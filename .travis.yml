@@ -7,4 +7,4 @@ script:
 - python3 -m pytest --runslow
 before_install:
 - openssl aes-256-cbc -K $encrypted_17c9f05fa8f1_key -iv $encrypted_17c9f05fa8f1_iv -in tests/sample-files.tar.gz.enc -out tests/sample-files.tar.gz -d
-- tar -xvzf tests/sample-files.tar.gz
+- tar -xvzf tests/sample-files.tar.gz -C tests/
