@@ -1,5 +1,6 @@
 # samples directory, which is provided encrypted as sample-files.tar.gz.enc
 tests/sample-files/
+tests/sample-files.tar.gz
 
 # editors
 *~
