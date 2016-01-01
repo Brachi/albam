@@ -64,7 +64,7 @@ def test_arc_from_dir_re5(tmpdir, arc_file):
     assert os.path.getsize(arc_file) == os.path.getsize(arc_from_dir_out)
     # The hashes would be different due to the file_paths ordering
     assert arc_original.files_count == arc_from_arc_from_dir.files_count
-    assert files_extracted_1 == files_extracted_2
+    assert sorted(files_extracted_1) == sorted(files_extracted_2)
     assert arc_from_arc_from_dir.file_entries[0].offset == 32768
 
 
