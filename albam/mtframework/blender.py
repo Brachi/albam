@@ -36,8 +36,10 @@ def _get_vertex_array_from_vertex_buffer(mod, mesh):
         VF = VertexFormat
     else:
         VF = VertexFormat5
+    position = max(mesh.vertex_index_start_1, mesh.vertex_index_start_2) * mesh.vertex_stride
     offset = ctypes.addressof(mod.vertex_buffer)
-    offset += mesh.vertex_offset + max(mesh.vertex_index_start_1, mesh.vertex_index_start_2) * mesh.vertex_stride
+    offset += mesh.vertex_offset
+    offset += position
     if mesh.vertex_index_start_2 > mesh.vertex_index_start_1:
         vertex_count = mesh.vertex_index_end - mesh.vertex_index_start_2 + 1
         # TODO: research the content of mesh.vertex_index_start_1 and what it means in this case
@@ -54,7 +56,8 @@ def _get_indices_array(mod, mesh):
     position = mesh.face_offset * 2 + mesh.face_position * 2
     if position > get_size(mod, 'index_buffer'):
         raise BuildMeshError('Error building mesh in get_indices_array.'
-                             'mesh.face_offset: {}, mesh.face_position: {}'.format(mesh.face_offset, mesh.face_position))
+                             'mesh.face_offset: {}, mesh.face_position: {}'
+                             .format(mesh.face_offset, mesh.face_position))
     offset += position
     return (ctypes.c_ushort * mesh.face_count).from_address(offset)
 
@@ -181,7 +184,8 @@ def _export_vertices(blender_mesh_object, position, bounding_box):
             weights_data = weights_per_vertex[vertex_index]   # list of (str(bone_index), value)
         else:
             weights_data = []
-        # FIXME: Assumming vertex groups were named after the bone index, should get the bone and get the index
+        # FIXME: Assumming vertex groups were named after the bone index,
+        # should get the bone and get the index
         bone_indices = [int(vg_name) for vg_name, _ in weights_data]
         weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
 
@@ -320,7 +324,9 @@ def _create_blender_armature_from_mod(mod, armature_name, parent=None):
         blender_bones.append(blender_bone)
         parents = _get_bone_parents_from_mod(bone, mod.bones_array)
         if not parents:
-            blender_bone.head = Vector((bone.location_x / 100, bone.location_z * -1 / 100, bone.location_y / 100))
+            blender_bone.head = Vector((bone.location_x / 100,
+                                        bone.location_z * -1 / 100,
+                                        bone.location_y / 100))
             continue
         chain = [i] + parents
         wtm = Matrix.Translation((0, 0, 0))
@@ -335,8 +341,10 @@ def _create_blender_armature_from_mod(mod, armature_name, parent=None):
     # set tails of bone to their children or make them small if they have none
     for i, bone in enumerate(blender_bones):
         children = bone.children_recursive
-        non_mirror_children = [b for b in children if mod.bones_array[int(b.name)].mirror_index == int(b.name)]
-        mirror_children = [b for b in children if mod.bones_array[int(b.name)].mirror_index != int(b.name)]
+        non_mirror_children = [b for b in children
+                               if mod.bones_array[int(b.name)].mirror_index == int(b.name)]
+        mirror_children = [b for b in children
+                           if mod.bones_array[int(b.name)].mirror_index != int(b.name)]
         if mod.bones_array[i].mirror_index == i and non_mirror_children:
             bone.tail = non_mirror_children[0].head
         elif mod.bones_array[i].mirror_index != i and mirror_children:
