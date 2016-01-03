@@ -156,6 +156,12 @@ except Exception as err:
         assert mod_original.box_max_w == mod_exported.box_max_w
         """
         assert mod_original.reserved_03 == mod_exported.reserved_03
+        assert bytes(mod_original.bone_palette_count) == bytes(mod_exported.bone_palette_count)
+        assert bytes(mod_original.bones_array) == bytes(mod_exported.bones_array)
+        assert bytes(mod_original.bones_unk_matrix_array) == bytes(mod_exported.bones_unk_matrix_array)
+        assert bytes(mod_original.bones_world_transform_matrix_array) == bytes(mod_exported.bones_world_transform_matrix_array)
+        assert bytes(mod_original.unk_13) == bytes(mod_exported.unk_13)
+        assert bytes(mod_original.bone_palette_array) == bytes(mod_exported.bone_palette_array)
 
         assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
 
