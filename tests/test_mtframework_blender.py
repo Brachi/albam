@@ -1,3 +1,4 @@
+import ntpath
 import os
 import subprocess
 
@@ -71,16 +72,20 @@ sys.path.append('{project_dir}')
 
 import bpy
 
-from albam.mtframework.blender import import_arc, export_mod156
+from albam.mtframework.blender import import_arc, create_mod156, Tex112
 try:
     import_arc('{arc_file}', '{extract_dir}')
     imported_name = os.path.basename('{arc_file}')
     parent_arc = bpy.data.objects[imported_name]
     for child in parent_arc.children:
         mod_name = child.name
-        mod = export_mod156(child)
+        mod, textures = create_mod156(child)
         with open(os.path.join('{export_dir}', mod_name), 'wb') as w:
             w.write(mod)
+        for texture in textures:
+            tex = Tex112.from_dds(file_path=texture.image.filepath)
+            with open(os.path.join('{export_dir}', texture.name), 'wb') as w:
+                w.write(tex)
     bpy.ops.wm.save_as_mainfile(filepath='{filepath}')
 except Exception as err:
     print(err)
@@ -163,6 +168,9 @@ except Exception as err:
         assert bytes(mod_original.unk_13) == bytes(mod_exported.unk_13)
         assert bytes(mod_original.bone_palette_array) == bytes(mod_exported.bone_palette_array)
 
+        # TODO: when folder definition is supported, take out the os.path.basename
+        assert {ntpath.basename(t[:]).rstrip(b'\x00') for t in mod_original.textures_array} == \
+            {t[:].rstrip(b'\x00') for t in mod_exported.textures_array}
         assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
 
         failed_uvs_all = {}

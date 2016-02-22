@@ -239,7 +239,7 @@ def get_bone_count_from_blender_objects(blender_objects):
     return bone_count
 
 
-def get_texture_count_from_blender_objects(blender_objects):
+def get_textures_from_blender_objects(blender_objects):
     """
     Only counting the first material of the mesh
     """
@@ -249,9 +249,9 @@ def get_texture_count_from_blender_objects(blender_objects):
         if not ob.materials:
             continue
         for ts in ob.materials[0].texture_slots:
-            if ts and ts.texture:
+            if ts and ts.texture and ts.texture.image:
                 textures.add(ts.texture)
-    return len(textures)
+    return sorted(textures, key=lambda t: t.name)
 
 
 def get_materials_from_blender_objects(blender_objects):

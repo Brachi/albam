@@ -21,7 +21,7 @@ from albam.utils import (
     get_bounding_box_positions_from_blender_objects,
     create_mesh_name,
     get_bone_count_from_blender_objects,
-    get_texture_count_from_blender_objects,
+    get_textures_from_blender_objects,
     get_materials_from_blender_objects,
     get_mesh_count_from_blender_objects,
     get_vertex_count_from_blender_objects,
@@ -551,7 +551,7 @@ def import_arc(file_path, extraction_dir=None):
         import_mod156(mod_file, out, parent)
 
 
-def export_mod156(blender_object):
+def create_mod156(blender_object):
     """
     The blender_object provided should have meshes as children
     """
@@ -603,6 +603,24 @@ def export_mod156(blender_object):
     bounding_box = get_bounding_box_positions_from_blender_objects(objects)
     mesh_materials = get_materials_from_blender_objects(objects)
     meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, mesh_materials, bounding_box)
+    textures = get_textures_from_blender_objects(objects)
+    textures_array = ((ctypes.c_char * 64) * len(textures))()
+    for i, texture in enumerate(textures):
+        fp = os.path.basename(texture.image.filepath)
+        if len(fp) > 64:
+            # TODO: what if relative path are used?
+            raise ExportError('File path to texture {} is longer than 64 characters'
+                              .format(fp))
+        try:
+            file_path, _ = os.path.splitext(fp)
+            parts = file_path.split(os.path.sep)
+            file_path = ntpath.join(*parts)
+            file_path = file_path.encode('ascii')
+            # TODO: there must be a better way instead of splitting bytes
+            # TODO: when exporting to Arc, the mod should go in a defined folder
+            textures_array[i] = (ctypes.c_char * 64)(*file_path)
+        except UnicodeEncodeError:
+            raise ExportError('Texture path {} is not in ascii'.format(fp))
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
@@ -615,7 +633,7 @@ def export_mod156(blender_object):
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(vertex_buffer),
                  vertex_buffer_2_size=0,
-                 texture_count=get_texture_count_from_blender_objects(objects),
+                 texture_count=len(textures),
                  group_count=6,  # TODO: add group_count
                  bone_palette_count=bone_palette_count,
                  group_offset=0,
@@ -634,6 +652,7 @@ def export_mod156(blender_object):
                  bones_world_transform_matrix_array=bones_wt_array,
                  unk_13=unk_13,
                  bone_palette_array=bone_palette_array,
+                 textures_array=textures_array,
                  meshes_array=meshes_array,
                  vertex_buffer=vertex_buffer,
                  index_buffer=index_buffer
@@ -646,4 +665,5 @@ def export_mod156(blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-    return mod
+
+    return mod, textures
