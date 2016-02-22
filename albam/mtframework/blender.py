@@ -10,6 +10,7 @@ from albam.mtframework.mod import (
     Mesh156,
     Bone,
     BonePalette,
+    MaterialData,
     )
 from albam.mtframework import Arc, Mod156, Tex112
 from albam.utils import (
@@ -290,7 +291,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 slot.mapping = 'CUBE'
             else:
                 slot.use_map_color_diffuse = False
-                pass
                 # TODO: 3, 4, 5, 6,
         materials.append(blender_material)
     return materials
@@ -430,7 +430,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     return ob
 
 
-def _create_meshes_156_array(blender_objects, group_materials, bounding_box):
+def _create_meshes_156_array(blender_objects, materials, bounding_box):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -468,6 +468,10 @@ def _create_meshes_156_array(blender_objects, group_materials, bounding_box):
 
         m156 = meshes_156[i]
         m156.type = 0  # Needs to be investagated
+        try:
+            m156.material_index = materials.index(blender_mesh.materials[0])
+        except IndexError:
+            raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
         m156.unk_01 = 1  # all game models seem to have the value 1
         m156.level_of_detail = 1  # TODO
         m156.unk_02 = 0  # most player models seem to have this value, needs research
@@ -601,8 +605,8 @@ def create_mod156(blender_object):
         bone_palette_array = (BonePalette * bone_count)()
 
     bounding_box = get_bounding_box_positions_from_blender_objects(objects)
-    mesh_materials = get_materials_from_blender_objects(objects)
-    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, mesh_materials, bounding_box)
+    materials = get_materials_from_blender_objects(objects)
+    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, materials, bounding_box)
     textures = get_textures_from_blender_objects(objects)
     textures_array = ((ctypes.c_char * 64) * len(textures))()
     for i, texture in enumerate(textures):
@@ -622,12 +626,34 @@ def create_mod156(blender_object):
         except UnicodeEncodeError:
             raise ExportError('Texture path {} is not in ascii'.format(fp))
 
+    materials_data_array = (MaterialData * len(materials))()
+    for i, mat in enumerate(materials):
+        material_data = MaterialData()
+        for texture_slot in mat.texture_slots:
+            if not texture_slot:
+                continue
+            texture = texture_slot.texture
+            # texture_indices expects index-1 based
+            texture_index = textures.index(texture) + 1
+            if texture_slot.use_map_normal and texture_slot.mapping != 'CUBE':
+                material_data.texture_indices[1] = texture_index
+            elif texture_slot.use_map_specular:
+                material_data.texture_indices[2] = texture_index
+            elif texture_slot.mapping == 'CUBE':
+                material_data.texture_indices[7] = texture_index
+            else:
+                if not material_data.texture_indices[0]:
+                    material_data.texture_indices[0] = texture_index
+                else:
+                    material_data.texture_indices[6] = texture_index
+        materials_data_array[i] = material_data
+
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
                  bone_count=bone_count,
                  mesh_count=get_mesh_count_from_blender_objects(objects),
-                 material_count=len(mesh_materials),
+                 material_count=len(materials),
                  vertex_count=get_vertex_count_from_blender_objects(objects),
                  face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
@@ -653,6 +679,7 @@ def create_mod156(blender_object):
                  unk_13=unk_13,
                  bone_palette_array=bone_palette_array,
                  textures_array=textures_array,
+                 materials_data_array=materials_data_array,
                  meshes_array=meshes_array,
                  vertex_buffer=vertex_buffer,
                  index_buffer=index_buffer

@@ -264,7 +264,7 @@ def get_materials_from_blender_objects(blender_objects):
         if not ob.materials:
             continue
         materials.add(ob.materials[0])
-    return materials
+    return sorted(materials, key=lambda m: m.name)
 
 
 def get_mesh_count_from_blender_objects(blender_objects):
