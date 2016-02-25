@@ -310,7 +310,7 @@ def _get_bone_parents_from_mod(bone, bones_array):
     return parents
 
 
-def _save_mod_data_to_armature(mod, blender_armature):
+def _save_mod_data_to_armature(mod, blender_armature, dirpath=None):
     """
     This function should be generalized when more formats are added
     Base64 is used because when saving bytes to a StringProperty, the get
@@ -324,6 +324,7 @@ def _save_mod_data_to_armature(mod, blender_armature):
     mod156_bones_world_transform_matrix_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     mod156_unk_13 = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     mod156_bone_palette_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
+    mod156_dirpath = StrProp(options={'HIDDEN'})
 
     bpy.types.Armature.mod156_bone_palette_count = mod156_bone_palette_count
     bpy.types.Armature.mod156_bones_array = mod156_bones_array
@@ -332,6 +333,7 @@ def _save_mod_data_to_armature(mod, blender_armature):
     bpy.types.Armature.mod156_bones_world_transform_matrix_array = mod156_bones_world_transform_matrix_array
     bpy.types.Armature.mod156_unk_13 = mod156_unk_13
     bpy.types.Armature.mod156_bone_palette_array = mod156_bone_palette_array
+    bpy.types.Armature.mod156_dirpath = mod156_dirpath
 
     blender_armature.mod156_bone_palette_count = mod.bone_palette_count
     blender_armature.mod156_bones_array = b64encode(bytes(mod.bones_array))
@@ -340,6 +342,7 @@ def _save_mod_data_to_armature(mod, blender_armature):
     blender_armature.mod156_bones_world_transform_matrix_array = b64encode(bytes(mod.bones_world_transform_matrix_array))
     blender_armature.mod156_unk_13 = b64encode(bytes(mod.unk_13))
     blender_armature.mod156_bone_palette_array = b64encode(bytes(mod.bone_palette_array))
+    blender_armature.mod156_dirpath = dirpath
 
 
 def _create_blender_armature_from_mod(mod, armature_name, parent=None):
@@ -347,7 +350,6 @@ def _create_blender_armature_from_mod(mod, armature_name, parent=None):
     armature_ob = bpy.data.objects.new(armature_name, armature)
     armature_ob.parent = parent
     bpy.context.scene.objects.link(armature_ob)
-    _save_mod_data_to_armature(mod, armature)
 
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -506,7 +508,7 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box):
     return meshes_156, vertex_buffer, index_buffer
 
 
-def import_mod156(file_path, base_dir, parent=None):
+def _import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
     mod = Mod156(file_path=file_path)
     model_name = os.path.basename(file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
@@ -521,6 +523,7 @@ def import_mod156(file_path, base_dir, parent=None):
     if mod.bone_count:
         armature_ob = _create_blender_armature_from_mod(mod, model_name, parent)
         armature_ob.show_x_ray = True
+        _save_mod_data_to_armature(mod, armature_ob.data, mod_dir_path)
     else:
         parent_empty = bpy.data.objects.new(model_name, None)
         parent_empty.parent = parent
@@ -545,14 +548,18 @@ def import_arc(file_path, extraction_dir=None):
         out = extraction_dir
     if not os.path.isdir(out):
         os.makedirs(out)
+    if not out.endswith(os.path.sep):
+        out = out + os.path.sep
     arc = Arc(file_path=file_path)
     arc.unpack(out)
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
+    mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
     parent = bpy.data.objects.new(os.path.basename(file_path), None)
     bpy.context.scene.objects.link(parent)
-    for mod_file in mod_files:
-        import_mod156(mod_file, out, parent)
+    for i, mod_file in enumerate(mod_files):
+        mod_dir = mod_dirs[i]
+        _import_mod156(mod_file, out, parent, mod_dir)
 
 
 def create_mod156(blender_object):
@@ -565,9 +572,9 @@ def create_mod156(blender_object):
         saved_bone_count = None
         skel = blender_object.data
         try:
-            saved_bone_count = blender_object.data.mod156_bone_count
-
-            bone_palette_count = blender_object.data.mod156_bone_palette_count
+            # TODO: saving of attributes for models with no skeleton
+            saved_bone_count = skel.mod156_bone_count
+            bone_palette_count = skel.mod156_bone_palette_count
 
             bones_array_b64 = skel.mod156_bones_array
             bones_array_data = b64decode(bones_array_b64)
@@ -588,6 +595,8 @@ def create_mod156(blender_object):
             bone_palette_array_b64 = skel.mod156_bone_palette_array
             bp_data = b64decode(bone_palette_array_b64)
             bone_palette_array = (BonePalette * bone_palette_count).from_buffer_copy(bp_data)
+
+            mod_dirpath = skel.mod156_dirpath
 
         except AttributeError:
             raise ExportError("Can't export model to Mod156, the skeleton to be exported "
@@ -616,7 +625,8 @@ def create_mod156(blender_object):
             raise ExportError('File path to texture {} is longer than 64 characters'
                               .format(fp))
         try:
-            file_path, _ = os.path.splitext(fp)
+            file_path = os.path.join(mod_dirpath, fp)
+            file_path, _ = os.path.splitext(file_path)
             parts = file_path.split(os.path.sep)
             file_path = ntpath.join(*parts)
             file_path = file_path.encode('ascii')

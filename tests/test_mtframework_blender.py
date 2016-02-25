@@ -169,18 +169,18 @@ except Exception as err:
         assert bytes(mod_original.bone_palette_array) == bytes(mod_exported.bone_palette_array)
 
         # TODO: when folder definition is supported, take out the os.path.basename
-        textures_original = {ntpath.basename(t[:]).rstrip(b'\x00') for t in mod_original.textures_array}
-        textures_exported = {t[:].rstrip(b'\x00') for t in mod_exported.textures_array}
+        textures_original = {t[:] for t in mod_original.textures_array}
+        textures_exported = {t[:] for t in mod_exported.textures_array}
         assert textures_original == textures_exported
         assert len(mod_original.materials_data_array) == len(mod_exported.materials_data_array)
         assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
         assert len(mod_original.textures_array) == len(mod_exported.textures_array)
 
 
-        texture_paths_from_materials_original = {ntpath.basename(mod_original.textures_array[ti - 1][:].rstrip(b'\x00'))
+        texture_paths_from_materials_original = {mod_original.textures_array[ti - 1][:]
                                                  for md in mod_original.materials_data_array for ti in md.texture_indices}
 
-        texture_paths_from_materials_exported = {ntpath.basename(mod_exported.textures_array[ti - 1][:].rstrip(b'\x00'))
+        texture_paths_from_materials_exported = {mod_exported.textures_array[ti - 1][:]
                                                  for md in mod_exported.materials_data_array for ti in md.texture_indices}
         assert texture_paths_from_materials_original == texture_paths_from_materials_exported
 
