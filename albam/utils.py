@@ -45,8 +45,15 @@ def print_structure(ctypes_structure_ob):
             print('error printint struct: "{}"'.format(attr_name), err)
 
 
-def parse_fields(sequence_of_tuples, file_path=None, **kwargs):
+def parse_fields(sequence_of_tuples, file_path_or_buffer=None, **kwargs):
     ready_fields = []
+    try:
+        os.path.isfile(file_path_or_buffer)
+        is_file = True
+        buff = open(file_path_or_buffer, 'rb')
+    except TypeError:
+        buff = file_path_or_buffer
+        is_file = False
 
     for t in sequence_of_tuples:
         attr_name = t[0]
@@ -58,18 +65,21 @@ def parse_fields(sequence_of_tuples, file_path=None, **kwargs):
             class TmpStruct(ctypes.Structure):
                 _fields_ = ready_fields
                 _pack_ = 1
-            if file_path:
+            if buff:
                 tmp_struct = TmpStruct()
-                with open(file_path, 'rb') as f:
-                    f.readinto(tmp_struct)
+                buff.readinto(tmp_struct)
+                buff.seek(0)
             else:
                 tmp_struct = TmpStruct(**kwargs)
             try:
                 c_type = ctype_or_callable(tmp_struct)
             except TypeError:
-                c_type = ctype_or_callable(tmp_struct, file_path)
+                c_type = ctype_or_callable(tmp_struct, file_path_or_buffer)
 
             ready_fields.append((attr_name, c_type))
+
+    if file_path_or_buffer and is_file:
+        buff.close()
 
     return tuple(ready_fields)
 
@@ -78,6 +88,7 @@ class BaseStructure:
 
     _fields_ = None
 
+    # TODO: change signature to make it clear that 'file_path' can be also a buffer
     def __new__(cls, file_path=None, *args, **kwargs):
         cls_dict = {'_pack_': 1}
         for k, v in cls.__dict__.items():
@@ -92,8 +103,12 @@ class BaseStructure:
 
         if file_path:
             instance = generated_cls()
-            with open(file_path, 'rb') as f:
-                f.readinto(instance)
+            try:
+                with open(file_path, 'rb') as f:
+                    f.readinto(instance)
+            except TypeError:
+                file_path.readinto(instance)
+                file_path.close()
         else:
             instance = generated_cls(**kwargs)
 
