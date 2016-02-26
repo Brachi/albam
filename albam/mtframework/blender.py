@@ -38,6 +38,38 @@ except ImportError:
     pass
 
 
+def import_arc(file_path, extraction_dir=None):
+    '''Imports an arc file (Resident Evil 5 for only for now) into blender,
+    extracting all files to a tmp dir and saving unknown/unused data
+    to the armature (if any) for using in exporting'''
+
+    base_dir = os.path.basename(file_path).replace('.arc', '_arc_extracted')
+    if not extraction_dir:
+        out = os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
+    else:
+        out = extraction_dir
+    if not os.path.isdir(out):
+        os.makedirs(out)
+    if not out.endswith(os.path.sep):
+        out = out + os.path.sep
+    arc = Arc(file_path=file_path)
+    arc.unpack(out)
+    mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
+                 for f in files if f.endswith('.mod')]
+    mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
+    parent = bpy.data.objects.new(os.path.basename(file_path), None)
+    bpy.context.scene.objects.link(parent)
+    for i, mod_file in enumerate(mod_files):
+        mod_dir = mod_dirs[i]
+        _import_mod156(mod_file, out, parent, mod_dir)
+
+
+def export_arc(blender_object, out):
+    '''Exports an arc file containing mod and tex files, among others from a
+    previously imported arc.'''
+    pass
+
+
 def _get_vertex_array_from_vertex_buffer(mod, mesh):
     if mesh.vertex_format == 0:
         VF = VertexFormat0
@@ -520,28 +552,6 @@ def _import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
             modifier.use_vertex_groups = True
         else:
             mesh.parent = parent_empty
-
-
-def import_arc(file_path, extraction_dir=None):
-    base_dir = os.path.basename(file_path).replace('.arc', '_arc_extracted')
-    if not extraction_dir:
-        out = os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
-    else:
-        out = extraction_dir
-    if not os.path.isdir(out):
-        os.makedirs(out)
-    if not out.endswith(os.path.sep):
-        out = out + os.path.sep
-    arc = Arc(file_path=file_path)
-    arc.unpack(out)
-    mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
-                 for f in files if f.endswith('.mod')]
-    mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
-    parent = bpy.data.objects.new(os.path.basename(file_path), None)
-    bpy.context.scene.objects.link(parent)
-    for i, mod_file in enumerate(mod_files):
-        mod_dir = mod_dirs[i]
-        _import_mod156(mod_file, out, parent, mod_dir)
 
 
 def _export_textures_and_materials(blender_objects, base_path=None):
