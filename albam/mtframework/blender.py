@@ -1,6 +1,7 @@
 from base64 import b64encode, b64decode
 import ctypes
 from itertools import chain
+from io import BytesIO
 import ntpath
 import os
 
@@ -316,33 +317,14 @@ def _save_mod_data_to_armature(mod, blender_armature, dirpath=None):
     Base64 is used because when saving bytes to a StringProperty, the get
     cut off at the first null byte. That might be a bug.
     """
-    # TODO: put all these attributes under a PropertyGroup called Mod156
-    mod156_bone_palette_count = IntProp(options={'HIDDEN'})
-    mod156_bones_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    mod156_bones_unk_matrix_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    mod156_bone_count = IntProp(options={'HIDDEN'})
-    mod156_bones_world_transform_matrix_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    mod156_unk_13 = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    mod156_bone_palette_array = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
+    albam_mod156 = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     mod156_dirpath = StrProp(options={'HIDDEN'})
 
-    bpy.types.Armature.mod156_bone_palette_count = mod156_bone_palette_count
-    bpy.types.Armature.mod156_bones_array = mod156_bones_array
-    bpy.types.Armature.mod156_bones_unk_matrix_array = mod156_bones_unk_matrix_array
-    bpy.types.Armature.mod156_bone_count = mod156_bone_count
-    bpy.types.Armature.mod156_bones_world_transform_matrix_array = mod156_bones_world_transform_matrix_array
-    bpy.types.Armature.mod156_unk_13 = mod156_unk_13
-    bpy.types.Armature.mod156_bone_palette_array = mod156_bone_palette_array
-    bpy.types.Armature.mod156_dirpath = mod156_dirpath
+    bpy.types.Armature.albam_mod156 = albam_mod156
+    bpy.types.Armature.albam_mod156_dirpath = mod156_dirpath
 
-    blender_armature.mod156_bone_palette_count = mod.bone_palette_count
-    blender_armature.mod156_bones_array = b64encode(bytes(mod.bones_array))
-    blender_armature.mod156_bones_unk_matrix_array = b64encode(bytes(mod.bones_unk_matrix_array))
-    blender_armature.mod156_bone_count = mod.bone_count
-    blender_armature.mod156_bones_world_transform_matrix_array = b64encode(bytes(mod.bones_world_transform_matrix_array))
-    blender_armature.mod156_unk_13 = b64encode(bytes(mod.unk_13))
-    blender_armature.mod156_bone_palette_array = b64encode(bytes(mod.bone_palette_array))
-    blender_armature.mod156_dirpath = dirpath
+    blender_armature.albam_mod156 = b64encode(bytes(mod))
+    blender_armature.albam_mod156_dirpath = dirpath
 
 
 def _create_blender_armature_from_mod(mod, armature_name, parent=None):
@@ -562,70 +544,21 @@ def import_arc(file_path, extraction_dir=None):
         _import_mod156(mod_file, out, parent, mod_dir)
 
 
-def create_mod156(blender_object):
-    """
-    The blender_object provided should have meshes as children
-    """
-    objects = [child for child in blender_object.children] + [blender_object]
-    if blender_object.type == 'ARMATURE':
-        bone_count = get_bone_count_from_blender_objects(objects)
-        saved_bone_count = None
-        skel = blender_object.data
-        try:
-            # TODO: saving of attributes for models with no skeleton
-            saved_bone_count = skel.mod156_bone_count
-            bone_palette_count = skel.mod156_bone_palette_count
-
-            bones_array_b64 = skel.mod156_bones_array
-            bones_array_data = b64decode(bones_array_b64)
-            bones_array = (Bone * bone_count).from_buffer_copy(bones_array_data)
-
-            bones_unk_matrix_b64 = skel.mod156_bones_unk_matrix_array
-            unk_matrix = b64decode(bones_unk_matrix_b64)
-            bones_unk_matrix = ((ctypes.c_float * 16) * bone_count).from_buffer_copy(unk_matrix)
-
-            bones_wt_matrix_b64 = skel.mod156_bones_world_transform_matrix_array
-            wt_matrix = b64decode(bones_wt_matrix_b64)
-            bones_wt_array = ((ctypes.c_float * 16) * bone_count).from_buffer_copy(wt_matrix)
-
-            unk_13_b64 = skel.mod156_unk_13
-            unk_13_data = b64decode(unk_13_b64)
-            unk_13 = (ctypes.c_ubyte * 256).from_buffer_copy(unk_13_data)
-
-            bone_palette_array_b64 = skel.mod156_bone_palette_array
-            bp_data = b64decode(bone_palette_array_b64)
-            bone_palette_array = (BonePalette * bone_palette_count).from_buffer_copy(bp_data)
-
-            mod_dirpath = skel.mod156_dirpath
-
-        except AttributeError:
-            raise ExportError("Can't export model to Mod156, the skeleton to be exported "
-                              "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)")
-        if saved_bone_count != bone_count:
-            raise ExportError("Can't export model to Mod156, the skeleton was modified. "
-                              "check if bones were added or removed")
-    else:
-        bone_count = 0
-        bone_palette_count = 0
-        bones_array = (Bone * bone_count)()
-        bones_unk_matrix = ((ctypes.c_float * 16) * bone_count)()
-        bones_wt_array = ((ctypes.c_float * 16) * bone_count)()
-        unk_13 = (ctypes.c_ubyte * bone_count)()
-        bone_palette_array = (BonePalette * bone_count)()
-
-    bounding_box = get_bounding_box_positions_from_blender_objects(objects)
-    materials = get_materials_from_blender_objects(objects)
-    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, materials, bounding_box)
-    textures = get_textures_from_blender_objects(objects)
+def _export_textures_and_materials(blender_objects, base_path=None):
+    textures = get_textures_from_blender_objects(blender_objects)
+    materials = get_materials_from_blender_objects(blender_objects)
     textures_array = ((ctypes.c_char * 64) * len(textures))()
+    materials_data_array = (MaterialData * len(materials))()
+
     for i, texture in enumerate(textures):
-        fp = os.path.basename(texture.image.filepath)
-        if len(fp) > 64:
+        file_path = os.path.basename(texture.image.filepath)
+        if len(file_path) > 64:
             # TODO: what if relative path are used?
             raise ExportError('File path to texture {} is longer than 64 characters'
                               .format(fp))
         try:
-            file_path = os.path.join(mod_dirpath, fp)
+            if base_path:
+                file_path = os.path.join(base_path, file_path)
             file_path, _ = os.path.splitext(file_path)
             parts = file_path.split(os.path.sep)
             file_path = ntpath.join(*parts)
@@ -636,7 +569,6 @@ def create_mod156(blender_object):
         except UnicodeEncodeError:
             raise ExportError('Texture path {} is not in ascii'.format(fp))
 
-    materials_data_array = (MaterialData * len(materials))()
     for i, mat in enumerate(materials):
         material_data = MaterialData()
         for texture_slot in mat.texture_slots:
@@ -658,10 +590,33 @@ def create_mod156(blender_object):
                     material_data.texture_indices[6] = texture_index
         materials_data_array[i] = material_data
 
+    return textures_array, materials_data_array
+
+
+def create_mod156(blender_object):
+    '''The blender_object provided should have meshes as children'''
+
+    objects = [child for child in blender_object.children] + [blender_object]
+    try:
+        mod_dirpath = blender_object.data.albam_mod156_dirpath
+        saved_mod = Mod156(file_path=BytesIO(b64decode(blender_object.data.albam_mod156)))
+    except AttributeError:
+        raise ExportError("Can't export model to Mod156, the model to be exported "
+                          "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)")
+    # TODO: check the skeleton was not modified (e.g. has less bones)
+    bounding_box = get_bounding_box_positions_from_blender_objects(objects)
+
+    # TODO: this is also called in _export_textures...
+    materials = get_materials_from_blender_objects(objects)
+    textures = get_textures_from_blender_objects(objects)
+
+    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, materials, bounding_box)
+    textures_array, materials_array = _export_textures_and_materials(objects, mod_dirpath)
+
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
-                 bone_count=bone_count,
+                 bone_count=get_bone_count_from_blender_objects(objects),
                  mesh_count=get_mesh_count_from_blender_objects(objects),
                  material_count=len(materials),
                  vertex_count=get_vertex_count_from_blender_objects(objects),
@@ -669,9 +624,9 @@ def create_mod156(blender_object):
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(vertex_buffer),
                  vertex_buffer_2_size=0,
-                 texture_count=len(textures),
+                 texture_count=len(textures_array),
                  group_count=6,  # TODO: add group_count
-                 bone_palette_count=bone_palette_count,
+                 bone_palette_count=saved_mod.bone_palette_count,
                  group_offset=0,
                  sphere_x=0, sphere_y=0, sphere_z=0, sphere_w=0,  # TODO
                  # from Z-up to Y-up, and scaling
@@ -683,18 +638,18 @@ def create_mod156(blender_object):
                  box_max_y=bounding_box.max_z * 100 * -1,
                  box_max_z=bounding_box.max_y * 100,
                  box_max_w=bounding_box.max_w * 100,
-                 bones_array=bones_array,
-                 bones_unk_matrix_array=bones_unk_matrix,
-                 bones_world_transform_matrix_array=bones_wt_array,
-                 unk_13=unk_13,
-                 bone_palette_array=bone_palette_array,
+                 bones_array=saved_mod.bones_array,
+                 bones_unk_matrix_array=saved_mod.bones_unk_matrix_array,
+                 bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
+                 unk_13=saved_mod.unk_13,
+                 bone_palette_array=saved_mod.bone_palette_array,
                  textures_array=textures_array,
-                 materials_data_array=materials_data_array,
+                 materials_data_array=materials_array,
                  meshes_array=meshes_array,
                  vertex_buffer=vertex_buffer,
                  index_buffer=index_buffer
-
                  )
+
     mod.bones_array_offset = get_offset(mod, 'bones_array')
     mod.group_offset = get_offset(mod, 'group_data_array')
     mod.textures_array_offset = get_offset(mod, 'textures_array')
