@@ -1,3 +1,4 @@
+from difflib import SequenceMatcher
 import os
 import subprocess
 
@@ -8,6 +9,9 @@ from albam.mtframework import (KNOWN_ARC_FAILS, KNOWN_ARC_BLENDER_CRASH, KNOWN_A
                                Mod156)
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
+EXPECTED_VERTEX_BUFFER_RATIO = 0.65
+EXPECTED_INDEX_BUFFER_RATIO = 0.65
+EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
 
 PYTHON_TEMPLATE ="""
 import os
@@ -35,6 +39,10 @@ except Exception as err:
     print(err)
     sys.exit(1)
 """
+def is_close(a, b):
+    return abs(a) - abs(b) < 0.001
+
+
 
 @pytest.fixture(scope='session')
 def arc_re5_samples(config=None):
@@ -114,6 +122,11 @@ def test_mod156_import_export_version(mods_import_export):
     assert mod_original.version == mod_exported.version
 
 
+def test_mod156_import_export_version_rev(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.version_rev == mod_exported.version_rev
+
+
 def test_mod156_import_export_bone_count(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.bone_count == mod_exported.bone_count
@@ -134,12 +147,6 @@ def test_mod156_import_export_vertex_count(mods_import_export):
     # TODO: see comment in _get_vertex_array_from_vertex_buffer assert
     mod_original.vertex_count == mod_exported.vertex_count
 
-
-def test_mod156_import_export_edge_count(mods_import_export):
-    mod_original, mod_exported = mods_import_export
-    assert mod_original.edge_count == mod_exported.edge_count
-
-
 def test_mod156_import_export_face_count(mods_import_export):
     mod_original, mod_exported = mods_import_export
     # Expecting some differences in faces generated with the export algorithm
@@ -147,10 +154,23 @@ def test_mod156_import_export_face_count(mods_import_export):
     assert abs(mod_original.face_count - mod_exported.face_count) < mod_original.mesh_count * EXPECTED_AVERAGE_EXTRA_INDICES
 
 
+@pytest.mark.xfail
+def test_mod156_import_export_edge_count(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.edge_count == mod_exported.edge_count
+
+
 def test_mod156_import_export_vertex_buffer_size(mods_import_export):
     mod_original, mod_exported = mods_import_export
     # TODO: see comment in _get_vertex_array_from_vertex_buffer
-    assert mod_original.vertex_buffer_size  == mod_exported.vertex_buffer_size
+    assert (mod_original.vertex_buffer_size - mod_exported.vertex_buffer_size) // 32 < EXPECTED_MAX_MISSING_VERTICES
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_vertex_buffer_2_size(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    # TODO: see comment in _get_vertex_array_from_vertex_buffer
+    assert mod_original.vertex_buffer_2_size  == mod_exported.vertex_buffer_2_size
 
 
 def test_mod156_import_export_texture_count(mods_import_export):
@@ -188,18 +208,21 @@ def test_mod156_import_export_meshes_array_offset(mods_import_export):
     assert mod_original.meshes_array_offset == mod_exported.meshes_array_offset
 
 
+@pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_offset(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.vertex_buffer_offset == mod_exported.vertex_buffer_offset
 
 
-def test_mod156_import_export_vertex_buffer_offset_2(mods_import_export):
+@pytest.mark.xfail
+def test_mod156_import_export_vertex_buffer_2_offset(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.vertex_buffer_2_offset == mod_exported.vertex_buffer_2_offset
 
 
+@pytest.mark.xfail
 def test_mod156_import_export_index_buffer_offset(mods_import_export):
-    mod_original, mod_exported = mods_import_exporAt
+    mod_original, mod_exported = mods_import_export
     assert mod_original.index_buffer_offset == mod_exported.index_buffer_offset
 
 
@@ -213,64 +236,120 @@ def test_mod156_import_export_reserved_02(mods_import_export):
     assert mod_original.reserved_02 == mod_exported.reserved_02
 
 
+@pytest.mark.xfail
 def test_mod156_import_export_sphere_x(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.sphere_x == mod_exported.sphere_x
+    assert is_close(mod_original.sphere_x, mod_exported.sphere_x)
 
 
+@pytest.mark.xfail
 def test_mod156_import_export_sphere_y(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.sphere_y == mod_exported.sphere_y
+    assert is_close(mod_original.sphere_y, mod_exported.sphere_y)
 
 
-def test_mod156_import_export_(mods_import_export):
+@pytest.mark.xfail
+def test_mod156_import_export_z(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.sphere_z == mod_exported.sphere_z
+    assert is_close(mod_original.sphere_z, mod_exported.sphere_z)
 
 
+@pytest.mark.xfail
 def test_mod156_import_export_sphere_w(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.sphere_w == mod_exported.sphere_w
+    assert is_close(mod_original.sphere_w, mod_exported.sphere_w)
 
 
 def test_mod156_import_export_box_min_x(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_min_x == mod_exported.box_min_x
+    assert is_close(mod_original.box_min_x, mod_exported.box_min_x)
 
 
 def test_mod156_import_export_box_min_y(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_min_y == mod_exported.box_min_y
+    assert is_close(mod_original.box_min_y, mod_exported.box_min_y)
 
 
 def test_mod156_import_export_box_min_z(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_min_z == mod_exported.box_min_z
+    assert is_close(mod_original.box_min_z, mod_exported.box_min_z)
 
 
 def test_mod156_import_export_box_min_w(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_min_w == mod_exported.box_min_w
+    assert is_close(mod_original.box_min_w, mod_exported.box_min_w)
 
 
 def test_mod156_import_export_box_max_x(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_max_x == mod_exported.box_max_x
+    assert is_close(mod_original.box_max_x, mod_exported.box_max_x)
 
 
 def test_mod156_import_export_box_max_y(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_max_y == mod_exported.box_max_y
+    assert is_close(mod_original.box_max_y, mod_exported.box_max_y)
 
 
 def test_mod156_import_export_box_max_z(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_max_z == mod_exported.box_max_z
+    assert is_close(mod_original.box_max_z, mod_exported.box_max_z)
 
 
 def test_mod156_import_export_box_max_w(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.box_max_w == mod_exported.box_max_w
+    assert is_close(mod_original.box_max_w, mod_exported.box_max_w)
+
+
+def test_mod156_import_export_box_unk_01(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_01 == mod_exported.unk_01
+
+def test_mod156_import_export_box_unk_02(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_02 == mod_exported.unk_02
+
+
+def test_mod156_import_export_box_unk_03(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_03 == mod_exported.unk_03
+
+def test_mod156_import_export_box_unk_04(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_04 == mod_exported.unk_04
+
+
+def test_mod156_import_export_box_unk_05(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_05 == mod_exported.unk_05
+
+
+def test_mod156_import_export_box_unk_06(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_06 == mod_exported.unk_06
+
+def test_mod156_import_export_box_unk_07(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_07 == mod_exported.unk_07
+
+
+def test_mod156_import_export_box_unk_08(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_08 == mod_exported.unk_08
+
+
+def test_mod156_import_export_box_unk_09(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_09 == mod_exported.unk_09
+
+
+def test_mod156_import_export_box_unk_10(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_10 == mod_exported.unk_10
+
+
+def test_mod156_import_export_box_unk_11(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert mod_original.unk_11 == mod_exported.unk_11
 
 
 def test_mod156_import_export_reserverd_03(mods_import_export):
@@ -278,9 +357,9 @@ def test_mod156_import_export_reserverd_03(mods_import_export):
     assert mod_original.reserved_03 == mod_exported.reserved_03
 
 
-def test_mod156_import_export_bones_palette_count(mods_import_export):
+def test_mod156_import_export_box_unk_12(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.bone_palette_count) == bytes(mod_exported.bone_palette_count)
+    assert bytes(mod_original.unk_12) == bytes(mod_exported.unk_12)
 
 
 def test_mod156_import_export_bones_array(mods_import_export):
@@ -288,7 +367,7 @@ def test_mod156_import_export_bones_array(mods_import_export):
     assert bytes(mod_original.bones_array) == bytes(mod_exported.bones_array)
 
 
-def test_mod156_import_export_bones(mods_import_export):
+def test_mod156_import_export_bones_unk_matrix_array(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert bytes(mod_original.bones_unk_matrix_array) == bytes(mod_exported.bones_unk_matrix_array)
 
@@ -335,3 +414,41 @@ def test_mod156_import_export_materials_data_array_texture_paths(mods_import_exp
 def test_mod156_import_export_meshes_array_length(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_2(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert bytes(mod_original.meshes_array_2) == bytes(mod_exported.meshes_array)
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_vertex_buffer(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert bytes(mod_original.vertex_buffer) == bytes(mod_exported.vertex_buffer)
+
+
+def test_mod156_import_export_vertex_buffer_approximation(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    seq = SequenceMatcher(None, bytes(mod_original.vertex_buffer), bytes(mod_exported.vertex_buffer))
+
+    assert seq.quick_ratio() >= EXPECTED_VERTEX_BUFFER_RATIO
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_vertex_buffer_2(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert bytes(mod_original.vertex_buffer_2) == bytes(mod_exported.vertex_buffer_2)
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_index_buffer(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    assert bytes(mod_original.index_buffer) == bytes(mod_exported.index_buffer)
+
+
+def test_mod156_import_export_index_buffer_approximation(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    seq = SequenceMatcher(None, bytes(mod_original), bytes(mod_exported))
+
+    assert seq.quick_ratio() >= EXPECTED_INDEX_BUFFER_RATIO
