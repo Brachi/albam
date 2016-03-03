@@ -29,7 +29,11 @@ def get_padding(tmp_struct):
 
 def get_data_length(tmp_struct, file_path=None):
     if file_path:
-        length = os.path.getsize(file_path) - sizeof(tmp_struct)
+        try:
+            length = os.path.getsize(file_path) - sizeof(tmp_struct)
+        except TypeError:
+            # XXX: inefficient?
+            length = len(file_path.getbuffer()) - sizeof(tmp_struct)
     else:
         length = len(tmp_struct.data)
     return length
