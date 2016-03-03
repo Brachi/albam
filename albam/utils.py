@@ -1,5 +1,5 @@
 import binascii
-from collections import namedtuple, deque
+from collections import namedtuple, deque, OrderedDict
 from copy import copy
 import ctypes
 from ctypes import c_float
@@ -43,6 +43,38 @@ def print_structure(ctypes_structure_ob):
             print(out)
         except Exception as err:
             print('error printint struct: "{}"'.format(attr_name), err)
+
+
+def as_dict(obj):
+    obj_type = type(obj)
+
+    if issubclass(obj_type, ctypes.Array):
+        if type(obj[:]) == bytes:
+            return obj[:].decode('ascii')
+        return [as_dict(item) for item in obj]
+
+    elif issubclass(obj_type, ctypes.Structure):
+        final = OrderedDict()
+        for attr_tuple in obj._fields_:
+            attr_name = attr_tuple[0]
+            attr_type = attr_tuple[1]
+            attr_value = getattr(obj, attr_name)
+            value_type = type(attr_value)
+            final_value = attr_value
+            if issubclass(value_type, ctypes.Array):
+                # Improve this?
+                if type(attr_value[:]) == bytes:
+                    final_value = attr_value[:]
+                else:
+                    final_value = [as_dict(item) for item in attr_value]
+            try:
+                final[attr_name] = final_value.decode('ascii')
+            except AttributeError:
+                final[attr_name] = final_value
+        return final
+    else:
+        return obj
+
 
 
 def parse_fields(sequence_of_tuples, file_path_or_buffer=None, **kwargs):
