@@ -61,7 +61,7 @@ def import_arc(file_path, extraction_dir=None):
     bpy.context.scene.objects.link(parent)
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
-        _import_mod156(mod_file, out, parent, mod_dir)
+        import_mod156(mod_file, out, parent, mod_dir)
 
 
 def export_arc(blender_object, out):
@@ -180,7 +180,7 @@ def _import_vertices(mod, mesh):
             }
 
 
-def _export_vertices(blender_mesh_object, position, bounding_box):
+def _export_vertices(blender_mesh_object, position, bounding_box, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     weights_per_vertex = get_weights_per_vertex(blender_mesh_object)
@@ -227,7 +227,7 @@ def _export_vertices(blender_mesh_object, position, bounding_box):
             weights_data = []
         # FIXME: Assumming vertex groups were named after the bone index,
         # should get the bone and get the index
-        bone_indices = [int(vg_name) for vg_name, _ in weights_data]
+        bone_indices = [bone_palette.index(int(vg_name)) for vg_name, _ in weights_data]
         weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
@@ -446,7 +446,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     return ob
 
 
-def _create_meshes_156_array(blender_objects, materials, bounding_box):
+def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -462,8 +462,13 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box):
     vertex_position = 0
     face_position = 0
     for i, blender_mesh_object in enumerate(blender_meshes_objects):
+        saved_mesh = saved_mod.meshes_array[i]
         blender_mesh = blender_mesh_object.data
-        vertex_format, vertices_array = _export_vertices(blender_mesh_object, vertex_position, bounding_box)
+
+        bla = saved_mesh.bone_palette_index
+        vertex_format, vertices_array = _export_vertices(blender_mesh_object, vertex_position,
+                                                         bounding_box,
+                                                         saved_mod.bone_palette_array[bla].values[:])
         vertex_buffer.extend(vertices_array)
         # TODO: is all this format conversion necessary?
         triangle_strips_python = triangles_list_to_triangles_strip(blender_mesh)
@@ -522,7 +527,7 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box):
     return meshes_156, vertex_buffer, index_buffer
 
 
-def _import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
+def import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
     mod = Mod156(file_path=file_path)
     model_name = os.path.basename(file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
@@ -554,7 +559,7 @@ def _import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
             mesh.parent = parent_empty
 
 
-def _export_textures_and_materials(blender_objects, base_path=None):
+def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=None):
     textures = get_textures_from_blender_objects(blender_objects)
     materials = get_materials_from_blender_objects(blender_objects)
     textures_array = ((ctypes.c_char * 64) * len(textures))()
@@ -620,8 +625,8 @@ def create_mod156(blender_object):
     materials = get_materials_from_blender_objects(objects)
     textures = get_textures_from_blender_objects(objects)
 
-    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, materials, bounding_box)
-    textures_array, materials_array = _export_textures_and_materials(objects, mod_dirpath)
+    meshes_array, vertex_buffer, index_buffer = _create_meshes_156_array(objects, materials, bounding_box, saved_mod)
+    textures_array, materials_array = _export_textures_and_materials(objects, mod_dirpath, saved_mod)
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
@@ -676,7 +681,7 @@ def create_mod156(blender_object):
     mod.textures_array_offset = get_offset(mod, 'textures_array')
     mod.meshes_array_offset = get_offset(mod, 'meshes_array')
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
-    mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer')
+    mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
 
     return mod, textures
