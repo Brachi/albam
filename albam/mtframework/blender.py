@@ -513,7 +513,7 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
         m156.unk_08 = 0
         m156.vertex_index_start_2 = vertex_position
         m156.unk_09 = 0
-        m156.bone_palette_index = 0  # TODO
+        m156.bone_palette_index = saved_mesh.bone_palette_index  # TODO: improve, not guaranteed!
         m156.unk_10 = 0
         m156.unk_11 = 0
         m156.unk_12 = 0
