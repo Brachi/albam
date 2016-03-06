@@ -6,7 +6,7 @@ import pytest
 
 
 from albam.mtframework import (KNOWN_ARC_FAILS, KNOWN_ARC_BLENDER_CRASH, KNOWN_ARC_BLENDER_HANGS,
-                               Mod156)
+                               Mod156, Arc)
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
@@ -20,20 +20,13 @@ sys.path.append('{project_dir}')
 
 import bpy
 
-from albam.mtframework.blender import import_arc, create_mod156, Tex112
+from albam.mtframework.blender import import_arc, export_arc
 try:
-    import_arc('{arc_file_path}', '{extract_dir}')
-    imported_name = os.path.basename('{arc_file_path}')
-    parent_arc = bpy.data.objects[imported_name]
-    for child in parent_arc.children:
-        mod_name = child.name
-        mod, textures = create_mod156(child)
-        with open(os.path.join('{export_dir}', mod_name), 'wb') as w:
-            w.write(mod)
-        for texture in textures:
-            tex = Tex112.from_dds(file_path=texture.image.filepath)
-            with open(os.path.join('{export_dir}', texture.name), 'wb') as w:
-                w.write(tex)
+    import_arc('{import_arc_filepath}', '{import_unpack_dir}')
+    imported_name = os.path.basename('{import_arc_filepath}')
+    exported_arc = export_arc(bpy.data.objects[imported_name])
+    with open('{export_arc_filepath}', 'wb') as w:
+        w.write(exported_arc)
     bpy.ops.wm.save_as_mainfile(filepath='{blend_file}')
 except Exception as err:
     print(err)
@@ -55,37 +48,41 @@ def arc_re5_samples(config=None):
 @pytest.fixture(scope='module', params=arc_re5_samples())
 def mods_import_export(request, tmpdir_factory):
     blender = pytest.config.getoption('blender')
-    arc_file_path = request.param
     # TODO: skip if blender was not supplied
 
-    if arc_file_path.endswith(KNOWN_ARC_FAILS):
+    import_arc_filepath = request.param
+    arc_file_name = os.path.basename(import_arc_filepath).replace('.arc', '-arc')
+    base_temp = tmpdir_factory.mktemp(arc_file_name)
+    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath) + 'exported')
+
+    if import_arc_filepath.endswith(KNOWN_ARC_FAILS):
         pytest.xfail(reason='Malformed arc from the game')
-    elif arc_file_path.endswith(KNOWN_ARC_BLENDER_CRASH):
+    elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
         pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
-    elif arc_file_path.endswith(KNOWN_ARC_BLENDER_HANGS):
+    elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_HANGS):
         pytest.xfail(reason='Memory corruption in blender: bug ALB-04')
-    elif arc_file_path.endswith('uPl03WeskerCos1.arc'):
+    elif import_arc_filepath.endswith('uPl03WeskerCos1.arc'):
         pytest.xfail(reason='Multiple mods export not supported yet')
-    elif arc_file_path.endswith(('uPl02JillCos1.arc', 'uPl02JillCos4.arc')):
+    elif import_arc_filepath.endswith(('uPl02JillCos1.arc', 'uPl02JillCos4.arc')):
         pytest.xfail(reason='Strip triangles exported wrongly')
-    elif arc_file_path.endswith('uPl01ShebaCos4.arc'):
+    elif import_arc_filepath.endswith('uPl01ShebaCos4.arc'):
         pytest.xfail(reason='Division by zero on bounding box')
 
 
-    arc_file_name = os.path.basename(arc_file_path).replace('.arc', '-arc')
-    base_temp = tmpdir_factory.mktemp(arc_file_name)
 
     python_script_file_path = str(base_temp.join('test-script.py'))
-    export_dir = str(base_temp.mkdir('albam_exported'))
-    extract_dir = str(base_temp.mkdir('albam_extracted'))
+    import_unpack_dir = str(base_temp.mkdir('import_unpack'))
+    export_unpack_dir = str(base_temp.mkdir('export_unpack'))
+    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath).replace('.arc', '-exported.arc'))
     # assuming that tests are run from the root project
     blend_file = str(base_temp.join(arc_file_name+ '.blend'))
     project_dir = os.getcwd()
 
     python_script = PYTHON_TEMPLATE.format(project_dir=project_dir,
-                                           arc_file_path=arc_file_path,
-                                           extract_dir=extract_dir,
-                                           export_dir=export_dir,
+                                           import_arc_filepath=import_arc_filepath,
+                                           export_arc_filepath=export_arc_filepath,
+                                           import_unpack_dir=import_unpack_dir,
+                                           export_unpack_dir=export_unpack_dir,
                                            blend_file=blend_file)
 
     with open(python_script_file_path, 'w') as w:
@@ -100,10 +97,14 @@ def mods_import_export(request, tmpdir_factory):
         raise
 
 
-    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(extract_dir)
-                          for f in files if f.endswith('.mod') and not f.startswith('exported')]
+    arc = Arc(export_arc_filepath)
+    arc.unpack(export_unpack_dir)
 
-    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_dir)
+    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir)
+                          for f in files if f.endswith('.mod')]
+
+
+    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir)
                           for f in files if f.endswith('.mod')]
 
     mod_files_original = sorted(mod_files_original, key=os.path.basename)
@@ -208,7 +209,6 @@ def test_mod156_import_export_meshes_array_offset(mods_import_export):
     assert mod_original.meshes_array_offset == mod_exported.meshes_array_offset
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_offset(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.vertex_buffer_offset == mod_exported.vertex_buffer_offset
@@ -236,25 +236,21 @@ def test_mod156_import_export_reserved_02(mods_import_export):
     assert mod_original.reserved_02 == mod_exported.reserved_02
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_sphere_x(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert is_close(mod_original.sphere_x, mod_exported.sphere_x)
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_sphere_y(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert is_close(mod_original.sphere_y, mod_exported.sphere_y)
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_z(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert is_close(mod_original.sphere_z, mod_exported.sphere_z)
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_sphere_w(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert is_close(mod_original.sphere_w, mod_exported.sphere_w)

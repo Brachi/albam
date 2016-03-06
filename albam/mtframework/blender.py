@@ -4,6 +4,7 @@ from itertools import chain
 from io import BytesIO
 import ntpath
 import os
+import tempfile
 
 from albam.exceptions import BuildMeshError, TextureError, ExportError
 from albam.mtframework.mod import (
@@ -54,20 +55,73 @@ def import_arc(file_path, extraction_dir=None):
         out = out + os.path.sep
     arc = Arc(file_path=file_path)
     arc.unpack(out)
+
+
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
     mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
     parent = bpy.data.objects.new(os.path.basename(file_path), None)
     bpy.context.scene.objects.link(parent)
+
+    # Saving arc to main object
+    albam_arc = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
+    bpy.types.Object.albam_arc = albam_arc
+    parent.albam_arc = b64encode(bytes(arc))
+
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
         import_mod156(mod_file, out, parent, mod_dir)
 
 
-def export_arc(blender_object, out):
+def export_arc(blender_object):
     '''Exports an arc file containing mod and tex files, among others from a
     previously imported arc.'''
-    pass
+    mods = {}
+    for child in blender_object.children:
+        try:
+            mod_dirpath = child.data.albam_mod156_dirpath
+            # TODO: This could lead to errors if imported in Windows and exported in posix?
+            mod_filepath = os.path.join(mod_dirpath, child.name)
+        except AttributeError:
+            raise ExportError("Object {0} did not come from the original arc")
+        mod, textures = export_mod156(child)
+        mods[mod_filepath] = (mod, textures)
+
+    saved_arc = Arc(file_path=BytesIO(b64decode(blender_object.albam_arc)))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_slash_ending = tmpdir + os.sep if not tmpdir.endswith(os.sep) else tmpdir
+        saved_arc.unpack(tmpdir)
+        mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+                     for f in files if f.endswith('.mod')]
+        tex_files = {os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+                     for f in files if f.endswith('.tex')}
+        new_tex_files = set()
+        for modf in mod_files:
+            rel_path = modf.split(tmpdir_slash_ending)[1]
+            try:
+                new_mod = mods[rel_path]
+            except KeyError:
+                raise ExportError("Can't export to arc, a mod file is missing: {}".format(rel_path))
+
+            with open(modf, 'wb') as w:
+                w.write(new_mod[0])
+            mod_textures = new_mod[1]
+            for texture in mod_textures:
+                tex = Tex112.from_dds(file_path=texture.image.filepath)
+                tex_name = os.path.basename(texture.image.filepath)
+                tex_filepath = os.path.join(os.path.dirname(modf), tex_name.replace('.dds', '.tex'))
+                new_tex_files.add(tex_filepath)
+                with open(tex_filepath, 'wb') as w:
+                    w.write(tex)
+        # probably other files can reference textures besides mod, this is in case
+        # textures applied have other names.
+        # TODO: delete only textures referenced from saved_mods at import time
+        unused_tex_files = tex_files - new_tex_files
+        for utex in unused_tex_files:
+            os.unlink(utex)
+        new_arc = Arc.from_dir(tmpdir)
+    return new_arc
+
 
 
 def _get_vertex_array_from_vertex_buffer(mod, mesh):
@@ -240,15 +294,15 @@ def _export_vertices(blender_mesh_object, position, bounding_box, bone_palette):
         vertex_format.position_w = 32767
         vertex_format.bone_indices = (ctypes.c_ubyte * weights_array_size)(*bone_indices)
         vertex_format.weight_values = (ctypes.c_ubyte * weights_array_size)(*weight_values)
-        vertex_format.normal_x = 127
-        vertex_format.normal_y = 127
-        vertex_format.normal_z = 127
-        vertex_format.normal_w = 127
+        vertex_format.normal_x = round(vertex.normal[0] * 127)
+        vertex_format.normal_y = round(vertex.normal[2] * 127) * -1
+        vertex_format.normal_z = round(vertex.normal[1] * 127)
+        vertex_format.normal_w = -1
         if VF == VertexFormat:
-            vertex_format.tangent_x = 127
-            vertex_format.tangent_y = 127
-            vertex_format.tangent_z = 127
-            vertex_format.tangent_w = 127
+            vertex_format.tangent_x = -1
+            vertex_format.tangent_y = -1
+            vertex_format.tangent_z = -1
+            vertex_format.tangent_w = -1
         vertex_format.uv_x = uvs_per_vertex[vertex_index][0] if uvs_per_vertex else 0
         vertex_format.uv_y = uvs_per_vertex[vertex_index][1] if uvs_per_vertex else 0
         if VF == VertexFormat:
@@ -624,7 +678,7 @@ def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=No
     return textures_array, materials_data_array
 
 
-def create_mod156(blender_object):
+def export_mod156(blender_object):
     '''The blender_object provided should have meshes as children'''
 
     objects = [child for child in blender_object.children] + [blender_object]
