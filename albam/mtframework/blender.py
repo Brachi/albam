@@ -462,13 +462,17 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
     vertex_position = 0
     face_position = 0
     for i, blender_mesh_object in enumerate(blender_meshes_objects):
-        saved_mesh = saved_mod.meshes_array[i]
+        # XXX: if a model with more meshes than the original is exported... boom
+        try:
+            saved_mesh = saved_mod.meshes_array[i]
+        except IndexError:
+            raise ExportError('Exporting models with more meshes (parts) than the original not supported yet')
         blender_mesh = blender_mesh_object.data
 
-        bla = saved_mesh.bone_palette_index
+        bpi = saved_mesh.bone_palette_index
         vertex_format, vertices_array = _export_vertices(blender_mesh_object, vertex_position,
                                                          bounding_box,
-                                                         saved_mod.bone_palette_array[bla].values[:])
+                                                         saved_mod.bone_palette_array[bpi].values[:])
         vertex_buffer.extend(vertices_array)
         # TODO: is all this format conversion necessary?
         triangle_strips_python = triangles_list_to_triangles_strip(blender_mesh)
@@ -488,13 +492,13 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
         index_count = len(triangle_strips_python)
 
         m156 = meshes_156[i]
-        m156.type = 0  # Needs to be investagated
+        m156.type = saved_mesh.type  # Needs to be investigated
         try:
             m156.material_index = materials.index(blender_mesh.materials[0])
         except IndexError:
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
         m156.unk_01 = 1  # all game models seem to have the value 1
-        m156.level_of_detail = 1  # TODO
+        m156.level_of_detail = saved_mesh.level_of_detail  # TODO
         m156.unk_02 = 0  # most player models seem to have this value, needs research
         m156.vertex_format = vf
         m156.vertex_stride = 32
@@ -509,15 +513,15 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
         m156.face_position = face_position
         m156.face_count = index_count
         m156.face_offset = 0
-        m156.unk_07 = 0
-        m156.unk_08 = 0
+        m156.unk_07 = saved_mesh.unk_07
+        m156.unk_08 = saved_mesh.unk_08
         m156.vertex_index_start_2 = vertex_position
-        m156.unk_09 = 0
-        m156.bone_palette_index = saved_mesh.bone_palette_index  # TODO: improve, not guaranteed!
-        m156.unk_10 = 0
-        m156.unk_11 = 0
-        m156.unk_12 = 0
-        m156.unk_13 = 0
+        m156.unk_09 = saved_mesh.unk_09
+        m156.bone_palette_index = saved_mesh.bone_palette_index  # XXX: improve, not guaranteed!
+        m156.unk_10 = saved_mesh.unk_10
+        m156.unk_11 = saved_mesh.unk_11
+        m156.unk_12 = saved_mesh.unk_12
+        m156.unk_13 = saved_mesh.unk_13
 
         vertex_position += vertex_count
         face_position += index_count
@@ -586,6 +590,18 @@ def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=No
 
     for i, mat in enumerate(materials):
         material_data = MaterialData()
+        try:
+            # XXX: Should use data from actual blender material
+            saved_mat = saved_mod.materials_data_array[i]
+        except IndexError:
+            raise ExportError('Exporting models with more materials than the original not supported yet')
+        material_data.unk_01 = saved_mat.unk_01
+        material_data.unk_02 = saved_mat.unk_02
+        material_data.unk_03 = saved_mat.unk_03
+        material_data.unk_04 = saved_mat.unk_04
+        material_data.unk_05 = saved_mat.unk_05
+        material_data.unk_06 = saved_mat.unk_06
+        material_data.unk_07 = saved_mat.unk_07
         for texture_slot in mat.texture_slots:
             if not texture_slot:
                 continue
@@ -643,16 +659,18 @@ def create_mod156(blender_object):
                  group_count=saved_mod.group_count,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=saved_mod.bone_palette_count,
-                 sphere_x=0, sphere_y=0, sphere_z=0, sphere_w=0,  # TODO
-                 # from Z-up to Y-up, and scaling
-                 box_min_x=bounding_box.min_x * 100,
-                 box_min_y=bounding_box.min_z * 100 * - 1,
-                 box_min_z=bounding_box.min_y * 100,
-                 box_min_w=bounding_box.min_w * 100,
-                 box_max_x=bounding_box.max_x * 100,
-                 box_max_y=bounding_box.max_z * 100 * -1,
-                 box_max_z=bounding_box.max_y * 100,
-                 box_max_w=bounding_box.max_w * 100,
+                 sphere_x=saved_mod.sphere_x,
+                 sphere_y=saved_mod.sphere_y,
+                 sphere_z=saved_mod.sphere_z,
+                 sphere_w=saved_mod.sphere_w,
+                 box_min_x=saved_mod.box_min_x,
+                 box_min_y=saved_mod.box_min_y,
+                 box_min_z=saved_mod.box_min_z,
+                 box_min_w=saved_mod.box_min_w,
+                 box_max_x=saved_mod.box_max_x,
+                 box_max_y=saved_mod.box_max_y,
+                 box_max_z=saved_mod.box_max_z,
+                 box_max_w=saved_mod.box_max_w,
                  unk_01=saved_mod.unk_01,
                  unk_02=saved_mod.unk_02,
                  unk_03=saved_mod.unk_03,
@@ -672,6 +690,7 @@ def create_mod156(blender_object):
                  textures_array=textures_array,
                  materials_data_array=materials_array,
                  meshes_array=meshes_array,
+                 meshes_array_2=saved_mod.meshes_array_2,
                  vertex_buffer=vertex_buffer,
                  index_buffer=index_buffer
                  )
@@ -683,5 +702,4 @@ def create_mod156(blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-
     return mod, textures
