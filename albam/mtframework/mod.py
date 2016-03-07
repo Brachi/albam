@@ -78,6 +78,32 @@ class Mesh156(Structure):
                 )
 
 
+class Mesh210_211(Structure):
+    _fields_ = (('mesh_type', c_ushort),
+                ('vertex_count', c_ushort),
+                ('group_index', c_ubyte),
+                ('unk_01', c_ubyte),
+                ('material_index', c_ubyte),
+                ('level_of_detail', c_ubyte),
+                ('class', c_ubyte),
+                ('mesh_class', c_ubyte),
+                ('vertex_stride', c_ubyte),
+                ('render_mode', c_ubyte),
+                ('vertex_position', c_uint),
+                ('vertex_offset', c_uint),
+                ('vertex_format', c_uint),
+                ('face_position', c_uint),
+                ('face_count', c_uint),
+                ('face_offset', c_uint),
+                ('bone_id_start', c_ubyte),
+                ('unique_boneids', c_ubyte),
+                ('mesh_index', c_ushort),
+                ('min_index', c_ushort),
+                ('max_index', c_ushort),
+                ('hash', c_uint),
+               )
+
+
 class VertexFormat0(Structure):
     _fields_ = (('position_x', c_float),
                 ('position_y', c_float),
@@ -141,9 +167,14 @@ class VertexFormat5(Structure):
 def get_meshes_sizes(tmp_struct):
     sizes = 0
     for m in tmp_struct.meshes_array:
-        sizes += m.unk_09
+        try:
+            sizes += m.unk_09
+            extra = 1  # TODO: investigate
+        except AttributeError:
+            sizes += m.unique_boneids
+            extra = 0
     total_size = 144 * sizes
-    q = (total_size // 4) + 1  # FIXME: why is '+1' necessary?
+    q = (total_size // 4) + extra
     return (c_uint * q)
 
 
@@ -218,3 +249,56 @@ class Mod156(BaseStructure):
                 # TODO: investigate the padding
                 ('index_buffer', lambda s: c_ushort * (s.face_count - 1)),
                 )
+
+
+class Mod210(BaseStructure):
+    _fields_ = (('id_magic', c_char * 4),
+                ('version', c_ubyte),
+                ('version_rev', c_byte),
+                ('bone_count', c_ushort),
+                ('mesh_count', c_short),
+                ('material_count', c_ushort),
+                ('vertex_count', c_uint),
+                ('face_count', c_uint),
+                ('edge_count', c_uint),
+                ('vertex_buffer_size', c_uint),
+                ('vertex_buffer_2_size', c_uint),
+                ('group_count', c_uint),
+                ('bones_array_offset', c_uint),
+                ('group_offset', c_uint),
+                ('materials_data_offset', c_uint),
+                ('meshes_array_offset', c_uint),
+                ('vertex_buffer_offset', c_uint),
+                ('index_buffer_offset', c_uint),
+                ('file_size', c_uint),
+                ('sphere_w', c_float),
+                ('sphere_x', c_float),
+                ('sphere_y', c_float),
+                ('sphere_z', c_float),
+                ('box_min_x', c_float),
+                ('box_min_y', c_float),
+                ('box_min_z', c_float),
+                ('box_min_w', c_float),
+                ('box_max_x', c_float),
+                ('box_max_y', c_float),
+                ('box_max_z', c_float),
+                ('box_max_w', c_float),
+                ('unk_02', c_uint),
+                ('unk_03', c_uint),
+                ('unk_04', c_uint),
+                ('unk_05', c_uint),
+                ('unk_06', c_uint),
+                ('bones_array', lambda s: Bone * s.bone_count),
+                ('bones_unk_matrix_array', lambda s: (c_float * 16) * s.bone_count),
+                ('bones_world_transform_matrix_array', lambda s: (c_float * 16) * s.bone_count),
+                ('unk_07', lambda s: (c_ubyte * 256) if s.bone_count else c_ubyte * 0),
+                ('group_data_array', lambda s: GroupData * s.group_count),
+                ('materials_data_array', lambda s: ((32 * c_uint) * s.material_count)),
+                ('meshes_array', lambda s: Mesh210_211 * s.mesh_count),
+                ('meshes_array_2', get_meshes_sizes),
+                ('vertex_buffer', lambda s: c_ubyte * s.vertex_buffer_size),
+                ('vertex_buffer_2', lambda s: c_ubyte * s.vertex_buffer_2_size),
+                ('index_buffer', lambda s: c_ushort * s.face_count),
+                ('file_padding', c_ubyte * 2)
+               )
+
