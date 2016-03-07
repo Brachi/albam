@@ -48,7 +48,8 @@ def arc_re5_samples(config=None):
 @pytest.fixture(scope='module', params=arc_re5_samples())
 def mods_import_export(request, tmpdir_factory):
     blender = pytest.config.getoption('blender')
-    # TODO: skip if blender was not supplied
+    if not blender:
+        pytest.skip('No blender bin path supplied')
 
     import_arc_filepath = request.param
     arc_file_name = os.path.basename(import_arc_filepath).replace('.arc', '-arc')
