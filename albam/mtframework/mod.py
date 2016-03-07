@@ -4,7 +4,6 @@ from albam.utils import BaseStructure
 
 
 class Bone(Structure):
-
     _fields_ = (('anim_map_index', c_ubyte),
                 ('parent_index', c_ubyte),  # 255: root
                 ('mirror_index', c_ubyte),
@@ -19,14 +18,12 @@ class Bone(Structure):
 
 
 class BonePalette(Structure):
-
     _fields_ = (('unk_01', c_uint),  # could be bone_count in values
                 ('values', c_ubyte * 32),
                 )
 
 
 class GroupData(Structure):
-
     _fields_ = (('unk_01', c_uint),
                 ('unk_02', c_uint),
                 ('unk_03', c_uint),
@@ -39,7 +36,6 @@ class GroupData(Structure):
 
 
 class MaterialData(Structure):
-
     _fields_ = (('unk_01', c_uint),
                 ('unk_02', c_uint),
                 ('unk_03', c_uint),
@@ -52,7 +48,6 @@ class MaterialData(Structure):
 
 
 class Mesh156(Structure):
-
     _fields_ = (('type', c_ushort),
                 ('material_index', c_ushort),
                 ('unk_01', c_ubyte),
@@ -160,7 +155,6 @@ def unk_data_depends_on_other_unk(tmp_struct):
 
 
 class Mod156(BaseStructure):
-
     _fields_ = (('id_magic', c_char * 4),
                 ('version', c_ubyte),
                 ('version_rev', c_byte),
