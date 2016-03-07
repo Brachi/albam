@@ -7,10 +7,6 @@ import pytest
 from albam.utils import BaseStructure, unpack_half_float, pack_half_float
 
 
-slow = pytest.mark.skipif(not pytest.config.getoption('--runslow'),
-                          reason='Slow test, needs "--runslow" to run')
-
-
 def test_base_structure(tmpdir):
     test_values = [4, 2, 1, 2, 3, 4, 0, 30, 31]  # TODO: randomize
     test_bytes = struct.pack('=IH IIII I II', *test_values)

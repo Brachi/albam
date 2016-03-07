@@ -1,5 +1,5 @@
 from albam.mtframework.arc import Arc
-from albam.mtframework.mod import Mod156
+from albam.mtframework.mod import Mod156, Mod210
 from albam.mtframework.tex import Tex112
 from albam.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
 

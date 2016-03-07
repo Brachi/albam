@@ -4,7 +4,13 @@ import pytest
 
 from albam.mtframework import Mod156
 from albam.utils import get_offset
-from tests.conftest import mod_re5_samples
+from tests.conftest import SAMPLES_DIR
+
+
+@pytest.fixture(scope='module')
+def mod_re5_samples():
+    samples_dir = pytest.config.getoption('--dirmod') or os.path.join(SAMPLES_DIR, 're5/mod')
+    return [os.path.join(samples_dir, f) for f in os.listdir(samples_dir)]
 
 
 @pytest.fixture(scope='module', params=mod_re5_samples())

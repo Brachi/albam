@@ -31,7 +31,7 @@ def print_structure(ctypes_structure_ob):
         if not isinstance(pretty_attr_value, bytes):
             try:
                 # TODO: speed this up, too many copies
-                pretty_attr_value = str(list(copy(attr_value))[:20])
+                pretty_attr_value = str(list(copy(attr_value))[:5])
             except TypeError:
                 pass
         try:
