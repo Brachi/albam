@@ -301,4 +301,3 @@ class Mod210(BaseStructure):
                 ('index_buffer', lambda s: c_ushort * s.face_count),
                 ('file_padding', c_ubyte * 2)
                )
-
