@@ -1,8 +1,8 @@
 from albam.mtframework import Tex112
-from tests.conftest import tex_re5_samples
 import pytest
 
 from albam.image_formats.dds import DDS
+from tests.test_mtframework_tex112 import tex_re5_samples
 
 
 @pytest.mark.parametrize('tex_file', tex_re5_samples())

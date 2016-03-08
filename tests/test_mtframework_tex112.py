@@ -9,7 +9,7 @@ from albam.image_formats.dds import DDSHeader
 from tests.conftest import SAMPLES_DIR
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
 def tex_re5_samples():
     samples_dir = pytest.config.getoption('--dirtex') or os.path.join(SAMPLES_DIR, 're5/tex')
     return [os.path.join(samples_dir, f) for f in os.listdir(samples_dir)]

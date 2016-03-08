@@ -13,8 +13,9 @@ from albam.mtframework.mod import (
     Bone,
     BonePalette,
     MaterialData,
+    VERTEX_FORMATS_TO_CLASSES,
     )
-from albam.mtframework import Arc, Mod156, Tex112
+from albam.mtframework import Arc, Mod156, Mod210, Tex112
 from albam.utils import (
     unpack_half_float, pack_half_float,
     chunks,
@@ -70,7 +71,7 @@ def import_arc(file_path, extraction_dir=None):
 
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
-        import_mod156(mod_file, out, parent, mod_dir)
+        import_mod(mod_file, out, parent, mod_dir)
 
 
 def export_arc(blender_object):
@@ -124,25 +125,30 @@ def export_arc(blender_object):
 
 
 
-def _get_vertex_array_from_vertex_buffer(mod, mesh):
-    if mesh.vertex_format == 0:
-        VF = VertexFormat0
-    elif mesh.vertex_format in (1, 2, 3, 4):
-        VF = VertexFormat
+def _get_vertices_array(mod, mesh):
+    try:
+        VF = VERTEX_FORMATS_TO_CLASSES[mesh.vertex_format]
+    except KeyError:
+        raise TypeError('Unrecognized vertex format: {}'.format(mesh.vertex_format))
+    if mod.version == 156:
+        position = max(mesh.vertex_index_start_1, mesh.vertex_index_start_2) * mesh.vertex_stride
+        if mesh.vertex_index_start_2 > mesh.vertex_index_start_1:
+            vertex_count = mesh.vertex_index_end - mesh.vertex_index_start_2 + 1
+            # TODO: research the content of mesh.vertex_index_start_1 and what it means in this case
+            # So far it looks it contains only garbage; all vertices have the same values.
+            # It's unknown why they exist for, and why they count for mesh.vertex_count
+            # The imported meshes here will have a different mesh count than the original.
+        else:
+            vertex_count = mesh.vertex_count
+    elif mod.version == 210:
+        position = mesh.vertex_index
+        vertex_count = mesh.vertex_count
     else:
-        VF = VertexFormat5
-    position = max(mesh.vertex_index_start_1, mesh.vertex_index_start_2) * mesh.vertex_stride
+        raise TypeError('Unsupported mod version: {}'.format(mod.version))
     offset = ctypes.addressof(mod.vertex_buffer)
     offset += mesh.vertex_offset
     offset += position
-    if mesh.vertex_index_start_2 > mesh.vertex_index_start_1:
-        vertex_count = mesh.vertex_index_end - mesh.vertex_index_start_2 + 1
-        # TODO: research the content of mesh.vertex_index_start_1 and what it means in this case
-        # So far it looks it contains only garbage; all vertices have the same values.
-        # It's unknown why they exist for, and why they count for mesh.vertex_count
-        # The imported meshes here will have a different mesh count than the original.
-    else:
-        vertex_count = mesh.vertex_count
+    print('offset', offset)
     return (VF * vertex_count).from_address(offset)
 
 
@@ -174,7 +180,7 @@ def _vertices_export_locations(xyz_tuple, bounding_box_width, bounding_box_heigh
     return (round(x), round(y), round(z))
 
 
-def _vertices_import_locations(vertex_format, bounding_box_width, bounding_box_height, bounding_box_length):
+def transform_vertices_from_bbox(vertex_format, bounding_box_width, bounding_box_height, bounding_box_length):
     x = vertex_format.position_x
     y = vertex_format.position_y
     z = vertex_format.position_z
@@ -212,14 +218,37 @@ def _get_weights_per_bone(mod, mesh, vertices_array):
 
 
 def _import_vertices(mod, mesh):
+    if mod.version == 156:
+        return _import_vertices_mod156(mod, mesh)
+    elif mod.version == 210:
+        return _import_vertices_mod210(mod, mesh)
+
+
+def _import_vertices_mod210(mod, mesh):
+    vertices_array = _get_vertices_array(mod, mesh)
+
+    vertices = ((vf.position_x / 32767, vf.position_y / 32767, vf.position_z / 32767)
+                for vf in vertices_array)
+    vertices = (y_up_to_z_up(vertex_tuple) for vertex_tuple in vertices)
+
+    # TODO: investigate why uvs don't appear above the image in the UV editor
+    list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
+    print(list(vertices)[:100])
+    return {'locations': list(vertices),
+            'uvs': list(chain.from_iterable(list_of_tuples)),
+            'weights_per_bone': {}
+            }
+
+
+def _import_vertices_mod156(mod, mesh):
     box_width = abs(mod.box_min_x) + abs(mod.box_max_x)
     box_height = abs(mod.box_min_y) + abs(mod.box_max_y)
     box_length = abs(mod.box_min_z) + abs(mod.box_max_z)
 
-    vertices_array = _get_vertex_array_from_vertex_buffer(mod, mesh)
+    vertices_array = _get_vertices_array(mod, mesh)
 
     if mesh.vertex_format != 0:
-        vertices = (_vertices_import_locations(vf, box_width, box_height, box_length)
+        vertices = (transform_vertices_from_bbox(vf, box_width, box_height, box_length)
                     for vf in vertices_array)
     else:
         vertices = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
@@ -472,6 +501,8 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     indices = _get_indices_array(mod, mesh)
+    print(indices[:])
+    #if mod.version == 156:
     indices = strip_triangles_to_triangles_list(indices)
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
@@ -585,11 +616,17 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
     return meshes_156, vertex_buffer, index_buffer
 
 
-def import_mod156(file_path, base_dir, parent=None, mod_dir_path=None):
+def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
     mod = Mod156(file_path=file_path)
+    if mod.version == 156:
+        pass
+    elif mod.version == 210:
+        mod = Mod210(file_path=file_path)
+
     model_name = os.path.basename(file_path)
-    textures = _create_blender_textures_from_mod(mod, base_dir)
-    materials = _create_blender_materials_from_mod(mod, model_name, textures)
+    #textures = _create_blender_textures_from_mod(mod, base_dir)
+    #materials = _create_blender_materials_from_mod(mod, model_name, textures)
+    materials = None
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
         try:

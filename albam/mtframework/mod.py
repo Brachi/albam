@@ -89,7 +89,7 @@ class Mesh210_211(Structure):
                 ('mesh_class', c_ubyte),
                 ('vertex_stride', c_ubyte),
                 ('render_mode', c_ubyte),
-                ('vertex_position', c_uint),
+                ('vertex_index', c_uint),
                 ('vertex_offset', c_uint),
                 ('vertex_format', c_uint),
                 ('face_position', c_uint),
@@ -162,6 +162,106 @@ class VertexFormat5(Structure):
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 )
+
+
+class VertexFormat_Test1(Structure):
+    # 0xA8FAB018
+    _fields_ = (('position_x', c_short),
+                ('position_y', c_short),
+                ('position_z', c_short),
+                ('bone_indices', c_ubyte * 1),
+                ('weight_values', c_ubyte * 1),
+                ('normal_x', c_byte),
+                ('normal_y', c_byte),
+                ('normal_z', c_byte),
+                ('normal_w', c_byte),
+                ('tangent_x', c_byte),
+                ('tangent_y', c_byte),
+                ('tangent_z', c_byte),
+                ('tangent_w', c_byte),
+                ('uv_x', c_ushort),  # half float
+                ('uv_y', c_ushort),  # half float
+                )
+
+
+class VertexFormat_Test2(Structure):
+    # 0xB0983013
+    _fields_ = (('position_x', c_short),
+                ('position_y', c_short),
+                ('position_z', c_short),
+                ('bone_indices', c_ubyte * 1),
+                ('weight_values', c_ubyte * 1),
+                ('uv_x', c_ushort),  # half float
+                ('uv_y', c_ushort),  # half float
+                )
+
+
+class VertexFormat_Test3(Structure):
+    # 0x2F55C03D
+    _fields_ = (('position_x', c_short),
+                ('position_y', c_short),
+                ('position_z', c_short),
+                ('weight_value_1', c_ushort),
+                ('normal_x', c_byte),
+                ('normal_y', c_byte),
+                ('normal_z', c_byte),
+                ('normal_w', c_byte),
+                ('tangent_x', c_byte),
+                ('tangent_y', c_byte),
+                ('tangent_z', c_byte),
+                ('tangent_w', c_byte),
+                ('bone_indices', c_ubyte * 4),
+                ('uv_x', c_ushort),  # half float
+                ('uv_y', c_ushort),  # half float
+                ('weight_value_2', c_ushort),  # half float
+                ('weight_value_3', c_ushort),  # half float
+                ('unk_01', c_uint),
+                ('unk_02', c_uint),
+                ('unk_03', c_uint),
+                ('unk_04', c_uint),
+                ('unk_05', c_uint),
+                ('unk_06', c_uint),
+                ('unk_07', c_uint),
+                ('unk_08', c_uint),
+                ('unk_09', c_uint),
+                )
+
+
+class VertexFormat_Test4(Structure):
+    # 0xC31F201C
+    _fields_ = (('position_x', c_short),
+                ('position_y', c_short),
+                ('position_z', c_short),
+                ('weight_value_1', c_ushort),
+                ('normal_x', c_byte),
+                ('normal_y', c_byte),
+                ('normal_z', c_byte),
+                ('normal_w', c_byte),
+                ('tangent_x', c_byte),
+                ('tangent_y', c_byte),
+                ('tangent_z', c_byte),
+                ('tangent_w', c_byte),
+                ('bone_indices', c_ushort * 2),  # half float??
+                ('uv_x', c_ushort),  # halhf float
+                ('uv_y', c_ushort),  # half float
+                )
+
+
+VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
+                             1: VertexFormat,
+                             2: VertexFormat,
+                             3: VertexFormat,
+                             4: VertexFormat,
+                             5: VertexFormat5,
+                             6: VertexFormat5,
+                             7: VertexFormat5,
+                             8: VertexFormat5,
+                             0xA8FAB018: VertexFormat_Test1,
+                             0xB0983013: VertexFormat_Test2,
+                             0xB0983014: VertexFormat_Test2,
+                             0x2F55C03D: VertexFormat_Test3,
+                             0xC31F201C: VertexFormat_Test4,
+                            }
 
 
 def get_meshes_sizes(tmp_struct):
