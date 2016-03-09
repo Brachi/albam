@@ -81,7 +81,6 @@ class Mesh156(Structure):
 class Mesh210_211(Structure):
     _fields_ = (('mesh_type', c_ushort),
                 ('vertex_count', c_ushort),
-                ('group_index', c_ubyte),
                 ('unk_01', c_ubyte),
                 ('material_index', c_ubyte),
                 ('level_of_detail', c_ubyte),
@@ -97,7 +96,8 @@ class Mesh210_211(Structure):
                 ('face_offset', c_uint),
                 ('bone_id_start', c_ubyte),
                 ('unique_boneids', c_ubyte),
-                ('mesh_index', c_ushort),
+                ('unk_02', c_ubyte),
+                ('unk_03', c_ubyte),
                 ('min_index', c_ushort),
                 ('max_index', c_ushort),
                 ('hash', c_uint),
@@ -246,6 +246,20 @@ class VertexFormat_Test4(Structure):
                 ('uv_y', c_ushort),  # half float
                 )
 
+class VertexFormat_Test5(Structure):
+    # 0xDB7DA014
+    _fields_ = (('position_x', c_short),
+                ('position_y', c_short),
+                ('position_z', c_short),
+                ('unk_01', c_byte),
+                ('unk_02', c_byte),
+                ('unk_03', c_byte),
+                ('unk_04', c_byte),
+                ('bone_indices', c_ubyte * 1),
+                ('weight_values', c_ubyte * 1),
+                ('uv_x', c_ushort),  # half float
+                ('uv_y', c_ushort),  # half float
+                )
 
 VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              1: VertexFormat,
@@ -261,6 +275,7 @@ VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              0xB0983014: VertexFormat_Test2,
                              0x2F55C03D: VertexFormat_Test3,
                              0xC31F201C: VertexFormat_Test4,
+                             0xDB7DA014: VertexFormat_Test5,
                             }
 
 

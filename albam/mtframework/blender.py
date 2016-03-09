@@ -129,7 +129,7 @@ def _get_vertices_array(mod, mesh):
     try:
         VF = VERTEX_FORMATS_TO_CLASSES[mesh.vertex_format]
     except KeyError:
-        raise TypeError('Unrecognized vertex format: {}'.format(mesh.vertex_format))
+        raise TypeError('Unrecognized vertex format: {}'.format(hex(mesh.vertex_format)))
     if mod.version == 156:
         position = max(mesh.vertex_index_start_1, mesh.vertex_index_start_2) * mesh.vertex_stride
         if mesh.vertex_index_start_2 > mesh.vertex_index_start_1:
@@ -141,14 +141,13 @@ def _get_vertices_array(mod, mesh):
         else:
             vertex_count = mesh.vertex_count
     elif mod.version == 210:
-        position = mesh.vertex_index
+        position = mesh.vertex_index * ctypes.sizeof(VF)
         vertex_count = mesh.vertex_count
     else:
         raise TypeError('Unsupported mod version: {}'.format(mod.version))
     offset = ctypes.addressof(mod.vertex_buffer)
     offset += mesh.vertex_offset
     offset += position
-    print('offset', offset)
     return (VF * vertex_count).from_address(offset)
 
 
@@ -226,14 +225,12 @@ def _import_vertices(mod, mesh):
 
 def _import_vertices_mod210(mod, mesh):
     vertices_array = _get_vertices_array(mod, mesh)
-
-    vertices = ((vf.position_x / 32767, vf.position_y / 32767, vf.position_z / 32767)
+    vertices = ((vf.position_x / 32767 * 2.5, vf.position_y / 32767 * 2.5, vf.position_z / 32767 * 2.5)
                 for vf in vertices_array)
     vertices = (y_up_to_z_up(vertex_tuple) for vertex_tuple in vertices)
 
     # TODO: investigate why uvs don't appear above the image in the UV editor
     list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
-    print(list(vertices)[:100])
     return {'locations': list(vertices),
             'uvs': list(chain.from_iterable(list_of_tuples)),
             'weights_per_bone': {}
@@ -439,7 +436,7 @@ def _save_mod_data_to_armature(mod, blender_armature, dirpath=None):
     bpy.types.Armature.albam_mod156_dirpath = mod156_dirpath
 
     blender_armature.albam_mod156 = b64encode(bytes(mod))
-    blender_armature.albam_mod156_dirpath = dirpath
+    blender_armature.albam_mod156_dirpath = dirpath if dirpath else ''
 
 
 def _create_blender_armature_from_mod(mod, armature_name, parent=None):
@@ -501,15 +498,18 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     indices = _get_indices_array(mod, mesh)
-    print(indices[:])
-    #if mod.version == 156:
-    indices = strip_triangles_to_triangles_list(indices)
+    if mod.version == 156:
+        indices = strip_triangles_to_triangles_list(indices)
+    else:
+        indices = [i - start_face for i in indices]
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
     name = create_mesh_name(mesh, mesh_index, file_path)
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
+    start_face = min(indices)
+
     me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
     me_ob.update(calc_edges=True)
     me_ob.validate()
@@ -624,9 +624,8 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
         mod = Mod210(file_path=file_path)
 
     model_name = os.path.basename(file_path)
-    #textures = _create_blender_textures_from_mod(mod, base_dir)
-    #materials = _create_blender_materials_from_mod(mod, model_name, textures)
-    materials = None
+    textures = _create_blender_textures_from_mod(mod, base_dir)
+    materials = _create_blender_materials_from_mod(mod, model_name, textures)
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
         try:
