@@ -101,7 +101,7 @@ class Mesh210_211(Structure):
                 ('min_index', c_ushort),
                 ('max_index', c_ushort),
                 ('hash', c_uint),
-               )
+                )
 
 
 class VertexFormat0(Structure):
@@ -246,6 +246,7 @@ class VertexFormat_Test4(Structure):
                 ('uv_y', c_ushort),  # half float
                 )
 
+
 class VertexFormat_Test5(Structure):
     # 0xDB7DA014
     _fields_ = (('position_x', c_short),
@@ -276,7 +277,7 @@ VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              0x2F55C03D: VertexFormat_Test3,
                              0xC31F201C: VertexFormat_Test4,
                              0xDB7DA014: VertexFormat_Test5,
-                            }
+                             }
 
 
 def get_meshes_sizes(tmp_struct):
@@ -415,4 +416,4 @@ class Mod210(BaseStructure):
                 ('vertex_buffer_2', lambda s: c_ubyte * s.vertex_buffer_2_size),
                 ('index_buffer', lambda s: c_ushort * s.face_count),
                 ('file_padding', c_ubyte * 2)
-               )
+                )
