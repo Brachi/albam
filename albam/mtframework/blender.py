@@ -225,7 +225,7 @@ def _import_vertices(mod, mesh):
 
 def _import_vertices_mod210(mod, mesh):
     vertices_array = _get_vertices_array(mod, mesh)
-    vertices = ((vf.position_x / 32767 * 2.5, vf.position_y / 32767 * 2.5, vf.position_z / 32767 * 2.5)
+    vertices = ((vf.position_x / 32767, vf.position_y / 32767, vf.position_z / 32767)
                 for vf in vertices_array)
     vertices = (y_up_to_z_up(vertex_tuple) for vertex_tuple in vertices)
 
@@ -501,6 +501,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     if mod.version == 156:
         indices = strip_triangles_to_triangles_list(indices)
     else:
+        start_face = min(indices)
         indices = [i - start_face for i in indices]
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
@@ -508,7 +509,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     name = create_mesh_name(mesh, mesh_index, file_path)
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
-    start_face = min(indices)
 
     me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
     me_ob.update(calc_edges=True)
@@ -617,15 +617,16 @@ def _create_meshes_156_array(blender_objects, materials, bounding_box, saved_mod
 
 
 def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
+    model_name = os.path.basename(file_path)
     mod = Mod156(file_path=file_path)
     if mod.version == 156:
-        pass
+        textures = _create_blender_textures_from_mod(mod, base_dir)
+        materials = _create_blender_materials_from_mod(mod, model_name, textures)
     elif mod.version == 210:
         mod = Mod210(file_path=file_path)
+        textures = []  # TODO: get them from mrl file
+        materials = []
 
-    model_name = os.path.basename(file_path)
-    textures = _create_blender_textures_from_mod(mod, base_dir)
-    materials = _create_blender_materials_from_mod(mod, model_name, textures)
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
         try:
