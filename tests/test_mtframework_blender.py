@@ -4,7 +4,6 @@ import subprocess
 
 import pytest
 
-
 from albam.mtframework import (KNOWN_ARC_FAILS, KNOWN_ARC_BLENDER_CRASH, KNOWN_ARC_BLENDER_HANGS,
                                Mod156, Arc)
 
@@ -12,15 +11,14 @@ SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
 EXPECTED_INDEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
-
-PYTHON_TEMPLATE ="""
+PYTHON_TEMPLATE = """
 import os
 import sys
 sys.path.append('{project_dir}')
 
 import bpy
 
-from albam.mtframework.blender import import_arc, export_arc
+from albam.mtframework.blender_import import import_arc, export_arc
 try:
     import_arc('{import_arc_filepath}', '{import_unpack_dir}')
     imported_name = os.path.basename('{import_arc_filepath}')
@@ -32,9 +30,10 @@ except Exception as err:
     print(err)
     sys.exit(1)
 """
+
+
 def is_close(a, b):
     return abs(a) - abs(b) < 0.001
-
 
 
 @pytest.fixture(scope='session')
@@ -69,14 +68,13 @@ def mods_import_export(request, tmpdir_factory):
     elif import_arc_filepath.endswith('uPl01ShebaCos4.arc'):
         pytest.xfail(reason='Division by zero on bounding box')
 
-
-
     python_script_file_path = str(base_temp.join('test-script.py'))
     import_unpack_dir = str(base_temp.mkdir('import_unpack'))
     export_unpack_dir = str(base_temp.mkdir('export_unpack'))
-    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath).replace('.arc', '-exported.arc'))
+    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath)
+                                       .replace('.arc', '-exported.arc'))
     # assuming that tests are run from the root project
-    blend_file = str(base_temp.join(arc_file_name+ '.blend'))
+    blend_file = str(base_temp.join(arc_file_name + '.blend'))
     project_dir = os.getcwd()
 
     python_script = PYTHON_TEMPLATE.format(project_dir=project_dir,
@@ -89,7 +87,6 @@ def mods_import_export(request, tmpdir_factory):
     with open(python_script_file_path, 'w') as w:
         w.write(python_script)
 
-
     args = '{} --background --python {}'.format(blender, python_script_file_path)
     try:
         subprocess.check_output((args,), shell=True)
@@ -97,13 +94,11 @@ def mods_import_export(request, tmpdir_factory):
         print(err.output)
         raise
 
-
     arc = Arc(export_arc_filepath)
     arc.unpack(export_unpack_dir)
 
     mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir)
                           for f in files if f.endswith('.mod')]
-
 
     mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir)
                           for f in files if f.endswith('.mod')]
@@ -149,11 +144,13 @@ def test_mod156_import_export_vertex_count(mods_import_export):
     # TODO: see comment in _get_vertex_array_from_vertex_buffer assert
     mod_original.vertex_count == mod_exported.vertex_count
 
+
 def test_mod156_import_export_face_count(mods_import_export):
     mod_original, mod_exported = mods_import_export
     # Expecting some differences in faces generated with the export algorithm
     EXPECTED_AVERAGE_EXTRA_INDICES = 20
-    assert abs(mod_original.face_count - mod_exported.face_count) < mod_original.mesh_count * EXPECTED_AVERAGE_EXTRA_INDICES
+    assert (abs(mod_original.face_count - mod_exported.face_count) <
+            mod_original.mesh_count * EXPECTED_AVERAGE_EXTRA_INDICES)
 
 
 @pytest.mark.xfail
@@ -172,7 +169,7 @@ def test_mod156_import_export_vertex_buffer_size(mods_import_export):
 def test_mod156_import_export_vertex_buffer_2_size(mods_import_export):
     mod_original, mod_exported = mods_import_export
     # TODO: see comment in _get_vertex_array_from_vertex_buffer
-    assert mod_original.vertex_buffer_2_size  == mod_exported.vertex_buffer_2_size
+    assert mod_original.vertex_buffer_2_size == mod_exported.vertex_buffer_2_size
 
 
 def test_mod156_import_export_texture_count(mods_import_export):
@@ -202,7 +199,7 @@ def test_mod156_import_export_group_offset(mods_import_export):
 
 def test_mod156_import_export_textures_array_offset(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert mod_original.textures_array_offset  == mod_exported.textures_array_offset
+    assert mod_original.textures_array_offset == mod_exported.textures_array_offset
 
 
 def test_mod156_import_export_meshes_array_offset(mods_import_export):
@@ -301,6 +298,7 @@ def test_mod156_import_export_box_unk_01(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.unk_01 == mod_exported.unk_01
 
+
 def test_mod156_import_export_box_unk_02(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.unk_02 == mod_exported.unk_02
@@ -309,6 +307,7 @@ def test_mod156_import_export_box_unk_02(mods_import_export):
 def test_mod156_import_export_box_unk_03(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.unk_03 == mod_exported.unk_03
+
 
 def test_mod156_import_export_box_unk_04(mods_import_export):
     mod_original, mod_exported = mods_import_export
@@ -323,6 +322,7 @@ def test_mod156_import_export_box_unk_05(mods_import_export):
 def test_mod156_import_export_box_unk_06(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.unk_06 == mod_exported.unk_06
+
 
 def test_mod156_import_export_box_unk_07(mods_import_export):
     mod_original, mod_exported = mods_import_export
@@ -371,7 +371,8 @@ def test_mod156_import_export_bones_unk_matrix_array(mods_import_export):
 
 def test_mod156_import_export_bones_world_transform_matrix_array(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.bones_world_transform_matrix_array) == bytes(mod_exported.bones_world_transform_matrix_array)
+    assert (bytes(mod_original.bones_world_transform_matrix_array) ==
+            bytes(mod_exported.bones_world_transform_matrix_array))
 
 
 def test_mod156_import_export_unk_13(mods_import_export):
