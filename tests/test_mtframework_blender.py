@@ -18,7 +18,8 @@ sys.path.append('{project_dir}')
 
 import bpy
 
-from albam.mtframework.blender_import import import_arc, export_arc
+from albam.mtframework.blender_import import import_arc
+from albam.mtframework.blender_export import export_arc
 try:
     import_arc('{import_arc_filepath}', '{import_unpack_dir}')
     imported_name = os.path.basename('{import_arc_filepath}')
