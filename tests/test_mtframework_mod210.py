@@ -1,4 +1,3 @@
-import ctypes
 import os
 
 import pytest
@@ -11,6 +10,8 @@ from tests.conftest import SAMPLES_DIR
 @pytest.fixture(scope='module')
 def mod_re1hd_samples():
     samples_dir = pytest.config.getoption('--dirmod') or os.path.join(SAMPLES_DIR, 're1hd/mod')
+    if not os.path.isdir(samples_dir):
+        return []
     return [os.path.join(samples_dir, f) for f in os.listdir(samples_dir)]
 
 
@@ -38,10 +39,6 @@ def test_mod210_bone_count(mod210):
     assert mod210.bone_count >= 0
 
 
-def test_mod210_bone_count(mod210):
-    assert mod210.bone_count >= 0
-
-
 def test_mod210_mesh_count(mod210):
     assert mod210.mesh_count >= 0
 
@@ -57,8 +54,8 @@ def test_mod210_vertex_count(mod210):
 
 def test_mod210_face_count(mod210):
     pass
-    #assert mod210.face_count >= 0
-    #assert mod210.face_count == len(mod210.index_buffer) + 1
+    # assert mod210.face_count >= 0
+    # assert mod210.face_count == len(mod210.index_buffer) + 1
     # assert mod210.face_count == sum(m.face_count for m in mod210.meshes_array)
 
 
@@ -68,8 +65,8 @@ def test_mod210_edge_count(mod210):
 
 def test_mod210_vertex_buffer_size(mod210):
     assert mod210.vertex_buffer_size >= 0
-    #assert mod210.vertex_buffer_size == mod210.vertex_count * 32
-    #assert mod210.vertex_buffer_size == sum(m.vertex_count for m in mod210.meshes_array) * 32
+    # assert mod210.vertex_buffer_size == mod210.vertex_count * 32
+    # assert mod210.vertex_buffer_size == sum(m.vertex_count for m in mod210.meshes_array) * 32
 
 
 def test_mod210_vertex_buffer_2_size(mod210):
@@ -127,7 +124,7 @@ def test_mod210_sphere_z(mod210):
     pass
 
 
-def test_mod210_sphere_z(mod210):
+def test_mod210_sphere_w(mod210):
     pass
 
 
@@ -146,6 +143,7 @@ def test_mod210_box_min_z(mod210):
 def test_mod210_box_min_w(mod210):
     pass
 
+
 def test_mod210_box_max_x(mod210):
     pass
 
@@ -163,9 +161,6 @@ def test_mod210_box_max_w(mod210):
 
 
 def test_mod210_unk_01(mod210):
-    pass
-
-def test_mod210_unk_02(mod210):
     pass
 
 
@@ -227,4 +222,4 @@ def test_mod210_vertex_buffer_2(mod210):
 def test_mod210_index_buffer(mod210):
     assert len(mod210.index_buffer) == mod210.face_count
     assert get_offset(mod210, 'index_buffer') == mod210.index_buffer_offset
-    #assert get_offset(mod210, 'index_buffer') + mod210.face_count * 2 + len(mod210.file_padding) == mod210.file_size
+    # assert get_offset(mod210, 'index_buffer') + mod210.face_count * 2 + len(mod210.file_padding) == mod210.file_size
