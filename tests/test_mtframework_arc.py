@@ -9,9 +9,10 @@ from tests.conftest import SAMPLES_DIR
 @pytest.fixture(scope='session')
 def arc_re5_samples(config=None):
     samples_dir = pytest.config.getoption('--dirarc') or os.path.join(SAMPLES_DIR, 're5/arc')
+    CORRUPTED_ARCS = {'uOmf303.arc', 's101.arc', 'uOmS103ScrAdj.arc'}
     return [os.path.join(root, f)
             for root, _, files in os.walk(samples_dir)
-            for f in files if f.endswith('.arc')]
+            for f in files if f.endswith('.arc') and f not in CORRUPTED_ARCS]
 
 
 @pytest.mark.parametrize("arc_file", arc_re5_samples())

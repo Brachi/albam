@@ -6,6 +6,7 @@ import pytest
 
 from albam.mtframework import (KNOWN_ARC_FAILS, KNOWN_ARC_BLENDER_CRASH, KNOWN_ARC_BLENDER_HANGS,
                                Mod156, Arc)
+from tests.test_mtframework_arc import arc_re5_samples
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
@@ -35,14 +36,6 @@ except Exception as err:
 
 def is_close(a, b):
     return abs(a) - abs(b) < 0.001
-
-
-@pytest.fixture(scope='session')
-def arc_re5_samples(config=None):
-    samples_dir = pytest.config.getoption('--dirarc') or os.path.join(SAMPLES_DIR, 're5/arc')
-    return [os.path.join(root, f)
-            for root, _, files in os.walk(samples_dir)
-            for f in files if f.endswith('.arc')]
 
 
 @pytest.fixture(scope='module', params=arc_re5_samples())
