@@ -57,7 +57,6 @@ def as_dict(obj):
         final = OrderedDict()
         for attr_tuple in obj._fields_:
             attr_name = attr_tuple[0]
-            attr_type = attr_tuple[1]
             attr_value = getattr(obj, attr_name)
             value_type = type(attr_value)
             final_value = attr_value
@@ -74,7 +73,6 @@ def as_dict(obj):
         return final
     else:
         return obj
-
 
 
 def parse_fields(sequence_of_tuples, file_path_or_buffer=None, **kwargs):
@@ -331,18 +329,29 @@ def get_index_count_from_blender_objects(blender_objects):
     return index_count
 
 
-def get_weights_per_vertex(blender_object):
+def get_bone_indices_and_weights_per_vertex(blender_object):
+    '''Returns {vertex_index: [(bone_index, weight_value), ...]}'''
     vertex_groups = blender_object.vertex_groups
-    if not vertex_groups or blender_object.type != 'MESH':
-        return {}
-    weights_per_vertex = {i: [] for i in range(len(blender_object.data.vertices))}
-    for vertex_index in weights_per_vertex:
-        for vg in vertex_groups:
-            try:
-                weight = vg.weight(vertex_index)
-                weights_per_vertex[vertex_index].append((vg.name, weight))
-            except RuntimeError:
-                pass
+    modifiers = {m.type: m for m in blender_object.modifiers}
+    weights_per_vertex = {}
+    if blender_object.type != 'MESH':
+        raise TypeError('Blender object is not a mesh')
+    if not vertex_groups or 'ARMATURE' not in modifiers:
+        return weights_per_vertex
+    armature = modifiers['ARMATURE'].object.data
+    bone_names_to_index = {b.name: i for i, b in enumerate(armature.bones)}
+
+    # https://www.blender.org/api/blender_python_api_current/bpy.types.VertexGroupElement.html
+    vertex_groups = blender_object.vertex_groups
+    for vertex in blender_object.data.vertices:
+        weights_per_vertex[vertex.index] = []
+        for group in vertex.groups:
+            # avoiding list comprehensions for readability
+            # bones in blender are matched to vertex group only by name
+            vgroup_name = vertex_groups[group.group].name
+            bone_index = bone_names_to_index[vgroup_name]
+            pair = (bone_index, group.weight)
+            weights_per_vertex[vertex.index].append(pair)
     return weights_per_vertex
 
 

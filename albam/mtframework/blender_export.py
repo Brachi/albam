@@ -26,7 +26,7 @@ from albam.utils import (
     get_materials_from_blender_objects,
     get_mesh_count_from_blender_objects,
     get_vertex_count_from_blender_objects,
-    get_weights_per_vertex,
+    get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
     )
 
@@ -164,7 +164,7 @@ def export_mod156(blender_object):
 def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
-    weights_per_vertex = get_weights_per_vertex(blender_mesh_object)
+    weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
     # TODO: check the number of uv layers
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object.data, blender_mesh_object.data.uv_layers[0])
     if weights_per_vertex:
@@ -192,7 +192,6 @@ def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
         uv_y = pack_half_float(uv_y)
         uvs_per_vertex[vertex_index] = (uv_x, uv_y)
 
-    vertices_array = (VF * vertex_count)()
     if uvs_per_vertex and len(uvs_per_vertex) != vertex_count:
         raise BuildMeshError('There are some vertices with no uvs in mesh in {}'.format(blender_mesh.name))
 
@@ -200,42 +199,46 @@ def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
     box_height = abs(bounding_box.min_y * 100) + abs(bounding_box.max_y * 100)
     box_length = abs(bounding_box.min_z * 100) + abs(bounding_box.max_z * 100)
 
+    vertices_array = (VF * vertex_count)()
+    has_bones = hasattr(VF, 'bone_indices')
+    has_tangents = hasattr(VF, 'tangent_x')
+    has_second_uv_layer = hasattr(VF, 'uv2_x')
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
-        vertex_format = vertices_array[vertex_index]
-        if max_bones_per_vertex:
-            weights_data = weights_per_vertex[vertex_index]   # list of (str(bone_index), value)
+        vertex_struct = vertices_array[vertex_index]
+        if weights_per_vertex:
+            weights_data = weights_per_vertex[vertex_index]   # list of (bone_index, value)
+            bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
+            weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
         else:
-            weights_data = []
-        # FIXME: Assumming vertex groups were named after the bone index,
-        # should get the bone and get the index
-        bone_indices = [bone_palette.index(int(vg_name)) for vg_name, _ in weights_data]
-        weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
+            bone_indices = []
+            weight_values = []
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
         if VF != VertexFormat0:
+            # applying bounding box constraints
             xyz = vertices_export_locations(xyz, box_width, box_length, box_height)
-        vertex_format.position_x = xyz[0]
-        vertex_format.position_y = xyz[1]
-        vertex_format.position_z = xyz[2]
-        vertex_format.position_w = 32767
-        vertex_format.bone_indices = (ctypes.c_ubyte * weights_array_size)(*bone_indices)
-        vertex_format.weight_values = (ctypes.c_ubyte * weights_array_size)(*weight_values)
-        vertex_format.normal_x = round(vertex.normal[0] * 127)
-        vertex_format.normal_y = round(vertex.normal[2] * 127) * -1
-        vertex_format.normal_z = round(vertex.normal[1] * 127)
-        vertex_format.normal_w = -1
-        if VF == VertexFormat:
-            vertex_format.tangent_x = -1
-            vertex_format.tangent_y = -1
-            vertex_format.tangent_z = -1
-            vertex_format.tangent_w = -1
-        vertex_format.uv_x = uvs_per_vertex[vertex_index][0] if uvs_per_vertex else 0
-        vertex_format.uv_y = uvs_per_vertex[vertex_index][1] if uvs_per_vertex else 0
-        if VF == VertexFormat:
-            vertex_format.uv2_x = 0
-            vertex_format.uv2_y = 0
-
+        vertex_struct.position_x = xyz[0]
+        vertex_struct.position_y = xyz[1]
+        vertex_struct.position_z = xyz[2]
+        vertex_struct.position_w = 32767
+        if has_bones:
+            vertex_struct.bone_indices = (ctypes.c_ubyte * weights_array_size)(*bone_indices)
+            vertex_struct.weight_values = (ctypes.c_ubyte * weights_array_size)(*weight_values)
+        vertex_struct.normal_x = round(vertex.normal[0] * 127)
+        vertex_struct.normal_y = round(vertex.normal[2] * 127) * -1
+        vertex_struct.normal_z = round(vertex.normal[1] * 127)
+        vertex_struct.normal_w = -1
+        if has_tangents:
+            vertex_struct.tangent_x = -1
+            vertex_struct.tangent_y = -1
+            vertex_struct.tangent_z = -1
+            vertex_struct.tangent_w = -1
+        vertex_struct.uv_x = uvs_per_vertex[vertex_index][0] if uvs_per_vertex else 0
+        vertex_struct.uv_y = uvs_per_vertex[vertex_index][1] if uvs_per_vertex else 0
+        if has_second_uv_layer:
+            vertex_struct.uv2_x = 0
+            vertex_struct.uv2_y = 0
     return VF, vertices_array
 
 
@@ -290,31 +293,34 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
             m156.material_index = materials.index(blender_mesh.materials[0])
         except IndexError:
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
-        m156.unk_01 = 1  # all game models seem to have the value 1
+        m156.unk_01 = 1
         m156.level_of_detail = saved_mesh.level_of_detail  # TODO
-        m156.unk_02 = 0  # most player models seem to have this value, needs research
         m156.vertex_format = vf
         m156.vertex_stride = 32
-        m156.unk_03 = 0  # Most meshes use this value
-        m156.unk_04 = 0
-        m156.unk_05 = 110
+        m156.unk_07 = saved_mesh.unk_07
+        m156.unk_08 = saved_mesh.unk_08
         m156.vertex_count = vertex_count
         m156.vertex_index_end = vertex_position + vertex_count - 1
         m156.vertex_index_start_1 = vertex_position
         m156.vertex_offset = 0
-        m156.unk_06 = 0  # Most models have this value
         m156.face_position = face_position
         m156.face_count = index_count
         m156.face_offset = 0
-        m156.unk_07 = saved_mesh.unk_07
-        m156.unk_08 = saved_mesh.unk_08
         m156.vertex_index_start_2 = vertex_position
         m156.unk_09 = saved_mesh.unk_09
-        m156.bone_palette_index = saved_mesh.bone_palette_index  # XXX: improve, not guaranteed!
-        m156.unk_10 = saved_mesh.unk_10
-        m156.unk_11 = saved_mesh.unk_11
-        m156.unk_12 = saved_mesh.unk_12
-        m156.unk_13 = saved_mesh.unk_13
+        # XXX: improve, not guaranteed!
+        m156.bone_palette_index = saved_mesh.bone_palette_index
+
+        # TODO: not using saved_mesh since it seems these are optional. Needs research
+        m156.unk_02 = 0
+        m156.unk_03 = 0
+        m156.unk_04 = 0
+        m156.unk_05 = 0
+        m156.unk_06 = 0
+        m156.unk_10 = 0
+        m156.unk_11 = 0
+        m156.unk_12 = 0
+        m156.unk_13 = 0
 
         vertex_position += vertex_count
         face_position += index_count
