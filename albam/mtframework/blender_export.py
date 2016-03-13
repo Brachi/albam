@@ -5,6 +5,8 @@ import ntpath
 import os
 import tempfile
 
+import bpy
+
 from albam.exceptions import BuildMeshError, ExportError
 from albam.mtframework.mod import (
     Mesh156,
@@ -15,6 +17,7 @@ from albam.mtframework.mod import (
 from albam.mtframework import Arc, Mod156, Tex112
 from albam.mtframework.utils import (
     vertices_export_locations,
+    get_vertices_array,
     )
 from albam.utils import (
     pack_half_float,
@@ -66,7 +69,17 @@ def export_arc(blender_object):
                 w.write(new_mod[0])
             mod_textures = new_mod[1]
             for texture in mod_textures:
-                tex = Tex112.from_dds(file_path=texture.image.filepath)
+                tex = Tex112.from_dds(file_path=bpy.path.abspath(texture.image.filepath))
+                # XXX: quick hack to get info from imported textures. Have to figure these values out
+                # should be easy just observing the game
+                try:
+                    tex.unk_float_1 = texture.albam_texture_unk_01
+                    tex.unk_float_2 = texture.albam_texture_unk_02
+                    tex.unk_float_3 = texture.albam_texture_unk_03
+                    tex.unk_float_4 = texture.albam_texture_unk_04
+                except AttributeError:
+                    pass
+
                 tex_name = os.path.basename(texture.image.filepath)
                 tex_filepath = os.path.join(os.path.dirname(modf), tex_name.replace('.dds', '.tex'))
                 new_tex_files.add(tex_filepath)
@@ -207,8 +220,10 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
     has_bones = hasattr(VF, 'bone_indices')
     has_tangents = hasattr(VF, 'tangent_x')
     has_second_uv_layer = hasattr(VF, 'uv2_x')
+    original_vertices_array = get_vertices_array(saved_mod, saved_mod.meshes_array[mesh_index])
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
+        original_vertex_struct = original_vertices_array[vertex_index]
         if weights_per_vertex:
             weights_data = weights_per_vertex[vertex_index]   # list of (bone_index, value)
             bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
@@ -230,15 +245,28 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
             vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
             vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
+        '''
         vertex_struct.normal_x = round(vertex.normal[0] * 127)
         vertex_struct.normal_y = round(vertex.normal[2] * 127) * -1
         vertex_struct.normal_z = round(vertex.normal[1] * 127)
         vertex_struct.normal_w = -1
+        '''
+        # XXX quick hack until normals can be exported ok in blender (gotta check fbx export or ask Bastien Montagne)
+        vertex_struct.normal_x = original_vertex_struct.normal_x
+        vertex_struct.normal_y = original_vertex_struct.normal_y
+        vertex_struct.normal_z = original_vertex_struct.normal_z
+        vertex_struct.normal_w = original_vertex_struct.normal_w
         if has_tangents:
+            vertex_struct.tangent_x = original_vertex_struct.tangent_x
+            vertex_struct.tangent_y = original_vertex_struct.tangent_x
+            vertex_struct.tangent_z = original_vertex_struct.tangent_x
+            vertex_struct.tangent_w = original_vertex_struct.tangent_x
+            '''
             vertex_struct.tangent_x = -1
             vertex_struct.tangent_y = -1
             vertex_struct.tangent_z = -1
             vertex_struct.tangent_w = -1
+            '''
         vertex_struct.uv_x = uvs_per_vertex[vertex_index][0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex[vertex_index][1] if uvs_per_vertex else 0
         if has_second_uv_layer:
