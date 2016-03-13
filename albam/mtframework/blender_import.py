@@ -78,10 +78,11 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
     if mod.bone_count:
         armature_ob = _create_blender_armature_from_mod(mod, model_name, parent)
         armature_ob.show_x_ray = True
-        _save_mod_data_to_armature(mod, armature_ob.data, mod_dir_path)
+        _save_mod_data_to_object(mod, armature_ob, mod_dir_path)
     else:
         parent_empty = bpy.data.objects.new(model_name, None)
         parent_empty.parent = parent
+        _save_mod_data_to_object(mod, parent_empty, mod_dir_path)
         bpy.context.scene.objects.link(parent_empty)
 
     for mesh in meshes:
@@ -210,7 +211,7 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
     return materials
 
 
-def _save_mod_data_to_armature(mod, blender_armature, dirpath=None):
+def _save_mod_data_to_object(mod, blender_object, dirpath=None):
     """
     This function should be generalized when more formats are added
     Base64 is used because when saving bytes to a StringProperty, the get
@@ -219,11 +220,11 @@ def _save_mod_data_to_armature(mod, blender_armature, dirpath=None):
     albam_mod156 = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     mod156_dirpath = StrProp(options={'HIDDEN'})
 
-    bpy.types.Armature.albam_mod156 = albam_mod156
-    bpy.types.Armature.albam_mod156_dirpath = mod156_dirpath
+    bpy.types.Object.albam_mod156 = albam_mod156
+    bpy.types.Object.albam_mod156_dirpath = mod156_dirpath
 
-    blender_armature.albam_mod156 = b64encode(bytes(mod))
-    blender_armature.albam_mod156_dirpath = dirpath if dirpath else ''
+    blender_object.albam_mod156 = b64encode(bytes(mod))
+    blender_object.albam_mod156_dirpath = dirpath if dirpath else ''
 
 
 def _create_blender_armature_from_mod(mod, armature_name, parent=None):
