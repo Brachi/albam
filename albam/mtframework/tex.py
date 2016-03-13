@@ -52,11 +52,22 @@ class Tex112(BaseStructure):
         dds_data = (c_byte * len(dds.data)).from_buffer(dds.data)
 
         # TODO: Don't hardcode uknown floats (seem to be brightness values)
-        tex = cls(id_magic=cls.ID_MAGIC, version=112, revision=34, mipmap_count=mipmap_count,
-                  unk_byte_1=1, unk_byte_2=0, unk_byte_3=0,
-                  width=width, height=height, compression_format=compression_format,
-                  unk_float_1=0.7, unk_float_2=0.7, tex_unk_float_3=0.7, unk_float_4=0.7,
-                  mipmap_offsets=mipmap_offsets, dds_data=dds_data)
+        tex = cls(id_magic=cls.ID_MAGIC,
+                  version=112,
+                  revision=34,
+                  mipmap_count=mipmap_count,
+                  unk_byte_1=1,
+                  unk_byte_2=0,
+                  unk_byte_3=0,
+                  width=width,
+                  height=height,
+                  compression_format=compression_format,
+                  unk_float_1=0.76,
+                  unk_float_2=0.76,
+                  tex_unk_float_3=0.76,
+                  unk_float_4=0,
+                  mipmap_offsets=mipmap_offsets,
+                  dds_data=dds_data)
 
         return tex
 
