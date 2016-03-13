@@ -20,7 +20,7 @@ def test_arc_unpack_re5(tmpdir, arc_file):
     if arc_file.endswith(KNOWN_ARC_FAILS):
         pytest.xfail()
     arc = Arc(file_path=arc_file)
-    out = os.path.join(str(tmpdir), 'extracted_ard')
+    out = os.path.join(str(tmpdir), 'extracted_arc')
 
     arc.unpack(out)
 
