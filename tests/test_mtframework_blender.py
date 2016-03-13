@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from albam.mtframework import (KNOWN_ARC_FAILS, KNOWN_ARC_BLENDER_CRASH, KNOWN_ARC_BLENDER_HANGS,
+from albam.mtframework import (KNOWN_ARC_BLENDER_CRASH, KNOWN_ARC_BLENDER_HANGS,
                                Mod156, Arc)
 from tests.test_mtframework_arc import arc_re5_samples
 
@@ -12,8 +12,7 @@ SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
 EXPECTED_INDEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
-PYTHON_TEMPLATE = """
-import os
+PYTHON_TEMPLATE = """import os
 import sys
 sys.path.append('{project_dir}')
 
@@ -47,7 +46,6 @@ def mods_import_export(request, tmpdir_factory):
     import_arc_filepath = request.param
     arc_file_name = os.path.basename(import_arc_filepath).replace('.arc', '-arc')
     base_temp = tmpdir_factory.mktemp(arc_file_name)
-    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath) + 'exported')
 
     if import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
         pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
@@ -63,7 +61,8 @@ def mods_import_export(request, tmpdir_factory):
     import_unpack_dir = str(base_temp.mkdir('import_unpack'))
     export_unpack_dir = str(base_temp.mkdir('export_unpack'))
     export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath)
-                                       .replace('.arc', '-exported.arc'))
+                                       .replace('.arc', '-exported.arc')
+                                       )
     # assuming that tests are run from the root project
     blend_file = str(base_temp.join(arc_file_name + '.blend'))
     project_dir = os.getcwd()
@@ -401,9 +400,222 @@ def test_mod156_import_export_materials_data_array_texture_paths(mods_import_exp
     assert texture_paths_from_materials_original == texture_paths_from_materials_exported
 
 
+def test_mod156_import_export_materials_data_array_values(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, material_original in enumerate(mod_original.materials_data_array):
+        material_exported = mod_exported.materials_data_array[i]
+        assert material_original.unk_01 == material_exported.unk_01
+        assert material_original.unk_02 == material_exported.unk_02
+        assert material_original.unk_03 == material_exported.unk_03
+        assert material_original.unk_04 == material_exported.unk_04
+        assert material_original.unk_05 == material_exported.unk_05
+        assert material_original.unk_06 == material_exported.unk_06
+        assert material_original.unk_07[:] == material_exported.unk_07[:]
+
+
 def test_mod156_import_export_meshes_array_length(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
+
+
+def test_mod156_import_export_meshes_array_group_index(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.group_index == mesh_exported.group_index
+
+
+def test_mod156_import_export_meshes_array_material_index(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.material_index == mesh_exported.material_index
+
+
+def test_mod156_import_export_meshes_array_level_of_detail(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.level_of_detail == mesh_exported.level_of_detail
+
+
+def test_mod156_import_export_meshes_array_unk_01(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_01 == mesh_exported.unk_01
+
+
+def test_mod156_import_export_meshes_array_vertex_format(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_format == mesh_exported.vertex_format
+
+
+def test_mod156_import_export_meshes_array_vertex_stride(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_stride == mesh_exported.vertex_stride
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_unk_02(mods_import_export):
+    '''For some reason the game crashes on uPl00ChrisNormal.arc if is set'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_02 == mesh_exported.unk_02
+
+
+def test_mod156_import_export_meshes_array_unk_03(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_03 == mesh_exported.unk_03
+
+
+def test_mod156_import_export_meshes_array_unk_04(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_04 == mesh_exported.unk_04
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_vertex_count(mods_import_export):
+    '''Won't match in meshes that use index_start_1'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_count == mesh_exported.vertex_count
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_vertex_index_end(mods_import_export):
+    '''Won't match since no grouping is applied'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_index_end == mesh_exported.vertex_index_end
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_vertex_index_start_1(mods_import_export):
+    '''Won't match since no grouping is applied'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_index_start_1 == mesh_exported.vertex_index_start_1
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_vertex_offset(mods_import_export):
+    '''Won't match since no grouping is applied'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_offset == mesh_exported.vertex_offset
+
+
+def test_mod156_import_export_meshes_array_unk_05(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_05 == mesh_exported.unk_05
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_face_position(mods_import_export):
+    '''Won't match since no grouping is applied, plus triangle strip numbers could vary'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.face_position == mesh_exported.face_position
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_face_count(mods_import_export):
+    '''Won't match since triangle strip numbers could vary'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.face_count == mesh_exported.face_count
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_face_offset(mods_import_export):
+    '''Won't match since no grouping is applied, plus triangle strip numbers could vary'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.face_offset == mesh_exported.face_offset
+
+
+def test_mod156_import_export_meshes_array_unk_06(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_06 == mesh_exported.unk_06
+
+
+def test_mod156_import_export_meshes_array_unk_07(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_07 == mesh_exported.unk_07
+
+
+@pytest.mark.xfail
+def test_mod156_import_export_meshes_array_vertex_index_start_22(mods_import_export):
+    '''Won't match since no grouping is applied'''
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_index_start_2 == mesh_exported.vertex_index_start_2
+
+
+def test_mod156_import_export_meshes_array_vertex_group_count(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.vertex_group_count == mesh_exported.vertex_group_count
+
+
+def test_mod156_import_export_meshes_bone_palette_index(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_07 == mesh_exported.unk_07
+
+
+def test_mod156_import_export_meshes_array_unk_08(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_08 == mesh_exported.unk_08
+
+
+def test_mod156_import_export_meshes_array_unk_09(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_09 == mesh_exported.unk_09
+
+
+def test_mod156_import_export_meshes_array_unk_10(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_10 == mesh_exported.unk_10
+
+
+def test_mod156_import_export_meshes_array_unk_11(mods_import_export):
+    mod_original, mod_exported = mods_import_export
+    for i, mesh_original in enumerate(mod_original.meshes_array):
+        mesh_exported = mod_exported.meshes_array[i]
+        assert mesh_original.unk_11 == mesh_exported.unk_11
 
 
 def test_mod156_import_export_meshes_array_2(mods_import_export):

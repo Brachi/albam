@@ -151,6 +151,18 @@ class VertexFormat(Structure):
                 )
 
 
+class VertexFormat2(VertexFormat):
+    pass
+
+
+class VertexFormat3(VertexFormat):
+    pass
+
+
+class VertexFormat4(VertexFormat):
+    pass
+
+
 class VertexFormat5(Structure):
     _fields_ = (('position_x', c_short),
                 ('position_y', c_short),
@@ -165,6 +177,18 @@ class VertexFormat5(Structure):
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 )
+
+
+class VertexFormat6(VertexFormat5):
+    pass
+
+
+class VertexFormat7(VertexFormat5):
+    pass
+
+
+class VertexFormat8(VertexFormat5):
+    pass
 
 
 class VertexFormat_Test1(Structure):
@@ -267,13 +291,13 @@ class VertexFormat_Test5(Structure):
 
 VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              1: VertexFormat,
-                             2: VertexFormat,
-                             3: VertexFormat,
-                             4: VertexFormat,
+                             2: VertexFormat2,
+                             3: VertexFormat3,
+                             4: VertexFormat4,
                              5: VertexFormat5,
-                             6: VertexFormat5,
-                             7: VertexFormat5,
-                             8: VertexFormat5,
+                             6: VertexFormat6,
+                             7: VertexFormat7,
+                             8: VertexFormat8,
                              0xA8FAB018: VertexFormat_Test1,
                              0xB0983013: VertexFormat_Test2,
                              0xB0983014: VertexFormat_Test2,
@@ -281,6 +305,9 @@ VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              0xC31F201C: VertexFormat_Test4,
                              0xDB7DA014: VertexFormat_Test5,
                              }
+
+
+CLASSES_TO_VERTEX_FORMATS = {v: k for k, v in VERTEX_FORMATS_TO_CLASSES.items()}
 
 
 def get_meshes_sizes(mod):

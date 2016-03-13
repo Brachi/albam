@@ -7,9 +7,10 @@ import tempfile
 
 from albam.exceptions import BuildMeshError, ExportError
 from albam.mtframework.mod import (
-    VertexFormat, VertexFormat5, VertexFormat0,
     Mesh156,
     MaterialData,
+    CLASSES_TO_VERTEX_FORMATS,
+    VERTEX_FORMATS_TO_CLASSES,
     )
 from albam.mtframework import Arc, Mod156, Tex112
 from albam.mtframework.utils import (
@@ -106,12 +107,12 @@ def export_mod156(blender_object):
                  version_rev=1,
                  bone_count=get_bone_count_from_blender_objects(objects),
                  mesh_count=get_mesh_count_from_blender_objects(objects),
-                 material_count=len(materials),
+                 material_count=len(materials_array),
                  vertex_count=get_vertex_count_from_blender_objects(objects),
                  face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(vertex_buffer),
-                 vertex_buffer_2_size=0,
+                 vertex_buffer_2_size=len(saved_mod.vertex_buffer_2),
                  texture_count=len(textures_array),
                  group_count=saved_mod.group_count,
                  group_data_array=saved_mod.group_data_array,
@@ -149,6 +150,7 @@ def export_mod156(blender_object):
                  meshes_array=meshes_array,
                  meshes_array_2=saved_mod.meshes_array_2,
                  vertex_buffer=vertex_buffer,
+                 vertex_buffer_2=saved_mod.vertex_buffer_2,
                  index_buffer=index_buffer
                  )
 
@@ -162,29 +164,30 @@ def export_mod156(blender_object):
     return mod, textures
 
 
-def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
+def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
+    saved_mesh = saved_mod.meshes_array[mesh_index]
+    bone_palette = saved_mod.bone_palette_array[saved_mesh.bone_palette_index].values[:]
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
     # TODO: check the number of uv layers
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object.data, blender_mesh_object.data.uv_layers[0])
+
+    VF = VERTEX_FORMATS_TO_CLASSES[saved_mesh.vertex_format]
+
+    '''
+    # Unfortunately this fails in some cases and could crash the game; until some mesh unknowns are figured out,
+    # relying on saved_mesh data
+    # e.g. pl0000.mod from uPl00ChrisNormal.arc, meshes_array[30] has max bones per vertex = 4, but the
+    # original file has 5
     if weights_per_vertex:
         max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()})
-        if max_bones_per_vertex <= 4:
-            weights_array_size = 4
-            VF = VertexFormat
-        elif max_bones_per_vertex <= 8:
-            weights_array_size = 8
-            VF = VertexFormat5
-        else:
+        if max_bones_per_vertex > 8:
             raise RuntimeError("The mesh '{}' contains some vertex that are weighted by "
                                "more than 8 bones, which is not supported. Fix it and try again"
                                .format(blender_mesh.name))
-
-    else:
-        max_bones_per_vertex = 0
-        weights_array_size = 0
-        VF = VertexFormat0
+        VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
+    '''
 
     for vertex_index, (uv_x, uv_y) in uvs_per_vertex.items():
         # flipping for dds textures
@@ -216,7 +219,7 @@ def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
-        if VF != VertexFormat0:
+        if has_bones:
             # applying bounding box constraints
             xyz = vertices_export_locations(xyz, box_width, box_length, box_height)
         vertex_struct.position_x = xyz[0]
@@ -224,8 +227,9 @@ def _export_vertices(blender_mesh_object, bounding_box, bone_palette):
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
         if has_bones:
-            vertex_struct.bone_indices = (ctypes.c_ubyte * weights_array_size)(*bone_indices)
-            vertex_struct.weight_values = (ctypes.c_ubyte * weights_array_size)(*weight_values)
+            array_size = ctypes.sizeof(vertex_struct.bone_indices)
+            vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
+            vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
         vertex_struct.normal_x = round(vertex.normal[0] * 127)
         vertex_struct.normal_y = round(vertex.normal[2] * 127) * -1
         vertex_struct.normal_z = round(vertex.normal[1] * 127)
@@ -266,10 +270,8 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
             raise ExportError('Exporting models with more meshes (parts) than the original not supported yet')
         blender_mesh = blender_mesh_object.data
 
-        bpi = saved_mesh.bone_palette_index
-        vertex_format, vertices_array = _export_vertices(blender_mesh_object,
-                                                         bounding_box,
-                                                         saved_mod.bone_palette_array[bpi].values[:])
+        vertex_format, vertices_array = _export_vertices(blender_mesh_object, bounding_box,
+                                                         saved_mod, i)
         vertex_buffer.extend(vertices_array)
         # TODO: is all this format conversion necessary?
         triangle_strips_python = triangles_list_to_triangles_strip(blender_mesh)
@@ -277,13 +279,6 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
         triangle_strips_python = [e + vertex_position for e in triangle_strips_python]
         triangle_strips_ctypes = (ctypes.c_ushort * len(triangle_strips_python))(*triangle_strips_python)
         index_buffer.extend(triangle_strips_ctypes)
-
-        if vertex_format == VertexFormat0:
-            vf = 0
-        elif vertex_format == VertexFormat:
-            vf = 1
-        else:
-            vf = 5
 
         vertex_count = len(blender_mesh.vertices)
         index_count = len(triangle_strips_python)
@@ -295,7 +290,7 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
         m156.constant = 1
         m156.level_of_detail = saved_mesh.level_of_detail  # TODO
-        m156.vertex_format = vf
+        m156.vertex_format = CLASSES_TO_VERTEX_FORMATS[vertex_format]
         m156.vertex_stride = 32
         m156.vertex_count = vertex_count
         m156.vertex_index_end = vertex_position + vertex_count - 1
@@ -310,17 +305,18 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
         m156.bone_palette_index = saved_mesh.bone_palette_index
 
         # TODO: not using saved_mesh since it seems these are optional. Needs research
-        m156.group_index = 0
-        m156.unk_01 = 0
-        m156.unk_02 = 0
-        m156.unk_03 = 0
-        m156.unk_04 = 0
-        m156.unk_05 = 0
-        m156.unk_06 = 0
-        m156.unk_07 = 0
-        m156.unk_08 = 0
-        m156.unk_09 = 0
-        m156.unk_10 = 0
+        m156.group_index = saved_mesh.group_index
+        m156.unk_01 = saved_mesh.unk_01
+        # m156.unk_02 = saved_mesh.unk_02  # crashes if set to saved_mesh.unk_02 in ChrisNormal
+        m156.unk_03 = saved_mesh.unk_03
+        m156.unk_04 = saved_mesh.unk_04
+        m156.unk_05 = saved_mesh.unk_05
+        m156.unk_06 = saved_mesh.unk_06
+        m156.unk_07 = saved_mesh.unk_07
+        m156.unk_08 = saved_mesh.unk_08
+        m156.unk_09 = saved_mesh.unk_09
+        m156.unk_10 = saved_mesh.unk_10
+        m156.unk_11 = saved_mesh.unk_11
 
         vertex_position += vertex_count
         face_position += index_count
