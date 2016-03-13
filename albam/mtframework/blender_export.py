@@ -37,11 +37,11 @@ def export_arc(blender_object):
     mods = {}
     for child in blender_object.children:
         try:
-            mod_dirpath = child.data.albam_mod156_dirpath
+            mod_dirpath = child.albam_mod156_dirpath
             # TODO: This could lead to errors if imported in Windows and exported in posix?
             mod_filepath = os.path.join(mod_dirpath, child.name)
         except AttributeError:
-            raise ExportError("Object {0} did not come from the original arc")
+            raise ExportError('Object {0} did not come from the original arc'.format(child.name))
         mod, textures = export_mod156(child)
         mods[mod_filepath] = (mod, textures)
 
@@ -86,11 +86,12 @@ def export_mod156(blender_object):
 
     objects = [child for child in blender_object.children] + [blender_object]
     try:
-        mod_dirpath = blender_object.data.albam_mod156_dirpath
-        saved_mod = Mod156(file_path=BytesIO(b64decode(blender_object.data.albam_mod156)))
+        mod_dirpath = blender_object.albam_mod156_dirpath
+        saved_mod = Mod156(file_path=BytesIO(b64decode(blender_object.albam_mod156)))
     except AttributeError:
-        raise ExportError("Can't export model to Mod156, the model to be exported "
-                          "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)")
+        raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
+                          "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)"
+                          .format(blender_object.name))
     bounding_box = get_bounding_box_positions_from_blender_objects(objects)
 
     # TODO: this is also called in _export_textures...
@@ -288,17 +289,14 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
         index_count = len(triangle_strips_python)
 
         m156 = meshes_156[i]
-        m156.type = saved_mesh.type  # Needs to be investigated
         try:
             m156.material_index = materials.index(blender_mesh.materials[0])
         except IndexError:
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
-        m156.unk_01 = 1
+        m156.constant = 1
         m156.level_of_detail = saved_mesh.level_of_detail  # TODO
         m156.vertex_format = vf
         m156.vertex_stride = 32
-        m156.unk_07 = saved_mesh.unk_07
-        m156.unk_08 = saved_mesh.unk_08
         m156.vertex_count = vertex_count
         m156.vertex_index_end = vertex_position + vertex_count - 1
         m156.vertex_index_start_1 = vertex_position
@@ -307,20 +305,22 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
         m156.face_count = index_count
         m156.face_offset = 0
         m156.vertex_index_start_2 = vertex_position
-        m156.unk_09 = saved_mesh.unk_09
+        m156.vertex_group_count = saved_mesh.vertex_group_count  # len(blender_mesh_object.vertex_groups)
         # XXX: improve, not guaranteed!
         m156.bone_palette_index = saved_mesh.bone_palette_index
 
         # TODO: not using saved_mesh since it seems these are optional. Needs research
+        m156.group_index = 0
+        m156.unk_01 = 0
         m156.unk_02 = 0
         m156.unk_03 = 0
         m156.unk_04 = 0
         m156.unk_05 = 0
         m156.unk_06 = 0
+        m156.unk_07 = 0
+        m156.unk_08 = 0
+        m156.unk_09 = 0
         m156.unk_10 = 0
-        m156.unk_11 = 0
-        m156.unk_12 = 0
-        m156.unk_13 = 0
 
         vertex_position += vertex_count
         face_position += index_count
