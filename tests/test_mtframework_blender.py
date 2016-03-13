@@ -49,16 +49,13 @@ def mods_import_export(request, tmpdir_factory):
     base_temp = tmpdir_factory.mktemp(arc_file_name)
     export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath) + 'exported')
 
-    if import_arc_filepath.endswith(KNOWN_ARC_FAILS):
-        pytest.xfail(reason='Malformed arc from the game')
-    elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
+    if import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
         pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
     elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_HANGS):
         pytest.xfail(reason='Memory corruption in blender: bug ALB-04')
     elif import_arc_filepath.endswith('uPl03WeskerCos1.arc'):
-        pytest.xfail(reason='Multiple mods export not supported yet')
-    elif import_arc_filepath.endswith(('uPl02JillCos1.arc', 'uPl02JillCos4.arc')):
-        pytest.xfail(reason='Strip triangles exported wrongly')
+        pytest.xfail(reason='Issues with cube textures (not recognized as DDS) and bone palettes')
+    # uPl02JillCos1.arc and uPl02JillCos4.arc have one mesh with wrong exported strip triangles
     elif import_arc_filepath.endswith('uPl01ShebaCos4.arc'):
         pytest.xfail(reason='Division by zero on bounding box')
 
@@ -214,6 +211,7 @@ def test_mod156_import_export_vertex_buffer_2_offset(mods_import_export):
 
 @pytest.mark.xfail
 def test_mod156_import_export_index_buffer_offset(mods_import_export):
+    '''Fails since vertex_buffer_2 is not included'''
     mod_original, mod_exported = mods_import_export
     assert mod_original.index_buffer_offset == mod_exported.index_buffer_offset
 
@@ -408,19 +406,14 @@ def test_mod156_import_export_meshes_array_length(mods_import_export):
     assert len(mod_original.meshes_array) == len(mod_exported.meshes_array)
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_meshes_array_2(mods_import_export):
     mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.meshes_array_2) == bytes(mod_exported.meshes_array)
-
-
-@pytest.mark.xfail
-def test_mod156_import_export_vertex_buffer(mods_import_export):
-    mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.vertex_buffer) == bytes(mod_exported.vertex_buffer)
+    assert bytes(mod_original.meshes_array_2) == bytes(mod_exported.meshes_array_2)
 
 
 def test_mod156_import_export_vertex_buffer_approximation(mods_import_export):
+    '''Is not expected that the buffer exported matches exactly the original,
+    because of rounding errors and more, but right know especially since normals are to be added'''
     mod_original, mod_exported = mods_import_export
     seq = SequenceMatcher(None, bytes(mod_original.vertex_buffer), bytes(mod_exported.vertex_buffer))
 
@@ -428,18 +421,18 @@ def test_mod156_import_export_vertex_buffer_approximation(mods_import_export):
 
 
 @pytest.mark.xfail
-def test_mod156_import_export_vertex_buffer_2(mods_import_export):
+def test_mod156_import_export_vertex_buffer_2_approximation(mods_import_export):
+    '''Is not expected that the buffer exported matches exactly the original,
+    because of rounding errors and more, but right know especially since normals are to be added'''
     mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.vertex_buffer_2) == bytes(mod_exported.vertex_buffer_2)
+    seq = SequenceMatcher(None, bytes(mod_original.vertex_buffer_2), bytes(mod_exported.vertex_buffer_2))
 
-
-@pytest.mark.xfail
-def test_mod156_import_export_index_buffer(mods_import_export):
-    mod_original, mod_exported = mods_import_export
-    assert bytes(mod_original.index_buffer) == bytes(mod_exported.index_buffer)
+    assert seq.quick_ratio() >= EXPECTED_VERTEX_BUFFER_RATIO
 
 
 def test_mod156_import_export_index_buffer_approximation(mods_import_export):
+    '''Is not expected that the buffer exported matches exactly the original,
+    because of rounding errors and more, but right know especially since normals are to be added'''
     mod_original, mod_exported = mods_import_export
     seq = SequenceMatcher(None, bytes(mod_original), bytes(mod_exported))
 
