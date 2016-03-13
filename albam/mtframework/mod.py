@@ -18,21 +18,24 @@ class Bone(Structure):
 
 
 class BonePalette(Structure):
-    _fields_ = (('unk_01', c_uint),  # could be bone_count in values
+    _fields_ = (('unk_01', c_uint),
                 ('values', c_ubyte * 32),
                 )
 
+    _comments_ = {'unk_01': 'Seems to be the count of meaninful values out of the 32 bytes, needs verification'}
+
 
 class GroupData(Structure):
-    _fields_ = (('unk_01', c_uint),
-                ('unk_02', c_uint),
-                ('unk_03', c_uint),
-                ('unk_04', c_uint),
-                ('unk_05', c_uint),
-                ('unk_06', c_uint),
-                ('unk_07', c_uint),
-                ('unk_08', c_uint),
+    _fields_ = (('group_index', c_uint),
+                ('unk_02', c_float),
+                ('unk_03', c_float),
+                ('unk_04', c_float),
+                ('unk_05', c_float),
+                ('unk_06', c_float),
+                ('unk_07', c_float),
+                ('unk_08', c_float),
                 )
+    _comments_ = {'group_index': "In ~25% of all RE5 mods, this value doesn't match the index"}
 
 
 class MaterialData(Structure):
@@ -48,33 +51,33 @@ class MaterialData(Structure):
 
 
 class Mesh156(Structure):
-    _fields_ = (('type', c_ushort),
+    _fields_ = (('group_index', c_ushort),
                 ('material_index', c_ushort),
-                ('unk_01', c_ubyte),
+                ('constant', c_ubyte),  # always 1
                 ('level_of_detail', c_ubyte),
-                ('unk_02', c_ubyte),
+                ('unk_01', c_ubyte),
                 ('vertex_format', c_ubyte),
                 ('vertex_stride', c_ubyte),
+                ('unk_02', c_ubyte),
                 ('unk_03', c_ubyte),
                 ('unk_04', c_ubyte),
-                ('unk_05', c_ubyte),
                 ('vertex_count', c_ushort),
                 ('vertex_index_end', c_ushort),
                 ('vertex_index_start_1', c_uint),
                 ('vertex_offset', c_uint),
-                ('unk_06', c_uint),
+                ('unk_05', c_uint),
                 ('face_position', c_uint),
                 ('face_count', c_uint),
                 ('face_offset', c_uint),
+                ('unk_06', c_ubyte),
                 ('unk_07', c_ubyte),
-                ('unk_08', c_ubyte),
                 ('vertex_index_start_2', c_ushort),
-                ('unk_09', c_ubyte),
+                ('vertex_group_count', c_ubyte),
                 ('bone_palette_index', c_ubyte),
-                ('unk_10', c_ubyte),
-                ('unk_11', c_ubyte),
-                ('unk_12', c_ushort),
-                ('unk_13', c_ushort),
+                ('unk_08', c_ubyte),
+                ('unk_09', c_ubyte),
+                ('unk_10', c_ushort),
+                ('unk_11', c_ushort),
                 )
 
 
@@ -95,7 +98,7 @@ class Mesh210_211(Structure):
                 ('face_count', c_uint),
                 ('face_offset', c_uint),
                 ('bone_id_start', c_ubyte),
-                ('unique_boneids', c_ubyte),
+                ('vertex_group_count', c_ubyte),
                 ('unk_02', c_ubyte),
                 ('unk_03', c_ubyte),
                 ('min_index', c_ushort),
@@ -280,18 +283,13 @@ VERTEX_FORMATS_TO_CLASSES = {0: VertexFormat0,
                              }
 
 
-def get_meshes_sizes(tmp_struct):
-    sizes = 0
-    for m in tmp_struct.meshes_array:
-        try:
-            sizes += m.unk_09
-            extra = 1  # TODO: investigate
-        except AttributeError:
-            sizes += m.unique_boneids
-            extra = 0
-    total_size = 144 * sizes
-    q = (total_size // 4) + extra
-    return (c_uint * q)
+def get_meshes_sizes(mod):
+    if mod.version == 156:
+        extra = 1  # TODO: investigate
+    else:
+        extra = 0
+    total_count = sum(mesh.vertex_group_count for mesh in mod.meshes_array)
+    return c_ubyte * ((total_count * 144) + (extra * 4))
 
 
 def unk_data_depends_on_other_unk(tmp_struct):
