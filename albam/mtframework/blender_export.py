@@ -5,7 +5,11 @@ import ntpath
 import os
 import tempfile
 
-import bpy
+try:
+    import bpy
+except ImportError:
+    pass
+
 
 from albam.exceptions import BuildMeshError, ExportError
 from albam.mtframework.mod import (

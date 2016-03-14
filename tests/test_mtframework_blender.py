@@ -21,7 +21,7 @@ import bpy
 from albam.mtframework.blender_import import import_arc
 from albam.mtframework.blender_export import export_arc
 try:
-    import_arc('{import_arc_filepath}', '{import_unpack_dir}')
+    import_arc('{import_arc_filepath}', '{import_unpack_dir}', bpy.context.scene)
     imported_name = os.path.basename('{import_arc_filepath}')
     exported_arc = export_arc(bpy.data.objects[imported_name])
     with open('{export_arc_filepath}', 'wb') as w:

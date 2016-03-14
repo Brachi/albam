@@ -27,7 +27,7 @@ from albam.utils import (
     )
 
 
-def import_arc(file_path, extraction_dir=None):
+def import_arc(file_path, extraction_dir=None, context_scene=None):
     '''Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
     to the armature (if any) for using in exporting'''
@@ -55,6 +55,14 @@ def import_arc(file_path, extraction_dir=None):
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
         import_mod(mod_file, out, parent, mod_dir)
+
+    # Addding the name of the imported item so then it can be selected
+    # from a list for exporting. Exporting models without a base model,
+    # at least for models with skeleton doesn't make much sense, plus
+    # the arc files contain a lot of other files that are not imported, but
+    # saved in the blend file
+    new_albam_imported_item = context_scene.albam_items_imported.add()
+    new_albam_imported_item.name = os.path.basename(file_path)
 
 
 def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
