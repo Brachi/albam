@@ -182,7 +182,10 @@ def export_mod156(blender_object):
 
 def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
     saved_mesh = saved_mod.meshes_array[mesh_index]
-    bone_palette = saved_mod.bone_palette_array[saved_mesh.bone_palette_index].values[:]
+    if saved_mod.bone_palette_array:
+        bone_palette = saved_mod.bone_palette_array[saved_mesh.bone_palette_index].values[:]
+    else:
+        bone_palette = []
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
@@ -401,7 +404,10 @@ def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=No
                 continue
             texture = texture_slot.texture
             # texture_indices expects index-1 based
-            texture_index = textures.index(texture) + 1
+            try:
+                texture_index = textures.index(texture) + 1
+            except ValueError:
+                print('error in textures')
             if texture_slot.use_map_normal and texture_slot.mapping != 'CUBE':
                 material_data.texture_indices[1] = texture_index
             elif texture_slot.use_map_specular:
