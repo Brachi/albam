@@ -342,6 +342,12 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
             offset = loop.vertex_index * 2
             per_loop_list.extend((uvs_per_vertex[offset], uvs_per_vertex[offset + 1]))
         uv_layer.foreach_set('uv', per_loop_list)
+    # Hiding non main level of detail meshes if they have more than one.
+    # For now, assuming that if the mesh has no bones, then it has only one level of detail
+    if weights_per_bone and mesh.level_of_detail in (2, 252):
+        ob.hide = True
+        ob.hide_render = True
+
     return ob
 
 
