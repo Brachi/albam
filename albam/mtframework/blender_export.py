@@ -1,4 +1,3 @@
-from base64 import b64decode
 import ctypes
 from io import BytesIO
 import ntpath
@@ -53,7 +52,7 @@ def export_arc(blender_object):
         mod, textures = export_mod156(child)
         mods[mod_filepath] = (mod, textures)
 
-    saved_arc = Arc(file_path=BytesIO(b64decode(blender_object.albam_arc)))
+    saved_arc = Arc(file_path=BytesIO(blender_object['albam_arc']))
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_slash_ending = tmpdir + os.sep if not tmpdir.endswith(os.sep) else tmpdir
         saved_arc.unpack(tmpdir)
@@ -105,7 +104,7 @@ def export_mod156(blender_object):
     objects = [child for child in blender_object.children] + [blender_object]
     try:
         mod_dirpath = blender_object.albam_mod156_dirpath
-        saved_mod = Mod156(file_path=BytesIO(b64decode(blender_object.albam_mod156)))
+        saved_mod = Mod156(file_path=BytesIO(blender_object['albam_mod156']))
     except AttributeError:
         raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
                           "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)"

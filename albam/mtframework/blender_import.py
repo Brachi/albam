@@ -1,4 +1,3 @@
-from base64 import b64encode
 from itertools import chain
 import ntpath
 import os
@@ -50,7 +49,7 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     # Saving arc to main object
     albam_arc = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     bpy.types.Object.albam_arc = albam_arc
-    parent.albam_arc = b64encode(bytes(arc))
+    parent['albam_arc'] = bytes(arc)
 
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
@@ -248,7 +247,7 @@ def _save_mod_data_to_object(mod, blender_object, dirpath=None):
     bpy.types.Object.albam_mod156 = albam_mod156
     bpy.types.Object.albam_mod156_dirpath = mod156_dirpath
 
-    blender_object.albam_mod156 = b64encode(bytes(mod))
+    blender_object['albam_mod156'] = bytes(mod)
     blender_object.albam_mod156_dirpath = dirpath if dirpath else ''
 
 
