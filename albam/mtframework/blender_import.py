@@ -324,7 +324,9 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
 
     me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
     me_ob.update(calc_edges=True)
+    me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
     me_ob.validate()
+
     if materials:
         me_ob.materials.append(materials[mesh.material_index])
     for bone_index, data in weights_per_bone.items():
