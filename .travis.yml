@@ -1,18 +1,27 @@
 sudo: required
+
 dist: trusty
+
 language: python
+
 python:
-- '3.4'
+  - '3.4'
+
 install:
-- pip install -r requirements.txt
+  - pip install -r requirements.txt
+
 script:
-- python3 -m coverage run --source="." --branch -m pytest --blender=$(which blender)
-- python3 -c "import os;print('testing travis', os.environ.get('SECRET_TOKEN'))"
+  - python3 scripts/download_sample_files.py
+  - python3 -m coverage run --source="." --branch -m pytest --blender=$(which blender)
+
 after_success: coveralls
+
 before_install:
-- sudo apt-get update
-- sudo apt-get install -y blender
+  - sudo apt-get update
+  - sudo apt-get install -y blender
 
 env:
   # SECRET_TOKEN
-  - secure: "pNQXaJ+l44Aa05fEDTJiAE06IzOy6zqOQlsbEUN75sg/FOyI4tD237VP1TtQoNJqJPwveM4KjyYaTGQv/GbF5nqOS64VzSeMsYUkvDcnI8M8oQE0YqUrcUJe1S00vXBJ7nw8duvctGddn4eDps+e+K6uFJQbxcsBH851XD3REsbFkk6HYD5SFC3K6jS89SEiwvkR8VztTF3N78wkv+Rx1ldI4MoTAeqVseHGkXzoYSaDNa5zbYj8SiD9sIDx9MaDLrkkIsULhVO/yniVmABV6ZiNHUiJihDO7PqtpSOiOK5aEoY4l5hCog1amjmDjfu9SRy0CGXjY2eBL0/iR8MLGk5T2DskhzCYYLdyv097bSQQVb/kGTorKkiy4wy01l3d45aVZewgowC9MQ3ftiapQuQWhucE5QQrRDrtqvCos4JUUW8hlLuxSG/kR97xMaMfOs4OvPllU0Y0ks3Yq/LMUxFCpJdkDadq2srGNDr3iJ1N1UpibOtKWXqrzT9JmX3O5N8AeuRnlJG8PmRHQjd+eH2jOANMSxyxBmrD691iGKQ13IDHTT4Hd3PTN/TkjraA9z+XkzHoXo72pfcvDqwUVowMEhDMTkYidjHe8ixAo+jFJ0C7ugIwG2mHQBzhvu3lVRelx1bPi3MKdRbVmTAsy/I7L4eZNmphrV2xMEXjbJM="
+  - secure: "UQC1P4S6bodLrWZ1jFc/V/1eKKOTM2aWw/TdTAzWOknJWKdArgQxaF3jG0cqk1hLz2/PkZD8JovPuV596293k00FG+b+wHQpSqFqmowB/IXzLymCFjOSHzDdGR/bI1r19U1IQWox3LLsQn2Y/1Kl8f7rXJBJQIxYblEO4et6NTw7c4RZ9agsNO21SOqJGzib4EmNaFgxYOfohsbb83htXjdrNUVmaU9ieH3vVlxl4N/HnZH5ZKLBN8nquNUO8/Rya/3EIe12og+/EsWC9RwvzgLol0e+YFJJAPej5FYWAetx3qj3fOJrnRhDscNneqU5hGhJKDSf86cRnYPD0hU0j12XgSDDW3kk3zQRJaMj3IDsBrCltRcDy34Xdyp+zcqL2RRu0OxSFc4FAGinv4/M/wHEmpyz4c7UyqYT7A9x6zJLCpVdqC4Ov/5Al1dKN8tUSMka+qhT3q35XRnIekh1qWSTYOPUJim/+At6sQXfQ2Xj4L3lrnJOa4/6YWVezOovYnx07hLXvuhoYBnFG4oEojIkbXAv4cgQzfM6AKh9joMlupBtZaWWHsKJZ6sgBQPE1AjgCstNVXaNdjGsigstJmumCerXjsZscwsLEN/BsRvjY0LRfHgqZ3WhUF87tg20mDycaDwjVQQwP85S3SblOyofkhpZsghGAm1cGd6lD10="
+  # SECRET_ID
+  - secure: "dF7Bl4z6nHu9q6KPL3W7I5Unjz1k0bAw0sXVTCO+TUo6N6b8VsGSWW1zdjmRLOrEC41hrYb5SXnvnF2uIpYylTQENvfSv46c646rArsZ6Rj/sP4ROPHJ78OiN3btIcYrjnwIilEjc9Gru97lN9OyymsmPor1Pa33d0IW2tRXWPnYoIot9IRd10i4M1J1BsT5IxBa4hZvTirJ1ZK0yv5pkLANBtFWltAbIsoYrX9jwmN9w8gwXE08a0yr0ph619K+nNpNllV/xfJRy2f49VdT4OPXJfdTFKOAIvWO+wbBg9O8ZND08ruDRJWk3Vy3R2cgJQzbuJ3Lpd8p03H4X/croF2/MnMe/0f6XFv0A4lXD+/bwy+OcmNxkQv36Nj1fQjJa7+jfK5UVhpywHO6PbNLG1PEdaw9HjDiFEXWBAaoBXFPzNpX1ZJHhBbw0a68ELI0nnTPn5jTu0buvKZk2iPSCm3WVlc6F+tIU0hEK80mmePoImb/xNbmFbpaIvwsahhWfPK/NLTxa3Ro3ALwG3EmHMtQckO/baT16sfozlVbWxanIduWnGFofquMQ4gAEs5zHNIKrAKIzaFko9uGz3flT2DNB79VqJ+3B/dDG0YJ2l6B60/2/POPLjgQ8tiuqhBHU66+lh/qnRWKHjnJqShNaWZsuBMLn78BsVIgFyDwDhw="

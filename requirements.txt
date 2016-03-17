@@ -1,3 +1,4 @@
-coverage
-coveralls
-pytest
+coverage==4.0.3
+coveralls==1.1
+pytest==2.9.0
+requests==2.9.1
