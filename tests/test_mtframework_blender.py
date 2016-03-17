@@ -27,6 +27,7 @@ logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
 
 try:
     start = time.time()
+    logging.debug('Importing {import_arc_filepath}')
     import_arc('{import_arc_filepath}', '{import_unpack_dir}', bpy.context.scene)
     logging.debug('Import time: {{}} seconds [{import_arc_filepath}])'.format(round(time.time() - start, 2)))
 except Exception:
