@@ -1,6 +1,7 @@
 from difflib import SequenceMatcher
 import os
 import subprocess
+from tempfile import TemporaryDirectory, gettempdir
 
 import pytest
 
@@ -13,32 +14,49 @@ EXPECTED_VERTEX_BUFFER_RATIO = 0.65
 EXPECTED_INDEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
 PYTHON_TEMPLATE = """import os
-import traceback
+import logging
 import sys
+import time
 sys.path.append('{project_dir}')
-
 import bpy
 
 from albam.mtframework.blender_import import import_arc
 from albam.mtframework.blender_export import export_arc
+
+logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
+
 try:
+    start = time.time()
     import_arc('{import_arc_filepath}', '{import_unpack_dir}', bpy.context.scene)
+    logging.debug('Import time: {{}} seconds [{import_arc_filepath}])'.format(round(time.time() - start, 2)))
+except Exception:
+    logging.exception('IMPORT failed: {import_arc_filepath}')
+    sys.exit(1)
+
+try:
     imported_name = os.path.basename('{import_arc_filepath}')
+    start = time.time()
     exported_arc = export_arc(bpy.data.objects[imported_name])
+    logging.debug('Export time: {{}} seconds [{import_arc_filepath}]'.format(round(time.time() - start, 2)))
     with open('{export_arc_filepath}', 'wb') as w:
         w.write(exported_arc)
-    bpy.ops.wm.save_as_mainfile(filepath='{blend_file}')
-except Exception as err:
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    with open('{error_logging_file_path}', 'w') as w:
-        tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        w.write(''.join(tb_lines))
+except Exception:
+    logging.exception('EXPORT failed: {import_arc_filepath}')
     sys.exit(1)
 """
 
 
 def is_close(a, b):
     return abs(a) - abs(b) < 0.001
+
+'''
+
+if import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
+    pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
+elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_HANGS):
+    pytest.xfail(reason='Memory corruption in blender: bug ALB-04')
+# uPl02JillCos1.arc and uPl02JillCos4.arc have one mesh with wrong exported strip triangles
+'''
 
 
 @pytest.fixture(scope='module', params=arc_re5_samples())
@@ -48,62 +66,46 @@ def mods_import_export(request, tmpdir_factory):
         pytest.skip('No blender bin path supplied')
 
     import_arc_filepath = request.param
-    arc_file_name = os.path.basename(import_arc_filepath).replace('.arc', '-arc')
-    base_temp = tmpdir_factory.mktemp(arc_file_name)
+    log_filepath = str(tmpdir_factory.getbasetemp().join('blender.log'))
+    import_unpack_dir = TemporaryDirectory()
+    export_arc_filepath = os.path.join(gettempdir(), os.path.basename(import_arc_filepath))
+    script_filepath = os.path.join(gettempdir(), 'import_arc.py')
 
-    if import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
-        pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
-    elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_HANGS):
-        pytest.xfail(reason='Memory corruption in blender: bug ALB-04')
-    elif import_arc_filepath.endswith('uPl03WeskerCos1.arc'):
-        pytest.xfail(reason='Issues with cube textures (not recognized as DDS) and bone palettes')
-    # uPl02JillCos1.arc and uPl02JillCos4.arc have one mesh with wrong exported strip triangles
-    elif import_arc_filepath.endswith('uPl01ShebaCos4.arc'):
-        pytest.xfail(reason='Division by zero on bounding box')
-
-    python_script_file_path = str(base_temp.join('test-script.py'))
-    error_logging_file_path = str(base_temp.join('errors.log'))
-    import_unpack_dir = str(base_temp.mkdir('import_unpack'))
-    export_unpack_dir = str(base_temp.mkdir('export_unpack'))
-    export_arc_filepath = os.path.join(str(base_temp), os.path.basename(import_arc_filepath)
-                                       .replace('.arc', '-exported.arc')
-                                       )
-    # assuming that tests are run from the root project
-    blend_file = str(base_temp.join(arc_file_name + '.blend'))
-    project_dir = os.getcwd()
-
-    python_script = PYTHON_TEMPLATE.format(project_dir=project_dir,
-                                           import_arc_filepath=import_arc_filepath,
-                                           export_arc_filepath=export_arc_filepath,
-                                           import_unpack_dir=import_unpack_dir,
-                                           export_unpack_dir=export_unpack_dir,
-                                           blend_file=blend_file,
-                                           error_logging_file_path=error_logging_file_path)
-
-    with open(python_script_file_path, 'w') as w:
-        w.write(python_script)
-
-    args = '{} --background --python {}'.format(blender, python_script_file_path)
+    with open(script_filepath, 'w') as w:
+        w.write(PYTHON_TEMPLATE.format(project_dir=os.getcwd(),
+                                       import_arc_filepath=import_arc_filepath,
+                                       export_arc_filepath=export_arc_filepath,
+                                       import_unpack_dir=import_unpack_dir.name,
+                                       log_filepath=log_filepath))
+    args = '{} --background --python {}'.format(blender, script_filepath)
     try:
         subprocess.check_output((args,), shell=True)
-    except subprocess.CalledProcessError as err:
-        print(err.output)
+    except subprocess.CalledProcessError:
+        # the test will actually error here, if the import/export fails, since the file it won't exist.
+        # which is better, since pytest traceback to subprocess.check_output is pretty long and useless
+        os.unlink(export_arc_filepath)
+        os.unlink(script_filepath)
         raise
 
+    export_unpack_dir = TemporaryDirectory()
     arc = Arc(export_arc_filepath)
-    arc.unpack(export_unpack_dir)
+    arc.unpack(export_unpack_dir.name)
 
-    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir)
+    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir.name)
                           for f in files if f.endswith('.mod')]
-
-    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir)
+    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
                           for f in files if f.endswith('.mod')]
-
     mod_files_original = sorted(mod_files_original, key=os.path.basename)
     mod_files_exported = sorted(mod_files_exported, key=os.path.basename)
     if mod_files_original and mod_files_exported:
-        return Mod156(file_path=mod_files_original[0]), Mod156(file_path=mod_files_exported[0])
+        mod_original = Mod156(file_path=mod_files_original[0])
+        mod_exported = Mod156(file_path=mod_files_exported[0])
+        os.unlink(export_arc_filepath)
+        os.unlink(script_filepath)
+        return mod_original, mod_exported
     else:
+        os.unlink(export_arc_filepath)
+        os.unlink(script_filepath)
         pytest.skip('Arc contains no mod files')
 
 
@@ -111,7 +113,7 @@ def test_mod156_import_export_export_id_magic(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.id_magic == mod_exported.id_magic
 
-"""
+
 def test_mod156_import_export_version(mods_import_export):
     mod_original, mod_exported = mods_import_export
     assert mod_original.version == mod_exported.version
@@ -657,4 +659,3 @@ def test_mod156_import_export_index_buffer_approximation(mods_import_export):
     seq = SequenceMatcher(None, bytes(mod_original), bytes(mod_exported))
 
     assert seq.quick_ratio() >= EXPECTED_INDEX_BUFFER_RATIO
-"""
