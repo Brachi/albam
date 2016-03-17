@@ -49,6 +49,8 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     # Saving arc to main object
     albam_arc = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
     bpy.types.Object.albam_arc = albam_arc
+    import ctypes
+    raise TypeError('Testing size of arc: {}'.format(ctypes.sizeof(albam_arc)))
     parent['albam_arc'] = bytes(arc)
 
     #for i, mod_file in enumerate(mod_files):
