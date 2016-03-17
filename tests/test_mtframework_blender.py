@@ -77,7 +77,7 @@ def mods_import_export(request, tmpdir_factory):
                                        export_arc_filepath=export_arc_filepath,
                                        import_unpack_dir=import_unpack_dir.name,
                                        log_filepath=log_filepath))
-    args = '{} --background --python {}'.format(blender, script_filepath)
+    args = '{} -noaudio --background --python {}'.format(blender, script_filepath)
     try:
         subprocess.check_output((args,), shell=True)
     except subprocess.CalledProcessError:
