@@ -19,6 +19,7 @@ after_success: coveralls
 before_install:
   - sudo apt-get update
   - sudo apt-get install -y blender
+  - sudo ln /dev/null /dev/raw1394
 
 env:
    global:
