@@ -34,7 +34,7 @@ try:
 except Exception:
     logging.exception('IMPORT failed: {import_arc_filepath}')
     sys.exit(1)
-
+time.sleep(5)
 try:
     imported_name = os.path.basename('{import_arc_filepath}')
     start = time.time()
