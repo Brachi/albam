@@ -83,6 +83,9 @@ def mods_import_export(request, tmpdir_factory):
     except subprocess.CalledProcessError:
         # the test will actually error here, if the import/export fails, since the file it won't exist.
         # which is better, since pytest traceback to subprocess.check_output is pretty long and useless
+        with open(log_filepath) as f:
+            for line in f:
+                print(line)   # XXX: should print only the last n lines
         os.unlink(export_arc_filepath)
         os.unlink(script_filepath)
         raise
