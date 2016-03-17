@@ -12,13 +12,15 @@ from tests.conftest import SAMPLES_DIR
 @pytest.fixture(scope='session')
 def tex_re5_samples():
     samples_dir = pytest.config.getoption('--dirtex') or os.path.join(SAMPLES_DIR, 're5/tex')
-    return [os.path.join(samples_dir, f) for f in os.listdir(samples_dir)]
+    return [os.path.join(root, f) for root, _, files in os.walk(samples_dir)
+            for f in files if f.endswith('.tex')]
 
 
 @pytest.fixture(scope='module')
 def dds_samples():
-    samples_dir = pytest.config.getoption('--dirtex') or os.path.join(SAMPLES_DIR, 'dds')
-    return [os.path.join(samples_dir, f) for f in os.listdir(samples_dir)]
+    samples_dir = pytest.config.getoption('--dirtex') or os.path.join(SAMPLES_DIR, 're5/tex')
+    return [os.path.join(root, f) for root, _, files in os.walk(samples_dir)
+            for f in files if f.endswith('.dds')]
 
 
 @pytest.mark.parametrize('tex_file', tex_re5_samples())

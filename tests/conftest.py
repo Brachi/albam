@@ -1,8 +1,4 @@
-import csv
 import os
-
-import pytest
-
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 
