@@ -25,6 +25,7 @@ from albam.mtframework.blender_export import export_arc
 
 logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
 
+logging.debug('Importing {import_arc_filepath}')
 try:
     start = time.time()
     logging.debug('Importing {import_arc_filepath}')
