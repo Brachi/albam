@@ -7,9 +7,12 @@ install:
 - pip install -r requirements.txt
 script:
 - python3 -m coverage run --source="." --branch -m pytest --blender=$(which blender)
+- python3 -c "import os;print('testing travis', os.environ.get('SECRET_TOKEN'))"
 after_success: coveralls
 before_install:
-- openssl aes-256-cbc -K $encrypted_17c9f05fa8f1_key -iv $encrypted_17c9f05fa8f1_iv -in tests/sample-files.tar.gz.enc -out tests/sample-files.tar.gz -d
-- tar -xvzf tests/sample-files.tar.gz -C tests/
 - sudo apt-get update
 - sudo apt-get install -y blender
+
+env:
+  # SECRET_TOKEN
+  - secure: "pNQXaJ+l44Aa05fEDTJiAE06IzOy6zqOQlsbEUN75sg/FOyI4tD237VP1TtQoNJqJPwveM4KjyYaTGQv/GbF5nqOS64VzSeMsYUkvDcnI8M8oQE0YqUrcUJe1S00vXBJ7nw8duvctGddn4eDps+e+K6uFJQbxcsBH851XD3REsbFkk6HYD5SFC3K6jS89SEiwvkR8VztTF3N78wkv+Rx1ldI4MoTAeqVseHGkXzoYSaDNa5zbYj8SiD9sIDx9MaDLrkkIsULhVO/yniVmABV6ZiNHUiJihDO7PqtpSOiOK5aEoY4l5hCog1amjmDjfu9SRy0CGXjY2eBL0/iR8MLGk5T2DskhzCYYLdyv097bSQQVb/kGTorKkiy4wy01l3d45aVZewgowC9MQ3ftiapQuQWhucE5QQrRDrtqvCos4JUUW8hlLuxSG/kR97xMaMfOs4OvPllU0Y0ks3Yq/LMUxFCpJdkDadq2srGNDr3iJ1N1UpibOtKWXqrzT9JmX3O5N8AeuRnlJG8PmRHQjd+eH2jOANMSxyxBmrD691iGKQ13IDHTT4Hd3PTN/TkjraA9z+XkzHoXo72pfcvDqwUVowMEhDMTkYidjHe8ixAo+jFJ0C7ugIwG2mHQBzhvu3lVRelx1bPi3MKdRbVmTAsy/I7L4eZNmphrV2xMEXjbJM="
