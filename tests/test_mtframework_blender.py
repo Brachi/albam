@@ -44,6 +44,9 @@ try:
         w.write(exported_arc)
 except Exception:
     logging.exception('EXPORT failed: {import_arc_filepath}')
+    # testing travis
+    import time
+    time.sleep(2)
     sys.exit(1)
 """
 
