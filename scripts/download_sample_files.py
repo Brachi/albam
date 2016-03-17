@@ -16,7 +16,7 @@ def download_sample_files():
     file_test_url = urljoin(BASE, path.format(id_, token))
     r = requests.get(file_test_url)
     data = r.json()
-    final_dir = 'tests/sample_files/re5/arc'
+    final_dir = 'tests/sample-files/re5/arc'  # XXX import it!
     if not os.path.isdir(final_dir):
         os.makedirs(final_dir)
     final_path = os.path.join(final_dir, data['file_name'])
