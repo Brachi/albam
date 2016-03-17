@@ -51,12 +51,13 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     bpy.types.Object.albam_arc = albam_arc
 
     from base64 import b64encode
-    parent.albam_arc = b64encode(arc)
+    parent.albam_arc = b64encode(bytes(arc))
     #parent['albam_arc'] = bytes(arc)
     #parent['albam_arc'] = bytes(arc)
-    #for i, mod_file in enumerate(mod_files):
-    #    mod_dir = mod_dirs[i]
-    #    import_mod(mod_file, out, parent, mod_dir)
+
+    for i, mod_file in enumerate(mod_files):
+        mod_dir = mod_dirs[i]
+        import_mod(mod_file, out, parent, mod_dir)
 
     # Addding the name of the imported item so then it can be selected
     # from a list for exporting. Exporting models without a base model,
