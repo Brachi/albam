@@ -79,13 +79,11 @@ def export_arc(blender_object):
             mod_textures = new_mod[1]
             for texture in mod_textures:
                 tex = Tex112.from_dds(file_path=bpy.path.abspath(texture.image.filepath))
-                # XXX: quick hack to get info from imported textures. Have to figure these values out
-                # should be easy just observing the game
                 try:
-                    tex.unk_float_1 = texture.albam_texture_unk_01
-                    tex.unk_float_2 = texture.albam_texture_unk_02
-                    tex.unk_float_3 = texture.albam_texture_unk_03
-                    tex.unk_float_4 = texture.albam_texture_unk_04
+                    tex.unk_float_1 = texture.albam_imported_texture_value_1
+                    tex.unk_float_2 = texture.albam_imported_texture_value_2
+                    tex.unk_float_3 = texture.albam_imported_texture_value_3
+                    tex.unk_float_4 = texture.albam_imported_texture_value_4
                 except AttributeError:
                     pass
 

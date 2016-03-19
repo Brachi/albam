@@ -5,7 +5,6 @@ import os
 try:
     import bpy
     from mathutils import Matrix, Vector
-    from bpy.props import FloatProperty
 except ImportError:
     pass
 
@@ -157,17 +156,6 @@ def _create_blender_textures_from_mod(mod, base_dir):
     textures = [None]  # materials refer to textures in index-1
     # TODO: check why in Arc.header.file_entries[n].file_path it returns a bytes, and
     # here the whole array of chars
-    # XXX Quick hack
-
-    albam_texture_unk_01 = FloatProperty(options={'HIDDEN'})
-    albam_texture_unk_02 = FloatProperty(options={'HIDDEN'})
-    albam_texture_unk_03 = FloatProperty(options={'HIDDEN'})
-    albam_texture_unk_04 = FloatProperty(options={'HIDDEN'})
-
-    bpy.types.Texture.albam_texture_unk_01 = albam_texture_unk_01
-    bpy.types.Texture.albam_texture_unk_02 = albam_texture_unk_02
-    bpy.types.Texture.albam_texture_unk_03 = albam_texture_unk_03
-    bpy.types.Texture.albam_texture_unk_04 = albam_texture_unk_04
 
     for i, texture_path in enumerate(mod.textures_array):
         path = texture_path[:].decode('ascii').partition('\x00')[0]
@@ -191,11 +179,11 @@ def _create_blender_textures_from_mod(mod, base_dir):
         texture = bpy.data.textures.new(os.path.basename(path), type='IMAGE')
         texture.image = image  # not in constructor!
         textures.append(texture)
-        # saving meta data for export XXX quick hack
-        texture.albam_texture_unk_01 = tex.unk_float_1
-        texture.albam_texture_unk_02 = tex.unk_float_2
-        texture.albam_texture_unk_03 = tex.unk_float_3
-        texture.albam_texture_unk_04 = tex.unk_float_4
+        # saving meta data for export
+        texture.albam_imported_texture_value_1 = tex.unk_float_1
+        texture.albam_imported_texture_value_2 = tex.unk_float_2
+        texture.albam_imported_texture_value_3 = tex.unk_float_3
+        texture.albam_imported_texture_value_4 = tex.unk_float_4
     return textures
 
 

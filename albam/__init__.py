@@ -105,9 +105,17 @@ def register():
     bpy.utils.register_class(AlbamImportedItem)
 
     bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
-    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItem)
+    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItemName)
 
     bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=AlbamImportedItem)
+
+    # Not using PointerProperty/PropertyGroup since they are not editable from the UI
+    # TODO: look if that can be added into blender
+    bpy.types.Texture.albam_imported_texture_type = bpy.props.StringProperty()
+    bpy.types.Texture.albam_imported_texture_value_1 = bpy.props.FloatProperty()
+    bpy.types.Texture.albam_imported_texture_value_2 = bpy.props.FloatProperty()
+    bpy.types.Texture.albam_imported_texture_value_3 = bpy.props.FloatProperty()
+    bpy.types.Texture.albam_imported_texture_value_4 = bpy.props.FloatProperty()
 
 
 def unregister():
