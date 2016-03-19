@@ -22,14 +22,18 @@ bl_info = {
     "category": "Import-Export"}
 
 
-class AlbamImportedItem(bpy.types.PropertyGroup):
+class AlbamImportedItemName(bpy.types.PropertyGroup):
     '''All imported object names are saved here to then show them in the
     export list'''
     name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
 
-bpy.utils.register_class(AlbamImportedItem)
-bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
-bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItem)
+
+class AlbamImportedItem(bpy.types.PropertyGroup):
+    name = bpy.props.StringProperty(options={'HIDDEN'})
+    source_path = bpy.props.StringProperty(options={'HIDDEN'})
+    source_path_is_absolute = bpy.props.BoolProperty(options={'HIDDEN'})
+    data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
+    file_type = bpy.props.StringProperty(options={'HIDDEN'})
 
 
 class AlbamImportExportPanel(bpy.types.Panel):
@@ -97,6 +101,13 @@ def register():
     bpy.utils.register_class(AlbamImportExportPanel)
     bpy.utils.register_class(AlbamImportOperator)
     bpy.utils.register_class(AlbamExportOperator)
+    bpy.utils.register_class(AlbamImportedItemName)
+    bpy.utils.register_class(AlbamImportedItem)
+
+    bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
+    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItem)
+
+    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=AlbamImportedItem)
 
 
 def unregister():

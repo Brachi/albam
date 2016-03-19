@@ -5,7 +5,7 @@ import os
 try:
     import bpy
     from mathutils import Matrix, Vector
-    from bpy.props import StringProperty as StrProp, FloatProperty
+    from bpy.props import FloatProperty
 except ImportError:
     pass
 
@@ -39,18 +39,21 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
         out = out + os.path.sep
     arc = Arc(file_path=file_path)
     arc.unpack(out)
+    arc_name = os.path.basename(file_path)
 
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
     mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
-    parent = bpy.data.objects.new(os.path.basename(file_path), None)
-    bpy.context.scene.objects.link(parent)
 
     # Saving arc to main object
-    albam_arc = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    bpy.types.Object.albam_arc = albam_arc
-    parent['albam_arc'] = bytes(arc)
-
+    parent = bpy.data.objects.new(arc_name, None)
+    bpy.context.scene.objects.link(parent)
+    parent.albam_imported_item['data'] = bytes(arc)
+    parent.albam_imported_item.name = arc_name
+    parent.albam_imported_item.source_path = file_path
+    parent.albam_imported_item.source_path = file_path
+    parent.albam_imported_item.source_path_is_absolute = True
+    parent.albam_imported_item.file_type = 'mtframework.arc'
     for i, mod_file in enumerate(mod_files):
         mod_dir = mod_dirs[i]
         import_mod(mod_file, out, parent, mod_dir)
@@ -83,24 +86,27 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
         except BuildMeshError as err:
             print(err)
     if mod.bone_count:
-        armature_ob = _create_blender_armature_from_mod(mod, model_name, parent)
-        armature_ob.show_x_ray = True
-        _save_mod_data_to_object(mod, armature_ob, mod_dir_path)
+        root = _create_blender_armature_from_mod(mod, model_name, parent)
+        root.show_x_ray = True
     else:
-        parent_empty = bpy.data.objects.new(model_name, None)
-        parent_empty.parent = parent
-        _save_mod_data_to_object(mod, parent_empty, mod_dir_path)
-        bpy.context.scene.objects.link(parent_empty)
+        root = bpy.data.objects.new(model_name, None)
+        root.parent = parent
+        # '_create_blender_armature_from_mod links the armature to the scene. Necessary?
+        bpy.context.scene.objects.link(root)
 
+    # saving imported data for export use (format not 100% figured out yet)
+    root.albam_imported_item['data'] = bytes(mod)
+    root.albam_imported_item.source_path = mod_dir_path  # e.g. pawn/pl/pl00/model
+    parent.albam_imported_item.source_path_is_absolute = False
+    root.albam_imported_item.name = model_name
+    root.albam_imported_item.file_type = 'mtframework.mod'
     for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
+        mesh.parent = root
         if mod.bone_count:
-            mesh.parent = armature_ob
             modifier = mesh.modifiers.new(type="ARMATURE", name=model_name)
-            modifier.object = armature_ob
+            modifier.object = root
             modifier.use_vertex_groups = True
-        else:
-            mesh.parent = parent_empty
 
 
 def _import_vertices(mod, mesh):
@@ -233,22 +239,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 # TODO: 3, 4, 5, 6,
         materials.append(blender_material)
     return materials
-
-
-def _save_mod_data_to_object(mod, blender_object, dirpath=None):
-    """
-    This function should be generalized when more formats are added
-    Base64 is used because when saving bytes to a StringProperty, the get
-    cut off at the first null byte. That might be a bug.
-    """
-    albam_mod156 = StrProp(options={'HIDDEN'}, subtype='BYTE_STRING')
-    mod156_dirpath = StrProp(options={'HIDDEN'})
-
-    bpy.types.Object.albam_mod156 = albam_mod156
-    bpy.types.Object.albam_mod156_dirpath = mod156_dirpath
-
-    blender_object['albam_mod156'] = bytes(mod)
-    blender_object.albam_mod156_dirpath = dirpath if dirpath else ''
 
 
 def _create_blender_armature_from_mod(mod, armature_name, parent=None):

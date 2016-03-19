@@ -42,17 +42,23 @@ def export_arc(blender_object):
     '''Exports an arc file containing mod and tex files, among others from a
     previously imported arc.'''
     mods = {}
+    try:
+        saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
+    except AttributeError:
+        raise ExportError('Object {0} did not come from the original arc'.format(blender_object.name))
+
     for child in blender_object.children:
         try:
-            mod_dirpath = child.albam_mod156_dirpath
+            mod_dirpath = child.albam_imported_item.source_path
             # TODO: This could lead to errors if imported in Windows and exported in posix?
             mod_filepath = os.path.join(mod_dirpath, child.name)
         except AttributeError:
             raise ExportError('Object {0} did not come from the original arc'.format(child.name))
+        assert child.albam_imported_item.source_path_is_absolute is False
+        assert child.albam_imported_item.file_type == 'mtframework.mod'
         mod, textures = export_mod156(child)
         mods[mod_filepath] = (mod, textures)
 
-    saved_arc = Arc(file_path=BytesIO(blender_object['albam_arc']))
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_slash_ending = tmpdir + os.sep if not tmpdir.endswith(os.sep) else tmpdir
         saved_arc.unpack(tmpdir)
@@ -103,12 +109,14 @@ def export_mod156(blender_object):
 
     objects = [child for child in blender_object.children] + [blender_object]
     try:
-        mod_dirpath = blender_object.albam_mod156_dirpath
-        saved_mod = Mod156(file_path=BytesIO(blender_object['albam_mod156']))
+        mod_dirpath = blender_object.albam_imported_item.source_path
+        saved_mod = Mod156(file_path=BytesIO(blender_object.albam_imported_item.data))
     except AttributeError:
         raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
-                          "didn't come from a game that uses Mod156 (e.g. Resident Evil 5)"
+                          "wasn't imported using Albam"
                           .format(blender_object.name))
+
+    assert blender_object.albam_imported_item.source_path_is_absolute is False
     bounding_box = get_bounding_box_positions_from_blender_objects(objects)
 
     # TODO: this is also called in _export_textures...
@@ -298,6 +306,7 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
     face_position = 0
     for i, blender_mesh_object in enumerate(blender_meshes_objects):
         # XXX: if a model with more meshes than the original is exported... boom
+        # If somehow indices are changed... boom
         try:
             saved_mesh = saved_mod.meshes_array[i]
         except IndexError:
