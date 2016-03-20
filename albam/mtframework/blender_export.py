@@ -104,8 +104,6 @@ def export_arc(blender_object):
 
 def export_mod156(blender_object):
     '''The blender_object provided should have meshes as children'''
-
-    objects = [child for child in blender_object.children] + [blender_object]
     try:
         saved_mod = Mod156(file_path=BytesIO(blender_object.albam_imported_item.data))
     except AttributeError:
@@ -113,15 +111,11 @@ def export_mod156(blender_object):
                           "wasn't imported using Albam"
                           .format(blender_object.name))
 
-    assert blender_object.albam_imported_item.source_path_is_absolute is False
+    objects = [child for child in blender_object.children] + [blender_object]
     bounding_box = get_bounding_box_positions_from_blender_objects(objects)
 
-    # TODO: this is also called in _export_textures...
-    materials = get_materials_from_blender_objects(objects)
-    textures = get_textures_from_blender_objects(objects)
-
     textures_array, materials_array = _export_textures_and_materials(objects, saved_mod)
-    meshes_array, vertex_buffer, index_buffer = _export_meshes(objects, materials, bounding_box, saved_mod)
+    meshes_array, vertex_buffer, index_buffer = _export_meshes(objects, bounding_box, saved_mod)
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
@@ -181,7 +175,7 @@ def export_mod156(blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-    return mod, textures
+    return mod, get_textures_from_blender_objects(objects)
 
 
 def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
@@ -285,7 +279,7 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
     return VF, vertices_array
 
 
-def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
+def _export_meshes(blender_objects, bounding_box, saved_mod):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -297,6 +291,7 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
     meshes_156 = (Mesh156 * len(blender_meshes_objects))()
     vertex_buffer = bytearray()
     index_buffer = bytearray()
+    materials = get_materials_from_blender_objects(blender_objects)
 
     vertex_position = 0
     face_position = 0
