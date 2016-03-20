@@ -10,6 +10,7 @@ from tests.test_mtframework_arc import arc_re5_samples
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
+EXPECTED_MAX_INDICES_COUNT_RATIO = 0.17
 EXPECTED_INDEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
 PYTHON_TEMPLATE = """import os
@@ -158,9 +159,9 @@ def test_mod156_import_export_vertex_count(mods_from_arc):
 def test_mod156_import_export_face_count(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         # Expecting some differences in faces generated with the export algorithm
-        EXPECTED_AVERAGE_EXTRA_INDICES = 20
-        assert (abs(mod_original.face_count - mod_exported.face_count) <
-                mod_original.mesh_count * EXPECTED_AVERAGE_EXTRA_INDICES)
+        difference = abs(mod_original.face_count - mod_exported.face_count)
+        ratio = difference / mod_original.face_count
+        assert ratio < EXPECTED_MAX_INDICES_COUNT_RATIO
 
 
 @pytest.mark.xfail
