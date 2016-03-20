@@ -31,6 +31,7 @@ class AlbamImportedItemName(bpy.types.PropertyGroup):
 class AlbamImportedItem(bpy.types.PropertyGroup):
     name = bpy.props.StringProperty(options={'HIDDEN'})
     source_path = bpy.props.StringProperty(options={'HIDDEN'})
+    # TODO: remove this and use a 'folder' attribute instead
     source_path_is_absolute = bpy.props.BoolProperty(options={'HIDDEN'})
     data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
     file_type = bpy.props.StringProperty(options={'HIDDEN'})
@@ -69,6 +70,7 @@ class AlbamImportOperator(bpy.types.Operator):
             except Exception as err:
                 # TODO: proper logging
                 print('Error importing {}: {}'.format(item, err))
+                raise
         return {'FINISHED'}
 
 

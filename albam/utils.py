@@ -340,7 +340,6 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
         return weights_per_vertex
     armature = modifiers['ARMATURE'].object.data
     bone_names_to_index = {b.name: i for i, b in enumerate(armature.bones)}
-
     # https://www.blender.org/api/blender_python_api_current/bpy.types.VertexGroupElement.html
     vertex_groups = blender_object.vertex_groups
     for vertex in blender_object.data.vertices:

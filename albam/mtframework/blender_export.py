@@ -10,7 +10,7 @@ except ImportError:
     pass
 
 
-from albam.exceptions import BuildMeshError, ExportError
+from albam.exceptions import ExportError
 from albam.mtframework.mod import (
     Mesh156,
     MaterialData,
@@ -102,22 +102,51 @@ def export_arc(blender_object):
     return new_arc
 
 
-def export_mod156(blender_object):
+def export_mod156(parent_blender_object):
     '''The blender_object provided should have meshes as children'''
     try:
-        saved_mod = Mod156(file_path=BytesIO(blender_object.albam_imported_item.data))
+        saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
     except AttributeError:
         raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
                           "wasn't imported using Albam"
-                          .format(blender_object.name))
+                          .format(parent_blender_object.name))
 
-    objects = [child for child in blender_object.children] + [blender_object]
-    bounding_box = get_bounding_box_positions_from_blender_objects(objects)
+    children_objects = [child for child in parent_blender_object.children]
+    empty_children = [c for c in children_objects if c.type == 'EMPTY']
+    meshes_children = [c for c in children_objects if c.type == 'MESH']
+    bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
 
-    textures_array, materials_array = _export_textures_and_materials(objects, saved_mod)
-    meshes_array, vertex_buffer, index_buffer = _export_meshes(objects, bounding_box, saved_mod)
+    if len(meshes_children) < len(saved_mod.meshes_array) and empty_children:
+        # There were failed meshes that were replaced as empties in the import
+        # We need to remove the extra weight groups (or whaterver they are),
+        # before exporting
+        failed_indices = {i for i, obj in enumerate(parent_blender_object.children)
+                          if obj.type == 'EMPTY'}
+        new_bytes = []
+        current_position = 0
+        for i, mesh in enumerate(saved_mod.meshes_array):
+            size = 144 * mesh.vertex_group_count
+            data = saved_mod.meshes_array_2[current_position:current_position + size]
+            current_position = current_position + size
+            if i in failed_indices:
+                continue
+            else:
+                new_bytes.extend(data)
+        # the misterious extra 4 bytes for mod.156
+        new_bytes.extend(saved_mod.meshes_array_2[-4:])
+        meshes_array_2 = (ctypes.c_ubyte * len(new_bytes))(*new_bytes)
+    elif len(meshes_children) != len(saved_mod.meshes_array) and not empty_children:
+        raise ExportError("Can't import {0}, different meshes quantity ({1} vs {2}) "
+                          "Support for this will come soon".format(parent_blender_object.name,
+                                                                   len(saved_mod.meshes_array),
+                                                                   len(children_objects)))
+    else:
+        meshes_array_2 = saved_mod.meshes_array_2
 
-    bone_count = get_bone_count_from_blender_objects(objects)
+    textures_array, materials_array = _export_textures_and_materials(children_objects, saved_mod)
+    meshes_array, vertex_buffer, index_buffer = _export_meshes(children_objects, bounding_box, saved_mod)
+
+    bone_count = get_bone_count_from_blender_objects([parent_blender_object])
     if not bone_count:
         bones_array_offset = 0
     elif bone_count and saved_mod.unk_08:
@@ -129,9 +158,9 @@ def export_mod156(blender_object):
                  version=156,
                  version_rev=1,
                  bone_count=bone_count,
-                 mesh_count=get_mesh_count_from_blender_objects(objects),
+                 mesh_count=get_mesh_count_from_blender_objects(children_objects),
                  material_count=len(materials_array),
-                 vertex_count=get_vertex_count_from_blender_objects(objects),
+                 vertex_count=get_vertex_count_from_blender_objects(children_objects),
                  face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(vertex_buffer),
@@ -173,7 +202,7 @@ def export_mod156(blender_object):
                  textures_array=textures_array,
                  materials_data_array=materials_array,
                  meshes_array=meshes_array,
-                 meshes_array_2=saved_mod.meshes_array_2,
+                 meshes_array_2=meshes_array_2,
                  vertex_buffer=vertex_buffer,
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
                  index_buffer=index_buffer
@@ -185,7 +214,7 @@ def export_mod156(blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-    return mod, get_textures_from_blender_objects(objects)
+    return mod, get_textures_from_blender_objects(children_objects)
 
 
 def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
@@ -300,21 +329,29 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
     No time to investigate why and how those are decided. I suspect it might have to
     do with location of the meshes
     """
-    blender_meshes_objects = [ob for ob in blender_objects if ob.type == 'MESH']
-    meshes_156 = (Mesh156 * len(blender_meshes_objects))()
+    all_blender_meshes_objects = [ob for ob in blender_objects if ob.type == 'MESH' or ob.type == 'EMPTY']
+    passed_blender_meshes_objects = [ob for ob in all_blender_meshes_objects if ob.type == 'MESH']
+    meshes_156 = (Mesh156 * len(passed_blender_meshes_objects))()
     vertex_buffer = bytearray()
     index_buffer = bytearray()
     materials = get_materials_from_blender_objects(blender_objects)
 
     vertex_position = 0
     face_position = 0
-    for i, blender_mesh_object in enumerate(blender_meshes_objects):
+    failed_count = 0
+    for i, blender_mesh_object in enumerate(all_blender_meshes_objects):
         # XXX: if a model with more meshes than the original is exported... boom
         # If somehow indices are changed... boom
         try:
             saved_mesh = saved_mod.meshes_array[i]
         except IndexError:
             raise ExportError('Exporting models with more meshes (parts) than the original not supported yet')
+        # Failed meshes are imported as empties, since the only reason they fail is that they have out of bounds
+        # array offsets (e.g. uEm41.arc em4000.mod), we can't retrieve any vertices since we'd mess up the vertex buffer
+        if blender_mesh_object.type == 'EMPTY':
+            failed_count += 1
+            continue
+
         blender_mesh = blender_mesh_object.data
 
         vertex_format, vertices_array = _export_vertices(blender_mesh_object, bounding_box,
@@ -330,7 +367,7 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
         vertex_count = len(blender_mesh.vertices)
         index_count = len(triangle_strips_python)
 
-        m156 = meshes_156[i]
+        m156 = meshes_156[i - failed_count]
         try:
             m156.material_index = materials.index(blender_mesh.materials[0])
         except IndexError:
@@ -348,7 +385,7 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
         m156.face_offset = 0
         m156.vertex_index_start_2 = vertex_position
         m156.vertex_group_count = saved_mesh.vertex_group_count  # len(blender_mesh_object.vertex_groups)
-        # XXX: improve, not guaranteed!
+        # XXX: improve, not guaranteed if the weighting is modified (e.g. replacing a model)
         m156.bone_palette_index = saved_mesh.bone_palette_index
 
         # TODO: not using saved_mesh since it seems these are optional. Needs research

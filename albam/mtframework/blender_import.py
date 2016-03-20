@@ -79,11 +79,16 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
+        name = create_mesh_name(mesh, i, file_path)
         try:
-            m = _build_blender_mesh_from_mod(mod, mesh, i, file_path, materials)
+            m = _build_blender_mesh_from_mod(mod, mesh, i, name, materials)
             meshes.append(m)
         except BuildMeshError as err:
-            print(err)
+            # TODO: logging
+            print('Error building mesh {0} for mod {1}'.format(i, file_path))
+            print('Details:', err)
+            m = bpy.data.objects.new(name, None)
+            meshes.append(m)
     if mod.bone_count:
         root = _create_blender_armature_from_mod(mod, model_name, parent)
         root.show_x_ray = True
@@ -103,7 +108,7 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
     for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
-        if mod.bone_count:
+        if mod.bone_count and mesh.type != 'EMPTY':  # an empty mesh is a failed one
             modifier = mesh.modifiers.new(type="ARMATURE", name=model_name)
             modifier.object = root
             modifier.use_vertex_groups = True
@@ -283,14 +288,21 @@ def _create_blender_armature_from_mod(mod, armature_name, parent=None):
             bone.tail = mirror_children[0].head
         else:
             bone.length = 0.01
-        if bone.tail == bone.head:
-            bone.tail += Vector((0.01, 0.01, 0.01))
+        # Some very small numbers won't be equal without rounding, but blender will
+        # later treat them as equal, so using rounding here
+        if round(bone.tail[0], 10) == round(bone.head[0], 10):
+            bone.tail[0] += 0.01
+        if round(bone.tail[1], 10) == round(bone.head[1], 10):
+            bone.tail[1] += 0.01
+        if round(bone.tail[2], 10) == round(bone.head[2], 10):
+            bone.tail[2] += 0.01
 
     bpy.ops.object.mode_set(mode='OBJECT')
+    assert len(armature.bones) == len(mod.bones_array)
     return armature_ob
 
 
-def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
+def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     indices = get_indices_array(mod, mesh)
@@ -302,7 +314,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
-    name = create_mesh_name(mesh, mesh_index, file_path)
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
@@ -331,7 +342,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, file_path, materials):
     if weights_per_bone and mesh.level_of_detail in (2, 252):
         ob.hide = True
         ob.hide_render = True
-
     return ob
 
 

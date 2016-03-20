@@ -38,10 +38,11 @@ def get_vertices_array(mod, mesh):
 def get_indices_array(mod, mesh):
     offset = ctypes.addressof(mod.index_buffer)
     position = mesh.face_offset * 2 + mesh.face_position * 2
-    if position > get_size(mod, 'index_buffer'):
-        raise BuildMeshError('Error building mesh in get_indices_array.'
-                             'mesh.face_offset: {}, mesh.face_position: {}'
-                             .format(mesh.face_offset, mesh.face_position))
+    index_buffer_size = get_size(mod, 'index_buffer')
+    if position > index_buffer_size:
+        raise BuildMeshError('Error building mesh in get_indices_array (out of bounds reference)'
+                             'Size of mod.indices_buffer: {} mesh.face_offset: {}, mesh.face_position: {}'
+                             .format(index_buffer_size, mesh.face_offset, mesh.face_position))
     offset += position
     return (ctypes.c_ushort * mesh.face_count).from_address(offset)
 
