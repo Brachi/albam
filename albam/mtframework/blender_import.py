@@ -99,6 +99,7 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
     parent.albam_imported_item.source_path_is_absolute = False
     root.albam_imported_item.name = model_name
     root.albam_imported_item.file_type = 'mtframework.mod'
+
     for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
@@ -159,6 +160,7 @@ def _create_blender_textures_from_mod(mod, base_dir):
 
     for i, texture_path in enumerate(mod.textures_array):
         path = texture_path[:].decode('ascii').partition('\x00')[0]
+        folder = ntpath.dirname(path)
         path = os.path.join(base_dir, *path.split(ntpath.sep))
         path = '.'.join((path, 'tex'))
         if not os.path.isfile(path):
@@ -177,9 +179,10 @@ def _create_blender_textures_from_mod(mod, base_dir):
             w.write(dds)
         image = bpy.data.images.load(dds_path)
         texture = bpy.data.textures.new(os.path.basename(path), type='IMAGE')
-        texture.image = image  # not in constructor!
+        texture.image = image
         textures.append(texture)
         # saving meta data for export
+        texture.albam_imported_texture_folder = folder
         texture.albam_imported_texture_value_1 = tex.unk_float_1
         texture.albam_imported_texture_value_2 = tex.unk_float_2
         texture.albam_imported_texture_value_3 = tex.unk_float_3
@@ -189,9 +192,9 @@ def _create_blender_textures_from_mod(mod, base_dir):
 
 def _create_blender_materials_from_mod(mod, model_name, textures):
     materials = []
-
     for i, material in enumerate(mod.materials_data_array):
         blender_material = bpy.data.materials.new('{}_{}'.format(model_name, str(i).zfill(2)))
+        materials.append(blender_material)
         for i, tex_index in enumerate(material.texture_indices):
             if tex_index == 0:
                 continue
@@ -199,11 +202,15 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
             try:
                 texture_target = textures[tex_index]
             except IndexError:
+                # TODO: should never happen, but log it
                 continue
             if not texture_target:
+                # This means the conversion failed before
                 continue
             slot.texture = texture_target
             slot.use_map_alpha = True
+            # Inserting meta data for export
+            texture_target.albam_imported_texture_type = i
             if i == 0:
                 # Diffuse
                 slot.use_map_color_diffuse = True
@@ -225,7 +232,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
             else:
                 slot.use_map_color_diffuse = False
                 # TODO: 3, 4, 5, 6,
-        materials.append(blender_material)
     return materials
 
 

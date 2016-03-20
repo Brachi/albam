@@ -64,8 +64,8 @@ def export_arc(blender_object):
         saved_arc.unpack(tmpdir)
         mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
                      for f in files if f.endswith('.mod')]
-        tex_files = {os.path.join(root, f) for root, _, files in os.walk(tmpdir)
-                     for f in files if f.endswith('.tex')}
+        # tex_files = {os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+        #             for f in files if f.endswith('.tex')}
         new_tex_files = set()
         for modf in mod_files:
             rel_path = modf.split(tmpdir_slash_ending)[1]
@@ -95,9 +95,9 @@ def export_arc(blender_object):
         # probably other files can reference textures besides mod, this is in case
         # textures applied have other names.
         # TODO: delete only textures referenced from saved_mods at import time
-        unused_tex_files = tex_files - new_tex_files
-        for utex in unused_tex_files:
-            os.unlink(utex)
+        # unused_tex_files = tex_files - new_tex_files
+        # for utex in unused_tex_files:
+        #    os.unlink(utex)
         new_arc = Arc.from_dir(tmpdir)
     return new_arc
 
@@ -107,7 +107,6 @@ def export_mod156(blender_object):
 
     objects = [child for child in blender_object.children] + [blender_object]
     try:
-        mod_dirpath = blender_object.albam_imported_item.source_path
         saved_mod = Mod156(file_path=BytesIO(blender_object.albam_imported_item.data))
     except AttributeError:
         raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
@@ -121,7 +120,7 @@ def export_mod156(blender_object):
     materials = get_materials_from_blender_objects(objects)
     textures = get_textures_from_blender_objects(objects)
 
-    textures_array, materials_array = _export_textures_and_materials(objects, mod_dirpath, saved_mod)
+    textures_array, materials_array = _export_textures_and_materials(objects, saved_mod)
     meshes_array, vertex_buffer, index_buffer = _export_meshes(objects, materials, bounding_box, saved_mod)
 
     mod = Mod156(id_magic=b'MOD',
@@ -175,8 +174,7 @@ def export_mod156(blender_object):
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
                  index_buffer=index_buffer
                  )
-
-    mod.bones_array_offset = get_offset(mod, 'bones_array')
+    mod.bones_array_offset = get_offset(mod, 'bones_array') if mod.bone_count else 0
     mod.group_offset = get_offset(mod, 'group_data_array')
     mod.textures_array_offset = get_offset(mod, 'textures_array')
     mod.meshes_array_offset = get_offset(mod, 'meshes_array')
@@ -367,35 +365,32 @@ def _export_meshes(blender_objects, materials, bounding_box, saved_mod):
     return meshes_156, vertex_buffer, index_buffer
 
 
-def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=None):
+def _export_textures_and_materials(blender_objects, saved_mod):
     textures = get_textures_from_blender_objects(blender_objects)
-    materials = get_materials_from_blender_objects(blender_objects)
+    blender_materials = get_materials_from_blender_objects(blender_objects)
     textures_array = ((ctypes.c_char * 64) * len(textures))()
-    materials_data_array = (MaterialData * len(materials))()
+    materials_data_array = (MaterialData * len(blender_materials))()
 
     for i, texture in enumerate(textures):
-        file_path = os.path.basename(texture.image.filepath)
+        file_name = os.path.basename(texture.image.filepath)
+        try:
+            file_path = ntpath.join(texture.albam_imported_texture_folder, file_name)
+        except AttributeError:
+            raise ExportError('Texture {0} was not imported from an Arc file'.format(texture.name))
+        try:
+            file_path, _ = ntpath.splitext(file_path)
+            textures_array[i] = (ctypes.c_char * 64)(*file_path.encode('ascii'))
+        except UnicodeEncodeError:
+            raise ExportError('Texture path {} is not in ascii'.format(file_path))
         if len(file_path) > 64:
             # TODO: what if relative path are used?
             raise ExportError('File path to texture {} is longer than 64 characters'
                               .format(file_path))
-        try:
-            if base_path:
-                file_path = os.path.join(base_path, file_path)
-            file_path, _ = os.path.splitext(file_path)
-            parts = file_path.split(os.path.sep)
-            file_path = ntpath.join(*parts)
-            file_path = file_path.encode('ascii')
-            # TODO: there must be a better way instead of splitting bytes
-            # TODO: when exporting to Arc, the mod should go in a defined folder
-            textures_array[i] = (ctypes.c_char * 64)(*file_path)
-        except UnicodeEncodeError:
-            raise ExportError('Texture path {} is not in ascii'.format(file_path))
 
-    for i, mat in enumerate(materials):
+    for i, mat in enumerate(blender_materials):
         material_data = MaterialData()
         try:
-            # XXX: Should use data from actual blender material
+            # TODO: Should use data from actual blender material
             saved_mat = saved_mod.materials_data_array[i]
         except IndexError:
             raise ExportError('Exporting models with more materials than the original not supported yet')
@@ -414,18 +409,9 @@ def _export_textures_and_materials(blender_objects, base_path=None, saved_mod=No
             try:
                 texture_index = textures.index(texture) + 1
             except ValueError:
+                # TODO: logging
                 print('error in textures')
-            if texture_slot.use_map_normal and texture_slot.mapping != 'CUBE':
-                material_data.texture_indices[1] = texture_index
-            elif texture_slot.use_map_specular:
-                material_data.texture_indices[2] = texture_index
-            elif texture_slot.mapping == 'CUBE':
-                material_data.texture_indices[7] = texture_index
-            else:
-                if not material_data.texture_indices[0]:
-                    material_data.texture_indices[0] = texture_index
-                else:
-                    material_data.texture_indices[6] = texture_index
+            material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
         materials_data_array[i] = material_data
 
     return textures_array, materials_data_array
