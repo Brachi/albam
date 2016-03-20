@@ -224,7 +224,10 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
         uvs_per_vertex[vertex_index] = (uv_x, uv_y)
 
     if uvs_per_vertex and len(uvs_per_vertex) != vertex_count:
-        raise BuildMeshError('There are some vertices with no uvs in mesh in {}'.format(blender_mesh.name))
+        # TODO: logging
+        print('There are some vertices with no uvs in mesh in {}.'
+              'Vertex count: {} UVs per vertex: {}'.format(blender_mesh.name, vertex_count,
+                                                           len(uvs_per_vertex)))
 
     box_width = abs(bounding_box.min_x * 100) + abs(bounding_box.max_x * 100)
     box_height = abs(bounding_box.min_y * 100) + abs(bounding_box.max_y * 100)
@@ -281,8 +284,8 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
             vertex_struct.tangent_z = -1
             vertex_struct.tangent_w = -1
             '''
-        vertex_struct.uv_x = uvs_per_vertex[vertex_index][0] if uvs_per_vertex else 0
-        vertex_struct.uv_y = uvs_per_vertex[vertex_index][1] if uvs_per_vertex else 0
+        vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
+        vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
         if has_second_uv_layer:
             vertex_struct.uv2_x = 0
             vertex_struct.uv2_y = 0
