@@ -117,10 +117,18 @@ def export_mod156(blender_object):
     textures_array, materials_array = _export_textures_and_materials(objects, saved_mod)
     meshes_array, vertex_buffer, index_buffer = _export_meshes(objects, bounding_box, saved_mod)
 
+    bone_count = get_bone_count_from_blender_objects(objects)
+    if not bone_count:
+        bones_array_offset = 0
+    elif bone_count and saved_mod.unk_08:
+        bones_array_offset = 176 + len(saved_mod.unk_12)
+    else:
+        bones_array_offset = 176
+
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
-                 bone_count=get_bone_count_from_blender_objects(objects),
+                 bone_count=bone_count,
                  mesh_count=get_mesh_count_from_blender_objects(objects),
                  material_count=len(materials_array),
                  vertex_count=get_vertex_count_from_blender_objects(objects),
@@ -130,6 +138,7 @@ def export_mod156(blender_object):
                  vertex_buffer_2_size=len(saved_mod.vertex_buffer_2),
                  texture_count=len(textures_array),
                  group_count=saved_mod.group_count,
+                 bones_array_offset=bones_array_offset,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=saved_mod.bone_palette_count,
                  sphere_x=saved_mod.sphere_x,
@@ -155,6 +164,7 @@ def export_mod156(blender_object):
                  unk_09=saved_mod.unk_09,
                  unk_10=saved_mod.unk_10,
                  unk_11=saved_mod.unk_11,
+                 unk_12=saved_mod.unk_12,
                  bones_array=saved_mod.bones_array,
                  bones_unk_matrix_array=saved_mod.bones_unk_matrix_array,
                  bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
@@ -400,6 +410,9 @@ def _export_textures_and_materials(blender_objects, saved_mod):
             if not texture_slot:
                 continue
             texture = texture_slot.texture
+            if not texture:
+                # ?
+                continue
             # texture_indices expects index-1 based
             try:
                 texture_index = textures.index(texture) + 1
