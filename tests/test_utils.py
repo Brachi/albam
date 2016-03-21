@@ -2,9 +2,8 @@ import ctypes
 import struct
 import os
 
-import pytest
-
-from albam.utils import BaseStructure, unpack_half_float, pack_half_float
+from albam.utils import (BaseStructure, unpack_half_float, pack_half_float,
+                         ensure_posixpath, ensure_ntpath)
 
 
 def test_base_structure(tmpdir):
@@ -40,11 +39,36 @@ def test_unpack_pack_half_float():
     # https://en.wikipedia.org/wiki/Half-precision_floating-point_format
     expected_fail = 0
     for short_input in range(0, 65535):
-        if (short_input in range(31745, 33792) or short_input in range(1, 1024)
-                or short_input in range(64512, 65535)):
+        if (short_input in range(31745, 33792) or
+                short_input in range(1, 1024) or
+                short_input in range(64512, 65535)):
             expected_fail += 1
         else:
             float_output = unpack_half_float(short_input)
             short_again = pack_half_float(float_output)
             assert short_input == short_again
     assert expected_fail == 4093
+
+
+def test_ensure_posixpath_from_ntpath():
+    path = 'foo\\bar\\spam\\eggs'
+
+    assert ensure_posixpath(path) == 'foo/bar/spam/eggs'
+
+
+def test_ensure_posixpath_from_posixpath():
+    path = 'foo/bar/spam/eggs'
+
+    assert ensure_posixpath(path) == 'foo/bar/spam/eggs'
+
+
+def test_ensure_ntpath_from_posixpath():
+    path = 'foo/bar/spam/eggs'
+
+    assert ensure_ntpath(path) == 'foo\\bar\\spam\\eggs'
+
+
+def test_ensure_ntpath_from_ntpath():
+    path = 'foo\\bar\\spam\\eggs'
+
+    assert ensure_ntpath(path) == 'foo\\bar\\spam\\eggs'

@@ -29,7 +29,10 @@ logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
 logging.debug('Importing {import_arc_filepath}')
 
 # TODO: use the UI panels directly?
-register()
+try:
+    register()
+except ValueError:  # The addon is installed in blender.
+    pass
 
 try:
     start = time.time()

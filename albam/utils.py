@@ -3,8 +3,11 @@ from collections import namedtuple, deque, OrderedDict
 from copy import copy
 import ctypes
 from ctypes import c_float
+import ntpath
 import os
+import posixpath
 import struct
+
 
 
 def get_offset(struct_ob, name):
@@ -365,6 +368,22 @@ def get_uvs_per_vertex(blender_mesh, uv_layer):
             uvs = uvs_per_loop[i].uv
             vertices[vertex_index] = (uvs[0], uvs[1])
     return vertices
+
+
+def ensure_posixpath(path):
+    '''If the path given is not posix, convert it and return it, else return it'''
+    splitted = path.split(ntpath.sep)
+    if len(splitted) == 1:
+        return path
+    return posixpath.join(*splitted)
+
+
+def ensure_ntpath(path):
+    '''If the path given is not nt, convert it and return it, else return it'''
+    splitted = path.split(posixpath.sep)
+    if len(splitted) == 1:
+        return path
+    return ntpath.join(*splitted)
 
 
 def triangles_list_to_triangles_strip(blender_mesh):

@@ -1,5 +1,6 @@
 import ctypes
 from io import BytesIO
+import posixpath
 import ntpath
 import os
 import tempfile
@@ -35,6 +36,7 @@ from albam.utils import (
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
+    ensure_ntpath,
     )
 
 
@@ -49,12 +51,14 @@ def export_arc(blender_object):
 
     for child in blender_object.children:
         try:
-            mod_dirpath = child.albam_imported_item.source_path
-            # TODO: This could lead to errors if imported in Windows and exported in posix?
-            mod_filepath = os.path.join(mod_dirpath, child.name)
+            basename = posixpath.basename(child.name)
+            folder = child.albam_imported_item.folder
+            if os.sep == ntpath.sep:  # Windows
+                mod_filepath = ntpath.join(ensure_ntpath(folder), basename)
+            else:
+                mod_filepath = os.path.join(folder, basename)
         except AttributeError:
             raise ExportError('Object {0} did not come from the original arc'.format(child.name))
-        assert child.albam_imported_item.source_path_is_absolute is False
         assert child.albam_imported_item.file_type == 'mtframework.mod'
         mod, textures = export_mod156(child)
         mods[mod_filepath] = (mod, textures)

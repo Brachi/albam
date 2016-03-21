@@ -1,5 +1,6 @@
 from itertools import chain
 import ntpath
+import posixpath
 import os
 
 try:
@@ -22,6 +23,7 @@ from albam.utils import (
     strip_triangles_to_triangles_list,
     y_up_to_z_up,
     create_mesh_name,
+    ensure_posixpath,
     )
 
 
@@ -44,7 +46,7 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
 
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
-    mod_dirs = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
+    mod_folders = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
 
     # Saving arc to main object
     parent = bpy.data.objects.new(arc_name, None)
@@ -52,12 +54,9 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     parent.albam_imported_item['data'] = bytes(arc)
     parent.albam_imported_item.name = arc_name
     parent.albam_imported_item.source_path = file_path
-    parent.albam_imported_item.source_path = file_path
-    parent.albam_imported_item.source_path_is_absolute = True
     parent.albam_imported_item.file_type = 'mtframework.arc'
     for i, mod_file in enumerate(mod_files):
-        mod_dir = mod_dirs[i]
-        import_mod(mod_file, out, parent, mod_dir)
+        import_mod(mod_file, out, parent, mod_folders[i])
 
     # Addding the name of the imported item so then it can be selected
     # from a list for exporting. Exporting models without a base model,
@@ -68,8 +67,10 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     new_albam_imported_item.name = os.path.basename(file_path)
 
 
-def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
+def import_mod(file_path, base_dir, parent=None, mod_folder=None):
     model_name = os.path.basename(file_path)
+    if mod_folder:
+        model_name = posixpath.join(ensure_posixpath(mod_folder), model_name)
     mod = Mod156(file_path=file_path)
     if mod.version == 156:
         textures = _create_blender_textures_from_mod(mod, base_dir)
@@ -98,8 +99,8 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
 
     # saving imported data for export use (format not 100% figured out yet)
     root.albam_imported_item['data'] = bytes(mod)
-    root.albam_imported_item.source_path = mod_dir_path  # e.g. pawn/pl/pl00/model
-    parent.albam_imported_item.source_path_is_absolute = False
+    root.albam_imported_item.folder = ensure_posixpath(mod_folder)  # e.g. pawn/pl/pl00/model
+    root.albam_imported_item.source_path = file_path
     root.albam_imported_item.name = model_name
     root.albam_imported_item.file_type = 'mtframework.mod'
 
