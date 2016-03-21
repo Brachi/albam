@@ -22,10 +22,15 @@ import bpy
 
 from albam.mtframework.blender_import import import_arc
 from albam.mtframework.blender_export import export_arc
+from albam import register
 
 logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
 
 logging.debug('Importing {import_arc_filepath}')
+
+# TODO: use the UI panels directly?
+register()
+
 try:
     start = time.time()
     logging.debug('Importing {import_arc_filepath}')
