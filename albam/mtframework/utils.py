@@ -51,14 +51,23 @@ def vertices_export_locations(xyz_tuple, bounding_box_width, bounding_box_height
     x, y, z = xyz_tuple
 
     x += bounding_box_width / 2
-    x /= bounding_box_width
+    try:
+        x /= bounding_box_width
+    except ZeroDivisionError:
+        pass
     x *= 32767
 
-    y /= bounding_box_height
+    try:
+        y /= bounding_box_height
+    except ZeroDivisionError:
+        pass
     y *= 32767
 
     z += bounding_box_length / 2
-    z /= bounding_box_length
+    try:
+        z /= bounding_box_length
+    except ZeroDivisionError:
+        pass
     z *= 32767
 
     return (round(x), round(y), round(z))

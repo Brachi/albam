@@ -11,7 +11,13 @@ from tests.conftest import SAMPLES_DIR
 def arc_re5_samples():
     samples_dir = pytest.config.getoption('--dirarc') or os.path.join(SAMPLES_DIR, 're5/arc')
     arc_regex = pytest.config.getoption('arcregex')
-    CORRUPTED_ARCS = {'uOmf303.arc', 's101.arc', 'uOmS103ScrAdj.arc'}
+    # TODO: move this to mtframework.arc
+    CORRUPTED_ARCS = {'uOmf303.arc',
+                      's101.arc',  # Not an rc
+                      'uOmS103ScrAdj.arc',
+                      'uOm001f.arc',  # Contains only one model that has one vertex
+                      'uOmS109_Truck_Rail.arc',   # Same, one model one vertex
+                      }
     full_list = [os.path.join(root, f)
                  for root, _, files in os.walk(samples_dir)
                  for f in files if f.endswith('.arc') and f not in CORRUPTED_ARCS]
