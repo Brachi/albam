@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory, gettempdir
 
 import pytest
 
-from albam.mtframework import Mod156, Arc
+from albam.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH
 from tests.test_mtframework_arc import arc_re5_samples
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
@@ -51,15 +51,6 @@ except Exception:
 def is_close(a, b):
     return abs(a) - abs(b) < 0.001
 
-'''
-
-if import_arc_filepath.endswith(KNOWN_ARC_BLENDER_CRASH):
-    pytest.xfail(reason='Crash/segfault in blender: bug ALB-04')
-elif import_arc_filepath.endswith(KNOWN_ARC_BLENDER_HANGS):
-    pytest.xfail(reason='Memory corruption in blender: bug ALB-04')
-# uPl02JillCos1.arc and uPl02JillCos4.arc have one mesh with wrong exported strip triangles
-'''
-
 
 @pytest.fixture(scope='module', params=arc_re5_samples())
 def mods_from_arc(request, tmpdir_factory):
@@ -68,6 +59,8 @@ def mods_from_arc(request, tmpdir_factory):
         pytest.skip('No blender bin path supplied')
 
     import_arc_filepath = request.param
+    if import_arc_filepath.endswith(tuple(KNOWN_ARC_BLENDER_CRASH)):
+        pytest.xfail('Known arc crashes blender')
     log_filepath = str(tmpdir_factory.getbasetemp().join('blender.log'))
     import_unpack_dir = TemporaryDirectory()
     export_arc_filepath = os.path.join(gettempdir(), os.path.basename(import_arc_filepath))

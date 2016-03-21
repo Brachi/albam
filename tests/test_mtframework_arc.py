@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from albam.mtframework import Arc, KNOWN_ARC_FAILS
+from albam.mtframework import Arc, CORRUPTED_ARCS
 from tests.conftest import SAMPLES_DIR
 
 
@@ -12,12 +12,6 @@ def arc_re5_samples():
     samples_dir = pytest.config.getoption('--dirarc') or os.path.join(SAMPLES_DIR, 're5/arc')
     arc_regex = pytest.config.getoption('arcregex')
     # TODO: move this to mtframework.arc
-    CORRUPTED_ARCS = {'uOmf303.arc',
-                      's101.arc',  # Not an rc
-                      'uOmS103ScrAdj.arc',
-                      'uOm001f.arc',  # Contains only one model that has one vertex
-                      'uOmS109_Truck_Rail.arc',   # Same, one model one vertex
-                      }
     full_list = [os.path.join(root, f)
                  for root, _, files in os.walk(samples_dir)
                  for f in files if f.endswith('.arc') and f not in CORRUPTED_ARCS]
@@ -29,8 +23,6 @@ def arc_re5_samples():
 
 @pytest.mark.parametrize("arc_file", arc_re5_samples())
 def test_arc_unpack_re5(tmpdir, arc_file):
-    if arc_file.endswith(KNOWN_ARC_FAILS):
-        pytest.xfail()
     arc = Arc(file_path=arc_file)
     out = os.path.join(str(tmpdir), 'extracted_arc')
 
@@ -50,9 +42,6 @@ def test_arc_unpack_re5(tmpdir, arc_file):
 def test_arc_from_dir_re5(tmpdir, arc_file):
     """get an arc file (ideally from the game), unpack it, repackit, unpack it again
     compare the 2 arc files and the 2 output folders"""
-
-    if arc_file.endswith(KNOWN_ARC_FAILS):
-        pytest.xfail()
     arc_original = Arc(file_path=arc_file)
     arc_original_out = os.path.join(str(tmpdir), os.path.basename(arc_file).replace('.arc', ''))
     arc_original.unpack(arc_original_out)

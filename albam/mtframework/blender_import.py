@@ -9,7 +9,7 @@ except ImportError:
     pass
 
 from albam.exceptions import BuildMeshError, TextureError
-from albam.mtframework import Arc, Mod156, Mod210, Tex112
+from albam.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
 from albam.mtframework.utils import (
     get_vertices_array,
     get_indices_array,
@@ -29,6 +29,8 @@ def import_arc(file_path, extraction_dir=None, context_scene=None):
     '''Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
     to the armature (if any) for using in exporting'''
+    if file_path.endswith(tuple(KNOWN_ARC_BLENDER_CRASH) + tuple(CORRUPTED_ARCS)):
+        raise ValueError('The arc file provided is not supported yet, it might crash Blender')
 
     base_dir = os.path.basename(file_path).replace('.arc', '_arc_extracted')
     out = extraction_dir or os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
@@ -72,10 +74,6 @@ def import_mod(file_path, base_dir, parent=None, mod_dir_path=None):
     if mod.version == 156:
         textures = _create_blender_textures_from_mod(mod, base_dir)
         materials = _create_blender_materials_from_mod(mod, model_name, textures)
-    elif mod.version == 210:
-        mod = Mod210(file_path=file_path)
-        textures = []  # TODO: get them from mrl file
-        materials = []
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
