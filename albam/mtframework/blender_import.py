@@ -198,6 +198,9 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
     materials = []
     for i, material in enumerate(mod.materials_data_array):
         blender_material = bpy.data.materials.new('{}_{}'.format(model_name, str(i).zfill(2)))
+        blender_material.use_transparency = True
+        blender_material.alpha = 0.0
+        blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
         materials.append(blender_material)
         for i, tex_index in enumerate(material.texture_indices):
             if tex_index == 0:
@@ -224,8 +227,10 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 slot.use_map_normal = True
                 slot.normal_factor = 0.05
             elif i == 2:
+                # Specular
                 slot.use_map_color_diffuse = False
                 slot.use_map_specular = True
+                blender_material.specular_intensity = 0.0
             elif i == 7:
                 # cube map normal
                 slot.use_map_color_diffuse = False
