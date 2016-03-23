@@ -27,6 +27,7 @@ KNOWN_ARC_BLENDER_CRASH = {
     'ev616_00.arc',
     'ev617_00.arc',
     'ev618_00.arc',
+    'uOm09882.arc',
     's109.arc',
     's119.arc',
     's300.arc',

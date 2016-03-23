@@ -1,7 +1,6 @@
 from ctypes import Structure, sizeof, c_int, c_uint, c_char, c_short, c_ubyte
 import ntpath
 import os
-import re
 import zlib
 
 from albam.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
@@ -99,7 +98,8 @@ class Arc(BaseStructure):
 
     @staticmethod
     def _set_path(source_path, file_path):
-        file_path = re.sub(source_path + os.path.sep, '', file_path, count=1)
+        source_path = source_path + os.path.sep if not source_path.endswith(os.path.sep) else source_path
+        file_path = file_path.replace(source_path, '')
         file_path = os.path.splitext(file_path)[0]
         parts = file_path.split(os.path.sep)
         return ntpath.join('', *parts).encode('ascii')
