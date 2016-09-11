@@ -316,7 +316,7 @@ def get_meshes_sizes(mod):
     else:
         extra = 0
     total_count = sum(mesh.vertex_group_count for mesh in mod.meshes_array)
-    return c_ubyte * ((total_count * 144) + (extra * 4))
+    return c_float * ((total_count * 36) + extra)
 
 
 def unk_data_depends_on_other_unk(tmp_struct):
