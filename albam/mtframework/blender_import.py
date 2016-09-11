@@ -321,6 +321,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
+    assert min(indices) >= 0  # Blender crashes if not
     me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
     me_ob.update(calc_edges=True)
     me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
