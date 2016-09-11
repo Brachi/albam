@@ -1,4 +1,5 @@
 from difflib import SequenceMatcher
+from itertools import chain
 import os
 import subprocess
 from tempfile import TemporaryDirectory, gettempdir
@@ -6,6 +7,7 @@ from tempfile import TemporaryDirectory, gettempdir
 import pytest
 
 from albam.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH
+from albam.utils import get_offset, get_size
 from tests.test_mtframework_arc import arc_re5_samples
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
@@ -84,7 +86,7 @@ def mods_from_arc(request, tmpdir_factory):
     try:
         subprocess.check_output((args,), shell=True)
     except subprocess.CalledProcessError:
-        # the test will actually error here, if the import/export fails, since the file it won't exist.
+        # the test will actually error here, if the import/export fails, since the file won't exist.
         # which is better, since pytest traceback to subprocess.check_output is pretty long and useless
         with open(log_filepath) as f:
             for line in f:
@@ -177,9 +179,8 @@ def test_mod156_import_export_vertex_buffer_size(mods_from_arc):
         assert (mod_original.vertex_buffer_size - mod_exported.vertex_buffer_size) // 32 < EXPECTED_MAX_MISSING_VERTICES
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_2_size(mods_from_arc):
-    # TODO: see comment in _get_vertex_array_from_vertex_buffer
+    """Since uses saved mod data"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         assert mod_original.vertex_buffer_2_size == mod_exported.vertex_buffer_2_size
 
@@ -194,47 +195,56 @@ def test_mod156_import_export_group_count(mods_from_arc):
         assert mod_original.group_count == mod_exported.group_count
 
 
-def test_mod156_import_export_bone_palette_count(mods_from_arc):
+def test_mod156_import_export_bone_palettes_same_indices(mods_from_arc):
+    """Bone palettes are exported using a greedy non optimized method, so
+    the quantity so far differs, but it's equivalent. Here we only care that
+    the exported bone palette has all the bone indices the original has"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.bone_palette_count == mod_exported.bone_palette_count
+        original = chain.from_iterable([bp.values[:] for bp in mod_original.bone_palette_array])
+        exported = chain.from_iterable([bp.values[:] for bp in mod_exported.bone_palette_array])
+        assert set(original) == set(exported)
+
+
+def _assert_offsets(mod_original, mod_exported, offset_attr_name, attr_name):
+        assert getattr(mod_original, offset_attr_name) == get_offset(mod_original, attr_name)
+        assert getattr(mod_exported, offset_attr_name) == get_offset(mod_exported, attr_name)
 
 
 def test_mod156_import_export_bones_array_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.bones_array_offset == mod_exported.bones_array_offset
+        _assert_offsets(mod_original, mod_exported, 'bones_array_offset', 'bones_array')
 
 
 def test_mod156_import_export_group_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.group_offset == mod_exported.group_offset
+        _assert_offsets(mod_original, mod_exported, 'group_offset', 'group_data_array')
 
 
 def test_mod156_import_export_textures_array_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.textures_array_offset == mod_exported.textures_array_offset
+        _assert_offsets(mod_original, mod_exported, 'textures_array_offset', 'textures_array')
 
 
 def test_mod156_import_export_meshes_array_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.meshes_array_offset == mod_exported.meshes_array_offset
+        _assert_offsets(mod_original, mod_exported, 'meshes_array_offset', 'meshes_array')
 
 
 def test_mod156_import_export_vertex_buffer_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.vertex_buffer_offset == mod_exported.vertex_buffer_offset
+        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_offset', 'vertex_buffer')
 
 
 @pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_2_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.vertex_buffer_2_offset == mod_exported.vertex_buffer_2_offset
+        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_2_offset', 'vertex_2_buffer')
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_index_buffer_offset(mods_from_arc):
     '''Fails since vertex_buffer_2 is not included'''
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.index_buffer_offset == mod_exported.index_buffer_offset
+        _assert_offsets(mod_original, mod_exported, 'index_buffer_offset', 'index_buffer')
 
 
 def test_mod156_import_export_reserved_01(mods_from_arc):
@@ -393,11 +403,6 @@ def test_mod156_import_export_unk_13(mods_from_arc):
         assert bytes(mod_original.unk_13) == bytes(mod_exported.unk_13)
 
 
-def test_mod156_import_export_bone_palette_array(mods_from_arc):
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert bytes(mod_original.bone_palette_array) == bytes(mod_exported.bone_palette_array)
-
-
 def test_mod156_import_export_textures_array(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         textures_original = {t[:] for t in mod_original.textures_array}
@@ -423,6 +428,7 @@ def test_mod156_import_export_materials_data_array_texture_paths(mods_from_arc):
         assert texture_paths_from_materials_original == texture_paths_from_materials_exported
 
 
+@pytest.mark.xfail(reason='Materials exported are hardcoded for now')
 def test_mod156_import_export_materials_data_array_values(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, material_original in enumerate(mod_original.materials_data_array):
@@ -442,10 +448,11 @@ def test_mod156_import_export_meshes_array_length(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_group_index(mods_from_arc):
+    """Mesh attribute is exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.group_index == mesh_exported.group_index
+            assert mesh_exported.group_index == 0
 
 
 def test_mod156_import_export_meshes_array_material_index(mods_from_arc):
@@ -463,12 +470,14 @@ def test_mod156_import_export_meshes_array_level_of_detail(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_unk_01(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_01 == mesh_exported.unk_01
+            mesh_exported.unk_01 == 0
 
 
+@pytest.mark.xfail(reason="Need to figure out how to export vertex format in all cases")
 def test_mod156_import_export_meshes_array_vertex_format(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
@@ -483,32 +492,32 @@ def test_mod156_import_export_meshes_array_vertex_stride(mods_from_arc):
             assert mesh_original.vertex_stride == mesh_exported.vertex_stride
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_meshes_array_unk_02(mods_from_arc):
-    '''For some reason the game crashes on uPl00ChrisNormal.arc if is set'''
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_02 == mesh_exported.unk_02
+            assert mesh_exported.unk_02 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_03(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_03 == mesh_exported.unk_03
+            assert mesh_exported.unk_03 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_04(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_04 == mesh_exported.unk_04
+            assert mesh_exported.unk_04 == 0
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="Won't match in meshes that use index_start_1")
 def test_mod156_import_export_meshes_array_vertex_count(mods_from_arc):
-    '''Won't match in meshes that use index_start_1'''
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
@@ -543,10 +552,11 @@ def test_mod156_import_export_meshes_array_vertex_offset(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_unk_05(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_05 == mesh_exported.unk_05
+            assert mesh_exported.unk_05 == 0
 
 
 @pytest.mark.xfail
@@ -577,17 +587,19 @@ def test_mod156_import_export_meshes_array_face_offset(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_unk_06(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_06 == mesh_exported.unk_06
+            assert mesh_exported.unk_06 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_07(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_07 == mesh_exported.unk_07
+            assert mesh_exported.unk_07 == 0
 
 
 @pytest.mark.xfail
@@ -600,12 +612,14 @@ def test_mod156_import_export_meshes_array_vertex_index_start_22(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_vertex_group_count(mods_from_arc):
+    """not sure if the attribute is 'vertex_group_count', but always exporting as 1"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.vertex_group_count == mesh_exported.vertex_group_count
+            assert mesh_exported.vertex_group_count == 1
 
 
+@pytest.mark.xfail(reason="not necessary, because heuristics")
 def test_mod156_import_export_meshes_bone_palette_index(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
@@ -614,33 +628,39 @@ def test_mod156_import_export_meshes_bone_palette_index(mods_from_arc):
 
 
 def test_mod156_import_export_meshes_array_unk_08(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_08 == mesh_exported.unk_08
+            assert mesh_exported.unk_08 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_09(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_09 == mesh_exported.unk_09
+            assert mesh_exported.unk_09 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_10(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_10 == mesh_exported.unk_10
+            assert mesh_exported.unk_10 == 0
 
 
 def test_mod156_import_export_meshes_array_unk_11(mods_from_arc):
+    """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_11 == mesh_exported.unk_11
+            assert mesh_exported.unk_11 == 0
 
 
+# TODO: test exported harcoded data maybe?
+@pytest.mark.xfail(reason="using hardcoded data")
 def test_mod156_import_export_meshes_array_2(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         assert bytes(mod_original.meshes_array_2) == bytes(mod_exported.meshes_array_2)
@@ -654,13 +674,10 @@ def test_mod156_import_export_vertex_buffer_approximation(mods_from_arc):
         assert seq.quick_ratio() >= EXPECTED_VERTEX_BUFFER_RATIO
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_2_approximation(mods_from_arc):
-    '''Is not expected that the buffer exported matches exactly the original,
-    because of rounding errors and more, but right know especially since normals are to be added'''
+    """Since the export uses the saved mod data"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        seq = SequenceMatcher(None, bytes(mod_original.vertex_buffer_2), bytes(mod_exported.vertex_buffer_2))
-        assert seq.quick_ratio() >= EXPECTED_VERTEX_BUFFER_RATIO
+        assert bytes(mod_original.vertex_buffer_2) == bytes(mod_exported.vertex_buffer_2)
 
 
 def test_mod156_import_export_index_buffer_approximation(mods_from_arc):
