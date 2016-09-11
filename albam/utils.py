@@ -9,7 +9,6 @@ import posixpath
 import struct
 
 
-
 def get_offset(struct_ob, name):
     return getattr(struct_ob.__class__, name).offset
 
@@ -217,7 +216,7 @@ def chunks(l, n):
 
 def strip_triangles_to_triangles_list(strip_indices_array):
     indices = []
-    offset = min(strip_indices_array[:3])
+    offset = min(strip_indices_array)
 
     for i in range(2, len(strip_indices_array)):
         a = strip_indices_array[i - 2]
