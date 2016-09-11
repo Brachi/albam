@@ -1,9 +1,12 @@
+from collections import OrderedDict
 import ctypes
 from io import BytesIO
 import posixpath
 import ntpath
 import os
 import tempfile
+import re
+import struct
 
 try:
     import bpy
@@ -15,14 +18,12 @@ from albam.exceptions import ExportError
 from albam.mtframework.mod import (
     Mesh156,
     MaterialData,
+    BonePalette,
     CLASSES_TO_VERTEX_FORMATS,
     VERTEX_FORMATS_TO_CLASSES,
     )
 from albam.mtframework import Arc, Mod156, Tex112
-from albam.mtframework.utils import (
-    vertices_export_locations,
-    get_vertices_array,
-    )
+from albam.mtframework.utils import vertices_export_locations
 from albam.utils import (
     pack_half_float,
     get_offset,
@@ -136,39 +137,29 @@ def export_mod156(parent_blender_object):
                           .format(parent_blender_object.name))
 
     children_objects = [child for child in parent_blender_object.children]
-    empty_children = [c for c in children_objects if c.type == 'EMPTY']
     meshes_children = [c for c in children_objects if c.type == 'MESH']
+    # TODO: decide what to do with EMPTY objects, which are failed imports
     bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
 
-    if len(meshes_children) < len(saved_mod.meshes_array) and empty_children:
-        # There were failed meshes that were replaced as empties in the import
-        # We need to remove the extra weight groups (or whaterver they are),
-        # before exporting
-        failed_indices = {i for i, obj in enumerate(parent_blender_object.children)
-                          if obj.type == 'EMPTY'}
-        new_bytes = []
-        current_position = 0
-        for i, mesh in enumerate(saved_mod.meshes_array):
-            size = 144 * mesh.vertex_group_count
-            data = saved_mod.meshes_array_2[current_position:current_position + size]
-            current_position = current_position + size
-            if i in failed_indices:
-                continue
-            else:
-                new_bytes.extend(data)
-        # the misterious extra 4 bytes for mod.156
-        new_bytes.extend(saved_mod.meshes_array_2[-4:])
-        meshes_array_2 = (ctypes.c_ubyte * len(new_bytes))(*new_bytes)
-    elif len(meshes_children) != len(saved_mod.meshes_array) and not empty_children:
-        raise ExportError("Can't import {0}, different meshes quantity ({1} vs {2}) "
-                          "Support for this will come soon".format(parent_blender_object.name,
-                                                                   len(saved_mod.meshes_array),
-                                                                   len(children_objects)))
-    else:
-        meshes_array_2 = saved_mod.meshes_array_2
+    mesh_count = len(meshes_children)
+    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
+    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
+    floats = [header] + CUBE_BBOX * mesh_count
+    meshes_array_2 = meshes_array_2(*floats)
 
-    textures_array, materials_array = _export_textures_and_materials(children_objects, saved_mod)
-    meshes_array, vertex_buffer, index_buffer = _export_meshes(children_objects, bounding_box, saved_mod)
+    textures_array, materials_array, materials_mapping = _export_textures_and_materials(children_objects)
+    bone_palettes = _create_bone_palettes(meshes_children)
+    meshes_array, vertex_buffer, index_buffer = _export_meshes(children_objects,
+                                                               bounding_box,
+                                                               bone_palettes,
+                                                               materials_mapping)
+    bone_palette_array = (BonePalette * len(bone_palettes))()
+    for i, bp in enumerate(bone_palettes.values()):
+        bone_palette_array[i].unk_01 = len(bp)
+        if len(bp) != 32:
+            padding = 32 - len(bp)
+            bp = bp + [0] * padding
+        bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
 
     bone_count = get_bone_count_from_blender_objects([parent_blender_object])
     if not bone_count:
@@ -193,7 +184,7 @@ def export_mod156(parent_blender_object):
                  group_count=saved_mod.group_count,
                  bones_array_offset=bones_array_offset,
                  group_data_array=saved_mod.group_data_array,
-                 bone_palette_count=saved_mod.bone_palette_count,
+                 bone_palette_count=len(bone_palette_array),
                  sphere_x=saved_mod.sphere_x,
                  sphere_y=saved_mod.sphere_y,
                  sphere_z=saved_mod.sphere_z,
@@ -222,7 +213,7 @@ def export_mod156(parent_blender_object):
                  bones_unk_matrix_array=saved_mod.bones_unk_matrix_array,
                  bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
                  unk_13=saved_mod.unk_13,
-                 bone_palette_array=saved_mod.bone_palette_array,
+                 bone_palette_array=bone_palette_array,
                  textures_array=textures_array,
                  materials_data_array=materials_array,
                  meshes_array=meshes_array,
@@ -241,33 +232,18 @@ def export_mod156(parent_blender_object):
     return mod, get_textures_from_blender_objects(children_objects)
 
 
-def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
-    saved_mesh = saved_mod.meshes_array[mesh_index]
-    if saved_mod.bone_palette_array:
-        bone_palette = saved_mod.bone_palette_array[saved_mesh.bone_palette_index].values[:]
-    else:
-        bone_palette = []
+def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
     # TODO: check the number of uv layers
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object.data, blender_mesh_object.data.uv_layers[0])
-
-    VF = VERTEX_FORMATS_TO_CLASSES[saved_mesh.vertex_format]
-
-    '''
-    # Unfortunately this fails in some cases and could crash the game; until some mesh unknowns are figured out,
-    # relying on saved_mesh data
-    # e.g. pl0000.mod from uPl00ChrisNormal.arc, meshes_array[30] has max bones per vertex = 4, but the
-    # original file has 5
-    if weights_per_vertex:
-        max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()})
-        if max_bones_per_vertex > 8:
-            raise RuntimeError("The mesh '{}' contains some vertex that are weighted by "
-                               "more than 8 bones, which is not supported. Fix it and try again"
-                               .format(blender_mesh.name))
-        VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
-    '''
+    max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
+    if max_bones_per_vertex > 8:
+        raise RuntimeError("The mesh '{}' contains some vertex that are weighted by "
+                           "more than 8 bones, which is not supported. Fix it and try again"
+                           .format(blender_mesh.name))
+    VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
     for vertex_index, (uv_x, uv_y) in uvs_per_vertex.items():
         # flipping for dds textures
@@ -288,16 +264,29 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
 
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
-    has_tangents = hasattr(VF, 'tangent_x')
     has_second_uv_layer = hasattr(VF, 'uv2_x')
-    original_vertices_array = get_vertices_array(saved_mod, saved_mod.meshes_array[mesh_index])
+    has_tangents = hasattr(VF, 'tangent_x')
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
-        original_vertex_struct = original_vertices_array[vertex_index]
         if weights_per_vertex:
             weights_data = weights_per_vertex[vertex_index]   # list of (bone_index, value)
             bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
             weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
+            total_weight = sum(weight_values)
+            # each vertex has to be influenced 100%. Padding if it's not.
+            if total_weight < 255:
+                to_fill = 255 - total_weight
+                percentages = [(w / total_weight) * 100 for w in weight_values]
+                weight_values = [round(w + ((percentages[i] * to_fill) / 100)) for i, w in enumerate(weight_values)]
+                # XXX tmp for 8 bone_indices other hack
+                excess = 255 - sum(weight_values)
+                if excess:
+                    weight_values[0] -= 1
+                # XXX more quick Saturday hack
+                if sum(weight_values) < 255:
+                    missing = 255 - sum(weight_values)
+                    weight_values[0] += missing
+
         else:
             bone_indices = []
             weight_values = []
@@ -311,41 +300,75 @@ def _export_vertices(blender_mesh_object, bounding_box, saved_mod, mesh_index):
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
+        # guessing for now:
+        # using Counter([v.normal_<x,y,z,w> for i, mesh in enumerate(mod.meshes_array)
+        #               for v in get_vertices_array(original, original.meshes_array[i])]).most_common(10)
+        vertex_struct.normal_x = 127
+        vertex_struct.normal_y = 127
+        vertex_struct.normal_z = 0
+        vertex_struct.normal_w = -1
+        if has_tangents:
+            vertex_struct.tangent_x = 53
+            vertex_struct.tangent_y = 53
+            vertex_struct.tangent_z = 53
+            vertex_struct.tangent_w = -1
+
         if has_bones:
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
-            vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
-            vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
-        '''
-        vertex_struct.normal_x = round(vertex.normal[0] * 127)
-        vertex_struct.normal_y = round(vertex.normal[2] * 127) * -1
-        vertex_struct.normal_z = round(vertex.normal[1] * 127)
-        vertex_struct.normal_w = -1
-        '''
-        # XXX quick hack until normals can be exported ok in blender (gotta check fbx export or ask Bastien Montagne)
-        vertex_struct.normal_x = original_vertex_struct.normal_x
-        vertex_struct.normal_y = original_vertex_struct.normal_y
-        vertex_struct.normal_z = original_vertex_struct.normal_z
-        vertex_struct.normal_w = original_vertex_struct.normal_w
-        if has_tangents:
-            vertex_struct.tangent_x = original_vertex_struct.tangent_x
-            vertex_struct.tangent_y = original_vertex_struct.tangent_x
-            vertex_struct.tangent_z = original_vertex_struct.tangent_x
-            vertex_struct.tangent_w = original_vertex_struct.tangent_x
-            '''
-            vertex_struct.tangent_x = -1
-            vertex_struct.tangent_y = -1
-            vertex_struct.tangent_z = -1
-            vertex_struct.tangent_w = -1
-            '''
-        vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
-        vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
+            try:
+                vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
+                vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
+            except IndexError:
+                # TODO: proper logging
+                print('bone_indices', bone_indices, 'array_size', array_size)
+                print('VF', VF)
+                raise
+        try:
+            vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
+            vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
+        except:
+            pass
         if has_second_uv_layer:
             vertex_struct.uv2_x = 0
             vertex_struct.uv2_y = 0
-    return VF, vertices_array
+    return vertices_array
 
 
-def _export_meshes(blender_objects, bounding_box, saved_mod):
+def _create_bone_palettes(blender_mesh_objects):
+    bone_palette_dicts = []
+    MAX_BONE_PALETTE_SIZE = 32
+
+    bone_palette = {'mesh_indices': set(), 'bone_indices': set()}
+    for i, mesh in enumerate(blender_mesh_objects):
+        # XXX case where bone names are not integers
+        bone_indices = {int(vg.name) for vg in mesh.vertex_groups}
+        assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, "Mesh {} is influenced by more than 32 bones, which is not supported".format(i)
+        current = bone_palette['bone_indices']
+        potential = current.union(bone_indices)
+        if len(potential) > MAX_BONE_PALETTE_SIZE:
+            bone_palette_dicts.append(bone_palette)
+            bone_palette = {'mesh_indices': {i}, 'bone_indices': set(bone_indices)}
+        else:
+            bone_palette['mesh_indices'].add(i)
+            bone_palette['bone_indices'].update(bone_indices)
+
+    bone_palette_dicts.append(bone_palette)
+
+    final = OrderedDict([(frozenset(bp['mesh_indices']), sorted(bp['bone_indices']))
+                        for bp in bone_palette_dicts])
+
+    return final
+
+
+def _infer_level_of_detail(name):
+    LEVEL_OF_DETAIL_RE = re.compile(r'.*LOD_(?P<level_of_detail>\d+)$')
+    match = LEVEL_OF_DETAIL_RE.match(name)
+    if match:
+        return int(match.group('level_of_detail'))
+    return 1
+
+
+def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mapping):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -353,34 +376,27 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
     No time to investigate why and how those are decided. I suspect it might have to
     do with location of the meshes
     """
-    all_blender_meshes_objects = [ob for ob in blender_objects if ob.type == 'MESH' or ob.type == 'EMPTY']
-    passed_blender_meshes_objects = [ob for ob in all_blender_meshes_objects if ob.type == 'MESH']
-    meshes_156 = (Mesh156 * len(passed_blender_meshes_objects))()
+    meshes_156 = (Mesh156 * len(blender_meshes))()
     vertex_buffer = bytearray()
     index_buffer = bytearray()
-    materials = get_materials_from_blender_objects(blender_objects)
 
     vertex_position = 0
     face_position = 0
-    failed_count = 0
-    for i, blender_mesh_object in enumerate(all_blender_meshes_objects):
-        # XXX: if a model with more meshes than the original is exported... boom
-        # If somehow indices are changed... boom
-        try:
-            saved_mesh = saved_mod.meshes_array[i]
-        except IndexError:
-            raise ExportError('Exporting models with more meshes (parts) than the original not supported yet')
-        # Failed meshes are imported as empties, since the only reason they fail is that they have out of bounds
-        # array offsets (e.g. uEm41.arc em4000.mod), we can't retrieve any vertices since we'd mess up the vertex buffer
-        if blender_mesh_object.type == 'EMPTY':
-            failed_count += 1
-            continue
+    for mesh_index, blender_mesh_ob in enumerate(blender_meshes):
 
-        blender_mesh = blender_mesh_object.data
+        level_of_detail = _infer_level_of_detail(blender_mesh_ob.name)
+        bone_palette_index = None
+        bone_palette = []
+        for bpi, (meshes_indices, bp) in enumerate(bone_palettes.items()):
+            if mesh_index in meshes_indices:
+                bone_palette_index = bpi
+                bone_palette = bp
+                break
 
-        vertex_format, vertices_array = _export_vertices(blender_mesh_object, bounding_box,
-                                                         saved_mod, i)
+        blender_mesh = blender_mesh_ob.data
+        vertices_array = _export_vertices(blender_mesh_ob, bounding_box, mesh_index, bone_palette)
         vertex_buffer.extend(vertices_array)
+
         # TODO: is all this format conversion necessary?
         triangle_strips_python = triangles_list_to_triangles_strip(blender_mesh)
         # mod156 use global indices for verts, in case one only mesh is needed, probably
@@ -391,14 +407,15 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
         vertex_count = len(blender_mesh.vertices)
         index_count = len(triangle_strips_python)
 
-        m156 = meshes_156[i - failed_count]
+        m156 = meshes_156[mesh_index]
         try:
-            m156.material_index = materials.index(blender_mesh.materials[0])
+            m156.material_index = materials_mapping[blender_mesh.materials[0].name]
         except IndexError:
+            # TODO: insert an empty generic material in this case
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
         m156.constant = 1
-        m156.level_of_detail = saved_mesh.level_of_detail  # TODO
-        m156.vertex_format = CLASSES_TO_VERTEX_FORMATS[vertex_format]
+        m156.level_of_detail = level_of_detail
+        m156.vertex_format = CLASSES_TO_VERTEX_FORMATS[type(vertices_array[0])]
         m156.vertex_stride = 32
         m156.vertex_count = vertex_count
         m156.vertex_index_end = vertex_position + vertex_count - 1
@@ -408,23 +425,22 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
         m156.face_count = index_count
         m156.face_offset = 0
         m156.vertex_index_start_2 = vertex_position
-        m156.vertex_group_count = saved_mesh.vertex_group_count  # len(blender_mesh_object.vertex_groups)
-        # XXX: improve, not guaranteed if the weighting is modified (e.g. replacing a model)
-        m156.bone_palette_index = saved_mesh.bone_palette_index
+        m156.vertex_group_count = 1  # using 'TEST' bounding box
+        m156.bone_palette_index = bone_palette_index
 
-        # TODO: not using saved_mesh since it seems these are optional. Needs research
-        m156.group_index = saved_mesh.group_index
-        m156.unk_01 = saved_mesh.unk_01
-        # m156.unk_02 = saved_mesh.unk_02  # crashes if set to saved_mesh.unk_02 in ChrisNormal
-        m156.unk_03 = saved_mesh.unk_03
-        m156.unk_04 = saved_mesh.unk_04
-        m156.unk_05 = saved_mesh.unk_05
-        m156.unk_06 = saved_mesh.unk_06
-        m156.unk_07 = saved_mesh.unk_07
-        m156.unk_08 = saved_mesh.unk_08
-        m156.unk_09 = saved_mesh.unk_09
-        m156.unk_10 = saved_mesh.unk_10
-        m156.unk_11 = saved_mesh.unk_11
+        # Needs research
+        m156.group_index = 0
+        m156.unk_01 = 0
+        m156.unk_02 = 0
+        m156.unk_03 = 0
+        m156.unk_04 = 0
+        m156.unk_05 = 0
+        m156.unk_06 = 0
+        m156.unk_07 = 0
+        m156.unk_08 = 0
+        m156.unk_09 = 0
+        m156.unk_10 = 0
+        m156.unk_11 = 0
 
         vertex_position += vertex_count
         face_position += index_count
@@ -434,11 +450,12 @@ def _export_meshes(blender_objects, bounding_box, saved_mod):
     return meshes_156, vertex_buffer, index_buffer
 
 
-def _export_textures_and_materials(blender_objects, saved_mod):
+def _export_textures_and_materials(blender_objects):
     textures = get_textures_from_blender_objects(blender_objects)
     blender_materials = get_materials_from_blender_objects(blender_objects)
     textures_array = ((ctypes.c_char * 64) * len(textures))()
     materials_data_array = (MaterialData * len(blender_materials))()
+    materials_mapping = {}  # blender_material.name: material_id
 
     for i, texture in enumerate(textures):
         file_name = os.path.basename(texture.image.filepath)
@@ -458,18 +475,14 @@ def _export_textures_and_materials(blender_objects, saved_mod):
 
     for i, mat in enumerate(blender_materials):
         material_data = MaterialData()
-        try:
-            # TODO: Should use data from actual blender material
-            saved_mat = saved_mod.materials_data_array[i]
-        except IndexError:
-            raise ExportError('Exporting models with more materials than the original not supported yet')
-        material_data.unk_01 = saved_mat.unk_01
-        material_data.unk_02 = saved_mat.unk_02
-        material_data.unk_03 = saved_mat.unk_03
-        material_data.unk_04 = saved_mat.unk_04
-        material_data.unk_05 = saved_mat.unk_05
-        material_data.unk_06 = saved_mat.unk_06
-        material_data.unk_07 = saved_mat.unk_07
+        # TODO: unhardcode values using blender properties instead
+        material_data.unk_01 = 2168619075
+        material_data.unk_02 = 18563
+        material_data.unk_03 = 2267538950
+        material_data.unk_04 = 451
+        material_data.unk_05 = 179374192
+        material_data.unk_06 = 0
+        material_data.unk_07 = (ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS)
         for texture_slot in mat.texture_slots:
             if not texture_slot:
                 continue
@@ -482,8 +495,9 @@ def _export_textures_and_materials(blender_objects, saved_mod):
                 texture_index = textures.index(texture) + 1
             except ValueError:
                 # TODO: logging
-                print('error in textures')
+                raise RuntimeError('error in textures')
             material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
         materials_data_array[i] = material_data
+        materials_mapping[mat.name] = i
 
-    return textures_array, materials_data_array
+    return textures_array, materials_data_array, materials_mapping
