@@ -40,6 +40,28 @@ from albam.utils import (
     )
 
 
+# Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
+# Not entirely sure what it represents, but it works to use in all models so far
+CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
+             0.0, 50.0, 0.0, 86.6025390625,
+             -50.0, 0.0, -50.0, 0.0,
+             50.0, 100.0, 50.0, 0.0,
+             1.0, 0.0, 0.0, 0.0,
+             0.0, 1.0, 0.0, 0.0,
+             0.0, 0.0, 1.0, 0.0,
+             0.0, 50.0, 0.0, 1.0,
+             50.0, 50.0, 50.0, 0.0]
+
+# Taken from RE5->uPlChrisNormal.arc->pawn/pl/pl00/model/pl0000.mod->materials_data_array[16]
+DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
+                           1.0, 0.3, 1.0, 1.0,
+                           1.0, 0.0, 0.25, 36.0,
+                           0.0, 0.5, 0.0, 0.0,
+                           0.0, 0.0, 0.0, 0.0,
+                           1.0, 0.2, 0.0, 0.0,
+                           0.0, 0.0)
+
+
 def export_arc(blender_object):
     '''Exports an arc file containing mod and tex files, among others from a
     previously imported arc.'''
