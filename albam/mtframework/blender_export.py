@@ -68,19 +68,17 @@ def export_arc(blender_object):
         saved_arc.unpack(tmpdir)
         mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
                      for f in files if f.endswith('.mod')]
-        # tex_files = {os.path.join(root, f) for root, _, files in os.walk(tmpdir)
-        #             for f in files if f.endswith('.tex')}
         new_tex_files = set()
         for modf in mod_files:
             rel_path = modf.split(tmpdir_slash_ending)[1]
             try:
-                new_mod = mods[rel_path]
+                new_mod, mod_textures = mods[rel_path]
             except KeyError:
                 raise ExportError("Can't export to arc, a mod file is missing: {}".format(rel_path))
 
             with open(modf, 'wb') as w:
-                w.write(new_mod[0])
-            mod_textures = new_mod[1]
+                w.write(new_mod)
+
             for texture in mod_textures:
                 tex = Tex112.from_dds(file_path=bpy.path.abspath(texture.image.filepath))
                 try:
