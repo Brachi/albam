@@ -5,6 +5,10 @@ try:
 except ImportError:
     pass
 
+import albam.mtframework.blender_import  # noqa
+import albam.mtframework.blender_export  # noqa
+
+
 bl_info = {
     "name": "Albam",
     "author": "Sebastian Brachi",

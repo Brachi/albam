@@ -7,7 +7,6 @@ import os
 import tempfile
 import re
 import struct
-
 try:
     import bpy
 except ImportError:
@@ -39,6 +38,7 @@ from albam.utils import (
     get_uvs_per_vertex,
     ensure_ntpath,
     )
+from albam.registry import blender_registry
 
 
 # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
@@ -63,7 +63,8 @@ DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
                            0.0, 0.0)
 
 
-def export_arc(blender_object):
+@blender_registry.register_function('export', b'ARC\x00')
+def export_arc(blender_object, file_path):
     '''Exports an arc file containing mod and tex files, among others from a
     previously imported arc.'''
     mods = {}
@@ -124,7 +125,8 @@ def export_arc(blender_object):
         # for utex in unused_tex_files:
         #    os.unlink(utex)
         new_arc = Arc.from_dir(tmpdir)
-    return new_arc
+        with open(file_path, 'wb') as w:
+            w.write(new_arc)
 
 
 def export_mod156(parent_blender_object):

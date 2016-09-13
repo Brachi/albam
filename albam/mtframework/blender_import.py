@@ -25,46 +25,35 @@ from albam.utils import (
     create_mesh_name,
     ensure_posixpath,
     )
+from albam.registry import blender_registry
 
 
-def import_arc(file_path, extraction_dir=None, context_scene=None):
-    '''Imports an arc file (Resident Evil 5 for only for now) into blender,
+@blender_registry.register_function('import', b'ARC\x00')
+def import_arc(blender_object, file_path):
+    """Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
-    to the armature (if any) for using in exporting'''
+    to the armature (if any) for using in exporting
+    """
+
     if file_path.endswith(tuple(KNOWN_ARC_BLENDER_CRASH) + tuple(CORRUPTED_ARCS)):
         raise ValueError('The arc file provided is not supported yet, it might crash Blender')
 
     base_dir = os.path.basename(file_path).replace('.arc', '_arc_extracted')
-    out = extraction_dir or os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
+    out = os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
     if not os.path.isdir(out):
         os.makedirs(out)
     if not out.endswith(os.path.sep):
         out = out + os.path.sep
+
     arc = Arc(file_path=file_path)
     arc.unpack(out)
-    arc_name = os.path.basename(file_path)
 
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
     mod_folders = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
 
-    # Saving arc to main object
-    parent = bpy.data.objects.new(arc_name, None)
-    bpy.context.scene.objects.link(parent)
-    parent.albam_imported_item['data'] = bytes(arc)
-    parent.albam_imported_item.name = arc_name
-    parent.albam_imported_item.source_path = file_path
-    parent.albam_imported_item.file_type = 'mtframework.arc'
     for i, mod_file in enumerate(mod_files):
-        import_mod(mod_file, out, parent, mod_folders[i])
-
-    # Addding the name of the imported item so then it can be selected
-    # from a list for exporting. Exporting models without a base model,
-    # at least for models with skeleton doesn't make much sense, plus
-    # the arc files contain a lot of other files that are not imported, but
-    # saved in the blend file
-    new_albam_imported_item = context_scene.albam_items_imported.add()
-    new_albam_imported_item.name = os.path.basename(file_path)
+        import_mod(mod_file, out, blender_object, mod_folders[i])
 
 
 def import_mod(file_path, base_dir, parent=None, mod_folder=None):
@@ -72,9 +61,8 @@ def import_mod(file_path, base_dir, parent=None, mod_folder=None):
     if mod_folder:
         model_name = posixpath.join(ensure_posixpath(mod_folder), model_name)
     mod = Mod156(file_path=file_path)
-    if mod.version == 156:
-        textures = _create_blender_textures_from_mod(mod, base_dir)
-        materials = _create_blender_materials_from_mod(mod, model_name, textures)
+    textures = _create_blender_textures_from_mod(mod, base_dir)
+    materials = _create_blender_materials_from_mod(mod, model_name, textures)
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):

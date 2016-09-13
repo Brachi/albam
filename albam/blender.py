@@ -3,10 +3,10 @@ import os
 try:
     import bpy
 except ImportError:
-    pass
+    from unittest.mock import Mock
+    bpy = Mock()
 
-from albam.mtframework.blender_import import import_arc
-from albam.mtframework.blender_export import export_arc
+from albam.registry import blender_registry
 
 
 class AlbamImportExportPanel(bpy.types.Panel):
@@ -36,13 +36,28 @@ class AlbamImportOperator(bpy.types.Operator):
 
     def execute(self, context):
         to_import = [os.path.join(self.directory, f.name) for f in self.files]
-        for item in to_import:
-            try:
-                import_arc(item, None, context.scene)
-            except Exception as err:
-                # TODO: proper logging
-                print('Error importing {}: {}'.format(item, err))
-                raise
+        for file_path in to_import:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+            id_magic = data[:4]
+
+            func = blender_registry.import_registry.get(id_magic)
+            if not func:
+                raise TypeError('File not supported for import. Id magic: {}'.format(id_magic))
+
+            name = os.path.basename(file_path)
+            obj = bpy.data.objects.new(name, None)
+
+            # TODO: proper logging/raising and rollback if failure
+            func(obj, file_path)
+
+            obj.albam_imported_item['data'] = data
+            obj.albam_imported_item.name = name
+            obj.albam_imported_item.source_path = file_path
+            bpy.context.scene.objects.link(obj)
+            new_albam_imported_item = context.scene.albam_items_imported.add()
+            new_albam_imported_item.name = name
+
         return {'FINISHED'}
 
 
@@ -65,7 +80,9 @@ class AlbamExportOperator(bpy.types.Operator):
     def execute(self, context):
         object_name = context.scene.albam_item_to_export
         obj = bpy.data.objects[object_name]
-        arc = export_arc(obj)
-        with open(self.filepath, 'wb') as w:
-            w.write(arc)
+        id_magic = obj.albam_imported_item['data'][:4]
+        func = blender_registry.export_registry.get(id_magic)
+        if not func:
+            raise TypeError('File not supported for export. Id magic: {}'.format(id_magic))
+        func(obj, self.filepath)
         return {'FINISHED'}
