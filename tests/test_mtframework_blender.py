@@ -39,7 +39,25 @@ except ValueError:  # The addon is installed in blender.
 try:
     start = time.time()
     logging.debug('Importing {import_arc_filepath}')
-    import_arc('{import_arc_filepath}', '{import_unpack_dir}', bpy.context.scene)
+
+    file_path = '{import_arc_filepath}'
+
+    with open(file_path, 'rb') as f:
+        data = f.read()
+
+    name = os.path.basename(file_path)
+    obj = bpy.data.objects.new(name, None)
+
+    import_arc(obj, file_path, unpack_dir='{import_unpack_dir}')
+
+    obj.albam_imported_item['data'] = data
+    obj.albam_imported_item.name = name
+    obj.albam_imported_item.source_path = file_path
+    bpy.context.scene.objects.link(obj)
+    new_albam_imported_item = bpy.context.scene.albam_items_imported.add()
+    new_albam_imported_item.name = name
+
+
     logging.debug('Import time: {{}} seconds [{import_arc_filepath}])'.format(round(time.time() - start, 2)))
 except Exception:
     logging.exception('IMPORT failed: {import_arc_filepath}')
@@ -48,10 +66,8 @@ time.sleep(4)
 try:
     imported_name = os.path.basename('{import_arc_filepath}')
     start = time.time()
-    exported_arc = export_arc(bpy.data.objects[imported_name])
+    export_arc(bpy.data.objects[imported_name], '{export_arc_filepath}')
     logging.debug('Export time: {{}} seconds [{import_arc_filepath}]'.format(round(time.time() - start, 2)))
-    with open('{export_arc_filepath}', 'wb') as w:
-        w.write(exported_arc)
 except Exception:
     logging.exception('EXPORT failed: {import_arc_filepath}')
     sys.exit(1)
@@ -103,6 +119,7 @@ def mods_from_arc(request, tmpdir_factory):
                           for f in files if f.endswith('.mod')]
     mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
                           for f in files if f.endswith('.mod')]
+
     mod_files_original = sorted(mod_files_original, key=os.path.basename)
     mod_files_exported = sorted(mod_files_exported, key=os.path.basename)
     mod_objects_original = []

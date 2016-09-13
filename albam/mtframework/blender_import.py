@@ -29,17 +29,19 @@ from albam.registry import blender_registry
 
 
 @blender_registry.register_function('import', b'ARC\x00')
-def import_arc(blender_object, file_path):
+def import_arc(blender_object, file_path, **kwargs):
     """Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
     to the armature (if any) for using in exporting
     """
 
+    unpack_dir = kwargs.get('unpack_dir')
+
     if file_path.endswith(tuple(KNOWN_ARC_BLENDER_CRASH) + tuple(CORRUPTED_ARCS)):
         raise ValueError('The arc file provided is not supported yet, it might crash Blender')
 
     base_dir = os.path.basename(file_path).replace('.arc', '_arc_extracted')
-    out = os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
+    out = unpack_dir or os.path.join(os.path.expanduser('~'), '.albam', 're5', base_dir)
     if not os.path.isdir(out):
         os.makedirs(out)
     if not out.endswith(os.path.sep):
