@@ -28,7 +28,7 @@ from albam.utils import (
 from albam.registry import blender_registry
 
 
-@blender_registry.register_function('import', b'ARC\x00')
+@blender_registry.register_function('import', identifier=b'ARC\x00')
 def import_arc(blender_object, file_path, **kwargs):
     """Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
@@ -54,14 +54,18 @@ def import_arc(blender_object, file_path, **kwargs):
                  for f in files if f.endswith('.mod')]
     mod_folders = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
 
-    for i, mod_file in enumerate(mod_files):
-        import_mod(mod_file, out, blender_object, mod_folders[i])
+    for i, file_path in enumerate(mod_files):
+        import_mod(blender_object, file_path, base_dir=out,  mod_folder=mod_folders[i])
 
 
-def import_mod(file_path, base_dir, parent=None, mod_folder=None):
+@blender_registry.register_function('import', identifier=b'MOD\x00')
+def import_mod(blender_object, file_path, **kwargs):
+    base_dir = kwargs.get('base_dir')
+    mod_folder = kwargs.get('mod_folder')
     model_name = os.path.basename(file_path)
     if mod_folder:
         model_name = posixpath.join(ensure_posixpath(mod_folder), model_name)
+
     mod = Mod156(file_path=file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
     materials = _create_blender_materials_from_mod(mod, model_name, textures)
@@ -76,14 +80,13 @@ def import_mod(file_path, base_dir, parent=None, mod_folder=None):
             # TODO: logging
             print('Error building mesh {0} for mod {1}'.format(i, file_path))
             print('Details:', err)
-            m = bpy.data.objects.new(name, None)
-            meshes.append(m)
+
     if mod.bone_count:
-        root = _create_blender_armature_from_mod(mod, model_name, parent)
+        root = _create_blender_armature_from_mod(mod, model_name, blender_object)
         root.show_x_ray = True
     else:
         root = bpy.data.objects.new(model_name, None)
-        root.parent = parent
+        root.parent = blender_object
         # '_create_blender_armature_from_mod links the armature to the scene. Necessary?
         bpy.context.scene.objects.link(root)
 
@@ -97,10 +100,54 @@ def import_mod(file_path, base_dir, parent=None, mod_folder=None):
     for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
-        if mod.bone_count and mesh.type != 'EMPTY':  # an empty mesh is a failed one
+        if mod.bone_count:
             modifier = mesh.modifiers.new(type="ARMATURE", name=model_name)
             modifier.object = root
             modifier.use_vertex_groups = True
+
+
+def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
+    imported_vertices = _import_vertices(mod, mesh)
+    vertex_locations = imported_vertices['locations']
+    indices = get_indices_array(mod, mesh)
+    if mod.version == 156:
+        indices = strip_triangles_to_triangles_list(indices)
+    else:
+        start_face = min(indices)
+        indices = [i - start_face for i in indices]
+    uvs_per_vertex = imported_vertices['uvs']
+    weights_per_bone = imported_vertices['weights_per_bone']
+
+    me_ob = bpy.data.meshes.new(name)
+    ob = bpy.data.objects.new(name, me_ob)
+
+    assert min(indices) >= 0  # Blender crashes if not
+    me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
+    me_ob.update(calc_edges=True)
+    me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
+    me_ob.validate()
+
+    if materials:
+        me_ob.materials.append(materials[mesh.material_index])
+    for bone_index, data in weights_per_bone.items():
+        vg = ob.vertex_groups.new(str(bone_index))
+        for vertex_index, weight_value in data:
+            vg.add((vertex_index,), weight_value, 'ADD')
+
+    if uvs_per_vertex:
+        me_ob.uv_textures.new(name)
+        uv_layer = me_ob.uv_layers[-1].data
+        per_loop_list = []
+        for loop in me_ob.loops:
+            offset = loop.vertex_index * 2
+            per_loop_list.extend((uvs_per_vertex[offset], uvs_per_vertex[offset + 1]))
+        uv_layer.foreach_set('uv', per_loop_list)
+    # Hiding non main level of detail meshes if they have more than one.
+    # For now, assuming that if the mesh has no bones, then it has only one level of detail
+    if weights_per_bone and mesh.level_of_detail in (2, 252):
+        ob.hide = True
+        ob.hide_render = True
+    return ob
 
 
 def _import_vertices(mod, mesh):
@@ -294,50 +341,6 @@ def _create_blender_armature_from_mod(mod, armature_name, parent=None):
     bpy.ops.object.mode_set(mode='OBJECT')
     assert len(armature.bones) == len(mod.bones_array)
     return armature_ob
-
-
-def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
-    imported_vertices = _import_vertices(mod, mesh)
-    vertex_locations = imported_vertices['locations']
-    indices = get_indices_array(mod, mesh)
-    if mod.version == 156:
-        indices = strip_triangles_to_triangles_list(indices)
-    else:
-        start_face = min(indices)
-        indices = [i - start_face for i in indices]
-    uvs_per_vertex = imported_vertices['uvs']
-    weights_per_bone = imported_vertices['weights_per_bone']
-
-    me_ob = bpy.data.meshes.new(name)
-    ob = bpy.data.objects.new(name, me_ob)
-
-    assert min(indices) >= 0  # Blender crashes if not
-    me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
-    me_ob.update(calc_edges=True)
-    me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
-    me_ob.validate()
-
-    if materials:
-        me_ob.materials.append(materials[mesh.material_index])
-    for bone_index, data in weights_per_bone.items():
-        vg = ob.vertex_groups.new(str(bone_index))
-        for vertex_index, weight_value in data:
-            vg.add((vertex_index,), weight_value, 'ADD')
-
-    if uvs_per_vertex:
-        me_ob.uv_textures.new(name)
-        uv_layer = me_ob.uv_layers[-1].data
-        per_loop_list = []
-        for loop in me_ob.loops:
-            offset = loop.vertex_index * 2
-            per_loop_list.extend((uvs_per_vertex[offset], uvs_per_vertex[offset + 1]))
-        uv_layer.foreach_set('uv', per_loop_list)
-    # Hiding non main level of detail meshes if they have more than one.
-    # For now, assuming that if the mesh has no bones, then it has only one level of detail
-    if weights_per_bone and mesh.level_of_detail in (2, 252):
-        ob.hide = True
-        ob.hide_render = True
-    return ob
 
 
 def _get_weights_per_bone(mod, mesh, vertices_array):
