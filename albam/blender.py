@@ -1,6 +1,9 @@
 import os
 
-import bpy
+try:
+    import bpy
+except ImportError:
+    pass
 
 from albam.mtframework.blender_import import import_arc
 from albam.mtframework.blender_export import export_arc
