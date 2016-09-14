@@ -6,13 +6,13 @@ import requests
 
 
 BASE = 'https://gitlab.com/api/v3/'
+path = 'projects/{0}/repository/files?private_token={1}&file_path=tests/samples/re5/arc/uPl00ChrisNormal.arc&ref=master'
 
 
 def download_sample_files():
     '''quick test'''
     token = os.environ['SECRET_TOKEN']
     id_ = os.environ['SECRET_ID']
-    path = 'projects/{0}/repository/files?private_token={1}&file_path=tests/samples/re5/arc/uPl00ChrisNormal.arc&ref=master'
     file_test_url = urljoin(BASE, path.format(id_, token))
     r = requests.get(file_test_url)
     data = r.json()

@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory, gettempdir
 import pytest
 
 from albam.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH
-from albam.utils import get_offset, get_size
+from albam.utils import get_offset
 from tests.test_mtframework_arc import arc_re5_samples
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')

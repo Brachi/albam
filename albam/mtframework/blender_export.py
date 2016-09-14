@@ -2,7 +2,6 @@ from collections import OrderedDict
 import ctypes
 from io import BytesIO
 from itertools import chain
-import posixpath
 import ntpath
 import os
 import tempfile
@@ -30,14 +29,12 @@ from albam.utils import (
     triangles_list_to_triangles_strip,
     z_up_to_y_up,
     get_bounding_box_positions_from_blender_objects,
-    get_bone_count_from_blender_objects,
     get_textures_from_blender_objects,
     get_materials_from_blender_objects,
     get_mesh_count_from_blender_objects,
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
-    ensure_ntpath,
     )
 
 
@@ -322,7 +319,8 @@ def _create_bone_palettes(blender_mesh_objects):
     for i, mesh in enumerate(blender_mesh_objects):
         # XXX case where bone names are not integers
         bone_indices = {int(vg.name) for vg in mesh.vertex_groups}
-        assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, "Mesh {} is influenced by more than 32 bones, which is not supported".format(i)
+        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(i)
+        assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
         current = bone_palette['bone_indices']
         potential = current.union(bone_indices)
         if len(potential) > MAX_BONE_PALETTE_SIZE:

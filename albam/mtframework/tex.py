@@ -25,7 +25,8 @@ class Tex112(BaseStructure):
                 ('unk_float_3', c_float),
                 ('unk_float_4', c_float),
                 ('mipmap_offsets', lambda s: c_uint * s.mipmap_count),
-                ('dds_data', lambda s, f: c_byte * (os.path.getsize(f) - 40 - sizeof(s.mipmap_offsets)) if f else c_byte * len(s.dds_data)),
+                ('dds_data', lambda s, f: c_byte * (os.path.getsize(f) - 40 -
+                 sizeof(s.mipmap_offsets)) if f else c_byte * len(s.dds_data)),
                 )
 
     def to_dds(self):
