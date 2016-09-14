@@ -1,6 +1,5 @@
 from itertools import chain
 import ntpath
-import posixpath
 import os
 
 try:
@@ -23,7 +22,6 @@ from albam.utils import (
     strip_triangles_to_triangles_list,
     y_up_to_z_up,
     create_mesh_name,
-    ensure_posixpath,
     )
 from albam.registry import blender_registry
 
@@ -54,21 +52,21 @@ def import_arc(blender_object, file_path, **kwargs):
                  for f in files if f.endswith('.mod')]
     mod_folders = [os.path.dirname(mod_file.split(out)[-1]) for mod_file in mod_files]
 
-    for i, file_path in enumerate(mod_files):
-        import_mod(blender_object, file_path, base_dir=out,  mod_folder=mod_folders[i])
+    return {'files': mod_files,
+            'kwargs': {'parent': blender_object,
+                       'mod_folder': mod_folders[0],  # XXX will break if mods are in different folders
+                       'base_dir': out,
+                       },
+            }
 
 
 @blender_registry.register_function('import', identifier=b'MOD\x00')
 def import_mod(blender_object, file_path, **kwargs):
     base_dir = kwargs.get('base_dir')
-    mod_folder = kwargs.get('mod_folder')
-    model_name = os.path.basename(file_path)
-    if mod_folder:
-        model_name = posixpath.join(ensure_posixpath(mod_folder), model_name)
 
     mod = Mod156(file_path=file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
-    materials = _create_blender_materials_from_mod(mod, model_name, textures)
+    materials = _create_blender_materials_from_mod(mod, blender_object.name, textures)
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
@@ -82,26 +80,18 @@ def import_mod(blender_object, file_path, **kwargs):
             print('Details:', err)
 
     if mod.bone_count:
-        root = _create_blender_armature_from_mod(mod, model_name, blender_object)
+        armature_name = 'skel_{}'.format(blender_object.name)
+        root = _create_blender_armature_from_mod(blender_object, mod, armature_name)
         root.show_x_ray = True
     else:
-        root = bpy.data.objects.new(model_name, None)
+        root = bpy.data.objects.new(blender_object.name, None)
         root.parent = blender_object
-        # '_create_blender_armature_from_mod links the armature to the scene. Necessary?
-        bpy.context.scene.objects.link(root)
-
-    # saving imported data for export use (format not 100% figured out yet)
-    root.albam_imported_item['data'] = bytes(mod)
-    root.albam_imported_item.folder = ensure_posixpath(mod_folder)  # e.g. pawn/pl/pl00/model
-    root.albam_imported_item.source_path = file_path
-    root.albam_imported_item.name = model_name
-    root.albam_imported_item.file_type = 'mtframework.mod'
 
     for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
         if mod.bone_count:
-            modifier = mesh.modifiers.new(type="ARMATURE", name=model_name)
+            modifier = mesh.modifiers.new(type="ARMATURE", name=blender_object.name)
             modifier.object = root
             modifier.use_vertex_groups = True
 
@@ -281,17 +271,17 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
     return materials
 
 
-def _create_blender_armature_from_mod(mod, armature_name, parent=None):
+def _create_blender_armature_from_mod(blender_object, mod, armature_name):
     armature = bpy.data.armatures.new(armature_name)
     armature_ob = bpy.data.objects.new(armature_name, armature)
-    armature_ob.parent = parent
-    bpy.context.scene.objects.link(armature_ob)
+    armature_ob.parent = blender_object
 
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     # deselect all objects
     for i in bpy.context.scene.objects:
         i.select = False
+    bpy.context.scene.objects.link(armature_ob)
     bpy.context.scene.objects.active = armature_ob
     armature_ob.select = True
     bpy.ops.object.mode_set(mode='EDIT')

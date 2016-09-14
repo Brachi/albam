@@ -22,18 +22,14 @@ import time
 sys.path.append('{project_dir}')
 import bpy
 
-from albam.mtframework.blender_import import import_arc
-from albam.mtframework.blender_export import export_arc
 from albam import register
 
 logging.basicConfig(filename='{log_filepath}', level=logging.DEBUG)
-
 logging.debug('Importing {import_arc_filepath}')
 
-# TODO: use the UI panels directly?
 try:
     register()
-except ValueError:  # The addon is installed in blender.
+except ValueError:  # The addon is already installed in blender.
     pass
 
 try:
@@ -41,22 +37,7 @@ try:
     logging.debug('Importing {import_arc_filepath}')
 
     file_path = '{import_arc_filepath}'
-
-    with open(file_path, 'rb') as f:
-        data = f.read()
-
-    name = os.path.basename(file_path)
-    obj = bpy.data.objects.new(name, None)
-
-    import_arc(obj, file_path, unpack_dir='{import_unpack_dir}')
-
-    obj.albam_imported_item['data'] = data
-    obj.albam_imported_item.name = name
-    obj.albam_imported_item.source_path = file_path
-    bpy.context.scene.objects.link(obj)
-    new_albam_imported_item = bpy.context.scene.albam_items_imported.add()
-    new_albam_imported_item.name = name
-
+    bpy.ops.albam_import.item(files=[{{'name': file_path}}], unpack_dir='{import_unpack_dir}')
 
     logging.debug('Import time: {{}} seconds [{import_arc_filepath}])'.format(round(time.time() - start, 2)))
 except Exception:
@@ -66,7 +47,8 @@ time.sleep(4)
 try:
     imported_name = os.path.basename('{import_arc_filepath}')
     start = time.time()
-    export_arc(bpy.data.objects[imported_name], '{export_arc_filepath}')
+    bpy.context.scene.albam_item_to_export = imported_name
+    bpy.ops.albam_export.item(filepath='{export_arc_filepath}')
     logging.debug('Export time: {{}} seconds [{import_arc_filepath}]'.format(round(time.time() - start, 2)))
 except Exception:
     logging.exception('EXPORT failed: {import_arc_filepath}')
@@ -107,8 +89,11 @@ def mods_from_arc(request, tmpdir_factory):
         with open(log_filepath) as f:
             for line in f:
                 print(line)   # XXX: should print only the last n lines
-        os.unlink(export_arc_filepath)
-        os.unlink(script_filepath)
+        try:
+            os.unlink(export_arc_filepath)
+            os.unlink(script_filepath)
+        except FileNotFoundError:
+            pass
         raise
 
     export_unpack_dir = TemporaryDirectory()

@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import ctypes
 from io import BytesIO
+from itertools import chain
 import posixpath
 import ntpath
 import os
@@ -12,7 +13,7 @@ try:
 except ImportError:
     pass
 
-
+from albam.registry import blender_registry
 from albam.exceptions import ExportError
 from albam.mtframework.mod import (
     Mesh156,
@@ -38,7 +39,6 @@ from albam.utils import (
     get_uvs_per_vertex,
     ensure_ntpath,
     )
-from albam.registry import blender_registry
 
 
 # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
@@ -65,41 +65,32 @@ DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
 
 @blender_registry.register_function('export', b'ARC\x00')
 def export_arc(blender_object, file_path):
-    '''Exports an arc file containing mod and tex files, among others from a
-    previously imported arc.'''
+    saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}
-    try:
-        saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
-    except AttributeError:
-        raise ExportError('Object {0} did not come from the original arc'.format(blender_object.name))
 
     for child in blender_object.children:
-        try:
-            basename = posixpath.basename(child.name)
-            folder = child.albam_imported_item.folder
-            if os.sep == ntpath.sep:  # Windows
-                mod_filepath = ntpath.join(ensure_ntpath(folder), basename)
-            else:
-                mod_filepath = os.path.join(folder, basename)
-        except AttributeError:
-            raise ExportError('Object {0} did not come from the original arc'.format(child.name))
-        assert child.albam_imported_item.file_type == 'mtframework.mod'
+        exportable = hasattr(child, 'albam_imported_item')
+        if not exportable:
+            continue
         mod, textures = export_mod156(child)
-        mods[mod_filepath] = (mod, textures)
+        mods[child.name] = (mod, textures)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_slash_ending = tmpdir + os.sep if not tmpdir.endswith(os.sep) else tmpdir
         saved_arc.unpack(tmpdir)
         mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
                      for f in files if f.endswith('.mod')]
         new_tex_files = set()
         for modf in mod_files:
-            rel_path = modf.split(tmpdir_slash_ending)[1]
+            filename = os.path.basename(modf)
             try:
-                new_mod, mod_textures = mods[rel_path]
+                # TODO: mods with the same name in different folders
+                new_mod, mod_textures = mods[filename]
             except KeyError:
-                raise ExportError("Can't export to arc, a mod file is missing: {}".format(rel_path))
+                raise ExportError("Can't export to arc, a mod file is missing: {}. "
+                                  "Was it deleted before exporting?. "
+                                  "mods.items(): {}".format(filename, mods.items()))
 
+            # overwriting the original mod file
             with open(modf, 'wb') as w:
                 w.write(new_mod)
 
@@ -130,15 +121,11 @@ def export_arc(blender_object, file_path):
 
 
 def export_mod156(parent_blender_object):
-    '''The blender_object provided should have meshes as children'''
-    try:
-        saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
-    except AttributeError:
-        raise ExportError("Can't export '{0}' to Mod156, the model to be exported "
-                          "wasn't imported using Albam"
-                          .format(parent_blender_object.name))
+    saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
 
-    children_objects = [child for child in parent_blender_object.children]
+    first_children = [child for child in parent_blender_object.children]
+
+    children_objects = list(chain.from_iterable(child.children for child in first_children))
     meshes_children = [c for c in children_objects if c.type == 'MESH']
     # TODO: decide what to do with EMPTY objects, which are failed imports
     bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
@@ -163,28 +150,19 @@ def export_mod156(parent_blender_object):
             bp = bp + [0] * padding
         bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
 
-    bone_count = get_bone_count_from_blender_objects([parent_blender_object])
-    if not bone_count:
-        bones_array_offset = 0
-    elif bone_count and saved_mod.unk_08:
-        bones_array_offset = 176 + len(saved_mod.unk_12)
-    else:
-        bones_array_offset = 176
-
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
-                 bone_count=bone_count,
-                 mesh_count=get_mesh_count_from_blender_objects(children_objects),
+                 bone_count=saved_mod.bone_count,
+                 mesh_count=get_mesh_count_from_blender_objects(meshes_children),
                  material_count=len(materials_array),
-                 vertex_count=get_vertex_count_from_blender_objects(children_objects),
+                 vertex_count=get_vertex_count_from_blender_objects(meshes_children),
                  face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(vertex_buffer),
                  vertex_buffer_2_size=len(saved_mod.vertex_buffer_2),
                  texture_count=len(textures_array),
                  group_count=saved_mod.group_count,
-                 bones_array_offset=bones_array_offset,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=len(bone_palette_array),
                  sphere_x=saved_mod.sphere_x,
