@@ -245,28 +245,27 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     has_tangents = hasattr(VF, 'tangent_x')
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
-        if weights_per_vertex:
-            weights_data = weights_per_vertex[vertex_index]   # list of (bone_index, value)
-            bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
-            weight_values = [round(weight_value * 255) for _, weight_value in weights_data]
-            total_weight = sum(weight_values)
-            # each vertex has to be influenced 100%. Padding if it's not.
-            if total_weight < 255:
-                to_fill = 255 - total_weight
-                percentages = [(w / total_weight) * 100 for w in weight_values]
-                weight_values = [round(w + ((percentages[i] * to_fill) / 100)) for i, w in enumerate(weight_values)]
-                # XXX tmp for 8 bone_indices other hack
-                excess = 255 - sum(weight_values)
-                if excess:
-                    weight_values[0] -= 1
-                # XXX more quick Saturday hack
-                if sum(weight_values) < 255:
-                    missing = 255 - sum(weight_values)
-                    weight_values[0] += missing
 
-        else:
-            bone_indices = []
-            weight_values = []
+        # list of (bone_index, value)
+        weights_data = weights_per_vertex.get(vertex_index, [])
+        # TODO: raise warning when vertices don't have weights
+        empty = [0] * max_bones_per_vertex
+        bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data] or empty
+        weight_values = [round(weight_value * 255) for _, weight_value in weights_data] or empty
+        total_weight = sum(weight_values)
+        # each vertex has to be influenced 100%. Padding if it's not.
+        if weights_data and total_weight < 255:
+            to_fill = 255 - total_weight
+            percentages = [(w / total_weight) * 100 for w in weight_values]
+            weight_values = [round(w + ((percentages[i] * to_fill) / 100)) for i, w in enumerate(weight_values)]
+            # XXX tmp for 8 bone_indices other hack
+            excess = 255 - sum(weight_values)
+            if excess:
+                weight_values[0] -= 1
+            # XXX more quick Saturday hack
+            if sum(weight_values) < 255:
+                missing = 255 - sum(weight_values)
+                weight_values[0] += missing
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
@@ -318,9 +317,12 @@ def _create_bone_palettes(blender_mesh_objects):
     bone_palette = {'mesh_indices': set(), 'bone_indices': set()}
     for i, mesh in enumerate(blender_mesh_objects):
         # XXX case where bone names are not integers
-        bone_indices = {int(vg.name) for vg in mesh.vertex_groups}
-        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(i)
+        vertex_group_mapping = {vg.index: int(vg.name) for vg in mesh.vertex_groups}
+        bone_indices = {vertex_group_mapping[vgroup.group] for vertex in mesh.data.vertices for vgroup in vertex.groups}
+
+        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(mesh.name)
         assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
+
         current = bone_palette['bone_indices']
         potential = current.union(bone_indices)
         if len(potential) > MAX_BONE_PALETTE_SIZE:

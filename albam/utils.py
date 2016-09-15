@@ -347,11 +347,14 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
     for vertex in blender_object.data.vertices:
         for group in vertex.groups:
             weights_per_vertex.setdefault(vertex.index, [])
+            if not group.weight:
+                continue
             # avoiding list comprehensions for readability
             # bones in blender are matched to vertex group only by name
             vgroup_name = vertex_groups[group.group].name
             bone_index = bone_names_to_index[vgroup_name]
             pair = (bone_index, group.weight)
+            # XXX RE5 hack
             if len(weights_per_vertex[vertex.index]) < 4:
                 weights_per_vertex[vertex.index].append(pair)
     return weights_per_vertex
