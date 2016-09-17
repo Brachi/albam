@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 import ctypes
 from io import BytesIO
 from itertools import chain
@@ -58,6 +58,15 @@ DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
                            0.0, 0.0, 0.0, 0.0,
                            1.0, 0.2, 0.0, 0.0,
                            0.0, 0.0)
+
+
+HARDCODED_MAT_DATA = dict(unk_01=2168619075, unk_02=18563, unk_03=2267538950, unk_04=451,
+                          unk_05=179374192, unk_06=0,
+                          unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
+
+
+ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
+ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array', 'materials_mapping'))
 
 
 @blender_registry.register_function('export', b'ARC\x00')
@@ -121,10 +130,8 @@ def export_mod156(parent_blender_object):
     saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
 
     first_children = [child for child in parent_blender_object.children]
-
     children_objects = list(chain.from_iterable(child.children for child in first_children))
     meshes_children = [c for c in children_objects if c.type == 'MESH']
-    # TODO: decide what to do with EMPTY objects, which are failed imports
     bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
 
     mesh_count = len(meshes_children)
@@ -133,13 +140,11 @@ def export_mod156(parent_blender_object):
     floats = [header] + CUBE_BBOX * mesh_count
     meshes_array_2 = meshes_array_2(*floats)
 
-    textures_array, materials_array, materials_mapping = _export_textures_and_materials(children_objects)
     bone_palettes = _create_bone_palettes(meshes_children)
-    meshes_array, vertex_buffer, index_buffer = _export_meshes(children_objects,
-                                                               bounding_box,
-                                                               bone_palettes,
-                                                               materials_mapping)
+    exported_materials = _export_textures_and_materials(children_objects)
+    exported_meshes = _export_meshes(children_objects, bounding_box, bone_palettes, exported_materials)
     bone_palette_array = (BonePalette * len(bone_palettes))()
+
     for i, bp in enumerate(bone_palettes.values()):
         bone_palette_array[i].unk_01 = len(bp)
         if len(bp) != 32:
@@ -152,13 +157,13 @@ def export_mod156(parent_blender_object):
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
                  mesh_count=get_mesh_count_from_blender_objects(meshes_children),
-                 material_count=len(materials_array),
+                 material_count=len(exported_materials.materials_array),
                  vertex_count=get_vertex_count_from_blender_objects(meshes_children),
-                 face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
+                 face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
-                 vertex_buffer_size=ctypes.sizeof(vertex_buffer),
+                 vertex_buffer_size=ctypes.sizeof(exported_meshes.vertex_buffer),
                  vertex_buffer_2_size=len(saved_mod.vertex_buffer_2),
-                 texture_count=len(textures_array),
+                 texture_count=len(exported_materials.textures_array),
                  group_count=saved_mod.group_count,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=len(bone_palette_array),
@@ -191,13 +196,13 @@ def export_mod156(parent_blender_object):
                  bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
                  unk_13=saved_mod.unk_13,
                  bone_palette_array=bone_palette_array,
-                 textures_array=textures_array,
-                 materials_data_array=materials_array,
-                 meshes_array=meshes_array,
+                 textures_array=exported_materials.textures_array,
+                 materials_data_array=exported_materials.materials_array,
+                 meshes_array=exported_meshes.meshes_array,
                  meshes_array_2=meshes_array_2,
-                 vertex_buffer=vertex_buffer,
+                 vertex_buffer=exported_meshes.vertex_buffer,
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
-                 index_buffer=index_buffer
+                 index_buffer=exported_meshes.index_buffer
                  )
     mod.bones_array_offset = get_offset(mod, 'bones_array') if mod.bone_count else 0
     mod.group_offset = get_offset(mod, 'group_data_array')
@@ -348,7 +353,7 @@ def _infer_level_of_detail(name):
     return 1
 
 
-def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mapping):
+def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -359,6 +364,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mappin
     meshes_156 = (Mesh156 * len(blender_meshes))()
     vertex_buffer = bytearray()
     index_buffer = bytearray()
+    materials_mapping = exported_materials.materials_mapping
 
     vertex_position = 0
     face_position = 0
@@ -427,7 +433,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mappin
     vertex_buffer = (ctypes.c_ubyte * len(vertex_buffer)).from_buffer(vertex_buffer)
     index_buffer = (ctypes.c_ushort * (len(index_buffer) // 2)).from_buffer(index_buffer)
 
-    return meshes_156, vertex_buffer, index_buffer
+    return ExportedMeshes(meshes_156, vertex_buffer, index_buffer)
 
 
 def _export_textures_and_materials(blender_objects):
@@ -455,29 +461,16 @@ def _export_textures_and_materials(blender_objects):
 
     for mat_index, mat in enumerate(blender_materials):
         # TODO: unhardcode values using blender properties instead
-        material_data = MaterialData(unk_01=2168619075,
-                                     unk_02=18563,
-                                     unk_03=2267538950,
-                                     unk_04=451,
-                                     unk_05=179374192,
-                                     unk_06=0,
-                                     unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
+        material_data = MaterialData(**HARDCODED_MAT_DATA)
 
         for texture_slot in mat.texture_slots:
-            if not texture_slot:
+            if not texture_slot or not texture_slot.texture:
                 continue
             texture = texture_slot.texture
-            if not texture:
-                # ?
-                continue
             # texture_indices expects index-1 based
-            try:
-                texture_index = textures.index(texture) + 1
-            except ValueError:
-                # TODO: logging
-                raise RuntimeError('error in textures')
+            texture_index = textures.index(texture) + 1
             material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
         materials_data_array[mat_index] = material_data
         materials_mapping[mat.name] = mat_index
 
-    return textures_array, materials_data_array, materials_mapping
+    return ExportedMaterials(textures_array, materials_data_array, materials_mapping)
