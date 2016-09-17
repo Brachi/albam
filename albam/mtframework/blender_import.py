@@ -193,7 +193,6 @@ def _create_blender_textures_from_mod(mod, base_dir):
 
     for i, texture_path in enumerate(mod.textures_array):
         path = texture_path[:].decode('ascii').partition('\x00')[0]
-        folder = ntpath.dirname(path)
         path = os.path.join(base_dir, *path.split(ntpath.sep))
         path = '.'.join((path, 'tex'))
         if not os.path.isfile(path):
@@ -211,11 +210,11 @@ def _create_blender_textures_from_mod(mod, base_dir):
         with open(dds_path, 'wb') as w:
             w.write(dds)
         image = bpy.data.images.load(dds_path)
-        texture = bpy.data.textures.new(os.path.basename(path), type='IMAGE')
+        texture_name_no_extension = os.path.splitext(os.path.basename(path))[0]
+        texture = bpy.data.textures.new(texture_name_no_extension, type='IMAGE')
         texture.image = image
         textures.append(texture)
         # saving meta data for export
-        texture.albam_imported_texture_folder = folder
         texture.albam_imported_texture_value_1 = tex.unk_float_1
         texture.albam_imported_texture_value_2 = tex.unk_float_2
         texture.albam_imported_texture_value_3 = tex.unk_float_3

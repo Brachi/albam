@@ -25,6 +25,7 @@ from albam.mtframework import Arc, Mod156, Tex112
 from albam.mtframework.utils import (
     vertices_export_locations,
     blender_texture_to_texture_code,
+    get_texture_dirs,
     )
 from albam.utils import (
     pack_half_float,
@@ -76,57 +77,63 @@ ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'material
 def export_arc(blender_object, file_path):
     saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}
+    blender_textures = {}
 
     for child in blender_object.children:
         exportable = hasattr(child, 'albam_imported_item')
         if not exportable:
             continue
-        mod, textures = export_mod156(child)
-        mods[child.name] = (mod, textures)
+
+        mod = export_mod156(child)
+        mods[child.name] = mod
+        blender_textures_to_export = get_textures_from_blender_objects([child])
+        for blender_texture in blender_textures_to_export:
+            blender_textures[blender_texture.name] = blender_texture
 
     with tempfile.TemporaryDirectory() as tmpdir:
         saved_arc.unpack(tmpdir)
-        mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
-                     for f in files if f.endswith('.mod')]
-        new_tex_files = set()
+
+        files_to_modify = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+                           for f in files if f.endswith(('.mod', '.tex'))]
+        mod_files = [f for f in files_to_modify if f.endswith('.mod')]
+        tex_files = [f for f in files_to_modify if f.endswith('.tex')]
+
+        # overwriting the original mod files with the exported ones
         for modf in mod_files:
             filename = os.path.basename(modf)
             try:
                 # TODO: mods with the same name in different folders
-                new_mod, mod_textures = mods[filename]
+                new_mod = mods[filename]
             except KeyError:
                 raise ExportError("Can't export to arc, a mod file is missing: {}. "
                                   "Was it deleted before exporting?. "
                                   "mods.items(): {}".format(filename, mods.items()))
 
-            # overwriting the original mod file
             with open(modf, 'wb') as w:
                 w.write(new_mod)
 
-            for texture in mod_textures:
-                tex = Tex112.from_dds(file_path=bpy.path.abspath(texture.image.filepath))
-                try:
-                    tex.unk_float_1 = texture.albam_imported_texture_value_1
-                    tex.unk_float_2 = texture.albam_imported_texture_value_2
-                    tex.unk_float_3 = texture.albam_imported_texture_value_3
-                    tex.unk_float_4 = texture.albam_imported_texture_value_4
-                except AttributeError:
-                    pass
+        # overwriting the original tex files with the ones from blender
+        for tex_filepath in tex_files:
+            filename_no_ext = os.path.splitext(os.path.basename(tex_filepath))[0]
+            blender_texture = blender_textures.get(filename_no_ext)
+            if blender_texture:
+                tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
+            else:
+                continue  # blender texture was deleted, but is left anyway just in case
+            with open(tex_filepath, 'wb') as w:
+                w.write(tex)
 
-                tex_name = os.path.basename(texture.image.filepath)
-                tex_filepath = os.path.join(os.path.dirname(modf), tex_name.replace('.dds', '.tex'))
-                new_tex_files.add(tex_filepath)
-                with open(tex_filepath, 'wb') as w:
-                    w.write(tex)
-        # probably other files can reference textures besides mod, this is in case
-        # textures applied have other names.
-        # TODO: delete only textures referenced from saved_mods at import time
-        # unused_tex_files = tex_files - new_tex_files
-        # for utex in unused_tex_files:
-        #    os.unlink(utex)
         new_arc = Arc.from_dir(tmpdir)
-        with open(file_path, 'wb') as w:
-            w.write(new_arc)
+
+    with open(file_path, 'wb') as w:
+        w.write(new_arc)
+
+"""
+tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
+tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
+tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
+tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
+"""
 
 
 def export_mod156(parent_blender_object):
@@ -144,7 +151,7 @@ def export_mod156(parent_blender_object):
     meshes_array_2 = meshes_array_2(*floats)
 
     bone_palettes = _create_bone_palettes(meshes_children)
-    exported_materials = _export_textures_and_materials(children_objects)
+    exported_materials = _export_textures_and_materials(children_objects, saved_mod)
     exported_meshes = _export_meshes(children_objects, bounding_box, bone_palettes, exported_materials)
     bone_palette_array = (BonePalette * len(bone_palettes))()
 
@@ -214,7 +221,8 @@ def export_mod156(parent_blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-    return mod, get_textures_from_blender_objects(children_objects)
+
+    return mod
 
 
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
@@ -439,17 +447,21 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
     return ExportedMeshes(meshes_156, vertex_buffer, index_buffer)
 
 
-def _export_textures_and_materials(blender_objects):
+def _export_textures_and_materials(blender_objects, saved_mod):
     textures = get_textures_from_blender_objects(blender_objects)
     blender_materials = get_materials_from_blender_objects(blender_objects)
+
     textures_array = ((ctypes.c_char * 64) * len(textures))()
     materials_data_array = (MaterialData * len(blender_materials))()
     materials_mapping = {}  # blender_material.name: material_id
+    texture_dirs = get_texture_dirs(saved_mod)
 
     for i, texture in enumerate(textures):
-        textures_dir = texture.albam_imported_texture_folder
+        texture_dir = texture_dirs.get(texture.name)
+        if not texture_dir:
+            raise ExportError('Texture {} was not on the original mod file'.format(texture.name))
         file_name = os.path.basename(texture.image.filepath)
-        file_path = ntpath.join(textures_dir, file_name)
+        file_path = ntpath.join(texture_dir, file_name)
         try:
             file_path = file_path.encode('ascii')
         except UnicodeEncodeError:
