@@ -22,7 +22,10 @@ from albam.mtframework.mod import (
     VERTEX_FORMATS_TO_CLASSES,
     )
 from albam.mtframework import Arc, Mod156, Tex112
-from albam.mtframework.utils import vertices_export_locations
+from albam.mtframework.utils import (
+    vertices_export_locations,
+    blender_texture_to_texture_code,
+    )
 from albam.utils import (
     pack_half_float,
     get_offset,
@@ -469,7 +472,8 @@ def _export_textures_and_materials(blender_objects):
             texture = texture_slot.texture
             # texture_indices expects index-1 based
             texture_index = textures.index(texture) + 1
-            material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
+            texture_code = blender_texture_to_texture_code(texture_slot)
+            material_data.texture_indices[texture_code] = texture_index
         materials_data_array[mat_index] = material_data
         materials_mapping[mat.name] = mat_index
 

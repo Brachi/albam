@@ -15,6 +15,8 @@ from albam.mtframework.utils import (
     get_indices_array,
     get_bone_parents_from_mod,
     transform_vertices_from_bbox,
+    texture_code_to_blender_texture,
+
     )
 from albam.utils import (
     chunks,
@@ -229,45 +231,18 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
         blender_material.alpha = 0.0
         blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
         materials.append(blender_material)
-        for i, tex_index in enumerate(material.texture_indices):
-            if tex_index == 0:
+        for texture_code, tex_index in enumerate(material.texture_indices):
+            if not tex_index:
                 continue
             slot = blender_material.texture_slots.add()
-            try:
-                texture_target = textures[tex_index]
-            except IndexError:
-                # TODO: should never happen, but log it
-                continue
+            texture_target = textures[tex_index]
             if not texture_target:
                 # This means the conversion failed before
+                # TODO: logging
                 continue
+            texture_code_to_blender_texture(texture_code, slot, blender_material)
             slot.texture = texture_target
-            slot.use_map_alpha = True
-            # Inserting meta data for export
-            texture_target.albam_imported_texture_type = i
-            if i == 0:
-                # Diffuse
-                slot.use_map_color_diffuse = True
-            elif i == 1:
-                # Normal
-                slot.use_map_color_diffuse = False
-                slot.use_map_normal = True
-                slot.normal_factor = 0.05
-            elif i == 2:
-                # Specular
-                slot.use_map_color_diffuse = False
-                slot.use_map_specular = True
-                blender_material.specular_intensity = 0.0
-            elif i == 7:
-                # cube map normal
-                slot.use_map_color_diffuse = False
-                slot.use_map_normal = True
-                slot.normal_factor = 0.05
-                slot.texture_coords = 'GLOBAL'
-                slot.mapping = 'CUBE'
-            else:
-                slot.use_map_color_diffuse = False
-                # TODO: 3, 4, 5, 6,
+
     return materials
 
 
