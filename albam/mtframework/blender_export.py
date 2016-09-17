@@ -157,7 +157,7 @@ def export_mod156(parent_blender_object):
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
                  mesh_count=get_mesh_count_from_blender_objects(meshes_children),
-                 material_count=len(exported_materials.materials_array),
+                 material_count=len(exported_materials.materials_data_array),
                  vertex_count=get_vertex_count_from_blender_objects(meshes_children),
                  face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
@@ -197,7 +197,7 @@ def export_mod156(parent_blender_object):
                  unk_13=saved_mod.unk_13,
                  bone_palette_array=bone_palette_array,
                  textures_array=exported_materials.textures_array,
-                 materials_data_array=exported_materials.materials_array,
+                 materials_data_array=exported_materials.materials_data_array,
                  meshes_array=exported_meshes.meshes_array,
                  meshes_array_2=meshes_array_2,
                  vertex_buffer=exported_meshes.vertex_buffer,
