@@ -39,7 +39,7 @@ from albam.utils import (
 
 
 # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
-# Not entirely sure what it represents, but it works to use in all models so far
+# Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
 CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
              0.0, 50.0, 0.0, 86.6025390625,
              -50.0, 0.0, -50.0, 0.0,
@@ -438,14 +438,11 @@ def _export_textures_and_materials(blender_objects):
     materials_mapping = {}  # blender_material.name: material_id
 
     for i, texture in enumerate(textures):
+        textures_dir = texture.albam_imported_texture_folder
         file_name = os.path.basename(texture.image.filepath)
+        file_path = ntpath.join(textures_dir, file_name)
         try:
-            file_path = ntpath.join(texture.albam_imported_texture_folder, file_name)
-        except AttributeError:
-            raise ExportError('Texture {0} was not imported from an Arc file'.format(texture.name))
-        try:
-            file_path, _ = ntpath.splitext(file_path)
-            textures_array[i] = (ctypes.c_char * 64)(*file_path.encode('ascii'))
+            file_path = file_path.encode('ascii')
         except UnicodeEncodeError:
             raise ExportError('Texture path {} is not in ascii'.format(file_path))
         if len(file_path) > 64:
@@ -453,16 +450,19 @@ def _export_textures_and_materials(blender_objects):
             raise ExportError('File path to texture {} is longer than 64 characters'
                               .format(file_path))
 
-    for i, mat in enumerate(blender_materials):
-        material_data = MaterialData()
+        file_path, _ = ntpath.splitext(file_path)
+        textures_array[i] = (ctypes.c_char * 64)(*file_path)
+
+    for mat_index, mat in enumerate(blender_materials):
         # TODO: unhardcode values using blender properties instead
-        material_data.unk_01 = 2168619075
-        material_data.unk_02 = 18563
-        material_data.unk_03 = 2267538950
-        material_data.unk_04 = 451
-        material_data.unk_05 = 179374192
-        material_data.unk_06 = 0
-        material_data.unk_07 = (ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS)
+        material_data = MaterialData(unk_01=2168619075,
+                                     unk_02=18563,
+                                     unk_03=2267538950,
+                                     unk_04=451,
+                                     unk_05=179374192,
+                                     unk_06=0,
+                                     unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
+
         for texture_slot in mat.texture_slots:
             if not texture_slot:
                 continue
@@ -477,7 +477,7 @@ def _export_textures_and_materials(blender_objects):
                 # TODO: logging
                 raise RuntimeError('error in textures')
             material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
-        materials_data_array[i] = material_data
-        materials_mapping[mat.name] = i
+        materials_data_array[mat_index] = material_data
+        materials_mapping[mat.name] = mat_index
 
     return textures_array, materials_data_array, materials_mapping
