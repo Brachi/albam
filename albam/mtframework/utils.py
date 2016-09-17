@@ -1,4 +1,5 @@
 import ctypes
+import ntpath
 
 from albam.exceptions import BuildMeshError
 from albam.mtframework.mod import (
@@ -156,3 +157,14 @@ def blender_texture_to_texture_code(blender_texture_slot):
         texture_code = 7
 
     return texture_code
+
+
+def get_texture_dirs(mod):
+    """Returns a dict of <texture_name>: <texture_dir>"""
+    texture_dirs = {}
+    for texture_path in mod.textures_array:
+        texture_dir, texture_name_no_ext = (ntpath.split(texture_path[:]
+                                            .decode('ascii')
+                                            .partition('\x00')[0]))
+        texture_dirs[texture_name_no_ext] = texture_dir
+    return texture_dirs
