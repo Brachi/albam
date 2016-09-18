@@ -389,6 +389,13 @@ def ensure_ntpath(path):
     return ntpath.join(*splitted)
 
 
+def ntpath_to_os_path(path):
+    splitted = path.split(ntpath.sep)
+    if len(splitted) == 1:
+        return path
+    return os.path.join(*splitted)
+
+
 def triangles_list_to_triangles_strip(blender_mesh):
     """
     Export triangle strips from a blender mesh.
