@@ -26,6 +26,7 @@ from albam.mtframework.utils import (
     vertices_export_locations,
     blender_texture_to_texture_code,
     get_texture_dirs,
+    get_default_texture_dir,
     )
 from albam.utils import (
     pack_half_float,
@@ -39,6 +40,7 @@ from albam.utils import (
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
+    ntpath_to_os_path,
     )
 
 
@@ -70,7 +72,10 @@ HARDCODED_MAT_DATA = dict(unk_01=2168619075, unk_02=18563, unk_03=2267538950, un
 
 
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
-ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array', 'materials_mapping'))
+ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array',
+                                                     'materials_mapping', 'blender_textures',
+                                                     'texture_dirs'))
+ExportedMod = namedtuple('ExportedMod', ('mod', 'exported_materials'))
 
 
 @blender_registry.register_function('export', b'ARC\x00')
@@ -78,16 +83,18 @@ def export_arc(blender_object, file_path):
     saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}
     blender_textures = {}
+    texture_dirs = {}
 
     for child in blender_object.children:
         exportable = hasattr(child, 'albam_imported_item')
         if not exportable:
             continue
 
-        mod = export_mod156(child)
-        mods[child.name] = mod
-        blender_textures_to_export = get_textures_from_blender_objects([child])
-        for blender_texture in blender_textures_to_export:
+        exported_mod = export_mod156(child)
+        mods[child.name] = exported_mod
+        texture_dirs.update(exported_mod.exported_materials.texture_dirs)
+
+        for blender_texture in exported_mod.exported_materials.blender_textures:
             blender_textures[blender_texture.name] = blender_texture
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -96,21 +103,21 @@ def export_arc(blender_object, file_path):
         files_to_modify = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
                            for f in files if f.endswith(('.mod', '.tex'))]
         mod_files = [f for f in files_to_modify if f.endswith('.mod')]
-        tex_files = [f for f in files_to_modify if f.endswith('.tex')]
+        tex_files = {f for f in files_to_modify if f.endswith('.tex')}
 
         # overwriting the original mod files with the exported ones
         for modf in mod_files:
             filename = os.path.basename(modf)
             try:
                 # TODO: mods with the same name in different folders
-                new_mod = mods[filename]
+                exported_mod = mods[filename]
             except KeyError:
                 raise ExportError("Can't export to arc, a mod file is missing: {}. "
                                   "Was it deleted before exporting?. "
                                   "mods.items(): {}".format(filename, mods.items()))
 
             with open(modf, 'wb') as w:
-                w.write(new_mod)
+                w.write(exported_mod.mod)
 
         # overwriting the original tex files with the ones from blender
         for tex_filepath in tex_files:
@@ -118,22 +125,38 @@ def export_arc(blender_object, file_path):
             blender_texture = blender_textures.get(filename_no_ext)
             if blender_texture:
                 tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
+                try:
+                    tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
+                    tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
+                    tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
+                    tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
+                except AttributeError:
+                    pass
             else:
                 continue  # blender texture was deleted, but is left anyway just in case
             with open(tex_filepath, 'wb') as w:
                 w.write(tex)
 
+        # writing the newly added textures
+        existing = {os.path.splitext(os.path.basename(f))[0] for f in tex_files}
+        for tex_name, blender_texture in blender_textures.items():
+            if tex_name in existing:
+                continue
+            # TODO: debug info new texture detected
+            # In export_mod() the path is already decided using get_default_dir()
+            resolved_path = ntpath_to_os_path(texture_dirs[tex_name])
+            new_path = os.path.join(tmpdir, resolved_path, tex_name)
+            if not new_path.endswith('.tex'):
+                new_path += '.tex'
+            tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
+            with open(new_path, 'wb') as w:
+                w.write(tex)
+
+        # Once the textures and the mods have been replaced, repack.
         new_arc = Arc.from_dir(tmpdir)
 
     with open(file_path, 'wb') as w:
         w.write(new_arc)
-
-"""
-tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
-tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
-tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
-tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
-"""
 
 
 def export_mod156(parent_blender_object):
@@ -222,7 +245,7 @@ def export_mod156(parent_blender_object):
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
 
-    return mod
+    return ExportedMod(mod, exported_materials)
 
 
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
@@ -455,11 +478,14 @@ def _export_textures_and_materials(blender_objects, saved_mod):
     materials_data_array = (MaterialData * len(blender_materials))()
     materials_mapping = {}  # blender_material.name: material_id
     texture_dirs = get_texture_dirs(saved_mod)
+    default_texture_dir = get_default_texture_dir(saved_mod)
 
     for i, texture in enumerate(textures):
         texture_dir = texture_dirs.get(texture.name)
         if not texture_dir:
-            raise ExportError('Texture {} was not on the original mod file'.format(texture.name))
+            texture_dir = default_texture_dir
+            texture_dirs[texture.name] = texture_dir
+        # TODO: no default texture_dir means the original mod had no textures
         file_name = os.path.basename(texture.image.filepath)
         file_path = ntpath.join(texture_dir, file_name)
         try:
@@ -489,4 +515,5 @@ def _export_textures_and_materials(blender_objects, saved_mod):
         materials_data_array[mat_index] = material_data
         materials_mapping[mat.name] = mat_index
 
-    return ExportedMaterials(textures_array, materials_data_array, materials_mapping)
+    return ExportedMaterials(textures_array, materials_data_array, materials_mapping, textures,
+                             texture_dirs)
