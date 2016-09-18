@@ -43,8 +43,6 @@ def register():
 
     # Not using PointerProperty/PropertyGroup since they are not editable from the UI
     # TODO: look if that can be added into blender
-    bpy.types.Texture.albam_imported_texture_type = bpy.props.IntProperty(options={'HIDDEN'})
-    bpy.types.Texture.albam_imported_texture_folder = bpy.props.StringProperty()
     bpy.types.Texture.albam_imported_texture_value_1 = bpy.props.FloatProperty()
     bpy.types.Texture.albam_imported_texture_value_2 = bpy.props.FloatProperty()
     bpy.types.Texture.albam_imported_texture_value_3 = bpy.props.FloatProperty()

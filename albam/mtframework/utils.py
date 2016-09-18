@@ -1,4 +1,6 @@
 import ctypes
+from collections import Counter
+import ntpath
 
 from albam.exceptions import BuildMeshError
 from albam.mtframework.mod import (
@@ -104,3 +106,77 @@ def get_bone_parents_from_mod(bone, bones_array):
         if parent_index != 255:
             parents.append(parent_index)
     return parents
+
+
+def texture_code_to_blender_texture(texture_code, blender_texture_slot, blender_material):
+    blender_texture_slot.use_map_alpha = True
+    if texture_code == 0:
+        # Diffuse
+        blender_texture_slot.use_map_color_diffuse = True
+    elif texture_code == 1:
+        # Normal
+        blender_texture_slot.use_map_color_diffuse = False
+        blender_texture_slot.use_map_normal = True
+        blender_texture_slot.normal_factor = 0.05
+    elif texture_code == 2:
+        # Specular
+        blender_texture_slot.use_map_color_diffuse = False
+        blender_texture_slot.use_map_specular = True
+        blender_material.specular_intensity = 0.0
+    elif texture_code == 7:
+        # cube map normal
+        blender_texture_slot.use_map_color_diffuse = False
+        blender_texture_slot.use_map_normal = True
+        blender_texture_slot.normal_factor = 0.05
+        blender_texture_slot.texture_coords = 'GLOBAL'
+        blender_texture_slot.mapping = 'CUBE'
+    else:
+        print('texture_code not supported', texture_code)
+        blender_texture_slot.use_map_color_diffuse = False
+        # TODO: 3, 4, 5, 6,
+
+
+def blender_texture_to_texture_code(blender_texture_slot):
+    texture_code = 0
+
+    # Diffuse
+    if blender_texture_slot.use_map_color_diffuse:
+        texture_code = 0
+
+    # Normal
+    elif blender_texture_slot.use_map_normal and blender_texture_slot.texture_coords == 'UV':
+        texture_code = 1
+
+    # Specular
+    elif blender_texture_slot.use_map_specular:
+        texture_code = 2
+
+    # Cube normal
+    elif (blender_texture_slot.use_map_normal and
+          blender_texture_slot.texture_coords == 'GLOBAL' and
+          blender_texture_slot.mapping == 'CUBE'):
+        texture_code = 7
+
+    return texture_code
+
+
+def get_texture_dirs(mod):
+    """Returns a dict of <texture_name>: <texture_dir>"""
+    texture_dirs = {}
+    for texture_path in mod.textures_array:
+        texture_path = texture_path[:].decode('ascii').partition('\x00')[0]
+        texture_dir, texture_name_no_ext = ntpath.split(texture_path)
+        texture_dirs[texture_name_no_ext] = texture_dir
+    return texture_dirs
+
+
+def get_default_texture_dir(mod):
+    if not mod.textures_array:
+        return None
+    texture_dirs = []
+    for texture_path in mod.textures_array:
+        texture_path = texture_path[:].decode('ascii').partition('\x00')[0]
+        texture_dir = ntpath.split(texture_path)[0]
+        texture_dirs.append(texture_dir)
+
+    return Counter(texture_dirs).most_common(1)[0][0]

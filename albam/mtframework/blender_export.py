@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 import ctypes
 from io import BytesIO
 from itertools import chain
@@ -22,7 +22,12 @@ from albam.mtframework.mod import (
     VERTEX_FORMATS_TO_CLASSES,
     )
 from albam.mtframework import Arc, Mod156, Tex112
-from albam.mtframework.utils import vertices_export_locations
+from albam.mtframework.utils import (
+    vertices_export_locations,
+    blender_texture_to_texture_code,
+    get_texture_dirs,
+    get_default_texture_dir,
+    )
 from albam.utils import (
     pack_half_float,
     get_offset,
@@ -35,11 +40,12 @@ from albam.utils import (
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
+    ntpath_to_os_path,
     )
 
 
 # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
-# Not entirely sure what it represents, but it works to use in all models so far
+# Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
 CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
              0.0, 50.0, 0.0, 86.6025390625,
              -50.0, 0.0, -50.0, 0.0,
@@ -60,71 +66,105 @@ DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
                            0.0, 0.0)
 
 
+HARDCODED_MAT_DATA = dict(unk_01=2168619075, unk_02=18563, unk_03=2267538950, unk_04=451,
+                          unk_05=179374192, unk_06=0,
+                          unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
+
+
+ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
+ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array',
+                                                     'materials_mapping', 'blender_textures',
+                                                     'texture_dirs'))
+ExportedMod = namedtuple('ExportedMod', ('mod', 'exported_materials'))
+
+
 @blender_registry.register_function('export', b'ARC\x00')
 def export_arc(blender_object, file_path):
     saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}
+    blender_textures = {}
+    texture_dirs = {}
 
     for child in blender_object.children:
         exportable = hasattr(child, 'albam_imported_item')
         if not exportable:
             continue
-        mod, textures = export_mod156(child)
-        mods[child.name] = (mod, textures)
+
+        exported_mod = export_mod156(child)
+        mods[child.name] = exported_mod
+        texture_dirs.update(exported_mod.exported_materials.texture_dirs)
+
+        for blender_texture in exported_mod.exported_materials.blender_textures:
+            blender_textures[blender_texture.name] = blender_texture
 
     with tempfile.TemporaryDirectory() as tmpdir:
         saved_arc.unpack(tmpdir)
-        mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
-                     for f in files if f.endswith('.mod')]
-        new_tex_files = set()
+
+        files_to_modify = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+                           for f in files if f.endswith(('.mod', '.tex'))]
+        mod_files = [f for f in files_to_modify if f.endswith('.mod')]
+        tex_files = {f for f in files_to_modify if f.endswith('.tex')}
+
+        # overwriting the original mod files with the exported ones
         for modf in mod_files:
             filename = os.path.basename(modf)
             try:
                 # TODO: mods with the same name in different folders
-                new_mod, mod_textures = mods[filename]
+                exported_mod = mods[filename]
             except KeyError:
                 raise ExportError("Can't export to arc, a mod file is missing: {}. "
                                   "Was it deleted before exporting?. "
                                   "mods.items(): {}".format(filename, mods.items()))
 
-            # overwriting the original mod file
             with open(modf, 'wb') as w:
-                w.write(new_mod)
+                w.write(exported_mod.mod)
 
-            for texture in mod_textures:
-                tex = Tex112.from_dds(file_path=bpy.path.abspath(texture.image.filepath))
+        # overwriting the original tex files with the ones from blender
+        for tex_filepath in tex_files:
+            filename_no_ext = os.path.splitext(os.path.basename(tex_filepath))[0]
+            blender_texture = blender_textures.get(filename_no_ext)
+            if blender_texture:
+                tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
                 try:
-                    tex.unk_float_1 = texture.albam_imported_texture_value_1
-                    tex.unk_float_2 = texture.albam_imported_texture_value_2
-                    tex.unk_float_3 = texture.albam_imported_texture_value_3
-                    tex.unk_float_4 = texture.albam_imported_texture_value_4
+                    tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
+                    tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
+                    tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
+                    tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
                 except AttributeError:
                     pass
+            else:
+                continue  # blender texture was deleted, but is left anyway just in case
+            with open(tex_filepath, 'wb') as w:
+                w.write(tex)
 
-                tex_name = os.path.basename(texture.image.filepath)
-                tex_filepath = os.path.join(os.path.dirname(modf), tex_name.replace('.dds', '.tex'))
-                new_tex_files.add(tex_filepath)
-                with open(tex_filepath, 'wb') as w:
-                    w.write(tex)
-        # probably other files can reference textures besides mod, this is in case
-        # textures applied have other names.
-        # TODO: delete only textures referenced from saved_mods at import time
-        # unused_tex_files = tex_files - new_tex_files
-        # for utex in unused_tex_files:
-        #    os.unlink(utex)
+        # writing the newly added textures
+        existing = {os.path.splitext(os.path.basename(f))[0] for f in tex_files}
+        for tex_name, blender_texture in blender_textures.items():
+            if tex_name in existing:
+                continue
+            # TODO: debug info new texture detected
+            # In export_mod() the path is already decided using get_default_dir()
+            resolved_path = ntpath_to_os_path(texture_dirs[tex_name])
+            new_path = os.path.join(tmpdir, resolved_path, tex_name)
+            if not new_path.endswith('.tex'):
+                new_path += '.tex'
+            tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
+            with open(new_path, 'wb') as w:
+                w.write(tex)
+
+        # Once the textures and the mods have been replaced, repack.
         new_arc = Arc.from_dir(tmpdir)
-        with open(file_path, 'wb') as w:
-            w.write(new_arc)
+
+    with open(file_path, 'wb') as w:
+        w.write(new_arc)
 
 
 def export_mod156(parent_blender_object):
     saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
 
     first_children = [child for child in parent_blender_object.children]
-
     children_objects = list(chain.from_iterable(child.children for child in first_children))
     meshes_children = [c for c in children_objects if c.type == 'MESH']
-    # TODO: decide what to do with EMPTY objects, which are failed imports
     bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
 
     mesh_count = len(meshes_children)
@@ -133,13 +173,11 @@ def export_mod156(parent_blender_object):
     floats = [header] + CUBE_BBOX * mesh_count
     meshes_array_2 = meshes_array_2(*floats)
 
-    textures_array, materials_array, materials_mapping = _export_textures_and_materials(children_objects)
     bone_palettes = _create_bone_palettes(meshes_children)
-    meshes_array, vertex_buffer, index_buffer = _export_meshes(children_objects,
-                                                               bounding_box,
-                                                               bone_palettes,
-                                                               materials_mapping)
+    exported_materials = _export_textures_and_materials(children_objects, saved_mod)
+    exported_meshes = _export_meshes(children_objects, bounding_box, bone_palettes, exported_materials)
     bone_palette_array = (BonePalette * len(bone_palettes))()
+
     for i, bp in enumerate(bone_palettes.values()):
         bone_palette_array[i].unk_01 = len(bp)
         if len(bp) != 32:
@@ -152,13 +190,13 @@ def export_mod156(parent_blender_object):
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
                  mesh_count=get_mesh_count_from_blender_objects(meshes_children),
-                 material_count=len(materials_array),
+                 material_count=len(exported_materials.materials_data_array),
                  vertex_count=get_vertex_count_from_blender_objects(meshes_children),
-                 face_count=(ctypes.sizeof(index_buffer) // 2) + 1,
+                 face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
-                 vertex_buffer_size=ctypes.sizeof(vertex_buffer),
+                 vertex_buffer_size=ctypes.sizeof(exported_meshes.vertex_buffer),
                  vertex_buffer_2_size=len(saved_mod.vertex_buffer_2),
-                 texture_count=len(textures_array),
+                 texture_count=len(exported_materials.textures_array),
                  group_count=saved_mod.group_count,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=len(bone_palette_array),
@@ -191,13 +229,13 @@ def export_mod156(parent_blender_object):
                  bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
                  unk_13=saved_mod.unk_13,
                  bone_palette_array=bone_palette_array,
-                 textures_array=textures_array,
-                 materials_data_array=materials_array,
-                 meshes_array=meshes_array,
+                 textures_array=exported_materials.textures_array,
+                 materials_data_array=exported_materials.materials_data_array,
+                 meshes_array=exported_meshes.meshes_array,
                  meshes_array_2=meshes_array_2,
-                 vertex_buffer=vertex_buffer,
+                 vertex_buffer=exported_meshes.vertex_buffer,
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
-                 index_buffer=index_buffer
+                 index_buffer=exported_meshes.index_buffer
                  )
     mod.bones_array_offset = get_offset(mod, 'bones_array') if mod.bone_count else 0
     mod.group_offset = get_offset(mod, 'group_data_array')
@@ -206,7 +244,8 @@ def export_mod156(parent_blender_object):
     mod.vertex_buffer_offset = get_offset(mod, 'vertex_buffer')
     mod.vertex_buffer_2_offset = get_offset(mod, 'vertex_buffer_2')
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
-    return mod, get_textures_from_blender_objects(children_objects)
+
+    return ExportedMod(mod, exported_materials)
 
 
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
@@ -348,7 +387,7 @@ def _infer_level_of_detail(name):
     return 1
 
 
-def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mapping):
+def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials):
     """
     No weird optimization or sharing of offsets in the vertex buffer.
     All the same offsets, different positions like pl0200.mod from
@@ -359,6 +398,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mappin
     meshes_156 = (Mesh156 * len(blender_meshes))()
     vertex_buffer = bytearray()
     index_buffer = bytearray()
+    materials_mapping = exported_materials.materials_mapping
 
     vertex_position = 0
     face_position = 0
@@ -427,25 +467,29 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, materials_mappin
     vertex_buffer = (ctypes.c_ubyte * len(vertex_buffer)).from_buffer(vertex_buffer)
     index_buffer = (ctypes.c_ushort * (len(index_buffer) // 2)).from_buffer(index_buffer)
 
-    return meshes_156, vertex_buffer, index_buffer
+    return ExportedMeshes(meshes_156, vertex_buffer, index_buffer)
 
 
-def _export_textures_and_materials(blender_objects):
+def _export_textures_and_materials(blender_objects, saved_mod):
     textures = get_textures_from_blender_objects(blender_objects)
     blender_materials = get_materials_from_blender_objects(blender_objects)
+
     textures_array = ((ctypes.c_char * 64) * len(textures))()
     materials_data_array = (MaterialData * len(blender_materials))()
     materials_mapping = {}  # blender_material.name: material_id
+    texture_dirs = get_texture_dirs(saved_mod)
+    default_texture_dir = get_default_texture_dir(saved_mod)
 
     for i, texture in enumerate(textures):
+        texture_dir = texture_dirs.get(texture.name)
+        if not texture_dir:
+            texture_dir = default_texture_dir
+            texture_dirs[texture.name] = texture_dir
+        # TODO: no default texture_dir means the original mod had no textures
         file_name = os.path.basename(texture.image.filepath)
+        file_path = ntpath.join(texture_dir, file_name)
         try:
-            file_path = ntpath.join(texture.albam_imported_texture_folder, file_name)
-        except AttributeError:
-            raise ExportError('Texture {0} was not imported from an Arc file'.format(texture.name))
-        try:
-            file_path, _ = ntpath.splitext(file_path)
-            textures_array[i] = (ctypes.c_char * 64)(*file_path.encode('ascii'))
+            file_path = file_path.encode('ascii')
         except UnicodeEncodeError:
             raise ExportError('Texture path {} is not in ascii'.format(file_path))
         if len(file_path) > 64:
@@ -453,31 +497,23 @@ def _export_textures_and_materials(blender_objects):
             raise ExportError('File path to texture {} is longer than 64 characters'
                               .format(file_path))
 
-    for i, mat in enumerate(blender_materials):
-        material_data = MaterialData()
+        file_path, _ = ntpath.splitext(file_path)
+        textures_array[i] = (ctypes.c_char * 64)(*file_path)
+
+    for mat_index, mat in enumerate(blender_materials):
         # TODO: unhardcode values using blender properties instead
-        material_data.unk_01 = 2168619075
-        material_data.unk_02 = 18563
-        material_data.unk_03 = 2267538950
-        material_data.unk_04 = 451
-        material_data.unk_05 = 179374192
-        material_data.unk_06 = 0
-        material_data.unk_07 = (ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS)
+        material_data = MaterialData(**HARDCODED_MAT_DATA)
+
         for texture_slot in mat.texture_slots:
-            if not texture_slot:
+            if not texture_slot or not texture_slot.texture:
                 continue
             texture = texture_slot.texture
-            if not texture:
-                # ?
-                continue
             # texture_indices expects index-1 based
-            try:
-                texture_index = textures.index(texture) + 1
-            except ValueError:
-                # TODO: logging
-                raise RuntimeError('error in textures')
-            material_data.texture_indices[texture.albam_imported_texture_type] = texture_index
-        materials_data_array[i] = material_data
-        materials_mapping[mat.name] = i
+            texture_index = textures.index(texture) + 1
+            texture_code = blender_texture_to_texture_code(texture_slot)
+            material_data.texture_indices[texture_code] = texture_index
+        materials_data_array[mat_index] = material_data
+        materials_mapping[mat.name] = mat_index
 
-    return textures_array, materials_data_array, materials_mapping
+    return ExportedMaterials(textures_array, materials_data_array, materials_mapping, textures,
+                             texture_dirs)
