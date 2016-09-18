@@ -86,10 +86,9 @@ def import_mod(blender_object, file_path, **kwargs):
         root = _create_blender_armature_from_mod(blender_object, mod, armature_name)
         root.show_x_ray = True
     else:
-        root = bpy.data.objects.new(blender_object.name, None)
-        root.parent = blender_object
+        root = blender_object
 
-    for mesh in meshes:
+    for i, mesh in enumerate(meshes):
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
         if mod.bone_count:
