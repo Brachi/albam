@@ -208,8 +208,8 @@ def test_mod156_import_export_bone_palettes_same_indices(mods_from_arc):
 
 
 def _assert_offsets(mod_original, mod_exported, offset_attr_name, attr_name):
-        assert getattr(mod_original, offset_attr_name) == get_offset(mod_original, attr_name)
-        assert getattr(mod_exported, offset_attr_name) == get_offset(mod_exported, attr_name)
+        assert getattr(mod_original, offset_attr_name) in (0, get_offset(mod_original, attr_name))
+        assert getattr(mod_exported, offset_attr_name) in (0, get_offset(mod_exported, attr_name))
 
 
 def test_mod156_import_export_bones_array_offset(mods_from_arc):
