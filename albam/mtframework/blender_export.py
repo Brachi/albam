@@ -163,35 +163,48 @@ def export_mod156(parent_blender_object):
     saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
 
     first_children = [child for child in parent_blender_object.children]
-    children_objects = list(chain.from_iterable(child.children for child in first_children))
-    meshes_children = [c for c in children_objects if c.type == 'MESH']
-    bounding_box = get_bounding_box_positions_from_blender_objects(children_objects)
+    blender_meshes = [c for c in first_children if c.type == 'MESH']
+    # only going one level deeper
+    if not blender_meshes:
+        children_objects = list(chain.from_iterable(child.children for child in first_children))
+        blender_meshes = [c for c in children_objects if c.type == 'MESH']
+    bounding_box = get_bounding_box_positions_from_blender_objects(blender_meshes)
 
-    mesh_count = len(meshes_children)
+    mesh_count = len(blender_meshes)
     header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
     meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
     floats = [header] + CUBE_BBOX * mesh_count
     meshes_array_2 = meshes_array_2(*floats)
 
-    bone_palettes = _create_bone_palettes(meshes_children)
-    exported_materials = _export_textures_and_materials(children_objects, saved_mod)
-    exported_meshes = _export_meshes(children_objects, bounding_box, bone_palettes, exported_materials)
-    bone_palette_array = (BonePalette * len(bone_palettes))()
+    if saved_mod.bone_count:
+        bone_palettes = _create_bone_palettes(blender_meshes)
+        bone_palette_array = (BonePalette * len(bone_palettes))()
+        if saved_mod.unk_08:
+            # Since unk_12 depends on the offset, calculate it early
+            bones_array_offset = 176 + len(saved_mod.unk_12)
+        else:
+            bones_array_offset = 176
+        for i, bp in enumerate(bone_palettes.values()):
+            bone_palette_array[i].unk_01 = len(bp)
+            if len(bp) != 32:
+                padding = 32 - len(bp)
+                bp = bp + [0] * padding
+            bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
+    else:
+        bones_array_offset = 0
+        bone_palettes = {}
+        bone_palette_array = (BonePalette * 0)()
 
-    for i, bp in enumerate(bone_palettes.values()):
-        bone_palette_array[i].unk_01 = len(bp)
-        if len(bp) != 32:
-            padding = 32 - len(bp)
-            bp = bp + [0] * padding
-        bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
+    exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
+    exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
-                 mesh_count=get_mesh_count_from_blender_objects(meshes_children),
+                 mesh_count=mesh_count,
                  material_count=len(exported_materials.materials_data_array),
-                 vertex_count=get_vertex_count_from_blender_objects(meshes_children),
+                 vertex_count=get_vertex_count_from_blender_objects(blender_meshes),
                  face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
                  edge_count=0,  # TODO: add edge_count
                  vertex_buffer_size=ctypes.sizeof(exported_meshes.vertex_buffer),
@@ -200,6 +213,7 @@ def export_mod156(parent_blender_object):
                  group_count=saved_mod.group_count,
                  group_data_array=saved_mod.group_data_array,
                  bone_palette_count=len(bone_palette_array),
+                 bones_array_offset=bones_array_offset,
                  sphere_x=saved_mod.sphere_x,
                  sphere_y=saved_mod.sphere_y,
                  sphere_z=saved_mod.sphere_z,
@@ -237,7 +251,6 @@ def export_mod156(parent_blender_object):
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
                  index_buffer=exported_meshes.index_buffer
                  )
-    mod.bones_array_offset = get_offset(mod, 'bones_array') if mod.bone_count else 0
     mod.group_offset = get_offset(mod, 'group_data_array')
     mod.textures_array_offset = get_offset(mod, 'textures_array')
     mod.meshes_array_offset = get_offset(mod, 'meshes_array')
@@ -405,7 +418,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
     for mesh_index, blender_mesh_ob in enumerate(blender_meshes):
 
         level_of_detail = _infer_level_of_detail(blender_mesh_ob.name)
-        bone_palette_index = None
+        bone_palette_index = 0
         bone_palette = []
         for bpi, (meshes_indices, bp) in enumerate(bone_palettes.items()):
             if mesh_index in meshes_indices:
