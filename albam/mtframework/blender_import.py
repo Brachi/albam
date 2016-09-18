@@ -88,7 +88,7 @@ def import_mod(blender_object, file_path, **kwargs):
     else:
         root = blender_object
 
-    for i, mesh in enumerate(meshes):
+    for mesh in meshes:
         bpy.context.scene.objects.link(mesh)
         mesh.parent = root
         if mod.bone_count:
