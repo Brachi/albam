@@ -1,4 +1,5 @@
 import ctypes
+from collections import Counter
 import ntpath
 
 from albam.exceptions import BuildMeshError
@@ -163,8 +164,19 @@ def get_texture_dirs(mod):
     """Returns a dict of <texture_name>: <texture_dir>"""
     texture_dirs = {}
     for texture_path in mod.textures_array:
-        texture_dir, texture_name_no_ext = (ntpath.split(texture_path[:]
-                                            .decode('ascii')
-                                            .partition('\x00')[0]))
+        texture_path = texture_path[:].decode('ascii').partition('\x00')[0]
+        texture_dir, texture_name_no_ext = ntpath.split(texture_path)
         texture_dirs[texture_name_no_ext] = texture_dir
     return texture_dirs
+
+
+def get_default_texture_dir(mod):
+    if not mod.textures_array:
+        return None
+    texture_dirs = []
+    for texture_path in mod.textures_array:
+        texture_path = texture_path[:].decode('ascii').partition('\x00')[0]
+        texture_dir = ntpath.split(texture_path)[0]
+        texture_dirs.append(texture_dir)
+
+    return Counter(texture_dirs).most_common(1)[0][0]
