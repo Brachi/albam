@@ -1,6 +1,6 @@
 ### Game
 
-### Game files
+### Example game file names
 
 
 ### Blender version
