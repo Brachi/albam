@@ -197,6 +197,7 @@ def _create_blender_textures_from_mod(mod, base_dir):
         path = '.'.join((path, 'tex'))
         if not os.path.isfile(path):
             # TODO: log warnings, figure out 'rtex' format
+            print('path {} does not exist'.format(path))
             continue
         tex = Tex112(path)
         try:
@@ -233,8 +234,13 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
         for texture_code, tex_index in enumerate(material.texture_indices):
             if not tex_index:
                 continue
+            try:
+                texture_target = textures[tex_index]
+            except IndexError:
+                # TODO
+                print('tex_index {} not found. Texture len(): {}'.format(tex_index, len(textures)))
+                continue
             slot = blender_material.texture_slots.add()
-            texture_target = textures[tex_index]
             if not texture_target:
                 # This means the conversion failed before
                 # TODO: logging
