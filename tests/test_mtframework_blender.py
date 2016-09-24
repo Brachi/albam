@@ -15,6 +15,8 @@ EXPECTED_VERTEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_INDICES_COUNT_RATIO = 0.17
 EXPECTED_INDEX_BUFFER_RATIO = 0.65
 EXPECTED_MAX_MISSING_VERTICES = 4000   # this is actually depending on the size of the model
+
+
 PYTHON_TEMPLATE = """import os
 import logging
 import sys
@@ -154,11 +156,9 @@ def test_mod156_import_export_material_count(mods_from_arc):
         assert mod_original.material_count == mod_exported.material_count
 
 
-@pytest.mark.skip
 def test_mod156_import_export_vertex_count(mods_from_arc):
-    # TODO: see comment in _get_vertex_array_from_vertex_buffer assert
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        assert mod_original.vertex_count == mod_exported.vertex_count
+        assert mod_original.vertex_count - mod_exported.vertex_count < EXPECTED_MAX_MISSING_VERTICES
 
 
 def test_mod156_import_export_face_count(mods_from_arc):
@@ -237,10 +237,9 @@ def test_mod156_import_export_vertex_buffer_offset(mods_from_arc):
         _assert_offsets(mod_original, mod_exported, 'vertex_buffer_offset', 'vertex_buffer')
 
 
-@pytest.mark.xfail
 def test_mod156_import_export_vertex_buffer_2_offset(mods_from_arc):
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_2_offset', 'vertex_2_buffer')
+        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_2_offset', 'vertex_buffer_2')
 
 
 def test_mod156_import_export_index_buffer_offset(mods_from_arc):
@@ -526,33 +525,6 @@ def test_mod156_import_export_meshes_array_vertex_count(mods_from_arc):
             assert mesh_original.vertex_count == mesh_exported.vertex_count
 
 
-@pytest.mark.xfail
-def test_mod156_import_export_meshes_array_vertex_index_end(mods_from_arc):
-    '''Won't match since no grouping is applied'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.vertex_index_end == mesh_exported.vertex_index_end
-
-
-@pytest.mark.xfail
-def test_mod156_import_export_meshes_array_vertex_index_start_1(mods_from_arc):
-    '''Won't match since no grouping is applied'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.vertex_index_start_1 == mesh_exported.vertex_index_start_1
-
-
-@pytest.mark.xfail
-def test_mod156_import_export_meshes_array_vertex_offset(mods_from_arc):
-    '''Won't match since no grouping is applied'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.vertex_offset == mesh_exported.vertex_offset
-
-
 def test_mod156_import_export_meshes_array_unk_05(mods_from_arc):
     """Exported as null"""
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
@@ -562,30 +534,12 @@ def test_mod156_import_export_meshes_array_unk_05(mods_from_arc):
 
 
 @pytest.mark.xfail
-def test_mod156_import_export_meshes_array_face_position(mods_from_arc):
-    '''Won't match since no grouping is applied, plus triangle strip numbers could vary'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.face_position == mesh_exported.face_position
-
-
-@pytest.mark.xfail
 def test_mod156_import_export_meshes_array_face_count(mods_from_arc):
     '''Won't match since triangle strip numbers could vary'''
     for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
             assert mesh_original.face_count == mesh_exported.face_count
-
-
-@pytest.mark.xfail
-def test_mod156_import_export_meshes_array_face_offset(mods_from_arc):
-    '''Won't match since no grouping is applied, plus triangle strip numbers could vary'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.face_offset == mesh_exported.face_offset
 
 
 def test_mod156_import_export_meshes_array_unk_06(mods_from_arc):
@@ -602,15 +556,6 @@ def test_mod156_import_export_meshes_array_unk_07(mods_from_arc):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
             assert mesh_exported.unk_07 == 0
-
-
-@pytest.mark.xfail
-def test_mod156_import_export_meshes_array_vertex_index_start_22(mods_from_arc):
-    '''Won't match since no grouping is applied'''
-    for mod_original, mod_exported in zip(mods_from_arc[0], mods_from_arc[1]):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.vertex_index_start_2 == mesh_exported.vertex_index_start_2
 
 
 def test_mod156_import_export_meshes_array_vertex_group_count(mods_from_arc):
