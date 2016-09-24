@@ -82,8 +82,8 @@ ExportedMod = namedtuple('ExportedMod', ('mod', 'exported_materials'))
 def export_arc(blender_object, file_path):
     saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}
-    blender_textures = {}
     texture_dirs = {}
+    textures_to_export = []
 
     for child in blender_object.children:
         exportable = hasattr(child, 'albam_imported_item')
@@ -93,17 +93,13 @@ def export_arc(blender_object, file_path):
         exported_mod = export_mod156(child)
         mods[child.name] = exported_mod
         texture_dirs.update(exported_mod.exported_materials.texture_dirs)
-
-        for blender_texture in exported_mod.exported_materials.blender_textures:
-            blender_textures[blender_texture.name] = blender_texture
+        textures_to_export.extend(exported_mod.exported_materials.blender_textures)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         saved_arc.unpack(tmpdir)
 
-        files_to_modify = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
-                           for f in files if f.endswith(('.mod', '.tex'))]
-        mod_files = [f for f in files_to_modify if f.endswith('.mod')]
-        tex_files = {f for f in files_to_modify if f.endswith('.tex')}
+        mod_files = [os.path.join(root, f) for root, _, files in os.walk(tmpdir)
+                     for f in files if f.endswith('.mod')]
 
         # overwriting the original mod files with the exported ones
         for modf in mod_files:
@@ -119,37 +115,21 @@ def export_arc(blender_object, file_path):
             with open(modf, 'wb') as w:
                 w.write(exported_mod.mod)
 
-        # overwriting the original tex files with the ones from blender
-        for tex_filepath in tex_files:
-            filename_no_ext = os.path.splitext(os.path.basename(tex_filepath))[0]
-            blender_texture = blender_textures.get(filename_no_ext)
-            if blender_texture:
-                tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
-                try:
-                    tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
-                    tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
-                    tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
-                    tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
-                except AttributeError:
-                    pass
-            else:
-                continue  # blender texture was deleted, but is left anyway just in case
-            with open(tex_filepath, 'wb') as w:
-                w.write(tex)
-
-        # writing the newly added textures
-        existing = {os.path.splitext(os.path.basename(f))[0] for f in tex_files}
-        for tex_name, blender_texture in blender_textures.items():
-            if tex_name in existing:
-                continue
-            # TODO: debug info new texture detected
-            # In export_mod() the path is already decided using get_default_dir()
-            resolved_path = ntpath_to_os_path(texture_dirs[tex_name])
-            new_path = os.path.join(tmpdir, resolved_path, tex_name)
-            if not new_path.endswith('.tex'):
-                new_path += '.tex'
+        for blender_texture in textures_to_export:
+            texture_name = blender_texture.name
+            resolved_path = ntpath_to_os_path(texture_dirs[texture_name])
+            tex_filename_no_ext = os.path.splitext(os.path.basename(blender_texture.image.filepath))[0]
+            destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
-            with open(new_path, 'wb') as w:
+            try:
+                # metadata saved
+                tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
+                tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
+                tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
+                tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
+            except AttributeError:
+                pass
+            with open(destination_path, 'wb') as w:
                 w.write(tex)
 
         # Once the textures and the mods have been replaced, repack.
