@@ -23,30 +23,21 @@ bl_info = {
 
 def register():
 
-    class AlbamImportedItemName(bpy.types.PropertyGroup):
-        '''All imported object names are saved here to then show them in the
-        export list'''
-        name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
-
-    class AlbamImportedItem(bpy.types.PropertyGroup):
-        name = bpy.props.StringProperty(options={'HIDDEN'})
-        source_path = bpy.props.StringProperty(options={'HIDDEN'})
-        folder = bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
-        data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
-        file_type = bpy.props.StringProperty(options={'HIDDEN'})
+    class Dummy(bpy.types.PropertyGroup):
+        name = bpy.props.StringProperty()
 
     bpy.utils.register_module(__name__)
+
     bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
-    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItemName)
+    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=blender.AlbamImportedItemName)
 
-    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=AlbamImportedItem)
+    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=blender.AlbamImportedItem)
 
-    # Not using PointerProperty/PropertyGroup since they are not editable from the UI
-    # TODO: look if that can be added into blender
-    bpy.types.Texture.albam_imported_texture_value_1 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_2 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_3 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_4 = bpy.props.FloatProperty()
+    for key, value in blender.ALBAM_MATERIAL_SETTINGS.items():
+        setattr(bpy.types.Material, key, value)
+
+    for key, value in blender.ALBAM_TEXTURE_SETTINGS.items():
+        setattr(bpy.types.Texture, key, value)
 
 
 def unregister():
