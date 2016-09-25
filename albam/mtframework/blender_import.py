@@ -211,14 +211,16 @@ def _create_blender_textures_from_mod(mod, base_dir):
             w.write(dds)
         image = bpy.data.images.load(dds_path)
         texture_name_no_extension = os.path.splitext(os.path.basename(path))[0]
+        texture_name_no_extension = str(i).zfill(2) + texture_name_no_extension
         texture = bpy.data.textures.new(texture_name_no_extension, type='IMAGE')
         texture.image = image
         textures.append(texture)
         # saving meta data for export
-        texture.albam_imported_texture_value_1 = tex.unk_float_1
-        texture.albam_imported_texture_value_2 = tex.unk_float_2
-        texture.albam_imported_texture_value_3 = tex.unk_float_3
-        texture.albam_imported_texture_value_4 = tex.unk_float_4
+        texture.re5_unk_value_1 = tex.unk_float_1
+        texture.re5_unk_value_2 = tex.unk_float_2
+        texture.re5_unk_value_3 = tex.unk_float_3
+        texture.re5_unk_value_4 = tex.unk_float_4
+
     return textures
 
 
@@ -229,7 +231,16 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
         blender_material.use_transparency = True
         blender_material.alpha = 0.0
         blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
+
+        # unknown data for export
+        for i in range(1, 39):
+            attr_name_1 = 're5_unk_value_{}'.format(i)
+            attr_name_2 = 'unk_{}'.format(str(i).zfill(2))
+            attr_value = getattr(material, attr_name_2)
+            setattr(blender_material, attr_name_1, attr_value)
+
         materials.append(blender_material)
+
         for texture_code, tex_index in enumerate(material.texture_indices):
             if not tex_index:
                 continue

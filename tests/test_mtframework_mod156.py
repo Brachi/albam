@@ -278,3 +278,12 @@ def test_meshes_array_2(mods_from_arc):
 def test_vertex_buffer(mods_from_arc):
     for mod in mods_from_arc:
         assert get_offset(mod, 'vertex_buffer') == mod.vertex_buffer_offset
+
+
+def test_materials_data_array_size(mods_from_arc):
+    for mod in mods_from_arc:
+        size = get_size(mod, 'materials_data_array')
+        offset = get_offset(mod, 'materials_data_array')
+        next_offset = get_offset(mod, 'meshes_array')
+
+        assert offset + size == next_offset

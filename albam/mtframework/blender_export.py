@@ -36,7 +36,6 @@ from albam.utils import (
     get_bounding_box_positions_from_blender_objects,
     get_textures_from_blender_objects,
     get_materials_from_blender_objects,
-    get_mesh_count_from_blender_objects,
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
@@ -55,20 +54,6 @@ CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
              0.0, 0.0, 1.0, 0.0,
              0.0, 50.0, 0.0, 1.0,
              50.0, 50.0, 50.0, 0.0]
-
-# Taken from RE5->uPlChrisNormal.arc->pawn/pl/pl00/model/pl0000.mod->materials_data_array[16]
-DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
-                           1.0, 0.3, 1.0, 1.0,
-                           1.0, 0.0, 0.25, 36.0,
-                           0.0, 0.5, 0.0, 0.0,
-                           0.0, 0.0, 0.0, 0.0,
-                           1.0, 0.2, 0.0, 0.0,
-                           0.0, 0.0)
-
-
-HARDCODED_MAT_DATA = dict(unk_01=2168619075, unk_02=18563, unk_03=2267538950, unk_04=451,
-                          unk_05=179374192, unk_06=0,
-                          unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
 
 
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
@@ -121,14 +106,12 @@ def export_arc(blender_object, file_path):
             tex_filename_no_ext = os.path.splitext(os.path.basename(blender_texture.image.filepath))[0]
             destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
-            try:
-                # metadata saved
-                tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
-                tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
-                tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
-                tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
-            except AttributeError:
-                pass
+            # metadata saved
+            tex.unk_float_1 = blender_texture.re5_unk_value_1
+            tex.unk_float_2 = blender_texture.re5_unk_value_2
+            tex.unk_float_3 = blender_texture.re5_unk_value_3
+            tex.unk_float_4 = blender_texture.re5_unk_value_4
+
             with open(destination_path, 'wb') as w:
                 w.write(tex)
 
@@ -494,8 +477,13 @@ def _export_textures_and_materials(blender_objects, saved_mod):
         textures_array[i] = (ctypes.c_char * 64)(*file_path)
 
     for mat_index, mat in enumerate(blender_materials):
-        # TODO: unhardcode values using blender properties instead
-        material_data = MaterialData(**HARDCODED_MAT_DATA)
+        material_data = MaterialData()
+        # Setting uknown data
+        for i in range(1, 39):
+            attr_name_1 = 're5_unk_value_{}'.format(i)
+            attr_name_2 = 'unk_{}'.format(str(i).zfill(2))
+            value = getattr(mat, attr_name_1)
+            setattr(material_data, attr_name_2, value)
 
         for texture_slot in mat.texture_slots:
             if not texture_slot or not texture_slot.texture:
