@@ -24,48 +24,6 @@ class AlbamImportedItem(bpy.types.PropertyGroup):
     file_type = bpy.props.StringProperty(options={'HIDDEN'})
 
 
-ALBAM_MATERIAL_SETTINGS = OrderedDict((
-                                      ('re5_unk_value_1', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_2', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_3', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_4', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_5', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_6', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_7', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_8', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_9', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_10', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_11', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_12', bpy.props.IntProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_13', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_14', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_15', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_16', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_17', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_18', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_19', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_20', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_21', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_22', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_23', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_24', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_25', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_26', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_27', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_28', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_29', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_30', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_31', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_32', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_33', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_34', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_35', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_36', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_37', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ('re5_unk_value_38', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                      ))
-
-
 ALBAM_TEXTURE_SETTINGS = OrderedDict((
                                      ('re5_unk_value_1', bpy.props.FloatProperty(options={'HIDDEN'})),
                                      ('re5_unk_value_2', bpy.props.FloatProperty(options={'HIDDEN'})),
@@ -74,31 +32,31 @@ ALBAM_TEXTURE_SETTINGS = OrderedDict((
                                      ))
 
 
-def active_node_mat(mat):
-    # taken from blender source
-    if mat is not None:
-        mat_node = mat.active_node_material
-        if mat_node:
-            return mat_node
-        else:
-            return mat
-
-    return None
-
-
 class CustomMaterialOptions(bpy.types.Panel):
     bl_label = "Albam material"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "material"
 
+    @staticmethod
+    def active_node_mat(mat):
+        # taken from blender source
+        if mat is not None:
+            mat_node = mat.active_node_material
+            if mat_node:
+                return mat_node
+            else:
+                return mat
+
+        return None
+
     def draw(self, context):
-        mat = active_node_mat(context.material)
+        mat = self.active_node_mat(context.material)
         if not mat:
             return
         layout = self.layout
-        for key in ALBAM_MATERIAL_SETTINGS:
-            layout.prop(mat, key)
+        for prop_name, _ in blender_registry.bpy_props.get('material', []):
+            layout.prop(mat, prop_name)
 
     @classmethod
     def poll(cls, context):

@@ -1,3 +1,4 @@
+from collections import defaultdict
 
 
 class BlenderRegistry:
@@ -5,6 +6,7 @@ class BlenderRegistry:
     def __init__(self):
         self.import_registry = {}
         self.export_registry = {}
+        self.bpy_props = defaultdict(list)  # identifier: [(prop_name, prop_type)]
 
     def register_function(self, func_type, identifier):
         def decorator(f):
@@ -17,10 +19,16 @@ class BlenderRegistry:
             return f
         return decorator
 
-    def register_export_function(self, id_magic):
-        def decorator(f):
-            self.export_registry[id_magic] = f
-            return f
+    def register_bpy_prop(self, identifier, prefix):
+        def decorator(cls):
+            for field in cls._fields_:
+                field_name = field[0]
+                if not field_name.startswith(prefix):
+                    continue
+                name_to_register = '{}_{}'.format(cls.__name__, field_name)
+                value = (name_to_register, 'FloatProperty')
+                self.bpy_props[identifier].append(value)
+            return cls
         return decorator
 
 

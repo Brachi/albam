@@ -1,6 +1,7 @@
-from ctypes import Structure, c_uint, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte
+from ctypes import Structure, c_uint, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte
 
 from albam.utils import BaseStructure
+from albam.registry import blender_registry
 
 
 class Bone(Structure):
@@ -38,11 +39,33 @@ class GroupData(Structure):
     _comments_ = {'group_index': "In ~25% of all RE5 mods, this value doesn't match the index"}
 
 
+class MaterialFlag(Structure):
+    _fields_ = (('unk_01', c_uint16, 1),
+                ('unk_02', c_uint16, 1),
+                ('unk_03', c_uint16, 1),
+                ('unk_04', c_uint16, 1),
+                ('unk_05', c_uint16, 1),
+                ('unk_06', c_uint16, 1),
+                ('unk_07', c_uint16, 1),
+                ('unk_08', c_uint16, 1),
+                ('unk_09', c_uint16, 1),
+                ('unk_10', c_uint16, 1),
+                ('unk_11', c_uint16, 1),
+                ('unk_12', c_uint16, 1),
+                ('unk_13', c_uint16, 1),
+                ('unk_14', c_uint16, 1),
+                ('unk_15', c_uint16, 1),
+                ('unk_16', c_uint16, 1),
+                )
+
+
+@blender_registry.register_bpy_prop('material', 'unk_')
 class MaterialData(Structure):
     _fields_ = (('unk_01', c_ushort),
+                ('flags_01', MaterialFlag),
                 ('unk_02', c_ushort),
-                ('unk_03', c_ushort),
-                ('unk_04', c_short),
+                ('unk_03', c_short),
+                ('unk_04', c_ushort),
                 ('unk_05', c_ushort),
                 ('unk_06', c_ushort),
                 ('unk_07', c_ushort),
@@ -50,8 +73,8 @@ class MaterialData(Structure):
                 ('unk_09', c_ushort),
                 ('unk_10', c_ushort),
                 ('unk_11', c_ushort),
-                ('unk_12', c_ushort),
                 ('texture_indices', c_uint * 8),
+                ('unk_12', c_float),
                 ('unk_13', c_float),
                 ('unk_14', c_float),
                 ('unk_15', c_float),
@@ -76,8 +99,7 @@ class MaterialData(Structure):
                 ('unk_34', c_float),
                 ('unk_35', c_float),
                 ('unk_36', c_float),
-                ('unk_37', c_float),
-                ('unk_38', c_float),)
+                ('unk_37', c_float),)
 
 
 class Mesh156(Structure):

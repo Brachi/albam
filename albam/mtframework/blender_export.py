@@ -479,7 +479,7 @@ def _export_textures_and_materials(blender_objects, saved_mod):
     for mat_index, mat in enumerate(blender_materials):
         material_data = MaterialData()
         # Setting uknown data
-        for i in range(1, 39):
+        for i in range(1, 38):  # TODO: don't use this hardcode value!
             attr_name_1 = 're5_unk_value_{}'.format(i)
             attr_name_2 = 'unk_{}'.format(str(i).zfill(2))
             value = getattr(mat, attr_name_1)

@@ -7,6 +7,7 @@ except ImportError:
 
 import albam.mtframework.blender_import  # noqa
 import albam.mtframework.blender_export  # noqa
+from albam.registry import blender_registry
 
 
 bl_info = {
@@ -23,8 +24,15 @@ bl_info = {
 
 def register():
 
-    class Dummy(bpy.types.PropertyGroup):
-        name = bpy.props.StringProperty()
+    # Setting custom material properties
+    for prop_name, prop_cls_name in blender_registry.bpy_props.get('material', []):
+        prop_cls = getattr(bpy.props, prop_cls_name)
+        prop_instance = prop_cls()
+        setattr(bpy.types.Material, prop_name, prop_instance)
+
+    # Setting custom texture properties
+    for key, value in blender.ALBAM_TEXTURE_SETTINGS.items():
+        setattr(bpy.types.Texture, key, value)
 
     bpy.utils.register_module(__name__)
 
@@ -32,12 +40,6 @@ def register():
     bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=blender.AlbamImportedItemName)
 
     bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=blender.AlbamImportedItem)
-
-    for key, value in blender.ALBAM_MATERIAL_SETTINGS.items():
-        setattr(bpy.types.Material, key, value)
-
-    for key, value in blender.ALBAM_TEXTURE_SETTINGS.items():
-        setattr(bpy.types.Texture, key, value)
 
 
 def unregister():

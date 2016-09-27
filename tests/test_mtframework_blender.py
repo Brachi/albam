@@ -451,7 +451,7 @@ def test_mod156_import_export_materials_data_array_values(unpacked_data):
     for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
         for i, material_original in enumerate(mod_original.materials_data_array):
             material_exported = mod_exported.materials_data_array[i]
-            for unk_index in range(1, 39):
+            for unk_index in range(1, 38):
                 attr_name = 'unk_{}'.format(str(unk_index).zfill(2))
                 assert getattr(material_original, attr_name) == getattr(material_exported, attr_name)
             assert material_original.texture_indices[:] == material_exported.texture_indices[:]
