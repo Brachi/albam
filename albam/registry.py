@@ -39,8 +39,10 @@ class BlenderRegistry:
         # TODO: add grouping in a different lib, like the 'DynamicStructure' one
         if field_type == ctypes.c_float:
             return 'FloatProperty'
-        elif field_type in (ctypes.c_short, ctypes.c_ushort, ctypes.c_uint, ctypes.c_uint16):
+        elif field_type in (ctypes.c_short, ctypes.c_ushort, ctypes.c_uint):
             return 'IntProperty'
+        elif field_type == ctypes.c_uint16:
+            return 'BoolProperty'
         else:
             raise TypeError('{} is not supported for registering with a bpy prop'.format(field_type))
 

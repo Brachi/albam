@@ -39,30 +39,25 @@ class GroupData(Structure):
     _comments_ = {'group_index': "In ~25% of all RE5 mods, this value doesn't match the index"}
 
 
-class MaterialFlag(Structure):
-    _fields_ = (('unk_01', c_uint16, 1),
-                ('unk_02', c_uint16, 1),
-                ('unk_03', c_uint16, 1),
-                ('unk_04', c_uint16, 1),
-                ('unk_05', c_uint16, 1),
-                ('unk_06', c_uint16, 1),
-                ('unk_07', c_uint16, 1),
-                ('unk_08', c_uint16, 1),
-                ('unk_09', c_uint16, 1),
-                ('unk_10', c_uint16, 1),
-                ('unk_11', c_uint16, 1),
-                ('unk_12', c_uint16, 1),
-                ('unk_13', c_uint16, 1),
-                ('unk_14', c_uint16, 1),
-                ('unk_15', c_uint16, 1),
-                ('unk_16', c_uint16, 1),
-                )
-
-
 @blender_registry.register_bpy_prop('material', 'unk_')
 class MaterialData(Structure):
     _fields_ = (('unk_01', c_ushort),
-                ('flags_01', MaterialFlag),
+                ('unk_flag_01', c_uint16, 1),
+                ('unk_flag_02', c_uint16, 1),
+                ('unk_flag_03', c_uint16, 1),
+                ('unk_flag_04', c_uint16, 1),
+                ('unk_flag_05', c_uint16, 1),
+                ('unk_flag_06', c_uint16, 1),
+                ('unk_flag_07', c_uint16, 1),
+                ('unk_flag_08', c_uint16, 1),
+                ('unk_flag_09', c_uint16, 1),
+                ('unk_flag_10', c_uint16, 1),
+                ('unk_flag_11', c_uint16, 1),
+                ('unk_flag_12', c_uint16, 1),
+                ('unk_flag_13', c_uint16, 1),
+                ('unk_flag_14', c_uint16, 1),
+                ('unk_flag_15', c_uint16, 1),
+                ('unk_flag_16', c_uint16, 1),
                 ('unk_02', c_ushort),
                 ('unk_03', c_short),
                 ('unk_04', c_ushort),
