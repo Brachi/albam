@@ -232,12 +232,14 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
         blender_material.alpha = 0.0
         blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
 
-        # unknown data for export
-        for i in range(1, 38):  # TODO: improve, don't hardcode
-            attr_name_1 = 're5_unk_value_{}'.format(i)
-            attr_name_2 = 'unk_{}'.format(str(i).zfill(2))
-            attr_value = getattr(material, attr_name_2)
-            setattr(blender_material, attr_name_1, attr_value)
+        # unknown data for export, registered already
+        # TODO: do this with a util function
+        for field_tuple in material._fields_:
+            attr_name = field_tuple[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            attr_value = getattr(material, attr_name)
+            setattr(blender_material, attr_name, attr_value)
 
         materials.append(blender_material)
 

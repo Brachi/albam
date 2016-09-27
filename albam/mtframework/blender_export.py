@@ -479,11 +479,12 @@ def _export_textures_and_materials(blender_objects, saved_mod):
     for mat_index, mat in enumerate(blender_materials):
         material_data = MaterialData()
         # Setting uknown data
-        for i in range(1, 38):  # TODO: don't use this hardcode value!
-            attr_name_1 = 're5_unk_value_{}'.format(i)
-            attr_name_2 = 'unk_{}'.format(str(i).zfill(2))
-            value = getattr(mat, attr_name_1)
-            setattr(material_data, attr_name_2, value)
+        # TODO: do this with a util function
+        for field in material_data._fields_:
+            attr_name = field[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            setattr(material_data, attr_name, getattr(mat, attr_name))
 
         for texture_slot in mat.texture_slots:
             if not texture_slot or not texture_slot.texture:

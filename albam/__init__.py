@@ -24,6 +24,10 @@ bl_info = {
 
 def register():
 
+    # workaround for error running tests: 'module albam defines no classes'
+    class Dummy(bpy.types.PropertyGroup):
+        name = bpy.props.StringProperty()
+
     # Setting custom material properties
     for prop_name, prop_cls_name in blender_registry.bpy_props.get('material', []):
         prop_cls = getattr(bpy.props, prop_cls_name)

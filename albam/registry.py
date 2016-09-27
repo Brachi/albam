@@ -1,3 +1,4 @@
+import ctypes
 from collections import defaultdict
 
 
@@ -23,13 +24,25 @@ class BlenderRegistry:
         def decorator(cls):
             for field in cls._fields_:
                 field_name = field[0]
+                field_type = field[1]
                 if not field_name.startswith(prefix):
                     continue
-                name_to_register = '{}_{}'.format(cls.__name__, field_name)
-                value = (name_to_register, 'FloatProperty')
+                name_to_register = field_name  # TODO: name clash between clasess, e.g unk_value_...
+                bpy_prop_cls_name = self._decide_bpyprop_cls(field_type)
+                value = (name_to_register, bpy_prop_cls_name)
                 self.bpy_props[identifier].append(value)
             return cls
         return decorator
+
+    @staticmethod
+    def _decide_bpyprop_cls(field_type):
+        # TODO: add grouping in a different lib, like the 'DynamicStructure' one
+        if field_type == ctypes.c_float:
+            return 'FloatProperty'
+        elif field_type in (ctypes.c_short, ctypes.c_ushort, ctypes.c_uint, ctypes.c_uint16):
+            return 'IntProperty'
+        else:
+            raise TypeError('{} is not supported for registering with a bpy prop'.format(field_type))
 
 
 blender_registry = BlenderRegistry()
