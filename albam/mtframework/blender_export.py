@@ -107,10 +107,13 @@ def export_arc(blender_object, file_path):
             destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
             # metadata saved
-            tex.unk_float_1 = blender_texture.re5_unk_value_1
-            tex.unk_float_2 = blender_texture.re5_unk_value_2
-            tex.unk_float_3 = blender_texture.re5_unk_value_3
-            tex.unk_float_4 = blender_texture.re5_unk_value_4
+            # TODO: use an util function
+
+            for field in tex._fields_:
+                attr_name = field[0]
+                if not attr_name.startswith('unk_'):
+                    continue
+                setattr(tex, attr_name, getattr(blender_texture, attr_name))
 
             with open(destination_path, 'wb') as w:
                 w.write(tex)

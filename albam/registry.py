@@ -4,6 +4,8 @@ from collections import defaultdict
 
 class BlenderRegistry:
 
+    _VALID_BPY_PROP_IDENTIFIERS = {'material', 'texture'}
+
     def __init__(self):
         self.import_registry = {}
         self.export_registry = {}
@@ -21,6 +23,10 @@ class BlenderRegistry:
         return decorator
 
     def register_bpy_prop(self, identifier, prefix):
+        if identifier not in self._VALID_BPY_PROP_IDENTIFIERS:
+            raise TypeError('Identifier {} is not valid: {}'
+                            .format(identifier, self._VALID_BPY_PROP_IDENTIFIERS))
+
         def decorator(cls):
             for field in cls._fields_:
                 field_name = field[0]
@@ -39,7 +45,7 @@ class BlenderRegistry:
         # TODO: add grouping in a different lib, like the 'DynamicStructure' one
         if field_type == ctypes.c_float:
             return 'FloatProperty'
-        elif field_type in (ctypes.c_short, ctypes.c_ushort, ctypes.c_uint):
+        elif field_type in (ctypes.c_short, ctypes.c_ushort, ctypes.c_uint, ctypes.c_byte):
             return 'IntProperty'
         elif field_type == ctypes.c_uint16:
             return 'BoolProperty'

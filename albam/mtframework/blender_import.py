@@ -216,10 +216,13 @@ def _create_blender_textures_from_mod(mod, base_dir):
         texture.image = image
         textures.append(texture)
         # saving meta data for export
-        texture.re5_unk_value_1 = tex.unk_float_1
-        texture.re5_unk_value_2 = tex.unk_float_2
-        texture.re5_unk_value_3 = tex.unk_float_3
-        texture.re5_unk_value_4 = tex.unk_float_4
+        # TODO: use a util function
+        for field_tuple in tex._fields_:
+            attr_name = field_tuple[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            attr_value = getattr(tex, attr_name)
+            setattr(texture, attr_name, attr_value)
 
     return textures
 

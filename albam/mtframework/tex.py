@@ -3,8 +3,10 @@ import os
 
 from albam.image_formats.dds import DDSHeader, DDS
 from albam.utils import BaseStructure
+from albam.registry import blender_registry
 
 
+@blender_registry.register_bpy_prop('texture', 'unk_')
 class Tex112(BaseStructure):
 
     ID_MAGIC = b'TEX'

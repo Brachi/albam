@@ -35,8 +35,11 @@ def register():
         setattr(bpy.types.Material, prop_name, prop_instance)
 
     # Setting custom texture properties
-    for key, value in blender.ALBAM_TEXTURE_SETTINGS.items():
-        setattr(bpy.types.Texture, key, value)
+    # Setting custom material properties
+    for prop_name, prop_cls_name in blender_registry.bpy_props.get('texture', []):
+        prop_cls = getattr(bpy.props, prop_cls_name)
+        prop_instance = prop_cls()
+        setattr(bpy.types.Texture, prop_name, prop_instance)
 
     bpy.utils.register_module(__name__)
 

@@ -24,14 +24,6 @@ class AlbamImportedItem(bpy.types.PropertyGroup):
     file_type = bpy.props.StringProperty(options={'HIDDEN'})
 
 
-ALBAM_TEXTURE_SETTINGS = OrderedDict((
-                                     ('re5_unk_value_1', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                     ('re5_unk_value_2', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                     ('re5_unk_value_3', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                     ('re5_unk_value_4', bpy.props.FloatProperty(options={'HIDDEN'})),
-                                     ))
-
-
 class CustomMaterialOptions(bpy.types.Panel):
     bl_label = "Albam material"
     bl_space_type = "PROPERTIES"
@@ -74,8 +66,8 @@ class CustomTextureOptions(bpy.types.Panel):
         layout = self.layout
         if not tex:
             return
-        for key in ALBAM_TEXTURE_SETTINGS:
-            layout.prop(tex, key)
+        for prop_name, _ in blender_registry.bpy_props.get('texture', []):
+            layout.prop(tex, prop_name)
 
     @classmethod
     def poll(cls, context):
