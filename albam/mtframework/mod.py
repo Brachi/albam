@@ -98,6 +98,7 @@ class MaterialData(Structure):
                 ('unk_37', c_float),)
 
 
+@blender_registry.register_bpy_prop('mesh', 'unk_')
 class Mesh156(Structure):
     _fields_ = (('group_index', c_ushort),
                 ('material_index', c_ushort),

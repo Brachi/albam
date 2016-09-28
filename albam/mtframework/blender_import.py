@@ -138,6 +138,16 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     if weights_per_bone and mesh.level_of_detail in (2, 252):
         ob.hide = True
         ob.hide_render = True
+
+    # Saving unknown metadata for export
+    # TODO: use a util function
+    for field_tuple in mesh._fields_:
+        attr_name = field_tuple[0]
+        if not attr_name.startswith('unk_'):
+            continue
+        attr_value = getattr(mesh, attr_name)
+        setattr(me_ob, attr_name, attr_value)
+
     return ob
 
 

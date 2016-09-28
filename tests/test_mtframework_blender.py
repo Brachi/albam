@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory, gettempdir
 import pytest
 
 from albam.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH, Tex112
+from albam.mtframework.mod import Mesh156
 from albam.utils import get_offset
 from tests.test_mtframework_arc import arc_re5_samples
 
@@ -493,12 +494,13 @@ def test_mod156_import_export_meshes_array_level_of_detail(unpacked_data):
             assert mesh_original.level_of_detail == mesh_exported.level_of_detail
 
 
-def test_mod156_import_export_meshes_array_unk_01(unpacked_data):
+@pytest.mark.parametrize('attr_name', (field[0] for field in Mesh156._fields_ if field[0].startswith('unk_')))
+def test_mod156_import_export_meshes_unk_attributes(unpacked_data, attr_name):
     """Exported as null"""
     for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
-            mesh_exported.unk_01 == 0
+            assert getattr(mesh_original, attr_name) == getattr(mesh_exported, attr_name)
 
 
 @pytest.mark.xfail(reason="Need to figure out how to export vertex format in all cases")
@@ -516,44 +518,12 @@ def test_mod156_import_export_meshes_array_vertex_stride(unpacked_data):
             assert mesh_original.vertex_stride == mesh_exported.vertex_stride
 
 
-def test_mod156_import_export_meshes_array_unk_02(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_02 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_03(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_03 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_04(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_04 == 0
-
-
 @pytest.mark.xfail(reason="Won't match in meshes that use index_start_1")
 def test_mod156_import_export_meshes_array_vertex_count(unpacked_data):
     for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
         for i, mesh_original in enumerate(mod_original.meshes_array):
             mesh_exported = mod_exported.meshes_array[i]
             assert mesh_original.vertex_count == mesh_exported.vertex_count
-
-
-def test_mod156_import_export_meshes_array_unk_05(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_05 == 0
 
 
 @pytest.mark.xfail
@@ -565,22 +535,6 @@ def test_mod156_import_export_meshes_array_face_count(unpacked_data):
             assert mesh_original.face_count == mesh_exported.face_count
 
 
-def test_mod156_import_export_meshes_array_unk_06(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_06 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_07(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_07 == 0
-
-
 def test_mod156_import_export_meshes_array_vertex_group_count(unpacked_data):
     """not sure if the attribute is 'vertex_group_count', but always exporting as 1"""
     for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
@@ -588,52 +542,8 @@ def test_mod156_import_export_meshes_array_vertex_group_count(unpacked_data):
             mesh_exported = mod_exported.meshes_array[i]
             assert mesh_exported.vertex_group_count == 1
 
-
-@pytest.mark.xfail(reason="not necessary, because heuristics")
-def test_mod156_import_export_meshes_bone_palette_index(unpacked_data):
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_original.unk_07 == mesh_exported.unk_07
-
-
-def test_mod156_import_export_meshes_array_unk_08(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_08 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_09(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_09 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_10(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_10 == 0
-
-
-def test_mod156_import_export_meshes_array_unk_11(unpacked_data):
-    """Exported as null"""
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        for i, mesh_original in enumerate(mod_original.meshes_array):
-            mesh_exported = mod_exported.meshes_array[i]
-            assert mesh_exported.unk_11 == 0
-
-
-# TODO: test exported harcoded data maybe?
-@pytest.mark.xfail(reason="using hardcoded data")
-def test_mod156_import_export_meshes_array_2(unpacked_data):
-    for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
-        assert bytes(mod_original.meshes_array_2) == bytes(mod_exported.meshes_array_2)
+# TODO: Mesh156.bone_palette_index
+# TODO: Mod156.meshes_array_2
 
 
 def test_mod156_import_export_vertex_buffer_approximation(unpacked_data):

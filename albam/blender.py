@@ -76,6 +76,25 @@ class CustomTextureOptions(bpy.types.Panel):
         return context.texture
 
 
+class CustomMeshOptions(bpy.types.Panel):
+    bl_label = "Albam mesh"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    def draw(self, context):
+        mesh = context.mesh
+        layout = self.layout
+        if not mesh:
+            return
+        for prop_name, _ in blender_registry.bpy_props.get('mesh', []):
+            layout.prop(mesh, prop_name)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.mesh)
+
+
 class AlbamImportExportPanel(bpy.types.Panel):
     bl_label = "Albam"
     bl_space_type = "VIEW_3D"

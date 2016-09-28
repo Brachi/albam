@@ -108,7 +108,6 @@ def export_arc(blender_object, file_path):
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
             # metadata saved
             # TODO: use an util function
-
             for field in tex._fields_:
                 attr_name = field[0]
                 if not attr_name.startswith('unk_'):
@@ -426,20 +425,16 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.vertex_index_start_2 = vertex_position
         m156.vertex_group_count = 1  # using 'TEST' bounding box
         m156.bone_palette_index = bone_palette_index
-
         # Needs research
         m156.group_index = 0
-        m156.unk_01 = 0
-        m156.unk_02 = 0
-        m156.unk_03 = 0
-        m156.unk_04 = 0
-        m156.unk_05 = 0
-        m156.unk_06 = 0
-        m156.unk_07 = 0
-        m156.unk_08 = 0
-        m156.unk_09 = 0
-        m156.unk_10 = 0
-        m156.unk_11 = 0
+
+        # metadata saved
+        # TODO: use an util function
+        for field in m156._fields_:
+            attr_name = field[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            setattr(m156, attr_name, getattr(blender_mesh, attr_name))
 
         vertex_position += vertex_count
         face_position += index_count
