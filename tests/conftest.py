@@ -48,12 +48,20 @@ def setup_blender(tmpdir_factory):
 
 
 def _get_blender_site_packages(blender_path):
+
+    blender_dir = os.path.dirname(blender_path)
+    dirs = [os.path.join(root, d) for root, dirs, _ in os.walk(blender_dir)
+            for d in dirs if d == 'site-packages']
+    blender_site_packages = dirs[0]
+
+    # another way, doesn't work on travis for now because of stderr messages
+    '''
     expr = "import sys;print('path=', [f for f in sys.path if 'site-packages' in f][0])"
     cmd = '{} --background --python-expr "{}"'.format(blender_path, expr)
     output = subprocess.check_output(cmd, shell=True)
-    print('DEBUG, output', output)
     blender_site_packages = re.match('path= (.*)', output.decode('utf-8')).group(1)
     assert os.path.isdir(blender_site_packages)
+    '''
 
     return blender_site_packages
 
