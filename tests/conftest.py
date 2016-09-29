@@ -52,7 +52,12 @@ def _get_blender_site_packages(blender_path):
     blender_dir = os.path.dirname(blender_path)
     dirs = [os.path.join(root, d) for root, dirs, _ in os.walk(blender_dir)
             for d in dirs if d == 'site-packages']
-    blender_site_packages = dirs[0]
+    try:
+        blender_site_packages = dirs[0]
+    except IndexError:
+        print('dirs', dirs)
+        print('blender_path', blender_path)
+        raise
 
     # another way, doesn't work on travis for now because of stderr messages
     '''
