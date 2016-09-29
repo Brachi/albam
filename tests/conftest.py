@@ -40,6 +40,10 @@ def setup_blender(tmpdir_factory):
     _setup_coverage_on_startup(blender_site_packages)
     blender_coveragerc = _create_coveragerc_for_blender(tmpdir_factory.getbasetemp(), albam_addon_source_path)
 
+    print('blender_coveragerc', blender_coveragerc)
+    with open(blender_coveragerc) as f:
+        print('blendercoveragerc content:',  f.read())
+
     os.environ['COVERAGE_PROCESS_START'] = blender_coveragerc
 
     _set_paths_in_coveragerc(albam_addon_source_path)
@@ -124,7 +128,7 @@ def _get_albam_addon_source_path(blender_path):
 
 def _create_coveragerc_for_blender(base_temp, albam_source_path):
     # TODO: check why coverals includes python/lib sources
-    dst = base_temp.join('coveragercblender')
+    dst = base_temp.join('.coveragercblender')
     content = """[run]
 branch = True
 data_file = .coverage.blender
