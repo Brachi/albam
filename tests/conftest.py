@@ -33,9 +33,9 @@ def setup_blender(tmpdir_factory):
         pytest.skip('No blender bin path supplied')
     assert os.path.isfile(blender)
 
+    _install_albam_as_addon(tmpdir_factory.getbasetemp(), blender)
     blender_site_packages = _get_blender_site_packages(blender)
     albam_addon_source_path = _get_albam_addon_source_path(blender)
-    _install_albam_as_addon(tmpdir_factory.getbasetemp(), blender)
     _install_coverage(blender_site_packages)
     _setup_coverage_on_startup(blender_site_packages)
     blender_coveragerc = _create_coveragerc_for_blender(tmpdir_factory.getbasetemp(), albam_addon_source_path)
