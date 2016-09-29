@@ -123,11 +123,13 @@ def _get_albam_addon_source_path(blender_path):
 
 
 def _create_coveragerc_for_blender(base_temp, albam_source_path):
+    # TODO: check why coverals includes python/lib sources
     dst = base_temp.join('coveragercblender')
     content = """[run]
 branch = True
 data_file = .coverage.blender
 source = {}
+omit = */python/lib/*
 """.format(albam_source_path)
     dst.write(content)
 
