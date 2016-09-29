@@ -9,9 +9,11 @@ python:
 
 
 before_install:
-  - sudo add-apt-repository -y ppa:thomas-schiex/blender
-  - sudo apt-get update
-  - sudo apt-get install -y blender
+  #- sudo add-apt-repository -y ppa:thomas-schiex/blender
+  #- sudo apt-get update
+  #- sudo apt-get install -y blender
+  - wget http://download.blender.org/release/Blender2.77/blender-2.77a-linux-glibc211-x86_64.tar.bz2
+  - tar -xjf blender-2.77a-linux-glibc211-x86_64.tar.bz2
   - sudo ln /dev/null /dev/raw1394
 
 install:
@@ -19,7 +21,7 @@ install:
 
 script:
   - python3 scripts/download_sample_files.py
-  - python3 -m coverage run --source="." --branch -m pytest --blender=$(which blender)
+  - python3 -m coverage run --source="." --branch -m pytest --blender=$TRAVIS_BUILD_DIR/blender-2.77a-linux-glibc211-x86_64/blender
   - python3 -m coverage combine
 
 after_success: coveralls
