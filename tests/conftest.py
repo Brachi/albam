@@ -81,6 +81,7 @@ import bpy
 import sys
 try:
     bpy.ops.wm.addon_install(overwrite=True, filepath='{}')
+    bpy.ops.wm.addon_enable(module='albam')
 except:
     sys.exit(1)
 sys.exit()
