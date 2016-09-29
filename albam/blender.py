@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import os
 
 try:
@@ -7,6 +8,91 @@ except ImportError:
     bpy = Mock()
 
 from albam.registry import blender_registry
+
+
+class AlbamImportedItemName(bpy.types.PropertyGroup):
+    '''All imported object names are saved here to then show them in the
+    export list'''
+    name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
+
+
+class AlbamImportedItem(bpy.types.PropertyGroup):
+    name = bpy.props.StringProperty(options={'HIDDEN'})
+    source_path = bpy.props.StringProperty(options={'HIDDEN'})
+    folder = bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
+    data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
+    file_type = bpy.props.StringProperty(options={'HIDDEN'})
+
+
+class CustomMaterialOptions(bpy.types.Panel):
+    bl_label = "Albam material"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "material"
+
+    @staticmethod
+    def active_node_mat(mat):
+        # taken from blender source
+        if mat is not None:
+            mat_node = mat.active_node_material
+            if mat_node:
+                return mat_node
+            else:
+                return mat
+
+        return None
+
+    def draw(self, context):
+        mat = self.active_node_mat(context.material)
+        if not mat:
+            return
+        layout = self.layout
+        for prop_name, _ in blender_registry.bpy_props.get('material', []):
+            layout.prop(mat, prop_name)
+
+    @classmethod
+    def poll(cls, context):
+        return context.material
+
+
+class CustomTextureOptions(bpy.types.Panel):
+    bl_label = "Albam texture"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "texture"
+
+    def draw(self, context):
+        tex = context.texture
+        layout = self.layout
+        if not tex:
+            return
+        for prop_name, _ in blender_registry.bpy_props.get('texture', []):
+            layout.prop(tex, prop_name)
+
+    @classmethod
+    def poll(cls, context):
+        if not hasattr(context, "texture_slot"):
+            return False
+        return context.texture
+
+
+class CustomMeshOptions(bpy.types.Panel):
+    bl_label = "Albam mesh"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    def draw(self, context):
+        mesh = context.mesh
+        layout = self.layout
+        if not mesh:
+            return
+        for prop_name, _ in blender_registry.bpy_props.get('mesh', []):
+            layout.prop(mesh, prop_name)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.mesh)
 
 
 class AlbamImportExportPanel(bpy.types.Panel):

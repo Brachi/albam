@@ -7,6 +7,7 @@ except ImportError:
 
 import albam.mtframework.blender_import  # noqa
 import albam.mtframework.blender_export  # noqa
+from albam.registry import blender_registry
 
 
 bl_info = {
@@ -23,30 +24,34 @@ bl_info = {
 
 def register():
 
-    class AlbamImportedItemName(bpy.types.PropertyGroup):
-        '''All imported object names are saved here to then show them in the
-        export list'''
-        name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
+    # workaround for error running tests: 'module albam defines no classes'
+    class Dummy(bpy.types.PropertyGroup):
+        name = bpy.props.StringProperty()
 
-    class AlbamImportedItem(bpy.types.PropertyGroup):
-        name = bpy.props.StringProperty(options={'HIDDEN'})
-        source_path = bpy.props.StringProperty(options={'HIDDEN'})
-        folder = bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
-        data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
-        file_type = bpy.props.StringProperty(options={'HIDDEN'})
+    # Setting custom material properties
+    for prop_name, prop_cls_name in blender_registry.bpy_props.get('material', []):
+        prop_cls = getattr(bpy.props, prop_cls_name)
+        prop_instance = prop_cls()
+        setattr(bpy.types.Material, prop_name, prop_instance)
+
+    # Setting custom texture properties
+    for prop_name, prop_cls_name in blender_registry.bpy_props.get('texture', []):
+        prop_cls = getattr(bpy.props, prop_cls_name)
+        prop_instance = prop_cls()
+        setattr(bpy.types.Texture, prop_name, prop_instance)
+
+    # Setting custom mesh properties
+    for prop_name, prop_cls_name in blender_registry.bpy_props.get('mesh', []):
+        prop_cls = getattr(bpy.props, prop_cls_name)
+        prop_instance = prop_cls()
+        setattr(bpy.types.Mesh, prop_name, prop_instance)
 
     bpy.utils.register_module(__name__)
+
     bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
-    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItemName)
+    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=blender.AlbamImportedItemName)
 
-    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=AlbamImportedItem)
-
-    # Not using PointerProperty/PropertyGroup since they are not editable from the UI
-    # TODO: look if that can be added into blender
-    bpy.types.Texture.albam_imported_texture_value_1 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_2 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_3 = bpy.props.FloatProperty()
-    bpy.types.Texture.albam_imported_texture_value_4 = bpy.props.FloatProperty()
+    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=blender.AlbamImportedItem)
 
 
 def unregister():

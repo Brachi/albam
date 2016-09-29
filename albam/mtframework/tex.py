@@ -3,8 +3,10 @@ import os
 
 from albam.image_formats.dds import DDSHeader, DDS
 from albam.utils import BaseStructure
+from albam.registry import blender_registry
 
 
+@blender_registry.register_bpy_prop('texture', 'unk_')
 class Tex112(BaseStructure):
 
     ID_MAGIC = b'TEX'
@@ -65,7 +67,7 @@ class Tex112(BaseStructure):
                   compression_format=compression_format,
                   unk_float_1=0.76,
                   unk_float_2=0.76,
-                  tex_unk_float_3=0.76,
+                  unk_float_3=0.76,
                   unk_float_4=0,
                   mipmap_offsets=mipmap_offsets,
                   dds_data=dds_data)

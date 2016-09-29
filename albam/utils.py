@@ -135,6 +135,7 @@ class BaseStructure:
 
         if file_path:
             instance = generated_cls()
+            instance._file_path = file_path  # TODO: move to 'meta' attribute.
             try:
                 with open(file_path, 'rb') as f:
                     f.readinto(instance)

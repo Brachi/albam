@@ -36,7 +36,6 @@ from albam.utils import (
     get_bounding_box_positions_from_blender_objects,
     get_textures_from_blender_objects,
     get_materials_from_blender_objects,
-    get_mesh_count_from_blender_objects,
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
@@ -55,20 +54,6 @@ CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
              0.0, 0.0, 1.0, 0.0,
              0.0, 50.0, 0.0, 1.0,
              50.0, 50.0, 50.0, 0.0]
-
-# Taken from RE5->uPlChrisNormal.arc->pawn/pl/pl00/model/pl0000.mod->materials_data_array[16]
-DEFAULT_MATERIAL_FLOATS = (0.0, 1.0, 0.04, 0.0,
-                           1.0, 0.3, 1.0, 1.0,
-                           1.0, 0.0, 0.25, 36.0,
-                           0.0, 0.5, 0.0, 0.0,
-                           0.0, 0.0, 0.0, 0.0,
-                           1.0, 0.2, 0.0, 0.0,
-                           0.0, 0.0)
-
-
-HARDCODED_MAT_DATA = dict(unk_01=2168619075, unk_02=18563, unk_03=2267538950, unk_04=451,
-                          unk_05=179374192, unk_06=0,
-                          unk_07=(ctypes.c_float * 26)(*DEFAULT_MATERIAL_FLOATS))
 
 
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
@@ -121,14 +106,14 @@ def export_arc(blender_object, file_path):
             tex_filename_no_ext = os.path.splitext(os.path.basename(blender_texture.image.filepath))[0]
             destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
-            try:
-                # metadata saved
-                tex.unk_float_1 = blender_texture.albam_imported_texture_value_1
-                tex.unk_float_2 = blender_texture.albam_imported_texture_value_2
-                tex.unk_float_3 = blender_texture.albam_imported_texture_value_3
-                tex.unk_float_4 = blender_texture.albam_imported_texture_value_4
-            except AttributeError:
-                pass
+            # metadata saved
+            # TODO: use an util function
+            for field in tex._fields_:
+                attr_name = field[0]
+                if not attr_name.startswith('unk_'):
+                    continue
+                setattr(tex, attr_name, getattr(blender_texture, attr_name))
+
             with open(destination_path, 'wb') as w:
                 w.write(tex)
 
@@ -440,20 +425,16 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.vertex_index_start_2 = vertex_position
         m156.vertex_group_count = 1  # using 'TEST' bounding box
         m156.bone_palette_index = bone_palette_index
-
         # Needs research
         m156.group_index = 0
-        m156.unk_01 = 0
-        m156.unk_02 = 0
-        m156.unk_03 = 0
-        m156.unk_04 = 0
-        m156.unk_05 = 0
-        m156.unk_06 = 0
-        m156.unk_07 = 0
-        m156.unk_08 = 0
-        m156.unk_09 = 0
-        m156.unk_10 = 0
-        m156.unk_11 = 0
+
+        # metadata saved
+        # TODO: use an util function
+        for field in m156._fields_:
+            attr_name = field[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            setattr(m156, attr_name, getattr(blender_mesh, attr_name))
 
         vertex_position += vertex_count
         face_position += index_count
@@ -494,8 +475,14 @@ def _export_textures_and_materials(blender_objects, saved_mod):
         textures_array[i] = (ctypes.c_char * 64)(*file_path)
 
     for mat_index, mat in enumerate(blender_materials):
-        # TODO: unhardcode values using blender properties instead
-        material_data = MaterialData(**HARDCODED_MAT_DATA)
+        material_data = MaterialData()
+        # Setting uknown data
+        # TODO: do this with a util function
+        for field in material_data._fields_:
+            attr_name = field[0]
+            if not attr_name.startswith('unk_'):
+                continue
+            setattr(material_data, attr_name, getattr(mat, attr_name))
 
         for texture_slot in mat.texture_slots:
             if not texture_slot or not texture_slot.texture:
