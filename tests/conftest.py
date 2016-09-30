@@ -40,15 +40,29 @@ def setup_blender(tmpdir_factory):
     _setup_coverage_on_startup(blender_site_packages)
     blender_coveragerc = _create_coveragerc_for_blender(tmpdir_factory.getbasetemp(), albam_addon_source_path)
 
-    print('blender_coveragerc', blender_coveragerc)
-    with open(blender_coveragerc) as f:
-        print('blendercoveragerc content:',  f.read())
-
     os.environ['COVERAGE_PROCESS_START'] = blender_coveragerc
 
-    _set_paths_in_coveragerc(albam_addon_source_path)
     yield blender
-    # TODO: leave coveragerc like it was, after the session finishes
+    _set_paths_in_coveragerc(albam_addon_source_path)
+    # TODO: see pytest_sessionfinish
+
+
+def pytest_sessionfinish(session, exitstatus):
+    # None of these work!!! No idea way. Tried both
+    # doing ```coverage combine``` after the tests finishes does the job.
+    # TODO: combine automatically and change .coveragerc back to its original state
+    # Maybe see if coverage API could be improved to avoid using the coveragerc
+    # to get the paths
+    """
+    option 1
+    cmd = ('python3', '-m', 'coverage', 'combine')
+    subprocess.check_call(cmd)
+    """
+    """
+    option 2
+    cov = coverage.Coverage()
+    cov.combine()
+    """
 
 
 def _get_blender_site_packages(blender_path):
@@ -56,22 +70,8 @@ def _get_blender_site_packages(blender_path):
     blender_dir = os.path.dirname(blender_path)
     dirs = [os.path.join(root, d) for root, dirs, _ in os.walk(blender_dir)
             for d in dirs if d == 'site-packages']
-    try:
-        blender_site_packages = dirs[0]
-    except IndexError:
-        print('blender_path', blender_path)
-        print('dirs', [os.path.join(root, d) for root, dirs, _ in os.walk(blender_dir)
-                       for d in dirs])
-        raise
 
-    # another way, doesn't work on travis for now because of stderr messages
-    '''
-    expr = "import sys;print('path=', [f for f in sys.path if 'site-packages' in f][0])"
-    cmd = '{} --background --python-expr "{}"'.format(blender_path, expr)
-    output = subprocess.check_output(cmd, shell=True)
-    blender_site_packages = re.match('path= (.*)', output.decode('utf-8')).group(1)
-    assert os.path.isdir(blender_site_packages)
-    '''
+    blender_site_packages = dirs[0]
 
     return blender_site_packages
 
@@ -120,7 +120,7 @@ def _get_albam_addon_source_path(blender_path):
     expr = "import albam,os;print('path=', os.path.dirname(albam.__file__))"
     cmd = '{} --background --python-expr "{}"'.format(blender_path, expr)
     output = subprocess.check_output(cmd, shell=True)
-    albam_source_path = re.match('path= (.*)', output.decode('utf-8')).group(1)
+    albam_source_path = re.search('.*path= (.*)', output.decode('utf-8')).group(1)
     assert os.path.isdir(albam_source_path)
 
     return albam_source_path
@@ -148,6 +148,8 @@ def _set_paths_in_coveragerc(albam_addon_source_path):
     # if multiple addons are installed, coverage will take all addons as missing
     # files
     albam_addon_source_path = os.path.dirname(albam_addon_source_path)
+    with open(str(COVERAGERC_FILE)) as f:
+        original_coveragerc = f.read()
 
     config = configparser.ConfigParser()
     config.read([str(COVERAGERC_FILE)])
@@ -159,3 +161,4 @@ def _set_paths_in_coveragerc(albam_addon_source_path):
 
     with open(str(COVERAGERC_FILE), 'w') as w:
         config.write(w)
+    return original_coveragerc

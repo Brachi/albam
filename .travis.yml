@@ -21,7 +21,7 @@ install:
 
 script:
   - python3 scripts/download_sample_files.py
-  - python3 -m coverage run -m pytest -sv --blender=$TRAVIS_BUILD_DIR/blender-2.77a-linux-glibc211-x86_64/blender
+  - python3 -m coverage run -m pytest --blender=$TRAVIS_BUILD_DIR/blender-2.77a-linux-glibc211-x86_64/blender
   - python3 -m coverage combine
 
 after_success: coveralls
