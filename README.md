@@ -1,7 +1,9 @@
 Albam
 =====
-[![Build Status](https://travis-ci.org/Brachi/albam.svg?branch=master)](https://travis-ci.org/Brachi/albam)
-[![Coverage Status](https://coveralls.io/repos/Brachi/albam/badge.svg?branch=master&service=github)](https://coveralls.io/github/Brachi/albam?branch=master)
+[![Build Status](https://travis-ci.org/Brachi/albam.svg?branch=develop)](https://travis-ci.org/Brachi/albam)
+[![Coverage Status](https://coveralls.io/repos/Brachi/albam/badge.svg?branch=develop&service=github)](https://coveralls.io/github/Brachi/albam?branch=develop)
+[![Downloads](https://img.shields.io/github/downloads/brachi/albam/total.svg)]](https://github.com/Brachi/albam/releases)
+
 
 This is the source code of Albam, a [Blender](https://www.blender.org) addon that lets you import and export video game models.
 
