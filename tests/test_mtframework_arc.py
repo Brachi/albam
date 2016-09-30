@@ -1,24 +1,9 @@
 import os
-import re
 
 import pytest
 
-from albam.mtframework import Arc, CORRUPTED_ARCS
-from tests.conftest import SAMPLES_DIR
-
-
-@pytest.fixture(scope='session')
-def arc_re5_samples():
-    samples_dir = pytest.config.getoption('--dirarc') or os.path.join(SAMPLES_DIR, 're5/arc')
-    arc_regex = pytest.config.getoption('arcregex')
-    # TODO: move this to mtframework.arc
-    full_list = [os.path.join(root, f)
-                 for root, _, files in os.walk(samples_dir)
-                 for f in files if f.endswith('.arc') and f not in CORRUPTED_ARCS]
-    if arc_regex:
-        pattern = re.compile(arc_regex)
-        full_list = [f for f in full_list if pattern.search(f)]
-    return full_list
+from albam.mtframework import Arc
+from tests.conftest import arc_re5_samples
 
 
 @pytest.mark.parametrize("arc_file", arc_re5_samples())
