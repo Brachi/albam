@@ -68,11 +68,7 @@ UnpackedData = namedtuple('UnpackedData', ('mods_original', 'textures_original',
 
 
 @pytest.fixture(scope='module', params=arc_re5_samples())
-def unpacked_data(request, tmpdir_factory):
-    blender = pytest.config.getoption('blender')
-    if not blender:
-        pytest.skip('No blender bin path supplied')
-
+def unpacked_data(request, tmpdir_factory, setup_blender):
     import_arc_filepath = request.param
     if import_arc_filepath.endswith(tuple(KNOWN_ARC_BLENDER_CRASH)):
         pytest.xfail('Known arc crashes blender')
@@ -87,7 +83,7 @@ def unpacked_data(request, tmpdir_factory):
                                        export_arc_filepath=export_arc_filepath,
                                        import_unpack_dir=import_unpack_dir.name,
                                        log_filepath=log_filepath))
-    args = '{} -noaudio --background --python {}'.format(blender, script_filepath)
+    args = '{} -noaudio --background --python {}'.format(setup_blender, script_filepath)
     try:
         subprocess.check_output((args,), shell=True)
     except subprocess.CalledProcessError:
@@ -448,7 +444,6 @@ def test_mod156_import_export_materials_data_array_texture_paths(unpacked_data):
 
 
 def test_mod156_import_export_materials_data_array_values(unpacked_data):
-    print()
     for mod_original, mod_exported in zip(unpacked_data.mods_original, unpacked_data.mods_exported):
         for i, material_original in enumerate(mod_original.materials_data_array):
             material_exported = mod_exported.materials_data_array[i]
