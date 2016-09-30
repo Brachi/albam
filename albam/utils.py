@@ -279,14 +279,6 @@ def create_mesh_name(mesh, index, file_path):
                                  mesh.level_of_detail)
 
 
-def get_bone_count_from_blender_objects(blender_objects):
-    bone_count = 0
-    for ob in blender_objects:
-        if ob.type == 'ARMATURE':
-            bone_count += len(ob.data.bones)
-    return bone_count
-
-
 def get_textures_from_blender_objects(blender_objects):
     """
     Only counting the first material of the mesh
@@ -315,21 +307,8 @@ def get_materials_from_blender_objects(blender_objects):
     return sorted(materials, key=lambda m: m.name)
 
 
-def get_mesh_count_from_blender_objects(blender_objects):
-    return len({ob for ob in blender_objects if ob.type == 'MESH'})
-
-
 def get_vertex_count_from_blender_objects(blender_objects):
     return sum([len(ob.data.vertices) for ob in blender_objects if ob.type == 'MESH'])
-
-
-def get_index_count_from_blender_objects(blender_objects):
-    index_count = 0
-    meshes = {ob.data for ob in blender_objects if ob.type == 'MESH'}
-    for mesh in meshes:
-        for poly in mesh.polygons:
-            index_count += len(poly.vertices)
-    return index_count
 
 
 def get_bone_indices_and_weights_per_vertex(blender_object):

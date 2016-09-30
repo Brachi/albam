@@ -31,7 +31,7 @@ class CustomMaterialOptions(bpy.types.Panel):
     bl_context = "material"
 
     @staticmethod
-    def active_node_mat(mat):
+    def active_node_mat(mat):  # pragma: no cover
         # taken from blender source
         if mat is not None:
             mat_node = mat.active_node_material
@@ -42,7 +42,7 @@ class CustomMaterialOptions(bpy.types.Panel):
 
         return None
 
-    def draw(self, context):
+    def draw(self, context):  # pragma: no cover
         mat = self.active_node_mat(context.material)
         if not mat:
             return
@@ -51,7 +51,7 @@ class CustomMaterialOptions(bpy.types.Panel):
             layout.prop(mat, prop_name)
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, context):  # pragma: no cover
         return context.material
 
 
@@ -61,7 +61,7 @@ class CustomTextureOptions(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "texture"
 
-    def draw(self, context):
+    def draw(self, context):  # pragma: no cover
         tex = context.texture
         layout = self.layout
         if not tex:
@@ -70,7 +70,7 @@ class CustomTextureOptions(bpy.types.Panel):
             layout.prop(tex, prop_name)
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, context):  # pragma: no cover
         if not hasattr(context, "texture_slot"):
             return False
         return context.texture
@@ -82,7 +82,7 @@ class CustomMeshOptions(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "data"
 
-    def draw(self, context):
+    def draw(self, context):  # pragma: no cover
         mesh = context.mesh
         layout = self.layout
         if not mesh:
@@ -91,7 +91,7 @@ class CustomMeshOptions(bpy.types.Panel):
             layout.prop(mesh, prop_name)
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, context):  # pragma: no cover
         return bool(context.mesh)
 
 
@@ -100,7 +100,7 @@ class AlbamImportExportPanel(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
 
-    def draw(self, context):
+    def draw(self, context):  # pragma: no cover
         scn = context.scene
         layout = self.layout
         layout.operator('albam_import.item', text='Import')
@@ -116,7 +116,7 @@ class AlbamImportOperator(bpy.types.Operator):
     filter_glob = bpy.props.StringProperty(default="*.arc", options={'HIDDEN'})
     unpack_dir = bpy.props.StringProperty(options={'HIDDEN'})
 
-    def invoke(self, context, event):
+    def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -169,12 +169,12 @@ class AlbamExportOperator(bpy.types.Operator):
     filepath = bpy.props.StringProperty()
 
     @classmethod
-    def poll(self, context):
+    def poll(self, context):  # pragma: no cover
         if not bpy.context.scene.albam_item_to_export:
             return False
         return True
 
-    def invoke(self, context, event):
+    def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
