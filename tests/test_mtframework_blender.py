@@ -3,7 +3,7 @@ from itertools import chain
 
 import pytest
 
-from albam.mtframework.mod import Mesh156
+from albam.mtframework.mod import Mod156, Mesh156
 from albam.utils import get_offset
 
 
@@ -17,39 +17,32 @@ def is_close(a, b):
     return abs(a) - abs(b) < 0.001
 
 
-def test_mod156_import_export_export_id_magic(re5_unpacked_data):
+# field names that are expected to have their own test since they won't be exactly
+# the same as the original mod
+MOD_DIFFERING_FIELDS = {'vertex_count', 'face_count', 'edge_count', 'bone_palette_count',
+                        'vertex_buffer_size', 'unk_12', 'unk_13',
+                        'box_min_x', 'box_min_y', 'box_min_z', 'box_min_w'
+                        'box_max_x', 'box_max_y', 'box_max_z', 'box_max_w'}
+
+
+MOD_OFFSET_TYPES = ('group_offset', 'textures_array_offset', 'meshes_array_offset',
+                    'vertex_buffer_offset', 'vertex_buffer_2_offset', 'index_buffer_offset')
+
+MOD_ARRAY_TYPES = ('bone_palette_array', 'bones_array', 'bones_unk_matrix_array',
+                   'bones_world_transform_matrix_array', 'group_data_array', 'textures_array',
+                   'materials_data_array', 'meshes_array', 'meshes_array', 'meshes_array_2',
+                   'vertex_buffer', 'vertex_buffer_2', 'index_buffer')
+
+
+@pytest.mark.parametrize('attr_name', (field[0] for field in Mod156._fields_
+                                       if field[0] not in MOD_DIFFERING_FIELDS and
+                                       field[0] not in MOD_ARRAY_TYPES and
+                                       field[0] not in MOD_OFFSET_TYPES))
+def test_mod156_import_attributes(re5_unpacked_data, attr_name):
     for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.id_magic == mod_exported.id_magic
-
-
-def test_mod156_import_export_version(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.version == mod_exported.version
-
-
-def test_mod156_import_export_version_rev(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.version_rev == mod_exported.version_rev
-
-
-def test_mod156_import_export_bone_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.bone_count == mod_exported.bone_count
-
-
-def test_mod156_import_export_mesh_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.mesh_count == mod_exported.mesh_count
-
-
-def test_mod156_import_export_material_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.material_count == mod_exported.material_count
-
-
-def test_mod156_import_export_vertex_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.vertex_count - mod_exported.vertex_count < EXPECTED_MAX_MISSING_VERTICES
+        original_value = getattr(mod_original, attr_name)
+        exported_value = getattr(mod_exported, attr_name)
+        assert original_value == exported_value or is_close(original_value, exported_value)
 
 
 def test_mod156_import_export_face_count(re5_unpacked_data):
@@ -72,22 +65,6 @@ def test_mod156_import_export_vertex_buffer_size(re5_unpacked_data):
         assert (mod_original.vertex_buffer_size - mod_exported.vertex_buffer_size) // 32 < EXPECTED_MAX_MISSING_VERTICES
 
 
-def test_mod156_import_export_vertex_buffer_2_size(re5_unpacked_data):
-    """Since uses saved mod data"""
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.vertex_buffer_2_size == mod_exported.vertex_buffer_2_size
-
-
-def test_mod156_import_export_texture_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.texture_count == mod_exported.texture_count
-
-
-def test_mod156_import_export_group_count(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.group_count == mod_exported.group_count
-
-
 def test_mod156_import_export_bone_palettes_same_indices(re5_unpacked_data):
     """Bone palettes are exported using a greedy non optimized method, so
     the quantity so far differs, but it's equivalent. Here we only care that
@@ -103,70 +80,15 @@ def _assert_offsets(mod_original, mod_exported, offset_attr_name, attr_name):
         assert getattr(mod_exported, offset_attr_name) in (0, get_offset(mod_exported, attr_name))
 
 
-def test_mod156_import_export_bones_array_offset(re5_unpacked_data):
+@pytest.mark.parametrize('offset_field,attr_name', (('group_offset', 'group_data_array'),
+                                                    ('textures_array_offset', 'textures_array'),
+                                                    ('meshes_array_offset', 'meshes_array'),
+                                                    ('vertex_buffer_offset', 'vertex_buffer'),
+                                                    ('vertex_buffer_2_offset', 'vertex_buffer_2'),
+                                                    ('index_buffer_offset', 'index_buffer')))
+def test_mod156_import_export_offsets(re5_unpacked_data, offset_field, attr_name):
     for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'bones_array_offset', 'bones_array')
-
-
-def test_mod156_import_export_group_offset(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'group_offset', 'group_data_array')
-
-
-def test_mod156_import_export_textures_array_offset(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'textures_array_offset', 'textures_array')
-
-
-def test_mod156_import_export_meshes_array_offset(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'meshes_array_offset', 'meshes_array')
-
-
-def test_mod156_import_export_vertex_buffer_offset(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_offset', 'vertex_buffer')
-
-
-def test_mod156_import_export_vertex_buffer_2_offset(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'vertex_buffer_2_offset', 'vertex_buffer_2')
-
-
-def test_mod156_import_export_index_buffer_offset(re5_unpacked_data):
-    '''Fails since vertex_buffer_2 is not included'''
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        _assert_offsets(mod_original, mod_exported, 'index_buffer_offset', 'index_buffer')
-
-
-def test_mod156_import_export_reserved_01(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.reserved_01 == mod_exported.reserved_01
-
-
-def test_mod156_import_export_reserved_02(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.reserved_02 == mod_exported.reserved_02
-
-
-def test_mod156_import_export_sphere_x(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.sphere_x, mod_exported.sphere_x)
-
-
-def test_mod156_import_export_sphere_y(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.sphere_y, mod_exported.sphere_y)
-
-
-def test_mod156_import_export_z(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.sphere_z, mod_exported.sphere_z)
-
-
-def test_mod156_import_export_sphere_w(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.sphere_w, mod_exported.sphere_w)
+        _assert_offsets(mod_original, mod_exported, offset_field, attr_name)
 
 
 @pytest.mark.parametrize('bbox_attr_name', ('box_min_x', 'box_min_y', 'box_min_z', 'box_min_w',
@@ -179,71 +101,6 @@ def test_mod156_import_export_bounding_box(re5_unpacked_data, bbox_attr_name):
         # for some reason values don't always correspond to the vertices available
         # so accepting a difference of at most 5 units
         assert abs(original_value - exported_value) < 5
-
-
-def test_mod156_import_export_box_unk_01(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_01 == mod_exported.unk_01
-
-
-def test_mod156_import_export_box_unk_02(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_02 == mod_exported.unk_02
-
-
-def test_mod156_import_export_box_unk_03(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_03 == mod_exported.unk_03
-
-
-def test_mod156_import_export_box_unk_04(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_04 == mod_exported.unk_04
-
-
-def test_mod156_import_export_box_unk_05(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_05 == mod_exported.unk_05
-
-
-def test_mod156_import_export_box_unk_06(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_06 == mod_exported.unk_06
-
-
-def test_mod156_import_export_box_unk_07(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_07 == mod_exported.unk_07
-
-
-def test_mod156_import_export_box_unk_08(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_08 == mod_exported.unk_08
-
-
-def test_mod156_import_export_box_unk_09(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_09 == mod_exported.unk_09
-
-
-def test_mod156_import_export_box_unk_10(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_10 == mod_exported.unk_10
-
-
-def test_mod156_import_export_box_unk_11(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.unk_11 == mod_exported.unk_11
-
-
-def test_mod156_import_export_reserverd_03(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert mod_original.reserved_03 == mod_exported.reserved_03
-
-
-def test_mod156_import_export_box_unk_12(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert bytes(mod_original.unk_12) == bytes(mod_exported.unk_12)
 
 
 def test_mod156_import_export_bones_array(re5_unpacked_data):
