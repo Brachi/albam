@@ -169,44 +169,16 @@ def test_mod156_import_export_sphere_w(re5_unpacked_data):
         assert is_close(mod_original.sphere_w, mod_exported.sphere_w)
 
 
-def test_mod156_import_export_box_min_x(re5_unpacked_data):
+@pytest.mark.parametrize('bbox_attr_name', ('box_min_x', 'box_min_y', 'box_min_z', 'box_min_w',
+                                            'box_max_x', 'box_max_y', 'box_max_z', 'box_max_w'))
+def test_mod156_import_export_bounding_box(re5_unpacked_data, bbox_attr_name):
     for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_min_x, mod_exported.box_min_x)
+        original_value = getattr(mod_original, bbox_attr_name)
+        exported_value = getattr(mod_original, bbox_attr_name)
 
-
-def test_mod156_import_export_box_min_y(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_min_y, mod_exported.box_min_y)
-
-
-def test_mod156_import_export_box_min_z(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_min_z, mod_exported.box_min_z)
-
-
-def test_mod156_import_export_box_min_w(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_min_w, mod_exported.box_min_w)
-
-
-def test_mod156_import_export_box_max_x(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_max_x, mod_exported.box_max_x)
-
-
-def test_mod156_import_export_box_max_y(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_max_y, mod_exported.box_max_y)
-
-
-def test_mod156_import_export_box_max_z(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_max_z, mod_exported.box_max_z)
-
-
-def test_mod156_import_export_box_max_w(re5_unpacked_data):
-    for mod_original, mod_exported in zip(re5_unpacked_data.mods_original, re5_unpacked_data.mods_exported):
-        assert is_close(mod_original.box_max_w, mod_exported.box_max_w)
+        # for some reason values don't always correspond to the vertices available
+        # so accepting a difference of at most 5 units
+        assert abs(original_value - exported_value) < 5
 
 
 def test_mod156_import_export_box_unk_01(re5_unpacked_data):

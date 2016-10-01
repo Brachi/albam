@@ -103,7 +103,8 @@ def export_arc(blender_object, file_path):
         for blender_texture in textures_to_export:
             texture_name = blender_texture.name
             resolved_path = ntpath_to_os_path(texture_dirs[texture_name])
-            tex_filename_no_ext = os.path.splitext(os.path.basename(blender_texture.image.filepath))[0]
+            tex_file_path = bpy.path.abspath(blender_texture.image.filepath)
+            tex_filename_no_ext = os.path.splitext(os.path.basename(tex_file_path))[0]
             destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
             # metadata saved
@@ -183,14 +184,15 @@ def export_mod156(parent_blender_object):
                  sphere_y=saved_mod.sphere_y,
                  sphere_z=saved_mod.sphere_z,
                  sphere_w=saved_mod.sphere_w,
-                 box_min_x=saved_mod.box_min_x,
-                 box_min_y=saved_mod.box_min_y,
-                 box_min_z=saved_mod.box_min_z,
-                 box_min_w=saved_mod.box_min_w,
-                 box_max_x=saved_mod.box_max_x,
-                 box_max_y=saved_mod.box_max_y,
-                 box_max_z=saved_mod.box_max_z,
-                 box_max_w=saved_mod.box_max_w,
+                 # z up to y up
+                 box_min_x=bounding_box.min_x * 100,
+                 box_min_y=bounding_box.min_z * -100,
+                 box_min_z=bounding_box.min_y * 100,
+                 box_min_w=bounding_box.min_w * 100,
+                 box_max_x=bounding_box.max_x * 100,
+                 box_max_y=bounding_box.max_z * 100,  # not multiplying by -1, since it's abs
+                 box_max_z=bounding_box.max_y * 100,
+                 box_max_w=bounding_box.max_w * 100,
                  unk_01=saved_mod.unk_01,
                  unk_02=saved_mod.unk_02,
                  unk_03=saved_mod.unk_03,
@@ -460,7 +462,7 @@ def _export_textures_and_materials(blender_objects, saved_mod):
             texture_dir = default_texture_dir
             texture_dirs[texture.name] = texture_dir
         # TODO: no default texture_dir means the original mod had no textures
-        file_name = os.path.basename(texture.image.filepath)
+        file_name = os.path.basename(bpy.path.abspath(texture.image.filepath))
         file_path = ntpath.join(texture_dir, file_name)
         try:
             file_path = file_path.encode('ascii')
