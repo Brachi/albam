@@ -1,5 +1,4 @@
 from collections import namedtuple
-import configparser
 import os
 from pathlib import Path
 import re
@@ -47,7 +46,6 @@ def setup_blender(tmpdir_factory):
     os.environ['COVERAGE_PROCESS_START'] = blender_coveragerc
 
     yield blender
-    _set_paths_in_coveragerc(albam_addon_source_path)
     # TODO: see pytest_sessionfinish
 
 
@@ -142,30 +140,6 @@ omit = */python/lib/*
     dst.write(content)
 
     return str(dst)
-
-
-def _set_paths_in_coveragerc(albam_addon_source_path):
-    """adds [paths] to the current .coveragerc adding the source installed as addond,
-    for combining both coverage files"""
-
-    # XXX this is temporary until it's decided how albam is shipped
-    # if multiple addons are installed, coverage will take all addons as missing
-    # files
-    albam_addon_source_path = os.path.dirname(albam_addon_source_path)
-    with open(str(COVERAGERC_FILE)) as f:
-        original_coveragerc = f.read()
-
-    config = configparser.ConfigParser()
-    config.read([str(COVERAGERC_FILE)])
-    try:
-        config.add_section('paths')
-    except configparser.DuplicateSectionError:
-        pass
-    config.set('paths', 'source', '.\n{}'.format(albam_addon_source_path))
-
-    with open(str(COVERAGERC_FILE), 'w') as w:
-        config.write(w)
-    return original_coveragerc
 
 
 PYTHON_TEMPLATE = """import os
