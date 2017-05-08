@@ -4,7 +4,7 @@ import os
 import pytest
 
 from albam.engines.mtframework import Arc, Mod156
-from albam.utils import get_offset, get_size
+from albam.lib.structure import get_offset, get_size
 from tests.test_mtframework_arc import arc_re5_samples
 
 

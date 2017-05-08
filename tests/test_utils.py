@@ -2,8 +2,9 @@ import ctypes
 import struct
 import os
 
-from albam.utils import (BaseStructure, unpack_half_float, pack_half_float,
-                         ensure_posixpath, ensure_ntpath)
+from albam.lib.structure import BaseStructure
+from albam.lib.half_float import unpack_half_float, pack_half_float
+from albam.lib.misc import ensure_posixpath, ensure_ntpath
 
 
 def test_base_structure(tmpdir):

@@ -4,7 +4,7 @@ import os
 import zlib
 
 from albam.engines.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
-from albam.utils import BaseStructure
+from albam.lib.structure import BaseStructure
 
 
 class FileEntry(Structure):
