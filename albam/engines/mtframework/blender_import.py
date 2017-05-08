@@ -9,8 +9,8 @@ except ImportError:
     pass
 
 from albam.exceptions import BuildMeshError, TextureError
-from albam.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
-from albam.mtframework.utils import (
+from albam.engines.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
+from albam.engines.mtframework.utils import (
     get_vertices_array,
     get_indices_array,
     get_bone_parents_from_mod,
@@ -18,13 +18,10 @@ from albam.mtframework.utils import (
     texture_code_to_blender_texture,
 
     )
-from albam.utils import (
-    chunks,
-    unpack_half_float,
-    strip_triangles_to_triangles_list,
-    y_up_to_z_up,
-    create_mesh_name,
-    )
+from albam.lib.misc import chunks
+from albam.lib.half_float import unpack_half_float
+from albam.lib.geometry import y_up_to_z_up
+from albam.lib.blender import strip_triangles_to_triangles_list, create_mesh_name
 from albam.registry import blender_registry
 
 

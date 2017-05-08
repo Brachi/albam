@@ -2,7 +2,7 @@ from ctypes import Structure, sizeof, c_int, c_char, c_byte
 import os
 
 from albam.exceptions import TextureError
-from albam.utils import BaseStructure
+from albam.lib.structure import BaseStructure
 
 
 class DDSHeader(Structure):

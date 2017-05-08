@@ -14,32 +14,32 @@ except ImportError:
 
 from albam.registry import blender_registry
 from albam.exceptions import ExportError
-from albam.mtframework.mod import (
+from albam.engines.mtframework.mod import (
     Mesh156,
     MaterialData,
     BonePalette,
     CLASSES_TO_VERTEX_FORMATS,
     VERTEX_FORMATS_TO_CLASSES,
     )
-from albam.mtframework import Arc, Mod156, Tex112
-from albam.mtframework.utils import (
+from albam.engines.mtframework import Arc, Mod156, Tex112
+from albam.engines.mtframework.utils import (
     vertices_export_locations,
     blender_texture_to_texture_code,
     get_texture_dirs,
     get_default_texture_dir,
     )
-from albam.utils import (
-    pack_half_float,
-    get_offset,
+from albam.lib.half_float import pack_half_float
+from albam.lib.structure import get_offset
+from albam.lib.geometry import z_up_to_y_up
+from albam.lib.misc import ntpath_to_os_path
+from albam.lib.blender import (
     triangles_list_to_triangles_strip,
-    z_up_to_y_up,
     get_bounding_box_positions_from_blender_objects,
     get_textures_from_blender_objects,
     get_materials_from_blender_objects,
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
-    ntpath_to_os_path,
     )
 
 

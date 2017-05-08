@@ -9,7 +9,7 @@ import shutil
 import coverage
 import pytest
 
-from albam.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH, Tex112, CORRUPTED_ARCS
+from albam.engines.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH, Tex112, CORRUPTED_ARCS
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 ALBAM_ROOT_DIR = Path(__file__).parent.parent

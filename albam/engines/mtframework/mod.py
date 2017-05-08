@@ -1,6 +1,6 @@
 from ctypes import Structure, c_uint, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte
 
-from albam.utils import BaseStructure
+from albam.lib.structure import BaseStructure
 from albam.registry import blender_registry
 
 

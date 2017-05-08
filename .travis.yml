@@ -30,4 +30,3 @@ after_success: coveralls
 env:
    global:
       - AUDIODEV=null
-      - secure: "IV7Gwqgv//RpKMmn9axkpZOOAR6m4w/tCqUnHpDmZDU3D9fHkpT4oHJh+Qa83kZsscjAZUm8CRdIaJf7S1Bos/WlGOwxvOZHDAp1Ei7lSMnb1OFA0shkVCRSpC3XP/diz5BNFytyU6GpiwH06mFp1LnbSxVv3in1jVTNwLaeHUtm+KoEPgWMkC1PaYEDdQ86VmNwoh/EPJSsN68W9ekjahykp2UI7JylflqWMH5zWz/Tx/zJ1Ob30kNyAledQ2XWcHtf1+qhuErfZbdOVJN0bJzc0DZIsOSVP53p+gCQo/nK5oILxe8jKZ9hbKesGMCCeknX8rWwRdh18nJzgsMDDStN/woc08gePA/QT/huJSiWVlHnnJYtAPkCXoraXzJYDBHbQpAA3sIlWkE+WSjmYJJ/h2NAnA0BoUJGICIeEagW6qpuBZnIs04t7jj/iftaodOu8bTekaVlixlfMnsAwtpHK2sN8LGR1Eladi8WyjqS6H6pvXdvvfwm+Vg10iexalhYvd16ZPkVF1WbW6jmPNHM+Po/f12e/ybjxxbS+rYpZz3e+Kk0yd+brUCXoyuNEuSVIJGuyYXA4Pd+3iPsQSx2zIOOFcoLaj8dBI8pqSF3Q/AI+5quEXE6zZZLVrJGf+jLyj0hoi8iQDTvtHI0Ur80j3m31c4JmSxFOta2BlM="

@@ -19,7 +19,10 @@ def download_sample_files():
     final_dir = 'tests/sample-files/re5/arc'  # XXX import it!
     if not os.path.isdir(final_dir):
         os.makedirs(final_dir)
-    final_path = os.path.join(final_dir, data['file_name'])
+    try:
+        final_path = os.path.join(final_dir, data['file_name'])
+    except KeyError:
+        raise ValueError('data does not have the file_name key: {}'.format(data))
 
     with open(final_path, 'wb') as w:
         w.write(b64decode(data['content']))

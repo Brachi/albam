@@ -2,7 +2,7 @@ from ctypes import c_int, c_uint, c_char, c_short, c_float, c_byte, sizeof
 import os
 
 from albam.image_formats.dds import DDSHeader, DDS
-from albam.utils import BaseStructure
+from albam.lib.structure import BaseStructure
 from albam.registry import blender_registry
 
 

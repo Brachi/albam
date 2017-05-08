@@ -3,12 +3,10 @@ from collections import Counter
 import ntpath
 
 from albam.exceptions import BuildMeshError
-from albam.mtframework.mod import (
+from albam.engines.mtframework.mod import (
     VERTEX_FORMATS_TO_CLASSES,
     )
-from albam.utils import (
-    get_size,
-    )
+from albam.lib.structure import get_size
 
 
 def get_vertices_array(mod, mesh):

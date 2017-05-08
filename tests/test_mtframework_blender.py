@@ -3,8 +3,8 @@ from itertools import chain
 
 import pytest
 
-from albam.mtframework.mod import Mod156, Mesh156
-from albam.utils import get_offset
+from albam.engines.mtframework.mod import Mod156, Mesh156
+from albam.lib.structure import get_offset
 
 
 EXPECTED_VERTEX_BUFFER_RATIO = 0.65
