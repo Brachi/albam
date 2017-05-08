@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from albam.mtframework import Arc
+from albam.engines.mtframework import Arc
 from tests.conftest import arc_re5_samples
 
 

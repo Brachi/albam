@@ -9,8 +9,8 @@ except ImportError:
     pass
 
 from albam.exceptions import BuildMeshError, TextureError
-from albam.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
-from albam.mtframework.utils import (
+from albam.engines.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
+from albam.engines.mtframework.utils import (
     get_vertices_array,
     get_indices_array,
     get_bone_parents_from_mod,

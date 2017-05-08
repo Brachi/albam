@@ -4,7 +4,7 @@ import os
 
 
 from albam.image_formats.dds import DDS, DDSHeader
-from albam.mtframework import Tex112
+from albam.engines.mtframework import Tex112
 
 
 def test_tex112_to_dds(tmpdir, re5_unpacked_data):

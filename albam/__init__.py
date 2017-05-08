@@ -5,8 +5,8 @@ try:
 except ImportError:
     pass
 
-import albam.mtframework.blender_import  # noqa
-import albam.mtframework.blender_export  # noqa
+import albam.engines.mtframework.blender_import  # noqa
+import albam.engines.mtframework.blender_export  # noqa
 from albam.registry import blender_registry
 
 

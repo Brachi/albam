@@ -14,15 +14,15 @@ except ImportError:
 
 from albam.registry import blender_registry
 from albam.exceptions import ExportError
-from albam.mtframework.mod import (
+from albam.engines.mtframework.mod import (
     Mesh156,
     MaterialData,
     BonePalette,
     CLASSES_TO_VERTEX_FORMATS,
     VERTEX_FORMATS_TO_CLASSES,
     )
-from albam.mtframework import Arc, Mod156, Tex112
-from albam.mtframework.utils import (
+from albam.engines.mtframework import Arc, Mod156, Tex112
+from albam.engines.mtframework.utils import (
     vertices_export_locations,
     blender_texture_to_texture_code,
     get_texture_dirs,
