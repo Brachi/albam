@@ -24,266 +24,67 @@ def mods_from_arc(request, tmpdir_factory):
     return mods
 
 
-def test_mod_id_magic(mods_from_arc):
+def test_constant_fields(mods_from_arc):
     for mod in mods_from_arc:
         assert mod.id_magic == b'MOD'
-
-
-def test_mod_version(mods_from_arc):
-    for mod in mods_from_arc:
         assert mod.version == 156
-
-
-def test_mod_version_rev(mods_from_arc):
-    for mod in mods_from_arc:
         assert mod.version_rev == 1
+        assert mod.reserved_01 == 0
+        assert mod.reserved_02 == 0
+        assert mod.reserved_03 == 0
 
 
-def test_mod_bone_count(mods_from_arc):
+def test_mandatory_fields(mods_from_arc):
     for mod in mods_from_arc:
-        assert mod.bone_count >= 0
+        assert mod.mesh_count
+        assert mod.material_count
+        assert mod.vertex_count
+        assert mod.face_count
+        assert mod.edge_count
+        assert mod.vertex_buffer_size
+        assert mod.vertex_buffer_2_size
+        assert mod.group_count
+        assert mod.group_offset
+        assert mod.unk_01
+        assert mod.unk_02
+        assert mod.unk_03
+        assert mod.unk_04
 
 
-def test_mod_mesh_count(mods_from_arc):
+def test_conditional_fields(mods_from_arc):
     for mod in mods_from_arc:
-        assert mod.mesh_count >= 0
+        assert bool(mod.bone_count) == bool(mod.bones_array_offset)
+        assert bool(mod.bone_count) == bool(mod.bone_palette_count)
+        assert bool(mod.texture_count) == bool(mod.textures_array)
+        assert bool(mod.texture_count) == bool(mod.textures_array_offset)
+        assert bool(mod.unk_08) == bool(mod.unk_12)
 
 
-def test_mod_material_count(mods_from_arc):
+def test_offset_fields(mods_from_arc):
     for mod in mods_from_arc:
-        assert mod.material_count >= 0
+        assert not mod.bone_count or get_offset(mod, 'bones_array') == mod.bones_array_offset
+        assert not mod.texture_count or mod.textures_array_offset > get_offset(mod, 'group_data_array')
+        assert mod.meshes_array_offset == get_offset(mod, 'meshes_array')
+        assert get_offset(mod, 'meshes_array_2') == get_offset(mod, 'meshes_array') + get_size(mod, 'meshes_array')
+        assert get_offset(mod, 'vertex_buffer') == mod.vertex_buffer_offset
+        assert get_offset(mod, 'index_buffer') == mod.index_buffer_offset
+
+
+def test_size_fields(mods_from_arc):
+    for mod in mods_from_arc:
+        assert mod.bone_count == len(mod.bones_array)
+        assert mod.mesh_count == len(mod.meshes_array)
+        assert mod.material_count == len(mod.materials_data_array)
+        assert mod.texture_count == len(mod.textures_array)
+        assert mod.bone_palette_count == len(mod.bone_palette_array)
 
 
 def test_mod_vertex_count(mods_from_arc):
     for mod in mods_from_arc:
-        assert mod.vertex_count >= 0
         assert mod.vertex_count == len(mod.vertex_buffer) // 32
 
 
 def test_mod_face_count(mods_from_arc):
     for mod in mods_from_arc:
-        assert mod.face_count >= 0
         assert mod.face_count == len(mod.index_buffer) + 1
         # assert mod.face_count == sum(m.face_count for m in mod.meshes_array)
-
-
-def test_mod_edge_count(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.edge_count >= 0
-
-
-def test_mod_vertex_buffer_size(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.vertex_buffer_size >= 0
-        assert mod.vertex_buffer_size == mod.vertex_count * 32
-        assert mod.vertex_buffer_size == sum(m.vertex_count for m in mod.meshes_array) * 32
-
-
-def test_mod_vertex_buffer_2_size(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.vertex_buffer_2_size >= 0
-
-
-def test_mod_texture_count(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.texture_count >= 0
-
-
-def test_mod_group_count(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.group_count >= 1
-
-
-def test_mod_bone_palette_count(mods_from_arc):
-    for mod in mods_from_arc:
-        if mod.bone_count:
-            assert mod.bone_palette_count >= 1
-        else:
-            assert mod.bone_palette_count == 0
-
-
-def test_mod_bones_array_offset(mods_from_arc):
-    for mod in mods_from_arc:
-        if mod.bone_count:
-            assert mod.bones_array_offset >= get_offset(mod, 'unk_12')
-        else:
-            assert mod.bones_array_offset == 0
-
-
-def test_mod_group_offset(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.group_offset > 0
-
-
-def test_mod_textures_array_offset(mods_from_arc):
-    for mod in mods_from_arc:
-        if mod.texture_count or mod.material_count:
-            assert mod.textures_array_offset > get_offset(mod, 'group_data_array')
-        else:
-            assert mod.textures_array_offset == 0
-
-
-def test_mod_meshes_array_offset(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.meshes_array_offset >= 0
-
-
-def test_mod_vertex_buffer_offset(mods_from_arc):
-    pass
-
-
-def test_mod_vertex_buffer_2_offset(mods_from_arc):
-    pass
-
-
-def test_mod_index_buffer_offset(mods_from_arc):
-    pass
-
-
-def test_mod_reserverd_01(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.reserved_01 == 0
-
-
-def test_mod_reserved_02(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.reserved_02 == 0
-
-
-def test_mod_sphere_x(mods_from_arc):
-    for mod in mods_from_arc:
-        pass
-
-
-def test_mod_sphere_y(mods_from_arc):
-    pass
-
-
-def test_mod_sphere_z(mods_from_arc):
-    pass
-
-
-def test_mod_sphere_w(mods_from_arc):
-    pass
-
-
-def test_mod_box_min_x(mods_from_arc):
-    pass
-
-
-def test_mod_box_min_y(mods_from_arc):
-    pass
-
-
-def test_mod_box_min_z(mods_from_arc):
-    pass
-
-
-def test_mod_box_min_w(mods_from_arc):
-    pass
-
-
-def test_mod_box_max_x(mods_from_arc):
-    pass
-
-
-def test_mod_box_max_y(mods_from_arc):
-    pass
-
-
-def test_mod_box_max_z(mods_from_arc):
-    pass
-
-
-def test_mod_box_max_w(mods_from_arc):
-    pass
-
-
-def test_mod_unk_01(mods_from_arc):
-    pass
-
-
-def test_mod_unk_02(mods_from_arc):
-    pass
-
-
-def test_mod_unk_03(mods_from_arc):
-    pass
-
-
-def test_mod_unk_04(mods_from_arc):
-    pass
-
-
-def test_mod_unk_05(mods_from_arc):
-    pass
-
-
-def test_mod_unk_06(mods_from_arc):
-    pass
-
-
-def test_mod_unk_07(mods_from_arc):
-    pass
-
-
-def test_mod_unk_08(mods_from_arc):
-    pass
-
-
-def test_mod_unk_09(mods_from_arc):
-    pass
-
-
-def test_mod_unk_10(mods_from_arc):
-    pass
-
-
-def test_mod_unk_11(mods_from_arc):
-    pass
-
-
-def test_mod_reserved_03(mods_from_arc):
-    for mod in mods_from_arc:
-        assert mod.reserved_03 == 0
-
-
-def test_mod_unk_12(mods_from_arc):
-    for mod in mods_from_arc:
-        if mod.unk_08:
-            assert mod.unk_12
-        else:
-            assert not mod.unk_12
-
-
-def test_mod_bones_array(mods_from_arc):
-    for mod in mods_from_arc:
-        if mod.bone_count:
-            assert len(mod.bones_array) == mod.bone_count
-            assert get_offset(mod, 'bones_array') == mod.bones_array_offset
-        else:
-            assert mod.bones_array_offset == 0
-
-
-def test_bones_unk_matrix_array(mods_from_arc):
-    pass
-
-
-def test_meshes_array_2(mods_from_arc):
-    for mod in mods_from_arc:
-        assert get_offset(mod, 'meshes_array_2') == get_offset(mod, 'meshes_array') + get_size(mod, 'meshes_array')
-        assert get_offset(mod, 'vertex_buffer') == get_offset(mod, 'meshes_array_2') + get_size(mod, 'meshes_array_2')
-
-
-def test_vertex_buffer(mods_from_arc):
-    for mod in mods_from_arc:
-        assert get_offset(mod, 'vertex_buffer') == mod.vertex_buffer_offset
-
-
-def test_materials_data_array_size(mods_from_arc):
-    for mod in mods_from_arc:
-        size = get_size(mod, 'materials_data_array')
-        offset = get_offset(mod, 'materials_data_array')
-        next_offset = get_offset(mod, 'meshes_array')
-
-        assert offset + size == next_offset
