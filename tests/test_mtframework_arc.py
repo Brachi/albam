@@ -3,10 +3,15 @@ import os
 import pytest
 
 from albam.engines.mtframework import Arc
-from tests.conftest import arc_re5_samples
+from tests.conftest import SAMPLES_DIR
 
 
-@pytest.mark.parametrize("arc_file", arc_re5_samples())
+ARC_SAMPLES_DIR = os.path.join(SAMPLES_DIR, 're5/arc')
+ARC_FILES = [os.path.join(root, f) for root, _, files in os.walk(ARC_SAMPLES_DIR)
+             for f in files if f.endswith('.arc')]
+
+
+@pytest.mark.parametrize("arc_file", ARC_FILES)
 def test_arc_unpack_re5(tmpdir, arc_file):
     arc = Arc(file_path=arc_file)
     out = os.path.join(str(tmpdir), 'extracted_arc')
@@ -23,7 +28,7 @@ def test_arc_unpack_re5(tmpdir, arc_file):
     assert expected_sizes == files_sizes
 
 
-@pytest.mark.parametrize('arc_file', arc_re5_samples())
+@pytest.mark.parametrize('arc_file', ARC_FILES)
 def test_arc_from_dir_re5(tmpdir, arc_file):
     """get an arc file (ideally from the game), unpack it, repackit, unpack it again
     compare the 2 arc files and the 2 output folders"""

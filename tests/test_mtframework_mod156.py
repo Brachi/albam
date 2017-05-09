@@ -1,14 +1,13 @@
-import ctypes
 import os
 
 import pytest
 
 from albam.engines.mtframework import Arc, Mod156
 from albam.lib.structure import get_offset, get_size
-from tests.test_mtframework_arc import arc_re5_samples
+from tests.test_mtframework_arc import ARC_FILES
 
 
-@pytest.fixture(scope='module', params=arc_re5_samples())
+@pytest.fixture(scope='module', params=ARC_FILES)
 def mods_from_arc(request, tmpdir_factory):
     arc_file = request.param
     base_temp = tmpdir_factory.mktemp(os.path.basename(arc_file).replace('.arc', '-arc'))
@@ -19,8 +18,6 @@ def mods_from_arc(request, tmpdir_factory):
     mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
                  for f in files if f.endswith('.mod')]
     mods = [Mod156(mod_file) for mod_file in mod_files]
-    for i, mod in enumerate(mods):
-        assert ctypes.sizeof(mod) == os.path.getsize(mod_files[i])
     return mods
 
 
