@@ -3,7 +3,7 @@ from itertools import chain
 
 import pytest
 
-from albam.engines.mtframework.mod import Mod156, Mesh156
+from albam.engines.mtframework.mod_156 import Mod156, Mesh156
 from albam.lib.structure import get_offset
 
 

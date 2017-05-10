@@ -14,7 +14,7 @@ except ImportError:
 
 from albam.registry import blender_registry
 from albam.exceptions import ExportError
-from albam.engines.mtframework.mod import (
+from albam.engines.mtframework.mod_156 import (
     Mesh156,
     MaterialData,
     BonePalette,
