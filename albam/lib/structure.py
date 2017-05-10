@@ -4,7 +4,7 @@ from ctypes import c_float
 import os
 
 
-class BaseStructure:
+class DynamicStructure:
 
     _fields_ = None
 

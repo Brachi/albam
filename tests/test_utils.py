@@ -2,7 +2,7 @@ import ctypes
 import struct
 import os
 
-from albam.lib.structure import BaseStructure
+from albam.lib.structure import DynamicStructure
 from albam.lib.half_float import unpack_half_float, pack_half_float
 from albam.lib.misc import ensure_posixpath, ensure_ntpath
 
@@ -14,7 +14,7 @@ def test_base_structure(tmpdir):
     with open(test_file_name, 'wb') as w:
         w.write(test_bytes)
 
-    class MyStructure(BaseStructure):
+    class MyStructure(DynamicStructure):
         _fields_ = (('arr_size', ctypes.c_uint),
                     ('foo', ctypes.c_ushort),
                     ('arr', lambda s: ctypes.c_uint * s.arr_size),

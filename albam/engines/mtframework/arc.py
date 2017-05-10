@@ -4,7 +4,7 @@ import os
 import zlib
 
 from albam.engines.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
-from albam.lib.structure import BaseStructure
+from albam.lib.structure import DynamicStructure
 
 
 class FileEntry(Structure):
@@ -38,7 +38,7 @@ def get_data_length(tmp_struct, file_path=None):
     return length
 
 
-class Arc(BaseStructure):
+class Arc(DynamicStructure):
     ID_MAGIC = b'ARC'
 
     _fields_ = (('id_magic', c_char * 4),

@@ -2,12 +2,12 @@ from ctypes import c_int, c_uint, c_char, c_short, c_float, c_byte, sizeof
 import os
 
 from albam.image_formats.dds import DDSHeader, DDS
-from albam.lib.structure import BaseStructure
+from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
 
 
 @blender_registry.register_bpy_prop('texture', 'unk_')
-class Tex112(BaseStructure):
+class Tex112(DynamicStructure):
 
     ID_MAGIC = b'TEX'
 

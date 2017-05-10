@@ -1,6 +1,6 @@
 from ctypes import Structure, c_uint, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte
 
-from albam.lib.structure import BaseStructure
+from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
 
 
@@ -375,7 +375,7 @@ def unk_data_depends_on_other_unk(tmp_struct):
         return c_ubyte * 0
 
 
-class Mod156(BaseStructure):
+class Mod156(DynamicStructure):
     _fields_ = (('id_magic', c_char * 4),
                 ('version', c_ubyte),
                 ('version_rev', c_byte),
@@ -441,7 +441,7 @@ class Mod156(BaseStructure):
                 )
 
 
-class Mod210(BaseStructure):
+class Mod210(DynamicStructure):
     _fields_ = (('id_magic', c_char * 4),
                 ('version', c_ubyte),
                 ('version_rev', c_byte),
