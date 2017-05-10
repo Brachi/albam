@@ -1,19 +1,28 @@
 from albam.engines.mtframework.arc import Arc
 from albam.engines.mtframework.mod_156 import Mod156
+from albam.engines.mtframework.mod_210 import Mod210
 from albam.engines.mtframework.tex import Tex112
 from albam.engines.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
 
 
-__all__ = ('Arc', 'Mod156', 'Tex112', 'FILE_ID_TO_EXTENSION', 'EXTENSION_TO_FILE_ID')
+__all__ = (
+    'Arc',
+    'Mod156',
+    'Mod210',
+    'Tex112',
+    'FILE_ID_TO_EXTENSION',
+    'EXTENSION_TO_FILE_ID',
+)
 
 
-CORRUPTED_ARCS = {'uOmf303.arc',
-                  's101.arc',  # Not an arc
-                  'uOmf303.arc'
-                  'uOmS103ScrAdj.arc',
-                  'uOm001f.arc',  # Contains only one model that has one vertex
-                  'uOmS109_Truck_Rail.arc',   # Same, one model one vertex
-                  }
+CORRUPTED_ARCS = {
+    'uOmf303.arc',
+    's101.arc',  # Not an arc
+    'uOmf303.arc'
+    'uOmS103ScrAdj.arc',
+    'uOm001f.arc',  # Contains only one model that has one vertex
+    'uOmS109_Truck_Rail.arc',   # Same, one model one vertex
+}
 
 # Probably due to bad indices, needs investigation
 KNOWN_ARC_BLENDER_CRASH = {
