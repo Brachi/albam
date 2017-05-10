@@ -11,11 +11,9 @@ class BaseStructure:
     # TODO: change signature to make it clear that 'file_path' can be also a buffer
     def __new__(cls, file_path=None, *args, **kwargs):
         cls_dict = {'_pack_': 1}
-        for k, v in cls.__dict__.items():
-            if k != '_fields_':
-                cls_dict[k] = v
-
+        cls_dict.update(cls.__dict__)
         cls_dict['_fields_'] = parse_fields(cls._fields_, file_path, **kwargs)
+
         try:
             generated_cls = type('Gen{}'.format(cls.__name__), (ctypes.Structure,), cls_dict)
         except TypeError:
@@ -34,44 +32,6 @@ class BaseStructure:
             instance = generated_cls(**kwargs)
 
         return instance
-
-
-def get_offset(struct_ob, name):
-    return getattr(struct_ob.__class__, name).offset
-
-
-def get_size(struct_ob, name):
-    return getattr(struct_ob.__class__, name).size
-
-
-def print_structure(ctypes_structure_ob):
-    for attr_tuple in ctypes_structure_ob._fields_:
-        attr_name = attr_tuple[0]
-        attr_type = attr_tuple[1]
-        attr_value = getattr(ctypes_structure_ob, attr_name)
-        attr_desc = str(getattr(ctypes_structure_ob.__class__, attr_name))
-
-        pretty_attr_value = attr_value
-        try:
-            pretty_attr_value = str(bytearray().extend(*list(copy(attr_value))))
-        except TypeError:
-            pass
-
-        if not isinstance(pretty_attr_value, bytes):
-            try:
-                # TODO: speed this up, too many copies
-                pretty_attr_value = str(list(copy(attr_value))[:5])
-            except TypeError:
-                pass
-        try:
-            if attr_type == c_float:
-                template = '{:<20} -- {:<20.2f} {}'
-            else:
-                template = '{:<20} -- {:<20} {}'
-            out = template.format(attr_name, pretty_attr_value, attr_desc)
-            print(out)
-        except Exception as err:
-            print('error printint struct: "{}"'.format(attr_name), err)
 
 
 def parse_fields(sequence_of_tuples, file_path_or_buffer=None, **kwargs):
@@ -111,3 +71,53 @@ def parse_fields(sequence_of_tuples, file_path_or_buffer=None, **kwargs):
         buff.close()
 
     return tuple(ready_fields)
+
+
+def get_offset(struct_ob, name):
+    return getattr(struct_ob.__class__, name).offset
+
+
+def get_size(struct_ob, name):
+    return getattr(struct_ob.__class__, name).size
+
+
+def pretty_field(field):
+    field_name = field.__name__
+    if field_name.startswith('c_'):
+        pretty_field = field_name.replace('c_', '')
+        if hasattr(field, '_length_'):
+            field_name = field._type_.__name__.replace('c_', '')
+            pretty_field = '{} []'.format(field_name)
+    else:
+        pretty_field = field_name
+    return pretty_field
+
+
+def print_structure(ctypes_structure_ob):
+    for attr_tuple in ctypes_structure_ob._fields_:
+        attr_name = attr_tuple[0]
+        attr_type = attr_tuple[1]
+        attr_value = getattr(ctypes_structure_ob, attr_name)
+        attr_desc = str(getattr(ctypes_structure_ob.__class__, attr_name))
+
+        pretty_attr_value = attr_value
+        try:
+            pretty_attr_value = str(bytearray().extend(*list(copy(attr_value))))
+        except TypeError:
+            pass
+
+        if not isinstance(pretty_attr_value, bytes):
+            try:
+                # TODO: speed this up, too many copies
+                pretty_attr_value = str(list(copy(attr_value))[:5])
+            except TypeError:
+                pass
+        try:
+            if attr_type == c_float:
+                template = '{:<20} -- {:<20.2f} {}'
+            else:
+                template = '{:<20} -- {:<20} {}'
+            out = template.format(attr_name, pretty_attr_value, attr_desc)
+            print(out)
+        except Exception as err:
+            print('error printint struct: "{}"'.format(attr_name), err)
