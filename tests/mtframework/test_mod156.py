@@ -1,29 +1,4 @@
-import ctypes
-import os
-
-import pytest
-
-from albam.engines.mtframework import Arc, Mod156
 from albam.lib.structure import get_offset, get_size
-from tests.test_mtframework_arc import ARC_FILES
-
-
-@pytest.fixture(scope='module', params=ARC_FILES)
-def mod156(request, tmpdir_factory):
-    arc_file = request.param
-    base_temp = tmpdir_factory.mktemp(os.path.basename(arc_file).replace('.arc', '-arc'))
-    out = str(base_temp)
-    arc = Arc(file_path=arc_file)
-    arc.unpack(out)
-
-    mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
-                 for f in files if f.endswith('.mod')]
-    mods = [Mod156(mod_file) for mod_file in mod_files]
-    # TODO: test all mods in the arc in a simple way.
-    # maybe it's worth to wait until parametrized fixtures
-    # https://docs.pytest.org/en/latest/proposals/parametrize_with_fixtures.html
-    biggest_mod = max(mods, key=lambda m: ctypes.sizeof(m))
-    return biggest_mod
 
 
 def test_constant_fields(mod156):

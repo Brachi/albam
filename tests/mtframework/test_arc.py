@@ -3,12 +3,7 @@ import os
 import pytest
 
 from albam.engines.mtframework import Arc
-from tests.conftest import SAMPLES_DIR
-
-
-ARC_SAMPLES_DIR = os.path.join(SAMPLES_DIR, 're5/arc')
-ARC_FILES = [os.path.join(root, f) for root, _, files in os.walk(ARC_SAMPLES_DIR)
-             for f in files if f.endswith('.arc')]
+from tests.mtframework.conftest import ARC_FILES
 
 
 @pytest.mark.parametrize("arc_file", ARC_FILES)

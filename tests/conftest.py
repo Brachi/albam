@@ -1,15 +1,12 @@
-from collections import namedtuple
 import os
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory, gettempdir
 import shutil
 
 import coverage
 import pytest
 
-from albam.engines.mtframework import Mod156, Arc, KNOWN_ARC_BLENDER_CRASH, Tex112, CORRUPTED_ARCS
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 ALBAM_ROOT_DIR = Path(__file__).parent.parent
@@ -181,89 +178,3 @@ except Exception:
     logging.exception('EXPORT failed: {import_arc_filepath}')
     sys.exit(1)
 """
-
-
-@pytest.fixture(scope='session')
-def arc_re5_samples():
-    samples_dir = os.path.join(SAMPLES_DIR, 're5/arc')
-    full_list = [os.path.join(root, f)
-                 for root, _, files in os.walk(samples_dir)
-                 for f in files if f.endswith('.arc') and f not in CORRUPTED_ARCS]
-    return full_list
-
-
-RE5UnpackedData = namedtuple('RE5UnpackedData', ('mods_original', 'textures_original',
-                                                 'mods_exported', 'textures_exported'))
-
-
-@pytest.fixture(scope='module', params=arc_re5_samples())
-def re5_unpacked_data(request, tmpdir_factory, setup_blender):
-    import_arc_filepath = request.param
-    if import_arc_filepath.endswith(tuple(KNOWN_ARC_BLENDER_CRASH)):
-        pytest.xfail('Known arc crashes blender')
-    log_filepath = str(tmpdir_factory.getbasetemp().join('blender.log'))
-    import_unpack_dir = TemporaryDirectory()
-    export_arc_filepath = os.path.join(gettempdir(), os.path.basename(import_arc_filepath))
-    script_filepath = os.path.join(gettempdir(), 'import_arc.py')
-
-    with open(script_filepath, 'w') as w:
-        w.write(PYTHON_TEMPLATE.format(project_dir=os.getcwd(),
-                                       import_arc_filepath=import_arc_filepath,
-                                       export_arc_filepath=export_arc_filepath,
-                                       import_unpack_dir=import_unpack_dir.name,
-                                       log_filepath=log_filepath))
-    args = '{} -noaudio --background --python {}'.format(setup_blender, script_filepath)
-    try:
-        subprocess.check_output((args,), shell=True)
-    except subprocess.CalledProcessError:
-        # the test will actually error here, if the import/export fails, since the file won't exist.
-        # which is better, since pytest traceback to subprocess.check_output is pretty long and useless
-        with open(log_filepath) as f:
-            for line in f:
-                print(line)
-        try:
-            os.unlink(export_arc_filepath)
-            os.unlink(script_filepath)
-        except FileNotFoundError:
-            pass
-        raise
-
-    export_unpack_dir = TemporaryDirectory()
-    arc = Arc(export_arc_filepath)
-    arc.unpack(export_unpack_dir.name)
-
-    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir.name)
-                          for f in files if f.endswith('.mod')]
-    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
-                          for f in files if f.endswith('.mod')]
-
-    tex_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir.name)
-                          for f in files if f.endswith('.tex')]
-
-    tex_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
-                          for f in files if f.endswith('.tex')]
-
-    mod_files_original = sorted(mod_files_original, key=os.path.basename)
-    mod_files_exported = sorted(mod_files_exported, key=os.path.basename)
-    tex_files_original = sorted(tex_files_original, key=os.path.basename)
-    tex_files_exported = sorted(tex_files_exported, key=os.path.basename)
-    tex_files_original = [Tex112(fp) for fp in tex_files_original]
-    tex_files_exported = [Tex112(fp) for fp in tex_files_exported]
-    mod_objects_original = []
-    mod_objects_exported = []
-    if mod_files_original and mod_files_exported:
-        os.unlink(export_arc_filepath)
-        os.unlink(script_filepath)
-        for i, mod_file_original in enumerate(mod_files_original):
-            mod_original = Mod156(file_path=mod_file_original)
-            mod_exported = Mod156(file_path=mod_files_exported[i])
-            mod_objects_original.append(mod_original)
-            mod_objects_exported.append(mod_exported)
-    else:
-        os.unlink(export_arc_filepath)
-        os.unlink(script_filepath)
-        pytest.skip('Arc contains no mod files')
-    return RE5UnpackedData(mods_original=mod_objects_original,
-                           mods_exported=mod_objects_exported,
-                           textures_original=tex_files_original,
-                           textures_exported=tex_files_exported)
