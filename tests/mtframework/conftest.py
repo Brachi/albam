@@ -1,108 +1,87 @@
-from collections import namedtuple
-import ctypes
 import os
-from tempfile import TemporaryDirectory, gettempdir
-import subprocess
+from tempfile import mkdtemp
+import shutil
 
 import pytest
 
-from albam.engines.mtframework import Arc, Mod156, KNOWN_ARC_BLENDER_CRASH, Tex112
-from tests.conftest import SAMPLES_DIR, PYTHON_TEMPLATE
+from albam.engines.mtframework import Arc, Mod156, Tex112
+from albam.lib.misc import find_files
+from tests.conftest import SAMPLES_DIR
 
 ARC_SAMPLES_DIR = os.path.join(SAMPLES_DIR, 're5/arc')
 ARC_FILES = [os.path.join(root, f) for root, _, files in os.walk(ARC_SAMPLES_DIR)
              for f in files if f.endswith('.arc')]
 
-RE5UnpackedData = namedtuple('RE5UnpackedData', ('mods_original', 'textures_original',
-                                                 'mods_exported', 'textures_exported'))
+
+CACHE_ARC = {}  # source arc dir: list of all files extracted in a temp dir
+CACHE_FILE_ARC = {}
+CACHE_TEMP_DIRS = set()
 
 
-@pytest.fixture(scope='module', params=ARC_FILES)
-def mod156(request, tmpdir_factory):
-    arc_file = request.param
-    base_temp = tmpdir_factory.mktemp(os.path.basename(arc_file).replace('.arc', '-arc'))
-    out = str(base_temp)
-    arc = Arc(file_path=arc_file)
-    arc.unpack(out)
-
-    mod_files = [os.path.join(root, f) for root, _, files in os.walk(out)
-                 for f in files if f.endswith('.mod')]
-    mods = [Mod156(mod_file) for mod_file in mod_files]
-    # TODO: test all mods in the arc in a simple way.
-    # maybe it's worth to wait until parametrized fixtures
-    # https://docs.pytest.org/en/latest/proposals/parametrize_with_fixtures.html
-    biggest_mod = max(mods, key=lambda m: ctypes.sizeof(m))
-    return biggest_mod
+@pytest.fixture(scope='module')
+def mod156(mod_file_from_arc):
+    mod156 = Mod156(mod_file_from_arc)
+    return mod156
 
 
-@pytest.fixture(scope='module', params=ARC_FILES)
-def re5_unpacked_data(request, tmpdir_factory, setup_blender):
-    import_arc_filepath = request.param
-    if import_arc_filepath.endswith(tuple(KNOWN_ARC_BLENDER_CRASH)):
-        pytest.xfail('Known arc crashes blender')
-    log_filepath = str(tmpdir_factory.getbasetemp().join('blender.log'))
-    import_unpack_dir = TemporaryDirectory()
-    export_arc_filepath = os.path.join(gettempdir(), os.path.basename(import_arc_filepath))
-    script_filepath = os.path.join(gettempdir(), 'import_arc.py')
+@pytest.fixture(scope='module')
+def tex112(tex_file_from_arc):
+    tex112 = Tex112(tex_file_from_arc)
+    return tex112
 
-    with open(script_filepath, 'w') as w:
-        w.write(PYTHON_TEMPLATE.format(project_dir=os.getcwd(),
-                                       import_arc_filepath=import_arc_filepath,
-                                       export_arc_filepath=export_arc_filepath,
-                                       import_unpack_dir=import_unpack_dir.name,
-                                       log_filepath=log_filepath))
-    args = '{} -noaudio --background --python {}'.format(setup_blender, script_filepath)
-    try:
-        subprocess.check_output((args,), shell=True)
-    except subprocess.CalledProcessError:
-        # the test will actually error here, if the import/export fails, since the file won't exist.
-        # which is better, since pytest traceback to subprocess.check_output is pretty long and useless
-        with open(log_filepath) as f:
-            for line in f:
-                print(line)
-        try:
-            os.unlink(export_arc_filepath)
-            os.unlink(script_filepath)
-        except FileNotFoundError:
-            pass
-        raise
 
-    export_unpack_dir = TemporaryDirectory()
-    arc = Arc(export_arc_filepath)
-    arc.unpack(export_unpack_dir.name)
+def pytest_generate_tests(metafunc):
+    if 'mod_file_from_arc' in metafunc.fixturenames:
+        mod_files = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        mod_file_names = [os.path.basename(mf) for mf in mod_files]
+        metafunc.parametrize("mod_file_from_arc", mod_files, scope='module', ids=mod_file_names)
+    elif 'tex_file_from_arc' in metafunc.fixturenames:
+        tex_files = _get_files_from_arcs(extension='.tex', arc_path=metafunc.config.option.dirarc)
+        tex_file_names = [os.path.basename(tf) for tf in tex_files]
+        metafunc.parametrize("tex_file_from_arc", tex_files, scope='module', ids=tex_file_names)
+    elif 'mod156_original' and 'mod156_exported' in metafunc.fixturenames:
+        mod_files = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        mod_files = _import_export_blender(mod_files)
+        metafunc.parametrize("mod156_original, mod156_exported", mod_files, scope='module')
 
-    mod_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir.name)
-                          for f in files if f.endswith('.mod')]
-    mod_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
-                          for f in files if f.endswith('.mod')]
 
-    tex_files_original = [os.path.join(root, f) for root, _, files in os.walk(import_unpack_dir.name)
-                          for f in files if f.endswith('.tex')]
+def pytest_sessionfinish(session, exitstatus):
+    # TODO: try to use tempdir fixture from config?
+    for temp_dir in CACHE_TEMP_DIRS:
+        shutil.rmtree(temp_dir)
 
-    tex_files_exported = [os.path.join(root, f) for root, _, files in os.walk(export_unpack_dir.name)
-                          for f in files if f.endswith('.tex')]
 
-    mod_files_original = sorted(mod_files_original, key=os.path.basename)
-    mod_files_exported = sorted(mod_files_exported, key=os.path.basename)
-    tex_files_original = sorted(tex_files_original, key=os.path.basename)
-    tex_files_exported = sorted(tex_files_exported, key=os.path.basename)
-    tex_files_original = [Tex112(fp) for fp in tex_files_original]
-    tex_files_exported = [Tex112(fp) for fp in tex_files_exported]
-    mod_objects_original = []
-    mod_objects_exported = []
-    if mod_files_original and mod_files_exported:
-        os.unlink(export_arc_filepath)
-        os.unlink(script_filepath)
-        for i, mod_file_original in enumerate(mod_files_original):
-            mod_original = Mod156(file_path=mod_file_original)
-            mod_exported = Mod156(file_path=mod_files_exported[i])
-            mod_objects_original.append(mod_original)
-            mod_objects_exported.append(mod_exported)
+def _get_files_from_arcs(extension, arc_path=None):
+    if arc_path:
+        arc_list = find_files(arc_path, '.arc')
     else:
-        os.unlink(export_arc_filepath)
-        os.unlink(script_filepath)
-        pytest.skip('Arc contains no mod files')
-    return RE5UnpackedData(mods_original=mod_objects_original,
-                           mods_exported=mod_objects_exported,
-                           textures_original=tex_files_original,
-                           textures_exported=tex_files_exported)
+        arc_list = ARC_FILES
+    files = []
+    for arc_file in arc_list:
+        files_in_arc = CACHE_ARC.get(arc_file)
+        if not files_in_arc:
+            _unpack_arc_in_temp(arc_file)
+        files_in_arc = CACHE_ARC[arc_file]
+        found_files = [f for f in files_in_arc if f.endswith(extension)]
+        files.extend(found_files)
+    return files
+
+
+def _unpack_arc_in_temp(arc_file):
+    tmp_dirname = os.path.basename(arc_file).replace('.arc', '-arc')
+    base_temp = mkdtemp(suffix=tmp_dirname, prefix='ALBAM_')
+    CACHE_TEMP_DIRS.add(base_temp)
+    arc = Arc(file_path=arc_file)
+    arc.unpack(base_temp)
+    CACHE_ARC[arc_file] = find_files(base_temp)
+
+    return base_temp
+
+
+def _import_export_blender(mod_files):
+    out = []
+
+    for mod_file in mod_files:
+        result = (Mod156(mod_file), Mod156(mod_file))
+        out.append(result)
+    return out
