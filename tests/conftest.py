@@ -64,8 +64,16 @@ def pytest_sessionfinish(session, exitstatus):
     """
 
 
-def assert_same_attributes(obj1, obj2, attr):
-    assert getattr(obj1, attr) == getattr(obj2, attr)
+def assert_same_attributes(obj1, obj2, attr, binary=False, length=False):
+    attr_1 = getattr(obj1, attr)
+    attr_2 = getattr(obj2, attr)
+    if binary:
+        attr_1 = bytes(attr_1)
+        attr_2 = bytes(attr_2)
+    elif length:
+        attr_1 = len(attr_1)
+        attr_2 = len(attr_2)
+    assert attr_1 == attr_2
 
 
 def _get_blender_site_packages(blender_path):
