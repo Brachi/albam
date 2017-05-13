@@ -30,9 +30,9 @@ def ntpath_to_os_path(path):
     return os.path.join(*splitted)
 
 
-def find_files(root_dir, extension):
+def find_files(root_dir, extension=None):
     """
     Traverse <root_dir> recursively and return absolute paths of files that end in <extension>
     """
     return [os.path.join(root, f) for root, _, files in os.walk(root_dir)
-            for f in files if f.endswith(extension)]
+            for f in files if not extension or (extension and f.endswith(extension))]
