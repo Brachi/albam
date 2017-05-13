@@ -212,8 +212,6 @@ class Mesh156(Structure):
                 )
 
 
-
-
 class VertexFormat0(Structure):
     _fields_ = (('position_x', c_float),
                 ('position_y', c_float),
