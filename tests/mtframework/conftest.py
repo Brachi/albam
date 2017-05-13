@@ -32,15 +32,13 @@ def tex112(tex_file_from_arc):
 
 def pytest_generate_tests(metafunc):
     if 'mod_file_from_arc' in metafunc.fixturenames:
-        mod_files = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
-        mod_file_names = [os.path.basename(mf) for mf in mod_files]
-        metafunc.parametrize("mod_file_from_arc", mod_files, scope='module', ids=mod_file_names)
+        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        metafunc.parametrize("mod_file_from_arc", mod_files, scope='module', ids=ids)
     elif 'tex_file_from_arc' in metafunc.fixturenames:
-        tex_files = _get_files_from_arcs(extension='.tex', arc_path=metafunc.config.option.dirarc)
-        tex_file_names = [os.path.basename(tf) for tf in tex_files]
-        metafunc.parametrize("tex_file_from_arc", tex_files, scope='module', ids=tex_file_names)
+        tex_files, ids = _get_files_from_arcs(extension='.tex', arc_path=metafunc.config.option.dirarc)
+        metafunc.parametrize("tex_file_from_arc", tex_files, scope='module', ids=ids)
     elif 'mod156_original' and 'mod156_exported' in metafunc.fixturenames:
-        mod_files = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        mod_files, _ = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
         mod_files = _import_export_blender(mod_files)
         metafunc.parametrize("mod156_original, mod156_exported", mod_files, scope='module')
 
@@ -57,6 +55,7 @@ def _get_files_from_arcs(extension, arc_path=None):
     else:
         arc_list = ARC_FILES
     files = []
+    ids = []
     for arc_file in arc_list:
         files_in_arc = CACHE_ARC.get(arc_file)
         if not files_in_arc:
@@ -64,7 +63,10 @@ def _get_files_from_arcs(extension, arc_path=None):
         files_in_arc = CACHE_ARC[arc_file]
         found_files = [f for f in files_in_arc if f.endswith(extension)]
         files.extend(found_files)
-    return files
+        ids_for_files = ['{}-->{}'.format(os.path.basename(arc_file), os.path.basename(f)) for f in found_files]
+        ids.extend(ids_for_files)
+
+    return files, ids
 
 
 def _unpack_arc_in_temp(arc_file):
