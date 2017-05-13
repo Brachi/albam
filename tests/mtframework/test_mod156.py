@@ -17,20 +17,18 @@ def test_mandatory_fields(mod156):
     assert mod156.face_count
     assert mod156.edge_count
     assert mod156.vertex_buffer_size
-    assert mod156.vertex_buffer_2_size
     assert mod156.group_count
     assert mod156.group_offset
     assert mod156.unk_01
     assert mod156.unk_02
-    assert mod156.unk_03
-    assert mod156.unk_04
 
 
 def test_conditional_fields(mod156):
     assert bool(mod156.bone_count) == bool(mod156.bones_array_offset)
     assert bool(mod156.bone_count) == bool(mod156.bone_palette_count)
     assert bool(mod156.texture_count) == bool(mod156.textures_array)
-    assert bool(mod156.texture_count) == bool(mod156.textures_array_offset)
+    assert bool(mod156.texture_count) == bool(mod156.textures_array_offset) or \
+        bool(mod156.textures_array_offset) == bool(mod156.materials_data_array)
     assert bool(mod156.unk_08) == bool(mod156.unk_12)
 
 
