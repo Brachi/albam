@@ -64,6 +64,10 @@ def pytest_sessionfinish(session, exitstatus):
     """
 
 
+def assert_same_attributes(obj1, obj2, attr):
+    assert getattr(obj1, attr) == getattr(obj2, attr)
+
+
 def _get_blender_site_packages(blender_path):
 
     blender_dir = os.path.dirname(blender_path)
