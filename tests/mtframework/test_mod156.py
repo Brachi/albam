@@ -49,3 +49,23 @@ def test_size_fields(mod156):
     assert mod156.bone_palette_count == len(mod156.bone_palette_array)
     assert mod156.vertex_count == len(mod156.vertex_buffer) // 32
     assert mod156.face_count == len(mod156.index_buffer) + 1
+
+
+def test_mesh_constant_fields(mod156_mesh):
+    assert mod156_mesh.constant == 1
+    assert mod156_mesh.vertex_stride == 32
+
+
+def test_mesh_enum_fields(mod156_mesh):
+    assert mod156_mesh.level_of_detail in (0, 1, 2, 252, 254, 255)
+    assert mod156_mesh.vertex_format in (0, 1, 2, 3, 4, 5, 6)
+
+
+def test_mesh_mandatory_fields(mod156_mesh):
+    assert mod156_mesh.constant
+    assert mod156_mesh.level_of_detail
+    assert mod156_mesh.vertex_stride
+    assert mod156_mesh.vertex_count
+    assert mod156_mesh.vertex_index_end
+    assert mod156_mesh.face_count
+    assert mod156_mesh.vertex_group_count

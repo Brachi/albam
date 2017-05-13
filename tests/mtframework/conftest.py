@@ -37,6 +37,14 @@ def pytest_generate_tests(metafunc):
     elif 'tex_file_from_arc' in metafunc.fixturenames:
         tex_files, ids = _get_files_from_arcs(extension='.tex', arc_path=metafunc.config.option.dirarc)
         metafunc.parametrize("tex_file_from_arc", tex_files, scope='module', ids=ids)
+    elif 'mod156_mesh' in metafunc.fixturenames:
+        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        meshes, ids = _get_array_members_from_files(mod_files, ids, Mod156, 'meshes_array')
+        metafunc.parametrize("mod156_mesh", meshes, scope='module', ids=ids)
+    elif 'mod156_bone' in metafunc.fixturenames:
+        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
+        meshes, ids = _get_array_members_from_files(mod_files, ids, Mod156, 'bones_array')
+        metafunc.parametrize("mod156_bone", meshes, scope='module', ids=ids)
     elif 'mod156_original' and 'mod156_exported' in metafunc.fixturenames:
         mod_files, _ = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
         mod_files = _import_export_blender(mod_files)
@@ -67,6 +75,35 @@ def _get_files_from_arcs(extension, arc_path=None):
         ids.extend(ids_for_files)
 
     return files, ids
+
+
+def _get_array_members_from_files(files, file_ids, struct_class, array_name):
+    """
+    Given a list of <files>, and <file_ids> of the same length,
+    iterate over files and parse them using <struct_class> creating an structure object
+    Then iterate over structure_object.<array_name> and return a list of all the members,
+    along with a list of ids appending '--><array_name>-<array_index> to each member
+
+    the attribute '_parent_structure' is added to each array member containing the structure
+    where it was taken from
+    """
+    assert len(files) == len(file_ids)
+
+    structures = [struct_class(f) for f in files]
+    structs_and_ids = [(array_member,
+                        file_ids[structure_index] + '-->{}-{}'.format(array_name, array_index),
+                        structure_index)
+                       for structure_index, structure in enumerate(structures)
+                       for array_index, array_member in enumerate(getattr(structure, array_name))]
+    array_members = [t[0] for t in structs_and_ids]
+    ids = [t[1] for t in structs_and_ids]
+
+    for triplet in structs_and_ids:
+        array_member = triplet[0]
+        struct_index = triplet[2]
+        array_member._parent_structure = structures[struct_index]
+
+    return array_members, ids
 
 
 def _unpack_arc_in_temp(arc_file):
