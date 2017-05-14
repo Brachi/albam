@@ -88,6 +88,7 @@ def assert_same_attributes(obj1, obj2, attr, binary=False, length=False):
     elif length:
         attr_1 = len(attr_1)
         attr_2 = len(attr_2)
+
     assert attr_1 == attr_2
 
 
@@ -95,7 +96,11 @@ def assert_approximate_fields(obj1, obj2, attr_name, max_ratio):
     attr_1 = getattr(obj1, attr_name)
     attr_2 = getattr(obj2, attr_name)
     difference = abs(attr_1 - attr_2)
-    ratio = difference / obj1.face_count
+
+    try:
+        ratio = difference / attr_1
+    except ZeroDivisionError:
+        ratio = difference
 
     assert ratio < max_ratio
 
