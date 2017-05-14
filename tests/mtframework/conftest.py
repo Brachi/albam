@@ -58,7 +58,6 @@ def pytest_generate_tests(metafunc):
             if not ARC_FILES_EXPORTED:
                 albam_import_export(blender_path, ARC_FILES)
                 ARC_FILES_EXPORTED = True
-            print('travis debug', os.listdir(os.path.dirname(ARC_FILES[0])))
             exported_files = [f + '.exported' for f in ARC_FILES]
 
             mod_files_original, ids_exported = _get_files_from_arcs(extension='.mod', arc_list=ARC_FILES)
