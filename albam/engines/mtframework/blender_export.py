@@ -235,7 +235,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
-    # TODO: check the number of uv layers
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
     if max_bones_per_vertex > 8:
