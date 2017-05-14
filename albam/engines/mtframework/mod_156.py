@@ -1,4 +1,8 @@
-from ctypes import Structure, c_uint, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte
+from ctypes import (
+    Structure,
+    LittleEndianStructure,
+    c_uint, c_uint8, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte,
+)
 
 from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
@@ -181,7 +185,7 @@ class MaterialData(Structure):
 
 
 @blender_registry.register_bpy_prop('mesh', 'unk_')
-class Mesh156(Structure):
+class Mesh156(LittleEndianStructure):
     _fields_ = (('group_index', c_ushort),
                 ('material_index', c_ushort),
                 ('constant', c_ubyte),  # always 1
@@ -191,7 +195,14 @@ class Mesh156(Structure):
                 ('vertex_stride', c_ubyte),
                 ('unk_02', c_ubyte),
                 ('unk_03', c_ubyte),
-                ('unk_04', c_ubyte),
+                ('unk_flag_01', c_uint8, 1),
+                ('unk_flag_02', c_uint8, 1),
+                ('unk_flag_03', c_uint8, 1),
+                ('unk_flag_04', c_uint8, 1),
+                ('unk_flag_05', c_uint8, 1),
+                ('cast_shadows', c_uint8, 1),
+                ('unk_flag_06', c_uint8, 1),
+                ('unk_flag_07', c_uint8, 1),
                 ('vertex_count', c_ushort),
                 ('vertex_index_end', c_ushort),
                 ('vertex_index_start_1', c_uint),
