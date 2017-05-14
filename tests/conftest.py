@@ -3,15 +3,18 @@ from pathlib import Path
 import re
 import subprocess
 import shutil
+import tempfile
 
 import coverage
-import pytest
 
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'sample-files')
 ALBAM_ROOT_DIR = Path(__file__).parent.parent
 ALBAM_MODULE_DIR = ALBAM_ROOT_DIR / 'albam'
 COVERAGERC_FILE = ALBAM_ROOT_DIR / '.coveragerc'
+TEMPLATE_PATH = ALBAM_ROOT_DIR / 'tests' / 'run_albam.template.py'
+IS_BLENDER_SETUP = False
+EXPORTED_CACHE = {}
 
 
 def pytest_addoption(parser):
@@ -19,29 +22,38 @@ def pytest_addoption(parser):
     parser.addoption('--blender', help='Path to Blender executable for performing functional tests')
 
 
-@pytest.fixture(scope='session')
-def setup_blender(tmpdir_factory):
-    """Setups blender to be able to run tests inside of it:
-    * Installs albam as an addon, with the current code, overwriting existing installs
-    * Adds a sitecustomize.py file to be used by coverage if it's being used outside
-    * cleanups everythings after done
-    """
-    blender = pytest.config.getoption('blender')
-    if not blender:
-        pytest.skip('No blender bin path supplied')
-    assert os.path.isfile(blender)
+def albam_import_export(blender_path, files):
+    _setup_blender(blender_path)
+    temp_script = tempfile.NamedTemporaryFile()
+    with open(str(TEMPLATE_PATH)) as f:
+        python_template = f.read()
+    with open(temp_script.name, 'w') as w:
+        content = python_template.format(files=files)
+        w.write(content)
 
-    _install_albam_as_addon(tmpdir_factory.getbasetemp(), blender)
-    blender_site_packages = _get_blender_site_packages(blender)
-    albam_addon_source_path = _get_albam_addon_source_path(blender)
+    args = '{} -noaudio --background --python {}'.format(blender_path, temp_script.name)
+    subprocess.call((args,), shell=True)
+
+
+def _setup_blender(blender_path):
+    """
+    Setup blender to be able to run tests inside of it:
+    * Install albam as an addon, with the current code, overwriting existing installs
+    * Add a sitecustomize.py file to be used by coverage if it's being used outside
+    """
+    global IS_BLENDER_SETUP
+    if IS_BLENDER_SETUP:
+        return
+
+    _install_albam_as_addon(blender_path)
+    blender_site_packages = _get_blender_site_packages(blender_path)
+    albam_addon_source_path = _get_albam_addon_source_path(blender_path)
     _install_coverage(blender_site_packages)
     _setup_coverage_on_startup(blender_site_packages)
-    blender_coveragerc = _create_coveragerc_for_blender(tmpdir_factory.getbasetemp(), albam_addon_source_path)
+    blender_coveragerc = _create_coveragerc_for_blender(albam_addon_source_path)
 
     os.environ['COVERAGE_PROCESS_START'] = blender_coveragerc
-
-    yield blender
-    # TODO: see pytest_sessionfinish
+    IS_BLENDER_SETUP = True
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -74,6 +86,15 @@ def assert_same_attributes(obj1, obj2, attr, binary=False, length=False):
     assert attr_1 == attr_2
 
 
+def assert_approximate_fields(obj1, obj2, attr_name, max_ratio):
+    attr_1 = getattr(obj1, attr_name)
+    attr_2 = getattr(obj2, attr_name)
+    difference = abs(attr_1 - attr_2)
+    ratio = difference / obj1.face_count
+
+    assert ratio < max_ratio
+
+
 def _get_blender_site_packages(blender_path):
 
     blender_dir = os.path.dirname(blender_path)
@@ -85,8 +106,10 @@ def _get_blender_site_packages(blender_path):
     return blender_site_packages
 
 
-def _install_albam_as_addon(base_temp, blender_path):
-    zip_path = str(base_temp.join('albam'))  # '.zip' is already appended
+def _install_albam_as_addon(blender_path):
+    temp_dir = tempfile.mkdtemp()
+    zip_path = os.path.join(temp_dir, 'albam')
+    os.mkdir(os.path.join(temp_dir, 'albam'))
     shutil.make_archive(zip_path, 'zip', str(ALBAM_ROOT_DIR), str(ALBAM_MODULE_DIR.parts[-1]))
 
     script = """
@@ -99,11 +122,12 @@ except:
     sys.exit(1)
 sys.exit()
 """.format(zip_path + '.zip')
-    script_file = base_temp.join('script_install_albam.py')
-    script_file.write(script)
-    cmd = '{} --background --python {}'.format(blender_path, script_file)
+    with tempfile.NamedTemporaryFile() as temp_file:
+        with open(temp_file.name, 'w') as w:
+            w.write(script)
+        cmd = '{} --background --python {}'.format(blender_path, temp_file.name)
 
-    subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
 
 
 def _install_coverage(blender_site_packages_path):
@@ -135,15 +159,16 @@ def _get_albam_addon_source_path(blender_path):
     return albam_source_path
 
 
-def _create_coveragerc_for_blender(base_temp, albam_source_path):
+def _create_coveragerc_for_blender(albam_source_path):
     # TODO: check why coverals includes python/lib sources
-    dst = base_temp.join('.coveragercblender')
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
     content = """[run]
 branch = True
 data_file = .coverage.blender
 source = {}
 omit = */python/lib/*
 """.format(albam_source_path)
-    dst.write(content)
+    with open(temp_file.name, 'w') as w:
+        w.write(content)
 
-    return str(dst)
+    return temp_file.name
