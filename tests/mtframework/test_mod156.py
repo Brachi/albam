@@ -57,8 +57,8 @@ def test_mesh_constant_fields(mod156_mesh):
 
 
 def test_mesh_enum_fields(mod156_mesh):
-    assert mod156_mesh.level_of_detail in (0, 1, 2, 252, 254, 255)
-    assert mod156_mesh.vertex_format in (0, 1, 2, 3, 4, 5, 6)
+    assert mod156_mesh.level_of_detail in (0, 1, 2, 3, 252, 254, 255)
+    assert mod156_mesh.vertex_format in (0, 1, 2, 3, 4, 5, 6, 7)
 
 
 def test_mesh_mandatory_fields(mod156_mesh):
