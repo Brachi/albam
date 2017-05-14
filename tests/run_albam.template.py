@@ -8,6 +8,7 @@ FILES = {files}
 
 
 def import_export_file(file_path):
+    return
     try:
         bpy.ops.albam_import.item(files=[{{'name': file_path}}])
     except Exception:
