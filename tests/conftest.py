@@ -32,11 +32,11 @@ def albam_import_export(blender_path, files):
         w.write(content)
 
     args = '{} -noaudio --background --python {}'.format(blender_path, temp_script.name)
+    print('running blender import/export as subprocess')
     try:
         output = subprocess.check_output((args,), shell=True)
         print(output)
     except subprocess.CalledProcessError as exc:
-        print('debug', exc.output)
         raise RuntimeError('Failed to execute blender. output: {}'.format(exc.output))
 
 
