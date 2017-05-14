@@ -32,7 +32,8 @@ def albam_import_export(blender_path, files):
         w.write(content)
 
     args = '{} -noaudio --background --python {}'.format(blender_path, temp_script.name)
-    subprocess.call((args,), shell=True)
+    output = subprocess.check_output((args,), shell=True)
+    print('debug', output)
 
 
 def _setup_blender(blender_path):
