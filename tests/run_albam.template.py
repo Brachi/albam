@@ -22,7 +22,8 @@ def import_export_file(file_path):
         print('exporting')
         bpy.ops.albam_export.item(filepath=file_path + '.exported')
         print('done')
-    except Exception:
+    except Exception as err:
+        sys.stderr.write('[ALBAM] Error Importing/Exporting ' + str(err))
         sys.exit(1)
 
 for f in FILES:
