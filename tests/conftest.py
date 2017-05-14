@@ -123,6 +123,7 @@ import sys
 try:
     bpy.ops.wm.addon_install(overwrite=True, filepath='{}')
     bpy.ops.wm.addon_enable(module='albam')
+    bpy.ops.wm.save_userpref()
 except:
     sys.exit(1)
 sys.exit()
