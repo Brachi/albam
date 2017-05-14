@@ -201,10 +201,14 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
     return weights_per_vertex
 
 
-def get_uvs_per_vertex(blender_mesh, uv_layer):
-    uvs_per_loop = uv_layer.data
+def get_uvs_per_vertex(blender_mesh_object):
     vertices = {}  # vertex_index: (uv_x, uv_y)
-    for i, loop in enumerate(blender_mesh.loops):
+    try:
+        uv_layer = blender_mesh_object.data.uv_layers[0]
+    except IndexError:
+        return vertices
+    uvs_per_loop = uv_layer.data
+    for i, loop in enumerate(blender_mesh_object.data.loops):
         vertex_index = loop.vertex_index
         if vertex_index in vertices:
             continue
