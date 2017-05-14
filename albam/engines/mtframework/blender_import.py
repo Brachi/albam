@@ -151,22 +151,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
 def _import_vertices(mod, mesh):
     if mod.version == 156:
         return _import_vertices_mod156(mod, mesh)
-    elif mod.version == 210:
-        return _import_vertices_mod210(mod, mesh)
-
-
-def _import_vertices_mod210(mod, mesh):
-    vertices_array = get_vertices_array(mod, mesh)
-    vertices = ((vf.position_x / 32767, vf.position_y / 32767, vf.position_z / 32767)
-                for vf in vertices_array)
-    vertices = (y_up_to_z_up(vertex_tuple) for vertex_tuple in vertices)
-
-    # TODO: investigate why uvs don't appear above the image in the UV editor
-    list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
-    return {'locations': list(vertices),
-            'uvs': list(chain.from_iterable(list_of_tuples)),
-            'weights_per_bone': {}
-            }
 
 
 def _import_vertices_mod156(mod, mesh):

@@ -1,6 +1,5 @@
 from albam.engines.mtframework.arc import Arc
 from albam.engines.mtframework.mod_156 import Mod156
-from albam.engines.mtframework.mod_210 import Mod210
 from albam.engines.mtframework.tex import Tex112
 from albam.engines.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO_FILE_ID
 
@@ -8,7 +7,6 @@ from albam.engines.mtframework.mappers import FILE_ID_TO_EXTENSION, EXTENSION_TO
 __all__ = (
     'Arc',
     'Mod156',
-    'Mod210',
     'Tex112',
     'FILE_ID_TO_EXTENSION',
     'EXTENSION_TO_FILE_ID',
