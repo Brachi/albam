@@ -186,5 +186,6 @@ class AlbamExportOperator(bpy.types.Operator):
         func = blender_registry.export_registry.get(id_magic)
         if not func:
             raise TypeError('File not supported for export. Id magic: {}'.format(id_magic))
+        bpy.ops.object.mode_set(mode='OBJECT')
         func(obj, self.filepath)
         return {'FINISHED'}
