@@ -8,10 +8,10 @@ FILES = {files}
 
 
 def import_export_file(file_path):
-    return
     try:
         bpy.ops.albam_import.item(files=[{{'name': file_path}}])
-    except Exception:
+    except Exception as err:
+        sys.stderr.write('[ALBAM] Error Imorting ' + str(err))
         sys.exit(1)
 
     time.sleep(0.5)
@@ -24,7 +24,7 @@ def import_export_file(file_path):
         bpy.ops.albam_export.item(filepath=file_path + '.exported')
         print('done')
     except Exception as err:
-        sys.stderr.write('[ALBAM] Error Importing/Exporting ' + str(err))
+        sys.stderr.write('[ALBAM] Error Exporting ' + str(err))
         sys.exit(1)
 
 for f in FILES:
