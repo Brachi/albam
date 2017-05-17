@@ -1,5 +1,6 @@
 from itertools import chain
 
+from albam.engines.mtframework.utils import get_vertices_array
 from tests.conftest import assert_same_attributes, assert_approximate_fields
 
 EXPECTED_MAX_INDICES_COUNT_RATIO = 0.17
@@ -78,3 +79,11 @@ def test_meshes_array_immutable_fields(mod156_original, mod156_exported):
         assert_same_attributes(mesh_original, mesh_exported, 'level_of_detail')
         assert_same_attributes(mesh_original, mesh_exported, 'material_index')
         assert_same_attributes(mesh_original, mesh_exported, 'vertex_stride')
+
+
+def test_mesh_vertices_bone_weights_sum(mod156_original, mod156_exported):
+    # almost duplicate from test_mod156.py
+    for mesh_index, mesh in enumerate(mod156_exported.meshes_array):
+        mesh_vertices = get_vertices_array(mod156_exported, mesh)
+        for vertex_index, vertex in enumerate(mesh_vertices):
+            assert not mod156_exported.bone_count or sum(vertex.weight_values) == 255

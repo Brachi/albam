@@ -173,7 +173,9 @@ def get_vertex_count_from_blender_objects(blender_objects):
 
 
 def get_bone_indices_and_weights_per_vertex(blender_object):
-    '''Returns {vertex_index: [(bone_index, weight_value), ...]}'''
+    """
+    Return {vertex_index: [(bone_index, weight_value), ...]}
+    """
     vertex_groups = blender_object.vertex_groups
     modifiers = {m.type: m for m in blender_object.modifiers}
     weights_per_vertex = {}
@@ -195,9 +197,7 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
             vgroup_name = vertex_groups[group.group].name
             bone_index = bone_names_to_index[vgroup_name]
             pair = (bone_index, group.weight)
-            # XXX RE5 hack
-            if len(weights_per_vertex[vertex.index]) < 4:
-                weights_per_vertex[vertex.index].append(pair)
+            weights_per_vertex[vertex.index].append(pair)
     return weights_per_vertex
 
 
