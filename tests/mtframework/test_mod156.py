@@ -1,3 +1,4 @@
+from albam.engines.mtframework.utils import get_vertices_array
 from albam.lib.structure import get_offset, get_size
 
 
@@ -49,6 +50,13 @@ def test_size_fields(mod156):
     assert mod156.bone_palette_count == len(mod156.bone_palette_array)
     assert mod156.vertex_count == len(mod156.vertex_buffer) // 32
     assert mod156.face_count == len(mod156.index_buffer) + 1
+
+
+def test_mesh_vertices_bone_weights_sum(mod156_mesh):
+    mod = mod156_mesh._parent_structure
+    mesh_vertices = get_vertices_array(mod, mod156_mesh)
+    for vertex in mesh_vertices:
+        assert not mod.bone_count or sum(vertex.weight_values) == 255
 
 
 def test_mesh_constant_fields(mod156_mesh):

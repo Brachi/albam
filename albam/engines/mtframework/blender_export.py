@@ -231,6 +231,13 @@ def export_mod156(parent_blender_object):
     return ExportedMod(mod, exported_materials)
 
 
+def _normalize_weights(weights):
+    total = sum(weights)
+    if total == 0:
+        return weights
+    return [(w / total) for w in weights]
+
+
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
@@ -269,24 +276,9 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
 
         # list of (bone_index, value)
         weights_data = weights_per_vertex.get(vertex_index, [])
-        # TODO: raise warning when vertices don't have weights
-        empty = [0] * max_bones_per_vertex
-        bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data] or empty
-        weight_values = [round(weight_value * 255) for _, weight_value in weights_data] or empty
-        total_weight = sum(weight_values)
-        # each vertex has to be influenced 100%. Padding if it's not.
-        if weights_data and total_weight < 255:
-            to_fill = 255 - total_weight
-            percentages = [(w / total_weight) * 100 for w in weight_values]
-            weight_values = [round(w + ((percentages[i] * to_fill) / 100)) for i, w in enumerate(weight_values)]
-            # XXX tmp for 8 bone_indices other hack
-            excess = 255 - sum(weight_values)
-            if excess:
-                weight_values[0] -= 1
-            # XXX more quick Saturday hack
-            if sum(weight_values) < 255:
-                missing = 255 - sum(weight_values)
-                weight_values[0] += missing
+        bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
+        weights = [w for _, w in weights_data]
+        weight_values = [round(w * 255) for w in _normalize_weights(weights)]
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
