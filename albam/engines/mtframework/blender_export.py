@@ -211,7 +211,7 @@ def export_mod156(parent_blender_object):
                  bones_array=saved_mod.bones_array,
                  bones_unk_matrix_array=saved_mod.bones_unk_matrix_array,
                  bones_world_transform_matrix_array=saved_mod.bones_world_transform_matrix_array,
-                 unk_13=saved_mod.unk_13,
+                 bones_animation_mapping=saved_mod.bones_animation_mapping,
                  bone_palette_array=bone_palette_array,
                  textures_array=exported_materials.textures_array,
                  materials_data_array=exported_materials.materials_data_array,

@@ -76,7 +76,7 @@ class Mod156(DynamicStructure):
                 ('bones_array', lambda s: Bone * s.bone_count),
                 ('bones_unk_matrix_array', lambda s: (c_float * 16) * s.bone_count),
                 ('bones_world_transform_matrix_array', lambda s: (c_float * 16) * s.bone_count),
-                ('unk_13', lambda s: (c_ubyte * 256) if s.bone_palette_count else c_ubyte * 0),
+                ('bones_animation_mapping', lambda s: (c_ubyte * 256) if s.bone_palette_count else c_ubyte * 0),
                 ('bone_palette_array', lambda s: BonePalette * s.bone_palette_count),
                 ('group_data_array', lambda s: GroupData * s.group_count),
                 ('textures_array', lambda s: (c_char * 64) * s.texture_count),

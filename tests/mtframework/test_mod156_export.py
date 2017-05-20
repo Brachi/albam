@@ -22,7 +22,7 @@ def test_inmutable_fields(mod156_original, mod156_exported):
     assert_same_attributes(mod156_original, mod156_exported, 'bones_array', binary=True)
     assert_same_attributes(mod156_original, mod156_exported, 'bones_unk_matrix_array', binary=True)
     assert_same_attributes(mod156_original, mod156_exported, 'bones_world_transform_matrix_array', binary=True)
-    assert_same_attributes(mod156_original, mod156_exported, 'unk_13', binary=True)
+    assert_same_attributes(mod156_original, mod156_exported, 'bones_animation_mapping', binary=True)
     assert_same_attributes(mod156_original, mod156_exported, 'materials_data_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'textures_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'meshes_array', length=True)

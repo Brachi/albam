@@ -327,7 +327,7 @@ def _get_weights_per_bone(mod, mesh, vertices_array):
     for vertex_index, vertex in enumerate(vertices_array):
         for bi, bone_index in enumerate(vertex.bone_indices):
             if bone_index >= bone_palette.unk_01:
-                real_bone_index = mod.unk_13[bone_index]
+                real_bone_index = mod.bones_animation_mapping[bone_index]
             else:
                 real_bone_index = bone_palette.values[bone_index]
             if bone_index + vertex.weight_values[bi] == 0:
