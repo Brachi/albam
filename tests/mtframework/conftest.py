@@ -69,6 +69,28 @@ def pytest_generate_tests(metafunc):
             TEMP_FILES_TO_DELETE.update(exported_files)
 
             metafunc.parametrize("mod156_original, mod156_exported", mods, scope='module', ids=ids_exported)
+    # XXX don't even think of merging this as is
+    elif 'mod156_mesh_original' and 'mod156_mesh_exported' in metafunc.fixturenames:
+        exported_files = []
+        blender_path = metafunc.config.getoption('blender')
+        if not blender_path:
+            pytest.skip('No blender bin path supplied')
+        else:
+            if not ARC_FILES_EXPORTED:
+                albam_import_export(blender_path, ARC_FILES)
+                ARC_FILES_EXPORTED = True
+            exported_files = [f + '.exported' for f in ARC_FILES]
+
+            mod_files_original, ids_original = _get_files_from_arcs(extension='.mod', arc_list=ARC_FILES)
+            mod_files_exported, ids_exported = _get_files_from_arcs(extension='.mod', arc_list=exported_files)
+
+            meshes_original, ids_original = _get_array_members_from_files(mod_files_original, ids_original, Mod156, 'meshes_array')
+            meshes_exported, ids_exported = _get_array_members_from_files(mod_files_exported, ids_exported, Mod156, 'meshes_array')
+            meshes = list(zip(meshes_original, meshes_exported))
+            ids = list(zip(ids_original, ids_exported))
+            TEMP_FILES_TO_DELETE.update(exported_files)
+
+            metafunc.parametrize("mod156_mesh_original, mod156_mesh_exported", meshes, scope='module', ids=ids_exported)
 
 
 def pytest_sessionfinish(session, exitstatus):

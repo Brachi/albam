@@ -1,5 +1,7 @@
 from itertools import chain
 
+import pytest
+
 from albam.engines.mtframework.utils import get_vertices_array
 from tests.conftest import assert_same_attributes, assert_approximate_fields
 
@@ -81,9 +83,45 @@ def test_meshes_array_immutable_fields(mod156_original, mod156_exported):
         assert_same_attributes(mesh_original, mesh_exported, 'vertex_stride')
 
 
-def test_mesh_vertices_bone_weights_sum(mod156_original, mod156_exported):
-    # almost duplicate from test_mod156.py
-    for mesh_index, mesh in enumerate(mod156_exported.meshes_array):
-        mesh_vertices = get_vertices_array(mod156_exported, mesh)
-        for vertex_index, vertex in enumerate(mesh_vertices):
-            assert not mod156_exported.bone_count or sum(vertex.weight_values) == 255
+def test_mesh_vertices_bone_weights_sum(mod156_mesh_original, mod156_mesh_exported):
+    # TODO: see to not dupliacte the test
+    mod_exported = mod156_mesh_exported._parent_structure
+    mesh_vertices = get_vertices_array(mod_exported, mod156_mesh_exported)
+    if not mod_exported.bone_count:
+        return
+
+    vertices_failed = []
+    for vertex_index, vertex in enumerate(mesh_vertices):
+        if not sum(vertex.weight_values) == 255:
+            vertices_failed.append(vertex_index)
+    assert not vertices_failed
+
+
+def test_mesh_vertices(mod156_mesh_original, mod156_mesh_exported):
+    # TODO: see to not dupliacte the test
+    mod_original = mod156_mesh_original._parent_structure
+    mod_exported = mod156_mesh_exported._parent_structure
+
+    mesh_original_vertices = get_vertices_array(mod_original, mod156_mesh_original)
+    mesh_exported_vertices = get_vertices_array(mod_exported, mod156_mesh_exported)
+
+    if mod156_mesh_original.vertex_count != mod156_mesh_exported.vertex_count:
+        pytest.xfail('research needed')
+
+    failed_pos_vertices = []
+    failed_norm_vertices = []
+    for vertex_index, vertex_ori in enumerate(mesh_original_vertices):
+        vertex_exp = mesh_exported_vertices[vertex_index]
+
+        pos_original = vertex_ori.position_x, vertex_ori.position_y, vertex_ori.position_z, vertex_ori.position_w
+        pos_exported = vertex_exp.position_x, vertex_exp.position_y, vertex_exp.position_z, vertex_exp.position_w
+        norm_original = vertex_ori.normal_x, vertex_ori.normal_y, vertex_ori.normal_z, vertex_ori.normal_w
+        norm_exported = vertex_exp.normal_x, vertex_exp.normal_y, vertex_exp.normal_z, vertex_exp.normal_w
+
+        if pos_original != pos_exported:
+            failed_pos_vertices.append(vertex_index)
+        if norm_original != norm_exported:
+            failed_norm_vertices.append(vertex_index)
+
+    assert not failed_pos_vertices
+    #assert not failed_norm_vertices
