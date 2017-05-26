@@ -20,7 +20,6 @@ from albam.engines.mtframework.utils import (
     )
 from albam.lib.misc import chunks
 from albam.lib.half_float import unpack_half_float
-from albam.lib.geometry import y_up_to_z_up
 from albam.lib.blender import strip_triangles_to_triangles_list, create_mesh_name
 from albam.registry import blender_registry
 
@@ -97,23 +96,50 @@ def import_mod(blender_object, file_path, **kwargs):
 def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
+    vertex_normals = imported_vertices['normals']
+    uvs_per_vertex = imported_vertices['uvs']
+    weights_per_bone = imported_vertices['weights_per_bone']
     indices = get_indices_array(mod, mesh)
     if mod.version == 156:
         indices = strip_triangles_to_triangles_list(indices)
     else:
         start_face = min(indices)
         indices = [i - start_face for i in indices]
-    uvs_per_vertex = imported_vertices['uvs']
-    weights_per_bone = imported_vertices['weights_per_bone']
+    assert min(indices) >= 0  # Blender crashes if not
+    faces = chunks(indices, 3)
 
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
-    assert min(indices) >= 0  # Blender crashes if not
-    me_ob.from_pydata(vertex_locations, [], chunks(indices, 3))
+    me_ob.from_pydata(vertex_locations, [], faces)
+    me_ob.create_normals_split()
+
+    for loop in me_ob.loops:
+        loop.normal[:] = vertex_normals[loop.vertex_index]
+
+    if mesh_index == 29:
+        print('canejo', me_ob.loops[0].normal, vertex_normals[me_ob.loops[0].vertex_index])
+    me_ob.validate(clean_customdata=False)
     me_ob.update(calc_edges=True)
-    me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
-    me_ob.validate()
+
+    """
+    import array
+    clnors = array.array('f', [0.0] * (len(me_ob.loops) * 3))
+    me_ob.loops.foreach_get("normal", clnors)
+
+    if mesh_index == 29:
+        print('after validate')
+        print(me_ob.loops[0].index, me_ob.loops[0].normal)
+
+
+    me_ob.normals_split_custom_set(tuple(zip(*(iter(clnors),) * 3)))
+    me_ob.use_auto_smooth = True
+    me_ob.show_edge_sharp = True
+
+    #me_ob.normals_split_custom_set_from_vertices(vertex_normals)
+    #me_ob.use_auto_smooth = True
+    #me_ob.show_edge_sharp = True
+    """
 
     if materials:
         me_ob.materials.append(materials[mesh.material_index])
@@ -161,16 +187,18 @@ def _import_vertices_mod156(mod, mesh):
     vertices_array = get_vertices_array(mod, mesh)
 
     if mesh.vertex_format != 0:
-        vertices = (transform_vertices_from_bbox(vf, box_width, box_height, box_length)
-                    for vf in vertices_array)
+        locations = (transform_vertices_from_bbox(vf, box_width, box_height, box_length)
+                     for vf in vertices_array)
     else:
-        vertices = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
-    vertices = (y_up_to_z_up(vertex_tuple) for vertex_tuple in vertices)
-    vertices = ((x / 100, y / 100, z / 100) for x, y, z in vertices)
+        locations = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
+    locations = map(lambda t: (t[0] / 100, t[2] / -100, t[1] / 100), locations)
+    #normals = map(lambda v: (v.normal_x / 127, v.normal_z / -127, v.normal_y / -127), vertices_array)
+    normals = map(lambda v: (v.normal_x / 127, v.normal_y / 127, v.normal_z / 127), vertices_array)
 
     # TODO: investigate why uvs don't appear above the image in the UV editor
     list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
-    return {'locations': list(vertices),
+    return {'locations': list(locations),
+            'normals': list(normals),
             'uvs': list(chain.from_iterable(list_of_tuples)),
             'weights_per_bone': _get_weights_per_bone(mod, mesh, vertices_array)
             }
