@@ -4,6 +4,7 @@ from ctypes import (
     c_uint, c_uint8, c_uint16, c_float, c_char, c_short, c_ushort, c_byte, c_ubyte,
 )
 
+from albam.engines.mtframework.defaults import DEFAULT_MATERIAL
 from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
 
@@ -127,6 +128,7 @@ class GroupData(Structure):
 
 @blender_registry.register_bpy_prop('material', 'unk_')
 class MaterialData(Structure):
+    _defaults_ = DEFAULT_MATERIAL
     _fields_ = (('unk_01', c_ushort),
                 ('unk_flag_01', c_uint16, 1),
                 ('unk_flag_02', c_uint16, 1),

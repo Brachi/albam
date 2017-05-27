@@ -4,13 +4,14 @@ import os
 from albam.image_formats.dds import DDSHeader, DDS
 from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
+from albam.engines.mtframework.defaults import DEFAULT_TEXTURE
 
 
 @blender_registry.register_bpy_prop('texture', 'unk_')
 class Tex112(DynamicStructure):
 
     ID_MAGIC = b'TEX'
-
+    _defaults_ = DEFAULT_TEXTURE
     _fields_ = (('id_magic', c_char * 4),
                 ('version', c_short),
                 ('revision', c_short),
