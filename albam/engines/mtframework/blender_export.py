@@ -307,10 +307,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
-        # list of (bone_index, value)
-        weights_data = weights_per_vertex.get(vertex_index, [])
-        bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
-
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
         if has_bones:
@@ -333,7 +329,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         if has_bones:
             weights_data = weights_per_vertex.get(vertex_index, [])
             weight_values = [w for _, w in weights_data]
-            bone_indices = [bi for bi, _ in weights_data]
+            bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
             vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
             vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
