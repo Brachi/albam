@@ -231,48 +231,41 @@ def export_mod156(parent_blender_object):
     return ExportedMod(mod, exported_materials)
 
 
-def normalize_weights(weights_per_vertex):
-    new_weights_per_vertex = {}
-    for vertex_index, influence_list in weights_per_vertex.items():
-        weights = [t[1] for t in influence_list]
-        bone_indices = [t[0] for t in influence_list]
-        total_weight = sum(weights)
-        if total_weight == 0:
-            new_weights_per_vertex[vertex_index] = influence_list
-        else:
-            normalized_weights = [(w / total_weight) for w in weights]
-            new_weights_per_vertex[vertex_index] = list(zip(bone_indices, normalized_weights))
-    return new_weights_per_vertex
-
-
-def limit_bone_weights(weights_per_vertex, limit=4):
+def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
     """
     Given a dict `weights_per_vertex` with vertex_indices as keys and
     a list of tuples (bone_index, weight_value), iterate over values
-    and keep only up to `max_bones` elements, discarding the pairs that have the
-    lowest influence
+    and process them to make them mtframework friendly:
+    1) Limit bone weights: keep only up to `max_bones` elements, discarding the pairs that have the
+       lowest influence. This is actually a limitation in albam for lack of
+       understanding on how the engine treats vertices with more than 4 bone influencing it
+    2) Normalize weights: make all weights sum up 1
+    3) float to byte: convert the (-1.0, 1.0) to (0, 255)
     """
     new_weights_per_vertex = {}
+    limit = max_bones_per_vertex
     for vertex_index, influence_list in weights_per_vertex.items():
-        if len(influence_list) <= limit:
-            new_weights_per_vertex[vertex_index] = influence_list
-        else:
-            new_weights_per_vertex[vertex_index] = sorted(influence_list, key=lambda t: t[1])[-limit:]
+        # limit max bones
+        if len(influence_list) > limit:
+            influence_list = sorted(influence_list, key=lambda t: t[1])[-limit:]
 
-    return new_weights_per_vertex
-
-
-def normalized_to_byte(weights_per_vertex):
-    new_weights_per_vertex = {}
-    for vertex_index, influence_list in weights_per_vertex.items():
+        # normalize
+        weights = [t[1] for t in influence_list]
         bone_indices = [t[0] for t in influence_list]
-        byte_weights = [round(t[1] * 255) for t in influence_list]
-        total_weight = sum(byte_weights)
-        if total_weight and total_weight == 254:
-            byte_weights[0] += 1
-        elif total_weight and total_weight == 256:
-            byte_weights[0] -= 1
-        new_weights_per_vertex[vertex_index] = list(zip(bone_indices, byte_weights))
+        total_weight = sum(weights)
+        if total_weight:
+            weights = [(w / total_weight) for w in weights]
+
+        # float to byte
+        weights = [round(w * 255) for w in weights]
+        total_weight = sum(weights)
+        # correct precision
+        if total_weight == 254:
+            weights[0] += 1
+        elif total_weight == 256:
+            weights[0] -= 1
+
+        new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
 
     return new_weights_per_vertex
 
@@ -282,11 +275,9 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertex_count = len(blender_mesh.vertices)
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
-    weights_per_vertex = limit_bone_weights(weights_per_vertex, 4)  # until research finds how > 4 works
-    weights_per_vertex = normalize_weights(weights_per_vertex)
-    weights_per_vertex = normalized_to_byte(weights_per_vertex)
-
+    weights_per_vertex = _process_weights(weights_per_vertex)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
+
     VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
     for vertex_index, (uv_x, uv_y) in uvs_per_vertex.items():
