@@ -47,6 +47,17 @@ def get_indices_array(mod, mesh):
     return (ctypes.c_ushort * mesh.face_count).from_address(offset)
 
 
+def get_non_deform_bone_indices(mod):
+    bone_indices = {i for i, _ in enumerate(mod.bones_array)}
+    active_bone_indices = {mod.bone_palette_array[mod.meshes_array[mesh_index].bone_palette_index].values[bone_index]
+                           for mesh_index, mesh in enumerate(mod.meshes_array)
+                           for i, vert in enumerate(get_vertices_array(mod, mod.meshes_array[mesh_index]))
+                           for bone_index in vert.bone_indices
+                           }
+
+    return bone_indices.difference(active_bone_indices)
+
+
 def vertices_export_locations(xyz_tuple, bounding_box_width, bounding_box_height, bounding_box_length):
     x, y, z = xyz_tuple
 
@@ -55,20 +66,29 @@ def vertices_export_locations(xyz_tuple, bounding_box_width, bounding_box_height
         x /= bounding_box_width
     except ZeroDivisionError:
         pass
-    x *= 32767
+    if x > 1.0:
+        x = 32767
+    else:
+        x *= 32767
 
     try:
         y /= bounding_box_height
     except ZeroDivisionError:
         pass
-    y *= 32767
+    if y > 1.0:
+        y = 32767
+    else:
+        y *= 32767
 
     z += bounding_box_length / 2
     try:
         z /= bounding_box_length
     except ZeroDivisionError:
         pass
-    z *= 32767
+    if z > 1.0:
+        z = 32767
+    else:
+        z *= 32767
 
     return (round(x), round(y), round(z))
 
