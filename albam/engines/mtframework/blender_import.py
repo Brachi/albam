@@ -13,6 +13,7 @@ from albam.engines.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRA
 from albam.engines.mtframework.utils import (
     get_vertices_array,
     get_indices_array,
+    get_non_deform_bone_indices,
     get_bone_parents_from_mod,
     transform_vertices_from_bbox,
     texture_code_to_blender_texture,
@@ -292,8 +293,11 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
 
     assert len(blender_bones) == len(mod.bones_array)
 
+    non_deform_bone_indices = get_non_deform_bone_indices(mod)
     # set tails of bone to their children or make them small if they have none
     for i, bone in enumerate(blender_bones):
+        if i in non_deform_bone_indices:
+            bone.use_deform = False
         children = bone.children_recursive
         non_mirror_children = [b for b in children
                                if mod.bones_array[int(b.name)].mirror_index == int(b.name)]
