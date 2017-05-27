@@ -28,22 +28,33 @@ def register():
     class Dummy(bpy.types.PropertyGroup):
         name = bpy.props.StringProperty()
 
+    # TODO: refactor to avoid code duplication
+
     # Setting custom material properties
-    for prop_name, prop_cls_name in blender_registry.bpy_props.get('material', []):
+    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('material', []):
         prop_cls = getattr(bpy.props, prop_cls_name)
-        prop_instance = prop_cls()
+        kwargs = {}
+        if default:
+            kwargs['default'] = default
+        prop_instance = prop_cls(**kwargs)
         setattr(bpy.types.Material, prop_name, prop_instance)
 
     # Setting custom texture properties
-    for prop_name, prop_cls_name in blender_registry.bpy_props.get('texture', []):
+    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('texture', []):
         prop_cls = getattr(bpy.props, prop_cls_name)
-        prop_instance = prop_cls()
+        kwargs = {}
+        if default:
+            kwargs['default'] = default
+        prop_instance = prop_cls(**kwargs)
         setattr(bpy.types.Texture, prop_name, prop_instance)
 
     # Setting custom mesh properties
-    for prop_name, prop_cls_name in blender_registry.bpy_props.get('mesh', []):
+    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('mesh', []):
         prop_cls = getattr(bpy.props, prop_cls_name)
-        prop_instance = prop_cls()
+        kwargs = {}
+        if default:
+            kwargs['default'] = default
+        prop_instance = prop_cls(**kwargs)
         setattr(bpy.types.Mesh, prop_name, prop_instance)
 
     bpy.utils.register_module(__name__)

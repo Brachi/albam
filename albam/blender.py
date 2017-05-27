@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import os
 
 try:
@@ -47,7 +46,7 @@ class CustomMaterialOptions(bpy.types.Panel):
         if not mat:
             return
         layout = self.layout
-        for prop_name, _ in blender_registry.bpy_props.get('material', []):
+        for prop_name, _, _ in blender_registry.bpy_props.get('material', []):
             layout.prop(mat, prop_name)
 
     @classmethod
@@ -66,7 +65,7 @@ class CustomTextureOptions(bpy.types.Panel):
         layout = self.layout
         if not tex:
             return
-        for prop_name, _ in blender_registry.bpy_props.get('texture', []):
+        for prop_name, _, _ in blender_registry.bpy_props.get('texture', []):
             layout.prop(tex, prop_name)
 
     @classmethod
@@ -87,7 +86,7 @@ class CustomMeshOptions(bpy.types.Panel):
         layout = self.layout
         if not mesh:
             return
-        for prop_name, _ in blender_registry.bpy_props.get('mesh', []):
+        for prop_name, _, _ in blender_registry.bpy_props.get('mesh', []):
             layout.prop(mesh, prop_name)
 
     @classmethod
