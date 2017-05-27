@@ -1,3 +1,13 @@
+# Diffuse Tex112 texture, from Chris, Mod156->MaterialData[15]
+DEFAULT_TEXTURE = {
+    "unk_byte_1": 1,
+    "unk_byte_2": 0,
+    "unk_byte_3": 0,
+    "unk_float_1": 0.87,
+    "unk_float_2": 0.87,
+    "unk_float_3": 0.87,
+    "unk_float_4": 0.87,
+}
 
 # Mod156, Chris material 19
 DEFAULT_MATERIAL = {
