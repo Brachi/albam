@@ -294,7 +294,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
     has_second_uv_layer = hasattr(VF, 'uv2_x')
-    has_tangents = hasattr(VF, 'tangent_x')
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
@@ -307,15 +306,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
-        vertex_struct.normal_x = round(vertex.normal[0] * 127)
-        vertex_struct.normal_y = round(vertex.normal[2] * 127)
-        vertex_struct.normal_z = round(vertex.normal[1] * -127)
-        vertex_struct.normal_w = -1
-        if has_tangents:
-            vertex_struct.tangent_x = 53
-            vertex_struct.tangent_y = 53
-            vertex_struct.tangent_z = 53
-            vertex_struct.tangent_w = -1
 
         if has_bones:
             weights_data = weights_per_vertex.get(vertex_index, [])
