@@ -99,11 +99,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     indices = get_indices_array(mod, mesh)
-    if mod.version == 156:
-        indices = strip_triangles_to_triangles_list(indices)
-    else:
-        start_face = min(indices)
-        indices = [i - start_face for i in indices]
+    indices = strip_triangles_to_triangles_list(indices)
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
@@ -116,8 +112,11 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
     me_ob.validate()
 
-    if materials:
-        me_ob.materials.append(materials[mesh.material_index])
+    mesh_material = materials[mesh.material_index]
+    if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
+        mesh_material.use_cast_shadows = False
+    me_ob.materials.append(mesh_material)
+
     for bone_index, data in weights_per_bone.items():
         vg = ob.vertex_groups.new(str(bone_index))
         for vertex_index, weight_value in data:
@@ -150,8 +149,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
 
 
 def _import_vertices(mod, mesh):
-    if mod.version == 156:
-        return _import_vertices_mod156(mod, mesh)
+    return _import_vertices_mod156(mod, mesh)
 
 
 def _import_vertices_mod156(mod, mesh):
@@ -235,7 +233,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 continue
             attr_value = getattr(material, attr_name)
             setattr(blender_material, attr_name, attr_value)
-
         materials.append(blender_material)
 
         for texture_code, tex_index in enumerate(material.texture_indices):
