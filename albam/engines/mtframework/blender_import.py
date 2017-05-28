@@ -99,11 +99,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     indices = get_indices_array(mod, mesh)
-    if mod.version == 156:
-        indices = strip_triangles_to_triangles_list(indices)
-    else:
-        start_face = min(indices)
-        indices = [i - start_face for i in indices]
+    indices = strip_triangles_to_triangles_list(indices)
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
@@ -150,8 +146,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
 
 
 def _import_vertices(mod, mesh):
-    if mod.version == 156:
-        return _import_vertices_mod156(mod, mesh)
+    return _import_vertices_mod156(mod, mesh)
 
 
 def _import_vertices_mod156(mod, mesh):
