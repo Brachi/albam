@@ -231,23 +231,53 @@ def export_mod156(parent_blender_object):
     return ExportedMod(mod, exported_materials)
 
 
-def _normalize_weights(weights):
-    total = sum(weights)
-    if total == 0:
-        return weights
-    return [(w / total) for w in weights]
+def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
+    """
+    Given a dict `weights_per_vertex` with vertex_indices as keys and
+    a list of tuples (bone_index, weight_value), iterate over values
+    and process them to make them mtframework friendly:
+    1) Limit bone weights: keep only up to `max_bones` elements, discarding the pairs that have the
+       lowest influence. This is actually a limitation in albam for lack of
+       understanding on how the engine treats vertices with more than 4 bone influencing it
+    2) Normalize weights: make all weights sum up 1
+    3) float to byte: convert the (-1.0, 1.0) to (0, 255)
+    """
+    new_weights_per_vertex = {}
+    limit = max_bones_per_vertex
+    for vertex_index, influence_list in weights_per_vertex.items():
+        # limit max bones
+        if len(influence_list) > limit:
+            influence_list = sorted(influence_list, key=lambda t: t[1])[-limit:]
+
+        # normalize
+        weights = [t[1] for t in influence_list]
+        bone_indices = [t[0] for t in influence_list]
+        total_weight = sum(weights)
+        if total_weight:
+            weights = [(w / total_weight) for w in weights]
+
+        # float to byte
+        weights = [round(w * 255) for w in weights]
+        total_weight = sum(weights)
+        # correct precision
+        if total_weight == 254:
+            weights[0] += 1
+        elif total_weight == 256:
+            weights[0] -= 1
+
+        new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
+
+    return new_weights_per_vertex
 
 
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
-    weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object)
+    weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
+    weights_per_vertex = _process_weights(weights_per_vertex)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
-    if max_bones_per_vertex > 8:
-        raise RuntimeError("The mesh '{}' contains some vertex that are weighted by "
-                           "more than 8 bones, which is not supported. Fix it and try again"
-                           .format(blender_mesh.name))
+
     VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
     for vertex_index, (uv_x, uv_y) in uvs_per_vertex.items():
@@ -257,12 +287,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         uv_y = pack_half_float(uv_y)
         uvs_per_vertex[vertex_index] = (uv_x, uv_y)
 
-    if uvs_per_vertex and len(uvs_per_vertex) != vertex_count:
-        # TODO: logging
-        print('There are some vertices with no uvs in mesh in {}.'
-              'Vertex count: {} UVs per vertex: {}'.format(blender_mesh.name, vertex_count,
-                                                           len(uvs_per_vertex)))
-
     box_width = abs(bounding_box.min_x * 100) + abs(bounding_box.max_x * 100)
     box_height = abs(bounding_box.min_y * 100) + abs(bounding_box.max_y * 100)
     box_length = abs(bounding_box.min_z * 100) + abs(bounding_box.max_z * 100)
@@ -270,15 +294,8 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
     has_second_uv_layer = hasattr(VF, 'uv2_x')
-    has_tangents = hasattr(VF, 'tangent_x')
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
-
-        # list of (bone_index, value)
-        weights_data = weights_per_vertex.get(vertex_index, [])
-        bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
-        weights = [w for _, w in weights_data]
-        weight_values = [round(w * 255) for w in _normalize_weights(weights)]
 
         xyz = (vertex.co[0] * 100, vertex.co[1] * 100, vertex.co[2] * 100)
         xyz = z_up_to_y_up(xyz)
@@ -289,34 +306,16 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
-        # guessing for now:
-        # using Counter([v.normal_<x,y,z,w> for i, mesh in enumerate(mod.meshes_array)
-        #               for v in get_vertices_array(original, original.meshes_array[i])]).most_common(10)
-        vertex_struct.normal_x = 127
-        vertex_struct.normal_y = 127
-        vertex_struct.normal_z = 0
-        vertex_struct.normal_w = -1
-        if has_tangents:
-            vertex_struct.tangent_x = 53
-            vertex_struct.tangent_y = 53
-            vertex_struct.tangent_z = 53
-            vertex_struct.tangent_w = -1
 
         if has_bones:
+            weights_data = weights_per_vertex.get(vertex_index, [])
+            weight_values = [w for _, w in weights_data]
+            bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
-            try:
-                vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
-                vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
-            except IndexError:
-                # TODO: proper logging
-                print('bone_indices', bone_indices, 'array_size', array_size)
-                print('VF', VF)
-                raise
-        try:
-            vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
-            vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
-        except:
-            pass
+            vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
+            vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
+        vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
+        vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
         if has_second_uv_layer:
             vertex_struct.uv2_x = 0
             vertex_struct.uv2_y = 0
@@ -403,7 +402,8 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
 
         m156 = meshes_156[mesh_index]
         try:
-            m156.material_index = materials_mapping[blender_mesh.materials[0].name]
+            blender_material = blender_mesh.materials[0]
+            m156.material_index = materials_mapping[blender_material.name]
         except IndexError:
             # TODO: insert an empty generic material in this case
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
@@ -421,19 +421,11 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.vertex_index_start_2 = vertex_position
         m156.vertex_group_count = 1  # using 'TEST' bounding box
         m156.bone_palette_index = bone_palette_index
-        # Needs research
-        m156.group_index = 0
-
-        # metadata saved
-        # TODO: use an util function
-        for field in m156._fields_:
-            attr_name = field[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            setattr(m156, attr_name, getattr(blender_mesh, attr_name))
+        m156.use_cast_shadows = int(blender_material.use_cast_shadows)
 
         vertex_position += vertex_count
         face_position += index_count
+
     vertex_buffer = (ctypes.c_ubyte * len(vertex_buffer)).from_buffer(vertex_buffer)
     index_buffer = (ctypes.c_ushort * (len(index_buffer) // 2)).from_buffer(index_buffer)
 

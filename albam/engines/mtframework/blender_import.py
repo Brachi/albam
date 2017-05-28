@@ -13,6 +13,7 @@ from albam.engines.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRA
 from albam.engines.mtframework.utils import (
     get_vertices_array,
     get_indices_array,
+    get_non_deform_bone_indices,
     get_bone_parents_from_mod,
     transform_vertices_from_bbox,
     texture_code_to_blender_texture,
@@ -100,13 +101,10 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
     indices = get_indices_array(mod, mesh)
-    if mod.version == 156:
-        indices = strip_triangles_to_triangles_list(indices)
-    else:
-        start_face = min(indices)
-        indices = [i - start_face for i in indices]
-    assert min(indices) >= 0  # Blender crashes if not
+    indices = strip_triangles_to_triangles_list(indices)
     faces = chunks(indices, 3)
+    uvs_per_vertex = imported_vertices['uvs']
+    weights_per_bone = imported_vertices['weights_per_bone']
 
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
@@ -117,8 +115,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     for loop in me_ob.loops:
         loop.normal[:] = vertex_normals[loop.vertex_index]
 
-    if mesh_index == 29:
-        print('canejo', me_ob.loops[0].normal, vertex_normals[me_ob.loops[0].vertex_index])
     me_ob.validate(clean_customdata=False)
     me_ob.update(calc_edges=True)
 
@@ -141,8 +137,11 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     #me_ob.show_edge_sharp = True
     """
 
-    if materials:
-        me_ob.materials.append(materials[mesh.material_index])
+    mesh_material = materials[mesh.material_index]
+    if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
+        mesh_material.use_cast_shadows = False
+    me_ob.materials.append(mesh_material)
+
     for bone_index, data in weights_per_bone.items():
         vg = ob.vertex_groups.new(str(bone_index))
         for vertex_index, weight_value in data:
@@ -175,8 +174,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
 
 
 def _import_vertices(mod, mesh):
-    if mod.version == 156:
-        return _import_vertices_mod156(mod, mesh)
+    return _import_vertices_mod156(mod, mesh)
 
 
 def _import_vertices_mod156(mod, mesh):
@@ -262,7 +260,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 continue
             attr_value = getattr(material, attr_name)
             setattr(blender_material, attr_name, attr_value)
-
         materials.append(blender_material)
 
         for texture_code, tex_index in enumerate(material.texture_indices):
@@ -320,8 +317,11 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
 
     assert len(blender_bones) == len(mod.bones_array)
 
+    non_deform_bone_indices = get_non_deform_bone_indices(mod)
     # set tails of bone to their children or make them small if they have none
     for i, bone in enumerate(blender_bones):
+        if i in non_deform_bone_indices:
+            bone.use_deform = False
         children = bone.children_recursive
         non_mirror_children = [b for b in children
                                if mod.bones_array[int(b.name)].mirror_index == int(b.name)]
