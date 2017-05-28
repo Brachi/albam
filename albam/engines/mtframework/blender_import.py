@@ -19,6 +19,7 @@ from albam.engines.mtframework.utils import (
     texture_code_to_blender_texture,
 
     )
+from albam.engines.mtframework.mappers import BONE_INDEX_TO_GROUP
 from albam.lib.misc import chunks
 from albam.lib.half_float import unpack_half_float
 from albam.lib.geometry import y_up_to_z_up
@@ -315,62 +316,95 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
         if round(bone.tail[2], 10) == round(bone.head[2], 10):
             bone.tail[2] += 0.01
 
-    # XXX TMP WIP
-    from albam.engines.mtframework.mappers import Mod156BoneAnimationMapping
-    TEST = {item.value for item in Mod156BoneAnimationMapping}
-
-    bone_indices = set()
-    for mesh_index, mesh in enumerate(mod.meshes_array):
-        mesh_vertices = get_vertices_array(mod, mesh)
-        for vertex_index, vertex in enumerate(mesh_vertices):
-            real_bone_indices = [mod.bone_palette_array[mesh.bone_palette_index].values[bi]
-                                 for bi in vertex.bone_indices]
-            bone_indices.update(real_bone_indices)
-
-    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.object.mode_set(mode='OBJECT')
     assert len(armature.bones) == len(mod.bones_array)
-    bone_group_base = armature_ob.pose.bone_groups.new('base')
-    bone_group_base.color_set = 'THEME03'
 
-    bone_group_other = armature_ob.pose.bone_groups.new('other')
-    bone_group_other.color_set = 'THEME05'
+    _create_bone_groups(armature_ob, mod)
+    return armature_ob
 
-    bone_group_no_deform = armature_ob.pose.bone_groups.new('no-deform')
-    bone_group_no_deform.color_set = 'THEME09'
 
+_bone_groups_cache = {
+    'BONE_GROUP_MAIN': {
+        'color_set': 'THEME03',
+        'name': 'Main',
+        'layer': 0,
+        },
+    'BONE_GROUP_ARMS': {
+        'color_set': 'THEME02',
+        'name': 'Arms',
+        'layer': 1,
+        },
+    'BONE_GROUP_LEGS': {
+        'color_set': 'THEME05',
+        'name': 'Legs',
+        'layer': 2,
+        },
+    'BONE_GROUP_HANDS': {
+        'color_set': 'THEME06',
+        'name': 'Hands',
+        'layer': 3,
+        },
+    'BONE_GROUP_HAIR': {
+        'color_set': 'THEME07',
+        'name': 'Hair',
+        'layer': 4,
+        },
+    'BONE_GROUP_FACIAL_BASIC': {
+        'color_set': 'THEME02',
+        'name': 'Facial Basic',
+        'layer': 5,
+        },
+    'BONE_GROUP_FACIAL': {
+        'color_set': 'THEME01',
+        'name': 'Facial',
+        'layer': 6,
+        },
+    'BONE_GROUP_ACCESORIES': {
+        'color_set': 'THEME14',
+        'name': 'Accessories',
+        'layer': 7,
+        },
+    'OTHER': {
+        'color_set': 'THEME20',
+        'name': 'Other',
+        'layer': 8,
+        },
+}
+
+
+def _create_bone_groups(armature_ob, mod):
+    bpy.ops.object.mode_set(mode='POSE')
     for i, bone in enumerate(armature_ob.pose.bones):
         source_bone = mod.bones_array[i]
-        anim_bone = source_bone.anim_map_index
-        source_bone_index = mod.bones_animation_mapping[anim_bone]
-        if anim_bone in TEST and source_bone_index in bone_indices:
-            bone.bone_group = bone_group_base
-            default = [False for _ in range(32)]
-            default[0] = True
-            default[1] = True
-            armature_ob.data.bones[i].select = True
-            bpy.ops.pose.bone_layers(layers=default)
-            armature_ob.data.bones[i].select = False
-            # this might not be good if in the future bones can have string names
-        elif source_bone_index in bone_indices:
-            bone.bone_group = bone_group_other
-            default = [False for _ in range(32)]
-            default[0] = True
-            default[2] = True
-            armature_ob.data.bones[i].select = True
-            bpy.ops.pose.bone_layers(layers=default)
-            armature_ob.data.bones[i].select = False
-        elif source_bone_index not in bone_indices:
-            bone.bone_group = bone_group_no_deform
-            armature_ob.data.bones[i].use_deform = False
-            default = [False for _ in range(32)]
-            default[0] = True
-            default[8] = True
-            armature_ob.data.bones[i].select = True
-            bpy.ops.pose.bone_layers(layers=default)
-            armature_ob.data.bones[i].select = False
-    # XXX END TMP WIP
+        anim_index = source_bone.anim_map_index
+        bone.bone_group = _get_or_create_bone_group(anim_index, armature_ob, i)
+    bpy.ops.object.mode_set(mode='OBJECT')
 
-    return armature_ob
+
+def _get_or_create_bone_group(bone_anim_index, armature_ob, bone_index):
+    bone_group_name = BONE_INDEX_TO_GROUP.get(bone_anim_index, 'OTHER')
+
+    bone_group_cache = _bone_groups_cache.get(bone_group_name) or _bone_groups_cache['OTHER']
+    layer_index = bone_group_cache['layer']
+    _move_bone_to_layers(armature_ob, bone_index, 0, layer_index)
+
+    if bone_group_cache.get('bl_group'):
+        return bone_group_cache['bl_group']
+
+    bl_bone_group = armature_ob.pose.bone_groups.new(bone_group_cache['name'])
+    bl_bone_group.color_set = bone_group_cache['color_set']
+    bone_group_cache['bl_group'] = bl_bone_group
+
+    return bl_bone_group
+
+
+def _move_bone_to_layers(armature_ob, bone_index, *layer_indices):
+    layers = [False] * 32
+    for layer_index in layer_indices:
+        layers[layer_index] = True
+    armature_ob.data.bones[bone_index].select = True
+    bpy.ops.pose.bone_layers(layers=layers)
+    armature_ob.data.bones[bone_index].select = False
 
 
 def _get_weights_per_bone(mod, mesh, vertices_array):
