@@ -202,7 +202,7 @@ class Mesh156(LittleEndianStructure):
                 ('unk_flag_03', c_uint8, 1),
                 ('unk_flag_04', c_uint8, 1),
                 ('unk_flag_05', c_uint8, 1),
-                ('cast_shadows', c_uint8, 1),
+                ('use_cast_shadows', c_uint8, 1),
                 ('unk_flag_06', c_uint8, 1),
                 ('unk_flag_07', c_uint8, 1),
                 ('vertex_count', c_ushort),

@@ -402,7 +402,8 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
 
         m156 = meshes_156[mesh_index]
         try:
-            m156.material_index = materials_mapping[blender_mesh.materials[0].name]
+            blender_material = blender_mesh.materials[0]
+            m156.material_index = materials_mapping[blender_material.name]
         except IndexError:
             # TODO: insert an empty generic material in this case
             raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
@@ -420,19 +421,11 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.vertex_index_start_2 = vertex_position
         m156.vertex_group_count = 1  # using 'TEST' bounding box
         m156.bone_palette_index = bone_palette_index
-        # Needs research
-        m156.group_index = 0
-
-        # metadata saved
-        # TODO: use an util function
-        for field in m156._fields_:
-            attr_name = field[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            setattr(m156, attr_name, getattr(blender_mesh, attr_name))
+        m156.use_cast_shadows = int(blender_material.use_cast_shadows)
 
         vertex_position += vertex_count
         face_position += index_count
+
     vertex_buffer = (ctypes.c_ubyte * len(vertex_buffer)).from_buffer(vertex_buffer)
     index_buffer = (ctypes.c_ushort * (len(index_buffer) // 2)).from_buffer(index_buffer)
 
