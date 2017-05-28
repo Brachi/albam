@@ -448,3 +448,171 @@ class Mod156BoneAnimationMapping(Enum):
     UNK_253 = 253
     UNK_254 = 254
     UNK_255 = 255
+
+BONE_GROUP_MAIN = {
+    'ROOT',
+    'LOWER_SPINE',
+    'UPPER_SPINE',
+    'NECK',
+    'HEAD',
+    'RIGHT_SHOULDER',
+    'RIGHT_UPPER_ARM',
+    'RIGHT_ARM',
+    'RIGHT_WRIST',
+    'RIGHT_HAND',
+    'LEFT_SHOULDER',
+    'LEFT_UPPER_ARM',
+    'LEFT_ARM',
+    'LEFT_WRIST',
+    'LEFT_HAND',
+    'HIPS',
+    'RIGHT_UPPER_LEG',
+    'RIGHT_LEG',
+    'RIGHT_FOOT',
+    'RIGHT_TOE',
+    'LEFT_UPPER_LEG',
+    'LEFT_LEG',
+    'LEFT_FOOT',
+    'LEFT_TOE',
+}
+
+BONE_GROUP_ARMS = {
+    'RIGHT_SHOULDER_DEFORM',
+    'RIGHT_ELBOW_DEFORM',
+    'LEFT_SHOULDER_DEFORM',
+    'LEFT_ELBOW_DEFORM',
+    'RIGHT_UPPER_ARM_DEFORM_1',
+    'RIGHT_UPPER_ARM_DEFORM_2',
+    'RIGHT_UPPER_ARM_DEFORM_3',
+    'RIGHT_UPPER_ARM_DEFORM_4',
+    'RIGHT_ARM_DEFORM_1',
+    'RIGHT_ARM_DEFORM_2',
+    'LEFT_UPPER_ARM_DEFORM_1',
+    'LEFT_UPPER_ARM_DEFORM_2',
+    'LEFT_UPPER_ARM_DEFORM_3',
+    'LEFT_UPPER_ARM_DEFORM_4',
+    'LEFT_ARM_DEFORM_1',
+    'LEFT_ARM_DEFORM_2',
+}
+
+BONE_GROUP_LEGS = {
+    'RIGHT_BUTT_CHEEK',
+    'LEFT_BUTT_CHEEK',
+    'RIGHT_KNEE',
+    'LEFT_KNEE',
+}
+
+
+BONE_GROUP_HANDS = {
+    'RIGHT_THUMB',
+    'LEFT_THUMB',
+    'RIGHT_UPPER_THUMB',
+    'RIGHT_MIDDLE_THUMB',
+    'RIGHT_LOWER_THUMB',
+    'RIGHT_UPPER_INDEX_FINGER',
+    'RIGHT_MIDDLE_INDEX_FINGER',
+    'RIGHT_LOWER_INDEX_FINGER',
+    'RIGHT_UPPER_MIDDLE_FINGER',
+    'RIGHT_MIDDLE_MIDDLE_FINGER',
+    'RIGHT_LOWER_MIDDLE_FINGER',
+    'RIGHT_PALM',
+    'RIGHT_UPPER_RING_FINGER',
+    'RIGHT_MIDDLE_RING_FINGER',
+    'RIGHT_LOWER_RING_FINGER',
+    'RIGHT_UPPER_PINKY_FINGER',
+    'RIGHT_MIDDLE_PINKY_FINGER',
+    'RIGHT_LOWER_PINKY_FINGER',
+    'LEFT_UPPER_THUMB',
+    'LEFT_MIDDLE_THUMB',
+    'LEFT_LOWER_THUMB',
+    'LEFT_UPPER_INDEX_FINGER',
+    'LEFT_MIDDLE_INDEX_FINGER',
+    'LEFT_LOWER_INDEX_FINGER',
+    'LEFT_UPPER_MIDDLE_FINGER',
+    'LEFT_MIDDLE_MIDDLE_FINGER',
+    'LEFT_LOWER_MIDDLE_FINGER',
+    'LEFT_PALM',
+    'LEFT_UPPER_RING_FINGER',
+    'LEFT_MIDDLE_RING_FINGER',
+    'LEFT_LOWER_RING_FINGER',
+    'LEFT_UPPER_PINKY_FINGER',
+    'LEFT_MIDDLE_PINKY_FINGER',
+    'LEFT_LOWER_PINKY_FINGER',
+}
+
+BONE_GROUP_FACIAL_BASIC = {
+    'RIGHT_EYE',
+    'LEFT_EYE',
+    'RIGHT_EYELID',
+    'LEFT_EYELID',
+    'JAW',
+}
+
+BONE_GROUP_HAIR = {
+    'HAIR_FOREHEAD_LEFT_PARENT',
+    'HAIR_FOREHEAD_LEFT',
+    'HAIR_FOREHAD_RIGHT_PARENT',
+    'HAIR_FOREHAD_RIGHT',
+    'HAIR_NAPE_PARENT',
+    'HAIR_NAPE',
+    'HAIR_BACK_PARENT',
+    'HAIR_BACK',
+    'HAIR_UP_1_PARENT',
+    'HAIR_UP_1',
+    'HAIR_UP_2_PARENT',
+    'HAIR_UP_2',
+    'HAIR_FOREHEAD',
+}
+
+BONE_GROUP_FACIAL = {
+    'RIGHT_INNER_EYEBROW',
+    'RIGHT_OUTER_EYEBROW',
+    'LEFT_INNER_EYEBROW',
+    'LEFT_OUTER_EYEBROW',
+    'RIGHT_LOWER_EYELID',
+    'LEFT_LOWER_EYELID',
+    'RIGHT_UPPER_CHEEK',
+    'LEFT_UPPER_CHEEK',
+    'RIGHT_UPPER_OUTER_CHEEK',
+    'LEFT_UPPER_OUTER_CHEEK',
+    'RIGHT_NOSE',
+    'LEFT_NOSE',
+    'RIGHT_OUTER_LIP',
+    'RIGHT_UPPER_LIP',
+    'UPPER_LIP',
+    'LEFT_UPPER_LIP',
+    'LEFT_OUTER_LIP',
+    'LEFT_OUTER_LOWER_LIP',
+    'LOWER_LIP',
+    'LEFT_LOWER_LIP',
+    'RIGHT_LOWER_CHEEK',
+    'LEFT_LOWER_CHEEK',
+}
+
+BONE_GROUP_ACCESORIES = {
+    'RIGHT_BACKPACK_STRIP',
+    'LEFT_BACKPACK_STRIP',
+    'BACK_ACCESORIES_PARENT',
+    'BACK_ACCESORIES',
+    'RIGHT_BACK_ACCESORY_1_PARENT',
+    'RIGHT_BACK_ACCESORY_1',
+    'RIGHT_BACK_ACCESORY_2_PARENT',
+    'RIGHT_BACK_ACCESORY_2',
+    'BACK_LEFT_KNIFE_PARENT',
+    'BACK_LEFT_KNIFE',
+    'RIGHT_BACKPACK_STRIP_BACK_1_PARENT',
+    'RIGHT_BACKPACK_STRIP_BACK_1',
+}
+
+# Iterate over all BONE_GROUP_* sets and create a dict
+# with bone_indices as keys and group_name as value
+BONE_INDEX_TO_GROUP = {}
+for group_name, set_of_strings in dict(vars()).items():
+    if not group_name.startswith('BONE_GROUP_'):
+        continue
+    # verify that groups use a correct enum
+    bone_enums = {getattr(Mod156BoneAnimationMapping, field_name) for field_name in set_of_strings}
+    # check if more than one group share a bone index
+    assert all(bone_enum.value not in BONE_INDEX_TO_GROUP for bone_enum in bone_enums)
+    for bone_enum in bone_enums:
+        BONE_INDEX_TO_GROUP[bone_enum.value] = group_name
