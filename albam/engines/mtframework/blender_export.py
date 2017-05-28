@@ -422,16 +422,6 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.vertex_group_count = 1  # using 'TEST' bounding box
         m156.bone_palette_index = bone_palette_index
         m156.use_cast_shadows = int(blender_material.use_cast_shadows)
-        # Needs research
-        m156.group_index = 0
-
-        # metadata saved
-        # TODO: use an util function
-        for field in m156._fields_:
-            attr_name = field[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            setattr(m156, attr_name, getattr(blender_mesh, attr_name))
 
         vertex_position += vertex_count
         face_position += index_count
