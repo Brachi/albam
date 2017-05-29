@@ -4,6 +4,8 @@ import requests
 
 import bpy
 
+normals = [(str(i) + '--->', list(map(lambda n: round(n * 127), vert.normal))) for i, vert in enumerate(D.meshes[1].vertices)]
+
 
 def load_mesh(vertex_locations, faces, per_vertex_normals):
     mesh = bpy.data.meshes.new('test')
