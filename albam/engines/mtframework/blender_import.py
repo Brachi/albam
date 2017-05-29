@@ -323,68 +323,67 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
     return armature_ob
 
 
-_bone_groups_cache = {
-    'BONE_GROUP_MAIN': {
-        'color_set': 'THEME03',
-        'name': 'Main',
-        'layer': 0,
-        },
-    'BONE_GROUP_ARMS': {
-        'color_set': 'THEME02',
-        'name': 'Arms',
-        'layer': 1,
-        },
-    'BONE_GROUP_LEGS': {
-        'color_set': 'THEME05',
-        'name': 'Legs',
-        'layer': 2,
-        },
-    'BONE_GROUP_HANDS': {
-        'color_set': 'THEME06',
-        'name': 'Hands',
-        'layer': 3,
-        },
-    'BONE_GROUP_HAIR': {
-        'color_set': 'THEME07',
-        'name': 'Hair',
-        'layer': 4,
-        },
-    'BONE_GROUP_FACIAL_BASIC': {
-        'color_set': 'THEME02',
-        'name': 'Facial Basic',
-        'layer': 5,
-        },
-    'BONE_GROUP_FACIAL': {
-        'color_set': 'THEME01',
-        'name': 'Facial',
-        'layer': 6,
-        },
-    'BONE_GROUP_ACCESORIES': {
-        'color_set': 'THEME14',
-        'name': 'Accessories',
-        'layer': 7,
-        },
-    'OTHER': {
-        'color_set': 'THEME20',
-        'name': 'Other',
-        'layer': 8,
-        },
-}
-
-
 def _create_bone_groups(armature_ob, mod):
+    bone_groups_cache = {
+        'BONE_GROUP_MAIN': {
+            'color_set': 'THEME03',
+            'name': 'Main',
+            'layer': 0,
+            },
+        'BONE_GROUP_ARMS': {
+            'color_set': 'THEME02',
+            'name': 'Arms',
+            'layer': 1,
+            },
+        'BONE_GROUP_LEGS': {
+            'color_set': 'THEME05',
+            'name': 'Legs',
+            'layer': 2,
+            },
+        'BONE_GROUP_HANDS': {
+            'color_set': 'THEME06',
+            'name': 'Hands',
+            'layer': 3,
+            },
+        'BONE_GROUP_HAIR': {
+            'color_set': 'THEME07',
+            'name': 'Hair',
+            'layer': 4,
+            },
+        'BONE_GROUP_FACIAL_BASIC': {
+            'color_set': 'THEME02',
+            'name': 'Facial Basic',
+            'layer': 5,
+            },
+        'BONE_GROUP_FACIAL': {
+            'color_set': 'THEME01',
+            'name': 'Facial',
+            'layer': 6,
+            },
+        'BONE_GROUP_ACCESORIES': {
+            'color_set': 'THEME14',
+            'name': 'Accessories',
+            'layer': 7,
+            },
+        'OTHER': {
+            'color_set': 'THEME20',
+            'name': 'Other',
+            'layer': 8,
+            },
+    }
+
     bpy.ops.object.mode_set(mode='POSE')
     for i, bone in enumerate(armature_ob.pose.bones):
         source_bone = mod.bones_array[i]
         anim_index = source_bone.anim_map_index
-        bone.bone_group = _get_or_create_bone_group(anim_index, armature_ob, i)
+        bone.bone_group = _get_or_create_bone_group(anim_index, armature_ob, i, bone_groups_cache)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-def _get_or_create_bone_group(bone_anim_index, armature_ob, bone_index):
+def _get_or_create_bone_group(bone_anim_index, armature_ob, bone_index, bone_groups_cache):
     bone_group_name = BONE_INDEX_TO_GROUP.get(bone_anim_index, 'OTHER')
 
-    bone_group_cache = _bone_groups_cache.get(bone_group_name) or _bone_groups_cache['OTHER']
+    bone_group_cache = bone_groups_cache.get(bone_group_name) or bone_groups_cache['OTHER']
     layer_index = bone_group_cache['layer']
     _move_bone_to_layers(armature_ob, bone_index, 0, layer_index)
 
