@@ -328,47 +328,47 @@ def _create_bone_groups(armature_ob, mod):
         'BONE_GROUP_MAIN': {
             'color_set': 'THEME03',
             'name': 'Main',
-            'layer': 0,
+            'layer': 1,
             },
         'BONE_GROUP_ARMS': {
             'color_set': 'THEME02',
             'name': 'Arms',
-            'layer': 1,
+            'layer': 2,
             },
         'BONE_GROUP_LEGS': {
             'color_set': 'THEME05',
             'name': 'Legs',
-            'layer': 2,
+            'layer': 3,
             },
         'BONE_GROUP_HANDS': {
             'color_set': 'THEME06',
             'name': 'Hands',
-            'layer': 3,
+            'layer': 4,
             },
         'BONE_GROUP_HAIR': {
             'color_set': 'THEME07',
             'name': 'Hair',
-            'layer': 4,
+            'layer': 5,
             },
         'BONE_GROUP_FACIAL_BASIC': {
             'color_set': 'THEME02',
             'name': 'Facial Basic',
-            'layer': 5,
+            'layer': 6,
             },
         'BONE_GROUP_FACIAL': {
             'color_set': 'THEME01',
             'name': 'Facial',
-            'layer': 6,
+            'layer': 7,
             },
         'BONE_GROUP_ACCESORIES': {
             'color_set': 'THEME14',
             'name': 'Accessories',
-            'layer': 7,
+            'layer': 8,
             },
         'OTHER': {
             'color_set': 'THEME20',
             'name': 'Other',
-            'layer': 8,
+            'layer': 9,
             },
     }
 
