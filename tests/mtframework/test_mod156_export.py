@@ -113,15 +113,17 @@ def test_mesh_vertices(mod156_mesh_original, mod156_mesh_exported):
     for vertex_index, vertex_ori in enumerate(mesh_original_vertices):
         vertex_exp = mesh_exported_vertices[vertex_index]
 
-        pos_original = vertex_ori.position_x, vertex_ori.position_y, vertex_ori.position_z, vertex_ori.position_w
-        pos_exported = vertex_exp.position_x, vertex_exp.position_y, vertex_exp.position_z, vertex_exp.position_w
-        norm_original = vertex_ori.normal_x, vertex_ori.normal_y, vertex_ori.normal_z, vertex_ori.normal_w
-        norm_exported = vertex_exp.normal_x, vertex_exp.normal_y, vertex_exp.normal_z, vertex_exp.normal_w
+        pos_original = vertex_ori.position_x, vertex_ori.position_y, vertex_ori.position_z
+        pos_exported = vertex_exp.position_x, vertex_exp.position_y, vertex_exp.position_z
+        norm_original = vertex_ori.normal_x, vertex_ori.normal_y, vertex_ori.normal_z
+        norm_exported = vertex_exp.normal_x, vertex_exp.normal_y, vertex_exp.normal_z
 
         if pos_original != pos_exported:
             failed_pos_vertices.append(vertex_index)
         if norm_original != norm_exported:
-            failed_norm_vertices.append(vertex_index)
+            failed_norm_vertices.append((vertex_index, norm_original, norm_exported))
 
     assert not failed_pos_vertices
-    #assert not failed_norm_vertices
+    from pprint import pprint
+    pprint(failed_norm_vertices)
+    assert not failed_norm_vertices

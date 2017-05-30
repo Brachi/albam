@@ -306,6 +306,48 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
+        vertex_struct.normal_x = round(vertex.normal[0] * 127)
+        vertex_struct.normal_y = round(vertex.normal[2] * 127)
+        vertex_struct.normal_z = round(vertex.normal[1] * 127)
+        vertex_struct.normal_w = -1
+
+        vs = vertex_struct
+        #print(vertex_index, vs.normal_x, vs.normal_y, vs.normal_z)
+
+        if vertex_struct.normal_x == 0:
+            vertex_struct.normal_x = 127
+        elif vertex_struct.normal_x == 127:
+            vertex_struct.normal_x = -1
+        elif vertex_struct.normal_x < 0:
+            vertex_struct.normal_x += 127
+        elif vertex_struct.normal_x > 0:
+            vertex_struct.normal_x -= 127
+
+        if vertex_struct.normal_y == 0:
+            vertex_struct.normal_y = 127
+        elif vertex_struct.normal_y == 127:
+            vertex_struct.normal_y = 0
+        elif vertex_struct.normal_y == -127:
+            vertex_struct.normal_y = -1
+        elif vertex_struct.normal_y < 0:
+            vertex_struct.normal_y += 127
+            #vertex_struct.normal_y *= -1
+        elif vertex_struct.normal_y > 0:
+            vertex_struct.normal_y -= 127
+
+        if vertex_struct.normal_z == 0:
+            vertex_struct.normal_z = 127
+        elif vertex_struct.normal_z == 127:
+            vertex_struct.normal_z = 0
+        elif vertex_struct.normal_z == -127:
+            vertex_struct.normal_z = -1
+        elif vertex_struct.normal_z < 0:
+            vertex_struct.normal_z += 127
+            vertex_struct.normal_z *= -1
+        elif vertex_struct.normal_z > 0:
+            vertex_struct.normal_z -= 127
+
+
 
         if has_bones:
             weights_data = weights_per_vertex.get(vertex_index, [])
