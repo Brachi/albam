@@ -293,7 +293,17 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
 
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
-    has_second_uv_layer = hasattr(VF, 'uv2_x')
+
+    blender_mesh.calc_tangents(blender_mesh.uv_layers[0].name)
+
+    vert_index_tangents = {}
+
+    for loop in blender_mesh.loops:
+        tangents = vert_index_tangents.setdefault(loop.vertex_index, None)
+        to_add = [round(t * 127) for t in loop.tangent]
+        if not tangents:
+            vert_index_tangents[loop.vertex_index] = to_add
+
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
@@ -310,6 +320,13 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.normal_y = round(vertex.normal[2] * 127)
         vertex_struct.normal_z = round(vertex.normal[1] * 127)
         vertex_struct.normal_w = -1
+        # Since only VertexFofmat <= 4 is exported, there are always tangents
+        vertex_struct.tangent_x = vert_index_tangents[vertex_index][0]
+        vertex_struct.tangent_y = vert_index_tangents[vertex_index][1]
+        vertex_struct.tangent_z = vert_index_tangents[vertex_index][2]
+        vertex_struct.tangent_w = -1
+        vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
+        vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
 
         if vertex_struct.normal_x <= 0:
             vertex_struct.normal_x += 127
@@ -333,11 +350,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
             vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
             vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
-        vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
-        vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
-        if has_second_uv_layer:
-            vertex_struct.uv2_x = 0
-            vertex_struct.uv2_y = 0
     return vertices_array
 
 
