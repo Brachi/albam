@@ -1,3 +1,4 @@
+import csv
 from itertools import chain
 
 import pytest
@@ -97,8 +98,21 @@ def test_mesh_vertices_bone_weights_sum(mod156_mesh_original, mod156_mesh_export
     assert not vertices_failed
 
 
-def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported):
-    FAILURE_RATIO = 0.1
+@pytest.fixture(scope='module')
+def csv_writer():
+    with open('mesh.csv', 'w') as w:
+        csv_writer = csv.writer(w)
+        csv_writer.writerow(('node_id', 'vertex_index',
+                             'x', 'y', 'z', '  ',
+                             'exported_x', 'exported_y', 'exported_z', '  ',
+                             'blen_x', 'blen_y', 'blen_z',
+                             ))
+        yield csv_writer
+
+
+def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported, csv_writer):
+    FAILURE_RATIO = 0.2
+    WRITE_CSV = False
 
     mod_original = mod156_mesh_original._parent_structure
     mod_exported = mod156_mesh_exported._parent_structure
@@ -132,6 +146,13 @@ def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported):
         check_normal(vertex_index, vertex_ori.normal_y, vertex_exp.normal_y, failed_norm_y_vertices)
         check_normal(vertex_index, vertex_ori.normal_z, vertex_exp.normal_z, failed_norm_z_vertices)
         check_normal(vertex_index, vertex_ori.normal_w, vertex_exp.normal_w, failed_norm_w_vertices)
+
+        if WRITE_CSV:
+            csv_writer.writerow((request.node.name, vertex_index,
+                                 vertex_ori.normal_x, vertex_ori.normal_y, vertex_ori.normal_z, '   ',
+                                 vertex_exp.normal_x, vertex_exp.normal_y, vertex_exp.normal_z, '   ',
+                                 vertex_exp.tangent_x, vertex_exp.tangent_y, vertex_exp.tangent_z,
+                                 ))
 
     assert not failed_pos_vertices
     assert not failed_uvs

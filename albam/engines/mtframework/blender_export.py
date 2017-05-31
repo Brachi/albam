@@ -310,6 +310,12 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.normal_y = round(vertex.normal[2] * 127)
         vertex_struct.normal_z = round(vertex.normal[1] * -127)
         vertex_struct.normal_w = -1
+        # TMP
+        vertex_struct.tangent_x = round(vertex.normal[0] * 127)
+        vertex_struct.tangent_y = round(vertex.normal[1] * 127)
+        vertex_struct.tangent_z = round(vertex.normal[2] * 127)
+        # END TMP
+
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
 
