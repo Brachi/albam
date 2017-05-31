@@ -294,16 +294,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
 
-    blender_mesh.calc_tangents(blender_mesh.uv_layers[0].name)
-
-    vert_index_tangents = {}
-
-    for loop in blender_mesh.loops:
-        tangents = vert_index_tangents.setdefault(loop.vertex_index, None)
-        to_add = [round(t * 127) for t in loop.tangent]
-        if not tangents:
-            vert_index_tangents[loop.vertex_index] = to_add
-
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
@@ -320,11 +310,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.normal_y = round(vertex.normal[2] * 127)
         vertex_struct.normal_z = round(vertex.normal[1] * 127)
         vertex_struct.normal_w = -1
-        # Since only VertexFofmat <= 4 is exported, there are always tangents
-        vertex_struct.tangent_x = vert_index_tangents[vertex_index][0]
-        vertex_struct.tangent_y = vert_index_tangents[vertex_index][1]
-        vertex_struct.tangent_z = vert_index_tangents[vertex_index][2]
-        vertex_struct.tangent_w = -1
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
 
