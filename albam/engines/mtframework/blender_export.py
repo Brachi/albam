@@ -308,7 +308,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_w = 32767
         vertex_struct.normal_x = round(vertex.normal[0] * 127)
         vertex_struct.normal_y = round(vertex.normal[2] * 127)
-        vertex_struct.normal_z = round(vertex.normal[1] * 127)
+        vertex_struct.normal_z = round(vertex.normal[1] * -127)
         vertex_struct.normal_w = -1
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
