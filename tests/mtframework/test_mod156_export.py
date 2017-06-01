@@ -102,17 +102,16 @@ def test_mesh_vertices_bone_weights_sum(mod156_mesh_original, mod156_mesh_export
 def csv_writer():
     with open('mesh.csv', 'w') as w:
         csv_writer = csv.writer(w)
-        csv_writer.writerow(('node_id', 'vertex_index',
+        csv_writer.writerow(('node_id', 'vertex_index', '   ', 
                              'x', 'y', 'z', '  ',
                              'exported_x', 'exported_y', 'exported_z', '  ',
-                             'blen_x', 'blen_y', 'blen_z',
                              ))
         yield csv_writer
 
 
 def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported, csv_writer):
-    FAILURE_RATIO = 0.2
-    WRITE_CSV = False
+    FAILURE_RATIO = 0.1
+    WRITE_CSV = True if '[uPl00ChrisNormal.arc.exported-->pl0000.mod-->meshes_array-22]' in request.node.name else False
 
     mod_original = mod156_mesh_original._parent_structure
     mod_exported = mod156_mesh_exported._parent_structure
@@ -148,26 +147,21 @@ def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported, csv_
         check_normal(vertex_index, vertex_ori.normal_w, vertex_exp.normal_w, failed_norm_w_vertices)
 
         if WRITE_CSV:
-            csv_writer.writerow((request.node.name, vertex_index,
+            csv_writer.writerow((request.node.name, vertex_index, '   ',
                                  vertex_ori.normal_x, vertex_ori.normal_y, vertex_ori.normal_z, '   ',
                                  vertex_exp.normal_x, vertex_exp.normal_y, vertex_exp.normal_z, '   ',
-                                 vertex_exp.tangent_x, vertex_exp.tangent_y, vertex_exp.tangent_z,
                                  ))
 
     assert not failed_pos_vertices
     assert not failed_uvs
-    assert not failed_norm_x_vertices or len(failed_norm_x_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
-    assert not failed_norm_y_vertices or len(failed_norm_y_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
-    assert not failed_norm_z_vertices or len(failed_norm_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
+    assert len(failed_norm_x_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
+    assert len(failed_norm_y_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
+    assert len(failed_norm_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
     assert not failed_norm_w_vertices
 
 
-def check_normal(vertex_index, normal_original, normal_exported, failed_list, limit=20):
-    is_ok = (
-        normal_original == pytest.approx(normal_exported, abs=limit) or
-        # normal_original == pytest.approx(normal_exported, rel=limit) or
-        normal_exported == 0
-        )
+def check_normal(vertex_index, normal_original, normal_exported, failed_list, limit=12):
+    is_ok = normal_original == pytest.approx(normal_exported, abs=limit)
 
     if not is_ok:
         failed_list.append((vertex_index, normal_original, normal_exported))

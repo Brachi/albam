@@ -270,6 +270,16 @@ def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
     return new_weights_per_vertex
 
 
+def _test(x):
+    if x < 0:
+        x += 1
+    elif x == 0:
+        x = 1
+    elif x > 0:
+        x -= 1
+    return x
+
+
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
@@ -294,6 +304,13 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
 
+    bla = {}
+
+    assert blender_mesh.has_custom_normals
+    blender_mesh.calc_normals_split()  # wtf is split vs custom?
+    for loop in blender_mesh.loops:
+        bla.setdefault(loop.vertex_index, loop.normal)
+
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
@@ -306,33 +323,15 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
-        vertex_struct.normal_x = round(vertex.normal[0] * 127)
-        vertex_struct.normal_y = round(vertex.normal[2] * 127)
-        vertex_struct.normal_z = round(vertex.normal[1] * -127)
-        vertex_struct.normal_w = -1
-        # TMP
-        vertex_struct.tangent_x = round(vertex.normal[0] * 127)
-        vertex_struct.tangent_y = round(vertex.normal[1] * 127)
-        vertex_struct.tangent_z = round(vertex.normal[2] * 127)
-        # END TMP
+        normal_x = _test(bla[vertex_index][0])
+        normal_y = _test(bla[vertex_index][1])
+        normal_z = _test(bla[vertex_index][2])
+        vertex_struct.normal_x = round(normal_x * 127)
+        vertex_struct.normal_y = round(normal_z * 127)
+        vertex_struct.normal_z = round(normal_y * -127)
 
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
-
-        if vertex_struct.normal_x <= 0:
-            vertex_struct.normal_x += 127
-        elif vertex_struct.normal_x > 0:
-            vertex_struct.normal_x -= 127
-
-        if vertex_struct.normal_y <= 0:
-            vertex_struct.normal_y += 127
-        elif vertex_struct.normal_y > 0:
-            vertex_struct.normal_y -= 127
-
-        if vertex_struct.normal_z <= 0:
-            vertex_struct.normal_z += 127
-        elif vertex_struct.normal_z > 0:
-            vertex_struct.normal_z -= 127
 
         if has_bones:
             weights_data = weights_per_vertex.get(vertex_index, [])
