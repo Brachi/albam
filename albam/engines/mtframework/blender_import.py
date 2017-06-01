@@ -111,32 +111,16 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     ob = bpy.data.objects.new(name, me_ob)
 
     me_ob.from_pydata(vertex_locations, [], faces)
-    me_ob.create_normals_split()
 
-    for loop in me_ob.loops:
-        loop.normal[:] = vertex_normals[loop.vertex_index]
+    me_ob.create_normals_split()
 
     me_ob.validate(clean_customdata=False)
     me_ob.update(calc_edges=True)
+    me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
 
-    """
-    import array
-    clnors = array.array('f', [0.0] * (len(me_ob.loops) * 3))
-    me_ob.loops.foreach_get("normal", clnors)
-
-    if mesh_index == 29:
-        print('after validate')
-        print(me_ob.loops[0].index, me_ob.loops[0].normal)
-
-
-    me_ob.normals_split_custom_set(tuple(zip(*(iter(clnors),) * 3)))
+    me_ob.normals_split_custom_set_from_vertices(vertex_normals)
     me_ob.use_auto_smooth = True
     me_ob.show_edge_sharp = True
-
-    #me_ob.normals_split_custom_set_from_vertices(vertex_normals)
-    #me_ob.use_auto_smooth = True
-    #me_ob.show_edge_sharp = True
-    """
 
     mesh_material = materials[mesh.material_index]
     if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
@@ -191,13 +175,38 @@ def _import_vertices_mod156(mod, mesh):
     else:
         locations = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
     locations = map(lambda t: (t[0] / 100, t[2] / -100, t[1] / 100), locations)
-    #normals = map(lambda v: (v.normal_x / 127, v.normal_z / -127, v.normal_y / -127), vertices_array)
-    normals = map(lambda v: (v.normal_x / 127, v.normal_y / 127, v.normal_z / 127), vertices_array)
+    normals = map(lambda v: (v.normal_x, v.normal_y, v.normal_z), vertices_array)
+    final_normals = []
+    for x, y, z in normals:
+        if x < 0:
+            x += 128
+        elif x == 0:
+            x = 127
+        elif x > 0:
+            x -= 127
+
+        if y < 0:
+            y += 128
+        elif y == 0:
+            y = 127
+        elif y == 128:
+            y = 0
+        elif y > 0:
+            y -= 127
+
+        if z < 0:
+            z += 128
+        elif z == 0:
+            z = 127
+        elif z > 0:
+            z -= 127
+
+        final_normals.append((x / 127, z / -127, y / 127))
 
     # TODO: investigate why uvs don't appear above the image in the UV editor
     list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
     return {'locations': list(locations),
-            'normals': list(normals),
+            'normals': final_normals,
             'uvs': list(chain.from_iterable(list_of_tuples)),
             'weights_per_bone': _get_weights_per_bone(mod, mesh, vertices_array)
             }
