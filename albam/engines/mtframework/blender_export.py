@@ -304,12 +304,27 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
 
+    import csv
+    import json
     bla = {}
 
     assert blender_mesh.has_custom_normals
     blender_mesh.calc_normals_split()  # wtf is split vs custom?
     for loop in blender_mesh.loops:
         bla.setdefault(loop.vertex_index, loop.normal)
+
+    debug_data = json.loads(blender_mesh.albam_debug_json)
+    if mesh_index == 22:
+        with open('/home/sbrachi/Downloads/vertices.csv', 'w') as w:
+            csv_writer = csv.writer(w)
+            for i, _ in enumerate(blender_mesh.vertices):
+                csv_writer.writerow((
+                    debug_data['normals_1'][i] + [' '] +
+                    debug_data['normals_2'][i] + [' '] +
+                    debug_data['normals_3'][i] + [' '] +
+                    debug_data['normals_4'][i] + [' '] +
+                    list(bla[i])
+                    ))
 
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]

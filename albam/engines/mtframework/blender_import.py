@@ -1,3 +1,4 @@
+import json
 from itertools import chain
 import ntpath
 import os
@@ -96,7 +97,10 @@ def import_mod(blender_object, file_path, **kwargs):
 
 
 def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
-    imported_vertices = _import_vertices(mod, mesh)
+    me_ob = bpy.data.meshes.new(name)
+    ob = bpy.data.objects.new(name, me_ob)
+
+    imported_vertices = _import_vertices(mod, mesh, me_ob)
     vertex_locations = imported_vertices['locations']
     vertex_normals = imported_vertices['normals']
     uvs_per_vertex = imported_vertices['uvs']
@@ -107,8 +111,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
-    me_ob = bpy.data.meshes.new(name)
-    ob = bpy.data.objects.new(name, me_ob)
 
     me_ob.from_pydata(vertex_locations, [], faces)
 
@@ -118,6 +120,11 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob.update(calc_edges=True)
     me_ob.polygons.foreach_set("use_smooth", [True] * len(me_ob.polygons))
 
+    loop_normals = []
+    for loop in me_ob.loops:
+        loop_normals.append(vertex_normals[loop.vertex_index])
+
+    #me_ob.normals_split_custom_set(loop_normals)
     me_ob.normals_split_custom_set_from_vertices(vertex_normals)
     me_ob.use_auto_smooth = True
     me_ob.show_edge_sharp = True
@@ -158,11 +165,11 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     return ob
 
 
-def _import_vertices(mod, mesh):
-    return _import_vertices_mod156(mod, mesh)
+def _import_vertices(mod, mesh, blender_mesh):
+    return _import_vertices_mod156(mod, mesh, blender_mesh)
 
 
-def _import_vertices_mod156(mod, mesh):
+def _import_vertices_mod156(mod, mesh, blender_mesh):
     box_width = abs(mod.box_min_x) + abs(mod.box_max_x)
     box_height = abs(mod.box_min_y) + abs(mod.box_max_y)
     box_length = abs(mod.box_min_z) + abs(mod.box_max_z)
@@ -174,9 +181,15 @@ def _import_vertices_mod156(mod, mesh):
                      for vf in vertices_array)
     else:
         locations = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
+
+    debug_data = {}
+
     locations = map(lambda t: (t[0] / 100, t[2] / -100, t[1] / 100), locations)
-    normals = map(lambda v: (v.normal_x, v.normal_y, v.normal_z), vertices_array)
-    final_normals = []
+    normals = list(map(lambda v: (v.normal_x, v.normal_y, v.normal_z), vertices_array))
+
+    debug_data['normals_1'] = normals
+
+    normals_2 = []
     for x, y, z in normals:
         if x < 0:
             x += 128
@@ -201,12 +214,19 @@ def _import_vertices_mod156(mod, mesh):
         elif z > 0:
             z -= 127
 
-        final_normals.append((x / 127, z / -127, y / 127))
+        normals_2.append((x, y, z))
 
+    debug_data['normals_2'] = normals_2
+    normals_3 = list(map(lambda v: (v[0], v[2] * -1, v[1]), normals_2))
+    debug_data['normals_3'] = normals_3
+    normals_4 = list(map(lambda v: (v[0] / 127, v[1] / 127, v[2] / 127), normals_3))
+    debug_data['normals_4'] = normals_4
+
+    blender_mesh.albam_debug_json = json.dumps(debug_data)
     # TODO: investigate why uvs don't appear above the image in the UV editor
     list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
     return {'locations': list(locations),
-            'normals': final_normals,
+            'normals': normals_4,
             'uvs': list(chain.from_iterable(list_of_tuples)),
             'weights_per_bone': _get_weights_per_bone(mod, mesh, vertices_array)
             }
