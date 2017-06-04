@@ -110,6 +110,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
+    assert min(indices) >= 0, "Bad face indices"  # Blender crashes if not
     me_ob.from_pydata(vertex_locations, [], faces)
 
     me_ob.create_normals_split()

@@ -27,7 +27,6 @@ def register():
     # workaround for error running tests: 'module albam defines no classes'
     class Dummy(bpy.types.PropertyGroup):
         name = bpy.props.StringProperty()
-    bpy.types.Mesh.albam_debug_json = bpy.props.StringProperty()
 
     # TODO: refactor to avoid code duplication
 
