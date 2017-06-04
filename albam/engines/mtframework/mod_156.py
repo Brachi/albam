@@ -233,10 +233,10 @@ class VertexFormat0(Structure):
                 ('normal_y', c_ubyte),
                 ('normal_z', c_ubyte),
                 ('normal_w', c_ubyte),
-                ('tangent_x', c_byte),
-                ('tangent_y', c_byte),
-                ('tangent_z', c_byte),
-                ('tangent_w', c_byte),
+                ('tangent_x', c_ubyte),
+                ('tangent_y', c_ubyte),
+                ('tangent_z', c_ubyte),
+                ('tangent_w', c_ubyte),
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 ('uv2_x', c_ushort),  # half float
@@ -258,10 +258,10 @@ class VertexFormat(Structure):
                 ('normal_y', c_ubyte),
                 ('normal_z', c_ubyte),
                 ('normal_w', c_ubyte),
-                ('tangent_x', c_byte),
-                ('tangent_y', c_byte),
-                ('tangent_z', c_byte),
-                ('tangent_w', c_byte),
+                ('tangent_x', c_ubyte),
+                ('tangent_y', c_ubyte),
+                ('tangent_z', c_ubyte),
+                ('tangent_w', c_ubyte),
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 ('uv2_x', c_ushort),  # half float

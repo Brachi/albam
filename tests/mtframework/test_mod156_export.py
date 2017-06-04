@@ -123,6 +123,7 @@ XFAILS = {
 
 def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported):
     FAILURE_RATIO = 0.15
+    TANGENT_LIMIT = 20
 
     mod_original = mod156_mesh_original._parent_structure
     mod_exported = mod156_mesh_exported._parent_structure
@@ -164,10 +165,10 @@ def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported):
         check_normal(vertex_index, vertex_ori.normal_w, vertex_exp.normal_w, failed_norm_w_vertices)
 
         try:
-            check_normal(vertex_index, vertex_ori.tangent_x, vertex_exp.tangent_x, failed_tang_x_vertices)
-            check_normal(vertex_index, vertex_ori.tangent_y, vertex_exp.tangent_y, failed_tang_y_vertices)
-            check_normal(vertex_index, vertex_ori.tangent_z, vertex_exp.tangent_z, failed_tang_z_vertices)
-            check_normal(vertex_index, vertex_ori.tangent_w, vertex_exp.tangent_w, failed_tang_w_vertices)
+            check_normal(vertex_index, vertex_ori.tangent_x, vertex_exp.tangent_x, failed_tang_x_vertices, TANGENT_LIMIT)
+            check_normal(vertex_index, vertex_ori.tangent_y, vertex_exp.tangent_y, failed_tang_y_vertices, TANGENT_LIMIT)
+            check_normal(vertex_index, vertex_ori.tangent_z, vertex_exp.tangent_z, failed_tang_z_vertices, TANGENT_LIMIT)
+            check_normal(vertex_index, vertex_ori.tangent_w, vertex_exp.tangent_w, failed_tang_w_vertices, TANGENT_LIMIT)
         except AttributeError:
             pass
 
@@ -180,9 +181,10 @@ def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported):
     assert len(failed_norm_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
     # TODO: Improve and research tangets. For now there are many failures, but good enough in-game
     """
-    assert len(failed_tang_x_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
-    assert len(failed_tang_y_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
-    assert len(failed_tang_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
+    FAILURE_RATIO_TANGENT = 0.30
+    assert len(failed_tang_x_vertices) / len(mesh_original_vertices) < FAILURE_RATIO_TANGENT
+    assert len(failed_tang_y_vertices) / len(mesh_original_vertices) < FAILURE_RATIO_TANGENT
+    assert len(failed_tang_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO_TANGENT
     """
 
 
