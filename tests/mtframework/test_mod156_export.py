@@ -1,4 +1,3 @@
-import re
 from itertools import chain
 
 import pytest
@@ -82,20 +81,6 @@ def test_meshes_array_immutable_fields(mod156_original, mod156_exported):
         assert_same_attributes(mesh_original, mesh_exported, 'level_of_detail')
         assert_same_attributes(mesh_original, mesh_exported, 'material_index')
         assert_same_attributes(mesh_original, mesh_exported, 'vertex_stride')
-
-
-def test_mesh_vertices_bone_weights_sum(mod156_mesh_original, mod156_mesh_exported):
-    # TODO: see to not dupliacte the test
-    mod_exported = mod156_mesh_exported._parent_structure
-    mesh_vertices = get_vertices_array(mod_exported, mod156_mesh_exported)
-    if not mod_exported.bone_count:
-        return
-
-    vertices_failed = []
-    for vertex_index, vertex in enumerate(mesh_vertices):
-        if not sum(vertex.weight_values) == 255:
-            vertices_failed.append(vertex_index)
-    assert not vertices_failed
 
 
 XFAILS = {
