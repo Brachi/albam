@@ -283,6 +283,15 @@ def _get_normals_per_vertex(blender_mesh):
     return normals
 
 
+def _get_tangents_per_vertex(blender_mesh):
+    tangents = {}
+    uv_name = blender_mesh.uv_layers[0].name  # TODO: case with no UV
+    blender_mesh.calc_tangents(uv_name)
+    for loop in blender_mesh.loops:
+        tangents.setdefault(loop.vertex_index, loop.tangent)
+    return tangents
+
+
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
@@ -291,6 +300,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     weights_per_vertex = _process_weights(weights_per_vertex)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
     normals = _get_normals_per_vertex(blender_mesh)
+    tangents = _get_tangents_per_vertex(blender_mesh)
 
     VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
@@ -330,6 +340,10 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.normal_y = round(((normals[vertex_index][2] * 0.5) + 0.5) * 255)
         vertex_struct.normal_z = round(((normals[vertex_index][1] * 0.5) + 0.5) * 255) * -1
         vertex_struct.normal_w = 255
+        vertex_struct.tangent_x = round(((tangents[vertex_index][0] * 0.5) + 0.5) * 255)
+        vertex_struct.tangent_y = round(((tangents[vertex_index][2] * 0.5) + 0.5) * 255)
+        vertex_struct.tangent_z = round(((tangents[vertex_index][1] * 0.5) + 0.5) * 255) * -1
+        vertex_struct.tangent_w = 255
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
     return vertices_array
