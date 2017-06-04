@@ -1,4 +1,3 @@
-import json
 from itertools import chain
 import ntpath
 import os
@@ -111,7 +110,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     uvs_per_vertex = imported_vertices['uvs']
     weights_per_bone = imported_vertices['weights_per_bone']
 
-
     me_ob.from_pydata(vertex_locations, [], faces)
 
     me_ob.create_normals_split()
@@ -124,10 +122,8 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     for loop in me_ob.loops:
         loop_normals.append(vertex_normals[loop.vertex_index])
 
-    #me_ob.normals_split_custom_set(loop_normals)
     me_ob.normals_split_custom_set_from_vertices(vertex_normals)
     me_ob.use_auto_smooth = True
-    me_ob.show_edge_sharp = True
 
     mesh_material = materials[mesh.material_index]
     if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
@@ -182,51 +178,18 @@ def _import_vertices_mod156(mod, mesh, blender_mesh):
     else:
         locations = ((vf.position_x, vf.position_y, vf.position_z) for vf in vertices_array)
 
-    debug_data = {}
-
     locations = map(lambda t: (t[0] / 100, t[2] / -100, t[1] / 100), locations)
-    normals = list(map(lambda v: (v.normal_x, v.normal_y, v.normal_z), vertices_array))
+    # from [0, 255] o [-1, 1]
+    normals = map(lambda v: (((v.normal_x / 255) * 2) - 1,
+                             ((v.normal_y / 255) * 2) - 1,
+                             ((v.normal_z / 255) * 2) - 1), vertices_array)
+    # y up to z up
+    normals = map(lambda n: (n[0], n[2] * -1, n[1]), normals)
 
-    debug_data['normals_1'] = normals
-
-    normals_2 = []
-    for x, y, z in normals:
-        if x < 0:
-            x += 128
-        elif x == 0:
-            x = 127
-        elif x > 0:
-            x -= 127
-
-        if y < 0:
-            y += 128
-        elif y == 0:
-            y = 127
-        elif y == 128:
-            y = 0
-        elif y > 0:
-            y -= 127
-
-        if z < 0:
-            z += 128
-        elif z == 0:
-            z = 127
-        elif z > 0:
-            z -= 127
-
-        normals_2.append((x, y, z))
-
-    debug_data['normals_2'] = normals_2
-    normals_3 = list(map(lambda v: (v[0], v[2] * -1, v[1]), normals_2))
-    debug_data['normals_3'] = normals_3
-    normals_4 = list(map(lambda v: (v[0] / 127, v[1] / 127, v[2] / 127), normals_3))
-    debug_data['normals_4'] = normals_4
-
-    blender_mesh.albam_debug_json = json.dumps(debug_data)
-    # TODO: investigate why uvs don't appear above the image in the UV editor
     list_of_tuples = [(unpack_half_float(v.uv_x), unpack_half_float(v.uv_y) * -1) for v in vertices_array]
     return {'locations': list(locations),
-            'normals': normals_4,
+            'normals': list(normals),
+            # TODO: investigate why uvs don't appear above the image in the UV editor
             'uvs': list(chain.from_iterable(list_of_tuples)),
             'weights_per_bone': _get_weights_per_bone(mod, mesh, vertices_array)
             }
