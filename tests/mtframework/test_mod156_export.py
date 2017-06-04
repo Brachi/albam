@@ -102,7 +102,7 @@ def test_mesh_vertices_bone_weights_sum(mod156_mesh_original, mod156_mesh_export
 def csv_writer():
     with open('mesh.csv', 'w') as w:
         csv_writer = csv.writer(w)
-        csv_writer.writerow(('node_id', 'vertex_index', '   ', 
+        csv_writer.writerow(('node_id', 'vertex_index', '   ',
                              'x', 'y', 'z', '  ',
                              'exported_x', 'exported_y', 'exported_z', '  ',
                              ))
@@ -110,7 +110,7 @@ def csv_writer():
 
 
 def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported, csv_writer):
-    FAILURE_RATIO = 0.1
+    FAILURE_RATIO = 0.15
     WRITE_CSV = True if '[uPl00ChrisNormal.arc.exported-->pl0000.mod-->meshes_array-22]' in request.node.name else False
 
     mod_original = mod156_mesh_original._parent_structure
@@ -154,13 +154,13 @@ def test_mesh_vertices(request, mod156_mesh_original, mod156_mesh_exported, csv_
 
     assert not failed_pos_vertices
     assert not failed_uvs
+    assert not failed_norm_w_vertices
     assert len(failed_norm_x_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
     assert len(failed_norm_y_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
     assert len(failed_norm_z_vertices) / len(mesh_original_vertices) < FAILURE_RATIO
-    assert not failed_norm_w_vertices
 
 
-def check_normal(vertex_index, normal_original, normal_exported, failed_list, limit=12):
+def check_normal(vertex_index, normal_original, normal_exported, failed_list, limit=10):
     is_ok = normal_original == pytest.approx(normal_exported, abs=limit)
 
     if not is_ok:
