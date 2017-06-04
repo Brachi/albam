@@ -99,7 +99,7 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
-    imported_vertices = _import_vertices(mod, mesh, me_ob)
+    imported_vertices = _import_vertices(mod, mesh)
     vertex_locations = imported_vertices['locations']
     vertex_normals = imported_vertices['normals']
     uvs_per_vertex = imported_vertices['uvs']
@@ -162,11 +162,11 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     return ob
 
 
-def _import_vertices(mod, mesh, blender_mesh):
-    return _import_vertices_mod156(mod, mesh, blender_mesh)
+def _import_vertices(mod, mesh):
+    return _import_vertices_mod156(mod, mesh)
 
 
-def _import_vertices_mod156(mod, mesh, blender_mesh):
+def _import_vertices_mod156(mod, mesh):
     box_width = abs(mod.box_min_x) + abs(mod.box_max_x)
     box_height = abs(mod.box_min_y) + abs(mod.box_max_y)
     box_length = abs(mod.box_min_z) + abs(mod.box_max_z)
