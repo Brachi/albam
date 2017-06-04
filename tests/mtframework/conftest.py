@@ -69,7 +69,7 @@ def pytest_generate_tests(metafunc):
             TEMP_FILES_TO_DELETE.update(exported_files)
 
             metafunc.parametrize("mod156_original, mod156_exported", mods, scope='module', ids=ids_exported)
-    # XXX don't even think of merging this as is
+    # XXX TODO: simplify this, too much duplication!
     elif 'mod156_mesh_original' and 'mod156_mesh_exported' in metafunc.fixturenames:
         exported_files = []
         blender_path = metafunc.config.getoption('blender')
