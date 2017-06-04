@@ -229,14 +229,14 @@ class VertexFormat0(Structure):
     _fields_ = (('position_x', c_float),
                 ('position_y', c_float),
                 ('position_z', c_float),
-                ('normal_x', c_byte),
-                ('normal_y', c_byte),
-                ('normal_z', c_byte),
-                ('normal_w', c_byte),
-                ('tangent_x', c_byte),
-                ('tangent_y', c_byte),
-                ('tangent_z', c_byte),
-                ('tangent_w', c_byte),
+                ('normal_x', c_ubyte),
+                ('normal_y', c_ubyte),
+                ('normal_z', c_ubyte),
+                ('normal_w', c_ubyte),
+                ('tangent_x', c_ubyte),
+                ('tangent_y', c_ubyte),
+                ('tangent_z', c_ubyte),
+                ('tangent_w', c_ubyte),
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 ('uv2_x', c_ushort),  # half float
@@ -254,14 +254,14 @@ class VertexFormat(Structure):
                 ('position_w', c_short),
                 ('bone_indices', c_ubyte * 4),
                 ('weight_values', c_ubyte * 4),
-                ('normal_x', c_byte),
-                ('normal_y', c_byte),
-                ('normal_z', c_byte),
-                ('normal_w', c_byte),
-                ('tangent_x', c_byte),
-                ('tangent_y', c_byte),
-                ('tangent_z', c_byte),
-                ('tangent_w', c_byte),
+                ('normal_x', c_ubyte),
+                ('normal_y', c_ubyte),
+                ('normal_z', c_ubyte),
+                ('normal_w', c_ubyte),
+                ('tangent_x', c_ubyte),
+                ('tangent_y', c_ubyte),
+                ('tangent_z', c_ubyte),
+                ('tangent_w', c_ubyte),
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 ('uv2_x', c_ushort),  # half float
@@ -288,10 +288,10 @@ class VertexFormat5(Structure):
                 ('position_w', c_short),
                 ('bone_indices', c_ubyte * 8),
                 ('weight_values', c_ubyte * 8),
-                ('normal_x', c_byte),
-                ('normal_y', c_byte),
-                ('normal_z', c_byte),
-                ('normal_w', c_byte),
+                ('normal_x', c_ubyte),
+                ('normal_y', c_ubyte),
+                ('normal_z', c_ubyte),
+                ('normal_w', c_ubyte),
                 ('uv_x', c_ushort),  # half float
                 ('uv_y', c_ushort),  # half float
                 )

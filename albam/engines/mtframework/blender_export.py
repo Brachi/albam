@@ -270,6 +270,31 @@ def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
     return new_weights_per_vertex
 
 
+def _get_normals_per_vertex(blender_mesh):
+    normals = {}
+
+    if blender_mesh.has_custom_normals:
+        blender_mesh.calc_normals_split()
+        for loop in blender_mesh.loops:
+            normals.setdefault(loop.vertex_index, loop.normal)
+    else:
+        for vertex in blender_mesh.vertices:
+            normals[vertex.index] = vertex.normal
+    return normals
+
+
+def _get_tangents_per_vertex(blender_mesh):
+    tangents = {}
+    try:
+        uv_name = blender_mesh.uv_layers[0].name
+    except IndexError:
+        uv_name = ''
+    blender_mesh.calc_tangents(uv_name)
+    for loop in blender_mesh.loops:
+        tangents.setdefault(loop.vertex_index, loop.tangent)
+    return tangents
+
+
 def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
@@ -277,6 +302,8 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(blender_mesh_object)
     weights_per_vertex = _process_weights(weights_per_vertex)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
+    normals = _get_normals_per_vertex(blender_mesh)
+    tangents = _get_tangents_per_vertex(blender_mesh)
 
     VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
@@ -293,7 +320,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
 
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
-    has_second_uv_layer = hasattr(VF, 'uv2_x')
+
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
 
@@ -302,23 +329,30 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         if has_bones:
             # applying bounding box constraints
             xyz = vertices_export_locations(xyz, box_width, box_length, box_height)
-        vertex_struct.position_x = xyz[0]
-        vertex_struct.position_y = xyz[1]
-        vertex_struct.position_z = xyz[2]
-        vertex_struct.position_w = 32767
-
-        if has_bones:
             weights_data = weights_per_vertex.get(vertex_index, [])
             weight_values = [w for _, w in weights_data]
             bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
             vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
             vertex_struct.weight_values = (ctypes.c_ubyte * array_size)(*weight_values)
+        vertex_struct.position_x = xyz[0]
+        vertex_struct.position_y = xyz[1]
+        vertex_struct.position_z = xyz[2]
+        vertex_struct.position_w = 32767
+        try:
+            vertex_struct.normal_x = round(((normals[vertex_index][0] * 0.5) + 0.5) * 255)
+            vertex_struct.normal_y = round(((normals[vertex_index][2] * 0.5) + 0.5) * 255)
+            vertex_struct.normal_z = round(((normals[vertex_index][1] * 0.5) + 0.5) * 255) * -1
+            vertex_struct.normal_w = 255
+            vertex_struct.tangent_x = round(((tangents[vertex_index][0] * 0.5) + 0.5) * 255)
+            vertex_struct.tangent_y = round(((tangents[vertex_index][2] * 0.5) + 0.5) * 255)
+            vertex_struct.tangent_z = round(((tangents[vertex_index][1] * 0.5) + 0.5) * 255) * -1
+            vertex_struct.tangent_w = 255
+        except KeyError:
+            # should not happen. TODO: investigate cases where it did happen
+            print('Missing normal in vertex {}, mesh {}'.format(vertex_index, mesh_index))
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
-        if has_second_uv_layer:
-            vertex_struct.uv2_x = 0
-            vertex_struct.uv2_y = 0
     return vertices_array
 
 
@@ -376,7 +410,6 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
     vertex_position = 0
     face_position = 0
     for mesh_index, blender_mesh_ob in enumerate(blender_meshes):
-
         level_of_detail = _infer_level_of_detail(blender_mesh_ob.name)
         bone_palette_index = 0
         bone_palette = []
