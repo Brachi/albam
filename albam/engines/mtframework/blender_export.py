@@ -285,7 +285,10 @@ def _get_normals_per_vertex(blender_mesh):
 
 def _get_tangents_per_vertex(blender_mesh):
     tangents = {}
-    uv_name = blender_mesh.uv_layers[0].name  # TODO: case with no UV
+    try:
+        uv_name = blender_mesh.uv_layers[0].name
+    except IndexError:
+        uv_name = ''
     blender_mesh.calc_tangents(uv_name)
     for loop in blender_mesh.loops:
         tangents.setdefault(loop.vertex_index, loop.tangent)
@@ -336,14 +339,18 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_y = xyz[1]
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
-        vertex_struct.normal_x = round(((normals[vertex_index][0] * 0.5) + 0.5) * 255)
-        vertex_struct.normal_y = round(((normals[vertex_index][2] * 0.5) + 0.5) * 255)
-        vertex_struct.normal_z = round(((normals[vertex_index][1] * 0.5) + 0.5) * 255) * -1
-        vertex_struct.normal_w = 255
-        vertex_struct.tangent_x = round(((tangents[vertex_index][0] * 0.5) + 0.5) * 255)
-        vertex_struct.tangent_y = round(((tangents[vertex_index][2] * 0.5) + 0.5) * 255)
-        vertex_struct.tangent_z = round(((tangents[vertex_index][1] * 0.5) + 0.5) * 255) * -1
-        vertex_struct.tangent_w = 255
+        try:
+            vertex_struct.normal_x = round(((normals[vertex_index][0] * 0.5) + 0.5) * 255)
+            vertex_struct.normal_y = round(((normals[vertex_index][2] * 0.5) + 0.5) * 255)
+            vertex_struct.normal_z = round(((normals[vertex_index][1] * 0.5) + 0.5) * 255) * -1
+            vertex_struct.normal_w = 255
+            vertex_struct.tangent_x = round(((tangents[vertex_index][0] * 0.5) + 0.5) * 255)
+            vertex_struct.tangent_y = round(((tangents[vertex_index][2] * 0.5) + 0.5) * 255)
+            vertex_struct.tangent_z = round(((tangents[vertex_index][1] * 0.5) + 0.5) * 255) * -1
+            vertex_struct.tangent_w = 255
+        except KeyError:
+            # should not happen. TODO: investigate cases where it did happen
+            print('Missing normal in vertex {}, mesh {}'.format(vertex_index, mesh_index))
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
     return vertices_array
