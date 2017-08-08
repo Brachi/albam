@@ -13,8 +13,8 @@ from albam.registry import blender_registry
 bl_info = {
     "name": "Albam",
     "author": "Sebastian Brachi",
-    "version": (0, 0, 1),
-    "blender": (2, 76, 0),
+    "version": (0, 3, 0),
+    "blender": (2, 78, 0),
     "location": "Properties Panel",
     "description": "Import-Export multiple video-bame formats",
     "wiki_url": "https://github.com/Brachi/albam",
