@@ -340,6 +340,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         vertex_struct.position_z = xyz[2]
         vertex_struct.position_w = 32767
         try:
+            # TODO: use a function with a good name (range conversion + y_up_to_z_up?)
             vertex_struct.normal_x = round(((normals[vertex_index][0] * 0.5) + 0.5) * 255)
             vertex_struct.normal_y = round(((normals[vertex_index][2] * 0.5) + 0.5) * 255)
             vertex_struct.normal_z = round(((normals[vertex_index][1] * -0.5) + 0.5) * 255)
