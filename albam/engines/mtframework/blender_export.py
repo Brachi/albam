@@ -242,6 +242,7 @@ def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
     2) Normalize weights: make all weights sum up 1
     3) float to byte: convert the (-1.0, 1.0) to (0, 255)
     """
+    # TODO: move to mtframework.utils
     new_weights_per_vertex = {}
     limit = max_bones_per_vertex
     for vertex_index, influence_list in weights_per_vertex.items():
@@ -257,13 +258,12 @@ def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
             weights = [(w / total_weight) for w in weights]
 
         # float to byte
-        weights = [round(w * 255) for w in weights]
-        total_weight = sum(weights)
+        weights = [round(w * 255) or 1 for w in weights]  # can't have zero values
         # correct precision
-        if total_weight == 254:
-            weights[0] += 1
-        elif total_weight == 256:
-            weights[0] -= 1
+        excess = sum(weights) - 255
+        if excess:
+            max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+            weights[max_index] -= excess
 
         new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
 
