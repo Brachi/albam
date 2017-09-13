@@ -145,7 +145,6 @@ def export_mod156(parent_blender_object):
     if saved_mod.bone_count:
         bone_palettes = _create_bone_palettes(blender_meshes)
         bone_palette_array = (BonePalette * len(bone_palettes))()
-        box_min_w = bounding_box.min_w * 100
 
         if saved_mod.unk_08:
             # Since unk_12 depends on the offset, calculate it early
@@ -162,7 +161,6 @@ def export_mod156(parent_blender_object):
         bones_array_offset = 0
         bone_palettes = {}
         bone_palette_array = (BonePalette * 0)()
-        box_min_w = -431602080.0  # thank you tests
 
     exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
     exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
@@ -187,15 +185,14 @@ def export_mod156(parent_blender_object):
                  sphere_y=saved_mod.sphere_y,
                  sphere_z=saved_mod.sphere_z,
                  sphere_w=saved_mod.sphere_w,
-                 # z up to y up
-                 box_min_x=bounding_box.min_x * 100,
-                 box_min_y=bounding_box.min_z * -100,
-                 box_min_z=bounding_box.min_y * 100,
-                 box_min_w=box_min_w,
-                 box_max_x=bounding_box.max_x * 100,
-                 box_max_y=bounding_box.max_z * 100,  # not multiplying by -1, since it's abs
-                 box_max_z=bounding_box.max_y * 100,
-                 box_max_w=bounding_box.max_w * 100,
+                 box_min_x=saved_mod.box_min_x,
+                 box_min_y=saved_mod.box_min_y,
+                 box_min_z=saved_mod.box_min_z,
+                 box_min_w=saved_mod.box_min_w,
+                 box_max_x=saved_mod.box_max_x,
+                 box_max_y=saved_mod.box_max_y,
+                 box_max_z=saved_mod.box_max_z,
+                 box_max_w=saved_mod.box_max_w,
                  unk_01=saved_mod.unk_01,
                  unk_02=saved_mod.unk_02,
                  unk_03=saved_mod.unk_03,
