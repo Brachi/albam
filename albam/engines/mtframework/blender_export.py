@@ -145,7 +145,6 @@ def export_mod156(parent_blender_object):
     if saved_mod.bone_count:
         bone_palettes = _create_bone_palettes(blender_meshes)
         bone_palette_array = (BonePalette * len(bone_palettes))()
-        box_min_w = bounding_box.min_w * 100
 
         if saved_mod.unk_08:
             # Since unk_12 depends on the offset, calculate it early
@@ -162,7 +161,6 @@ def export_mod156(parent_blender_object):
         bones_array_offset = 0
         bone_palettes = {}
         bone_palette_array = (BonePalette * 0)()
-        box_min_w = -431602080.0  # thank you tests
 
     exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
     exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
