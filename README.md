@@ -32,6 +32,7 @@ Researchers like to understand how certain parts of a game works and how the dif
 ### Examples
 
 Click the image below for a video on how to import, modify and export a model from the game Resident Evil 5:
+(Note: this is outdated)
 
 [![Importing/Exporting in Resident Evil 5](http://img.youtube.com/vi/mbXSFLhitOk/0.jpg)](https://www.youtube.com/watch?v=mbXSFLhitOk)
 
