@@ -258,7 +258,7 @@ def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
         weights = [round(w * 255) or 1 for w in weights]  # can't have zero values
         # correct precision
         excess = sum(weights) - 255
-        if excess:
+        if excess and weights:
             max_index, _ = max(enumerate(weights), key=lambda p: p[1])
             weights[max_index] -= excess
 
