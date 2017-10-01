@@ -42,20 +42,6 @@ from albam.lib.blender import (
     get_uvs_per_vertex,
     )
 
-
-# Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
-# Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
-CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
-             0.0, 50.0, 0.0, 86.6025390625,
-             -50.0, 0.0, -50.0, 0.0,
-             50.0, 100.0, 50.0, 0.0,
-             1.0, 0.0, 0.0, 0.0,
-             0.0, 1.0, 0.0, 0.0,
-             0.0, 0.0, 1.0, 0.0,
-             0.0, 50.0, 0.0, 1.0,
-             90.0, 90.0, 90.0, 0.0]
-
-
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
 ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array',
                                                      'materials_mapping', 'blender_textures',
@@ -128,48 +114,18 @@ def export_arc(blender_object, file_path):
 def export_mod156(parent_blender_object):
     saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
 
-    first_children = [child for child in parent_blender_object.children]
-    blender_meshes = [c for c in first_children if c.type == 'MESH']
-    # only going one level deeper
-    if not blender_meshes:
-        children_objects = list(chain.from_iterable(child.children for child in first_children))
-        blender_meshes = [c for c in children_objects if c.type == 'MESH']
+    blender_meshes = _get_blender_meshes(parent_blender_object)
     bounding_box = get_bounding_box_positions_from_blender_objects(blender_meshes)
-
-    mesh_count = len(blender_meshes)
-    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
-    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
-    floats = [header] + CUBE_BBOX * mesh_count
-    meshes_array_2 = meshes_array_2(*floats)
-
-    if saved_mod.bone_count:
-        bone_palettes = _create_bone_palettes(blender_meshes)
-        bone_palette_array = (BonePalette * len(bone_palettes))()
-
-        if saved_mod.unk_08:
-            # Since unk_12 depends on the offset, calculate it early
-            bones_array_offset = 176 + len(saved_mod.unk_12)
-        else:
-            bones_array_offset = 176
-        for i, bp in enumerate(bone_palettes.values()):
-            bone_palette_array[i].unk_01 = len(bp)
-            if len(bp) != 32:
-                padding = 32 - len(bp)
-                bp = bp + [0] * padding
-            bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
-    else:
-        bones_array_offset = 0
-        bone_palettes = {}
-        bone_palette_array = (BonePalette * 0)()
-
+    bones_array_offset, bone_palettes, bone_palette_array = _get_bone_data(blender_meshes, saved_mod)
     exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
     exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
+    meshes_array_2 = _get_meshes_array_2(len(blender_meshes))
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
-                 mesh_count=mesh_count,
+                 mesh_count=len(blender_meshes),
                  material_count=len(exported_materials.materials_data_array),
                  vertex_count=get_vertex_count_from_blender_objects(blender_meshes),
                  face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
@@ -226,6 +182,86 @@ def export_mod156(parent_blender_object):
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
 
     return ExportedMod(mod, exported_materials)
+
+
+def _get_blender_meshes(blender_object_root):
+    """
+    Given a blender_object, which acts as 'root', return all its children
+    that are of type 'MESH'. If no meshes are found, then look up in those children
+    for meshes
+    Example:
+        root_object
+            - mesh1
+            - mesh2
+    will return [mesh1, mesh2]
+
+        root_object
+            - armature1
+                - mesh1
+                - mesh2
+    will also return [mesh1, mesh2]
+
+    """
+    first_children = [child for child in blender_object_root.children]
+    blender_meshes = [c for c in first_children if c.type == 'MESH']
+    # only going one level deeper
+    if not blender_meshes:
+        children_objects = list(chain.from_iterable(child.children for child in first_children))
+        blender_meshes = [c for c in children_objects if c.type == 'MESH']
+
+    return blender_meshes
+
+
+def _get_meshes_array_2(mesh_count):
+    """
+    Construct the struct 'meshes_array_2', which has unknown values.
+    For now using a hardcoded value taken from the most basic model found (a cube).
+    It was observed that this changes affect the model visibility related to the camera
+    see https://github.com/Brachi/albam/issues/18
+    """
+    # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
+    # Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
+    CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
+                 0.0, 50.0, 0.0, 86.6025390625,
+                 -50.0, 0.0, -50.0, 0.0,
+                 50.0, 100.0, 50.0, 0.0,
+                 1.0, 0.0, 0.0, 0.0,
+                 0.0, 1.0, 0.0, 0.0,
+                 0.0, 0.0, 1.0, 0.0,
+                 0.0, 50.0, 0.0, 1.0,
+                 90.0, 90.0, 90.0, 0.0]  # original had 50.0, but for issue #18 it was changed to 90.
+
+    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
+    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
+    floats = [header] + CUBE_BBOX * mesh_count
+    meshes_array_2 = meshes_array_2(*floats)
+
+    return meshes_array_2
+
+
+def _get_bone_data(blender_meshes, saved_mod):
+    # TODO: add docstrings
+    bones_array_offset = 0
+    bone_palettes = {}
+    bone_palette_array = (BonePalette * 0)()
+    if not saved_mod.bone_count:
+        return bones_array_offset, bone_palettes, bone_palette_array
+
+    bone_palettes = _create_bone_palettes(blender_meshes)
+    bone_palette_array = (BonePalette * len(bone_palettes))()
+
+    if saved_mod.unk_08:
+        # Since unk_12 depends on the offset, calculate it early
+        bones_array_offset = 176 + len(saved_mod.unk_12)
+    else:
+        bones_array_offset = 176
+    for i, bp in enumerate(bone_palettes.values()):
+        bone_palette_array[i].unk_01 = len(bp)
+        if len(bp) != 32:
+            padding = 32 - len(bp)
+            bp = bp + [0] * padding
+        bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
+    return bones_array_offset, bone_palettes, bone_palette_array
 
 
 def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
