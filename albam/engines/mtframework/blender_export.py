@@ -53,7 +53,7 @@ CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
              0.0, 1.0, 0.0, 0.0,
              0.0, 0.0, 1.0, 0.0,
              0.0, 50.0, 0.0, 1.0,
-             50.0, 50.0, 50.0, 0.0]
+             90.0, 90.0, 90.0, 0.0]
 
 
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
