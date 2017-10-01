@@ -142,7 +142,8 @@ class AlbamImportOperator(bpy.types.Operator):
             raise TypeError('File not supported for import. Id magic: {}'.format(id_magic))
 
         name = os.path.basename(file_path)
-        obj = bpy.data.objects.new(name, None)
+        obj_data = bpy.data.meshes.new(name)
+        obj = bpy.data.objects.new(name, obj_data)
         obj.parent = parent
         obj.albam_imported_item['data'] = data
         obj.albam_imported_item.source_path = file_path
