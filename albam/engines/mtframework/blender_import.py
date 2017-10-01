@@ -23,6 +23,7 @@ from albam.engines.mtframework.mappers import BONE_INDEX_TO_GROUP
 from albam.lib.misc import chunks
 from albam.lib.half_float import unpack_half_float
 from albam.lib.blender import strip_triangles_to_triangles_list, create_mesh_name
+from albam.lib.geometry import vertices_from_bbox
 from albam.registry import blender_registry
 
 
@@ -60,6 +61,14 @@ def import_arc(blender_object, file_path, **kwargs):
             }
 
 
+def _set_bounding_box(mod, blender_object):
+    vertices, faces = vertices_from_bbox(mod.box_min_x / 100, mod.box_min_z / -100, mod.box_min_y / 100,
+                                         mod.box_max_x / 100, mod.box_max_z / -100, mod.box_max_y / 100)
+    blender_object.data.from_pydata(vertices, [], faces)
+    blender_object.data.validate()
+    blender_object.draw_type = 'WIRE'
+
+
 @blender_registry.register_function('import', identifier=b'MOD\x00')
 def import_mod(blender_object, file_path, **kwargs):
     base_dir = kwargs.get('base_dir')
@@ -67,6 +76,8 @@ def import_mod(blender_object, file_path, **kwargs):
     mod = Mod156(file_path=file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
     materials = _create_blender_materials_from_mod(mod, blender_object.name, textures)
+
+    _set_bounding_box(mod, blender_object)
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
