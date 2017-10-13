@@ -37,7 +37,7 @@ def test_offset_fields(mod156):
     assert not mod156.bone_count or get_offset(mod156, 'bones_array') == mod156.bones_array_offset
     assert not mod156.texture_count or mod156.textures_array_offset > get_offset(mod156, 'group_data_array')
     assert mod156.meshes_array_offset == get_offset(mod156, 'meshes_array')
-    assert get_offset(mod156, 'meshes_array_2') == get_offset(mod156, 'meshes_array') + get_size(mod156, 'meshes_array')
+    assert get_offset(mod156, 'meshes_array_2') == get_offset(mod156, 'meshes_array') + get_size(mod156, 'meshes_array') + 4
     assert get_offset(mod156, 'vertex_buffer') == mod156.vertex_buffer_offset
     assert get_offset(mod156, 'index_buffer') == mod156.index_buffer_offset
 
