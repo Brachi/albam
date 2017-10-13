@@ -34,27 +34,13 @@ from albam.lib.geometry import z_up_to_y_up
 from albam.lib.misc import ntpath_to_os_path
 from albam.lib.blender import (
     triangles_list_to_triangles_strip,
-    get_bounding_box_positions_from_blender_objects,
     get_textures_from_blender_objects,
     get_materials_from_blender_objects,
     get_vertex_count_from_blender_objects,
     get_bone_indices_and_weights_per_vertex,
     get_uvs_per_vertex,
+    get_bounding_box,
     )
-
-
-# Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
-# Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
-CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
-             0.0, 50.0, 0.0, 86.6025390625,
-             -50.0, 0.0, -50.0, 0.0,
-             50.0, 100.0, 50.0, 0.0,
-             1.0, 0.0, 0.0, 0.0,
-             0.0, 1.0, 0.0, 0.0,
-             0.0, 0.0, 1.0, 0.0,
-             0.0, 50.0, 0.0, 1.0,
-             90.0, 90.0, 90.0, 0.0]
-
 
 ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
 ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array',
@@ -127,49 +113,18 @@ def export_arc(blender_object, file_path):
 
 def export_mod156(parent_blender_object):
     saved_mod = Mod156(file_path=BytesIO(parent_blender_object.albam_imported_item.data))
-
-    first_children = [child for child in parent_blender_object.children]
-    blender_meshes = [c for c in first_children if c.type == 'MESH']
-    # only going one level deeper
-    if not blender_meshes:
-        children_objects = list(chain.from_iterable(child.children for child in first_children))
-        blender_meshes = [c for c in children_objects if c.type == 'MESH']
-    bounding_box = get_bounding_box_positions_from_blender_objects(blender_meshes)
-
-    mesh_count = len(blender_meshes)
-    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
-    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
-    floats = [header] + CUBE_BBOX * mesh_count
-    meshes_array_2 = meshes_array_2(*floats)
-
-    if saved_mod.bone_count:
-        bone_palettes = _create_bone_palettes(blender_meshes)
-        bone_palette_array = (BonePalette * len(bone_palettes))()
-
-        if saved_mod.unk_08:
-            # Since unk_12 depends on the offset, calculate it early
-            bones_array_offset = 176 + len(saved_mod.unk_12)
-        else:
-            bones_array_offset = 176
-        for i, bp in enumerate(bone_palettes.values()):
-            bone_palette_array[i].unk_01 = len(bp)
-            if len(bp) != 32:
-                padding = 32 - len(bp)
-                bp = bp + [0] * padding
-            bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
-    else:
-        bones_array_offset = 0
-        bone_palettes = {}
-        bone_palette_array = (BonePalette * 0)()
-
+    blender_meshes = _get_blender_meshes(parent_blender_object)
+    bounding_box = get_bounding_box(parent_blender_object)
+    bones_array_offset, bone_palettes, bone_palette_array = _get_bone_data(blender_meshes, saved_mod)
     exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
     exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
+    meshes_array_2 = _get_meshes_array_2(len(blender_meshes))
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
                  version_rev=1,
                  bone_count=saved_mod.bone_count,
-                 mesh_count=mesh_count,
+                 mesh_count=len(blender_meshes),
                  material_count=len(exported_materials.materials_data_array),
                  vertex_count=get_vertex_count_from_blender_objects(blender_meshes),
                  face_count=(ctypes.sizeof(exported_meshes.index_buffer) // 2) + 1,
@@ -185,14 +140,14 @@ def export_mod156(parent_blender_object):
                  sphere_y=saved_mod.sphere_y,
                  sphere_z=saved_mod.sphere_z,
                  sphere_w=saved_mod.sphere_w,
-                 box_min_x=saved_mod.box_min_x,
-                 box_min_y=saved_mod.box_min_y,
-                 box_min_z=saved_mod.box_min_z,
-                 box_min_w=saved_mod.box_min_w,
-                 box_max_x=saved_mod.box_max_x,
-                 box_max_y=saved_mod.box_max_y,
-                 box_max_z=saved_mod.box_max_z,
-                 box_max_w=saved_mod.box_max_w,
+                 box_min_x=bounding_box.min_x * 100,
+                 box_min_y=bounding_box.min_z * 100,
+                 box_min_z=bounding_box.max_y * -100,  # z up to y up
+                 box_min_w=bounding_box.min_w * 100,
+                 box_max_x=bounding_box.max_x * 100,
+                 box_max_y=bounding_box.max_z * 100,
+                 box_max_z=bounding_box.min_y * -100,  # z up to y up
+                 box_max_w=bounding_box.max_w * 100,
                  unk_01=saved_mod.unk_01,
                  unk_02=saved_mod.unk_02,
                  unk_03=saved_mod.unk_03,
@@ -226,6 +181,86 @@ def export_mod156(parent_blender_object):
     mod.index_buffer_offset = get_offset(mod, 'index_buffer')
 
     return ExportedMod(mod, exported_materials)
+
+
+def _get_blender_meshes(blender_object_root):
+    """
+    Given a blender_object, which acts as 'root', return all its children
+    that are of type 'MESH'. If no meshes are found, then look up in those children
+    for meshes
+    Example:
+        root_object
+            - mesh1
+            - mesh2
+    will return [mesh1, mesh2]
+
+        root_object
+            - armature1
+                - mesh1
+                - mesh2
+    will also return [mesh1, mesh2]
+
+    """
+    first_children = [child for child in blender_object_root.children]
+    blender_meshes = [c for c in first_children if c.type == 'MESH']
+    # only going one level deeper
+    if not blender_meshes:
+        children_objects = list(chain.from_iterable(child.children for child in first_children))
+        blender_meshes = [c for c in children_objects if c.type == 'MESH']
+
+    return blender_meshes
+
+
+def _get_meshes_array_2(mesh_count):
+    """
+    Construct the struct 'meshes_array_2', which has unknown values.
+    For now using a hardcoded value taken from the most basic model found (a cube).
+    It was observed that this changes affect the model visibility related to the camera
+    see https://github.com/Brachi/albam/issues/18
+    """
+    # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
+    # Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
+    CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
+                 0.0, 50.0, 0.0, 86.6025390625,
+                 -50.0, 0.0, -50.0, 0.0,
+                 50.0, 100.0, 50.0, 0.0,
+                 1.0, 0.0, 0.0, 0.0,
+                 0.0, 1.0, 0.0, 0.0,
+                 0.0, 0.0, 1.0, 0.0,
+                 0.0, 50.0, 0.0, 1.0,
+                 90.0, 90.0, 90.0, 0.0]  # original had 50.0, but for issue #18 it was changed to 90.
+
+    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
+    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
+    floats = [header] + CUBE_BBOX * mesh_count
+    meshes_array_2 = meshes_array_2(*floats)
+
+    return meshes_array_2
+
+
+def _get_bone_data(blender_meshes, saved_mod):
+    # TODO: add docstrings
+    bones_array_offset = 0
+    bone_palettes = {}
+    bone_palette_array = (BonePalette * 0)()
+    if not saved_mod.bone_count:
+        return bones_array_offset, bone_palettes, bone_palette_array
+
+    bone_palettes = _create_bone_palettes(blender_meshes)
+    bone_palette_array = (BonePalette * len(bone_palettes))()
+
+    if saved_mod.unk_08:
+        # Since unk_12 depends on the offset, calculate it early
+        bones_array_offset = 176 + len(saved_mod.unk_12)
+    else:
+        bones_array_offset = 176
+    for i, bp in enumerate(bone_palettes.values()):
+        bone_palette_array[i].unk_01 = len(bp)
+        if len(bp) != 32:
+            padding = 32 - len(bp)
+            bp = bp + [0] * padding
+        bone_palette_array[i].values = (ctypes.c_ubyte * len(bp))(*bp)
+    return bones_array_offset, bone_palettes, bone_palette_array
 
 
 def _process_weights(weights_per_vertex, max_bones_per_vertex=4):
@@ -292,7 +327,7 @@ def _get_tangents_per_vertex(blender_mesh):
     return tangents
 
 
-def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette):
+def _export_vertices(blender_mesh_object, bbox, mesh_index, bone_palette):
     blender_mesh = blender_mesh_object.data
     vertex_count = len(blender_mesh.vertices)
     uvs_per_vertex = get_uvs_per_vertex(blender_mesh_object)
@@ -302,6 +337,10 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
     normals = _get_normals_per_vertex(blender_mesh)
     tangents = _get_tangents_per_vertex(blender_mesh)
 
+    box_width = bbox.width * 100
+    box_height = bbox.length * 100   # z up to y up
+    box_length = bbox.height * 100
+
     VF = VERTEX_FORMATS_TO_CLASSES[max_bones_per_vertex]
 
     for vertex_index, (uv_x, uv_y) in uvs_per_vertex.items():
@@ -310,10 +349,6 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         uv_x = pack_half_float(uv_x)
         uv_y = pack_half_float(uv_y)
         uvs_per_vertex[vertex_index] = (uv_x, uv_y)
-
-    box_width = abs(bounding_box.min_x * 100) + abs(bounding_box.max_x * 100)
-    box_height = abs(bounding_box.min_y * 100) + abs(bounding_box.max_y * 100)
-    box_length = abs(bounding_box.min_z * 100) + abs(bounding_box.max_z * 100)
 
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
@@ -325,7 +360,7 @@ def _export_vertices(blender_mesh_object, bounding_box, mesh_index, bone_palette
         xyz = z_up_to_y_up(xyz)
         if has_bones:
             # applying bounding box constraints
-            xyz = vertices_export_locations(xyz, box_width, box_length, box_height)
+            xyz = vertices_export_locations(xyz, box_width, box_height, box_length)
             weights_data = weights_per_vertex.get(vertex_index, [])
             weight_values = [w for _, w in weights_data]
             bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]

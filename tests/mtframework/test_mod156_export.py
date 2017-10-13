@@ -29,19 +29,21 @@ def test_inmutable_fields(mod156_original, mod156_exported):
     assert_same_attributes(mod156_original, mod156_exported, 'textures_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'meshes_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'vertex_buffer_2', binary=True)
-    assert_same_attributes(mod156_original, mod156_exported, 'box_min_x')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_min_y')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_min_z')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_min_w')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_max_x')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_max_y')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_max_z')
-    assert_same_attributes(mod156_original, mod156_exported, 'box_max_w')
 
 
 def test_approximate_fields(mod156_original, mod156_exported):
     assert_approximate_fields(mod156_original, mod156_exported, 'face_count', EXPECTED_MAX_INDICES_COUNT_RATIO)
     assert_approximate_fields(mod156_original, mod156_exported, 'vertex_buffer_size', EXPECTED_MAX_INDICES_COUNT_RATIO)
+    assert mod156_original.box_min_x == pytest.approx(mod156_exported.box_min_x)
+    assert mod156_original.box_min_y == pytest.approx(mod156_exported.box_min_y)
+    assert mod156_original.box_min_z == pytest.approx(mod156_exported.box_min_z)
+
+    assert mod156_original.box_max_x == pytest.approx(mod156_exported.box_max_x)
+    assert mod156_original.box_max_y == pytest.approx(mod156_exported.box_max_y)
+    assert mod156_original.box_max_z == pytest.approx(mod156_exported.box_max_z)
+
+    assert mod156_original.box_min_w == pytest.approx(mod156_exported.box_min_w)
+    assert mod156_original.box_max_w == pytest.approx(mod156_exported.box_max_w)
 
 
 def test_texture_paths_in_materials(mod156_original, mod156_exported):
