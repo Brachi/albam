@@ -6,7 +6,6 @@ import ntpath
 import os
 import tempfile
 import re
-import struct
 try:
     import bpy
 except ImportError:
@@ -16,6 +15,7 @@ from albam.registry import blender_registry
 from albam.exceptions import ExportError
 from albam.engines.mtframework.mod_156 import (
     Mesh156,
+    MeshBox,
     MaterialData,
     BonePalette,
     CLASSES_TO_VERTEX_FORMATS,
@@ -27,6 +27,7 @@ from albam.engines.mtframework.utils import (
     blender_texture_to_texture_code,
     get_texture_dirs,
     get_default_texture_dir,
+    get_vertices_array,
     )
 from albam.lib.half_float import pack_half_float
 from albam.lib.structure import get_offset
@@ -42,7 +43,8 @@ from albam.lib.blender import (
     get_bounding_box,
     )
 
-ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer'))
+ExportedMeshes = namedtuple('ExportedMeshes', ('meshes_array', 'vertex_buffer', 'index_buffer',
+                                               'per_mesh_bone_indices'))
 ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'materials_data_array',
                                                      'materials_mapping', 'blender_textures',
                                                      'texture_dirs'))
@@ -118,7 +120,7 @@ def export_mod156(parent_blender_object):
     bones_array_offset, bone_palettes, bone_palette_array = _get_bone_data(blender_meshes, saved_mod)
     exported_materials = _export_textures_and_materials(blender_meshes, saved_mod)
     exported_meshes = _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materials)
-    meshes_array_2 = _get_meshes_array_2(len(blender_meshes))
+    meshes_array_2 = _get_meshes_array_2(saved_mod, exported_meshes)
 
     mod = Mod156(id_magic=b'MOD',
                  version=156,
@@ -168,6 +170,7 @@ def export_mod156(parent_blender_object):
                  textures_array=exported_materials.textures_array,
                  materials_data_array=exported_materials.materials_data_array,
                  meshes_array=exported_meshes.meshes_array,
+                 meshes_array_2_size=len(meshes_array_2),
                  meshes_array_2=meshes_array_2,
                  vertex_buffer=exported_meshes.vertex_buffer,
                  vertex_buffer_2=saved_mod.vertex_buffer_2,
@@ -211,31 +214,82 @@ def _get_blender_meshes(blender_object_root):
     return blender_meshes
 
 
-def _get_meshes_array_2(mesh_count):
+def _get_meshes_array_2(saved_mod, exported_meshes):
     """
     Construct the struct 'meshes_array_2', which has unknown values.
-    For now using a hardcoded value taken from the most basic model found (a cube).
     It was observed that this changes affect the model visibility related to the camera
     see https://github.com/Brachi/albam/issues/18
+    It'a assumed that these values represent some sort of per bone bounding boxes.
+    Here a heuristic is't used to assign values to every mesh based on the bones they use.
+    :param saved_mod: Mod156 instance, the original imported
+    :param exported_meshes: ExportedMeshes instance
     """
-    # Taken from: RE5->uOm0000Damage.arc->/pawn/om/om0000/model/om0000.mod
-    # Not entirely sure what it represents (a bounding box + a matrix?), but it works in all models so far
-    CUBE_BBOX = [0.0, 0.0, 0.0, 0.0,
-                 0.0, 50.0, 0.0, 86.6025390625,
-                 -50.0, 0.0, -50.0, 0.0,
-                 50.0, 100.0, 50.0, 0.0,
-                 1.0, 0.0, 0.0, 0.0,
-                 0.0, 1.0, 0.0, 0.0,
-                 0.0, 0.0, 1.0, 0.0,
-                 0.0, 50.0, 0.0, 1.0,
-                 90.0, 90.0, 90.0, 0.0]  # original had 50.0, but for issue #18 it was changed to 90.
+    DEFAULT_BOX = _create_default_box()
+    per_bone_meshes_boxes = _get_per_bone_meshes_boxes(saved_mod)
+    mesh_boxes = []
 
-    header = struct.unpack('f', struct.pack('4B', mesh_count, 0, 0, 0))[0]
-    meshes_array_2 = ctypes.c_float * ((mesh_count * 36) + 1)
-    floats = [header] + CUBE_BBOX * mesh_count
-    meshes_array_2 = meshes_array_2(*floats)
+    for mesh_index, mesh in enumerate(exported_meshes.meshes_array):
+        vertex_count = mesh.vertex_count
+        vertex_group_count = mesh.vertex_group_count
+        bone_indices = exported_meshes.per_mesh_bone_indices[mesh_index]
+
+        assert len(bone_indices) == vertex_group_count
+
+        assert vertex_group_count == len(bone_indices)
+        for bone_index in bone_indices:
+            box = per_bone_meshes_boxes.get(bone_index, {}).get(vertex_count)
+            if not box:
+                box = DEFAULT_BOX
+            mesh_boxes.append(box)
+
+    meshes_array_2 = (MeshBox * len(mesh_boxes))(*mesh_boxes)
 
     return meshes_array_2
+
+
+def _create_default_box():
+    unk_01 = [0.0, 0.0, 0.0, 0.0,
+              0.0, 50.0, 0.0, 86.6025390625,
+              -50.0, 0.0, -50.0, 0.0,
+              50.0, 100.0, 50.0, 0.0]
+    unk_02 = [1.0, 0.0, 0.0, 0.0,
+              0.0, 1.0, 0.0, 0.0,
+              0.0, 0.0, 1.0, 0.0,
+              0.0, 50.0, 0.0, 1.0]
+    unk_03 = [90.0, 90.0, 90.0, 0.0]  # original had 50.0, but for issue #18 it was changed to 90.
+
+    return MeshBox(unk_01=(ctypes.c_float * 16)(*unk_01),
+                   unk_02=(ctypes.c_float * 16)(*unk_02),
+                   unk_03=(ctypes.c_float * 4)(*unk_03),
+                   )
+
+
+def _get_per_bone_meshes_boxes(mod):
+    """
+    Given a Mod156 instances, return a dict with information about all the 'boxes'
+    for each bone index (real, not bone palette)
+    :return: dict with bone indices as keys (int) and a 'box_data' dict as values
+             where box data has vertex_count (int) as keys and an instance of MeshBox
+             as value
+    """
+    boxes = {}
+
+    count = 0
+    for mesh_index, mesh in enumerate(mod.meshes_array):
+        bone_palette = mod.bone_palette_array[mesh.bone_palette_index]
+
+        vertex_group_count = mesh.vertex_group_count
+        mesh_bone_indices = {bi for v in get_vertices_array(mod, mesh) for bi in v.bone_indices if bi}
+        mesh_bone_indices = sorted([bone_palette.values[bi] for bi in mesh_bone_indices])
+        mesh_boxes = mod.meshes_array_2[count: count + vertex_group_count]
+        # mesh_boxes can be len(mesh_bone_indices) or len(mesh_bone_indices) + 1
+        # but only counting the first option
+        combined = zip(mesh_bone_indices, mesh_boxes)
+        for bone_index, mesh_box in combined:
+            v = boxes.setdefault(bone_index, {})
+            v[mesh.vertex_count] = mesh_box
+        count += vertex_group_count
+    return boxes
 
 
 def _get_bone_data(blender_meshes, saved_mod):
@@ -352,6 +406,7 @@ def _export_vertices(blender_mesh_object, bbox, mesh_index, bone_palette):
 
     vertices_array = (VF * vertex_count)()
     has_bones = hasattr(VF, 'bone_indices')
+    total_bones = set()
 
     for vertex_index, vertex in enumerate(blender_mesh.vertices):
         vertex_struct = vertices_array[vertex_index]
@@ -363,6 +418,7 @@ def _export_vertices(blender_mesh_object, bbox, mesh_index, bone_palette):
             xyz = vertices_export_locations(xyz, box_width, box_height, box_length)
             weights_data = weights_per_vertex.get(vertex_index, [])
             weight_values = [w for _, w in weights_data]
+            total_bones.update((bi for bi, _ in weights_data))
             bone_indices = [bone_palette.index(bone_index) for bone_index, _ in weights_data]
             array_size = ctypes.sizeof(vertex_struct.bone_indices)
             vertex_struct.bone_indices = (ctypes.c_ubyte * array_size)(*bone_indices)
@@ -386,7 +442,7 @@ def _export_vertices(blender_mesh_object, bbox, mesh_index, bone_palette):
             print('Missing normal in vertex {}, mesh {}'.format(vertex_index, mesh_index))
         vertex_struct.uv_x = uvs_per_vertex.get(vertex_index, (0, 0))[0] if uvs_per_vertex else 0
         vertex_struct.uv_y = uvs_per_vertex.get(vertex_index, (0, 0))[1] if uvs_per_vertex else 0
-    return vertices_array
+    return vertices_array, total_bones
 
 
 def _create_bone_palettes(blender_mesh_objects):
@@ -442,6 +498,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
 
     vertex_position = 0
     face_position = 0
+    per_mesh_bone_indices = []
     for mesh_index, blender_mesh_ob in enumerate(blender_meshes):
         level_of_detail = _infer_level_of_detail(blender_mesh_ob.name)
         bone_palette_index = 0
@@ -453,7 +510,8 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
                 break
 
         blender_mesh = blender_mesh_ob.data
-        vertices_array = _export_vertices(blender_mesh_ob, bounding_box, mesh_index, bone_palette)
+        vertices_array, total_bones = _export_vertices(blender_mesh_ob, bounding_box, mesh_index, bone_palette)
+        per_mesh_bone_indices.append(total_bones)
         vertex_buffer.extend(vertices_array)
 
         # TODO: is all this format conversion necessary?
@@ -485,7 +543,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
         m156.face_count = index_count
         m156.face_offset = 0
         m156.vertex_index_start_2 = vertex_position
-        m156.vertex_group_count = 1  # using 'TEST' bounding box
+        m156.vertex_group_count = len(total_bones)
         m156.bone_palette_index = bone_palette_index
         m156.use_cast_shadows = int(blender_material.use_cast_shadows)
 
@@ -495,7 +553,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
     vertex_buffer = (ctypes.c_ubyte * len(vertex_buffer)).from_buffer(vertex_buffer)
     index_buffer = (ctypes.c_ushort * (len(index_buffer) // 2)).from_buffer(index_buffer)
 
-    return ExportedMeshes(meshes_156, vertex_buffer, index_buffer)
+    return ExportedMeshes(meshes_156, vertex_buffer, index_buffer, per_mesh_bone_indices)
 
 
 def _export_textures_and_materials(blender_objects, saved_mod):

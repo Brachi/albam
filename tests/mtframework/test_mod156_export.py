@@ -28,6 +28,7 @@ def test_inmutable_fields(mod156_original, mod156_exported):
     assert_same_attributes(mod156_original, mod156_exported, 'materials_data_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'textures_array', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'meshes_array', length=True)
+    assert_same_attributes(mod156_original, mod156_exported, 'meshes_array_2', length=True)
     assert_same_attributes(mod156_original, mod156_exported, 'vertex_buffer_2', binary=True)
 
 
