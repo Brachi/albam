@@ -232,14 +232,15 @@ def _get_meshes_array_2(saved_mod, exported_meshes):
         vertex_count = mesh.vertex_count
         vertex_group_count = mesh.vertex_group_count
         bone_indices = exported_meshes.per_mesh_bone_indices[mesh_index]
-
         assert len(bone_indices) == vertex_group_count
 
-        assert vertex_group_count == len(bone_indices)
         for bone_index in bone_indices:
-            box = per_bone_meshes_boxes.get(bone_index, {}).get(vertex_count)
-            if not box:
+            candidates = per_bone_meshes_boxes.get(bone_index)
+            if not candidates:
                 box = DEFAULT_BOX
+            else:
+                closest_vertex_count = min(candidates, key=lambda k: abs(k - vertex_count))
+                box = candidates[closest_vertex_count]
             mesh_boxes.append(box)
 
     meshes_array_2 = (MeshBox * len(mesh_boxes))(*mesh_boxes)
