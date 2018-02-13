@@ -9,15 +9,6 @@ from albam.lib.structure import DynamicStructure
 from albam.registry import blender_registry
 
 
-def get_meshes_sizes(mod):
-    if mod.version == 156:
-        extra = 1  # TODO: investigate
-    else:
-        extra = 0
-    total_count = sum(mesh.vertex_group_count for mesh in mod.meshes_array)
-    return c_float * ((total_count * 36) + extra)
-
-
 def unk_data_depends_on_other_unk(tmp_struct):
     if tmp_struct.unk_08:
         return c_ubyte * (tmp_struct.bones_array_offset - 176)
@@ -83,7 +74,8 @@ class Mod156(DynamicStructure):
                 ('textures_array', lambda s: (c_char * 64) * s.texture_count),
                 ('materials_data_array', lambda s: MaterialData * s.material_count),
                 ('meshes_array', lambda s: Mesh156 * s.mesh_count),
-                ('meshes_array_2', get_meshes_sizes),
+                ('meshes_array_2_size', c_uint),
+                ('meshes_array_2', lambda s: MeshBox * s.meshes_array_2_size),
                 ('vertex_buffer', lambda s: c_ubyte * s.vertex_buffer_size),
                 ('vertex_buffer_2', lambda s: c_ubyte * s.vertex_buffer_2_size),
                 # TODO: investigate the padding
@@ -111,6 +103,13 @@ class BonePalette(Structure):
                 )
 
     _comments_ = {'unk_01': 'Seems to be the count of meaninful values out of the 32 bytes, needs verification'}
+
+
+class MeshBox(Structure):
+    _fields_ = (('unk_01', c_float * 16),
+                ('unk_02', c_float * 16),
+                ('unk_03', c_float * 4),
+                )
 
 
 class GroupData(Structure):
