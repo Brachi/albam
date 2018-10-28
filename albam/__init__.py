@@ -1,5 +1,3 @@
-from albam import blender   # noqa , used by register_module
-
 try:
     import bpy
 except ImportError:
@@ -9,12 +7,134 @@ import albam.engines.mtframework.blender_import  # noqa
 import albam.engines.mtframework.blender_export  # noqa
 from albam.registry import blender_registry
 
+import os
+
+try:
+    import bpy
+except ImportError:
+    from unittest.mock import Mock
+    bpy = Mock()
+
+from albam.registry import blender_registry
+
+
+class AlbamImportedItemName(bpy.types.PropertyGroup):
+    '''All imported object names are saved here to then show them in the
+    export list'''
+    name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
+
+
+class AlbamImportedItem(bpy.types.PropertyGroup):
+    name = bpy.props.StringProperty(options={'HIDDEN'})
+    source_path = bpy.props.StringProperty(options={'HIDDEN'})
+    folder = bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
+    data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
+    file_type = bpy.props.StringProperty(options={'HIDDEN'})
+
+
+class AlbamImportExportPanel(bpy.types.Panel):
+    bl_label = "Albam"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):  # pragma: no cover
+        scn = context.scene
+        layout = self.layout
+        layout.operator('albam_import.item', text='Import')
+        layout.prop_search(scn, 'albam_item_to_export', scn, 'albam_items_imported', 'select')
+        layout.operator('albam_export.item', text='Export')
+
+
+class AlbamImportOperator(bpy.types.Operator):
+    bl_idname = "albam_import.item"
+    bl_label = "import item"
+    directory = bpy.props.StringProperty(subtype='DIR_PATH')
+    files = bpy.props.CollectionProperty(name='adf', type=bpy.types.OperatorFileListElement)
+    filter_glob = bpy.props.StringProperty(default="*.arc", options={'HIDDEN'})
+    unpack_dir = bpy.props.StringProperty(options={'HIDDEN'})
+
+    def invoke(self, context, event):  # pragma: no cover
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        to_import = [os.path.join(self.directory, f.name) for f in self.files]
+        for file_path in to_import:
+            self._import_file(file_path=file_path, context=context)
+
+        return {'FINISHED'}
+
+    def _import_file(self, **kwargs):
+        parent = kwargs.get('parent')
+        file_path = kwargs.get('file_path')
+        context = kwargs['context']
+        kwargs['unpack_dir'] = self.unpack_dir
+
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        id_magic = data[:4]
+
+        func = blender_registry.import_registry.get(id_magic)
+        if not func:
+            raise TypeError('File not supported for import. Id magic: {}'.format(id_magic))
+
+        name = os.path.basename(file_path)
+        obj_data = bpy.data.meshes.new(name)
+        obj = bpy.data.objects.new(name, obj_data)
+        obj.parent = parent
+        obj.albam_imported_item['data'] = data
+        obj.albam_imported_item.source_path = file_path
+
+        # TODO: proper logging/raising and rollback if failure
+        results_dict = func(blender_object=obj, **kwargs)
+        bpy.context.scene.objects.link(obj)
+
+        is_exportable = bool(blender_registry.export_registry.get(id_magic))
+        if is_exportable:
+            new_albam_imported_item = context.scene.albam_items_imported.add()
+            new_albam_imported_item.name = name
+        # TODO: re-think this. Is it necessary? Too implicit
+        if results_dict:
+            files = results_dict.get('files', [])
+            kwargs = results_dict.get('kwargs', {})
+            for f in files:
+                self._import_file(file_path=f, context=context, **kwargs)
+
+
+class AlbamExportOperator(bpy.types.Operator):
+    bl_idname = "albam_export.item"
+    bl_label = "export item"
+    filepath = bpy.props.StringProperty()
+
+    @classmethod
+    def poll(self, context):  # pragma: no cover
+        if not bpy.context.scene.albam_item_to_export:
+            return False
+        return True
+
+    def invoke(self, context, event):  # pragma: no cover
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        object_name = context.scene.albam_item_to_export
+        obj = bpy.data.objects[object_name]
+        id_magic = obj.albam_imported_item['data'][:4]
+        func = blender_registry.export_registry.get(id_magic)
+        if not func:
+            raise TypeError('File not supported for export. Id magic: {}'.format(id_magic))
+        bpy.ops.object.mode_set(mode='OBJECT')
+        func(obj, self.filepath)
+        return {'FINISHED'}
+
 
 bl_info = {
     "name": "Albam",
     "author": "Sebastian Brachi",
     "version": (0, 3, 0),
-    "blender": (2, 78, 0),
+    "blender": (2, 80, 0),
     "location": "Properties Panel",
     "description": "Import-Export multiple video-bame formats",
     "wiki_url": "https://github.com/Brachi/albam",
@@ -23,46 +143,15 @@ bl_info = {
 
 
 def register():
-
-    # workaround for error running tests: 'module albam defines no classes'
-    class Dummy(bpy.types.PropertyGroup):
-        name = bpy.props.StringProperty()
-
-    # TODO: refactor to avoid code duplication
-
-    # Setting custom material properties
-    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('material', []):
-        prop_cls = getattr(bpy.props, prop_cls_name)
-        kwargs = {}
-        if default:
-            kwargs['default'] = default
-        prop_instance = prop_cls(**kwargs)
-        setattr(bpy.types.Material, prop_name, prop_instance)
-
-    # Setting custom texture properties
-    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('texture', []):
-        prop_cls = getattr(bpy.props, prop_cls_name)
-        kwargs = {}
-        if default:
-            kwargs['default'] = default
-        prop_instance = prop_cls(**kwargs)
-        setattr(bpy.types.Texture, prop_name, prop_instance)
-
-    # Setting custom mesh properties
-    for prop_name, prop_cls_name, default in blender_registry.bpy_props.get('mesh', []):
-        prop_cls = getattr(bpy.props, prop_cls_name)
-        kwargs = {}
-        if default:
-            kwargs['default'] = default
-        prop_instance = prop_cls(**kwargs)
-        setattr(bpy.types.Mesh, prop_name, prop_instance)
-
-    bpy.utils.register_module(__name__)
+    bpy.utils.register_class(AlbamImportedItem)
+    bpy.utils.register_class(AlbamImportedItemName)
+    bpy.utils.register_class(AlbamImportExportPanel)
+    bpy.utils.register_class(AlbamExportOperator)
+    bpy.utils.register_class(AlbamImportOperator)
 
     bpy.types.Scene.albam_item_to_export = bpy.props.StringProperty()
-    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=blender.AlbamImportedItemName)
-
-    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=blender.AlbamImportedItem)
+    bpy.types.Scene.albam_items_imported = bpy.props.CollectionProperty(type=AlbamImportedItemName)
+    bpy.types.Object.albam_imported_item = bpy.props.PointerProperty(type=AlbamImportedItem)
 
 
 def unregister():
