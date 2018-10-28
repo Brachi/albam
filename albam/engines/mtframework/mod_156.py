@@ -6,7 +6,6 @@ from ctypes import (
 
 from albam.engines.mtframework.defaults import DEFAULT_MATERIAL
 from albam.lib.structure import DynamicStructure
-from albam.registry import blender_registry
 
 
 def unk_data_depends_on_other_unk(tmp_struct):
@@ -125,7 +124,6 @@ class GroupData(Structure):
     _comments_ = {'group_index': "In ~25% of all RE5 mods, this value doesn't match the index"}
 
 
-@blender_registry.register_bpy_prop('material', 'unk_')
 class MaterialData(Structure):
     _defaults_ = DEFAULT_MATERIAL
     _fields_ = (('unk_01', c_ushort),
@@ -185,7 +183,6 @@ class MaterialData(Structure):
                 ('unk_37', c_float),)
 
 
-@blender_registry.register_bpy_prop('mesh', 'unk_')
 class Mesh156(LittleEndianStructure):
     _fields_ = (('group_index', c_ushort),
                 ('material_index', c_ushort),

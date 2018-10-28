@@ -1,7 +1,6 @@
 from ctypes import Structure, sizeof, c_int, c_char, c_byte
 import os
 
-from albam.exceptions import TextureError
 from albam.lib.structure import DynamicStructure
 
 
@@ -101,7 +100,7 @@ class DDS(DynamicStructure):
         elif fmt in (b'DXT3', b'DXT5'):
             return 16
         else:
-            raise TextureError('Unrecognized format in dds: {}'.format(fmt))
+            raise RuntimeError('Unrecognized format in dds: {}'.format(fmt))
 
     @classmethod
     def calculate_linear_size(cls, width, height, fmt):

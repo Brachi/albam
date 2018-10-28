@@ -12,7 +12,6 @@ except ImportError:
     pass
 
 from albam.registry import blender_registry
-from albam.exceptions import ExportError
 from albam.engines.mtframework.mod_156 import (
     Mesh156,
     MeshBox,
@@ -81,7 +80,7 @@ def export_arc(blender_object, file_path):
                 # TODO: mods with the same name in different folders
                 exported_mod = mods[filename]
             except KeyError:
-                raise ExportError("Can't export to arc, a mod file is missing: {}. "
+                raise RuntimeError("Can't export to arc, a mod file is missing: {}. "
                                   "Was it deleted before exporting?. "
                                   "mods.items(): {}".format(filename, mods.items()))
 
@@ -95,13 +94,6 @@ def export_arc(blender_object, file_path):
             tex_filename_no_ext = os.path.splitext(os.path.basename(tex_file_path))[0]
             destination_path = os.path.join(tmpdir, resolved_path, tex_filename_no_ext + '.tex')
             tex = Tex112.from_dds(file_path=bpy.path.abspath(blender_texture.image.filepath))
-            # metadata saved
-            # TODO: use an util function
-            for field in tex._fields_:
-                attr_name = field[0]
-                if not attr_name.startswith('unk_'):
-                    continue
-                setattr(tex, attr_name, getattr(blender_texture, attr_name))
 
             with open(destination_path, 'wb') as w:
                 w.write(tex)
@@ -531,7 +523,7 @@ def _export_meshes(blender_meshes, bounding_box, bone_palettes, exported_materia
             m156.material_index = materials_mapping[blender_material.name]
         except IndexError:
             # TODO: insert an empty generic material in this case
-            raise ExportError('Mesh {} has no materials'.format(blender_mesh.name))
+            raise RuntimeError('Mesh {} has no materials'.format(blender_mesh.name))
         m156.constant = 1
         m156.level_of_detail = level_of_detail
         m156.vertex_format = CLASSES_TO_VERTEX_FORMATS[type(vertices_array[0])]
@@ -578,10 +570,10 @@ def _export_textures_and_materials(blender_objects, saved_mod):
         try:
             file_path = file_path.encode('ascii')
         except UnicodeEncodeError:
-            raise ExportError('Texture path {} is not in ascii'.format(file_path))
+            raise RuntimeError('Texture path {} is not in ascii'.format(file_path))
         if len(file_path) > 64:
             # TODO: what if relative path are used?
-            raise ExportError('File path to texture {} is longer than 64 characters'
+            raise RuntimeError('File path to texture {} is longer than 64 characters'
                               .format(file_path))
 
         file_path, _ = ntpath.splitext(file_path)
@@ -589,13 +581,6 @@ def _export_textures_and_materials(blender_objects, saved_mod):
 
     for mat_index, mat in enumerate(blender_materials):
         material_data = MaterialData()
-        # Setting uknown data
-        # TODO: do this with a util function
-        for field in material_data._fields_:
-            attr_name = field[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            setattr(material_data, attr_name, getattr(mat, attr_name))
 
         for texture_slot in mat.texture_slots:
             if not texture_slot or not texture_slot.texture:

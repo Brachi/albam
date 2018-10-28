@@ -8,7 +8,6 @@ try:
 except ImportError:
     pass
 
-from albam.exceptions import BuildMeshError, TextureError
 from albam.engines.mtframework import Arc, Mod156, Tex112, KNOWN_ARC_BLENDER_CRASH, CORRUPTED_ARCS
 from albam.engines.mtframework.utils import (
     get_vertices_array,
@@ -85,7 +84,7 @@ def import_mod(blender_object, file_path, **kwargs):
         try:
             m = _build_blender_mesh_from_mod(mod, mesh, i, name, materials)
             meshes.append(m)
-        except BuildMeshError as err:
+        except Exception as err:
             # TODO: logging
             print('Error building mesh {0} for mod {1}'.format(i, file_path))
             print('Details:', err)
@@ -160,16 +159,6 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     if weights_per_bone and mesh.level_of_detail in (2, 252):
         ob.hide = True
         ob.hide_render = True
-
-    # Saving unknown metadata for export
-    # TODO: use a util function
-    for field_tuple in mesh._fields_:
-        attr_name = field_tuple[0]
-        if not attr_name.startswith('unk_'):
-            continue
-        attr_value = getattr(mesh, attr_name)
-        setattr(me_ob, attr_name, attr_value)
-
     return ob
 
 
@@ -223,7 +212,7 @@ def _create_blender_textures_from_mod(mod, base_dir):
         tex = Tex112(path)
         try:
             dds = tex.to_dds()
-        except TextureError as err:
+        except Exception as err:
             # TODO: log this instead of printing it
             print('Error converting "{}"to dds: {}'.format(path, err))
             textures.append(None)
@@ -237,14 +226,6 @@ def _create_blender_textures_from_mod(mod, base_dir):
         texture = bpy.data.textures.new(texture_name_no_extension, type='IMAGE')
         texture.image = image
         textures.append(texture)
-        # saving meta data for export
-        # TODO: use a util function
-        for field_tuple in tex._fields_:
-            attr_name = field_tuple[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            attr_value = getattr(tex, attr_name)
-            setattr(texture, attr_name, attr_value)
 
     return textures
 
@@ -256,16 +237,6 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
         blender_material.use_transparency = True
         blender_material.alpha = 0.0
         blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
-
-        # unknown data for export, registered already
-        # TODO: do this with a util function
-        for field_tuple in material._fields_:
-            attr_name = field_tuple[0]
-            if not attr_name.startswith('unk_'):
-                continue
-            attr_value = getattr(material, attr_name)
-            setattr(blender_material, attr_name, attr_value)
-        materials.append(blender_material)
 
         for texture_code, tex_index in enumerate(material.texture_indices):
             if not tex_index:
@@ -283,6 +254,8 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 continue
             texture_code_to_blender_texture(texture_code, slot, blender_material)
             slot.texture = texture_target
+        materials.append(blender_material)
+
 
     return materials
 

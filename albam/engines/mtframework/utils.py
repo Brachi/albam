@@ -2,7 +2,6 @@ import ctypes
 from collections import Counter
 import ntpath
 
-from albam.exceptions import BuildMeshError
 from albam.engines.mtframework.mod_156 import (
     VERTEX_FORMATS_TO_CLASSES,
     )
@@ -40,7 +39,7 @@ def get_indices_array(mod, mesh):
     position = mesh.face_offset * 2 + mesh.face_position * 2
     index_buffer_size = get_size(mod, 'index_buffer')
     if position > index_buffer_size:
-        raise BuildMeshError('Error building mesh in get_indices_array (out of bounds reference)'
+        raise RuntimeError('Error building mesh in get_indices_array (out of bounds reference)'
                              'Size of mod.indices_buffer: {} mesh.face_offset: {}, mesh.face_position: {}'
                              .format(index_buffer_size, mesh.face_offset, mesh.face_position))
     offset += position
