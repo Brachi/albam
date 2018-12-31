@@ -4,7 +4,7 @@ except ImportError:
     pass
 
 import albam.engines.mtframework.blender_import  # noqa
-import albam.engines.mtframework.blender_export  # noqa
+import albam.engines.mtframework.blender_import  # noqa
 from albam.registry import blender_registry
 
 import os
@@ -21,15 +21,15 @@ from albam.registry import blender_registry
 class AlbamImportedItemName(bpy.types.PropertyGroup):
     '''All imported object names are saved here to then show them in the
     export list'''
-    name = bpy.props.StringProperty(name="Imported Item", default="Unknown")
+    name : bpy.props.StringProperty(name="Imported Item", default="Unknown")
 
 
 class AlbamImportedItem(bpy.types.PropertyGroup):
-    name = bpy.props.StringProperty(options={'HIDDEN'})
-    source_path = bpy.props.StringProperty(options={'HIDDEN'})
-    folder = bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
-    data = bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
-    file_type = bpy.props.StringProperty(options={'HIDDEN'})
+    name : bpy.props.StringProperty(options={'HIDDEN'})
+    source_path : bpy.props.StringProperty(options={'HIDDEN'})
+    folder : bpy.props.StringProperty(options={'HIDDEN'})  # Always in posix format
+    data : bpy.props.StringProperty(options={'HIDDEN'}, subtype='BYTE_STRING')
+    file_type : bpy.props.StringProperty(options={'HIDDEN'})
 
 
 class AlbamImportExportPanel(bpy.types.Panel):
@@ -40,29 +40,35 @@ class AlbamImportExportPanel(bpy.types.Panel):
     def draw(self, context):  # pragma: no cover
         scn = context.scene
         layout = self.layout
-        layout.operator('albam_import.item', text='Import')
-        layout.prop_search(scn, 'albam_item_to_export', scn, 'albam_items_imported', 'select')
+        layout.operator('albam_import.item', text='Import (debug)')
+        layout.prop_search(scn, 'albam_item_to_export', scn, 'albam_items_imported', text='select')
         layout.operator('albam_export.item', text='Export')
 
 
 class AlbamImportOperator(bpy.types.Operator):
     bl_idname = "albam_import.item"
     bl_label = "import item"
-    directory = bpy.props.StringProperty(subtype='DIR_PATH')
-    files = bpy.props.CollectionProperty(name='adf', type=bpy.types.OperatorFileListElement)
-    filter_glob = bpy.props.StringProperty(default="*.arc", options={'HIDDEN'})
-    unpack_dir = bpy.props.StringProperty(options={'HIDDEN'})
 
-    def invoke(self, context, event):  # pragma: no cover
-        wm = context.window_manager
-        wm.fileselect_add(self)
-        return {'RUNNING_MODAL'}
+    directory : bpy.props.StringProperty(subtype='DIR_PATH')
+    files : bpy.props.CollectionProperty(name='adf', type=bpy.types.OperatorFileListElement)
+    unpack_dir : bpy.props.StringProperty(options={'HIDDEN'})
+
+    # temporary disabling
+    # def invoke(self, context, event):  # pragma: no cover
+    #     wm = context.window_manager
+    #     wm.fileselect_add(self)
+    #     return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        to_import = [os.path.join(self.directory, f.name) for f in self.files]
-        for file_path in to_import:
-            self._import_file(file_path=file_path, context=context)
+        """
+        Temporary always importing the same model for upgrade to 2.8
+        """
+        # to_import = [os.path.join(self.directory, f.name) for f in self.files]
+        # for file_path in to_import:
+        #     self._import_file(file_path=file_path, context=context)
 
+        file_path = '/home/brachi/repos/albam/tests/samples/re5/arc/uPl00ChrisNormal.arc'
+        self._import_file(file_path=file_path, context=context)
         return {'FINISHED'}
 
     def _import_file(self, **kwargs):
@@ -88,7 +94,8 @@ class AlbamImportOperator(bpy.types.Operator):
 
         # TODO: proper logging/raising and rollback if failure
         results_dict = func(blender_object=obj, **kwargs)
-        bpy.context.scene.objects.link(obj)
+        obj.display_type = 'WIRE'
+        bpy.context.scene.collection.objects.link(obj)
 
         is_exportable = bool(blender_registry.export_registry.get(id_magic))
         if is_exportable:
@@ -103,9 +110,10 @@ class AlbamImportOperator(bpy.types.Operator):
 
 
 class AlbamExportOperator(bpy.types.Operator):
-    bl_idname = "albam_export.item"
     bl_label = "export item"
-    filepath = bpy.props.StringProperty()
+    bl_idname = "albam_export.item"
+
+    filepath : bpy.props.StringProperty()
 
     @classmethod
     def poll(self, context):  # pragma: no cover

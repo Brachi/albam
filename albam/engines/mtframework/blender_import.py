@@ -65,7 +65,6 @@ def _set_bounding_box(mod, blender_object):
                                          mod.box_max_x / 100, mod.box_max_z / -100, mod.box_max_y / 100)
     blender_object.data.from_pydata(vertices, [], faces)
     blender_object.data.validate()
-    blender_object.draw_type = 'WIRE'
 
 
 @blender_registry.register_function('import', identifier=b'MOD\x00')
@@ -74,7 +73,7 @@ def import_mod(blender_object, file_path, **kwargs):
 
     mod = Mod156(file_path=file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
-    materials = _create_blender_materials_from_mod(mod, blender_object.name, textures)
+    materials = [] # _create_blender_materials_from_mod(mod, blender_object.name, textures)
 
     _set_bounding_box(mod, blender_object)
 
@@ -92,12 +91,12 @@ def import_mod(blender_object, file_path, **kwargs):
     if mod.bone_count:
         armature_name = 'skel_{}'.format(blender_object.name)
         root = _create_blender_armature_from_mod(blender_object, mod, armature_name)
-        root.show_x_ray = True
+        root.show_in_front = True
     else:
         root = blender_object
 
     for mesh in meshes:
-        bpy.context.scene.objects.link(mesh)
+        bpy.context.scene.collection.objects.link(mesh)
         mesh.parent = root
         if mod.bone_count:
             modifier = mesh.modifiers.new(type="ARMATURE", name=blender_object.name)
@@ -136,17 +135,17 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob.normals_split_custom_set_from_vertices(vertex_normals)
     me_ob.use_auto_smooth = True
 
-    mesh_material = materials[mesh.material_index]
-    if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
-        mesh_material.use_cast_shadows = False
-    me_ob.materials.append(mesh_material)
+    #mesh_material = materials[mesh.material_index]
+    #if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
+    #    mesh_material.use_cast_shadows = False
+    #me_ob.materials.append(mesh_material)
 
     for bone_index, data in weights_per_bone.items():
-        vg = ob.vertex_groups.new(str(bone_index))
+        vg = ob.vertex_groups.new(name=str(bone_index))
         for vertex_index, weight_value in data:
             vg.add((vertex_index,), weight_value, 'ADD')
 
-    if uvs_per_vertex:
+    if False and uvs_per_vertex:
         me_ob.uv_textures.new(name)
         uv_layer = me_ob.uv_layers[-1].data
         per_loop_list = []
@@ -156,9 +155,9 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
         uv_layer.foreach_set('uv', per_loop_list)
     # Hiding non main level of detail meshes if they have more than one.
     # For now, assuming that if the mesh has no bones, then it has only one level of detail
-    if weights_per_bone and mesh.level_of_detail in (2, 252):
-        ob.hide = True
-        ob.hide_render = True
+    #if and weights_per_bone and mesh.level_of_detail in (2, 252):
+    #    ob.hide = True
+    #    ob.hide_render = True
     return ob
 
 
@@ -269,10 +268,12 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
         bpy.ops.object.mode_set(mode='OBJECT')
     # deselect all objects
     for i in bpy.context.scene.objects:
-        i.select = False
-    bpy.context.scene.objects.link(armature_ob)
-    bpy.context.scene.objects.active = armature_ob
-    armature_ob.select = True
+        i.select_set(False)
+
+    bpy.context.scene.collection.objects.link(armature_ob)
+    bpy.context.view_layer.objects.active = armature_ob
+
+    # armature_ob.select = True
     bpy.ops.object.mode_set(mode='EDIT')
 
     blender_bones = []
@@ -289,7 +290,7 @@ def _create_blender_armature_from_mod(blender_object, mod, armature_name):
         wtm = Matrix.Translation((0, 0, 0))
         for bi in reversed(chain):
             b = mod.bones_array[bi]
-            wtm *= Matrix.Translation((b.location_x / 100, b.location_z / 100 * -1, b.location_y / 100))
+            wtm @= Matrix.Translation((b.location_x / 100, b.location_z / 100 * -1, b.location_y / 100))
         blender_bone.head = wtm.to_translation()
         blender_bone.parent = blender_bones[bone.parent_index]
 
@@ -394,7 +395,7 @@ def _get_or_create_bone_group(bone_anim_index, armature_ob, bone_index, bone_gro
     if bone_group_cache.get('bl_group'):
         return bone_group_cache['bl_group']
 
-    bl_bone_group = armature_ob.pose.bone_groups.new(bone_group_cache['name'])
+    bl_bone_group = armature_ob.pose.bone_groups.new(name=bone_group_cache['name'])
     bl_bone_group.color_set = bone_group_cache['color_set']
     bone_group_cache['bl_group'] = bl_bone_group
 
