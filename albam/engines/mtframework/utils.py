@@ -125,32 +125,15 @@ def get_bone_parents_from_mod(bone, bones_array):
     return parents
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_slot, blender_material):
-    blender_texture_slot.use_map_alpha = True
-    if texture_code == 0:
-        # Diffuse
-        blender_texture_slot.use_map_color_diffuse = True
-    elif texture_code == 1:
-        # Normal
-        blender_texture_slot.use_map_color_diffuse = False
-        blender_texture_slot.use_map_normal = True
-        blender_texture_slot.normal_factor = 0.05
-    elif texture_code == 2:
-        # Specular
-        blender_texture_slot.use_map_color_diffuse = False
-        blender_texture_slot.use_map_specular = True
-        blender_material.specular_intensity = 0.0
-    elif texture_code == 7:
-        # cube map normal
-        blender_texture_slot.use_map_color_diffuse = False
-        blender_texture_slot.use_map_normal = True
-        blender_texture_slot.normal_factor = 0.05
-        blender_texture_slot.texture_coords = 'GLOBAL'
-        blender_texture_slot.mapping = 'CUBE'
-    else:
-        print('texture_code not supported', texture_code)
-        blender_texture_slot.use_map_color_diffuse = False
-        # TODO: 3, 4, 5, 6,
+def texture_code_to_blender_texture(texture_code):
+    # XXX temporary
+    # TODO: 3, 4, 5, 6,
+    mapping = {0: 'diffuse',
+               1: 'normal',
+               2: 'specular',
+               7: 'cube_map'
+            }
+    return mapping.get(texture_code)
 
 
 def blender_texture_to_texture_code(blender_texture_slot):

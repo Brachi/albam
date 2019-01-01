@@ -73,13 +73,16 @@ def import_mod(blender_object, file_path, **kwargs):
 
     mod = Mod156(file_path=file_path)
     textures = _create_blender_textures_from_mod(mod, base_dir)
-    materials = [] # _create_blender_materials_from_mod(mod, blender_object.name, textures)
+    materials = _create_blender_materials_from_mod(mod, blender_object.name, textures)
 
     _set_bounding_box(mod, blender_object)
 
     meshes = []
     for i, mesh in enumerate(mod.meshes_array):
         name = create_mesh_name(mesh, i, file_path)
+        # XXX temporary for debug
+        if mesh.level_of_detail not in (1, 255):
+            continue
         try:
             m = _build_blender_mesh_from_mod(mod, mesh, i, name, materials)
             meshes.append(m)
@@ -135,29 +138,22 @@ def _build_blender_mesh_from_mod(mod, mesh, mesh_index, name, materials):
     me_ob.normals_split_custom_set_from_vertices(vertex_normals)
     me_ob.use_auto_smooth = True
 
-    #mesh_material = materials[mesh.material_index]
-    #if not mesh.use_cast_shadows and mesh_material.use_cast_shadows:
-    #    mesh_material.use_cast_shadows = False
-    #me_ob.materials.append(mesh_material)
+    mesh_material = materials[mesh.material_index]
+    me_ob.materials.append(mesh_material)
 
     for bone_index, data in weights_per_bone.items():
         vg = ob.vertex_groups.new(name=str(bone_index))
         for vertex_index, weight_value in data:
             vg.add((vertex_index,), weight_value, 'ADD')
 
-    if False and uvs_per_vertex:
-        me_ob.uv_textures.new(name)
+    if uvs_per_vertex:
+        me_ob.uv_layers.new(name=name)
         uv_layer = me_ob.uv_layers[-1].data
         per_loop_list = []
         for loop in me_ob.loops:
             offset = loop.vertex_index * 2
             per_loop_list.extend((uvs_per_vertex[offset], uvs_per_vertex[offset + 1]))
         uv_layer.foreach_set('uv', per_loop_list)
-    # Hiding non main level of detail meshes if they have more than one.
-    # For now, assuming that if the mesh has no bones, then it has only one level of detail
-    #if and weights_per_bone and mesh.level_of_detail in (2, 252):
-    #    ob.hide = True
-    #    ob.hide_render = True
     return ob
 
 
@@ -233,9 +229,8 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
     materials = []
     for i, material in enumerate(mod.materials_data_array):
         blender_material = bpy.data.materials.new('{}_{}'.format(model_name, str(i).zfill(2)))
-        blender_material.use_transparency = True
-        blender_material.alpha = 0.0
-        blender_material.specular_intensity = 0.2  # would be nice to get this info from the mod
+        blender_material.use_nodes = True
+        node_tree = blender_material.node_tree
 
         for texture_code, tex_index in enumerate(material.texture_indices):
             if not tex_index:
@@ -246,13 +241,16 @@ def _create_blender_materials_from_mod(mod, model_name, textures):
                 # TODO
                 print('tex_index {} not found. Texture len(): {}'.format(tex_index, len(textures)))
                 continue
-            slot = blender_material.texture_slots.add()
-            if not texture_target:
-                # This means the conversion failed before
-                # TODO: logging
-                continue
-            texture_code_to_blender_texture(texture_code, slot, blender_material)
-            slot.texture = texture_target
+            texture_type = texture_code_to_blender_texture(texture_code)
+            if texture_type == 'diffuse':
+                nbsdf = node_tree.nodes['Principled BSDF']
+                ntex = node_tree.nodes.new('ShaderNodeTexImage')
+                ntex.image = texture_target.image
+                nmap = node_tree.nodes.new('ShaderNodeMapping')
+
+                node_tree.links.new(ntex.outputs['Color'], nmap.inputs['Vector'])
+                node_tree.links.new(nmap.outputs['Vector'], nbsdf.inputs['Base Color'])
+
         materials.append(blender_material)
 
 
