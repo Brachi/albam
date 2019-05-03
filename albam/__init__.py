@@ -36,11 +36,12 @@ class AlbamImportExportPanel(bpy.types.Panel):
     bl_label = "Albam"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_category = "Albam"
 
     def draw(self, context):  # pragma: no cover
         scn = context.scene
         layout = self.layout
-        layout.operator('albam_import.item', text='Import (debug)')
+        layout.operator('albam_import.item', text='Import')
         layout.prop_search(scn, 'albam_item_to_export', scn, 'albam_items_imported', text='select')
         layout.operator('albam_export.item', text='Export')
 
@@ -53,22 +54,18 @@ class AlbamImportOperator(bpy.types.Operator):
     files : bpy.props.CollectionProperty(name='adf', type=bpy.types.OperatorFileListElement)
     unpack_dir : bpy.props.StringProperty(options={'HIDDEN'})
 
-    # temporary disabling
-    # def invoke(self, context, event):  # pragma: no cover
-    #     wm = context.window_manager
-    #     wm.fileselect_add(self)
-    #     return {'RUNNING_MODAL'}
+    def invoke(self, context, event):  # pragma: no cover
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
     def execute(self, context):
         """
         Temporary always importing the same model for upgrade to 2.8
         """
-        # to_import = [os.path.join(self.directory, f.name) for f in self.files]
-        # for file_path in to_import:
-        #     self._import_file(file_path=file_path, context=context)
-
-        file_path = '/home/brachi/repos/albam/tests/samples/re5/arc/uPl00ChrisNormal.arc'
-        self._import_file(file_path=file_path, context=context)
+        to_import = [os.path.join(self.directory, f.name) for f in self.files]
+        for file_path in to_import:
+            self._import_file(file_path=file_path, context=context)
         return {'FINISHED'}
 
     def _import_file(self, **kwargs):
