@@ -11,7 +11,7 @@ try:
 except ImportError:
     pass
 
-from albam.registry import blender_registry
+from albam.registry import albam_registry
 from albam.engines.mtframework.mod_156 import (
     Mesh156,
     MeshBox,
@@ -50,7 +50,7 @@ ExportedMaterials = namedtuple('ExportedMaterials', ('textures_array', 'material
 ExportedMod = namedtuple('ExportedMod', ('mod', 'exported_materials'))
 
 
-@blender_registry.register_function('export', b'ARC\x00')
+@albam_registry.register_function('export', b'ARC\x00')
 def export_arc(blender_object, file_path):
     saved_arc = Arc(file_path=BytesIO(blender_object.albam_imported_item.data))
     mods = {}

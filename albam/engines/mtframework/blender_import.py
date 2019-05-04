@@ -23,10 +23,10 @@ from albam.lib.misc import chunks
 from albam.lib.half_float import unpack_half_float
 from albam.lib.blender import strip_triangles_to_triangles_list, create_mesh_name
 from albam.lib.geometry import vertices_from_bbox
-from albam.registry import blender_registry
+from albam.registry import albam_registry
 
 
-@blender_registry.register_function('import', identifier=b'ARC\x00')
+@albam_registry.register_function('import', identifier=b'ARC\x00')
 def import_arc(blender_object, file_path, **kwargs):
     """Imports an arc file (Resident Evil 5 for only for now) into blender,
     extracting all files to a tmp dir and saving unknown/unused data
@@ -67,7 +67,7 @@ def _set_bounding_box(mod, blender_object):
     blender_object.data.validate()
 
 
-@blender_registry.register_function('import', identifier=b'MOD\x00')
+@albam_registry.register_function('import', identifier=b'MOD\x00')
 def import_mod(blender_object, file_path, **kwargs):
     base_dir = kwargs.get('base_dir')
 
