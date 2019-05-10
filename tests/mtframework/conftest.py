@@ -7,7 +7,7 @@ import pytest
 
 from albam.engines.mtframework import Arc, Mod156, Tex112
 from albam.lib.misc import find_files
-from tests.conftest import SAMPLES_DIR, albam_import_export
+from tests.conftest import SAMPLES_DIR
 
 ARC_SAMPLES_DIR = os.path.join(SAMPLES_DIR, 're5/arc')
 ARC_FILES = [os.path.join(root, f) for root, _, files in os.walk(ARC_SAMPLES_DIR)
@@ -19,86 +19,6 @@ CACHE_FILE_ARC = {}
 TEMP_DIRS_TO_DELETE = set()
 TEMP_FILES_TO_DELETE = set()
 ARC_FILES_EXPORTED = False
-
-
-@pytest.fixture(scope='module')
-def mod156(mod_file_from_arc):
-    mod156 = Mod156(mod_file_from_arc)
-    return mod156
-
-
-@pytest.fixture(scope='module')
-def tex112(tex_file_from_arc):
-    tex112 = Tex112(tex_file_from_arc)
-    return tex112
-
-
-def pytest_generate_tests(metafunc):
-    global ARC_FILES_EXPORTED
-
-    if 'mod_file_from_arc' in metafunc.fixturenames:
-        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
-        metafunc.parametrize("mod_file_from_arc", mod_files, scope='module', ids=ids)
-    elif 'tex_file_from_arc' in metafunc.fixturenames:
-        tex_files, ids = _get_files_from_arcs(extension='.tex', arc_path=metafunc.config.option.dirarc)
-        metafunc.parametrize("tex_file_from_arc", tex_files, scope='module', ids=ids)
-    elif 'mod156_mesh' in metafunc.fixturenames:
-        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
-        meshes, ids = _get_array_members_from_files(mod_files, ids, Mod156, 'meshes_array')
-        metafunc.parametrize("mod156_mesh", meshes, scope='module', ids=ids)
-    elif 'mod156_bone' in metafunc.fixturenames:
-        mod_files, ids = _get_files_from_arcs(extension='.mod', arc_path=metafunc.config.option.dirarc)
-        meshes, ids = _get_array_members_from_files(mod_files, ids, Mod156, 'bones_array')
-        metafunc.parametrize("mod156_bone", meshes, scope='module', ids=ids)
-    elif 'mod156_original' and 'mod156_exported' in metafunc.fixturenames:
-        exported_files = []
-        blender_path = metafunc.config.getoption('blender')
-        if not blender_path:
-            pytest.skip('No blender bin path supplied')
-        else:
-            if not ARC_FILES_EXPORTED:
-                albam_import_export(blender_path, ARC_FILES)
-                ARC_FILES_EXPORTED = True
-            exported_files = [f + '.exported' for f in ARC_FILES]
-
-            mod_files_original, ids_exported = _get_files_from_arcs(extension='.mod', arc_list=ARC_FILES)
-            mod_files_exported, ids_exported = _get_files_from_arcs(extension='.mod', arc_list=exported_files)
-
-            mod_files = list(zip(mod_files_original, mod_files_exported))
-            mods = [(Mod156(t[0]), Mod156(t[1])) for t in mod_files]
-            TEMP_FILES_TO_DELETE.update(exported_files)
-
-            metafunc.parametrize("mod156_original, mod156_exported", mods, scope='module', ids=ids_exported)
-    # XXX TODO: simplify this, too much duplication!
-    elif 'mod156_mesh_original' and 'mod156_mesh_exported' in metafunc.fixturenames:
-        exported_files = []
-        blender_path = metafunc.config.getoption('blender')
-        if not blender_path:
-            pytest.skip('No blender bin path supplied')
-        else:
-            if not ARC_FILES_EXPORTED:
-                albam_import_export(blender_path, ARC_FILES)
-                ARC_FILES_EXPORTED = True
-            exported_files = [f + '.exported' for f in ARC_FILES]
-
-            mod_files_original, ids_original = _get_files_from_arcs(extension='.mod', arc_list=ARC_FILES)
-            mod_files_exported, ids_exported = _get_files_from_arcs(extension='.mod', arc_list=exported_files)
-
-            meshes_original, ids_original = _get_array_members_from_files(mod_files_original, ids_original, Mod156, 'meshes_array')
-            meshes_exported, ids_exported = _get_array_members_from_files(mod_files_exported, ids_exported, Mod156, 'meshes_array')
-            meshes = list(zip(meshes_original, meshes_exported))
-            ids = list(zip(ids_original, ids_exported))
-            TEMP_FILES_TO_DELETE.update(exported_files)
-
-            metafunc.parametrize("mod156_mesh_original, mod156_mesh_exported", meshes, scope='module', ids=ids_exported)
-
-
-def pytest_sessionfinish(session, exitstatus):
-    # TODO: try to use tempdir fixture from config?
-    for temp_dir in TEMP_DIRS_TO_DELETE:
-        shutil.rmtree(temp_dir)
-    for temp_file in TEMP_FILES_TO_DELETE:
-        os.remove(temp_file)
 
 
 def _get_files_from_arcs(extension, arc_list=None, arc_path=None):
