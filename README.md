@@ -1,6 +1,6 @@
 Albam
 =====
-[![Build Status](https://travis-ci.org/Brachi/albam.svg?branch=develop)](https://travis-ci.org/Brachi/albam)
+[![Build Status](https://travis-ci.com/Brachi/albam.svg?branch=develop)](https://travis-ci.org/Brachi/albam)
 [![Coverage Status](https://coveralls.io/repos/Brachi/albam/badge.svg?branch=develop&service=github)](https://coveralls.io/github/Brachi/albam?branch=develop)
 [![Downloads](https://img.shields.io/github/downloads/brachi/albam/total.svg)](https://github.com/Brachi/albam/releases)
 
