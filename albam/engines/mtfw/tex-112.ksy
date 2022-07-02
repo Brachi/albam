@@ -3,7 +3,7 @@ meta:
   endian: le
   title:  Resident Evil 5 (MTFramework) texture format
   application: Resident Evil 5/Biohazard 5
-  file-extension: arc
+  file-extension: tex
   license: CC0-1.0
   ks-version: 0.8
 
