@@ -1,0 +1,35 @@
+[project]
+name = "Albam"
+version = "0.3.6"
+description = "Import 3d models into Blender"
+readme = "README.md"
+authors = [ {name = "Sebastian A. Brachi"} ]
+requires-python = "==3.10"
+license = {file = "LICENSE"}
+keywords = ["blender", "blender-addon", "import", "3d models", "3d formats"]
+
+
+[project.optional-dependencies]
+test = [
+  "black == 22.12.0",
+  "bpy == 3.4.0",
+  "coverage[toml] == 7.1.0",
+  "flake8-pyproject == 1.2.2",
+  "pytest == 7.2.0",
+  "pytest-xdist == 3.1.0",
+  "pytest-cov[all]"
+]
+
+
+[tool.black]
+line-length = 100
+
+
+[tool.coverage.run]
+omit = [ "*/structs/*.py", "*/albam_vendor/*" ]
+
+
+[tool.flake8]
+max-line-length = 100
+exclude = ["structs", "albam_vendor"]
+ignore = ['E203']
