@@ -4,7 +4,7 @@ import sys
 
 import bpy
 
-from albam.blender_ui import classes_to_register
+from albam.blender_ui import CLASSES_TO_REGISTER
 
 
 bl_info = {
@@ -25,11 +25,11 @@ def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
     importlib.import_module("albam.engines.mtfw.archive")
-    for cls in classes_to_register:
+    for cls in CLASSES_TO_REGISTER:
         bpy.utils.register_class(cls)
 
 
 def unregister():
-    for cls in reversed(classes_to_register):
+    for cls in reversed(CLASSES_TO_REGISTER):
         bpy.utils.unregister_class(cls)
     sys.path.remove(VENDOR_DIR)

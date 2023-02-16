@@ -5,9 +5,7 @@ import bpy
 from albam.registry import blender_registry
 
 
-class ALBAM_PT_ImportExportPanel2(bpy.types.Panel):
-    """UI Albam subpanel in 3D view"""
-
+class ALBAM_PT_Import(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Albam [Beta]"
@@ -18,7 +16,7 @@ class ALBAM_PT_ImportExportPanel2(bpy.types.Panel):
         self.layout.operator("albam_import.item", text="Import")
 
 
-class AlbamImportOperator2(bpy.types.Operator):
+class ALBAM_OT_Import(bpy.types.Operator):
     """Import button operator"""
 
     DIRECTORY = bpy.props.StringProperty(subtype="DIR_PATH")
@@ -37,9 +35,7 @@ class AlbamImportOperator2(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):  # pragma: no cover
-        to_import = [
-            os.path.join(self.directory, f.name) for f in self.files
-        ]  # combine path to file and file name list to a new list
+        to_import = [os.path.join(self.directory, f.name) for f in self.files]
         for file_path in to_import:
             self._import_file(file_path=file_path)
 
@@ -65,9 +61,3 @@ class AlbamImportOperator2(bpy.types.Operator):
                 bpy.context.collection.objects.link(child)
             except RuntimeError:
                 pass
-
-
-classes_to_register = (
-    ALBAM_PT_ImportExportPanel2,
-    AlbamImportOperator2,
-)
