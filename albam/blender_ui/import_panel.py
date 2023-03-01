@@ -4,6 +4,8 @@ import bpy
 
 from albam.registry import blender_registry
 
+NODES_CACHE = {}
+
 
 class ALBAM_OT_Import(bpy.types.Operator):
     bl_idname = "albam_import.item"
@@ -54,6 +56,7 @@ class ALBAM_OT_FileItemCollapseToggle(bpy.types.Operator):
         item_list = context.scene.albam.file_explorer.file_list
         item = item_list[item_index]
         item.is_expanded = not item.is_expanded
+        NODES_CACHE[item.name] = item.is_expanded
         context.scene.albam.file_explorer.file_list_selected_index = self.button_index
 
         item_list.update()
@@ -95,7 +98,7 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
     DIRECTORY = bpy.props.StringProperty(subtype="DIR_PATH")
     FILES = bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)
     # TODO: use registry, un-hardcode
-    FILTER_GLOB = bpy.props.StringProperty(default="*.arc", options={"HIDDEN"})
+    FILTER_GLOB = bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})
 
     bl_idname = "albam.add_files"
     bl_label = "Add File(s)"
@@ -153,16 +156,16 @@ class ALBAM_UL_FileList(bpy.types.UIList):
 
     def filter_items(self, context, data, propname):
         filtered_items = []
+        # TODO: self.filter_name
 
         item_list = getattr(data, propname)
         for item in item_list:
             if item.is_archive:
                 filtered_items.append(self.bitflag_filter_item)
-                continue
-            ancestors = [item_list[anc.node_id] for anc in item.tree_node_ancestors]
-            is_visible = all(a.is_expanded for a in ancestors)
-            if is_visible:
+
+            elif all(NODES_CACHE.get(anc.node_id, False) for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
+
             else:
                 filtered_items.append(0)
 
