@@ -9,7 +9,7 @@ from mathutils import Matrix
 
 from albam.lib.blender import strip_triangles_to_triangles_list
 from albam.lib.misc import chunks
-from . import EXTENSION_TO_FILE_ID
+from albam.registry import blender_registry
 from .material import build_blender_materials
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
@@ -21,21 +21,23 @@ MOD_CLASS_MAPPER = {
 }
 
 
-def build_blender_model(arc, mod_file_entry):
+@blender_registry.register_import_function(extension="mod")
+def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
 
-    bl_mod_container_name = mod_file_entry.file_path
+    file_list_item.get_buffer(context)
+    bl_mod_container_name = file_list_item.display_name
     bl_mod_container = bpy.data.objects.new(bl_mod_container_name, None)
-    mod_type = EXTENSION_TO_FILE_ID["mod"]
 
-    mod_buffer = arc.get_file(mod_file_entry.file_path, mod_type)
+    mod_buffer = file_list_item.get_buffer(context)
     mod_version = mod_buffer[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
+
     Mod = MOD_CLASS_MAPPER[mod_version]
     mod = Mod(KaitaiStream(io.BytesIO(mod_buffer)))
     bbox_data = _create_bbox_data(mod)
     skeleton = build_blender_armature(mod, bl_mod_container, bbox_data)
-    materials = build_blender_materials(arc, mod, bl_mod_container_name, mod_file_entry)
+    materials = build_blender_materials(file_list_item, context, mod, bl_mod_container_name)
     meshes_parent = skeleton or bl_mod_container
 
     for i, mesh in enumerate(m for m in mod.meshes if m.level_of_detail in LODS_TO_IMPORT):

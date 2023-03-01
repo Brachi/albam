@@ -6,7 +6,6 @@ import bpy
 from kaitaistruct import KaitaiStream
 
 from albam.lib.dds import DDSHeader
-from . import EXTENSION_TO_FILE_ID
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 from .structs.mrl import Mrl
@@ -53,15 +52,15 @@ TEX_TYPE_MAPPER = {
 }
 
 
-def build_blender_materials(arc, mod, name_prefix="material", mod_file_entry=None):
+def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="material"):
     materials = {}
-    mrl = _infer_mrl(arc, mod_file_entry)
-    if mod.header.version != 156 and not mrl:
+    mrl = _infer_mrl(context, mod_file_item)
+    if parsed_mod.header.version != 156 and not mrl:
         return materials
 
-    textures = build_blender_textures(arc, mod, mrl)
-    if mod.header.version == 156:
-        src_materials = mod.materials
+    textures = build_blender_textures(mod_file_item, context, parsed_mod, mrl)
+    if parsed_mod.header.version == 156:
+        src_materials = parsed_mod.materials
     else:
         src_materials = mrl.materials
 
@@ -132,18 +131,27 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     return tex_index
 
 
-def build_blender_textures(arc, mod, mrl=None):
+def build_blender_textures(mod_file_item, context, parsed_mod, mrl=None):
     textures = [None]  # materials refer to textures in index-1
-    tex_type = EXTENSION_TO_FILE_ID["tex"]
 
-    src_textures = getattr(mod, "textures", None) or getattr(mrl, "textures", None)
+    file_list = context.scene.albam.file_explorer.file_list
+
+    src_textures = getattr(parsed_mod, "textures", None) or getattr(mrl, "textures", None)
     if not src_textures:
         return textures
-    TexCls = TEX_VERSION_MAPPER[mod.header.version]
+    TexCls = TEX_VERSION_MAPPER[parsed_mod.header.version]
 
     for i, texture_slot in enumerate(src_textures):
         texture_path = getattr(texture_slot, "texture_path", None) or texture_slot
-        tex_buffer = arc.get_file(texture_path, tex_type)
+        new_texture_path = (
+            mod_file_item.tree_node.root_id + "::" + texture_path.replace("\\", "::") + ".tex"
+        )
+        try:
+            texture_item = file_list[new_texture_path]
+            tex_buffer = texture_item.get_buffer(context)
+        except KeyError:
+            tex_buffer = None
+
         if not tex_buffer:
             print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
@@ -448,18 +456,19 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         # TODO: 7 CM cubemap
 
 
-def _infer_mrl(arc, mod_file_entry):
+def _infer_mrl(context, mod_file_item):
     """
     Assuming mrl file is next to the .mod file with
     the same name.
     It's not always like this, e.g. RE6
     """
-    if not mod_file_entry:
-        return
-    mrl_type = EXTENSION_TO_FILE_ID["mrl"]
+    mrl_file_id = mod_file_item.name.replace(".mod", ".mrl")
+    file_list = context.scene.albam.file_explorer.file_list
 
-    mrl_file = arc.get_file(mod_file_entry.file_path, mrl_type)
-    if not mrl_file:
+    try:
+        mrl_file_item = file_list[mrl_file_id]
+    except KeyError:
         return
-    mrl = Mrl(KaitaiStream(io.BytesIO(mrl_file)))
-    return mrl
+
+    mrl_buffer = mrl_file_item.get_buffer(context)
+    return Mrl(KaitaiStream(io.BytesIO(mrl_buffer)))

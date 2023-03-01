@@ -3,15 +3,30 @@ import os
 import bpy
 import pytest
 
-from albam.engines.mtfw.archive import import_arc
+from albam.blender_ui.import_panel import (
+    ALBAM_OT_AddFiles,
+    ALBAM_OT_Import,
+)
+
+
+class FileWrapper:
+    def __init__(self, file_path):
+        self.name = os.path.basename(file_path)
 
 
 @pytest.fixture
-def imported_arc(arc_filepath, scope="function"):
-    bl_container = import_arc(arc_filepath)
+def loaded_mod_files(arc_filepath, scope="function"):
+    directory = os.path.dirname(arc_filepath)
+    ALBAM_OT_AddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
 
-    yield arc_filepath, bl_container
+    file_list = bpy.context.scene.albam.file_explorer.file_list
 
+    mod_files = [f for f in file_list if f.name.endswith('.mod')]
+
+    yield mod_files
+
+    # TODO: cleanup, for memory
+    """
     id_objs = {c.id_data for c in bl_container.children_recursive}
     id_objs.add(bl_container.id_data)
     bpy.data.batch_remove(id_objs)
@@ -24,9 +39,11 @@ def imported_arc(arc_filepath, scope="function"):
     id_armatures = {a.id_data for a in bpy.data.armatures if a.users == 0}
     bpy.data.batch_remove(id_armatures)
     del bl_container
+    """
 
 
-def test_import_arc(imported_arc):
-    arc_filepath, bl_container = imported_arc
+def test_import_mod(loaded_mod_files):
 
-    assert bl_container.name == os.path.basename(arc_filepath)
+    for mod_file in loaded_mod_files:
+        ALBAM_OT_Import._execute(mod_file, bpy.context)
+        assert bpy.data.objects[mod_file.display_name]

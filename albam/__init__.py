@@ -5,6 +5,7 @@ import sys
 import bpy
 
 from albam.blender_ui import CLASSES_TO_REGISTER
+from albam.blender_ui.data import AlbamData
 
 
 bl_info = {
@@ -25,8 +26,12 @@ def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
     importlib.import_module("albam.engines.mtfw.archive")
+    importlib.import_module("albam.engines.mtfw.mesh")
+
     for cls in CLASSES_TO_REGISTER:
         bpy.utils.register_class(cls)
+
+    bpy.types.Scene.albam = bpy.props.PointerProperty(type=AlbamData)
 
 
 def unregister():
