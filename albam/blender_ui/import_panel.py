@@ -8,7 +8,7 @@ NODES_CACHE = {}
 
 
 class ALBAM_OT_Import(bpy.types.Operator):
-    bl_idname = "albam_import.item"
+    bl_idname = "albam.import"
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
@@ -21,6 +21,8 @@ class ALBAM_OT_Import(bpy.types.Operator):
         import_function = blender_registry.import_registry[item.extension]
 
         bl_container = import_function(item, context)
+        if not bl_container:
+            return
 
         bpy.context.collection.objects.link(bl_container)
         for child in bl_container.children_recursive:
@@ -101,7 +103,7 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
     FILTER_GLOB = bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})
 
     bl_idname = "albam.add_files"
-    bl_label = "Add File(s)"
+    bl_label = "Add Files"
     directory: DIRECTORY
     files: FILES
     filter_glob: FILTER_GLOB
@@ -196,6 +198,6 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         )
         self.layout.row()
         self.layout.row()
-        self.layout.operator("albam_import.item", text="Import")
+        self.layout.operator("albam.import", text="Import")
         self.layout.row()
         self.layout.row()

@@ -31,4 +31,4 @@ class ALBAM_PT_Export(bpy.types.Panel):
             sort_lock=True,
         )
         row = self.layout.row()
-        self.layout.operator("albam_import.item", text="Export")
+        self.layout.label(text="Export (TODO)")
