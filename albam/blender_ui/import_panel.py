@@ -65,12 +65,14 @@ class ALBAM_OT_FileItemCollapseToggle(bpy.types.Operator):
         return {"FINISHED"}
 
 
+@blender_registry.register_blender_prop
 class TreeNode(bpy.types.PropertyGroup):
     node_id: bpy.props.StringProperty()
     root_id: bpy.props.StringProperty()
     depth: bpy.props.IntProperty(default=0)
 
 
+@blender_registry.register_blender_prop
 class FileListItem(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     file_path: bpy.props.StringProperty()
@@ -91,6 +93,7 @@ class FileListItem(bpy.types.PropertyGroup):
         return archive_accessor_func(self, context)
 
 
+@blender_registry.register_blender_prop_albam(name="file_explorer")
 class FileExplorerData(bpy.types.PropertyGroup):
     file_list: bpy.props.CollectionProperty(type=FileListItem)
     file_list_selected_index: bpy.props.IntProperty()
@@ -174,18 +177,31 @@ class ALBAM_UL_FileList(bpy.types.UIList):
         return filtered_items, []
 
 
+class ALBAM_PT_ImportSection(bpy.types.Panel):
+    bl_category = "Albam [Beta]"
+    bl_idname = "ALBAM_PT_ImportSection"
+    bl_label = "Import"
+    bl_region_type = "UI"
+    bl_space_type = "VIEW_3D"
+
+    def draw(self, context):
+        pass
+
+
 class ALBAM_PT_FileExplorer(bpy.types.Panel):
     bl_category = "Albam [Beta]"
     bl_idname = "ALBAM_PT_FileExplorer"
-    bl_label = "Import"
-    bl_space_type = "VIEW_3D"
+    bl_label = "File Explorer"
+    bl_options = {"HIDE_HEADER"}
+    bl_parent_id = "ALBAM_PT_ImportSection"
     bl_region_type = "UI"
+    bl_space_type = "VIEW_3D"
 
     def draw(self, context):
-        self.layout.operator("albam.add_files", icon="FILE_NEW", text="Add File(s)")
-        self.layout.row()
-        self.layout.row()
-        row = self.layout.row()
+        self.layout.separator()
+        self.layout.separator()
+        row = self.layout.row(align=True)
+        row.operator("albam.add_files", icon="FILE_NEW", text="")
         row.template_list(
             "ALBAM_UL_FileList",
             "",
@@ -198,6 +214,20 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         )
         self.layout.row()
         self.layout.row()
-        self.layout.operator("albam.import", text="Import")
-        self.layout.row()
+
+
+class ALBAM_PT_ImportButton(bpy.types.Panel):
+    bl_category = "Albam [Beta]"
+    bl_idname = "ALBAM_PT_ImportButton"
+    bl_label = "Import (unused)"
+    bl_options = {"HIDE_HEADER"}
+    bl_parent_id = "ALBAM_PT_ImportSection"
+    bl_region_type = "UI"
+    bl_space_type = "VIEW_3D"
+
+    def draw(self, context):
+        self.layout.separator()
+        row = self.layout.row()
+        row.label(icon="OPTIONS")
+        row.operator("albam.import", text="Import")
         self.layout.row()

@@ -5,7 +5,8 @@ import sys
 import bpy
 
 from albam.blender_ui import CLASSES_TO_REGISTER
-from albam.blender_ui.data import AlbamData
+from albam.blender_ui.data import AlbamDataFactory
+from albam.registry import blender_registry
 
 
 bl_info = {
@@ -31,10 +32,20 @@ def register():
     for cls in CLASSES_TO_REGISTER:
         bpy.utils.register_class(cls)
 
+    for _, cls in blender_registry.props:
+        bpy.utils.register_class(cls)
+
+    AlbamData = AlbamDataFactory()
+    bpy.utils.register_class(AlbamData)
     bpy.types.Scene.albam = bpy.props.PointerProperty(type=AlbamData)
 
 
 def unregister():
     for cls in reversed(CLASSES_TO_REGISTER):
         bpy.utils.unregister_class(cls)
+    for _, cls in reversed(blender_registry.props):
+        bpy.utils.unregister_class(cls)
+
+    bpy.utils.unregister_class(type(bpy.context.scene.albam))
+
     sys.path.remove(VENDOR_DIR)
