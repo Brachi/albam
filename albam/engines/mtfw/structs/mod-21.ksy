@@ -204,7 +204,7 @@ types:
 
   bone:
     seq:
-      - {id: idx, type: u1}
+      - {id: idx_anim_map, type: u1}
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
       - {id: idx_mapping, type: u1}

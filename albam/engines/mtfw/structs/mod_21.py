@@ -218,7 +218,7 @@ class Mod21(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.idx = self._io.read_u1()
+            self.idx_anim_map = self._io.read_u1()
             self.idx_parent = self._io.read_u1()
             self.idx_mirror = self._io.read_u1()
             self.idx_mapping = self._io.read_u1()
