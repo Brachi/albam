@@ -1,6 +1,9 @@
 import bpy
 
+from albam.registry import blender_registry
 
+
+@blender_registry.register_blender_type
 class ALBAM_UL_ExportableObjects(bpy.types.UIList):
     def filter_items(self, context, data, property_):
         flt_flags = [
@@ -11,6 +14,7 @@ class ALBAM_UL_ExportableObjects(bpy.types.UIList):
         return flt_flags, flt_neworder
 
 
+@blender_registry.register_blender_type
 class ALBAM_PT_Export(bpy.types.Panel):
     bl_category = "Albam [Beta]"
     bl_idname = "ALBAM_PT_Export"

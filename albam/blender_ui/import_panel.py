@@ -7,6 +7,7 @@ from albam.registry import blender_registry
 NODES_CACHE = {}
 
 
+@blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
     bl_idname = "albam.import"
     bl_label = "import item"
@@ -37,6 +38,9 @@ class ALBAM_OT_Import(bpy.types.Operator):
         item = cls.get_selected_item(context)
         if not item or item.extension not in blender_registry.importable_extensions:
             return False
+        custom_poll_func = blender_registry.import_operator_poll_funcs.get(item.extension)
+        if custom_poll_func:
+            return custom_poll_func(cls, context)
         return True
 
     @staticmethod
@@ -47,6 +51,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
         return context.scene.albam.file_explorer.file_list[index]
 
 
+@blender_registry.register_blender_type
 class ALBAM_OT_FileItemCollapseToggle(bpy.types.Operator):
     bl_idname = "albam.file_item_collapse_toggle"
     bl_label = "ALBAM_OT_FileItemCollapseToggle"
@@ -99,6 +104,7 @@ class FileExplorerData(bpy.types.PropertyGroup):
     file_list_selected_index: bpy.props.IntProperty()
 
 
+@blender_registry.register_blender_type
 class ALBAM_OT_AddFiles(bpy.types.Operator):
     DIRECTORY = bpy.props.StringProperty(subtype="DIR_PATH")
     FILES = bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)
@@ -138,6 +144,7 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
                 archive_loader_func(file_item, context)
 
 
+@blender_registry.register_blender_type
 class ALBAM_UL_FileList(bpy.types.UIList):
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
@@ -177,6 +184,7 @@ class ALBAM_UL_FileList(bpy.types.UIList):
         return filtered_items, []
 
 
+@blender_registry.register_blender_type
 class ALBAM_PT_ImportSection(bpy.types.Panel):
     bl_category = "Albam [Beta]"
     bl_idname = "ALBAM_PT_ImportSection"
@@ -188,6 +196,7 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
         pass
 
 
+@blender_registry.register_blender_type
 class ALBAM_PT_FileExplorer(bpy.types.Panel):
     bl_category = "Albam [Beta]"
     bl_idname = "ALBAM_PT_FileExplorer"
@@ -216,6 +225,39 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         self.layout.row()
 
 
+@blender_registry.register_blender_type
+class ALBAM_PT_ImportOptionsCustom(bpy.types.Panel):
+    # TODO: better class name
+    bl_category = "Albam [Beta]"
+    bl_idname = "ALBAM_PT_ImportOptionsCustom"
+    bl_label = ""
+    bl_parent_id = "ALBAM_PT_ImportSection"
+    bl_region_type = "UI"
+    bl_space_type = "VIEW_3D"
+
+    def draw(self, context):
+        current_item = ALBAM_OT_Import.get_selected_item(context)
+        if not current_item:
+            return
+        ext = current_item.extension
+        draw_func = blender_registry.import_options_custom_draw_funcs.get(ext)
+        if not draw_func:
+            return
+        draw_func(self, context)
+
+    @classmethod
+    def poll(self, context):
+        current_item = ALBAM_OT_Import.get_selected_item(context)
+        if not current_item:
+            return False
+        ext = current_item.extension
+        poll_func = blender_registry.import_options_custom_poll_funcs.get(ext)
+        if not poll_func:
+            return False
+        return poll_func(self, context)
+
+
+@blender_registry.register_blender_type
 class ALBAM_PT_ImportButton(bpy.types.Panel):
     bl_category = "Albam [Beta]"
     bl_idname = "ALBAM_PT_ImportButton"
