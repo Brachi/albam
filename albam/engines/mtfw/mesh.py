@@ -278,6 +278,7 @@ def build_blender_armature(mod, bl_object_parent, bbox_data):
         head = _name_me(mod, m, bbox_data)
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
+        blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
         blender_bones.append(blender_bone)
 
     bpy.ops.object.mode_set(mode="OBJECT")

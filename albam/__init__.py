@@ -27,6 +27,7 @@ def register():
     # Load registered functions into the blender_registry
     importlib.import_module("albam.blender_ui.import_panel")
     importlib.import_module("albam.blender_ui.export_panel")
+    importlib.import_module("albam.engines.mtfw.animation")
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
 

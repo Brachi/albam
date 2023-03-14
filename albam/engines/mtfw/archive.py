@@ -64,6 +64,17 @@ class ArcWrapper:
                 filtered.append(fe)
         return filtered
 
+    def get_files_by_extension(self, extension):
+        try:
+            file_type = EXTENSION_TO_FILE_ID[extension]
+        except KeyError:
+            raise RuntimeError(f"Extension {extension} unknown")
+        files = []
+        for file_entry in self.get_file_entries_by_type(file_type):
+            t = (file_entry.file_path, self.get_file(file_entry.file_path, file_type))
+            files.append(t)
+        return files
+
     def get_file_entries(self):
         file_entries = []
         for fe in self.parsed.file_entries:
