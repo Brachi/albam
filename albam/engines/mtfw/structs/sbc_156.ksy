@@ -1,9 +1,8 @@
 meta:
   id: mtframework_sbc
-  file-extension: ksy
+  file-extension: sbc
   endian: le
   title:  Resident Evil 5 (MTFramework) collision format
-  file-extension: sbc_156
   license: CC0-1.0
   ks-version: 0.10
 
