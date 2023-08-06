@@ -148,16 +148,16 @@ def build_blender_textures(mod_file_item, context, parsed_mod, mrl=None):
         )
         try:
             texture_item = file_list[new_texture_path]
-            tex_buffer = texture_item.get_buffer(context)
+            tex_bytes = texture_item.get_bytes()
         except KeyError:
-            tex_buffer = None
+            tex_bytes = None
 
-        if not tex_buffer:
+        if not tex_bytes:
             print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
             # TODO: handle missing texture
             continue
-        tex = TexCls(KaitaiStream(io.BytesIO(tex_buffer)))
+        tex = TexCls(KaitaiStream(io.BytesIO(tex_bytes)))
         try:
             dds_header = DDSHeader(
                 dwHeight=tex.height,
@@ -470,5 +470,5 @@ def _infer_mrl(context, mod_file_item):
     except KeyError:
         return
 
-    mrl_buffer = mrl_file_item.get_buffer(context)
-    return Mrl(KaitaiStream(io.BytesIO(mrl_buffer)))
+    mrl_bytes = mrl_file_item.get_bytes()
+    return Mrl(KaitaiStream(io.BytesIO(mrl_bytes)))

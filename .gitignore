@@ -4,3 +4,7 @@ __pycache__/
 .coverage.*
 .cache
 .venv/
+tests/data/
+albam/albam_vendor/*.so
+albam/albam_vendor/*.dll
+albam/albam_vendor/*.list
