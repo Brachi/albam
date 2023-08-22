@@ -24,30 +24,34 @@ types:
 
   texture_slot:
     seq:
-      - {id: unk_01, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: type_hash, type: u4}
       - {id: unk_02, type: u4}
       - {id: unk_03, type: u4}
       - {id: texture_path, type: str, size: 64, encoding: ascii, terminator: 0}
+      
+  hash_block:
+    seq:
+      - {id: index, type: b12}
+      - {id: value, type: b20}
 
   material:
     seq:
-      - {id: unk_01, type: u4}
+      - {id: type_hash, type: u4}
       - {id: name_hash_crcjam32, type: u4}
-      - {id: size_data, type: u4}
-      - {id: unk_04, type: u4}
-      - {id: unk_05, type: u1, repeat: expr, repeat-expr: 4}
-      - {id: unk_06, type: u1, repeat: expr, repeat-expr: 4}
-      - {id: num_resources, type: u1}
-      - {id: unk_07, type: u1, repeat: expr, repeat-expr: 3}
-      - {id: unk_08, type: u1, repeat: expr, repeat-expr: 4}
-      - {id: unk_09, type: u1, repeat: expr, repeat-expr: 4}
-      - {id: unk_10, type: u4}
-      - {id: unk_11, type: u4}
-      - {id: unk_12, type: u4}
-      - {id: unk_13, type: u4}
-      - {id: ofs_data, type: u4}
-      - {id: unk_15, type: u4}
-
-    instances:
-      resources:
-        {pos: ofs_data, type: resource_binding, repeat: expr, repeat-expr: num_resources}
+      - {id: cmd_buffer_size, type: u4}
+      - {id: blend_state, type: hash_block}
+      - {id: depth_stencil_state, type: hash_block}
+      - {id: rasterizer_state, type: hash_block}
+      - {id: cmd_list_info, type: hash_block}
+      #- {id: unk_07, type: u1, repeat: expr, repeat-expr: 3}
+      - {id: material_info_flags, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: unk_nulls, type: u4, repeat: expr, repeat-expr: 4}
+      #- {id: unk_10, type: u4}
+      #- {id: unk_11, type: u4}
+      #- {id: unk_12, type: u4}
+      - {id: anim_data_size, type: u4}
+      - {id: ofs_cmd, type: u4}
+      - {id: ofs_anim_data, type: u4}
+    #instances:
+    #  resources:
+    #    {pos: ofs_data, type: resource_binding, repeat: expr, repeat-expr: num_resources}
