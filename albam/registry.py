@@ -47,21 +47,21 @@ class BlenderRegistry:
             return f
         return decorator
 
-    def register_import_function(self, extension):
+    def register_import_function(self, app_id, extension):
         def decorator(f):
-            self.import_registry[extension] = f
+            self.import_registry[(app_id, extension)] = f
             return f
         return decorator
 
-    def register_archive_loader(self, extension):
+    def register_archive_loader(self, app_id, extension):
         def decorator(f):
-            self.archive_loader_registry[extension] = f
+            self.archive_loader_registry[(app_id, extension)] = f
             return f
         return decorator
 
-    def register_archive_accessor(self, extension):
+    def register_archive_accessor(self, app_id, extension):
         def decorator(f):
-            self.archive_accessor_registry[extension] = f
+            self.archive_accessor_registry[(app_id, extension)] = f
             return f
 
         return decorator

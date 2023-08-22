@@ -21,20 +21,21 @@ MOD_CLASS_MAPPER = {
 }
 
 
-@blender_registry.register_import_function(extension="mod")
+@blender_registry.register_import_function(app_id="re0", extension="mod")
+@blender_registry.register_import_function(app_id="re1", extension="mod")
+@blender_registry.register_import_function(app_id="re5", extension="mod")
 def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
 
-    file_list_item.get_buffer(context)
     bl_mod_container_name = file_list_item.display_name
     bl_mod_container = bpy.data.objects.new(bl_mod_container_name, None)
 
-    mod_buffer = file_list_item.get_buffer(context)
-    mod_version = mod_buffer[4]
+    mod_bytes = file_list_item.get_bytes()
+    mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     Mod = MOD_CLASS_MAPPER[mod_version]
-    mod = Mod(KaitaiStream(io.BytesIO(mod_buffer)))
+    mod = Mod(KaitaiStream(io.BytesIO(mod_bytes)))
     bbox_data = _create_bbox_data(mod)
     skeleton = build_blender_armature(mod, bl_mod_container, bbox_data)
     materials = build_blender_materials(file_list_item, context, mod, bl_mod_container_name)
