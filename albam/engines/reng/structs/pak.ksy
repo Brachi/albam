@@ -1,5 +1,5 @@
 meta:
-  id: reengine_pak
+  id: pak
   endian: le
   title: RE Engine archive format
   file-extension: pak
@@ -10,17 +10,17 @@ meta:
 seq:
   - {id: ident, contents: [0x4b, 0x50, 0x4b, 0x41]}
   - {id: version, type: u4}
-  - {id: num_files, type: s4}
-  - {id: reserved, type: s4}
-  - {id: files, type: file_entry, repeat: expr, repeat-expr: num_files}
+  - {id: num_file_entries, type: u4}
+  - {id: reserved, type: u4}
+  - {id: file_entries, type: file_entry, repeat: expr, repeat-expr: num_file_entries}
 
 types:
   file_entry:
     seq:
-      - {id: name_crc_l, type: u4}
-      - {id: name_crc_u, type: u4}
-      - {id: offset, type: s8}
-      - {id: zsize, type: s8}
-      - {id: size, type: s8}
-      - {id: flags, type: s8}
-      - {id: unk_01, type: s8}
+      - {id: file_path_hash_case_insensitive, type: u4}
+      - {id: file_path_hash_case_sensitive, type: u4}
+      - {id: offset, type: u8}
+      - {id: zsize, type: u8}
+      - {id: size, type: u8}
+      - {id: flags, type: u8}
+      - {id: unk_01, type: u8}

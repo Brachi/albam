@@ -19,10 +19,10 @@ ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
 
 
-@blender_registry.register_import_function(extension='lmt')
+@blender_registry.register_import_function(app_id="re5", extension='lmt')
 def load_lmt(file_item, context):
-    buff = file_item.get_buffer(context)
-    lmt = Lmt(KaitaiStream(io.BytesIO(buff)))
+    lmt_bytes = file_item.get_bytes()
+    lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)
 

@@ -8,21 +8,25 @@ requires-python = "==3.10"
 license = {file = "LICENSE"}
 keywords = ["blender", "blender-addon", "import", "3d models", "3d formats"]
 
+dependencies = [
+  "bpy",
+  "pybc7",
+  "zstd"
+]
 
 [project.optional-dependencies]
 test = [
-  "black == 22.12.0",
-  "bpy == 3.4.0",
-  "coverage[toml] == 7.1.0",
-  "flake8-pyproject == 1.2.2",
-  "pytest == 7.2.0",
-  "pytest-xdist == 3.1.0",
+  "black",
+  "coverage[toml]",
+  "flake8-pyproject",
+  "pytest",
+  "pytest-xdist",
   "pytest-cov[all]"
 ]
 
 
 [tool.black]
-line-length = 100
+line-length = 110
 
 
 [tool.coverage.run]
@@ -30,6 +34,10 @@ omit = [ "*/structs/*.py", "*/albam_vendor/*" ]
 
 
 [tool.flake8]
-max-line-length = 100
+max-line-length = 110
 exclude = ["structs", "albam_vendor"]
-ignore = ['E203']
+# F722: needed for Blender props annotations
+# e.g.:
+# class MyPanel(bpy.types.Panel):
+#     my_prop : bpy.props.BoolProperty()
+ignore = ["E203", "F722"]
