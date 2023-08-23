@@ -3,10 +3,10 @@
 APPS_TODO = {
 
     "re2": (
-        "natives/stm",
-        "2109108288",
-        "21",
-        "34",
+        "natives/stm",  # prefix
+        "2109108288", # .mesh version
+        "21",  # .mdf2 version
+        "34",  # .tex version
     ),
     "re2_non_rt": (
         "natives/x64",

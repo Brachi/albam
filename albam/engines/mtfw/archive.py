@@ -21,7 +21,6 @@ def arc_loader(file_item, context):
         new_item = item_list.add()
         new_item.name = node["node_id"]
         new_item.display_name = node["name"]
-        new_item.extension = node["extension"]
         new_item.is_expandable = bool(node["children"])
         new_item.app_id = file_item.app_id
 

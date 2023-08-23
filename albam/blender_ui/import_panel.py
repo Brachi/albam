@@ -122,7 +122,6 @@ class TreeNode(bpy.types.PropertyGroup):
 class FileListItem(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     file_path: bpy.props.StringProperty()
-    extension: bpy.props.StringProperty()
     is_archive: bpy.props.BoolProperty(default=False)
     is_expandable: bpy.props.BoolProperty(default=False)
     is_expanded: bpy.props.BoolProperty(default=False)
@@ -131,6 +130,20 @@ class FileListItem(bpy.types.PropertyGroup):
     tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
 
     app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
+
+    @property
+    def extension(self):
+        """
+        Allow up to 2 dots as an extension
+        e.g. texname.tex.34 -> tex.34
+        """
+        SEP = "."
+        name , _ , extension = self.display_name.rpartition(SEP)
+        if SEP in name:
+            _, __, extension0 = name.rpartition(SEP)
+            extension = SEP.join((extension0, extension))
+        return extension
+
 
     def get_bytes(self):
         accessor = self.get_accessor()
@@ -204,7 +217,6 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
             file_item.name = app_id + "::" + f.name
             file_item.display_name = f.name
             file_item.file_path = os.path.join(directory, f.name)
-            file_item.extension = os.path.splitext(file_item.file_path)[1].replace(".", "")
 
             archive_loader_func = blender_registry.archive_loader_registry.get(
                 (app_id, file_item.extension)
