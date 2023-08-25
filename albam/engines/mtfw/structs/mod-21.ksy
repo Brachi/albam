@@ -100,7 +100,57 @@ types:
             0xc31f201c: vertex_c31f
             0xcb68015: vertex_cb68
             0xdb7da014: vertex_db7d
-
+            0xa7d7d036: vertex_a7d7 #static
+            0x49b4f029: vertex_49b4 # static
+            0x207d6037: vertex_207d #static
+            0xd8297028: vertex_8297
+            0xd1a47038: vertex_d1a4
+            0xb86de02a: vertex_b8de
+            
+  vertex_b8de:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: vec4_u1}
+      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+      - {id: unk_01, type: u4}
+  
+  vertex_d1a4:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4}
+      
+  vertex_8297:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_02, type: f4}
+            
+  vertex_207d: # 24
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: rgba, type: vec4_u1}
+  
+  vertex_49b4: #28
+    seq:
+       - {id: position, type: vec3}
+       - {id: normal, type: vec4_u1}
+       - {id: uv1, type: vec2_half_float}
+       - {id: uv2, type: vec2_half_float}
+       - {id: rgba, type: vec4_u1}
+  
+  vertex_a7d7: #20
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      
   vertex_14d4: # 28
     seq:
       - {id: position, type: vec4_s2}
@@ -169,6 +219,14 @@ types:
     seq:
       - {id: u, size: 2}
       - {id: v, size: 2}
+      
+  vec4_u1:
+    seq:
+      - {id: x, type: u1}
+      - {id: y, type: u1}
+      - {id: z, type: u1}
+      - {id: w, type: u1}
+
   vec3:
     seq:
       - {id: x, type: f4}
