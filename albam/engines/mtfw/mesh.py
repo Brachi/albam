@@ -83,7 +83,8 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     indices = strip_triangles_to_triangles_list(mesh.indices) if use_tri_strips else mesh.indices
     # convert indices for this mesh only, so they start at zero
     indices = [tri_idx - mesh.vertex_position for tri_idx in indices]
-    assert min(indices) >= 0, "Bad face indices"  # Blender crashes if not
+    assert min(indices) >= 0, "Bad face indices"  # Blender crashes with corrrupt indices
+    assert locations, "No vertices could be processed"  # Blender crashes with an empty sequence
 
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
