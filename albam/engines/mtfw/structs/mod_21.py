@@ -426,7 +426,7 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
@@ -558,8 +558,8 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = self._io.read_u4le()
 
 

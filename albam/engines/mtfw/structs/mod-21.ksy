@@ -112,8 +112,8 @@ types:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: unk_00, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
       - {id: uv1, type: vec2_half_float}
-      - {id: uv2, type: vec2_half_float}
       - {id: unk_01, type: u4}
   
   vertex_d1a4:
@@ -142,7 +142,7 @@ types:
        - {id: position, type: vec3}
        - {id: normal, type: vec4_u1}
        - {id: uv1, type: vec2_half_float}
-       - {id: uv2, type: vec2_half_float}
+       - {id: uv, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
   
   vertex_a7d7: #20
