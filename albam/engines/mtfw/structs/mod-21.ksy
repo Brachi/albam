@@ -106,6 +106,37 @@ types:
             0xd8297028: vertex_8297
             0xd1a47038: vertex_d1a4
             0xb86de02a: vertex_b8de
+            0x63b6c02f: vertex_63b6
+            0x926fd02e: vertex_926f
+            0x9399c033: vertex_9399
+            
+  vertex_9399:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      - {id: rgba, type: vec4_u1}
+  
+  vertex_926f:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      - {id: rgba, type: vec4_u1}
+  
+  vertex_63b6:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+      - {id: unk_01, type: u4}
             
   vertex_b8de:
     seq:
@@ -121,7 +152,7 @@ types:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: unk_01, type: u4}
+      - {id: uv1, type: vec2_half_float}
       
   vertex_8297:
     seq:

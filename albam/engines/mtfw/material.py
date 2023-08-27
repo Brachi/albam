@@ -19,6 +19,7 @@ TEX_FORMAT_MAPPER = {
     24: b"DXT5",
     25: b"DXT5",
     31: b"DXT5",
+    35: b"DXT5",
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
 }
@@ -43,9 +44,11 @@ class TextureTypes(Enum):
 
 TEX_TYPE_MAPPER = {
     0x345DCDC3: TextureTypes.DIFFUSE,  # RER
+    0x35DDCDC3: TextureTypes.DIFFUSE,  # RER2
     0x349DCDC3: TextureTypes.DIFFUSE,  # RE1
     0x347DCDC3: TextureTypes.DIFFUSE,  # RE6
     0x350DCDC3: TextureTypes.DIFFUSE,  # RE0
+    0x360DCDC3: TextureTypes.NORMAL,  # RER2
     0x34CDCDC3: TextureTypes.NORMAL,  # RE1
     0x34ADCDC3: TextureTypes.NORMAL,  # RE6
     0x353DCDC3: TextureTypes.NORMAL,  # RE0
