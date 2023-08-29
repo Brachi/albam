@@ -20,9 +20,17 @@ types:
   resource_binding:
     seq:
       - {id: info, type: cmd_info} # value type
-      - {id: value, type: cmd_value} 
+      - id: value_cmd
+        type:
+          switch-on: info.cmd_type
+          cases:
+            0: hash_block
+            1: cmd_ofs_buffer
+            2: hash_block
+            3: cmd_tex_idx
+            4: hash_block
       - {id: shader_object_hash, type: u4}
-
+        
   texture_slot:
     seq:
       - {id: type_hash, type: u4} # rTexture
@@ -41,18 +49,35 @@ types:
       
   cmd_info:
     seq:
-      - {id: cmd_type, type b4}
-      - {id: unk, type b16}
-      - {id: shader_obj_idx, type b12}
-      
-  cmd_value:
+      - {id: cmd_type, type: b4}
+      - {id: unk, type: b16}
+      - {id: shader_obj_idx, type: b12}
+  cmd_ofs_buffer:
     seq:
-      - {id: ofs_const_buff, type u4} #cmd info type 1
-    instances:
-      hash:
-        value: ofs_const_buff #type 0, 2, 4
-      texture_index:
-        value: ofs_const_buff #type 3
+      - {id: ofs_float_buff, type: u4}
+      
+  cmd_tex_idx:
+    seq:
+      - {id: tex_idx, type: u4}
+        
+  shd_cb_material:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 32}
+  shd_s_globals:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 76}
+  shd_diff_col_correct:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+  shd_half_lambert:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+  shd_toon2:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+  shd_indirect_user:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 12}
         
   tex_offset:
     seq:
@@ -85,5 +110,5 @@ types:
         {pos: ofs_cmd, type: resource_binding, repeat: expr, repeat-expr: cmd_list_info.index}
       values:
         {pos: ofs_cmd + 12 * cmd_list_info.index, size: cmd_buffer_size - 12 * cmd_list_info.index}
-      #anims:
-       # {pos: ofs_anim_data, size: anim_data_size, if anim_data_size != 0}
+      anims:
+        {pos: ofs_anim_data, size: anim_data_size, if anim_data_size != 0}
