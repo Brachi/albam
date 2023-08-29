@@ -30,6 +30,28 @@ types:
             3: cmd_tex_idx
             4: hash_block
       - {id: shader_object_hash, type: u4}
+    instances:
+      float_buffer:
+        pos: _parent._io.pos + value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+        type: 
+          switch-on: shader_object_hash
+          cases:
+            0x7b2c215f: shd_s_globals # $Globals re0
+            0x6c801200: shd_cb_material # CBMaterial re0
+            0x7b2c2159: shd_s_globals # $Globals rehd
+            0x6c8011f9: shd_cb_material # CBMaterial rehd
+            0x7b2c2155: shd_s_globals # $Globals rer1
+            0x6c8011f4: shd_cb_material # CBMaterial rer1
+            0x7b2c215e: shd_s_globals # $Globals rer2
+            0x6c8011fe: shd_cb_material # CBMaterial rer2
+            0x7b2c214c: shd_s_globals # $Globals re6
+            0x6c8011ea: shd_cb_material # CBMaterial re6
+        if: info.cmd_type == 1
+      #test:
+      #  value:  _parent._io
+      #test_1:
+      #  value: value_cmd.[0]
+      
         
   texture_slot:
     seq:
@@ -52,6 +74,7 @@ types:
       - {id: cmd_type, type: b4}
       - {id: unk, type: b16}
       - {id: shader_obj_idx, type: b12}
+      
   cmd_ofs_buffer:
     seq:
       - {id: ofs_float_buff, type: u4}
@@ -108,7 +131,7 @@ types:
     instances:
       resources:
         {pos: ofs_cmd, type: resource_binding, repeat: expr, repeat-expr: cmd_list_info.index}
-      values:
-        {pos: ofs_cmd + 12 * cmd_list_info.index, size: cmd_buffer_size - 12 * cmd_list_info.index}
+      #values:
+        #{pos: ofs_cmd + 12 * cmd_list_info.index, size: cmd_buffer_size - 12 * cmd_list_info.index}
       anims:
         {pos: ofs_anim_data, size: anim_data_size, if anim_data_size != 0}
