@@ -20,7 +20,7 @@ from .structs.pak import Pak
 def pak_loader(file_item, context):
     item_list = context.scene.albam.file_explorer.file_list
     app_config_filepath = context.scene.albam.file_explorer.app_config_filepath
-    app_id = file_item.app_id
+    app_id = file_item.app_id  # blender bug, needs reference or might mutate
     if not app_config_filepath:
         # TODO: custom exception that will result in informative popup
         print("WARNING: no app_config_filepath")
