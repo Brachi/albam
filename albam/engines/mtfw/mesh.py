@@ -1,10 +1,8 @@
 from binascii import crc32
 from collections import namedtuple
-import io
 from struct import unpack
 
 import bpy
-from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 
 from albam.lib.blender import strip_triangles_to_triangles_list
@@ -27,40 +25,38 @@ MOD_CLASS_MAPPER = {
 def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
 
-    bl_mod_container_name = file_list_item.display_name
-    bl_mod_container = bpy.data.objects.new(bl_mod_container_name, None)
-
     mod_bytes = file_list_item.get_bytes()
     mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+    mod = ModCls.from_bytes(mod_bytes)
 
-    Mod = MOD_CLASS_MAPPER[mod_version]
-    mod = Mod(KaitaiStream(io.BytesIO(mod_bytes)))
+    bl_object_name = file_list_item.display_name
     bbox_data = _create_bbox_data(mod)
-    skeleton = build_blender_armature(mod, bl_mod_container, bbox_data)
-    materials = build_blender_materials(file_list_item, context, mod, bl_mod_container_name)
-    meshes_parent = skeleton or bl_mod_container
+    skeleton = None if mod.header.num_bones == 0 else build_blender_armature(mod, bl_object_name, bbox_data)
+    bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
+    materials = build_blender_materials(file_list_item, context, mod, bl_object_name)
 
     for i, mesh in enumerate(m for m in mod.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
-            name = f"{bl_mod_container_name}_{str(i).zfill(2)}"
+            name = f"{bl_object_name}_{str(i).zfill(2)}"
             bl_mesh_ob = build_blender_mesh(mod, mesh, name, bbox_data, mod_version == 156)
-            bl_mesh_ob.parent = meshes_parent
+            bl_mesh_ob.parent = bl_object
             if skeleton:
                 modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
-                modifier.object = meshes_parent
+                modifier.object = skeleton
                 modifier.use_vertex_groups = True
             material_hash = _get_material_hash(mod, mesh)
             if materials.get(material_hash):
                 bl_mesh_ob.data.materials.append(materials[material_hash])
             else:
-                print(f"[{bl_mod_container_name}] material {material_hash} not found")
+                print(f"[{bl_object_name}] material {material_hash} not found")
 
         except Exception as err:
-            print(f"[{bl_mod_container_name}] error building mesh {i} {err}")
+            print(f"[{bl_object_name}] error building mesh {i} {err}")
             continue
 
-    return bl_mod_container
+    return bl_object
 
 
 def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
@@ -83,7 +79,8 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     indices = strip_triangles_to_triangles_list(mesh.indices) if use_tri_strips else mesh.indices
     # convert indices for this mesh only, so they start at zero
     indices = [tri_idx - mesh.vertex_position for tri_idx in indices]
-    assert min(indices) >= 0, "Bad face indices"  # Blender crashes if not
+    assert min(indices) >= 0, "Bad face indices"  # Blender crashes with corrrupt indices
+    assert locations, "No vertices could be processed"  # Blender crashes with an empty sequence
 
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
@@ -250,11 +247,9 @@ def _build_weights(bl_obj, weights_per_bone):
             vg.add((vertex_index,), weight_value, "ADD")
 
 
-def build_blender_armature(mod, bl_object_parent, bbox_data):
-    armature_name = bl_object_parent.name + "_skel"
+def build_blender_armature(mod, armature_name, bbox_data):
     armature = bpy.data.armatures.new(armature_name)
     armature_ob = bpy.data.objects.new(armature_name, armature)
-    armature_ob.parent = bl_object_parent
     armature_ob.show_in_front = True
 
     if bpy.context.mode != "OBJECT":

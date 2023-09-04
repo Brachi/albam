@@ -33,7 +33,6 @@ class Tree:
             else:
                 new_node = {
                     "name": path_part,
-                    "extension": os.path.splitext(path_part)[1].replace(".", ""),
                     "children": [],
                     "depth": current_level,
                     "node_id": self.generate_node_id(path_parts[0 : i + 1]),
@@ -49,7 +48,6 @@ class Tree:
         node_id = self.generate_node_id(path_parts)
         leaf_node = {
             "name": leaf_name,
-            "extension": os.path.splitext(leaf_name)[1].replace(".", ""),
             "children": [],
             "depth": current_level,
             "node_id": node_id,
