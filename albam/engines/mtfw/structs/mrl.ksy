@@ -47,11 +47,6 @@ types:
             0x7b2c214c: shd_s_globals # $Globals re6
             0x6c8011ea: shd_cb_material # CBMaterial re6
         if: info.cmd_type == 1
-      #test:
-      #  value:  _parent._io
-      #test_1:
-      #  value: value_cmd.[0]
-      
         
   texture_slot:
     seq:
@@ -62,7 +57,23 @@ types:
   
   anim_data:
     seq:
-      - {id: num_entry, type: u4}
+      - {id: entry_count, type: u4} #pl0503_0
+      - {id: unk_00, type: u4}
+      - {id: unk_01, type: u4} # seconds?
+      - {id: unk_02, type: u2}
+      - {id: unk_03, type: u2}
+      - {id: unk_04, type: u4}
+      - {id: unk_hash, type: u4}
+      - {id: ofs_block, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: unk_07, type: u4}
+      - {id: unk_08, type: u4}
+      - {id: entry_01, type: anim_entry, repeat: expr, repeat-expr: 4}
+      
+  anim_entry:
+    seq:
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: unk_floats, type: f4, repeat: expr, repeat-expr: 19}
+      - {id: unk_01, type: u4}
       
   hash_block:
     seq:
@@ -135,3 +146,4 @@ types:
         #{pos: ofs_cmd + 12 * cmd_list_info.index, size: cmd_buffer_size - 12 * cmd_list_info.index}
       anims:
         {pos: ofs_anim_data, size: anim_data_size, if anim_data_size != 0}
+        #{pos: ofs_anim_data, type: anim_data, if anim_data_size != 0}

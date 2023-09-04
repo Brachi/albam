@@ -20,6 +20,7 @@ TEX_FORMAT_MAPPER = {
     25: b"DXT5",
     31: b"DXT5",
     35: b"DXT5",
+    39: b"DXT1",
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
 }
@@ -43,15 +44,11 @@ class TextureTypes(Enum):
 
 
 TEX_TYPE_MAPPER = {
-    0x345DCDC3: TextureTypes.DIFFUSE,  # RER
-    0x35DDCDC3: TextureTypes.DIFFUSE,  # RER2
-    0x349DCDC3: TextureTypes.DIFFUSE,  # RE1
-    0x347DCDC3: TextureTypes.DIFFUSE,  # RE6
-    0x350DCDC3: TextureTypes.DIFFUSE,  # RE0
-    0x360DCDC3: TextureTypes.NORMAL,  # RER2
-    0x34CDCDC3: TextureTypes.NORMAL,  # RE1
-    0x34ADCDC3: TextureTypes.NORMAL,  # RE6
-    0x353DCDC3: TextureTypes.NORMAL,  # RE0
+    0xcd06f: TextureTypes.DIFFUSE,
+    0x22660: TextureTypes.NORMAL,
+    0xaa6f0: TextureTypes.LIGHTMAP,
+    0xed1b:  TextureTypes.SPECULAR,
+    0x75a53: TextureTypes.NORMAL_DETAIL,
 }
 
 
@@ -128,8 +125,8 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         tex_index = mtfw_material.texture_slots[texture_type.value - 1]
     else:
         for resource in mtfw_material.resources:
-            if TEX_TYPE_MAPPER.get(resource.resource_type) == texture_type:
-                tex_index = resource.resource_index
+            if TEX_TYPE_MAPPER.get((resource.shader_object_hash>>12)) == texture_type:
+                tex_index = resource.value_cmd.tex_idx
                 break
     return tex_index
 
