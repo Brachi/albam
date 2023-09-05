@@ -20,7 +20,7 @@ TEX_FORMAT_MAPPER = {
     25: b"DXT5",
     31: b"DXT5",
     35: b"DXT5",
-    39: b"DXT1",
+    39: b"DXT1", # uncompressed
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
 }
@@ -412,7 +412,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         blender_texture_node.location = (-300, -700)
         uv_map_node = blender_material.node_tree.nodes.new("ShaderNodeUVMap")
         uv_map_node.location = (-500, -700)
-        uv_map_node.uv_map = "lightmap"
+        uv_map_node.uv_map = "uv2"
         link(uv_map_node.outputs[0], blender_texture_node.inputs[0])
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[5])
         shader_node_grp.inputs[6].default_value = 1
