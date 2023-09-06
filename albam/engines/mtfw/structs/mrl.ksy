@@ -72,23 +72,28 @@ types:
     instances:
       resources:
         {pos: ofs_cmd, type: resource_binding, repeat: expr, repeat-expr: cmd_list_info.index}
-      #values:
-        #{pos: ofs_cmd + 12 * cmd_list_info.index, size: cmd_buffer_size - 12 * cmd_list_info.index}
       anims:
-        #{pos: ofs_anim_data, size: anim_data_size, if anim_data_size != 0}
         {pos: ofs_anim_data, type: anim_data, if anim_data_size != 0}
   
   anim_data:
     seq:
-      - {id: entry_count, type: u4} #pl0503_0
+      - {id: entry_count, type: u4}
       - {id: ofs_entry, type: u4}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: entry_count} # seconds?
       - {id: info, type: anim_info}
       - {id: ofs_list_entry1, type: u4}
       - {id: unk_hash, type: u4} # not in mfx
-      - {id: ofs_entry2, type: u4, repeat: expr, repeat-expr: info.num_entry2}
+      - {id: ofs_entry2, type: block_offset, repeat: expr, repeat-expr: info.num_entry2}
       - {id: set_buff_hash, type: u4, repeat: expr, repeat-expr: info.num_entry1}
-      - {id: entry_01, type: anim_entry}
+      #- {id: entry_01, type: anim_entry}
+      
+  block_offset:
+    seq:
+      - {id: ofc_block, type: u4}
+    instances:
+      body:
+        pos: _parent._parent.ofs_anim_data + ofc_block
+        type: anim_entry
       
   anim_info:
     seq:
@@ -106,7 +111,37 @@ types:
     seq:
       - {id: shader_hash, type: u4}
       - {id: info, type: anim_data_info}
-      - {id: entry, type: anim_sub_entry4}
+      - id: entry
+        type: 
+          switch-on: info.type
+          cases:
+            0: anim_sub_entry0
+            1: anim_sub_entry1
+            2: anim_sub_entry2
+            4: anim_sub_entry4
+            5: anim_sub_entry5
+            6: anim_sub_entry6
+            7: anim_sub_entry7
+            
+  anim_sub_entry0:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 12}
+     #- {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+    
+  anim_sub_entry1:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 24}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 20 * (_parent.info.num_entry -1)}
+  
+  anim_sub_entry2:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 12}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+
+  anim_sub_entry3:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 24}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 16 * (_parent.info.num_entry -1)}
       
   anim_sub_entry4:
     seq:
@@ -114,7 +149,20 @@ types:
      - {id: values, type: f4, repeat: expr, repeat-expr: 20 * _parent.info.num_entry}
      - {id: hash, type: u4}
      
+  anim_sub_entry5:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 12}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+     
+  anim_sub_entry6:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 36}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
   
+  anim_sub_entry7:
+    seq:
+     - {id: header, type: u1, repeat: expr, repeat-expr: 36}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
       
   hash_block:
     seq:
