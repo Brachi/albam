@@ -17,37 +17,6 @@ seq:
   - {id: materials, type: material, repeat: expr, repeat-expr: num_materials}
 
 types:
-  resource_binding:
-    seq:
-      - {id: info, type: cmd_info} # value type
-      - id: value_cmd
-        type:
-          switch-on: info.cmd_type
-          cases:
-            0: hash_block
-            1: cmd_ofs_buffer
-            2: hash_block
-            3: cmd_tex_idx
-            4: hash_block
-      - {id: shader_object_hash, type: u4}
-    instances:
-      float_buffer:
-        pos: _parent._io.pos + value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
-        type: 
-          switch-on: shader_object_hash
-          cases:
-            0x7b2c215f: shd_s_globals # $Globals re0
-            0x6c801200: shd_cb_material # CBMaterial re0
-            0x7b2c2159: shd_s_globals # $Globals rehd
-            0x6c8011f9: shd_cb_material # CBMaterial rehd
-            0x7b2c2155: shd_s_globals # $Globals rer1
-            0x6c8011f4: shd_cb_material # CBMaterial rer1
-            0x7b2c215e: shd_s_globals # $Globals rer2
-            0x6c8011fe: shd_cb_material # CBMaterial rer2
-            0x7b2c214c: shd_s_globals # $Globals re6
-            0x6c8011ea: shd_cb_material # CBMaterial re6
-        if: info.cmd_type == 1
-        
   texture_slot:
     seq:
       - {id: type_hash, type: u4} # rTexture
@@ -74,6 +43,47 @@ types:
         {pos: ofs_cmd, type: resource_binding, repeat: expr, repeat-expr: cmd_list_info.index}
       anims:
         {pos: ofs_anim_data, type: anim_data, if anim_data_size != 0}
+        
+  resource_binding:
+    seq:
+      - {id: info, type: cmd_info} # value type
+      - id: value_cmd
+        type:
+          switch-on: info.cmd_type
+          cases:
+            0: hash_block
+            1: cmd_ofs_buffer
+            2: hash_block
+            3: cmd_tex_idx
+            4: hash_block
+      - {id: shader_object_hash, type: u4}
+    instances:
+      float_buffer:
+        pos: _parent.ofs_cmd + value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+        type: 
+          switch-on: shader_object_hash
+          cases:
+            0x7b2c215f: shd_s_globals # $Globals re0
+            0x6c801200: shd_cb_material # CBMaterial re0
+            0x7b2c2159: shd_s_globals # $Globals rehd
+            0x6c8011f9: shd_cb_material # CBMaterial rehd
+            0x7b2c2155: shd_s_globals # $Globals rer1
+            0x6c8011f4: shd_cb_material # CBMaterial rer1
+            0x7b2c215e: shd_s_globals_rer2 #Revelation 2 hashes
+            0x6c8011fe: shd_cb_material
+            0x15419236: shd_vtx_displacement
+            0x51814237: shd_vtx_displacement2
+            0x22882238: shd_vtx_displacement3
+            0x6f01631b: shd_color_mask
+            0x61c6e23d: shd_vtx_dispmask_uv
+            0xaee37319: shd_ba_alpha_clip
+            0xefca3227: shd_distortion
+            0xc48f7228: shd_vtx_distortion_refract
+            0x7b2c214c: shd_s_globals # Re6 hashes
+            0x6c8011ea: shd_cb_material # CBMaterial re6
+        if: info.cmd_type == 1
+      #test_ofs:
+        #value: _parent.ofs_cmd
   
   anim_data:
     seq:
@@ -93,6 +103,7 @@ types:
       body:
         pos: _parent._parent.ofs_anim_data + ofc_block
         type: anim_entry
+        #type: u4
       
   anim_info:
     seq:
@@ -154,10 +165,10 @@ types:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
      - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
      
-  anim_sub_entry6:
+  anim_sub_entry6: #title_sheduler type 6,  2 num
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 36}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 16 * (_parent.info.num_entry -1)}
   
   anim_sub_entry7:
     seq:
@@ -182,25 +193,50 @@ types:
   cmd_tex_idx:
     seq:
       - {id: tex_idx, type: u4}
-        
+  #CBMaterial 0x6c8011fe size 32 rer2 
   shd_cb_material:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 32}
+  #$Globals
   shd_s_globals:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 76}
-  shd_diff_col_correct:
+  #$Globals 0x7b2c215e size 120 rer2  
+  shd_s_globals_rer2:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 120}
+  #CBVertexDisplacement 0x15419236 size 8 rer2
+  shd_vtx_displacement:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
+  #CBVertexDisplacement2 0x51814237 size 4 rer2
+  shd_vtx_displacement2:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  shd_half_lambert:
+  #CBVertexDisplacement3 0x22882238 size 4 rer2
+  shd_vtx_displacement3:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  shd_toon2:
+  #CBVertexDispMaskUV 0x61c6e23d size 8 rer2
+  shd_vtx_dispmask_uv:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
+  #CBColorMask 0x6f01631b size 24 rer2
+  shd_color_mask:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 24}
+  #CBBAlphaClip 0xaee37319 size 4 rer2
+  shd_ba_alpha_clip:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  shd_indirect_user:
+  #CBDistortion 0xefca3227 size 4 rer2
+  shd_distortion:
     seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 12}
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+  #CBDistortionRefract 0xc48f7228
+  shd_vtx_distortion_refract:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
         
   tex_offset:
     seq:
