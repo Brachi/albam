@@ -30,9 +30,10 @@ def register():
     importlib.import_module("albam.engines.mtfw.animation")
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
-    importlib.import_module("albam.engines.reng.archive")
-    importlib.import_module("albam.engines.reng.mesh")
-    importlib.import_module("albam.engines.reng.texture")
+    if os.getenv("ALBAM_ENABLE_REEN"):
+        importlib.import_module("albam.engines.reng.archive")
+        importlib.import_module("albam.engines.reng.mesh")
+        importlib.import_module("albam.engines.reng.texture")
 
     for _, cls in blender_registry.props:
         bpy.utils.register_class(cls)

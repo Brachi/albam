@@ -1,8 +1,13 @@
 import os
+import sys
 
 import pytest
 
 from albam import register, unregister
+from tests.mtfw import (
+    _generate_tests_arc_file_path,
+    _generate_tests_mrl,
+)
 
 
 def pytest_addoption(parser):
@@ -19,15 +24,6 @@ def pytest_sessionfinish():
 
 def pytest_generate_tests(metafunc):
     if "arc_filepath" in metafunc.fixturenames:
-        arc_dir = metafunc.config.getoption("arcdir")
-        if not arc_dir:
-            pytest.skip("No arc directory supplied")
-        else:
-            ARC_FILES = [
-                os.path.join(root, f)
-                for root, _, files in os.walk(arc_dir)
-                for f in files
-                if f.endswith(".arc")
-            ]
-            arc_names = [os.path.basename(f) for f in ARC_FILES]
-            metafunc.parametrize("arc_filepath", ARC_FILES, scope="module", ids=arc_names)
+        _generate_tests_arc_file_path(metafunc)
+    if "mrl" in metafunc.fixturenames:
+        _generate_tests_mrl(metafunc)

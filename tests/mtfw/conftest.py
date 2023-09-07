@@ -1,6 +1,3 @@
-import os
-
-import bpy
 import pytest
 
 from albam.blender_ui.import_panel import (
@@ -12,6 +9,22 @@ from albam.blender_ui.import_panel import (
 class FileWrapper:
     def __init__(self, file_path):
         self.name = os.path.basename(file_path)
+
+
+
+@pytest.fixture
+def mrl(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.structs.mrl import Mrl
+    arc = request.param[0]
+    mrl_file_entry = request.param[1]
+
+    mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
+    parsed_mrl = Mrl.from_bytes(mrl_bytes)
+
+    return parsed_mrl
 
 
 @pytest.fixture
@@ -40,10 +53,3 @@ def loaded_mod_files(arc_filepath, scope="function"):
     bpy.data.batch_remove(id_armatures)
     del bl_container
     """
-
-
-def test_import_mod(loaded_mod_files):
-
-    for mod_file in loaded_mod_files:
-        ALBAM_OT_Import._execute(mod_file, bpy.context)
-        assert bpy.data.objects[mod_file.display_name]
