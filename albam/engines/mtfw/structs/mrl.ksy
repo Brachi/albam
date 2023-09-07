@@ -85,7 +85,6 @@ types:
       - {id: unk_hash, type: u4} # not in mfx
       - {id: ofs_entry2, type: block_offset, repeat: expr, repeat-expr: info.num_entry2}
       - {id: set_buff_hash, type: u4, repeat: expr, repeat-expr: info.num_entry1}
-      #- {id: entry_01, type: anim_entry}
       
   block_offset:
     seq:
@@ -118,6 +117,7 @@ types:
             0: anim_sub_entry0
             1: anim_sub_entry1
             2: anim_sub_entry2
+            3: anim_sub_entry3
             4: anim_sub_entry4
             5: anim_sub_entry5
             6: anim_sub_entry6
@@ -126,7 +126,7 @@ types:
   anim_sub_entry0:
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
-     #- {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
     
   anim_sub_entry1:
     seq:
