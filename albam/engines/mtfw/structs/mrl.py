@@ -42,12 +42,12 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.header = []
-            for i in range(24):
+            for i in range(4):
                 self.header.append(self._io.read_u1())
 
             self.values = []
-            for i in range((20 * (self._parent.info.num_entry - 1))):
-                self.values.append(self._io.read_u1())
+            for i in range(self._parent.info.num_entry):
+                self.values.append(Mrl.AnimType1(self._io, self, self._root))
 
 
 
@@ -119,6 +119,21 @@ class Mrl(KaitaiStruct):
             self.num_entry1 = self._io.read_bits_int_le(14)
 
 
+    class AnimType4(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_00 = self._io.read_u4le()
+            self.unk_01 = []
+            for i in range(19):
+                self.unk_01.append(self._io.read_f4le())
+
+
+
     class CmdInfo(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -155,12 +170,12 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.header = []
-            for i in range(12):
+            for i in range(4):
                 self.header.append(self._io.read_u1())
 
             self.values = []
-            for i in range((8 * self._parent.info.num_entry)):
-                self.values.append(self._io.read_u1())
+            for i in range(self._parent.info.num_entry):
+                self.values.append(Mrl.AnimType0(self._io, self, self._root))
 
 
 
@@ -191,6 +206,18 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.shader_hash = self._io.read_u4le()
+
+
+    class AnimType0(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_00 = self._io.read_u4le()
+            self.unk_01 = self._io.read_f4le()
 
 
     class ShdVtxDistortionRefract(KaitaiStruct):
@@ -296,6 +323,24 @@ class Mrl(KaitaiStruct):
 
 
 
+    class AnimType6(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_00 = []
+            for i in range(2):
+                self.unk_00.append(self._io.read_u4le())
+
+            self.unk_01 = []
+            for i in range(4):
+                self.unk_01.append(self._io.read_f4le())
+
+
+
     class ShdSGlobalsRer2(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -336,10 +381,13 @@ class Mrl(KaitaiStruct):
                 self.header.append(self._io.read_u1())
 
             self.values = []
-            for i in range((20 * self._parent.info.num_entry)):
-                self.values.append(self._io.read_f4le())
+            for i in range(self._parent.info.num_entry):
+                self.values.append(Mrl.AnimType4(self._io, self, self._root))
 
-            self.hash = self._io.read_u4le()
+            self.hash = []
+            for i in range(self._parent.info.num_entry):
+                self.hash.append(self._io.read_u4le())
+
 
 
     class Material(KaitaiStruct):
@@ -397,6 +445,21 @@ class Mrl(KaitaiStruct):
             return getattr(self, '_m_anims', None)
 
 
+    class AnimType1(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_00 = self._io.read_u4le()
+            self.unk_01 = []
+            for i in range(4):
+                self.unk_01.append(self._io.read_f4le())
+
+
+
     class AnimSubEntry6(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -406,12 +469,12 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.header = []
-            for i in range(36):
+            for i in range(4):
                 self.header.append(self._io.read_u1())
 
             self.values = []
-            for i in range((16 * (self._parent.info.num_entry - 1))):
-                self.values.append(self._io.read_u1())
+            for i in range(self._parent.info.num_entry):
+                self.values.append(Mrl.AnimType6(self._io, self, self._root))
 
 
 
@@ -438,7 +501,7 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.entry_count = self._io.read_u4le()
-            self.ofs_entry = self._io.read_u4le()
+            self.ofs_to_info = self._io.read_u4le()
             self.unk_00 = []
             for i in range(self.entry_count):
                 self.unk_00.append(self._io.read_u4le())

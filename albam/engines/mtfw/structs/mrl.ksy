@@ -15,7 +15,7 @@ seq:
   - {id: ofs_materials, type: u4}
   - {id: textures, type: texture_slot, repeat: expr, repeat-expr: num_textures}
   - {id: materials, type: material, repeat: expr, repeat-expr: num_materials}
-
+  
 types:
   texture_slot:
     seq:
@@ -88,8 +88,8 @@ types:
   anim_data:
     seq:
       - {id: entry_count, type: u4}
-      - {id: ofs_entry, type: u4}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: entry_count} # seconds?
+      - {id: ofs_to_info, type: u4}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: entry_count}
       - {id: info, type: anim_info}
       - {id: ofs_list_entry1, type: u4}
       - {id: unk_hash, type: u4} # not in mfx
@@ -103,7 +103,8 @@ types:
       body:
         pos: _parent._parent.ofs_anim_data + ofc_block
         type: anim_entry
-        #type: u4
+      #test_ofs:
+      #  value: _parent._parent.ofs_anim_data + ofc_block
       
   anim_info:
     seq:
@@ -136,20 +137,30 @@ types:
             
   anim_sub_entry0:
     seq:
-     - {id: header, type: u1, repeat: expr, repeat-expr: 12}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+     - {id: header, type: u1, repeat: expr, repeat-expr: 4}
+     - {id: values, type: anim_type0, repeat: expr, repeat-expr: _parent.info.num_entry}
+  
+  anim_type0:
+    seq:
+      - {id: unk_00, type: u4}
+      - {id: unk_01, type: f4}
     
   anim_sub_entry1:
     seq:
-     - {id: header, type: u1, repeat: expr, repeat-expr: 24}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 20 * (_parent.info.num_entry -1)}
+     - {id: header, type: u1, repeat: expr, repeat-expr: 4}
+     - {id: values, type: anim_type1, repeat: expr, repeat-expr: _parent.info.num_entry }
+     
+  anim_type1:
+    seq:
+      - {id: unk_00, type: u4}
+      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
   
-  anim_sub_entry2:
+  anim_sub_entry2: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
      - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
 
-  anim_sub_entry3:
+  anim_sub_entry3: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 24}
      - {id: values, type: u1, repeat: expr, repeat-expr: 16 * (_parent.info.num_entry -1)}
@@ -157,20 +168,30 @@ types:
   anim_sub_entry4:
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 4}
-     - {id: values, type: f4, repeat: expr, repeat-expr: 20 * _parent.info.num_entry}
-     - {id: hash, type: u4}
+     - {id: values, type: anim_type4, repeat: expr, repeat-expr: _parent.info.num_entry}
+     - {id: hash, type: u4, repeat: expr, repeat-expr: _parent.info.num_entry}
      
-  anim_sub_entry5:
+  anim_type4:
+    seq:
+      - {id: unk_00, type: u4}
+      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 19}
+     
+  anim_sub_entry5: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
      - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
      
-  anim_sub_entry6: #title_sheduler type 6,  2 num
+  anim_sub_entry6:
     seq:
-     - {id: header, type: u1, repeat: expr, repeat-expr: 36}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 16 * (_parent.info.num_entry -1)}
+     - {id: header, type: u1, repeat: expr, repeat-expr: 4}
+     - {id: values, type: anim_type6, repeat: expr, repeat-expr: _parent.info.num_entry }
+     
+  anim_type6:
+    seq:
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
   
-  anim_sub_entry7:
+  anim_sub_entry7: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 36}
      - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
