@@ -19,14 +19,14 @@ seq:
 types:
   texture_slot:
     seq:
-      - {id: type_hash, type: u4} # rTexture
+      - {id: type_hash, type: u4} # rTexture not in mfx
       - {id: unk_02, type: u4}
       - {id: unk_03, type: u4}
       - {id: texture_path, type: str, size: 64, encoding: ascii, terminator: 0}
       
   material:
     seq:
-      - {id: type_hash, type: u4} #hash not in mfx
+      - {id: type_hash, type: u4} # TYPE_nDraw_MaterialStd not in mfx
       - {id: name_hash_crcjam32, type: u4}
       - {id: cmd_buffer_size, type: u4}
       - {id: blend_state_hash, type: u4}
@@ -84,12 +84,26 @@ types:
         if: info.cmd_type == 1
       #test_ofs:
         #value: _parent.ofs_cmd
-  
+        
   anim_data:
     seq:
       - {id: entry_count, type: u4}
-      - {id: ofs_to_info, type: u4}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: entry_count}
+      - {id: ofs_to_info, type: anim_ofs, repeat: expr, repeat-expr: entry_count}
+    instances:
+      ofs_base:
+        value: _parent.ofs_anim_data 
+        
+  anim_ofs:
+    seq:
+      - {id: ofs_block, type: u4}
+    instances:
+      anim_entries:
+        pos: _parent._parent.ofs_anim_data + ofs_block
+        type: anim_entry
+        
+  anim_entry:
+    seq:
+      - {id: unk_00, type: u4}
       - {id: info, type: anim_info}
       - {id: ofs_list_entry1, type: u4}
       - {id: unk_hash, type: u4} # not in mfx
@@ -101,10 +115,10 @@ types:
       - {id: ofc_block, type: u4}
     instances:
       body:
-        pos: _parent._parent.ofs_anim_data + ofc_block
-        type: anim_entry
+        pos: _parent._parent._parent.ofs_base + ofc_block
+        type: anim_sub_entry
       #test_ofs:
-      #  value: _parent._parent.ofs_anim_data + ofc_block
+      #  value: _parent._parent._parent.ofs_base + ofc_block
       
   anim_info:
     seq:
@@ -118,7 +132,7 @@ types:
       - {id: unk_00, type: b4}
       - {id: num_entry, type: b24}
       
-  anim_entry:
+  anim_sub_entry:
     seq:
       - {id: shader_hash, type: u4}
       - {id: info, type: anim_data_info}
@@ -148,7 +162,7 @@ types:
   anim_sub_entry1:
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 4}
-     - {id: values, type: anim_type1, repeat: expr, repeat-expr: _parent.info.num_entry }
+     - {id: values, type: anim_type1, repeat: expr, repeat-expr: _parent.info.num_entry}
      
   anim_type1:
     seq:
@@ -179,12 +193,12 @@ types:
   anim_sub_entry5: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+     #- {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
      
   anim_sub_entry6:
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 4}
-     - {id: values, type: anim_type6, repeat: expr, repeat-expr: _parent.info.num_entry }
+     #- {id: values, type: anim_type6, repeat: expr, repeat-expr: _parent.info.num_entry }
      
   anim_type6:
     seq:
@@ -194,7 +208,7 @@ types:
   anim_sub_entry7: # not in rev2
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 36}
-     - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
+     #- {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
       
   hash_block:
     seq:

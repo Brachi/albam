@@ -77,10 +77,6 @@ class Mrl(KaitaiStruct):
             for i in range(12):
                 self.header.append(self._io.read_u1())
 
-            self.values = []
-            for i in range((8 * self._parent.info.num_entry)):
-                self.values.append(self._io.read_u1())
-
 
 
     class CmdTexIdx(KaitaiStruct):
@@ -161,6 +157,28 @@ class Mrl(KaitaiStruct):
 
 
 
+    class AnimOfs(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.ofs_block = self._io.read_u4le()
+
+        @property
+        def anim_entries(self):
+            if hasattr(self, '_m_anim_entries'):
+                return self._m_anim_entries
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_anim_data + self.ofs_block))
+            self._m_anim_entries = Mrl.AnimEntry(self._io, self, self._root)
+            self._io.seek(_pos)
+            return getattr(self, '_m_anim_entries', None)
+
+
     class AnimSubEntry0(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -190,10 +208,6 @@ class Mrl(KaitaiStruct):
             self.header = []
             for i in range(36):
                 self.header.append(self._io.read_u1())
-
-            self.values = []
-            for i in range((24 * (self._parent.info.num_entry - 1))):
-                self.values.append(self._io.read_u1())
 
 
 
@@ -278,8 +292,8 @@ class Mrl(KaitaiStruct):
                 return self._m_body
 
             _pos = self._io.pos()
-            self._io.seek((self._parent._parent.ofs_anim_data + self.ofc_block))
-            self._m_body = Mrl.AnimEntry(self._io, self, self._root)
+            self._io.seek((self._parent._parent._parent.ofs_base + self.ofc_block))
+            self._m_body = Mrl.AnimSubEntry(self._io, self, self._root)
             self._io.seek(_pos)
             return getattr(self, '_m_body', None)
 
@@ -366,6 +380,35 @@ class Mrl(KaitaiStruct):
             self.type = self._io.read_bits_int_le(4)
             self.unk_00 = self._io.read_bits_int_le(4)
             self.num_entry = self._io.read_bits_int_le(24)
+
+
+    class AnimSubEntry(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.shader_hash = self._io.read_u4le()
+            self.info = Mrl.AnimDataInfo(self._io, self, self._root)
+            _on = self.info.type
+            if _on == 0:
+                self.entry = Mrl.AnimSubEntry0(self._io, self, self._root)
+            elif _on == 4:
+                self.entry = Mrl.AnimSubEntry4(self._io, self, self._root)
+            elif _on == 6:
+                self.entry = Mrl.AnimSubEntry6(self._io, self, self._root)
+            elif _on == 7:
+                self.entry = Mrl.AnimSubEntry7(self._io, self, self._root)
+            elif _on == 1:
+                self.entry = Mrl.AnimSubEntry1(self._io, self, self._root)
+            elif _on == 3:
+                self.entry = Mrl.AnimSubEntry3(self._io, self, self._root)
+            elif _on == 5:
+                self.entry = Mrl.AnimSubEntry5(self._io, self, self._root)
+            elif _on == 2:
+                self.entry = Mrl.AnimSubEntry2(self._io, self, self._root)
 
 
     class AnimSubEntry4(KaitaiStruct):
@@ -472,10 +515,6 @@ class Mrl(KaitaiStruct):
             for i in range(4):
                 self.header.append(self._io.read_u1())
 
-            self.values = []
-            for i in range(self._parent.info.num_entry):
-                self.values.append(Mrl.AnimType6(self._io, self, self._root))
-
 
 
     class ShdDistortion(KaitaiStruct):
@@ -501,22 +540,18 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.entry_count = self._io.read_u4le()
-            self.ofs_to_info = self._io.read_u4le()
-            self.unk_00 = []
+            self.ofs_to_info = []
             for i in range(self.entry_count):
-                self.unk_00.append(self._io.read_u4le())
+                self.ofs_to_info.append(Mrl.AnimOfs(self._io, self, self._root))
 
-            self.info = Mrl.AnimInfo(self._io, self, self._root)
-            self.ofs_list_entry1 = self._io.read_u4le()
-            self.unk_hash = self._io.read_u4le()
-            self.ofs_entry2 = []
-            for i in range(self.info.num_entry2):
-                self.ofs_entry2.append(Mrl.BlockOffset(self._io, self, self._root))
 
-            self.set_buff_hash = []
-            for i in range(self.info.num_entry1):
-                self.set_buff_hash.append(self._io.read_u4le())
+        @property
+        def ofs_base(self):
+            if hasattr(self, '_m_ofs_base'):
+                return self._m_ofs_base
 
+            self._m_ofs_base = self._parent.ofs_anim_data
+            return getattr(self, '_m_ofs_base', None)
 
 
     class OfsBuff(KaitaiStruct):
@@ -577,25 +612,18 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.shader_hash = self._io.read_u4le()
-            self.info = Mrl.AnimDataInfo(self._io, self, self._root)
-            _on = self.info.type
-            if _on == 0:
-                self.entry = Mrl.AnimSubEntry0(self._io, self, self._root)
-            elif _on == 4:
-                self.entry = Mrl.AnimSubEntry4(self._io, self, self._root)
-            elif _on == 6:
-                self.entry = Mrl.AnimSubEntry6(self._io, self, self._root)
-            elif _on == 7:
-                self.entry = Mrl.AnimSubEntry7(self._io, self, self._root)
-            elif _on == 1:
-                self.entry = Mrl.AnimSubEntry1(self._io, self, self._root)
-            elif _on == 3:
-                self.entry = Mrl.AnimSubEntry3(self._io, self, self._root)
-            elif _on == 5:
-                self.entry = Mrl.AnimSubEntry5(self._io, self, self._root)
-            elif _on == 2:
-                self.entry = Mrl.AnimSubEntry2(self._io, self, self._root)
+            self.unk_00 = self._io.read_u4le()
+            self.info = Mrl.AnimInfo(self._io, self, self._root)
+            self.ofs_list_entry1 = self._io.read_u4le()
+            self.unk_hash = self._io.read_u4le()
+            self.ofs_entry2 = []
+            for i in range(self.info.num_entry2):
+                self.ofs_entry2.append(Mrl.BlockOffset(self._io, self, self._root))
+
+            self.set_buff_hash = []
+            for i in range(self.info.num_entry1):
+                self.set_buff_hash.append(self._io.read_u4le())
+
 
 
     class ResourceBinding(KaitaiStruct):
