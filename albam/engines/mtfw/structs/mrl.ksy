@@ -169,12 +169,12 @@ types:
       - {id: unk_00, type: u4}
       - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
   
-  anim_sub_entry2: # not in rev2
+  anim_sub_entry2: # unused
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
      - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
 
-  anim_sub_entry3: # not in rev2
+  anim_sub_entry3: # unused
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 24}
      - {id: values, type: u1, repeat: expr, repeat-expr: 16 * (_parent.info.num_entry -1)}
@@ -190,25 +190,25 @@ types:
       - {id: unk_00, type: u4}
       - {id: unk_01, type: f4, repeat: expr, repeat-expr: 19}
      
-  anim_sub_entry5: # not in rev2
+  anim_sub_entry5: # unused
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 12}
-     #- {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 8 * _parent.info.num_entry}
      
   anim_sub_entry6:
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 4}
-     #- {id: values, type: anim_type6, repeat: expr, repeat-expr: _parent.info.num_entry }
+     - {id: values, type: anim_type6, repeat: expr, repeat-expr: _parent.info.num_entry }
      
   anim_type6:
     seq:
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
       - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
   
-  anim_sub_entry7: # not in rev2
+  anim_sub_entry7: # unused
     seq:
      - {id: header, type: u1, repeat: expr, repeat-expr: 36}
-     #- {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
+     - {id: values, type: u1, repeat: expr, repeat-expr: 24 * (_parent.info.num_entry -1)}
       
   hash_block:
     seq:

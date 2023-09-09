@@ -77,6 +77,10 @@ class Mrl(KaitaiStruct):
             for i in range(12):
                 self.header.append(self._io.read_u1())
 
+            self.values = []
+            for i in range((8 * self._parent.info.num_entry)):
+                self.values.append(self._io.read_u1())
+
 
 
     class CmdTexIdx(KaitaiStruct):
@@ -208,6 +212,10 @@ class Mrl(KaitaiStruct):
             self.header = []
             for i in range(36):
                 self.header.append(self._io.read_u1())
+
+            self.values = []
+            for i in range((24 * (self._parent.info.num_entry - 1))):
+                self.values.append(self._io.read_u1())
 
 
 
@@ -514,6 +522,10 @@ class Mrl(KaitaiStruct):
             self.header = []
             for i in range(4):
                 self.header.append(self._io.read_u1())
+
+            self.values = []
+            for i in range(self._parent.info.num_entry):
+                self.values.append(Mrl.AnimType6(self._io, self, self._root))
 
 
 
