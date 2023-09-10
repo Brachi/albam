@@ -39,7 +39,7 @@ def test_mod(mod):
 
     vertex_formats = {m.vertex_format for m in mod.meshes}
 
-    assert all(v in KNOWN_VERTEX_FORMATS for v in vertex_formats)
+    assert not vertex_formats.difference(KNOWN_VERTEX_FORMATS)
 
 
 def test_lmt(lmt):
