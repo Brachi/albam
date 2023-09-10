@@ -16,6 +16,24 @@ class Mod156(KaitaiStruct):
 
     def _read(self):
         self.header = Mod156.ModHeader(self._io, self, self._root)
+        if self.header.unk_10 != 0:
+            self.vtx8_unk_faces = []
+            for i in range(self.header.unk_10):
+                self.vtx8_unk_faces.append(Mod156.UnkVtx8Block00(self._io, self, self._root))
+
+
+        if self.header.unk_09 != 0:
+            self.vtx8_unk_uv = []
+            for i in range(self.header.unk_09):
+                self.vtx8_unk_uv.append(Mod156.UnkVtx8Block01(self._io, self, self._root))
+
+
+        if self.header.unk_08 != 0:
+            self.vtx8_unk_normals = []
+            for i in range(self.header.unk_08):
+                self.vtx8_unk_normals.append(Mod156.UnkVtx8Block02(self._io, self, self._root))
+
+
         self.bones = []
         for i in range(self.header.num_bones):
             self.bones.append(Mod156.Bone(self._io, self, self._root))
@@ -74,6 +92,20 @@ class Mod156(KaitaiStruct):
             self.w = self._io.read_f4le()
 
 
+    class UnkVtx8Block02(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_00 = self._io.read_u2le()
+            self.unk_01 = self._io.read_u2le()
+            self.unk_02 = self._io.read_u2le()
+            self.unk_03 = self._io.read_u2le()
+
+
     class ModHeader(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -122,9 +154,6 @@ class Mod156(KaitaiStruct):
             self.unk_10 = self._io.read_u4le()
             self.unk_11 = self._io.read_u4le()
             self.reserved_03 = self._io.read_u4le()
-            if self.unk_08 != 0:
-                self.unk_12 = self._io.read_bytes((self.offset_bones - 176))
-
 
 
     class Vertex(KaitaiStruct):
@@ -191,6 +220,18 @@ class Mod156(KaitaiStruct):
             self.unk_01 = self._io.read_f4le()
             self.parent_distance = self._io.read_f4le()
             self.location = Mod156.Vec3(self._io, self, self._root)
+
+
+    class UnkVtx8Block00(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.idx = self._io.read_u2le()
+            self.unk_00 = self._io.read_u2le()
 
 
     class Vertex0(KaitaiStruct):
@@ -304,6 +345,23 @@ class Mod156(KaitaiStruct):
 
             self._io.seek(_pos)
             return getattr(self, '_m_vertices', None)
+
+
+    class UnkVtx8Block01(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_01 = self._io.read_u2le()
+            self.unk_02 = self._io.read_u2le()
+            self.unk_03 = self._io.read_u4le()
+            self.unk_05 = self._io.read_u2le()
+            self.unk_06 = self._io.read_u2le()
+            self.unk_07 = self._io.read_u2le()
+            self.unk_08 = self._io.read_u2le()
 
 
     class Material(KaitaiStruct):
