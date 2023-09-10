@@ -129,6 +129,19 @@ class Mod21(KaitaiStruct):
 
 
 
+    class VertexA7d7(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+
+
     class Vec2HalfFloat(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -210,6 +223,39 @@ class Mod21(KaitaiStruct):
 
 
 
+    class Vertex926f(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
+
+
+    class Vertex63b6(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.unk_01 = self._io.read_u4le()
+
+
     class Bone(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -273,6 +319,20 @@ class Mod21(KaitaiStruct):
             for i in range(2):
                 self.bone_indices.append(self._io.read_bytes(2))
 
+
+
+    class Vec4U1(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.x = self._io.read_u1()
+            self.y = self._io.read_u1()
+            self.z = self._io.read_u1()
+            self.w = self._io.read_u1()
 
 
     class Vertex14d4(KaitaiStruct):
@@ -353,20 +413,38 @@ class Mod21(KaitaiStruct):
             self._m_vertices = []
             for i in range(self.num_vertices):
                 _on = self.vertex_format
-                if _on == 794148925:
+                if _on == 3094208554:
+                    self._m_vertices.append(Mod21.VertexB8de(self._io, self, self._root))
+                elif _on == 1672921135:
+                    self._m_vertices.append(Mod21.Vertex63b6(self._io, self, self._root))
+                elif _on == 794148925:
                     self._m_vertices.append(Mod21.Vertex2f55(self._io, self, self._root))
                 elif _on == 3273596956:
                     self._m_vertices.append(Mod21.VertexC31f(self._io, self, self._root))
+                elif _on == 2456801326:
+                    self._m_vertices.append(Mod21.Vertex926f(self._io, self, self._root))
                 elif _on == 3141681188:
                     self._m_vertices.append(Mod21.VertexBb42(self._io, self, self._root))
+                elif _on == 3626594344:
+                    self._m_vertices.append(Mod21.Vertex8297(self._io, self, self._root))
                 elif _on == 2835001368:
                     self._m_vertices.append(Mod21.VertexA8fa(self._io, self, self._root))
+                elif _on == 2476326963:
+                    self._m_vertices.append(Mod21.Vertex9399(self._io, self, self._root))
                 elif _on == 349437984:
                     self._m_vertices.append(Mod21.Vertex14d4(self._io, self, self._root))
+                elif _on == 545087543:
+                    self._m_vertices.append(Mod21.Vertex207d(self._io, self, self._root))
                 elif _on == 213286933:
                     self._m_vertices.append(Mod21.VertexCb68(self._io, self, self._root))
                 elif _on == 3682443284:
                     self._m_vertices.append(Mod21.VertexDb7d(self._io, self, self._root))
+                elif _on == 1236594729:
+                    self._m_vertices.append(Mod21.Vertex49b4(self._io, self, self._root))
+                elif _on == 2815938614:
+                    self._m_vertices.append(Mod21.VertexA7d7(self._io, self, self._root))
+                elif _on == 3517214776:
+                    self._m_vertices.append(Mod21.VertexD1a4(self._io, self, self._root))
                 elif _on == 2736832534:
                     self._m_vertices.append(Mod21.VertexA320(self._io, self, self._root))
                 elif _on == 2962763795:
@@ -374,6 +452,35 @@ class Mod21(KaitaiStruct):
 
             self._io.seek(_pos)
             return getattr(self, '_m_vertices', None)
+
+
+    class Vertex49b4(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
+
+
+    class VertexD1a4(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class VertexDb7d(KaitaiStruct):
@@ -405,6 +512,20 @@ class Mod21(KaitaiStruct):
             for i in range(30):
                 self.unk_floats.append(self._io.read_f4le())
 
+
+
+    class Vertex207d(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
     class WeightBound(KaitaiStruct):
@@ -465,6 +586,36 @@ class Mod21(KaitaiStruct):
             self.z = self._io.read_s2le()
 
 
+    class VertexB8de(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.unk_00 = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.unk_01 = self._io.read_u4le()
+
+
+    class Vertex8297(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.unk_02 = self._io.read_f4le()
+
+
     class Vec4S2(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -511,6 +662,22 @@ class Mod21(KaitaiStruct):
                 self.todo_1.append(self._io.read_u1())
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+
+
+    class Vertex9399(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.position = Mod21.Vec3(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
 

@@ -7,6 +7,9 @@ meta:
 
 seq:
   - {id: header, type: mod_header}
+  - {id: vtx8_unk_faces, type: unk_vtx8_block_00, repeat: expr, repeat-expr: header.unk_10,if: header.unk_10 != 0}
+  - {id: vtx8_unk_uv, type: unk_vtx8_block_01, repeat: expr, repeat-expr: header.unk_09, if: header.unk_09 != 0}
+  - {id: vtx8_unk_normals, type: unk_vtx8_block_02, repeat: expr, repeat-expr: header.unk_08, if: header.unk_08 != 0}
   - {id: bones, type: bone, repeat: expr, repeat-expr: header.num_bones}
   - {id: parent_space_matrices, type: matrix4x4, repeat: expr, repeat-expr: header.num_bones}
   - {id: inverse_bind_matrices, type: matrix4x4, repeat: expr, repeat-expr: header.num_bones}
@@ -64,7 +67,29 @@ types:
       - {id: unk_10, type: u4}
       - {id: unk_11, type: u4}
       - {id: reserved_03, type: u4}
-      - {id: unk_12, size: offset_bones - 176, if: unk_08 !=  0}
+      #- {id: unk_12, size: offset_bones - 176, if: unk_08 !=  0}
+
+  unk_vtx8_block_00:
+    seq:
+      - {id: idx, type: u2}
+      - {id: unk_00, type: u2}
+
+  unk_vtx8_block_01:
+    seq:
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: u2}
+      - {id: unk_03, type: u4}
+      - {id: unk_05, type: u2}
+      - {id: unk_06, type: u2}
+      - {id: unk_07, type: u2}
+      - {id: unk_08, type: u2}
+      
+  unk_vtx8_block_02:
+    seq:
+      - {id: unk_00, type: u2}
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: u2}
+      - {id: unk_03, type: u2}
 
   bone:
     seq:

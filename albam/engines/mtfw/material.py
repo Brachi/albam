@@ -19,6 +19,8 @@ TEX_FORMAT_MAPPER = {
     24: b"DXT5",
     25: b"DXT5",
     31: b"DXT5",
+    35: b"DXT5",
+    39: b"DXT1", # uncompressed
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
 }
@@ -42,13 +44,11 @@ class TextureTypes(Enum):
 
 
 TEX_TYPE_MAPPER = {
-    0x345DCDC3: TextureTypes.DIFFUSE,  # RER
-    0x349DCDC3: TextureTypes.DIFFUSE,  # RE1
-    0x347DCDC3: TextureTypes.DIFFUSE,  # RE6
-    0x350DCDC3: TextureTypes.DIFFUSE,  # RE0
-    0x34CDCDC3: TextureTypes.NORMAL,  # RE1
-    0x34ADCDC3: TextureTypes.NORMAL,  # RE6
-    0x353DCDC3: TextureTypes.NORMAL,  # RE0
+    0xcd06f: TextureTypes.DIFFUSE,
+    0x22660: TextureTypes.NORMAL,
+    0xaa6f0: TextureTypes.LIGHTMAP,
+    0xed1b:  TextureTypes.SPECULAR,
+    0x75a53: TextureTypes.NORMAL_DETAIL,
 }
 
 
@@ -125,8 +125,8 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         tex_index = mtfw_material.texture_slots[texture_type.value - 1]
     else:
         for resource in mtfw_material.resources:
-            if TEX_TYPE_MAPPER.get(resource.resource_type) == texture_type:
-                tex_index = resource.resource_index
+            if TEX_TYPE_MAPPER.get((resource.shader_object_hash>>12)) == texture_type:
+                tex_index = resource.value_cmd.tex_idx
                 break
     return tex_index
 
@@ -412,7 +412,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         blender_texture_node.location = (-300, -700)
         uv_map_node = blender_material.node_tree.nodes.new("ShaderNodeUVMap")
         uv_map_node.location = (-500, -700)
-        uv_map_node.uv_map = "lightmap"
+        uv_map_node.uv_map = "uv2"
         link(uv_map_node.outputs[0], blender_texture_node.inputs[0])
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[5])
         shader_node_grp.inputs[6].default_value = 1
