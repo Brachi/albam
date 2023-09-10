@@ -25,6 +25,8 @@ def pytest_sessionfinish():
 def pytest_generate_tests(metafunc):
     if "arc_filepath" in metafunc.fixturenames:
         _generate_tests_arc_file_path(metafunc)
+    if "lmt" in metafunc.fixturenames:
+        _generate_tests_from_arcs("lmt", metafunc)
     if "mod" in metafunc.fixturenames:
         _generate_tests_from_arcs("mod", metafunc)
     if "mrl" in metafunc.fixturenames:

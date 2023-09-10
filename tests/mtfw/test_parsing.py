@@ -1,5 +1,6 @@
 
 SUPPORTED_MOD_VERSIONS = (156, 210)
+SUPPORTED_LMT_VERSIONS = (51, )
 KNOWN_VERTEX_FORMATS = {
     0, 1, 2, 3, 4, 5, 6, 7, 8,
     0x14d40020,
@@ -39,3 +40,10 @@ def test_mod(mod):
     vertex_formats = {m.vertex_format for m in mod.meshes}
 
     assert all(v in KNOWN_VERTEX_FORMATS for v in vertex_formats)
+
+
+def test_lmt(lmt):
+
+    assert lmt.id_magic == b"LMT\x00"
+    assert lmt.version in SUPPORTED_LMT_VERSIONS
+    assert lmt.num_block_offsets == len(lmt.block_offsets)

@@ -12,6 +12,23 @@ class FileWrapper:
     def __init__(self, file_path):
         self.name = os.path.basename(file_path)
 
+@pytest.fixture
+def lmt(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.structs.lmt import Lmt
+
+    arc = request.param[0]
+    file_entry = request.param[1]
+
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
+
+    parsed = Lmt.from_bytes(src_bytes)
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._file_path = file_entry.file_path
+
+    return parsed
 
 
 @pytest.fixture
