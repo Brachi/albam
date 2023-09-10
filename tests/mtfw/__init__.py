@@ -19,11 +19,12 @@ def _generate_tests_arc_file_path(metafunc):
     metafunc.parametrize("arc_filepath", ARC_FILES, ids=arc_names)
 
 
-def _generate_tests_mrl(metafunc):
+def _generate_tests_from_arcs(file_extension, metafunc):
     """
-    Generate one parsed mrl object per test, based on provided arcs.
+    Generate one parsed object for file_extension, based on provided arcs.
     Defer decompression and parsing to test-run time, not
-    collection time
+    collection time.
+    It requires a fixture named after the extension
     """
     arc_dir = metafunc.config.getoption("arcdir")
     if not arc_dir:
@@ -40,25 +41,27 @@ def _generate_tests_mrl(metafunc):
     if not ARC_FILES:
         raise ValueError(f"No files ending in .arc found in {arc_dir}")
 
-    mrls, ids = mrls_per_arc(ARC_FILES)
+    parsed_files, ids = files_per_arc(file_extension, ARC_FILES)
     # mrl fixture in tests/mtfw/conftest.py
-    metafunc.parametrize("mrl", mrls, indirect=True, ids=ids)
+    metafunc.parametrize(file_extension, parsed_files, indirect=True, ids=ids)
 
 
-def mrls_per_arc(arc_paths):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
+def files_per_arc(file_extension, arc_paths):
+    # importing here to avoid errors in test collection.
+    # Since collection happens before calling register() in `pytest_sessionstart`
+    # sys.path is not modified to include albam_vendor, so the vendored dep kaitaistruct
+    # is not found when needed.
     from albam.engines.mtfw.archive import ArcWrapper
     final = []
     ids = []
     for arc_path in arc_paths:
         arc_name = os.path.basename(arc_path)
         arc = ArcWrapper(None, arc_path)
-        mrls_fe = arc.get_file_entries_by_extension("mrl")
-        if not mrls_fe:
+        file_entries = arc.get_file_entries_by_extension(file_extension)
+        if not file_entries:
+            del arc
             continue
-        for mrl in mrls_fe:
-            final.append((arc, mrl))
-            ids.append("::".join((arc_name, mrl.file_path + ".mrl")))
+        for fe in file_entries:
+            final.append((arc, fe))
+            ids.append("::".join((arc_name, f"{fe.file_path}.{file_extension}")))
     return final, ids

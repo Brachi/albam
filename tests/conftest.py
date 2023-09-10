@@ -6,7 +6,7 @@ import pytest
 from albam import register, unregister
 from tests.mtfw import (
     _generate_tests_arc_file_path,
-    _generate_tests_mrl,
+    _generate_tests_from_arcs,
 )
 
 
@@ -25,5 +25,7 @@ def pytest_sessionfinish():
 def pytest_generate_tests(metafunc):
     if "arc_filepath" in metafunc.fixturenames:
         _generate_tests_arc_file_path(metafunc)
+    if "mod" in metafunc.fixturenames:
+        _generate_tests_from_arcs("mod", metafunc)
     if "mrl" in metafunc.fixturenames:
-        _generate_tests_mrl(metafunc)
+        _generate_tests_from_arcs("mrl", metafunc)

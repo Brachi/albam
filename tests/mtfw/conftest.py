@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from albam.blender_ui.import_panel import (
@@ -23,8 +25,31 @@ def mrl(request):
 
     mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
     parsed_mrl = Mrl.from_bytes(mrl_bytes)
+    parsed_mrl._arc_name = os.path.basename(arc.file_path)
+    parsed_mrl._mrl_path = mrl_file_entry.file_path
 
     return parsed_mrl
+
+
+@pytest.fixture
+def mod(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+
+    arc = request.param[0]
+    file_entry = request.param[1]
+
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
+    mod_version = src_bytes[4]
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+
+    parsed = ModCls.from_bytes(src_bytes)
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._file_path = file_entry.file_path
+
+    return parsed
 
 
 @pytest.fixture
