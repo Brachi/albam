@@ -90,7 +90,7 @@ class Lmt(KaitaiStruct):
             self._io.seek(self.ofs_buffer_02)
             self._m_atk_buff2 = []
             for i in range(self.count_02):
-                self._m_atk_buff2.append(Lmt.Atk(self._io, self, self._root))
+                self._m_atk_buff2.append(Lmt.Atk2(self._io, self, self._root))
 
             self._io.seek(_pos)
             return getattr(self, '_m_atk_buff2', None)

@@ -39,7 +39,7 @@ types:
       atk_buff:
         {pos: ofs_buffer_01, type: atk, repeat: expr, repeat-expr: count_01}
       atk_buff2:
-        {pos: ofs_buffer_02, type: atk, repeat: expr, repeat-expr: count_02}
+        {pos: ofs_buffer_02, type: atk2, repeat: expr, repeat-expr: count_02}
 
 
   track:
