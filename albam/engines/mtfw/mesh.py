@@ -16,6 +16,7 @@ from .structs.mod_21 import Mod21
 MOD_CLASS_MAPPER = {
     156: Mod156,
     210: Mod21,
+    211: Mod21,
 }
 
 

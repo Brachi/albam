@@ -119,11 +119,123 @@ types:
             0xc66fa03a: vertex_c66f
             0x667b1019: vertex_667b
             0xa013501e: vertex_a013
+            0x12553032: vertex_1255
+            0xb6681034: vertex_b668
+            0x2082f03b: vertex_2082
+            0x37a4e035: vertex_37a4
+            0x4325a03e: vertex_4325
+            0x77d87022: vertex_77d8
+            0xd84e3026: vertex_d84e # rehd
+            0xdA55a021: vertex_da55 # re6
+            0xcbcf7027: vertex_cbcf # re6
+            0xd9e801d:  vertex_d9e8 # re6
+            0x747d1031: vertex_747d # re6
+            0x75c3e025: vertex_75c3 # re6
             
-  vertex_a013: # sm8754
+  vertex_75c3: #untested re6 em4801 mesh20
     seq:
       - {id: position, type: vec4_s2}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 7}
+            
+  vertex_747d: # untested re6 md0022_03
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}
+      
+  
+  vertex_d9e8: #untested re6 sm6290
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: uv, type: vec2_half_float}
+            
+  vertex_cbcf: #untested re6 em5030 mesh82
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 9}
+      
+            
+  vertex_da55: # untested re6 sm5933
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4}
+            
+  vertex_d84e: # untested rehd r313_g05
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 4}
+            
+  vertex_77d8: # untested rev1 bl_center_t2
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: unk_00, type: u4}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 2}
+            
+  vertex_4325: # untested rev1 md000f mesh1
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 10}
+#- {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
+
+  vertex_37a4: #untested s0102_g  mesh1
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      
+            
+  vertex_2082: #untested s0503-7f mesh36
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: uv, type: vec2_half_float}
+  
+  vertex_b668: #untested md002b_00
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}    
+  
+  vertex_1255: #untested rouka mesh10
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+            
+  vertex_a013: #exploded sm8754
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
             
   vertex_667b: #untested sm8771 mesh1
     seq:
@@ -162,16 +274,16 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv1, type: vec2_half_float}
-      #- {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
       
-  vertex_6459: #untested wp1800 mesh4
+      
+  vertex_6459: #expoded vertices wp1800 mesh4
     seq:
       - {id: position, type: vec4_s2}
       - {id: tangent, type: vec4_u1}
       - {id: normal, type: vec4_u1}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: uv, type: vec2_half_float}
       - {id: uv1, type: vec2_half_float}
-      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 2}
       
   vertex_b392: #untested wp1800 mesh8
     seq:
@@ -188,13 +300,13 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
             
-  vertex_cbf6: #untested wp3000 mesh1
+  vertex_cbf6: #ok wp3000 mesh1
     seq:
       - {id: position, type: vec4_s2}
-      - {id: tangent, type: vec4_u1}
+      - {id: normal, type: vec4_u1}
       - {id: unk_01, type: u4}
       - {id: uv, type: vec2_half_float}
-      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
 
   vertex_9399:
     seq:
@@ -302,7 +414,7 @@ types:
   vertex_b098: # 12
     seq:
       - {id: position, type: vec4_s2}
-      - {id: todo, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: normal, type: u1, repeat: expr, repeat-expr: 4}
 
   vertex_bb42: # 36
     seq:
