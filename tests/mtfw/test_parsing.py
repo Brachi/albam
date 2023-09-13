@@ -1,5 +1,5 @@
 
-SUPPORTED_MOD_VERSIONS = (156, 210)
+SUPPORTED_MOD_VERSIONS = (156, 210, 211)
 SUPPORTED_LMT_VERSIONS = (51, )
 KNOWN_VERTEX_FORMATS = {
     0, 1, 2, 3, 4, 5, 6, 7, 8,
@@ -21,6 +21,28 @@ KNOWN_VERTEX_FORMATS = {
     0x63b6c02f,
     0x926fd02e,
     0x9399c033,
+    0xcbf6c01a, 
+	0xd877801b, 
+	0xb392101f, 
+	0x64593023, 
+	0x5e7f202c, 
+	0xafa6302d, 
+	0xa14e003c, 
+	0xc66fa03a, 
+	0x667b1019, 
+	0xa013501e, 
+	0xb6681034, 
+	0x12553032, 
+	0x2082f03b,  
+	0x37a4e035, 
+    0x4325a03e, 
+    0x77d87022, 
+	0xd84e3026,
+	0xcbCF7027, 
+	0xdA55a021, 
+	0xd9e801d, 
+	0x747d1031,
+	0x75c3e025,
 }
 
 
