@@ -51,7 +51,7 @@ class Mrl(KaitaiStruct):
 
 
 
-    class ShdBaAlphaClip(KaitaiStruct):
+    class CbMaterial(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -60,7 +60,7 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.data = []
-            for i in range(4):
+            for i in range(32):
                 self.data.append(self._io.read_f4le())
 
 
@@ -94,6 +94,20 @@ class Mrl(KaitaiStruct):
             self.tex_idx = self._io.read_u4le()
 
 
+    class CbColorMask(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(24):
+                self.data.append(self._io.read_f4le())
+
+
+
     class HashBlock(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -104,6 +118,34 @@ class Mrl(KaitaiStruct):
         def _read(self):
             self.index = self._io.read_bits_int_le(12)
             self.value = self._io.read_bits_int_le(20)
+
+
+    class RehdCbSGlobals(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(72):
+                self.data.append(self._io.read_f4le())
+
+
+
+    class CbVtxDistortionRefract(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(4):
+                self.data.append(self._io.read_f4le())
+
 
 
     class AnimInfo(KaitaiStruct):
@@ -134,6 +176,34 @@ class Mrl(KaitaiStruct):
 
 
 
+    class CbVtxDispmaskUv(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(8):
+                self.data.append(self._io.read_f4le())
+
+
+
+    class CbUnk01(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(4):
+                self.data.append(self._io.read_f4le())
+
+
+
     class CmdInfo(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -147,7 +217,7 @@ class Mrl(KaitaiStruct):
             self.shader_obj_idx = self._io.read_bits_int_le(12)
 
 
-    class ShdVtxDisplacement3(KaitaiStruct):
+    class CbVtxDisplacement(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -156,7 +226,7 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.data = []
-            for i in range(4):
+            for i in range(8):
                 self.data.append(self._io.read_f4le())
 
 
@@ -201,6 +271,34 @@ class Mrl(KaitaiStruct):
 
 
 
+    class CbVtxDisplacement3(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(4):
+                self.data.append(self._io.read_f4le())
+
+
+
+    class CbUnk02(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(24):
+                self.data.append(self._io.read_f4le())
+
+
+
     class AnimSubEntry7(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -242,7 +340,7 @@ class Mrl(KaitaiStruct):
             self.unk_01 = self._io.read_f4le()
 
 
-    class ShdVtxDistortionRefract(KaitaiStruct):
+    class Rev2CbSGlobals(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -251,21 +349,7 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
-
-
-
-    class ShdCbMaterial(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(32):
+            for i in range(120):
                 self.data.append(self._io.read_f4le())
 
 
@@ -282,6 +366,20 @@ class Mrl(KaitaiStruct):
             self.unk_02 = self._io.read_u4le()
             self.unk_03 = self._io.read_u4le()
             self.texture_path = (KaitaiStream.bytes_terminate(self._io.read_bytes(64), 0, False)).decode(u"ascii")
+
+
+    class CbBaAlphaClip(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(4):
+                self.data.append(self._io.read_f4le())
+
 
 
     class BlockOffset(KaitaiStruct):
@@ -306,20 +404,6 @@ class Mrl(KaitaiStruct):
             return getattr(self, '_m_body', None)
 
 
-    class ShdColorMask(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(24):
-                self.data.append(self._io.read_f4le())
-
-
-
     class CmdOfsBuffer(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -331,7 +415,21 @@ class Mrl(KaitaiStruct):
             self.ofs_float_buff = self._io.read_u4le()
 
 
-    class ShdVtxDisplacement2(KaitaiStruct):
+    class CbDistortion(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(4):
+                self.data.append(self._io.read_f4le())
+
+
+
+    class CbVtxDisplacement2(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -363,20 +461,6 @@ class Mrl(KaitaiStruct):
 
 
 
-    class ShdSGlobalsRer2(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(120):
-                self.data.append(self._io.read_f4le())
-
-
-
     class AnimDataInfo(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -388,6 +472,20 @@ class Mrl(KaitaiStruct):
             self.type = self._io.read_bits_int_le(4)
             self.unk_00 = self._io.read_bits_int_le(4)
             self.num_entry = self._io.read_bits_int_le(24)
+
+
+    class CbUnk04(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(16):
+                self.data.append(self._io.read_f4le())
+
 
 
     class AnimSubEntry(KaitaiStruct):
@@ -438,6 +536,20 @@ class Mrl(KaitaiStruct):
             self.hash = []
             for i in range(self._parent.info.num_entry):
                 self.hash.append(self._io.read_u4le())
+
+
+
+    class CbUnk03(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.data = []
+            for i in range(8):
+                self.data.append(self._io.read_f4le())
 
 
 
@@ -529,20 +641,6 @@ class Mrl(KaitaiStruct):
 
 
 
-    class ShdDistortion(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
-
-
-
     class AnimData(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -577,7 +675,7 @@ class Mrl(KaitaiStruct):
             self.ofs_const_buff = self._io.read_u4le()
 
 
-    class ShdSGlobals(KaitaiStruct):
+    class CbSGlobals(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -586,7 +684,7 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.data = []
-            for i in range(76):
+            for i in range(84):
                 self.data.append(self._io.read_f4le())
 
 
@@ -600,20 +698,6 @@ class Mrl(KaitaiStruct):
 
         def _read(self):
             self.texture_id = self._io.read_u4le()
-
-
-    class ShdVtxDisplacement(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(8):
-                self.data.append(self._io.read_f4le())
-
 
 
     class AnimEntry(KaitaiStruct):
@@ -669,59 +753,71 @@ class Mrl(KaitaiStruct):
                 _pos = self._io.pos()
                 self._io.seek((self._parent.ofs_cmd + self.value_cmd.ofs_float_buff))
                 _on = self.shader_object_hash
-                if _on == 4023005735:
-                    self._m_float_buffer = Mrl.ShdDistortion(self._io, self, self._root)
+                if _on == 1862361870:
+                    self._m_float_buffer = Mrl.CbUnk02(self._io, self, self._root)
+                elif _on == 4023005735:
+                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                elif _on == 579346993:
+                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
+                elif _on == 4023005730:
+                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
                 elif _on == 1820332537:
-                    self._m_float_buffer = Mrl.ShdCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                elif _on == 4023005728:
+                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                elif _on == 1642345011:
+                    self._m_float_buffer = Mrl.CbUnk04(self._io, self, self._root)
+                elif _on == 2215727888:
+                    self._m_float_buffer = Mrl.CbUnk03(self._io, self, self._root)
+                elif _on == 2934141708:
+                    self._m_float_buffer = Mrl.CbUnk01(self._io, self, self._root)
+                elif _on == 1367425584:
+                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
+                elif _on == 3297735201:
+                    self._m_float_buffer = Mrl.CbUnk01(self._io, self, self._root)
                 elif _on == 579347000:
-                    self._m_float_buffer = Mrl.ShdVtxDisplacement3(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVtxDisplacement3(self._io, self, self._root)
                 elif _on == 1640423997:
-                    self._m_float_buffer = Mrl.ShdVtxDispmaskUv(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVtxDispmaskUv(self._io, self, self._root)
                 elif _on == 2066489676:
-                    self._m_float_buffer = Mrl.ShdSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbSGlobals(self._io, self, self._root)
+                elif _on == 3297735212:
+                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
+                elif _on == 356618799:
+                    self._m_float_buffer = Mrl.CbVtxDisplacement(self._io, self, self._root)
                 elif _on == 2066489689:
-                    self._m_float_buffer = Mrl.ShdSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
                 elif _on == 356618806:
-                    self._m_float_buffer = Mrl.ShdVtxDisplacement(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVtxDisplacement(self._io, self, self._root)
                 elif _on == 2066489695:
-                    self._m_float_buffer = Mrl.ShdSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
                 elif _on == 2934141721:
-                    self._m_float_buffer = Mrl.ShdBaAlphaClip(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbBaAlphaClip(self._io, self, self._root)
                 elif _on == 1862361883:
-                    self._m_float_buffer = Mrl.ShdColorMask(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbColorMask(self._io, self, self._root)
                 elif _on == 1820332522:
-                    self._m_float_buffer = Mrl.ShdCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
                 elif _on == 3297735208:
-                    self._m_float_buffer = Mrl.ShdVtxDistortionRefract(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
                 elif _on == 2066489694:
-                    self._m_float_buffer = Mrl.ShdSGlobalsRer2(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.Rev2CbSGlobals(self._io, self, self._root)
                 elif _on == 1820332542:
-                    self._m_float_buffer = Mrl.ShdCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                elif _on == 4023005739:
+                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
                 elif _on == 2066489685:
-                    self._m_float_buffer = Mrl.ShdSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
+                elif _on == 3297735203:
+                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
                 elif _on == 1820332532:
-                    self._m_float_buffer = Mrl.ShdCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
                 elif _on == 1820332544:
-                    self._m_float_buffer = Mrl.ShdCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
                 elif _on == 1367425591:
-                    self._m_float_buffer = Mrl.ShdVtxDisplacement2(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
                 self._io.seek(_pos)
 
             return getattr(self, '_m_float_buffer', None)
-
-
-    class ShdVtxDispmaskUv(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(8):
-                self.data.append(self._io.read_f4le())
-
 
 
     class AnimSubEntry3(KaitaiStruct):

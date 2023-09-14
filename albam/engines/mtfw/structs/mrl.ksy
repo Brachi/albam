@@ -63,24 +63,37 @@ types:
         type: 
           switch-on: shader_object_hash
           cases:
-            0x7b2c215f: shd_s_globals # $Globals re0
-            0x6c801200: shd_cb_material # CBMaterial re0
-            0x7b2c2159: shd_s_globals # $Globals rehd
-            0x6c8011f9: shd_cb_material # CBMaterial rehd
-            0x7b2c2155: shd_s_globals # $Globals rer1
-            0x6c8011f4: shd_cb_material # CBMaterial rer1
-            0x7b2c215e: shd_s_globals_rer2 #Revelation 2 hashes
-            0x6c8011fe: shd_cb_material
-            0x15419236: shd_vtx_displacement
-            0x51814237: shd_vtx_displacement2
-            0x22882238: shd_vtx_displacement3
-            0x6f01631b: shd_color_mask
-            0x61c6e23d: shd_vtx_dispmask_uv
-            0xaee37319: shd_ba_alpha_clip
-            0xefca3227: shd_distortion
-            0xc48f7228: shd_vtx_distortion_refract
-            0x7b2c214c: shd_s_globals # Re6 hashes
-            0x6c8011ea: shd_cb_material # CBMaterial re6
+            0x7b2c215f: rehd_cb_s_globals # re0 
+            0x6c801200: cb_material  
+            0x7b2c2159: rehd_cb_s_globals # rehd
+            0x6c8011f9: cb_material 
+            0xefca3222: cb_distortion 
+            0xc48f7223: cb_vtx_distortion_refract
+            0x7b2c2155: rehd_cb_s_globals # rer1
+            0x6c8011f4: cb_material
+            0xefca322b: cb_distortion
+            0xc48f722c: cb_vtx_distortion_refract
+            0x7b2c215e: rev2_cb_s_globals #rer2
+            0x6c8011fe: cb_material
+            0x15419236: cb_vtx_displacement
+            0x51814237: cb_vtx_displacement2
+            0x22882238: cb_vtx_displacement3
+            0x6f01631b: cb_color_mask
+            0x61c6e23d: cb_vtx_dispmask_uv
+            0xaee37319: cb_ba_alpha_clip
+            0xefca3227: cb_distortion
+            0xc48f7228: cb_vtx_distortion_refract
+            0x7b2c214c: cb_s_globals # Re6
+            0x6c8011ea: cb_material
+            0xaee3730c: cb_unk_01 #2934141708
+            0x6F01630e: cb_unk_02
+            0xc48f7221: cb_unk_01 #3297735201
+            0xefca3220: cb_unk_01 #4023005728 CBDistortion
+            0x84115310: cb_unk_03 #2215727888
+            0x61E43233: cb_unk_04 #1642345011 CBVertexDisplacementExplosion
+            0x1541922f: cb_vtx_displacement
+            0x51814230: cb_vtx_displacement2
+            0x22882231: cb_vtx_displacement2 #579346993
         if: info.cmd_type == 1
       #test_ofs:
         #value: _parent.ofs_cmd
@@ -229,49 +242,69 @@ types:
     seq:
       - {id: tex_idx, type: u4}
   #CBMaterial 0x6c8011fe size 32 rer2 
-  shd_cb_material:
+  cb_material:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 32}
-  #$Globals
-  shd_s_globals:
+  #$Globals rehd
+  rehd_cb_s_globals:
     seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 76}
+      - {id: data, type: f4, repeat: expr, repeat-expr: 72}
+  #$Globals
+  cb_s_globals:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 84}
   #$Globals 0x7b2c215e size 120 rer2  
-  shd_s_globals_rer2:
+  rev2_cb_s_globals:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 120}
   #CBVertexDisplacement 0x15419236 size 8 rer2
-  shd_vtx_displacement:
+  cb_vtx_displacement:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 8}
   #CBVertexDisplacement2 0x51814237 size 4 rer2
-  shd_vtx_displacement2:
+  cb_vtx_displacement2:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
   #CBVertexDisplacement3 0x22882238 size 4 rer2
-  shd_vtx_displacement3:
+  cb_vtx_displacement3:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
   #CBVertexDispMaskUV 0x61c6e23d size 8 rer2
-  shd_vtx_dispmask_uv:
+  cb_vtx_dispmask_uv:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 8}
   #CBColorMask 0x6f01631b size 24 rer2
-  shd_color_mask:
+  cb_color_mask:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 24}
   #CBBAlphaClip 0xaee37319 size 4 rer2
-  shd_ba_alpha_clip:
+  cb_ba_alpha_clip:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
   #CBDistortion 0xefca3227 size 4 rer2
-  shd_distortion:
+  cb_distortion:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
   #CBDistortionRefract 0xc48f7228
-  shd_vtx_distortion_refract:
+  cb_vtx_distortion_refract:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+      
+  cb_unk_01:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
+      
+  cb_unk_02:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 24}
+      
+  cb_unk_03:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
+      
+  cb_unk_04:
+    seq:
+      - {id: data, type: f4, repeat: expr, repeat-expr: 16}
         
   tex_offset:
     seq:
