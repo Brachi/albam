@@ -180,7 +180,7 @@ types:
   vertex_77d8: # untested rev1 bl_center_t2
     seq:
       - {id: position, type: vec4_s2}
-      - {id: normal, type: vec4_u1}
+      - {id: normal, type: vec4_u1} # uncorrect
       - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
@@ -193,7 +193,6 @@ types:
       - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
       - {id: unk_01, type: u4, repeat: expr, repeat-expr: 10}
-#- {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
 
   vertex_37a4: #untested s0102_g  mesh1
     seq:
@@ -205,12 +204,13 @@ types:
       - {id: uv1, type: vec2_half_float}
       
             
-  vertex_2082: #untested s0503-7f mesh36
+  vertex_2082: #ok s1030_00scr s0503-7f mesh36
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
   
   vertex_b668: #untested md002b_00
     seq:
@@ -220,7 +220,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}    
   
-  vertex_1255: #untested rouka mesh10
+  vertex_1255: #ok s2304_00scr.arc rouka mesh10
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
@@ -229,22 +229,23 @@ types:
       - {id: uv1, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
             
-  vertex_a013: #exploded sm8754
+  vertex_a013: # ok uSm8754.arc sm8754.mod
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: tangent, type: vec4_u1}
+      - {id: tangent, type: vec4_u1} # probably skin weights
       - {id: uv, type: vec2_half_float}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
             
-  vertex_667b: #untested sm8771 mesh1
+  vertex_667b: #ok uSm8771.arc sm8771.mod mesh1
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}            
+      - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
+      - {id: uv1, type: vec2_half_float}
       
-  vertex_c66f: #untested sm9110 mesh1
+  vertex_c66f: #ok usm9110.arc sm9110.mod mesh1
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
@@ -276,37 +277,42 @@ types:
       - {id: uv1, type: vec2_half_float}
       
       
-  vertex_6459: #expoded vertices wp1800 mesh4
+  vertex_6459: #ok wp1800 mesh4
     seq:
       - {id: position, type: vec4_s2}
-      - {id: tangent, type: vec4_u1}
       - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
       - {id: uv1, type: vec2_half_float}
       
-  vertex_b392: #untested wp1800 mesh8
+  vertex_b392: #ok wp1800 mesh8
     seq:
       - {id: position, type: vec4_s2}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
       - {id: uv1, type: vec2_half_float}
       - {id: unk_01, type: u4, repeat: expr, repeat-expr: 2}
             
-  vertex_d877: #untested wp1800 mesh6
+  vertex_d877: # ok wp1800 mesh6
     seq:
       - {id: position, type: vec4_s2}
-      - {id: uv, type: vec2_half_float}
       - {id: normal, type: vec4_u1}
-      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: tangent, type: vec4_u1}
+      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 2}
+      - {id: uv, type: vec2_half_float}
+      - {id: unk_02, type: u4}
             
   vertex_cbf6: #ok wp3000 mesh1
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: unk_01, type: u4}
+      - {id: unk_bone_indices, type: u1, repeat: expr, repeat-expr: 2}
+      - {id: unk_weight_values, type: u1, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
-      - {id: tangent, type: vec4_u1}
+      - {id: rgba, type: vec4_u1}
 
   vertex_9399:
     seq:
@@ -366,11 +372,11 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
   
-  vertex_49b4: #28
+  vertex_49b4: # s1030_00scr.arc cast_a.mod
     seq:
        - {id: position, type: vec3}
        - {id: normal, type: vec4_u1}
-       - {id: uv1, type: vec2_half_float}
+       - {id: tangent, type: vec4_u1}
        - {id: uv, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
   
@@ -380,10 +386,11 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       
-  vertex_14d4: # 28
+  vertex_14d4: # 28 ok rev2 wp1500
     seq:
       - {id: position, type: vec4_s2}
-      - {id: unk_01, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
       - {id: weight_values, size: 2, repeat: expr, repeat-expr: 2}  # half-float
@@ -414,7 +421,7 @@ types:
   vertex_b098: # 12
     seq:
       - {id: position, type: vec4_s2}
-      - {id: normal, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: normal, type: vec4_u1}
 
   vertex_bb42: # 36
     seq:

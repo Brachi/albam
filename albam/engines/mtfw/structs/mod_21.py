@@ -152,11 +152,9 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.unk_00 = []
-            for i in range(2):
-                self.unk_00.append(self._io.read_u4le())
-
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vec2HalfFloat(KaitaiStruct):
@@ -200,10 +198,7 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
-            self.normal = []
-            for i in range(4):
-                self.normal.append(self._io.read_u1())
-
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
 
 
     class VertexB668(KaitaiStruct):
@@ -267,12 +262,14 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
-            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_01 = []
-            for i in range(4):
+            for i in range(2):
                 self.unk_01.append(self._io.read_f4le())
 
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.unk_02 = self._io.read_u4le()
 
 
     class VertexD84e(KaitaiStruct):
@@ -305,8 +302,8 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
-            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = []
             for i in range(4):
                 self.unk_00.append(self._io.read_u4le())
@@ -341,11 +338,9 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.unk_00 = []
-            for i in range(2):
-                self.unk_00.append(self._io.read_u4le())
-
+            self.unk_00 = self._io.read_u4le()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vertex77d8(KaitaiStruct):
@@ -423,10 +418,9 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
-            self.unk_00 = []
-            for i in range(3):
-                self.unk_00.append(self._io.read_u4le())
-
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
+            self.unk_00 = self._io.read_u4le()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = []
@@ -561,9 +555,16 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.unk_01 = self._io.read_u4le()
+            self.unk_bone_indices = []
+            for i in range(2):
+                self.unk_bone_indices.append(self._io.read_u1())
+
+            self.unk_weight_values = []
+            for i in range(2):
+                self.unk_weight_values.append(self._io.read_u1())
+
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
     class Vec4U1(KaitaiStruct):
@@ -607,10 +608,8 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
-            self.unk_01 = []
-            for i in range(8):
-                self.unk_01.append(self._io.read_u1())
-
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.bone_indices = []
             for i in range(4):
                 self.bone_indices.append(self._io.read_u1())
@@ -771,7 +770,7 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
