@@ -202,7 +202,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       
             
   vertex_2082: #ok s1030_00scr s0503-7f mesh36
@@ -210,8 +210,8 @@ types:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
+      - {id: uv3, type: vec2_half_float}
   
   vertex_b668: #untested md002b_00
     seq:
@@ -227,10 +227,10 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
+      - {id: uv3, type: vec2_half_float}
             
-  vertex_a013: # ok uSm8754.arc sm8754.mod
+  vertex_a013: # ok uSm8754.arc sm8754.mod mesh2
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
@@ -244,21 +244,21 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       
   vertex_c66f: #ok usm9110.arc sm9110.mod mesh1
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
             
   vertex_a14e: #untested md000d_00 mesh0
     seq:
        - {id: position, type: vec3}
        - {id: normal, type: vec4_u1}
        - {id: uv, type: vec2_half_float}
-       - {id: uv1, type: vec2_half_float}
+       - {id: uv2, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
   
   vertex_afa6: #untested md0303 mesh0
@@ -267,7 +267,7 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
   
   vertex_5e7f: #untested md0020 mesh0
     seq:
@@ -275,7 +275,7 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       
       
   vertex_6459: #ok wp1800 mesh4
@@ -285,7 +285,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       
   vertex_b392: #ok wp1800 mesh8
     seq:
@@ -294,7 +294,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       - {id: unk_01, type: u4, repeat: expr, repeat-expr: 2}
             
   vertex_d877: # ok wp1800 mesh6
@@ -321,7 +321,7 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
   
   vertex_926f:
@@ -330,7 +330,7 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
   
   vertex_63b6: # ok s2304_00scr.arc rouka.mod mesh0
@@ -339,8 +339,8 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
+      - {id: uv3, type: vec2_half_float}
       - {id: unk_01, type: u4}
             
   vertex_b8de:
@@ -349,7 +349,7 @@ types:
       - {id: normal, type: vec4_u1}
       - {id: unk_00, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       - {id: unk_01, type: u4}
   
   vertex_d1a4:
@@ -357,7 +357,7 @@ types:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: uv1, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
       
   vertex_8297:
     seq:
@@ -381,7 +381,7 @@ types:
        - {id: uv, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
   
-  vertex_a7d7: #20
+  vertex_a7d7: #20 rev1 s10a_1_scroll.arc s10a_bgl1.mod
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}

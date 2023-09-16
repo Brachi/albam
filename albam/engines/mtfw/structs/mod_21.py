@@ -153,8 +153,8 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv3 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vec2HalfFloat(KaitaiStruct):
@@ -310,7 +310,7 @@ class Mod21(KaitaiStruct):
                 self.unk_00.append(self._io.read_u4le())
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vertex926f(KaitaiStruct):
@@ -325,7 +325,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
@@ -341,7 +341,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = self._io.read_u4le()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vertex77d8(KaitaiStruct):
@@ -375,8 +375,8 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv3 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = self._io.read_u4le()
 
 
@@ -392,7 +392,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class VertexA14e(KaitaiStruct):
@@ -406,7 +406,7 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
@@ -423,7 +423,7 @@ class Mod21(KaitaiStruct):
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = self._io.read_u4le()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = []
             for i in range(2):
                 self.unk_01.append(self._io.read_u4le())
@@ -788,7 +788,7 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vertex37a4(KaitaiStruct):
@@ -807,7 +807,7 @@ class Mod21(KaitaiStruct):
                 self.unk_00.append(self._io.read_u4le())
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vertex4325(KaitaiStruct):
@@ -854,7 +854,7 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Material(KaitaiStruct):
@@ -957,7 +957,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = self._io.read_u4le()
 
 
@@ -1003,8 +1003,8 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv3 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class Vec4S2(KaitaiStruct):
@@ -1051,7 +1051,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 
     class VertexCb68(KaitaiStruct):
@@ -1082,7 +1082,7 @@ class Mod21(KaitaiStruct):
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv1 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
