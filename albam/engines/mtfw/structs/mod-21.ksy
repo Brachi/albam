@@ -169,18 +169,19 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_01, type: u4}
             
-  vertex_d84e: # untested rehd r313_g05
+  vertex_d84e: # ok rehd r313_g05
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}
       - {id: uv, type: vec2_half_float}
-      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: unk_01, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: rgba, type: vec4_u1}
             
-  vertex_77d8: # untested rev1 bl_center_t2
+  vertex_77d8: # ok rev1 bl_center_t2
     seq:
       - {id: position, type: vec4_s2}
-      - {id: normal, type: vec4_u1} # uncorrect
+      - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: unk_00, type: u4}
       - {id: uv, type: vec2_half_float}
@@ -194,7 +195,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_01, type: u4, repeat: expr, repeat-expr: 10}
 
-  vertex_37a4: #untested s0102_g  mesh1
+  vertex_37a4: #ok s1010_00Scr.arc s0102_g  mesh1
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
@@ -332,7 +333,7 @@ types:
       - {id: uv1, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
   
-  vertex_63b6:
+  vertex_63b6: # ok s2304_00scr.arc rouka.mod mesh0
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
@@ -411,7 +412,7 @@ types:
       # TODO: weights
       - {id: todo, type: u1, repeat: expr, repeat-expr: 20}
 
-  vertex_a8fa: # 20
+  vertex_a8fa: # 20 upl01HelenaUsa.arc pl0100.mod mesh15
     seq:
       - {id: position, type: vec3_s2}
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 1}
@@ -431,10 +432,11 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: todo_2, type: u1, repeat: expr, repeat-expr: 12}
 
-  vertex_c31f: # 24
+  vertex_c31f: # fig01.arc pl2200.mod mesh17
     seq:
       - {id: position, type: vec4_s2}
-      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: normal, type: vec4_u1}
+      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
       # TODO: review bone_indices
       - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2}
@@ -445,7 +447,7 @@ types:
       - {id: todo_1, type: u1, repeat: expr, repeat-expr: 8}
       # FIXME: line meshes, don't seem to need uv/no valid uvs
       - {id: uv, type: vec2_half_float}
-
+  # pl2200.mod line geometry
   vertex_db7d: # 16, line meshes don't seem to contain UVs
     seq:
       - {id: position, type: vec4_s2}

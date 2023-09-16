@@ -283,14 +283,15 @@ class Mod21(KaitaiStruct):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.unk_00 = []
-            for i in range(2):
+            for i in range(3):
                 self.unk_00.append(self._io.read_u4le())
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.unk_01 = []
-            for i in range(4):
+            for i in range(2):
                 self.unk_01.append(self._io.read_u4le())
 
+            self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
 
     class Vertex6459(KaitaiStruct):
@@ -518,8 +519,9 @@ class Mod21(KaitaiStruct):
 
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
+            self.normal = Mod21.Vec4U1(self._io, self, self._root)
             self.todo_1 = []
-            for i in range(8):
+            for i in range(4):
                 self.todo_1.append(self._io.read_u1())
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
