@@ -145,7 +145,6 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_00, type: u4, repeat: expr, repeat-expr: 3}
       
-  
   vertex_d9e8: #untested re6 sm6290
     seq:
       - {id: position, type: vec4_s2}
@@ -306,12 +305,11 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_02, type: u4}
             
-  vertex_cbf6: #ok wp3000 mesh1
+  vertex_cbf6: #ok wp3000 mesh1 skinweight hardcoded to 1
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: unk_bone_indices, type: u1, repeat: expr, repeat-expr: 2}
-      - {id: unk_weight_values, type: u1, repeat: expr, repeat-expr: 2}
+      - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
 

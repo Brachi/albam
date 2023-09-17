@@ -557,14 +557,7 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec4S2(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.unk_bone_indices = []
-            for i in range(2):
-                self.unk_bone_indices.append(self._io.read_u1())
-
-            self.unk_weight_values = []
-            for i in range(2):
-                self.unk_weight_values.append(self._io.read_u1())
-
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.rgba = Mod21.Vec4U1(self._io, self, self._root)
 
@@ -987,7 +980,7 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
-            self.unk_01 = self._io.read_f4le()
+            self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
 

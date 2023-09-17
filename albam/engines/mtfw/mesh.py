@@ -69,12 +69,14 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     uvs_1 = []
     uvs_2 = []
     uvs_3 = []
+    vertex_colors = []
     weights_per_bone = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3)
+        _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
 
     indices = strip_triangles_to_triangles_list(mesh.indices) if use_tri_strips else mesh.indices
@@ -89,6 +91,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     _build_uvs(me_ob, uvs_1, "uv1")
     _build_uvs(me_ob, uvs_2, "uv2")
     _build_uvs(me_ob, uvs_3, "uv3")
+    _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
     return ob
@@ -143,6 +146,17 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out):
     u = unpack("e", bytes(vertex.uv3.u))[0]
     v = unpack("e", bytes(vertex.uv3.v))[0]
     uvs_3_out.extend((u, -v))
+
+
+def _process_vertex_colors(mod_version, vertex, rgba_out):
+    if not hasattr(vertex, "rgba"):
+        return
+    if mod_version == 210:
+        b = vertex.rgba.x/225
+        g = vertex.rgba.y/225
+        r = vertex.rgba.z/255
+        a = vertex.rgba.w/255
+        rgba_out.append((r, g, b, a))
 
 
 def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
@@ -237,6 +251,19 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
         offset = loop.vertex_index * 2
         per_loop_list.extend((uvs[offset], uvs[offset + 1]))
     uv_layer.data.foreach_set("uv", per_loop_list)
+
+
+def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
+    if len(vertex_colors)>0:
+        bl_mesh.vertex_colors.new(name=name)
+        color_layer = bl_mesh.vertex_colors[name]
+        for poly in bl_mesh.polygons:
+            for loop_index in poly.loop_indices:
+                loop = bl_mesh.loops[loop_index]
+                if vertex_colors[loop.vertex_index]:
+                    #print(vertex_colors[loop.vertex_index])
+                    #color_layer.data[loop_index].color = (1,0,0,1)
+                    color_layer.data[loop_index].color = vertex_colors[loop.vertex_index]
 
 
 def _build_weights(bl_obj, weights_per_bone):
