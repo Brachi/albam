@@ -987,8 +987,8 @@ class Mod21(KaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.unk_01 = self._io.read_f4le()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.unk_02 = self._io.read_f4le()
 
 
     class Vertex1255(KaitaiStruct):

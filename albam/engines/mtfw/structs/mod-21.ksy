@@ -228,7 +228,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-      - {id: uv3, type: vec2_half_float}
+      - {id: uv3, type: vec2_half_float} #lightmaps
             
   vertex_a013: # ok uSm8754.arc sm8754.mod mesh2
     seq:
@@ -359,12 +359,12 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       
-  vertex_8297:
+  vertex_8297: # ok rev1 s500_scroll.arc s500_2.mod mesh0
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      - {id: unk_02, type: f4}
             
   vertex_207d: # 24
     seq:

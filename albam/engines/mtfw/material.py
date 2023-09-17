@@ -19,6 +19,7 @@ TEX_FORMAT_MAPPER = {
     24: b"DXT5",
     25: b"DXT5",
     31: b"DXT5",
+    32: b"DXT5",
     35: b"DXT5",
     39: b"DXT1", # uncompressed
     "DXT1": b"DXT1",
