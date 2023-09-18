@@ -19,6 +19,11 @@ MOD_CLASS_MAPPER = {
     211: Mod21,
 }
 
+BBOX_AFFECTED = [
+    0xcbf6c01a,
+    0xb0983013,
+]
+
 
 @blender_registry.register_import_function(app_id="re0", extension="mod")
 @blender_registry.register_import_function(app_id="re1", extension="mod")
@@ -73,7 +78,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     weights_per_bone = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
-        _process_locations(mod.header.version, vertex, locations, bbox_data)
+        _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3)
         _process_vertex_colors(mod.header.version, vertex, vertex_colors)
@@ -97,7 +102,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     return ob
 
 
-def _process_locations(mod_version, vertex, vertices_out, bbox_data):
+def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     x = vertex.position.x
     y = vertex.position.y
     z = vertex.position.z
@@ -108,7 +113,7 @@ def _process_locations(mod_version, vertex, vertices_out, bbox_data):
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
 
-    elif w is not None and mod_version == 210:
+    elif (w is not None and mod_version == 210) or (mod_version == 210 and mesh.vertex_format in BBOX_AFFECTED):
         x = x / 32767 * bbox_data.dimension + bbox_data.min_x
         y = y / 32767 * bbox_data.dimension + bbox_data.min_y
         z = z / 32767 * bbox_data.dimension + bbox_data.min_z
@@ -261,8 +266,6 @@ def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
             for loop_index in poly.loop_indices:
                 loop = bl_mesh.loops[loop_index]
                 if vertex_colors[loop.vertex_index]:
-                    #print(vertex_colors[loop.vertex_index])
-                    #color_layer.data[loop_index].color = (1,0,0,1)
                     color_layer.data[loop_index].color = vertex_colors[loop.vertex_index]
 
 

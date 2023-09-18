@@ -305,9 +305,10 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: unk_02, type: u4}
             
-  vertex_cbf6: #ok wp3000 mesh1 skinweight hardcoded to 1
+  vertex_cbf6: #ok wp3000 mesh1 weight hardcoded to 1.0
     seq:
-      - {id: position, type: vec4_s2}
+      - {id: position, type: vec3_s2}
+      - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1}
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
@@ -417,10 +418,11 @@ types:
       - {id: todo_1, type: u1, repeat: expr, repeat-expr: 9}
       - {id: uv, type: vec2_half_float}
 
-  vertex_b098: # 12
+  vertex_b098: # 12 sm8799.mod weight hardcoded to 1.0
     seq:
-      - {id: position, type: vec4_s2}
-      - {id: normal, type: vec4_u1}
+      - {id: position, type: vec3_s2}
+      - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1}
+      - {id: normal, type: vec4_u1} # probably not normals
 
   vertex_bb42: # 36
     seq:
