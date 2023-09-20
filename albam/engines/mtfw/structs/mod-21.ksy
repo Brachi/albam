@@ -298,11 +298,13 @@ types:
             
   vertex_d877: # ok wp1800 mesh6
     seq:
-      - {id: position, type: vec4_s2}
+      - {id: position, type: vec3_s2}
+      - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1}
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
-      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
+      - {id: unk_01, type: u4}
+      - {id: uv2, type: vec2_half_float}
       - {id: unk_02, type: u4}
             
   vertex_cbf6: #ok wp3000 mesh1 weight hardcoded to 1.0
@@ -395,63 +397,69 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: weight_values, size: 2, repeat: expr, repeat-expr: 2}  # half-float
 
-  vertex_2f55: # 64
+  vertex_2f55: # 64 rehd pl0b.arc pl0b.mod mesh2
     seq:
       - {id: position, type: vec4_s2}
-      - {id: unk_01, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: normal, type: vec4_u1} #signed in maxscript
+      - {id: tangent, type: vec4_u1} #signed in maxscript
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
        # first weight in position.w, 4th is remaining until 1.0
       - {id: weight_values, size: 2, repeat: expr, repeat-expr: 2}  # half-float
       - {id: todo, type: u1, repeat: expr, repeat-expr: 36}
 
-  vertex_a320: # 28
+  vertex_a320: # lines rehd pl0b.arc pl0b.mod mesh35
     seq:
       - {id: position, type: vec4_s2}
       # TODO: weights
-      - {id: todo, type: u1, repeat: expr, repeat-expr: 20}
+      - {id: todo, type: u1, repeat: expr, repeat-expr: 16}
+      - {id: normal, type: vec4_u1}
 
-  vertex_a8fa: # 20 upl01HelenaUsa.arc pl0100.mod mesh15
+  vertex_a8fa: #ok rev2 wp6040.mod mesh4
     seq:
       - {id: position, type: vec3_s2}
-      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 1}
-      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 9}
+      - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1} # maybe bone and weight
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
 
-  vertex_b098: # 12 sm8799.mod weight hardcoded to 1.0
+  vertex_b098: #ok sm8799.mod weight hardcoded to 1.0
     seq:
       - {id: position, type: vec3_s2}
       - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1}
       - {id: normal, type: vec4_u1} # probably not normals
 
-  vertex_bb42: # 36
-    seq:
-      - {id: position, type: vec4_s2}
-      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 12}
-        # FIXME: doesn't seem to work
-      - {id: uv, type: vec2_half_float}
-      - {id: todo_2, type: u1, repeat: expr, repeat-expr: 12}
-
-  vertex_c31f: # fig01.arc pl2200.mod mesh17
+  vertex_bb42: # rev2 sm8683.mod mesh4 uncorrect weights
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1}
-      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 4}
+       # TODO: weights
+      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
       - {id: uv, type: vec2_half_float}
-      # TODO: review bone_indices
+      - {id: unk_weights, size: 2, repeat: expr, repeat-expr: 2}
+      - {id: tangent, type: vec4_u1}
+
+  vertex_c31f: #ok rev2 fig01.arc pl2200.mod mesh17 posed hands
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
       - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2}
 
-  vertex_cb68: # 20
+  vertex_cb68: #ok line rev2 uwp3010.mod sm8698.mod mesh3
     seq:
       - {id: position, type: vec4_s2}
-      - {id: todo_1, type: u1, repeat: expr, repeat-expr: 8}
-      # FIXME: line meshes, don't seem to need uv/no valid uvs
-      - {id: uv, type: vec2_half_float}
-  # pl2200.mod line geometry
-  vertex_db7d: # 16, line meshes don't seem to contain UVs
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4} 
+      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: normal, type: vec4_u1}# probably rgba
+  
+  vertex_db7d: #ok line rev2 uwp3010.mod sm8698.mod mesh2
     seq:
       - {id: position, type: vec4_s2}
-      - {id: todo, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: normal, type: vec4_u1}
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4} # strange 0x80 2 and 4 values
 
   vec2_half_float:
     seq:
@@ -464,7 +472,7 @@ types:
       - {id: y, type: u1}
       - {id: z, type: u1}
       - {id: w, type: u1}
-
+      
   vec3:
     seq:
       - {id: x, type: f4}

@@ -22,6 +22,8 @@ MOD_CLASS_MAPPER = {
 BBOX_AFFECTED = [
     0xcbf6c01a,
     0xb0983013,
+    0xA8FAB018,
+    0xd877801b,
 ]
 
 
@@ -79,7 +81,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
 
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
-        _process_normals(vertex, normals)
+        _process_normals(mesh, vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3)
         _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
@@ -122,7 +124,7 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     vertices_out.append((x * 0.01, -z * 0.01, y * 0.01))
 
 
-def _process_normals(vertex, normals_out):
+def _process_normals(mesh, vertex, normals_out):
     if not hasattr(vertex, "normal"):
         return
     # from [0, 255] o [-1, 1]
@@ -138,19 +140,19 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out):
         return
     u = unpack("e", bytes(vertex.uv.u))[0]
     v = unpack("e", bytes(vertex.uv.v))[0]
-    uvs_1_out.extend((u, -v))
+    uvs_1_out.extend((u, 1-v))
 
     if not hasattr(vertex, "uv2"):
         return
     u = unpack("e", bytes(vertex.uv2.u))[0]
     v = unpack("e", bytes(vertex.uv2.v))[0]
-    uvs_2_out.extend((u, -v))
+    uvs_2_out.extend((u, 1-v))
 
     if not hasattr(vertex, "uv3"):
         return
     u = unpack("e", bytes(vertex.uv3.u))[0]
     v = unpack("e", bytes(vertex.uv3.v))[0]
-    uvs_3_out.extend((u, -v))
+    uvs_3_out.extend((u, 1-v))
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out):
@@ -193,11 +195,16 @@ def _get_bone_indices(mod, mesh, bone_indices):
                     # Behaviour not observed in original files so far
                     real_bone_index = bone_index
             mapped_bone_indices.append(real_bone_index)
-    elif mesh.vertex_format == 0xC31F201C:
+    elif mesh.vertex_format in (
+        0xC31F201C,
+    ):
         b1 = int(unpack("e", bone_indices[0])[0])
         b2 = int(unpack("e", bone_indices[0])[0])
         mapped_bone_indices.extend((b1, b2))
-
+    elif mesh.vertex_format == 0xdb7da014:
+        b1 = bone_indices[0]
+        b2 = bone_indices[2]
+        mapped_bone_indices.extend((b1, b2))
     else:
         mapped_bone_indices = bone_indices
 
@@ -205,7 +212,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156:
+    if mod.header.version == 156 or mesh.vertex_format == 0xcb68015:
         return [w / 255 for w in vertex.weight_values]
 
     # Assuming all vertex formats share this pattern.
@@ -223,7 +230,10 @@ def _get_weights(mod, mesh, vertex):
         w4 = 1.0 - w1 - w2 - w3
         return (w1, w2, w3, w4)
 
-    elif mesh.vertex_format in (0xC31F201C,):
+    elif mesh.vertex_format in (
+        0xC31F201C,
+        0xdb7da014,
+     ):
         w1 = vertex.position.w / 32767
         w2 = 1.0 - w1
         return (w1, w2)
