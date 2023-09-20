@@ -81,7 +81,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
 
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
-        _process_normals(mesh, vertex, normals)
+        _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3)
         _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
@@ -124,7 +124,7 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     vertices_out.append((x * 0.01, -z * 0.01, y * 0.01))
 
 
-def _process_normals(mesh, vertex, normals_out):
+def _process_normals(vertex, normals_out):
     if not hasattr(vertex, "normal"):
         return
     # from [0, 255] o [-1, 1]
