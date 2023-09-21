@@ -325,7 +325,7 @@ types:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec4_u1} # 4th byte occlusion
       - {id: tangent, type: vec4_u1}
-      - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 2}
+      - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2} # half-float
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}

@@ -465,7 +465,7 @@ class Mod21(KaitaiStruct):
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.bone_indices = []
             for i in range(2):
-                self.bone_indices.append(self._io.read_u2le())
+                self.bone_indices.append(self._io.read_bytes(2))
 
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)

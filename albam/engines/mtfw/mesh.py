@@ -20,10 +20,11 @@ MOD_CLASS_MAPPER = {
 }
 
 BBOX_AFFECTED = [
-    0xcbf6c01a,
-    0xb0983013,
+    0x667B1019,
+    0xCBF6C01A,
+    0xB0983013,
     0xA8FAB018,
-    0xd877801b,
+    0xD877801B,
 ]
 
 
@@ -76,13 +77,14 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     uvs_1 = []
     uvs_2 = []
     uvs_3 = []
+    uvs_4 = []
     vertex_colors = []
     weights_per_bone = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
-        _process_uvs(vertex, uvs_1, uvs_2, uvs_3)
+        _process_uvs(vertex, uvs_1, uvs_2, uvs_3, uvs_4)
         _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
 
@@ -98,6 +100,7 @@ def build_blender_mesh(mod, mesh, name, bbox_data, use_tri_strips=False):
     _build_uvs(me_ob, uvs_1, "uv1")
     _build_uvs(me_ob, uvs_2, "uv2")
     _build_uvs(me_ob, uvs_3, "uv3")
+    _build_uvs(me_ob, uvs_4, "uv4")
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
@@ -135,7 +138,7 @@ def _process_normals(vertex, normals_out):
     normals_out.append((x, -z, y))
 
 
-def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out):
+def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
     if not hasattr(vertex, "uv"):
         return
     u = unpack("e", bytes(vertex.uv.u))[0]
@@ -153,6 +156,12 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out):
     u = unpack("e", bytes(vertex.uv3.u))[0]
     v = unpack("e", bytes(vertex.uv3.v))[0]
     uvs_3_out.extend((u, 1-v))
+
+    if not hasattr(vertex, "uv4"):
+        return
+    u = unpack("e", bytes(vertex.uv4.u))[0]
+    v = unpack("e", bytes(vertex.uv4.v))[0]
+    uvs_4_out.extend((u, 1-v))
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out):
@@ -197,6 +206,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
             mapped_bone_indices.append(real_bone_index)
     elif mesh.vertex_format in (
         0xC31F201C,
+        0xb392101f,
     ):
         b1 = int(unpack("e", bone_indices[0])[0])
         b2 = int(unpack("e", bone_indices[0])[0])
@@ -212,31 +222,51 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156 or mesh.vertex_format == 0xcb68015:
+    if mod.header.version == 156 or mesh.vertex_format == 0xCB68015:
         return [w / 255 for w in vertex.weight_values]
 
     # Assuming all vertex formats share this pattern.
     # TODO: verify
     if len(vertex.bone_indices) == 1:
         return (1.0,)
-
+    #2w
+    elif mesh.vertex_format in (
+        0xC31F201C,
+        0xDB7DA014,
+        0xb392101f,
+     ):
+        w1 = vertex.position.w / 32767
+        w2 = 1.0 - w1
+        return (w1, w2)
+    #4w
     elif mesh.vertex_format in (
         0x14D40020,
         0x2F55C03D,
+        0x64593023,
+        0xDA55A021,
+        0x77D87022,
     ):
         w1 = vertex.position.w / 32767
         w2 = unpack("e", bytes(vertex.weight_values[0]))[0]
         w3 = unpack("e", bytes(vertex.weight_values[1]))[0]
         w4 = 1.0 - w1 - w2 - w3
         return (w1, w2, w3, w4)
-
+    #8w
     elif mesh.vertex_format in (
-        0xC31F201C,
-        0xdb7da014,
+        0x75C3E025,
+        0xCBCF7027,
+        0xBB424024,
+        0xD84E3026,
      ):
         w1 = vertex.position.w / 32767
-        w2 = 1.0 - w1
-        return (w1, w2)
+        w2 = vertex.weight_values[0]/255
+        w3 = vertex.weight_values[1]/255
+        w4 = vertex.weight_values[2]/255
+        w5 = vertex.weight_values[3]/255
+        w6 = unpack("e", bytes(vertex.weight_values2[0]))[0]
+        w7 = unpack("e", bytes(vertex.weight_values2[1]))[0]
+        w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
+        return (w1, w2, w3, w4, w5, w6, w7, w8)
     else:
         print(f"Can't get weights for vertex_format '{mesh.vertex_format}'")
         return (0, 0, 0, 0)
