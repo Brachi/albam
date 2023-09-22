@@ -63,37 +63,37 @@ types:
         type: 
           switch-on: shader_object_hash
           cases:
-            0x7b2c215f: rehd_cb_s_globals # re0 
-            0x6c801200: cb_material  
-            0x7b2c2159: rehd_cb_s_globals # rehd
-            0x6c8011f9: cb_material 
-            0xefca3222: cb_distortion 
-            0xc48f7223: cb_vtx_distortion_refract
-            0x7b2c2155: rehd_cb_s_globals # rer1
-            0x6c8011f4: cb_material
-            0xefca322b: cb_distortion
-            0xc48f722c: cb_vtx_distortion_refract
-            0x7b2c215e: rev2_cb_s_globals #rer2
-            0x6c8011fe: cb_material
-            0x15419236: cb_vtx_displacement
-            0x51814237: cb_vtx_displacement2
-            0x22882238: cb_vtx_displacement3
-            0x6f01631b: cb_color_mask
-            0x61c6e23d: cb_vtx_dispmask_uv
-            0xaee37319: cb_ba_alpha_clip
-            0xefca3227: cb_distortion
-            0xc48f7228: cb_vtx_distortion_refract
+            0x7b2c215f: str_rehd_cb_globals # re0 
+            0x6c801200: str_cb_material
+            0x7b2c2159: str_rehd_cb_globals # rehd
+            0x6c8011f9: str_cb_material
+            0xefca3222: str_cb_distortion
+            0xc48f7223: str_cb_vtx_distortion_refract
+            0x7b2c2155: str_rehd_cb_globals # rer1
+            0x6c8011f4: str_cb_material
+            0xefca322b: str_cb_distortion
+            0xc48f722c: str_cb_vtx_distortion_refract
+            0x7b2c215e: str_rev2_cb_globals #rer2
+            0x6c8011fe: str_cb_material
+            0x15419236: str_cb_vtx_displacement
+            0x51814237: str_cb_vtx_displacement2
+            0x22882238: str_cb_vtx_displacement3
+            0x6f01631b: str_cb_color_mask
+            0x61c6e23d: str_cb_vtx_disp_mask_uv
+            0xaee37319: str_cb_ba_alpha_clip
+            0xefca3227: str_cb_distortion
+            0xc48f7228: str_cb_vtx_distortion_refract
             0x7b2c214c: cb_s_globals # Re6
-            0x6c8011ea: cb_material
-            0xaee3730c: cb_unk_01 #2934141708
-            0x6F01630e: cb_unk_02
-            0xc48f7221: cb_unk_01 #3297735201
-            0xefca3220: cb_unk_01 #4023005728 CBDistortion
+            0x6c8011ea: str_cb_material
+            0xaee3730c: cb_unk_01 #2934141708 alpha clip?
+            0x6F01630e: cb_unk_02 # color mas ?
+            0xc48f7221: cb_unk_01 #3297735201 distortion refract ?
+            0xefca3220: str_cb_distortion
             0x84115310: cb_unk_03 #2215727888
-            0x61E43233: cb_unk_04 #1642345011 CBVertexDisplacementExplosion
-            0x1541922f: cb_vtx_displacement
-            0x51814230: cb_vtx_displacement2
-            0x22882231: cb_vtx_displacement2 #579346993
+            0x61E43233: str_cb_vtx_disp_ex
+            0x1541922f: str_cb_vtx_displacement
+            0x51814230: str_cb_vtx_displacement2
+            0x22882231: str_cb_vtx_displacement3 #579346993
         if: info.cmd_type == 1
       #test_ofs:
         #value: _parent.ofs_cmd
@@ -241,54 +241,11 @@ types:
   cmd_tex_idx:
     seq:
       - {id: tex_idx, type: u4}
-  #CBMaterial 0x6c8011fe size 32 rer2 
-  cb_material:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 32}
-  #$Globals rehd
-  rehd_cb_s_globals:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 72}
-  #$Globals
+
+  #$Globals re6
   cb_s_globals:
     seq:
       - {id: data, type: f4, repeat: expr, repeat-expr: 84}
-  #$Globals 0x7b2c215e size 120 rer2  
-  rev2_cb_s_globals:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 120}
-  #CBVertexDisplacement 0x15419236 size 8 rer2
-  cb_vtx_displacement:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
-  #CBVertexDisplacement2 0x51814237 size 4 rer2
-  cb_vtx_displacement2:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  #CBVertexDisplacement3 0x22882238 size 4 rer2
-  cb_vtx_displacement3:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  #CBVertexDispMaskUV 0x61c6e23d size 8 rer2
-  cb_vtx_dispmask_uv:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
-  #CBColorMask 0x6f01631b size 24 rer2
-  cb_color_mask:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 24}
-  #CBBAlphaClip 0xaee37319 size 4 rer2
-  cb_ba_alpha_clip:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  #CBDistortion 0xefca3227 size 4 rer2
-  cb_distortion:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-  #CBDistortionRefract 0xc48f7228
-  cb_vtx_distortion_refract:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
       
   cb_unk_01:
     seq:
@@ -317,3 +274,177 @@ types:
   ofs_buff:
     seq:
       - {id: ofs_const_buff, type: u4}
+      
+  str_rev2_cb_globals: #120 floats
+    seq:
+      - {id: f_alpha_clip_threshold, type: f4} # 0
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4 
+      - {id: f_detail_normal_power, type: f4} #8
+      - {id: f_detail_normal_uv_scale, type: f4} #9
+      - {id: f_detail_normal2_power, type: f4} #10
+      - {id: f_detail_normal2_uv_scale, type: f4} #11
+      - {id: f_primary_shift, type: f4} #12
+      - {id: f_secondary_shift, type: f4} #13
+      - {id: f_parallax_factor, type: f4} #14
+      - {id: f_parallax_self_occlusion, type: f4} #15
+      - {id: f_parallax_min_sample, type: f4} #16
+      - {id: f_parallax_max_sample, type: f4, repeat: expr, repeat-expr: 3} #17
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 4} #20
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
+      - {id: f_thin_scattering, type: f4} #27
+      - {id: f_screen_uv_scale, type: f4, repeat: expr, repeat-expr: 2} #28
+      - {id: f_screen_uv_offset, type: f4, repeat: expr, repeat-expr: 2} #30
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #32
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} #34
+      - {id: f_fresnel_schlick, type: f4} #36
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} #37
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} #40
+      - {id: f_shininess, type: f4} #43
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 3} #44
+      - {id: f_emission_threshold, type: f4} #47
+      - {id: f_constant_color, type: f4, repeat: expr, repeat-expr: 4} #48
+      - {id: f_roughness, type: f4} #52
+      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} #53
+      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} #56
+      - {id: f_smoothness, type: f4} #59
+      - {id: f_anistropic_uv, type: f4,repeat: expr, repeat-expr: 2} #60
+      - {id: f_primary_expo, type: f4} #62
+      - {id: f_secondary_expo, type: f4} #63
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
+      - {id: f_albedo_color2, type: f4, repeat: expr, repeat-expr: 4} #72
+      - {id: f_specular_color2, type: f4, repeat: expr, repeat-expr: 3} #76
+      - {id: f_fresnel_schlick2, type: f4} #79
+      - {id: f_shininess2, type: f4, repeat: expr, repeat-expr: 4} #80
+      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4} #84
+      - {id: f_blend_uv, type: f4} #88
+      - {id: f_normal_power, type: f4, repeat: expr, repeat-expr: 3} #89
+      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4} #92
+      - {id: f_detail_normal_u_v_scale, type: f4, repeat: expr, repeat-expr: 2} #96
+      - {id: f_fresnel_legacy, type: f4, repeat: expr, repeat-expr: 2} #98
+      - {id: f_normal_mask_pow0, type: f4, repeat: expr, repeat-expr: 4} #100
+      - {id: f_normal_mask_pow1, type: f4, repeat: expr, repeat-expr: 4} #104
+      - {id: f_normal_mask_pow2, type: f4, repeat: expr, repeat-expr: 4} #108
+      - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4} #112  
+      - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4} #116
+      
+  str_rehd_cb_globals: #re0-rehd-rev 72 floats
+    seq:
+      - {id: f_alpha_clip_threshold, type: f4} # 0
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4 
+      - {id: f_detail_normal_power, type: f4} #8
+      - {id: f_detail_normal_uv_scale, type: f4} #9
+      - {id: f_detail_normal2_power, type: f4} #10
+      - {id: f_detail_normal2_uv_scale, type: f4} #11
+      - {id: f_primary_shift, type: f4} #12
+      - {id: f_secondary_shift, type: f4} #13
+      - {id: f_parallax_factor, type: f4} #14
+      - {id: f_parallax_self_occlusion, type: f4} #15
+      - {id: f_parallax_min_sample, type: f4} #16
+      - {id: f_parallax_max_sample, type: f4, repeat: expr, repeat-expr: 3} #17
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 4} #20
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
+      - {id: f_thin_scattering, type: f4} #27
+      - {id: f_screen_uv_scale, type: f4, repeat: expr, repeat-expr: 2} #28
+      - {id: f_screen_uv_offset, type: f4, repeat: expr, repeat-expr: 2} #30
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #32
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} #34
+      - {id: f_fresnel_schlick, type: f4} #36
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} #37
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} #40
+      - {id: f_shininess, type: f4} #43
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 4} #44
+      - {id: f_constant_color, type: f4, repeat: expr, repeat-expr: 4} #48
+      - {id: f_roughness, type: f4} #52
+      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} #53
+      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} #56
+      - {id: f_smoothness, type: f4} #59
+      - {id: f_anistropic_uv, type: f4,repeat: expr, repeat-expr: 2} #60
+      - {id: f_primary_expo, type: f4} #62
+      - {id: f_secondary_expo, type: f4} #63
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
+      
+  str_cb_material: #all games 32 floats
+    seq:
+      - {id: f_diffuse_color, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: f_transparency, type: f4}
+      - {id: f_reflective_color, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: f_transparency_volume, type: f4}
+      - {id: f_uv_transform, type: f4, repeat: expr, repeat-expr: 8}
+      - {id: f_uv_transform2, type: f4, repeat: expr, repeat-expr: 8}
+      - {id: f_uv_transform3, type: f4, repeat: expr, repeat-expr: 8}
+      
+  str_cb_ba_alpha_clip: # 4 floats 0xaee37319
+    seq:
+      - {id: f_b_alpha_clip_threshold, type: f4}
+      - {id: f_b_blend_rate, type: f4}
+      - {id: f_b_blend_band, type: f4}
+      - {id: filler, type: f4}
+
+  str_cb_vtx_displacement: # CBVertexDisplacement 0x15419236 rev2 8 floats
+    seq:
+      - {id: f_vtx_disp_start, type: f4}
+      - {id: f_vtx_disp_scale, type: f4}
+      - {id: f_vtx_disp_inv_area, type: f4}
+      - {id: f_vtx_disp_rcn, type: f4}
+      - {id: f_vtx_disp_tilt_u, type: f4}
+      - {id: f_vtx_disp_tilt_v, type: f4}
+      - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
+      
+  str_cb_vtx_displacement2: # CBVertexDisplacement2 0x51814237 rev2 4 floats
+    seq:
+      - {id: f_vtx_disp_start2, type: f4}
+      - {id: f_vtx_disp_scales, type: f4}
+      - {id: f_vtx_disp_inv_area2, type: f4}
+      - {id: f_vtx_disp_rcn2, type: f4}
+      
+  str_cb_vtx_displacement3: # CBVertexDisplacement3 0x22882238 rev2 4 floats
+    seq:
+      - {id: f_vtx_disp_direction, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler, type: f4}
+      
+  str_cb_color_mask: # 24 floats
+    seq:
+      - {id: f_color_mask_threshold, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: f_color_mask_offset, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: f_clip_threshold, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: f_color_mask_color, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: f_color_mask2_threshold, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: f_color_mask2_color, type: f4, repeat: expr, repeat-expr: 4}
+      
+  str_cb_vtx_disp_mask_uv: #CBVertexDispMaskUV 0x61c6e23d 8 floats
+    seq:
+      - {id: f_vertex_disp_mask_uv, type: f4, repeat: expr, repeat-expr: 8}
+      
+  str_cb_distortion: #CBDistortion 0xefca3227 4 floats
+    seq:
+      - {id: f_distortion_factor, type: f4}
+      - {id: f_distortion_blend, type: f4}
+      - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
+      
+  str_cb_vtx_distortion_refract:   #CBDistortionRefract 0xc48f7228
+    seq:
+      - {id: f_distortion_refract, type: f4}
+      - {id: filler, type: f4, repeat: expr, repeat-expr: 3}
+
+  str_cb_vtx_disp_ex: # re6 CBVertexDisplacementExplosion  0x61E43233 16 floats
+    seq:
+      - {id: f_vtx_disp_ex_scale0, type: f4}
+      - {id: f_vtx_disp_ex_scale1, type: f4}
+      - {id: f_vtx_disp_ex_scale2, type: f4}
+      - {id: f_vtx_disp_ex_scale3, type: f4}
+      - {id: f_vtx_disp_ex_scale4, type: f4}
+      - {id: f_vtx_disp_ex_scale5, type: f4}
+      - {id: f_vtx_disp_ex_scale6, type: f4}
+      - {id: f_vtx_disp_ex_scale7, type: f4}
+      - {id: f_vtx_disp_ex_radius, type: f4}
+      - {id: f_vtx_disp_ex_rot_x, type: f4}
+      - {id: f_vtx_disp_ex_rot_y, type: f4}
+      - {id: f_vtx_disp_ex_rot_z, type: f4}
+      - {id: f_vtx_disp_ex_rot_origin_x, type: f4}
+      - {id: f_vtx_disp_ex_rot_origin_y, type: f4}
+      - {id: f_vtx_disp_ex_rot_origin_z, type: f4}
+      - {id: filler, type: f4}

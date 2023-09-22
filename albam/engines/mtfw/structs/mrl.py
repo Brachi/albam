@@ -51,7 +51,7 @@ class Mrl(KaitaiStruct):
 
 
 
-    class CbMaterial(KaitaiStruct):
+    class StrCbBaAlphaClip(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -59,9 +59,25 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
-            for i in range(32):
-                self.data.append(self._io.read_f4le())
+            self.f_b_alpha_clip_threshold = self._io.read_f4le()
+            self.f_b_blend_rate = self._io.read_f4le()
+            self.f_b_blend_band = self._io.read_f4le()
+            self.filler = self._io.read_f4le()
+
+
+    class StrCbDistortion(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_distortion_factor = self._io.read_f4le()
+            self.f_distortion_blend = self._io.read_f4le()
+            self.filler = []
+            for i in range(2):
+                self.filler.append(self._io.read_f4le())
 
 
 
@@ -94,20 +110,6 @@ class Mrl(KaitaiStruct):
             self.tex_idx = self._io.read_u4le()
 
 
-    class CbColorMask(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(24):
-                self.data.append(self._io.read_f4le())
-
-
-
     class HashBlock(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -120,7 +122,7 @@ class Mrl(KaitaiStruct):
             self.value = self._io.read_bits_int_le(20)
 
 
-    class RehdCbSGlobals(KaitaiStruct):
+    class StrCbVtxDispEx(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -128,13 +130,25 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
-            for i in range(72):
-                self.data.append(self._io.read_f4le())
+            self.f_vtx_disp_ex_scale0 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale1 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale2 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale3 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale4 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale5 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale6 = self._io.read_f4le()
+            self.f_vtx_disp_ex_scale7 = self._io.read_f4le()
+            self.f_vtx_disp_ex_radius = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_x = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_y = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_z = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_origin_x = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_origin_y = self._io.read_f4le()
+            self.f_vtx_disp_ex_rot_origin_z = self._io.read_f4le()
+            self.filler = self._io.read_f4le()
 
 
-
-    class CbVtxDistortionRefract(KaitaiStruct):
+    class StrRev2CbGlobals(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -142,9 +156,149 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.f_albedo_blend_color = []
             for i in range(4):
-                self.data.append(self._io.read_f4le())
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = []
+            for i in range(3):
+                self.f_parallax_max_sample.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(4):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_screen_uv_scale = []
+            for i in range(2):
+                self.f_screen_uv_scale.append(self._io.read_f4le())
+
+            self.f_screen_uv_offset = []
+            for i in range(2):
+                self.f_screen_uv_offset.append(self._io.read_f4le())
+
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(3):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.f_emission_threshold = self._io.read_f4le()
+            self.f_constant_color = []
+            for i in range(4):
+                self.f_constant_color.append(self._io.read_f4le())
+
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(4):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.f_secondary_color = []
+            for i in range(4):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+            self.f_albedo_color2 = []
+            for i in range(4):
+                self.f_albedo_color2.append(self._io.read_f4le())
+
+            self.f_specular_color2 = []
+            for i in range(3):
+                self.f_specular_color2.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick2 = self._io.read_f4le()
+            self.f_shininess2 = []
+            for i in range(4):
+                self.f_shininess2.append(self._io.read_f4le())
+
+            self.f_transparency_clip_threshold = []
+            for i in range(4):
+                self.f_transparency_clip_threshold.append(self._io.read_f4le())
+
+            self.f_blend_uv = self._io.read_f4le()
+            self.f_normal_power = []
+            for i in range(3):
+                self.f_normal_power.append(self._io.read_f4le())
+
+            self.f_albedo_blend2_color = []
+            for i in range(4):
+                self.f_albedo_blend2_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_u_v_scale = []
+            for i in range(2):
+                self.f_detail_normal_u_v_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_legacy = []
+            for i in range(2):
+                self.f_fresnel_legacy.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow0 = []
+            for i in range(4):
+                self.f_normal_mask_pow0.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow1 = []
+            for i in range(4):
+                self.f_normal_mask_pow1.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow2 = []
+            for i in range(4):
+                self.f_normal_mask_pow2.append(self._io.read_f4le())
+
+            self.f_texture_blend_rate = []
+            for i in range(4):
+                self.f_texture_blend_rate.append(self._io.read_f4le())
+
+            self.f_texture_blend_color = []
+            for i in range(4):
+                self.f_texture_blend_color.append(self._io.read_f4le())
 
 
 
@@ -159,6 +313,20 @@ class Mrl(KaitaiStruct):
             self.unk = self._io.read_bits_int_le(2)
             self.num_entry2 = self._io.read_bits_int_le(16)
             self.num_entry1 = self._io.read_bits_int_le(14)
+
+
+    class StrCbVtxDispMaskUv(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_vertex_disp_mask_uv = []
+            for i in range(8):
+                self.f_vertex_disp_mask_uv.append(self._io.read_f4le())
+
 
 
     class AnimType4(KaitaiStruct):
@@ -176,7 +344,7 @@ class Mrl(KaitaiStruct):
 
 
 
-    class CbVtxDispmaskUv(KaitaiStruct):
+    class StrCbVtxDisplacement3(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -184,10 +352,11 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
-            for i in range(8):
-                self.data.append(self._io.read_f4le())
+            self.f_vtx_disp_direction = []
+            for i in range(3):
+                self.f_vtx_disp_direction.append(self._io.read_f4le())
 
+            self.filler = self._io.read_f4le()
 
 
     class CbUnk01(KaitaiStruct):
@@ -215,20 +384,6 @@ class Mrl(KaitaiStruct):
             self.cmd_type = self._io.read_bits_int_le(4)
             self.unk = self._io.read_bits_int_le(16)
             self.shader_obj_idx = self._io.read_bits_int_le(12)
-
-
-    class CbVtxDisplacement(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(8):
-                self.data.append(self._io.read_f4le())
-
 
 
     class AnimOfs(KaitaiStruct):
@@ -268,20 +423,6 @@ class Mrl(KaitaiStruct):
             self.values = []
             for i in range(self._parent.info.num_entry):
                 self.values.append(Mrl.AnimType0(self._io, self, self._root))
-
-
-
-    class CbVtxDisplacement3(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
 
 
 
@@ -340,7 +481,7 @@ class Mrl(KaitaiStruct):
             self.unk_01 = self._io.read_f4le()
 
 
-    class Rev2CbSGlobals(KaitaiStruct):
+    class StrCbMaterial(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -348,9 +489,27 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
-            for i in range(120):
-                self.data.append(self._io.read_f4le())
+            self.f_diffuse_color = []
+            for i in range(3):
+                self.f_diffuse_color.append(self._io.read_f4le())
+
+            self.f_transparency = self._io.read_f4le()
+            self.f_reflective_color = []
+            for i in range(3):
+                self.f_reflective_color.append(self._io.read_f4le())
+
+            self.f_transparency_volume = self._io.read_f4le()
+            self.f_uv_transform = []
+            for i in range(8):
+                self.f_uv_transform.append(self._io.read_f4le())
+
+            self.f_uv_transform2 = []
+            for i in range(8):
+                self.f_uv_transform2.append(self._io.read_f4le())
+
+            self.f_uv_transform3 = []
+            for i in range(8):
+                self.f_uv_transform3.append(self._io.read_f4le())
 
 
 
@@ -366,20 +525,6 @@ class Mrl(KaitaiStruct):
             self.unk_02 = self._io.read_u4le()
             self.unk_03 = self._io.read_u4le()
             self.texture_path = (KaitaiStream.bytes_terminate(self._io.read_bytes(64), 0, False)).decode(u"ascii")
-
-
-    class CbBaAlphaClip(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
-
 
 
     class BlockOffset(KaitaiStruct):
@@ -404,6 +549,26 @@ class Mrl(KaitaiStruct):
             return getattr(self, '_m_body', None)
 
 
+    class StrCbVtxDisplacement(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_vtx_disp_start = self._io.read_f4le()
+            self.f_vtx_disp_scale = self._io.read_f4le()
+            self.f_vtx_disp_inv_area = self._io.read_f4le()
+            self.f_vtx_disp_rcn = self._io.read_f4le()
+            self.f_vtx_disp_tilt_u = self._io.read_f4le()
+            self.f_vtx_disp_tilt_v = self._io.read_f4le()
+            self.filler = []
+            for i in range(2):
+                self.filler.append(self._io.read_f4le())
+
+
+
     class CmdOfsBuffer(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -415,7 +580,7 @@ class Mrl(KaitaiStruct):
             self.ofs_float_buff = self._io.read_u4le()
 
 
-    class CbDistortion(KaitaiStruct):
+    class StrCbVtxDistortionRefract(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -423,23 +588,10 @@ class Mrl(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
-
-
-
-    class CbVtxDisplacement2(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
+            self.f_distortion_refract = self._io.read_f4le()
+            self.filler = []
+            for i in range(3):
+                self.filler.append(self._io.read_f4le())
 
 
 
@@ -553,6 +705,139 @@ class Mrl(KaitaiStruct):
 
 
 
+    class StrCbColorMask(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_color_mask_threshold = []
+            for i in range(4):
+                self.f_color_mask_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask_offset = []
+            for i in range(4):
+                self.f_color_mask_offset.append(self._io.read_f4le())
+
+            self.f_clip_threshold = []
+            for i in range(4):
+                self.f_clip_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask_color = []
+            for i in range(4):
+                self.f_color_mask_color.append(self._io.read_f4le())
+
+            self.f_color_mask2_threshold = []
+            for i in range(4):
+                self.f_color_mask2_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask2_color = []
+            for i in range(4):
+                self.f_color_mask2_color.append(self._io.read_f4le())
+
+
+
+    class StrRehdCbGlobals(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.f_albedo_blend_color = []
+            for i in range(4):
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = []
+            for i in range(3):
+                self.f_parallax_max_sample.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(4):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_screen_uv_scale = []
+            for i in range(2):
+                self.f_screen_uv_scale.append(self._io.read_f4le())
+
+            self.f_screen_uv_offset = []
+            for i in range(2):
+                self.f_screen_uv_offset.append(self._io.read_f4le())
+
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(4):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.f_constant_color = []
+            for i in range(4):
+                self.f_constant_color.append(self._io.read_f4le())
+
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(4):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.f_secondary_color = []
+            for i in range(4):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+
+
     class Material(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -639,6 +924,20 @@ class Mrl(KaitaiStruct):
             for i in range(self._parent.info.num_entry):
                 self.values.append(Mrl.AnimType6(self._io, self, self._root))
 
+
+
+    class StrCbVtxDisplacement2(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.f_vtx_disp_start2 = self._io.read_f4le()
+            self.f_vtx_disp_scales = self._io.read_f4le()
+            self.f_vtx_disp_inv_area2 = self._io.read_f4le()
+            self.f_vtx_disp_rcn2 = self._io.read_f4le()
 
 
     class AnimData(KaitaiStruct):
@@ -756,65 +1055,65 @@ class Mrl(KaitaiStruct):
                 if _on == 1862361870:
                     self._m_float_buffer = Mrl.CbUnk02(self._io, self, self._root)
                 elif _on == 4023005735:
-                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbDistortion(self._io, self, self._root)
                 elif _on == 579346993:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement3(self._io, self, self._root)
                 elif _on == 4023005730:
-                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbDistortion(self._io, self, self._root)
                 elif _on == 1820332537:
-                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
                 elif _on == 4023005728:
-                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbDistortion(self._io, self, self._root)
                 elif _on == 1642345011:
-                    self._m_float_buffer = Mrl.CbUnk04(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDispEx(self._io, self, self._root)
                 elif _on == 2215727888:
                     self._m_float_buffer = Mrl.CbUnk03(self._io, self, self._root)
                 elif _on == 2934141708:
                     self._m_float_buffer = Mrl.CbUnk01(self._io, self, self._root)
                 elif _on == 1367425584:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement2(self._io, self, self._root)
                 elif _on == 3297735201:
                     self._m_float_buffer = Mrl.CbUnk01(self._io, self, self._root)
                 elif _on == 579347000:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement3(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement3(self._io, self, self._root)
                 elif _on == 1640423997:
-                    self._m_float_buffer = Mrl.CbVtxDispmaskUv(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDispMaskUv(self._io, self, self._root)
                 elif _on == 2066489676:
                     self._m_float_buffer = Mrl.CbSGlobals(self._io, self, self._root)
                 elif _on == 3297735212:
-                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDistortionRefract(self._io, self, self._root)
                 elif _on == 356618799:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement(self._io, self, self._root)
                 elif _on == 2066489689:
-                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrRehdCbGlobals(self._io, self, self._root)
                 elif _on == 356618806:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement(self._io, self, self._root)
                 elif _on == 2066489695:
-                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrRehdCbGlobals(self._io, self, self._root)
                 elif _on == 2934141721:
-                    self._m_float_buffer = Mrl.CbBaAlphaClip(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbBaAlphaClip(self._io, self, self._root)
                 elif _on == 1862361883:
-                    self._m_float_buffer = Mrl.CbColorMask(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbColorMask(self._io, self, self._root)
                 elif _on == 1820332522:
-                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
                 elif _on == 3297735208:
-                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDistortionRefract(self._io, self, self._root)
                 elif _on == 2066489694:
-                    self._m_float_buffer = Mrl.Rev2CbSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrRev2CbGlobals(self._io, self, self._root)
                 elif _on == 1820332542:
-                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
                 elif _on == 4023005739:
-                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbDistortion(self._io, self, self._root)
                 elif _on == 2066489685:
-                    self._m_float_buffer = Mrl.RehdCbSGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrRehdCbGlobals(self._io, self, self._root)
                 elif _on == 3297735203:
-                    self._m_float_buffer = Mrl.CbVtxDistortionRefract(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDistortionRefract(self._io, self, self._root)
                 elif _on == 1820332532:
-                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
                 elif _on == 1820332544:
-                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
                 elif _on == 1367425591:
-                    self._m_float_buffer = Mrl.CbVtxDisplacement2(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.StrCbVtxDisplacement2(self._io, self, self._root)
                 self._io.seek(_pos)
 
             return getattr(self, '_m_float_buffer', None)
