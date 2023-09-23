@@ -12,6 +12,7 @@ from .structs.mrl import Mrl
 
 
 TEX_FORMAT_MAPPER = {
+    14: b"DXT1", # uncompressed
     19: b"DXT1",
     20: b"DXT1",
     23: b"DXT5",
@@ -19,8 +20,10 @@ TEX_FORMAT_MAPPER = {
     24: b"DXT5",
     25: b"DXT5",
     31: b"DXT5",
+    32: b"DXT5",
     35: b"DXT5",
     39: b"DXT1", # uncompressed
+    40: b"DXT1", # uncompressed
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
 }
