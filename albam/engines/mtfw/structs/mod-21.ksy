@@ -131,7 +131,7 @@ types:
             0xd9e801d:  vertex_d9e8 # re6
             0x747d1031: vertex_747d # re6
             0x75c3e025: vertex_75c3 # re6
-            
+
   vertex_75c3: #untested re6 em4801 mesh20 IASkinTBN8wt
     seq:
       - {id: position, type: vec4_s2}
@@ -162,7 +162,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
-            
+
   vertex_cbcf: #untested re6 em5030 mesh82 IASkinTBNLA8wt
     seq:
       - {id: position, type: vec4_s2}
@@ -176,7 +176,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: uv4, type: vec2_half_float}
-      
+
   vertex_da55: # untested re6 sm5933 IASkinTBN4wt
     seq:
       - {id: position, type: vec4_s2}
@@ -187,7 +187,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: weight_values, size: 2, repeat: expr, repeat-expr: 2}
       - {id: uv2, type: vec2_half_float}
-            
+
   vertex_d84e: # ok rehd r313_g05 IASkinTBC8wt
     seq:
       - {id: position, type: vec4_s2} # w1
@@ -199,7 +199,7 @@ types:
       - {id: weight_values2, size: 2, repeat: expr, repeat-expr: 2}  # half-float
       - {id: tangent, type: vec4_u1}
       - {id: rgba, type: vec4_u1}
-            
+
   vertex_77d8: # ok rev1 bl_center_t2 IASkinTBC4wt
     seq:
       - {id: position, type: vec4_s2} # w = w1
@@ -210,7 +210,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: weight_values, size: 2, repeat: expr, repeat-expr: 2}  # half-float
       - {id: rgba, type: vec4_u1}
-            
+
   vertex_4325: # untested rev1 md000f mesh1 IANonSkinTBN_4M
     seq:
       - {id: position, type: vec3}
@@ -238,8 +238,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: uv4, type: vec2_half_float}
-      
-            
+
   vertex_2082: #ok s1030_00scr s0503-7f mesh36 IANonSkinBLA
     seq:
       - {id: position, type: vec3}
@@ -247,7 +246,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
-  
+
   vertex_b668: #untested md002b_00 IANonSkinTBNCA
     seq:
       - {id: position, type: vec3}
@@ -257,7 +256,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
       - {id: uv3, type: vec2_half_float}
-  
+
   vertex_1255: #ok s2304_00scr.arc rouka mesh10 IANonSkinTBLA
     seq:
       - {id: position, type: vec3}
@@ -267,7 +266,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float} #lightmaps
-            
+
   vertex_a013: #untested uSm8754.arc sm8754.mod mesh2 IASkinTBC2wt
     seq:
       - {id: position, type: vec4_s2}
@@ -277,7 +276,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2} # half float probably
       - {id: rgba, type: vec4_u1}
-            
+
   vertex_667b: #ok uSm8771.arc sm8771.mod mesh1  IASkinTBN1wt
     seq:
       - {id: position, type: vec3_s2}
@@ -287,14 +286,14 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-      
+
   vertex_c66f: #ok usm9110.arc sm9110.mod mesh1 IANonSkinBA
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-            
+
   vertex_a14e: #untested md000d_00 mesh0 IANonSkinBCA
     seq:
        - {id: position, type: vec3}
@@ -302,7 +301,7 @@ types:
        - {id: uv, type: vec2_half_float}
        - {id: uv2, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
-  
+
   vertex_afa6: #untested md0303 mesh0 IANonSkinTBA
     seq:
       - {id: position, type: vec3}
@@ -311,7 +310,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-  
+
   vertex_5e7f: #untested md0020 mesh0 IANonSkinTBN
     seq:
       - {id: position, type: vec3}
@@ -320,7 +319,6 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-      
       
   vertex_6459: #ok wp1800 mesh4 IASkinTBNLA4wt
     seq:
@@ -334,7 +332,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: uv4, type: vec2_half_float}
-      
+
   vertex_b392: #ok wp1800 mesh8 IASkinTBNLA2wt
     seq:
       - {id: position, type: vec4_s2}
@@ -346,7 +344,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: uv4, type: vec2_half_float}
-            
+
   vertex_d877: # ok wp1800 mesh6 IASkinTBNLA1wt
     seq:
       - {id: position, type: vec3_s2}
@@ -358,7 +356,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: uv4, type: vec2_half_float}
-            
+
   vertex_cbf6: #ok wp3000 mesh1 weight hardcoded to 1.0 IASkinTBC1wt
     seq:
       - {id: position, type: vec3_s2}
@@ -378,7 +376,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
-  
+
   vertex_926f: #IANonSkinTBNC
     seq:
       - {id: position, type: vec3}
@@ -388,7 +386,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
-  
+
   vertex_63b6: # ok s2304_00scr.arc rouka.mod mesh0 IANonSkinTBNL
     seq:
       - {id: position, type: vec3}
@@ -399,7 +397,7 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
       - {id: occlusion, type: u4}
-            
+
   vertex_b86d: # rer2 s2304_00Scr.arc bedroom.mod mesh14 IANonSkinTBL
     seq:
       - {id: position, type: vec3}
@@ -409,28 +407,28 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: occlusion, type: u4}
-  
+
   vertex_d1a4: #IANonSkinBL
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-      
+
   vertex_8297: # ok rev1 s500_scroll.arc s500_2.mod mesh0 IANonSkinTB
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-            
+
   vertex_207d: # 24 IANonSkinBC
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: rgba, type: vec4_u1}
-  
+
   vertex_49b4: # s1030_00scr.arc cast_a.mod IANonSkinTBC
     seq:
        - {id: position, type: vec3}
@@ -439,13 +437,13 @@ types:
        - {id: tangent, type: vec4_u1}
        - {id: uv, type: vec2_half_float}
        - {id: rgba, type: vec4_u1}
-  
+
   vertex_a7d7: #20 rev1 s10a_1_scroll.arc s10a_bgl1.mod IANonSkinB
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-      
+
   vertex_14d4: # 28 ok rev2 wp1500 IASkinTB4wt
     seq:
       - {id: position, type: vec4_s2}
@@ -523,7 +521,7 @@ types:
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4} 
       - {id: weight_values, type: u1, repeat: expr, repeat-expr: 4}
       - {id: normal, type: vec4_u1}
-  
+
   vertex_db7d: #ok line rev2 uwp3010.mod sm8698.mod mesh2 IASkinBridge2wt
     seq:
       - {id: position, type: vec4_s2}
@@ -534,20 +532,20 @@ types:
     seq:
       - {id: u, size: 2}
       - {id: v, size: 2}
-      
+
   vec4_u1:
     seq:
       - {id: x, type: u1}
       - {id: y, type: u1}
       - {id: z, type: u1}
       - {id: w, type: u1}
-      
+
   vec3_u1:
     seq:
       - {id: x, type: u1}
       - {id: y, type: u1}
       - {id: z, type: u1}
-      
+
   vec3:
     seq:
       - {id: x, type: f4}

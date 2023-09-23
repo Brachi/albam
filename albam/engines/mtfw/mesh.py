@@ -206,7 +206,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
             mapped_bone_indices.append(real_bone_index)
     elif mesh.vertex_format in (
         0xC31F201C,
-        0xb392101f,
+        0xB392101F,
     ):
         b1 = int(unpack("e", bone_indices[0])[0])
         b2 = int(unpack("e", bone_indices[0])[0])
