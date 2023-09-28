@@ -45,14 +45,82 @@ KNOWN_VERTEX_FORMATS = {
 	0x75c3e025,
 }
 
+KNOWN_FLOAT_BUFFER_HASHES = {
+	0x7b2c215f,
+	0x6c801200,
+	0x7b2c2159,
+	0x6c8011f9,
+	0x7b2c2155,
+	0x6c8011f4,
+	0x7b2c215e,
+	0x6c8011fe,
+	0x15419236,
+	0x51814237,
+	0x22882238,
+	0x6f01631b,
+	0x61c6e23d,
+	0xaee37319,
+	0xefca3227,
+	0xc48f7228,
+	0x7b2c214c,
+	0x6c8011ea,
+	0xefca3222, # rehd
+	0xc48f7223, # rehd
+	0xaee3730c, # re6
+	0x6F01630e, # re6
+	0x1541922f, # re6
+	0x51814230, # re6
+	0xc48f7221,
+	0xefca3220,
+	0x84115310,
+	0x22882231,	
+}
+
+TEX_TYPE_MAPPER = {
+    0xcd06f,
+    0x22660,
+    0xaa6f0,
+    0xed1b,
+    0x75a53,
+	0x64c43,
+	0x1698a,
+	0xff5be,
+	0x1cb2a,
+	0xed93b,
+	0xa9787,
+	0x39c0,
+	0x4934a,
+	0xed6be,
+	0x1e421,
+	0x343f4,
+    0x57C1C,
+    0x6ab7e,
+    0x181cf,
+    0xd4694,
+	0x7b571,
+	0x5f2a,
+    0xc3df7,
+    0x88165,
+    0x7e9aa,
+    0x62fde,
+	0x52e1,
+}
+
 
 def test_mrl(mrl):
-    materials = mrl.materials
-    textures = mrl.textures
-    assert mrl.id_magic == b"MRL\x00"
-    assert mrl.num_materials == len(materials)
-    assert mrl.num_textures == len(textures)
-
+	materials = mrl.materials
+	textures = mrl.textures
+	assert mrl.id_magic == b"MRL\x00"
+	assert mrl.num_materials == len(materials)
+	assert mrl.num_textures == len(textures)
+	set_buffer_hashes = set()
+	for i, m in enumerate(mrl.materials):
+		for j, res in enumerate(m.resources):
+		#resources = {m.resources for m in mrl.materials}
+		#set_buffer_hashes = {r.shader_object_hash for r in resources if r.info.cmd_type == 1 }
+			if res.info.cmd_type == 3:
+				set_buffer_hashes.add(res.shader_object_hash>>12)
+	assert not set_buffer_hashes.difference(TEX_TYPE_MAPPER)
 
 def test_mod(mod):
 

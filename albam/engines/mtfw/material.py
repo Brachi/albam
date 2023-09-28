@@ -52,6 +52,29 @@ TEX_TYPE_MAPPER = {
     0xaa6f0: TextureTypes.LIGHTMAP,
     0xed1b:  TextureTypes.SPECULAR,
     0x75a53: TextureTypes.NORMAL_DETAIL,
+    0x64c43: TextureTypes.ENVMAP,
+    0x1698a: TextureTypes.ALPHAMAP, #tTransparencyMap
+    #0xff5be: TextureTypes.UNK_01, # tAlbedoBlendMap
+    #0x1cb2a: TextureTypes.UNK_01, # ttHairShiftMap
+    #0xed93b: TextureTypes.UNK_01, # tEmissionMap
+    #0xa9787: TextureTypes.UNK_01, # tShininessMap
+    #0x39c0:  TextureTypes.UNK_01, # tVtxDispMask
+    #0x4934a: TextureTypes.UNK_01, # tVtxDisplacement
+    #0xed6be: TextureTypes.UNK_01, # tNormalBlendMap
+    #0x1e421: TextureTypes.UNK_01, # tOcclusionMap
+    #0x343f4: TextureTypes.UNK_01, # tSphereMap
+    #0x57C1C: TextureTypes.UNK_01, # not in rev2 mxt
+    #0x6ab7e: TextureTypes.UNK_01, # tIndirectMap
+    #0x181cf: TextureTypes.UNK_01, # tSpecularBlendMap
+    #0xd4694: TextureTypes.UNK_01, # tDetailNormalMap2
+    #0x7b571: TextureTypes.UNK_01, # tHeightMap
+    #0x5f2a:  TextureTypes.UNK_01, # tThinMap
+    #0xc3df7: TextureTypes.UNK_01, # not in re6 mxt
+    #0x88165: TextureTypes.UNK_01, # tDetailMaskMap
+    #0x7e9aa: TextureTypes.UNK_01, # not in re6 mxt
+    #0x62fde: TextureTypes.UNK_01, # not in re6 mxt
+    #0x52e1:  TextureTypes.UNK_01, # not in re6 mxt  
+    
 }
 
 
