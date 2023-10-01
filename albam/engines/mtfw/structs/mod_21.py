@@ -16,58 +16,16 @@ class Mod21(KaitaiStruct):
 
     def _read(self):
         self.header = Mod21.ModHeader(self._io, self, self._root)
-        self.bones = []
-        for i in range(self.header.num_bones):
-            self.bones.append(Mod21.Bone(self._io, self, self._root))
+        self.bsphere = Mod21.Vec4(self._io, self, self._root)
+        self.bbox_min = Mod21.Vec4(self._io, self, self._root)
+        self.bbox_max = Mod21.Vec4(self._io, self, self._root)
+        self.unk_01 = self._io.read_u4le()
+        self.unk_02 = self._io.read_u4le()
+        self.unk_03 = self._io.read_u4le()
+        self.unk_04 = self._io.read_u4le()
+        if self._root.header.version == 210:
+            self.num_weight_bounds = self._io.read_u4le()
 
-        self.parent_space_matrices = []
-        for i in range(self.header.num_bones):
-            self.parent_space_matrices.append(Mod21.Matrix4x4(self._io, self, self._root))
-
-        self.inverse_bind_matrices = []
-        for i in range(self.header.num_bones):
-            self.inverse_bind_matrices.append(Mod21.Matrix4x4(self._io, self, self._root))
-
-        if self.header.num_bones != 0:
-            self.bone_map = self._io.read_bytes(256)
-
-        self.groups = []
-        for i in range(self.header.num_groups):
-            self.groups.append(Mod21.Group(self._io, self, self._root))
-
-        if self.header.version == 210:
-            self.material_names = []
-            for i in range(self.header.num_material_names):
-                self.material_names.append((KaitaiStream.bytes_terminate(self._io.read_bytes(128), 0, False)).decode(u"ascii"))
-
-
-        if self.header.version == 211:
-            self.material_hashes = []
-            for i in range(self.header.num_material_hashes):
-                self.material_hashes.append(self._io.read_u4le())
-
-
-        self.meshes = []
-        for i in range(self.header.num_meshes):
-            self.meshes.append(Mod21.Mesh(self._io, self, self._root))
-
-        if self.header.version == 211:
-            self.num_weight_bounds_211 = self._io.read_u4le()
-
-        if self.header.version == 210:
-            self.weight_bounds_210 = []
-            for i in range(self.header.num_weight_bounds_210):
-                self.weight_bounds_210.append(Mod21.WeightBound(self._io, self, self._root))
-
-
-        if self.header.version == 211:
-            self.weight_bounds_211 = []
-            for i in range(self.num_weight_bounds_211):
-                self.weight_bounds_211.append(Mod21.WeightBound(self._io, self, self._root))
-
-
-        self.vertex_buffer = self._io.read_bytes(self.header.size_vertex_buffer)
-        self.index_buffer = self._io.read_bytes((self.header.num_faces * 2))
 
     class Vec4(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
@@ -110,23 +68,21 @@ class Mod21(KaitaiStruct):
             self.size_vertex_buffer = self._io.read_u4le()
             self.reserved_01 = self._io.read_u4le()
             self.num_groups = self._io.read_u4le()
-            self.offset_bones = self._io.read_u4le()
+            self.offset_bones_data = self._io.read_u4le()
             self.offset_groups = self._io.read_u4le()
-            self.offset_material = self._io.read_u4le()
-            self.offset_meshes = self._io.read_u4le()
-            self.offset_buffer_vertices = self._io.read_u4le()
-            self.offset_buffer_indices = self._io.read_u4le()
+            self.offset_materials_data = self._io.read_u4le()
+            self.offset_meshes_data = self._io.read_u4le()
+            self.offset_vertex_buffer = self._io.read_u4le()
+            self.offset_index_buffer = self._io.read_u4le()
             self.size_file = self._io.read_u4le()
-            self.bsphere = Mod21.Vec4(self._io, self, self._root)
-            self.bbox_min = Mod21.Vec4(self._io, self, self._root)
-            self.bbox_max = Mod21.Vec4(self._io, self, self._root)
-            self.unk_01 = self._io.read_u4le()
-            self.unk_02 = self._io.read_u4le()
-            self.unk_03 = self._io.read_u4le()
-            self.unk_04 = self._io.read_u4le()
-            if self.version == 210:
-                self.num_weight_bounds_210 = self._io.read_u4le()
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 64
+            return getattr(self, '_m_size_', None)
 
 
     class VertexA7d7(KaitaiStruct):
@@ -518,6 +474,14 @@ class Mod21(KaitaiStruct):
             self.parent_distance = self._io.read_f4le()
             self.location = Mod21.Vec3(self._io, self, self._root)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
 
     class Vertex2f55(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
@@ -648,6 +612,35 @@ class Mod21(KaitaiStruct):
             self.w = self._io.read_u1()
 
 
+    class MeshesData(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.meshes = []
+            for i in range(self._root.header.num_meshes):
+                self.meshes.append(Mod21.Mesh(self._io, self, self._root))
+
+            if self._root.header.version == 211:
+                self.num_weight_bounds = self._io.read_u4le()
+
+            self.weight_bounds = []
+            for i in range((self._root.num_weight_bounds if self._root.header.version == 210 else self.num_weight_bounds)):
+                self.weight_bounds.append(Mod21.WeightBound(self._io, self, self._root))
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if self._root.header.version == 210 else ((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)))
+            return getattr(self, '_m_size_', None)
+
+
     class VertexA013(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -712,7 +705,7 @@ class Mod21(KaitaiStruct):
             self.vertex_offset = self._io.read_u4le()
             self.vertex_format = self._io.read_u4le()
             self.face_position = self._io.read_u4le()
-            self.face_count = self._io.read_u4le()
+            self.num_indices = self._io.read_u4le()
             self.face_offset = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
             self.num_unique_bone_ids = self._io.read_u1()
@@ -722,14 +715,22 @@ class Mod21(KaitaiStruct):
             self.hash = self._io.read_u4le()
 
         @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 48
+            return getattr(self, '_m_size_', None)
+
+        @property
         def indices(self):
             if hasattr(self, '_m_indices'):
                 return self._m_indices
 
             _pos = self._io.pos()
-            self._io.seek(((self._root.header.offset_buffer_indices + (self.face_offset * 2)) + (self.face_position * 2)))
+            self._io.seek(((self._root.header.offset_index_buffer + (self.face_offset * 2)) + (self.face_position * 2)))
             self._m_indices = []
-            for i in range(self.face_count):
+            for i in range(self.num_indices):
                 self._m_indices.append(self._io.read_u2le())
 
             self._io.seek(_pos)
@@ -741,7 +742,7 @@ class Mod21(KaitaiStruct):
                 return self._m_vertices
 
             _pos = self._io.pos()
-            self._io.seek(((self._root.header.offset_buffer_vertices + self.vertex_offset) + (self.vertex_position * self.vertex_stride)))
+            self._io.seek(((self._root.header.offset_vertex_buffer + self.vertex_offset) + (self.vertex_position * self.vertex_stride)))
             self._m_vertices = []
             for i in range(self.num_vertices):
                 _on = self.vertex_format
@@ -995,6 +996,14 @@ class Mod21(KaitaiStruct):
             self.oabb_matrix = Mod21.Matrix4x4(self._io, self, self._root)
             self.oabb_dimension = Mod21.Vec4(self._io, self, self._root)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 144
+            return getattr(self, '_m_size_', None)
+
 
     class Vec3(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
@@ -1042,6 +1051,36 @@ class Mod21(KaitaiStruct):
             self.z = self._io.read_s2le()
 
 
+    class MaterialsData(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            if self._root.header.version == 210:
+                self.material_names = []
+                for i in range(self._root.header.num_material_names):
+                    self.material_names.append((KaitaiStream.bytes_terminate(self._io.read_bytes(128), 0, False)).decode(u"ascii"))
+
+
+            if self._root.header.version == 211:
+                self.material_hashes = []
+                for i in range(self._root.header.num_material_hashes):
+                    self.material_hashes.append(self._io.read_u4le())
+
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = ((128 * self._root.header.num_material_names) if self._root.header.version == 210 else (4 * self._root.header.num_material_hashes))
+            return getattr(self, '_m_size_', None)
+
+
     class VertexCbcf(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -1070,6 +1109,39 @@ class Mod21(KaitaiStruct):
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv3 = Mod21.Vec2HalfFloat(self._io, self, self._root)
             self.uv4 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+
+
+    class BonesData(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.bones_hierarchy = []
+            for i in range(self._root.header.num_bones):
+                self.bones_hierarchy.append(Mod21.Bone(self._io, self, self._root))
+
+            self.parent_space_matrices = []
+            for i in range(self._root.header.num_bones):
+                self.parent_space_matrices.append(Mod21.Matrix4x4(self._io, self, self._root))
+
+            self.inverse_bind_matrices = []
+            for i in range(self._root.header.num_bones):
+                self.inverse_bind_matrices.append(Mod21.Matrix4x4(self._io, self, self._root))
+
+            if self._root.header.num_bones != 0:
+                self.bone_map = self._io.read_bytes(256)
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = (((((self._root.header.num_bones * self.bones_hierarchy[0].size_) + (self._root.header.num_bones * 64)) + (self._root.header.num_bones * 64)) + 256) if self._root.header.num_bones > 0 else 0)
+            return getattr(self, '_m_size_', None)
 
 
     class Vertex8297(KaitaiStruct):
@@ -1133,6 +1205,14 @@ class Mod21(KaitaiStruct):
             self.unk_06 = self._io.read_f4le()
             self.unk_07 = self._io.read_f4le()
             self.unk_08 = self._io.read_f4le()
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
 
 
     class VertexAfa6(KaitaiStruct):
@@ -1211,5 +1291,88 @@ class Mod21(KaitaiStruct):
 
             self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
 
+
+    @property
+    def vertex_buffer(self):
+        if hasattr(self, '_m_vertex_buffer'):
+            return self._m_vertex_buffer
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.offset_vertex_buffer)
+        self._m_vertex_buffer = self._io.read_bytes(self.header.size_vertex_buffer)
+        self._io.seek(_pos)
+        return getattr(self, '_m_vertex_buffer', None)
+
+    @property
+    def materials_data(self):
+        if hasattr(self, '_m_materials_data'):
+            return self._m_materials_data
+
+        if self.header.offset_materials_data > 0:
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_materials_data)
+            self._m_materials_data = Mod21.MaterialsData(self._io, self, self._root)
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_materials_data', None)
+
+    @property
+    def meshes_data(self):
+        if hasattr(self, '_m_meshes_data'):
+            return self._m_meshes_data
+
+        if self.header.offset_meshes_data > 0:
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_meshes_data)
+            self._m_meshes_data = Mod21.MeshesData(self._io, self, self._root)
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_meshes_data', None)
+
+    @property
+    def index_buffer(self):
+        if hasattr(self, '_m_index_buffer'):
+            return self._m_index_buffer
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.offset_index_buffer)
+        self._m_index_buffer = self._io.read_bytes((self.header.num_faces * 2))
+        self._io.seek(_pos)
+        return getattr(self, '_m_index_buffer', None)
+
+    @property
+    def size_top_level_(self):
+        if hasattr(self, '_m_size_top_level_'):
+            return self._m_size_top_level_
+
+        self._m_size_top_level_ = ((self._root.header.size_ + 68) if self._root.header.version == 210 else (self._root.header.size_ + 64))
+        return getattr(self, '_m_size_top_level_', None)
+
+    @property
+    def bones_data(self):
+        if hasattr(self, '_m_bones_data'):
+            return self._m_bones_data
+
+        if self.header.num_bones != 0:
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_bones_data)
+            self._m_bones_data = Mod21.BonesData(self._io, self, self._root)
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_bones_data', None)
+
+    @property
+    def groups(self):
+        if hasattr(self, '_m_groups'):
+            return self._m_groups
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.offset_groups)
+        self._m_groups = []
+        for i in range(self.header.num_groups):
+            self._m_groups.append(Mod21.Group(self._io, self, self._root))
+
+        self._io.seek(_pos)
+        return getattr(self, '_m_groups', None)
 
 

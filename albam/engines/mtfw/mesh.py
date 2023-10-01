@@ -46,7 +46,7 @@ def build_blender_model(file_list_item, context):
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     materials = build_blender_materials(file_list_item, context, mod, bl_object_name)
 
-    for i, mesh in enumerate(m for m in mod.meshes if m.level_of_detail in LODS_TO_IMPORT):
+    for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
             name = f"{bl_object_name}_{str(i).zfill(2)}"
             bl_mesh_ob = build_blender_mesh(mod, mesh, name, bbox_data, mod_version == 156)
@@ -193,13 +193,13 @@ def _get_bone_indices(mod, mesh, bone_indices):
     mapped_bone_indices = []
 
     if mod.header.version == 156:
-        bone_palette = mod.bones_mapping[mesh.bone_map_index]
+        bone_palette = mod.bones_data.bones_mapping[mesh.bone_map_index]
         for bi, bone_index in enumerate(bone_indices):
             if bone_index >= bone_palette.unk_01:
-                real_bone_index = mod.bone_map[bone_index]
+                real_bone_index = mod.bones_data.bone_map[bone_index]
             else:
                 try:
-                    real_bone_index = mod.bones_mapping[mesh.bone_map_index].indices[bone_index]
+                    real_bone_index = mod.bones_data.bones_mapping[mesh.bone_map_index].indices[bone_index]
                 except IndexError:
                     # Behaviour not observed in original files so far
                     real_bone_index = bone_index
@@ -336,12 +336,12 @@ def build_blender_armature(mod, armature_name, bbox_data):
     scale = 0.01
     # TODO: do it at blender level
     # non_deform_bone_indices = get_non_deform_bone_indices(mod)
-    for i, bone in enumerate(mod.bones):
+    for i, bone in enumerate(mod.bones_data.bones_hierarchy):
         blender_bone = armature.edit_bones.new(str(i))
         valid_parent = bone.idx_parent < 255
         blender_bone.parent = blender_bones[bone.idx_parent] if valid_parent else None
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
-        m = mod.inverse_bind_matrices[i]
+        m = mod.bones_data.inverse_bind_matrices[i]
         head = _name_me(mod, m, bbox_data)
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
@@ -404,19 +404,19 @@ def _create_bbox_data(mod):
         ),
     )
     dimension = max(
-        abs(mod.header.bbox_min.x), abs(mod.header.bbox_min.y), abs(mod.header.bbox_min.z)
-    ) + max(abs(mod.header.bbox_max.x), abs(mod.header.bbox_max.y), abs(mod.header.bbox_max.z))
+        abs(mod.bbox_min.x), abs(mod.bbox_min.y), abs(mod.bbox_min.z)
+    ) + max(abs(mod.bbox_max.x), abs(mod.bbox_max.y), abs(mod.bbox_max.z))
 
     bbox_data = BboxData(
-        min_x=mod.header.bbox_min.x,
-        min_y=mod.header.bbox_min.y,
-        min_z=mod.header.bbox_min.z,
-        max_x=mod.header.bbox_max.x,
-        max_y=mod.header.bbox_max.y,
-        max_z=mod.header.bbox_max.z,
-        width=mod.header.bbox_max.x - mod.header.bbox_min.x,
-        height=mod.header.bbox_max.y - mod.header.bbox_min.y,
-        depth=mod.header.bbox_max.z - mod.header.bbox_min.z,
+        min_x=mod.bbox_min.x,
+        min_y=mod.bbox_min.y,
+        min_z=mod.bbox_min.z,
+        max_x=mod.bbox_max.x,
+        max_y=mod.bbox_max.y,
+        max_z=mod.bbox_max.z,
+        width=mod.bbox_max.x - mod.bbox_min.x,
+        height=mod.bbox_max.y - mod.bbox_min.y,
+        depth=mod.bbox_max.z - mod.bbox_min.z,
         dimension=dimension,
     )
 
@@ -428,6 +428,8 @@ def _get_material_hash(mod, mesh):
     if mod.header.version == 156:
         material_hash = mesh.idx_material
     elif mod.header.version == 210:
-        material_name = mod.material_names[mesh.idx_material // 16]
+        material_name = mod.materials_data.material_names[mesh.idx_material // 16]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
+    elif mod.header.version == 211:
+        material_hash = mod.materials_data.material_hashes[mesh.idx_material // 16]
     return material_hash

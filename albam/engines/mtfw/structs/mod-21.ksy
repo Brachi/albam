@@ -7,23 +7,33 @@ meta:
 
 seq:
   - {id: header, type: mod_header}
-  - {id: bones, type: bone, repeat: expr, repeat-expr: header.num_bones}
-  - {id: parent_space_matrices, type: matrix4x4, repeat: expr, repeat-expr: header.num_bones}
-  - {id: inverse_bind_matrices, type: matrix4x4, repeat: expr, repeat-expr: header.num_bones}
-  - {id: bone_map, size: 256, if: header.num_bones != 0}
-  - {id: groups, type: group, repeat: expr, repeat-expr: header.num_groups}
-  - {id: material_names, type: str, encoding: ascii, size: 128, terminator: 0, repeat: expr, repeat-expr: header.num_material_names, if: header.version == 210}
-  - {id: material_hashes, type: u4, repeat: expr, repeat-expr: header.num_material_hashes, if: header.version == 211}
-  - {id: meshes, type: mesh, repeat: expr, repeat-expr: header.num_meshes}
-  - {id: num_weight_bounds_211, type: u4, if: header.version == 211}
-  - {id: weight_bounds_210, type: weight_bound, repeat: expr, repeat-expr: header.num_weight_bounds_210, if: header.version == 210}
-  - {id: weight_bounds_211, type: weight_bound, repeat: expr, repeat-expr: num_weight_bounds_211, if: header.version == 211}
-  - {id: vertex_buffer, size: header.size_vertex_buffer}
-  - {id: index_buffer, size: header.num_faces * 2}
+  - {id: bsphere, type: vec4}
+  - {id: bbox_min, type: vec4}
+  - {id: bbox_max, type: vec4}
+  - {id: unk_01, type: u4}
+  - {id: unk_02, type: u4}
+  - {id: unk_03, type: u4}
+  - {id: unk_04, type: u4}
+  - {id: num_weight_bounds, type: u4, if: _root.header.version == 210}
   # TODO: padding
 
-types:
+instances:
+  bones_data:
+    {pos: header.offset_bones_data, type: bones_data, if: header.num_bones != 0}
+  groups:
+    {pos: header.offset_groups, type: group, repeat: expr, repeat-expr: header.num_groups}
+  materials_data:
+    {pos: header.offset_materials_data, type: materials_data, if: header.offset_materials_data > 0}
+  meshes_data:
+    {pos: header.offset_meshes_data, type: meshes_data, if: header.offset_meshes_data > 0}
+  vertex_buffer:
+    {pos: header.offset_vertex_buffer, size: header.size_vertex_buffer }
+  index_buffer:
+    {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
+  size_top_level_:
+    value: "_root.header.version == 210 ? _root.header.size_ + 68 : _root.header.size_ + 64"
 
+types:
   mod_header:
     seq:
       - {id: ident, contents: [0x4d, 0x4f, 0x44, 0x00]}
@@ -39,22 +49,78 @@ types:
       - {id: size_vertex_buffer, type: u4}
       - {id: reserved_01, type: u4}
       - {id: num_groups, type: u4}
-      - {id: offset_bones, type: u4}
+      - {id: offset_bones_data, type: u4}
       - {id: offset_groups, type: u4}
-      - {id: offset_material, type: u4}
-      - {id: offset_meshes, type: u4}
-      - {id: offset_buffer_vertices, type: u4}
-      - {id: offset_buffer_indices, type: u4}
+      - {id: offset_materials_data, type: u4}
+      - {id: offset_meshes_data, type: u4}
+      - {id: offset_vertex_buffer, type: u4}
+      - {id: offset_index_buffer, type: u4}
       - {id: size_file, type: u4}
-      - {id: bsphere, type: vec4}
-      - {id: bbox_min, type: vec4}
-      - {id: bbox_max, type: vec4}
-      - {id: unk_01, type: u4}
-      - {id: unk_02, type: u4}
-      - {id: unk_03, type: u4}
-      - {id: unk_04, type: u4}
-      - {id: num_weight_bounds_210, type: u4, if: version == 210}
+    instances:
+      size_:
+        value: 64
 
+  bones_data:
+    seq:
+      - {id: bones_hierarchy, type: bone, repeat: expr, repeat-expr: _root.header.num_bones}
+      - {id: parent_space_matrices, type: matrix4x4, repeat: expr, repeat-expr: _root.header.num_bones}
+      - {id: inverse_bind_matrices, type: matrix4x4, repeat: expr, repeat-expr: _root.header.num_bones}
+      - {id: bone_map, size: 256, if: _root.header.num_bones != 0}
+    instances:
+      size_:
+        value: |
+          _root.header.num_bones > 0 ?
+          _root.header.num_bones * bones_hierarchy[0].size_ +
+          _root.header.num_bones * 64 +
+          _root.header.num_bones * 64 +
+          256 : 0
+
+  bone:
+    seq:
+      - {id: idx_anim_map, type: u1}
+      - {id: idx_parent, type: u1}
+      - {id: idx_mirror, type: u1}
+      - {id: idx_mapping, type: u1}
+      - {id: unk_01, type: f4}
+      - {id: parent_distance, type: f4}
+      - {id: location, type: vec3}
+    instances:
+      size_:
+        value: 24
+
+  group:
+    seq:
+      - {id: group_index, type: u4}
+      - {id: unk_02, type: f4}
+      - {id: unk_03, type: f4}
+      - {id: unk_04, type: f4}
+      - {id: unk_05, type: f4}
+      - {id: unk_06, type: f4}
+      - {id: unk_07, type: f4}
+      - {id: unk_08, type: f4}
+    instances:
+      size_:
+        value: 32
+
+  materials_data:
+    seq:
+      - {id: material_names, type: str, encoding: ascii, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_material_names, if: _root.header.version == 210}
+      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_material_hashes, if: _root.header.version == 211}
+    instances:
+      size_:
+        value: "_root.header.version == 210 ? 128 * _root.header.num_material_names : 4 * _root.header.num_material_hashes"
+
+  meshes_data:
+    seq:
+      - {id: meshes, type: mesh, repeat: expr, repeat-expr: _root.header.num_meshes}
+      - {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
+      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 ? _root.num_weight_bounds : num_weight_bounds"}
+    instances:
+      size_:
+        value: |
+          _root.header.version == 210 ?
+          _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
+          _root.header.num_meshes * meshes[0].size_ + num_weight_bounds * weight_bounds[0].size_
   mesh:
     seq:
       - {id: idx_group, type: u2}
@@ -70,7 +136,7 @@ types:
       - {id: vertex_offset, type: u4}
       - {id: vertex_format, type: u4}
       - {id: face_position, type: u4}
-      - {id: face_count, type: u4}
+      - {id: num_indices, type: u4}
       - {id: face_offset, type: u4}
       - {id: bone_id_start, type: u1}
       - {id: num_unique_bone_ids, type: u1}
@@ -79,13 +145,15 @@ types:
       - {id: max_index, type: u2}
       - {id: hash, type: u4}
     instances:
+      size_:
+        value: 48
       indices:
-        pos: _root.header.offset_buffer_indices + face_offset * 2 + face_position * 2
+        pos: _root.header.offset_index_buffer + face_offset * 2 + face_position * 2
         repeat: expr
-        repeat-expr: face_count
+        repeat-expr: num_indices
         type: u2
       vertices:
-        pos: _root.header.offset_buffer_vertices + vertex_offset + (vertex_position * vertex_stride)
+        pos: _root.header.offset_vertex_buffer + vertex_offset + (vertex_position * vertex_stride)
         repeat: expr
         repeat-expr: num_vertices
         type:
@@ -143,7 +211,7 @@ types:
       - {id: weight_values2, size: 2, repeat: expr, repeat-expr: 2}
       - {id: tangent, type: vec4_u1}
       - {id: uv2, type: vec2_half_float}
-            
+
   vertex_747d: # untested re6 md0022_03 IANonSkinTBNA
     seq:
       - {id: position, type: vec3}
@@ -153,7 +221,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
-      
+
   vertex_d9e8: #untested re6 sm6290 IASkinTBN2wt
     seq:
       - {id: position, type: vec4_s2}
@@ -319,7 +387,7 @@ types:
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
-      
+
   vertex_6459: #ok wp1800 mesh4 IASkinTBNLA4wt
     seq:
       - {id: position, type: vec4_s2} # w = w1
@@ -579,26 +647,6 @@ types:
       - {id: row_3, type: vec4}
       - {id: row_4, type: vec4}
 
-  bone:
-    seq:
-      - {id: idx_anim_map, type: u1}
-      - {id: idx_parent, type: u1}
-      - {id: idx_mirror, type: u1}
-      - {id: idx_mapping, type: u1}
-      - {id: unk_01, type: f4}
-      - {id: parent_distance, type: f4}
-      - {id: location, type: vec3}
-
-  group:
-    seq:
-      - {id: group_index, type: u4}
-      - {id: unk_02, type: f4}
-      - {id: unk_03, type: f4}
-      - {id: unk_04, type: f4}
-      - {id: unk_05, type: f4}
-      - {id: unk_06, type: f4}
-      - {id: unk_07, type: f4}
-      - {id: unk_08, type: f4}
 
   material:
     seq:
@@ -615,3 +663,7 @@ types:
       - {id: bbox_max, type: vec4}
       - {id: oabb_matrix, type: matrix4x4}
       - {id: oabb_dimension, type: vec4}
+
+    instances:
+      size_:
+        value: 144

@@ -86,7 +86,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
 
     textures = build_blender_textures(mod_file_item, context, parsed_mod, mrl)
     if parsed_mod.header.version == 156:
-        src_materials = parsed_mod.materials
+        src_materials = parsed_mod.materials_data.materials
     else:
         src_materials = mrl.materials
 
@@ -162,7 +162,7 @@ def build_blender_textures(mod_file_item, context, parsed_mod, mrl=None):
 
     file_list = context.scene.albam.file_explorer.file_list
 
-    src_textures = getattr(parsed_mod, "textures", None) or getattr(mrl, "textures", None)
+    src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
     if not src_textures:
         return textures
     TexCls = TEX_VERSION_MAPPER[parsed_mod.header.version]
