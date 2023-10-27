@@ -27,21 +27,60 @@ class Tex112(KaitaiStruct):
         self.width = self._io.read_u2le()
         self.height = self._io.read_u2le()
         self.reserved = self._io.read_u4le()
-        self.compression_format = (self._io.read_bytes(4)).decode(u"ascii")
+        self.compression_format = (self._io.read_bytes(4)).decode(u"ASCII")
         self.red = self._io.read_f4le()
         self.green = self._io.read_f4le()
         self.blue = self._io.read_f4le()
         self.alpha = self._io.read_f4le()
-        if self.num_images > 1:
-            self.unk_offset = []
-            for i in range(27):
-                self.unk_offset.append(self._io.read_u4le())
+        if self.num_images == 6:
+            self.cube_faces = []
+            for i in range(3):
+                self.cube_faces.append(Tex112.CubeFace(self._io, self, self._root))
 
 
-        self.offsets_mipmaps = []
+        self.mipmap_offsets = []
         for i in range((self.num_mipmaps_per_image * self.num_images)):
-            self.offsets_mipmaps.append(self._io.read_u4le())
+            self.mipmap_offsets.append(self._io.read_u4le())
 
         self.dds_data = self._io.read_bytes_full()
+
+    class CubeFace(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.field_00 = self._io.read_f4le()
+            self.negative_co = []
+            for i in range(3):
+                self.negative_co.append(self._io.read_f4le())
+
+            self.positive_co = []
+            for i in range(3):
+                self.positive_co.append(self._io.read_f4le())
+
+            self.uv = []
+            for i in range(2):
+                self.uv.append(self._io.read_f4le())
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+
+    @property
+    def size_before_data_(self):
+        if hasattr(self, '_m_size_before_data_'):
+            return self._m_size_before_data_
+
+        self._m_size_before_data_ = ((40 + ((4 * self.num_mipmaps_per_image) * self.num_images)) if self.num_images == 1 else ((40 + ((4 * self.num_mipmaps_per_image) * self.num_images)) + 108))
+        return getattr(self, '_m_size_before_data_', None)
 
 

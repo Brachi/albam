@@ -16,11 +16,26 @@ seq:
   - {id: width, type: u2}
   - {id: height, type: u2}
   - {id: reserved, type: u4}
-  - {id: compression_format, type: str, encoding: ascii, size: 4}
+  - {id: compression_format, type: str, encoding: ASCII, size: 4}
   - {id: red, type: f4}
   - {id: green, type: f4}
   - {id: blue, type: f4}
   - {id: alpha, type: f4}
-  - {id: unk_offset, type: u4, repeat: expr, repeat-expr: + 27, if: num_images > 1}
-  - {id: offsets_mipmaps, type: u4, repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
+  - {id: cube_faces, type: cube_face, repeat: expr, repeat-expr: 3, if: num_images == 6}
+  - {id: mipmap_offsets, type: u4, repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
   - {id: dds_data, size-eos: true}
+
+instances:
+  size_before_data_:
+    value: "num_images == 1 ? 40 + (4 * num_mipmaps_per_image * num_images) : 40 + (4 * num_mipmaps_per_image * num_images) + 108"
+
+types:
+  cube_face:
+    seq:
+      - {id: field_00, type: f4}
+      - {id: negative_co, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: positive_co, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: uv, type: f4, repeat: expr, repeat-expr: 2}
+    instances:
+      size_:
+        value: 36
