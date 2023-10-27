@@ -193,13 +193,13 @@ def _get_bone_indices(mod, mesh, bone_indices):
     mapped_bone_indices = []
 
     if mod.header.version == 156:
-        bone_palette = mod.bones_data.bones_mapping[mesh.bone_map_index]
+        bone_palette = mod.bones_data.bone_palettes[mesh.idx_bone_palette]
         for bi, bone_index in enumerate(bone_indices):
             if bone_index >= bone_palette.unk_01:
                 real_bone_index = mod.bones_data.bone_map[bone_index]
             else:
                 try:
-                    real_bone_index = mod.bones_data.bones_mapping[mesh.bone_map_index].indices[bone_index]
+                    real_bone_index = mod.bones_data.bone_palettes[mesh.idx_bone_palette].indices[bone_index]
                 except IndexError:
                     # Behaviour not observed in original files so far
                     real_bone_index = bone_index

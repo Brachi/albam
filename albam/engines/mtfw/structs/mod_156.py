@@ -60,6 +60,29 @@ class Mod156(KaitaiStruct):
             self.w = self._io.read_f4le()
 
 
+    class BonePalette(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._read()
+
+        def _read(self):
+            self.unk_01 = self._io.read_u4le()
+            self.indices = []
+            for i in range(32):
+                self.indices.append(self._io.read_u1())
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+
     class UnkVtx8Block02(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -97,7 +120,7 @@ class Mod156(KaitaiStruct):
             self.size_vertex_buffer_2 = self._io.read_u4le()
             self.num_textures = self._io.read_u4le()
             self.num_groups = self._io.read_u4le()
-            self.num_bone_mappings = self._io.read_u4le()
+            self.num_bone_palettes = self._io.read_u4le()
             self.offset_bones_data = self._io.read_u4le()
             self.offset_groups = self._io.read_u4le()
             self.offset_materials_data = self._io.read_u4le()
@@ -287,8 +310,8 @@ class Mod156(KaitaiStruct):
             self.unk_06 = self._io.read_u1()
             self.unk_07 = self._io.read_u1()
             self.vertex_position = self._io.read_u2le()
-            self.vertex_group_count = self._io.read_u1()
-            self.bone_map_index = self._io.read_u1()
+            self.num_unique_bone_ids = self._io.read_u1()
+            self.idx_bone_palette = self._io.read_u1()
             self.unk_08 = self._io.read_u1()
             self.unk_09 = self._io.read_u1()
             self.unk_10 = self._io.read_u2le()
@@ -485,9 +508,9 @@ class Mod156(KaitaiStruct):
             if self._root.header.num_bones != 0:
                 self.bone_map = self._io.read_bytes(256)
 
-            self.bones_mapping = []
-            for i in range(self._root.header.num_bone_mappings):
-                self.bones_mapping.append(Mod156.BoneMapping(self._io, self, self._root))
+            self.bone_palettes = []
+            for i in range(self._root.header.num_bone_palettes):
+                self.bone_palettes.append(Mod156.BonePalette(self._io, self, self._root))
 
 
         @property
@@ -495,7 +518,7 @@ class Mod156(KaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = ((((((self._root.header.num_bones * self.bones_hierarchy[0].size_) + (self._root.header.num_bones * 64)) + (self._root.header.num_bones * 64)) + 256) + (self._root.header.num_bone_mappings * self.bones_mapping[0].size_)) if self._root.header.num_bones > 0 else 0)
+            self._m_size_ = ((((((self._root.header.num_bones * self.bones_hierarchy[0].size_) + (self._root.header.num_bones * 64)) + (self._root.header.num_bones * 64)) + 256) + (self._root.header.num_bone_palettes * self.bone_palettes[0].size_)) if self._root.header.num_bones > 0 else 0)
             return getattr(self, '_m_size_', None)
 
 
@@ -536,29 +559,6 @@ class Mod156(KaitaiStruct):
                 return self._m_size_
 
             self._m_size_ = 32
-            return getattr(self, '_m_size_', None)
-
-
-    class BoneMapping(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._read()
-
-        def _read(self):
-            self.unk_01 = self._io.read_u4le()
-            self.indices = []
-            for i in range(32):
-                self.indices.append(self._io.read_u1())
-
-
-        @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
-
-            self._m_size_ = 36
             return getattr(self, '_m_size_', None)
 
 
@@ -608,6 +608,14 @@ class Mod156(KaitaiStruct):
             self._io.seek(_pos)
 
         return getattr(self, '_m_materials_data', None)
+
+    @property
+    def bones_data_size_(self):
+        if hasattr(self, '_m_bones_data_size_'):
+            return self._m_bones_data_size_
+
+        self._m_bones_data_size_ = (0 if self.header.num_bones == 0 else self.bones_data.size_)
+        return getattr(self, '_m_bones_data_size_', None)
 
     @property
     def vertex_buffer_2(self):
@@ -682,5 +690,13 @@ class Mod156(KaitaiStruct):
 
         self._io.seek(_pos)
         return getattr(self, '_m_groups', None)
+
+    @property
+    def groups_size_(self):
+        if hasattr(self, '_m_groups_size_'):
+            return self._m_groups_size_
+
+        self._m_groups_size_ = (self.groups[0].size_ * self.header.num_groups)
+        return getattr(self, '_m_groups_size_', None)
 
 

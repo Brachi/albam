@@ -31,8 +31,12 @@ seq:
 instances:
   bones_data:
     {pos: header.offset_bones_data, type: bones_data, if: header.num_bones != 0}
+  bones_data_size_:
+    value: "header.num_bones == 0 ? 0 : bones_data.size_"
   groups:
     {pos: header.offset_groups, type: group, repeat: expr, repeat-expr: header.num_groups}
+  groups_size_:
+    value: "groups[0].size_ * header.num_groups"
   materials_data:
     {pos: header.offset_materials_data, type: materials_data, if: header.offset_materials_data > 0}
   meshes_data:
@@ -62,7 +66,7 @@ types:
       - {id: size_vertex_buffer_2, type: u4}
       - {id: num_textures, type: u4}
       - {id: num_groups, type: u4}
-      - {id: num_bone_mappings, type: u4}
+      - {id: num_bone_palettes, type: u4}
       - {id: offset_bones_data, type: u4}
       - {id: offset_groups, type: u4}
       - {id: offset_materials_data, type: u4}
@@ -79,7 +83,7 @@ types:
       - {id: parent_space_matrices, type: matrix4x4, repeat: expr, repeat-expr: _root.header.num_bones}
       - {id: inverse_bind_matrices, type: matrix4x4, repeat: expr, repeat-expr: _root.header.num_bones}
       - {id: bone_map, size: 256, if: _root.header.num_bones != 0}
-      - {id: bones_mapping, type: bone_mapping, repeat: expr, repeat-expr: _root.header.num_bone_mappings}
+      - {id: bone_palettes, type: bone_palette, repeat: expr, repeat-expr: _root.header.num_bone_palettes}
     instances:
       size_:
         value: |
@@ -88,7 +92,7 @@ types:
           _root.header.num_bones * 64 +
           _root.header.num_bones * 64 +
           256 +
-          _root.header.num_bone_mappings * bones_mapping[0].size_
+          _root.header.num_bone_palettes * bone_palettes[0].size_
           : 0
 
   unk_vtx8_block_00:
@@ -126,7 +130,7 @@ types:
       size_:
         value: 24
 
-  bone_mapping:
+  bone_palette:
     seq:
       - {id: unk_01, type: u4}
       - {id: indices, type: u1, repeat: expr, repeat-expr: 32}
@@ -202,8 +206,8 @@ types:
       - {id: unk_06, type: u1}
       - {id: unk_07, type: u1}
       - {id: vertex_position, type: u2}
-      - {id: vertex_group_count, type: u1}
-      - {id: bone_map_index, type: u1}
+      - {id: num_unique_bone_ids, type: u1}
+      - {id: idx_bone_palette, type: u1}
       - {id: unk_08, type: u1}
       - {id: unk_09, type: u1}
       - {id: unk_10, type: u2}
