@@ -20,8 +20,12 @@ seq:
 instances:
   bones_data:
     {pos: header.offset_bones_data, type: bones_data, if: header.num_bones != 0}
+  bones_data_size_:
+    value: "header.num_bones == 0 ? 0 : bones_data.size_"
   groups:
     {pos: header.offset_groups, type: group, repeat: expr, repeat-expr: header.num_groups}
+  groups_size_:
+    value: "groups[0].size_ * header.num_groups"
   materials_data:
     {pos: header.offset_materials_data, type: materials_data, if: header.offset_materials_data > 0}
   meshes_data:
@@ -41,8 +45,7 @@ types:
       - {id: revision, type: u1}
       - {id: num_bones, type: u2}
       - {id: num_meshes, type: u2}
-      - {id: num_material_names, type: u2, if: version == 210}
-      - {id: num_material_hashes, type: u2, if: version == 211}
+      - {id: num_materials, type: u2}
       - {id: num_vertices, type: u4}
       - {id: num_faces, type: u4}
       - {id: num_edges, type: u4}
@@ -104,11 +107,11 @@ types:
 
   materials_data:
     seq:
-      - {id: material_names, type: str, encoding: ascii, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_material_names, if: _root.header.version == 210}
-      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_material_hashes, if: _root.header.version == 211}
+      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 210}
+      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 211}
     instances:
       size_:
-        value: "_root.header.version == 210 ? 128 * _root.header.num_material_names : 4 * _root.header.num_material_hashes"
+        value: "_root.header.version == 210 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
 
   meshes_data:
     seq:
@@ -292,9 +295,9 @@ types:
       - {id: morph_position3, type: vec3_s2}
       - {id: morph_position4, type: vec3_s2}
       - {id: morph_normal, type: vec3_u1}
-      - {id: morph_normal2, type: vec3_u1} 
-      - {id: morph_normal3, type: vec3_u1} 
-      - {id: morph_normal4, type: vec3_u1} 
+      - {id: morph_normal2, type: vec3_u1}
+      - {id: morph_normal3, type: vec3_u1}
+      - {id: morph_normal4, type: vec3_u1}
 
   vertex_37a4: #ok s1010_00Scr.arc s0102_g  mesh1 IANonSkinTBNLA
     seq:
@@ -514,7 +517,7 @@ types:
 
   vertex_14d4: # 28 ok rev2 wp1500 IASkinTB4wt
     seq:
-      - {id: position, type: vec4_s2}
+      - {id: position, type: vec4_s2}  # FIXME upl2140.arc
       - {id: normal, type: vec3_u1}
       - {id: occlusion, type: u1}
       - {id: tangent, type: vec4_u1}
@@ -537,9 +540,9 @@ types:
       - {id: morph_position3, type: vec3_s2}
       - {id: morph_position4, type: vec3_s2}
       - {id: morph_normal, type: vec3_u1}
-      - {id: morph_normal2, type: vec3_u1} 
-      - {id: morph_normal3, type: vec3_u1} 
-      - {id: morph_normal4, type: vec3_u1} 
+      - {id: morph_normal2, type: vec3_u1}
+      - {id: morph_normal3, type: vec3_u1}
+      - {id: morph_normal4, type: vec3_u1}
 
   vertex_a320: #untested lines rehd pl0b.arc pl0b.mod mesh35 IASkinBridge8wt
     seq:
@@ -561,15 +564,16 @@ types:
     seq:
       - {id: position, type: vec3_s2}
       - {id: bone_indices, type: u2, repeat: expr, repeat-expr: 1}
-      - {id: normal, type: vec4_u1} 
+      - {id: normal, type: vec4_u1}
 
-  vertex_bb42: # rev2 sm8683.mod mesh4 uncorrect weights IASkinTB8wt
+  # TODO: check rev2 sm8683.mod mesh4 uncorrect weights is fixes
+  vertex_bb42: # IASkinTB8wt
     seq:
       - {id: position, type: vec4_s2} # w1
       - {id: normal, type: vec3_u1}
       - {id: occlusion, type: u1}
-      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 8} # w2-w5
-      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 4} # w2-w5
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 8}
       - {id: uv, type: vec2_half_float}
       - {id: weight_values2, size: 2, repeat: expr, repeat-expr: 2} # w6-w7
       - {id: tangent, type: vec4_u1}
@@ -661,7 +665,7 @@ types:
       - {id: bsphere, type: vec4}
       - {id: bbox_min, type: vec4}
       - {id: bbox_max, type: vec4}
-      - {id: oabb_matrix, type: matrix4x4}
+      - {id: oabb, type: matrix4x4}
       - {id: oabb_dimension, type: vec4}
 
     instances:
