@@ -151,7 +151,13 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         tex_index = mtfw_material.texture_slots[texture_type.value - 1]
     else:
         for resource in mtfw_material.resources:
-            if TEX_TYPE_MAPPER.get((resource.shader_object_hash>>12)) == texture_type:
+            try:
+                shader_object_id = resource.shader_object_id.value
+            except AttributeError:
+                # TODO: report as warnings, this means the enum doesn't exit for this app
+                shader_object_id = resource.shader_object_id
+
+            if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
                 tex_index = resource.value_cmd.tex_idx
                 break
     return tex_index
