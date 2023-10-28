@@ -27,6 +27,9 @@ BBOX_AFFECTED = [
     0xD877801B,
 ]
 
+VERSIONS_USE_BONE_PALETTES = {156}
+VERSIONS_USE_TRISTRIPS = {156}
+
 
 @blender_registry.register_import_function(app_id="re0", extension="mod")
 @blender_registry.register_import_function(app_id="re1", extension="mod")
@@ -49,7 +52,7 @@ def build_blender_model(file_list_item, context):
     for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
-            bl_mesh_ob = build_blender_mesh(mod, mesh, name, bbox_data, mod_version == 156)
+            bl_mesh_ob = build_blender_mesh(mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS)
             bl_mesh_ob.parent = bl_object
             if skeleton:
                 modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
@@ -192,7 +195,7 @@ def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
 def _get_bone_indices(mod, mesh, bone_indices):
     mapped_bone_indices = []
 
-    if mod.header.version == 156:
+    if mod.header.version in VERSIONS_USE_BONE_PALETTES:
         bone_palette = mod.bones_data.bone_palettes[mesh.idx_bone_palette]
         for bi, bone_index in enumerate(bone_indices):
             if bone_index >= bone_palette.unk_01:
