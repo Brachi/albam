@@ -48,7 +48,7 @@ def build_blender_model(file_list_item, context):
 
     for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
-            name = f"{bl_object_name}_{str(i).zfill(2)}"
+            name = f"{bl_object_name}_{str(i).zfill(4)}"
             bl_mesh_ob = build_blender_mesh(mod, mesh, name, bbox_data, mod_version == 156)
             bl_mesh_ob.parent = bl_object
             if skeleton:
