@@ -1,3 +1,4 @@
+from binascii import crc32
 import io
 
 import bpy
@@ -9,6 +10,8 @@ from .texture import (
     assign_textures,
     build_blender_textures,
 )
+
+VERSION_USES_MATERIAL_NAMES = {210}
 
 
 def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="material"):
@@ -25,15 +28,25 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
 
     if not bpy.data.node_groups.get("MT Framework shader"):
         _create_shader_node_group()
+    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES
+    mat_inverse_hashes = {}
+    if material_names_available:
+        mat_inverse_hashes = {crc32(mn.encode()) ^ 0xFFFFFFFF : mn for mn in parsed_mod.materials_data.material_names}
 
     for idx_material, material in enumerate(src_materials):
-        blender_material = bpy.data.materials.new(f"{name_prefix}_{str(idx_material).zfill(2)}")
+        default_mat_name = f"{name_prefix}_{str(idx_material).zfill(2)}"
+        mat_name_hash = getattr(material, "name_hash_crcjam32", "")
+        mat_name = mat_inverse_hashes.get(mat_name_hash, default_mat_name)
+        if material_names_available and mat_name == default_mat_name:
+            # don't create materials present in the mrl but not referenced
+            # by the mod file (will result in un-named materials)
+            continue
+        blender_material = bpy.data.materials.new(mat_name)
         blender_material.use_nodes = True
         # set transparency method 'OPAQUE', 'CLIP', 'HASHED', 'BLEND'
         blender_material.blend_method = "CLIP"
         node_to_delete = blender_material.node_tree.nodes.get("Principled BSDF")
         blender_material.node_tree.nodes.remove(node_to_delete)
-        # principled_node.inputs['Specular'].default_value = 0.2 # change specular
         shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
         shader_node_group.node_tree = bpy.data.node_groups["MT Framework shader"]
         shader_node_group.name = "MTFrameworkGroup"
