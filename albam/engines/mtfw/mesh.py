@@ -185,7 +185,16 @@ def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
     bone_indices = _get_bone_indices(mod, mesh, vertex.bone_indices)
     weights = _get_weights(mod, mesh, vertex)
 
+    # TODO: verify in parsing tests that bone_index = 0 is never taken into account
     for bi, bone_index in enumerate(bone_indices):
+        if bone_index == 0 and (
+            (mesh.vertex_format not in (0xC31F201C,) and
+            mod.header.num_bones != 1)
+            ):  # no root bone, 0 is acceptable
+            continue
+        weight = weights[bi]
+        if not weight:
+            continue
         bone_data = weights_per_bone.setdefault(bone_index, [])
         bone_data.append((vertex_index, weights[bi]))
 
@@ -212,7 +221,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
         0xB392101F,
     ):
         b1 = int(unpack("e", bone_indices[0])[0])
-        b2 = int(unpack("e", bone_indices[0])[0])
+        b2 = int(unpack("e", bone_indices[1])[0])
         mapped_bone_indices.extend((b1, b2))
     elif mesh.vertex_format == 0xdb7da014:
         b1 = bone_indices[0]
@@ -225,8 +234,8 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156 or mesh.vertex_format == 0xCB68015:
-        return [w / 255 for w in vertex.weight_values]
+    if mod.header.version == 156 or mesh.vertex_format in (0xCB68015, 0xa320c016):
+        return tuple([w / 255 for w in vertex.weight_values])
 
     # Assuming all vertex formats share this pattern.
     # TODO: verify
@@ -271,7 +280,7 @@ def _get_weights(mod, mesh, vertex):
         w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
         return (w1, w2, w3, w4, w5, w6, w7, w8)
     else:
-        print(f"Can't get weights for vertex_format '{mesh.vertex_format}'")
+        print(f"Can't get weights for vertex_format '{hex(mesh.vertex_format)}'")
         return (0, 0, 0, 0)
 
 
