@@ -403,9 +403,10 @@ def _create_bbox_data(mod):
             "dimension",
         ),
     )
-    dimension = max(
-        abs(mod.bbox_min.x), abs(mod.bbox_min.y), abs(mod.bbox_min.z)
-    ) + max(abs(mod.bbox_max.x), abs(mod.bbox_max.y), abs(mod.bbox_max.z))
+    dimension = (
+        abs(min(mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z)) +
+        max(abs(mod.bbox_max.x), abs(mod.bbox_max.y), abs(mod.bbox_max.z))
+    )
 
     bbox_data = BboxData(
         min_x=mod.bbox_min.x,
