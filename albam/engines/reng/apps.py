@@ -4,7 +4,7 @@ APPS_TODO = {
 
     "re2": (
         "natives/stm",  # prefix
-        "2109108288", # .mesh version
+        "2109108288",  # .mesh version
         "21",  # .mdf2 version
         "34",  # .tex version
     ),

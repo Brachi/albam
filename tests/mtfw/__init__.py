@@ -4,19 +4,31 @@ import pytest
 
 
 def _generate_tests_arc_file_path(metafunc):
-    arc_dir = metafunc.config.getoption("arcdir")
-    if not arc_dir:
-        pytest.skip("No arc directory supplied")
+    arc_dirs = metafunc.config.getoption("arcdir")
+
+    if not arc_dirs:
+        pytest.skip("No arc directory or app_id supplied")
         return
 
-    ARC_FILES = [
-        os.path.join(root, f)
-        for root, _, files in os.walk(arc_dir)
-        for f in files
-        if f.endswith(".arc")
-    ]
-    arc_names = [os.path.basename(f) for f in ARC_FILES]
-    metafunc.parametrize("arc_filepath", ARC_FILES, ids=arc_names)
+    total_arc_files = []
+    total_test_ids = []
+
+    for app_id_and_arc_dir in arc_dirs:
+        # TODO: error handling
+        app_id, arc_dir = app_id_and_arc_dir.split("::")
+        assert type(arc_dir) is str
+        ARC_FILES = [
+            {"filepath": os.path.join(root, f), "app_id": app_id}
+            for root, _, files in os.walk(arc_dir)
+            for f in files
+            if f.endswith(".arc")
+        ]
+        total_arc_files.extend(ARC_FILES)
+        test_ids = [f"{af['app_id']}::{os.path.basename(af['filepath'])}" for af in ARC_FILES]
+        assert len(ARC_FILES) == len(test_ids)
+        total_test_ids.extend(test_ids)
+
+    metafunc.parametrize("arc_file", total_arc_files, ids=total_test_ids)
 
 
 def _generate_tests_from_arcs(file_extension, metafunc):
@@ -26,24 +38,31 @@ def _generate_tests_from_arcs(file_extension, metafunc):
     collection time.
     It requires a fixture named after the extension
     """
-    arc_dir = metafunc.config.getoption("arcdir")
-    if not arc_dir:
+    arc_dirs = metafunc.config.getoption("arcdir")
+    if not arc_dirs:
         pytest.skip("No arc directory supplied")
         return
 
-    ARC_FILES = [
-        os.path.join(root, f)
-        for root, _, files in os.walk(arc_dir)
-        for f in files
-        if f.endswith(".arc")
-    ]
+    total_parsed_files = []
+    total_test_ids = []
 
-    if not ARC_FILES:
-        raise ValueError(f"No files ending in .arc found in {arc_dir}")
+    for arc_dir in arc_dirs:
+        app_id, arc_dir = arc_dir.split("::")
+        ARC_FILES = [
+            os.path.join(root, f)
+            for root, _, files in os.walk(arc_dir)
+            for f in files
+            if f.endswith(".arc")
+        ]
 
-    parsed_files, ids = files_per_arc(file_extension, ARC_FILES)
+        if not ARC_FILES:
+            raise ValueError(f"No files ending in .arc found in {arc_dir}")
+
+        parsed_files, ids = files_per_arc(file_extension, ARC_FILES)
+        total_parsed_files.extend(parsed_files)
+        total_test_ids.extend(ids)
     # mrl fixture in tests/mtfw/conftest.py
-    metafunc.parametrize(file_extension, parsed_files, indirect=True, ids=ids)
+    metafunc.parametrize(file_extension, total_parsed_files, indirect=True, ids=total_test_ids)
 
 
 def files_per_arc(file_extension, arc_paths):
@@ -56,7 +75,10 @@ def files_per_arc(file_extension, arc_paths):
     ids = []
     for arc_path in arc_paths:
         arc_name = os.path.basename(arc_path)
-        arc = ArcWrapper(None, arc_path)
+        try:
+            arc = ArcWrapper(arc_path)
+        except Exception:  # TODO: skip/xfail
+            continue
         file_entries = arc.get_file_entries_by_extension(file_extension)
         if not file_entries:
             del arc

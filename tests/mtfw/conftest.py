@@ -2,15 +2,11 @@ import os
 
 import pytest
 
-from albam.blender_ui.import_panel import (
-    ALBAM_OT_AddFiles,
-    ALBAM_OT_Import,
-)
-
 
 class FileWrapper:
     def __init__(self, file_path):
         self.name = os.path.basename(file_path)
+
 
 @pytest.fixture
 def lmt(request):
@@ -42,8 +38,10 @@ def mrl(request):
 
     mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
     parsed_mrl = Mrl.from_bytes(mrl_bytes)
+    parsed_mrl._read()
     parsed_mrl._arc_name = os.path.basename(arc.file_path)
     parsed_mrl._mrl_path = mrl_file_entry.file_path
+    parsed_mrl._num_bytes = len(mrl_bytes)
 
     return parsed_mrl
 
@@ -63,35 +61,30 @@ def mod(request):
     ModCls = MOD_CLASS_MAPPER[mod_version]
 
     parsed = ModCls.from_bytes(src_bytes)
+    parsed._read()
     parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._src_bytes = src_bytes
     parsed._file_path = file_entry.file_path
 
     return parsed
 
 
 @pytest.fixture
-def loaded_mod_files(arc_filepath, scope="function"):
-    directory = os.path.dirname(arc_filepath)
-    ALBAM_OT_AddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
+def tex(request):
+    # FIXME: unify 112 with 157 or get app_id from config and decide here
 
-    file_list = bpy.context.scene.albam.file_explorer.file_list
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.structs.tex_157 import Tex157
+    arc = request.param[0]
+    tex_file_entry = request.param[1]
 
-    mod_files = [f for f in file_list if f.name.endswith('.mod')]
+    tex_bytes = arc.get_file(tex_file_entry.file_path, tex_file_entry.file_type)
+    parsed_tex = Tex157.from_bytes(tex_bytes)
+    parsed_tex._read()
+    parsed_tex._arc_name = os.path.basename(arc.file_path)
+    parsed_tex._mrl_path = tex_file_entry.file_path
+    parsed_tex._num_bytes = len(tex_bytes)
 
-    yield mod_files
-
-    # TODO: cleanup, for memory
-    """
-    id_objs = {c.id_data for c in bl_container.children_recursive}
-    id_objs.add(bl_container.id_data)
-    bpy.data.batch_remove(id_objs)
-    id_meshes = {m.id_data for m in bpy.data.meshes if m.users == 0}
-    bpy.data.batch_remove(id_meshes)
-    id_materials = {m.id_data for m in bpy.data.materials if m.users == 0}
-    bpy.data.batch_remove(id_materials)
-    id_images = {i.id_data for i in bpy.data.images if i.users == 0}
-    bpy.data.batch_remove(id_images)
-    id_armatures = {a.id_data for a in bpy.data.armatures if a.users == 0}
-    bpy.data.batch_remove(id_armatures)
-    del bl_container
-    """
+    return parsed_tex

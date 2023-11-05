@@ -20,12 +20,10 @@ def dump_mfx(app_id, mfx_filepath):
     except FileNotFoundError:
         data = {}
 
-
     for i, entry_ptr in enumerate(mfx.entry_pointers):
         if i == mfx.num_entry_pointers - 1:  # XXX last entry seems corrupted
             break
         mfx_entry = entry_ptr.mfx_entry
-        mfx_entry_id = hex(generate_mfx_entry_id(mfx_entry.name, mfx_entry.index))
         mfx_name = mfx_entry.name
 
         entry = data.setdefault(mfx_name, {"hash": None, "friendly_name": None, "apps": {}})
@@ -44,7 +42,6 @@ def dump_mfx(app_id, mfx_filepath):
         w.write("enums:\n")
         w.write("  shader_object_hash:\n")
         for entry_name, values in data.items():
-            mfx_name_kaitai = entry_name.lower().replace("$", "")
             mfx_hash = hex(values["hash"])
             kaitai_name = values["friendly_name"]
             w.write(f"    {mfx_hash}: {kaitai_name}\n")

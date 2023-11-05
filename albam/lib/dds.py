@@ -1,4 +1,6 @@
-from ctypes import Structure, c_int, c_char
+from ctypes import Structure, c_int, c_char, sizeof
+import io
+import math
 
 
 class DDSHeader(Structure):
@@ -63,24 +65,28 @@ class DDSHeader(Structure):
         self.pixelfmt_dwSize = 32
         self.dwCaps = self.DDSCAPS_TEXTURE
 
-    def set_variables(self, compressed=True):
-        try:
-            self.dwPitchOrLinearSize = self.calculate_linear_size(
-                self.dwWidth, self.dwHeight, self.pixelfmt_dwFourCC
-            )
-        except Exception:
-            print("failed to set dwPitchOrLinearSize")
+    def set_variables(self, compressed=True, cubemap=False):
+        if not compressed:
+            self.dwPitchOrLinearSize = 0
+        else:
+            try:
+                self.dwPitchOrLinearSize = self.calculate_linear_size(
+                    self.dwWidth, self.dwHeight, self.pixelfmt_dwFourCC
+                )
+                self.dwFlags |= self.DDSD_LINEARSIZE
+            except Exception as err:
+                print(f"failed to set dwPitchOrLinearSize: {err}")
 
         if self.dwMipMapCount:
             self.dwFlags |= self.DDSD_MIPMAPCOUNT
             self.dwCaps |= self.DDSCAPS_MIPMAP
-        if self.dwMipMapCount:  # TODO: add 'or cubic or mipmapped_volume'
             self.dwCaps |= self.DDSCAPS_COMPLEX
+            # TODO: add 'or cubic or mipmapped_volume'
 
         if compressed:
             self.pixelfmt_dwFlags |= self.DDPF_FOURCC
         else:
-            self.dwPitchOrLinearSize = 256  # XXX temp
+            # specific for observed .tex in RE5 so far
             self.pixelfmt_dwFlags |= self.DDPF_RGB
             self.pixelfmt_dwFlags |= self.DDPF_ALPHAPIXELS  # TODO: need without alpha?
             self.pixelfmt_dwRGBBitCount = 32
@@ -88,12 +94,34 @@ class DDSHeader(Structure):
             self.pixelfmt_dwGBitMask = 0xFF00
             self.pixelfmt_dwBBitMask = 0xFF
             self.pixelfmt_dwABitMask = 0xFF000000
+        if cubemap:
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_POSITIVEX
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_NEGATIVEX
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_POSITIVEY
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_NEGATIVEY
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_POSITIVEZ
+            self.dwCaps2 |= self.DDSCAPS2_CUBEMAP_NEGATIVEZ
+
+    @property
+    def is_proper_cubemap(self):
+        return bool(
+            self.dwCaps2 |
+            self.DDSCAPS2_CUBEMAP &
+            self.DDSCAPS2_CUBEMAP_POSITIVEX &
+            self.DDSCAPS2_CUBEMAP_NEGATIVEX &
+            self.DDSCAPS2_CUBEMAP_POSITIVEY &
+            self.DDSCAPS2_CUBEMAP_NEGATIVEY &
+            self.DDSCAPS2_CUBEMAP_POSITIVEZ &
+            self.DDSCAPS2_CUBEMAP_NEGATIVEZ
+        )
 
     @property
     def mipmap_sizes(self):
         h = self.dwWidth
         w = self.dwHeight
         fmt = self.pixelfmt_dwFourCC
+        # FIXME: last 2 seem always duplicate
         return [self.calculate_mipmap_size(w, h, i, fmt) for i in range(self.dwMipMapCount)]
 
     @staticmethod
@@ -110,6 +138,14 @@ class DDSHeader(Structure):
         block_size = cls.get_block_size(fmt)
         return ((width + 3) >> 2) * ((height + 3) >> 2) * block_size
 
+    @property
+    def block_size(self):
+
+        fmt = self.pixelfmt_dwFourCC
+        if fmt == b"DXT1" or fmt == b"DXT4":
+            return 8
+        return 16
+
     @staticmethod
     def calculate_mipmap_size(width, height, level, fmt):
         w = max(1, width >> level)
@@ -123,8 +159,8 @@ class DDSHeader(Structure):
             w >>= 1
         if h > 1:
             h >>= 1
-        if fmt == "DDS_COMPRESS_NONE":
-            size += (w * h) * 16  # FIXME: get real bpp
+        if not fmt:
+            size += (w * h) * 4
         else:
             size += ((w + 3) // 4) * ((h + 3) // 4)
             if fmt == b"DXT1" or fmt == b"DXT4":
@@ -134,11 +170,45 @@ class DDSHeader(Structure):
 
         return size
 
+    @property
+    def data(self):
+        return self._dds_data
+
+    @property
+    def image_count(self):
+        return 6 if self.is_proper_cubemap else 1
+
+    @staticmethod
+    def static_calculate_mipmap_count(width, height):
+        return int(math.log(max(width, height), 2))
+
+    def calculate_mipmap_count(self):
+        return self.static_calculate_mipmap_count(self.dwWidth, self.dwHeight)
+
+    def calculate_mimpap_offsets(self, base_offset):
+        current_offset = base_offset
+        mipmap_offsets = [current_offset]
+        for im in range(self.image_count):
+            for i in range(self.dwMipMapCount):
+                # Don't calculate last offset since we already start with one extra
+                if im == self.image_count - 1 and i == self.dwMipMapCount - 1:
+                    break
+                current_offset += self.mipmap_sizes[i]
+                mipmap_offsets.append(current_offset)
+        return mipmap_offsets
+
     @classmethod
-    def calculate_mipmap_count(cls, width, height):
-        count = 1
-        size = max(width, height)
-        while size > 1:
-            count += 1
-            size = size // 2
-        return count
+    def from_bl_image(cls, bl_im):
+        from bpy.path import abspath
+
+        dds_header = cls()
+        header_size = sizeof(dds_header)
+        if bl_im.packed_file:
+            data = bl_im.packed_file.data
+        else:
+            with open(abspath(bl_im.filepath), "rb") as f:
+                data = f.read()
+        header_data = io.BytesIO(data[:header_size])  # FIXME unnecessary copy
+        header_data.readinto(dds_header)
+        dds_header._dds_data = data[header_size:]
+        return dds_header

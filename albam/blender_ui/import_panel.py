@@ -2,23 +2,15 @@ import os
 
 import bpy
 
+from albam.apps import APPS
 from albam.registry import blender_registry
+from albam.vfs import VirtualFileSystem, VirtualFile
 
 NODES_CACHE = {}
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
 # FIXME: store in app data
 APP_CONFIG_FILE_CACHE = {}
-APPS = [
-    ("re0", "Resident Evil 0", "", 0),
-    ("re1", "Resident Evil 1", "", 1),
-    ("re2", "Resident Evil 2", "", 2),
-    ("re2_non_rt", "Resident Evil 2 (dx11 non rt)", "", 3),
-    ("re3", "Resident Evil 3", "", 4),
-    ("re3_non_rt", "Resident Evil 3 (dx11 non rt)", "", 5),
-    ("re5", "Resident Evil 5", "", 6),
-    ("re8", "Resident Evil 8", "", 7),
-]
 
 
 def update_app_data(self, context):
@@ -88,7 +80,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
         if len(context.scene.albam.file_explorer.file_list) == 0:
             return None
         index = context.scene.albam.file_explorer.file_list_selected_index
-        return context.scene.albam.file_explorer.file_list[index]
+        try:
+            item = context.scene.albam.file_explorer.file_list[index]
+        except IndexError:
+            # list might have been cleared
+            return
+        return item
 
 
 @blender_registry.register_blender_type
@@ -121,15 +118,21 @@ class TreeNode(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class FileListItem(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
-    file_path: bpy.props.StringProperty()
+    file_path: bpy.props.StringProperty()  # FIXME: change to abs
+    relative_path: bpy.props.StringProperty()
     is_archive: bpy.props.BoolProperty(default=False)
+    is_root: bpy.props.BoolProperty(default=False)
     is_expandable: bpy.props.BoolProperty(default=False)
     is_expanded: bpy.props.BoolProperty(default=False)
 
-    tree_node: bpy.props.PointerProperty(type=TreeNode)
+    tree_node: bpy.props.PointerProperty(type=TreeNode)  # consider adding the attributes here directly
+    # FIXME: consider strings, seems pretty inefficient
     tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
 
     app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
+    vfs_id: bpy.props.StringProperty()
+
+    data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
 
     @property
     def extension(self):
@@ -144,7 +147,6 @@ class FileListItem(bpy.types.PropertyGroup):
             extension = SEP.join((extension0, extension))
         return extension
 
-
     def get_bytes(self):
         accessor = self.get_accessor()
         return accessor(self, bpy.context)
@@ -152,9 +154,10 @@ class FileListItem(bpy.types.PropertyGroup):
     def get_accessor(self):
         if self.file_path:
             return self.real_file_accessor
-
-        file_list = bpy.context.scene.albam.file_explorer.file_list
-        root = file_list[self.tree_node.root_id]
+        if self.data_bytes:
+            return lambda _: self.data_bytes
+        vfs = getattr(bpy.context.scene.albam, self.vfs_id)
+        root = vfs.file_list[self.tree_node.root_id]
         accessor_func = blender_registry.archive_accessor_registry.get(
             (self.app_id, root.extension)
         )
@@ -167,6 +170,9 @@ class FileListItem(bpy.types.PropertyGroup):
     def real_file_accessor(file_item, context):
         with open(file_item.file_path, 'rb') as f:
             return f.read()
+
+    def get_vfs(self):
+        return getattr(bpy.context.scene.albam, self.vfs_id)
 
 
 @blender_registry.register_blender_prop_albam(name="file_explorer")
@@ -203,29 +209,20 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         self._execute(context, self.directory, self.files)
-
         context.scene.albam.file_explorer.file_list.update()
         return {"FINISHED"}
 
     @staticmethod
     def _execute(context, directory, files):
         app_id = context.scene.albam.file_explorer.app_selected
+        vfs_id = "file_explorer"
+        vfs = VirtualFileSystem(vfs_id)
         for f in files:
-            file_item = context.scene.albam.file_explorer.file_list.add()
-            file_item.app_id = app_id
-            # FIXME: operator shouldn't know about vfs implementation details
-            file_item.name = app_id + "::" + f.name
-            file_item.display_name = f.name
-            file_item.file_path = os.path.join(directory, f.name)
+            file_path = os.path.join(directory, f.name)
+            virtual_file = VirtualFile.from_real_file(app_id, file_path)
+            vfs.append(virtual_file)
 
-            archive_loader_func = blender_registry.archive_loader_registry.get(
-                (app_id, file_item.extension)
-            )
-            if archive_loader_func:
-                file_item.is_expandable = True
-                file_item.is_archive = True
-                # TODO: popup if calling failed. Known exceptions + unexpected
-                archive_loader_func(file_item, context)
+        vfs.commit()
 
 
 @blender_registry.register_blender_type

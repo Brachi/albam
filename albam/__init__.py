@@ -4,7 +4,13 @@ import sys
 
 import bpy
 
-from albam.blender_ui.data import AlbamDataFactory
+from albam.blender_ui.data import (
+    AlbamDataFactory,
+    AlbamAsset,
+    AlbamCustomPropertiesMaterialFactory,
+    AlbamCustomPropertiesMeshFactory,
+    AlbamCustomPropertiesImageFactory,
+)
 from albam.registry import blender_registry
 
 
@@ -42,8 +48,22 @@ def register():
         bpy.utils.register_class(cls)
 
     AlbamData = AlbamDataFactory()
+    AlbamCustomPropertiesMaterial = AlbamCustomPropertiesMaterialFactory()
+    AlbamCustomPropertiesMesh = AlbamCustomPropertiesMeshFactory()
+    AlbamCustomPropertiesImage = AlbamCustomPropertiesImageFactory()
     bpy.utils.register_class(AlbamData)
+    bpy.utils.register_class(AlbamCustomPropertiesMaterial)
+    bpy.utils.register_class(AlbamCustomPropertiesMesh)
+    bpy.utils.register_class(AlbamCustomPropertiesImage)
+
     bpy.types.Scene.albam = bpy.props.PointerProperty(type=AlbamData)
+
+    bpy.types.Object.albam_asset = bpy.props.PointerProperty(type=AlbamAsset)
+    bpy.types.Image.albam_asset = bpy.props.PointerProperty(type=AlbamAsset)
+
+    bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
+    bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
+    bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
 
 
 def unregister():
