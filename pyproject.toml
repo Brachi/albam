@@ -35,9 +35,11 @@ omit = [ "*/structs/*.py", "*/albam_vendor/*" ]
 
 [tool.flake8]
 max-line-length = 110
-exclude = ["structs", "albam_vendor"]
+exclude = ["structs", "albam_vendor", ".venv"]
 # F722: needed for Blender props annotations
 # e.g.:
 # class MyPanel(bpy.types.Panel):
 #     my_prop : bpy.props.BoolProperty()
-ignore = ["E203", "F722"]
+
+# W503 and W504 seem to contradict each other:w
+ignore = ["E203", "F722", "W504"]
