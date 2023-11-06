@@ -65,6 +65,7 @@ BBOX_AFFECTED = [
 ]
 
 VERSIONS_USE_BONE_PALETTES = {156}
+VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 
 
@@ -717,26 +718,49 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         # TODO: be concise with struct (e.g. array of floats)
         m2 = dst_mod.Matrix4x4(_parent=bones_data, _root=bones_data._root)
         src_m2 = src_mod.bones_data.inverse_bind_matrices[i]
-
         m2.row_1 = dst_mod.Vec4(_parent=m2, _root=m._root)
-        m2.row_1.x = src_m2.row_1.x
+        m2.row_2 = dst_mod.Vec4(_parent=m2, _root=m._root)
+        m2.row_3 = dst_mod.Vec4(_parent=m2, _root=m._root)
+        m2.row_4 = dst_mod.Vec4(_parent=m2, _root=m._root)
+
+        if dst_mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+            # unapply transforms and apply the ones from the bbox to export
+            # TODO: avoid doing this if bbox didn´t change
+            src_bbox_data = _create_bbox_data(src_mod)
+            dst_bbox_data = _create_bbox_data(dst_mod)
+            r1x = round(src_m2.row_1.x - src_bbox_data.dimension + 1, 1)
+            r2y = round(src_m2.row_2.y - src_bbox_data.dimension + 1, 1)
+            r3z = round(src_m2.row_3.z - src_bbox_data.dimension + 1, 1)
+            r4x = src_m2.row_4.x - src_bbox_data.min_x
+            r4y = src_m2.row_4.y - src_bbox_data.min_y
+            r4z = src_m2.row_4.z - src_bbox_data.min_z
+
+            m2.row_1.x = round(r1x + dst_bbox_data.dimension - 1, 1)
+            m2.row_2.y = round(r2y + dst_bbox_data.dimension - 1, 1)
+            m2.row_3.z = round(r3z + dst_bbox_data.dimension - 1, 1)
+            m2.row_4.x = r4x + dst_bbox_data.min_x
+            m2.row_4.y = r4y + dst_bbox_data.min_y
+            m2.row_4.z = r4z + dst_bbox_data.min_z
+        else:
+            m2.row_1.x = src_m2.row_1.x
+            m2.row_2.y = src_m2.row_2.y
+            m2.row_3.z = src_m2.row_3.z
+            m2.row_4.x = src_m2.row_4.x
+            m2.row_4.y = src_m2.row_4.y
+            m2.row_4.z = src_m2.row_4.z
+
         m2.row_1.y = src_m2.row_1.y
         m2.row_1.z = src_m2.row_1.z
         m2.row_1.w = src_m2.row_1.w
-        m2.row_2 = dst_mod.Vec4(_parent=m2, _root=m._root)
+
         m2.row_2.x = src_m2.row_2.x
-        m2.row_2.y = src_m2.row_2.y
         m2.row_2.z = src_m2.row_2.z
         m2.row_2.w = src_m2.row_2.w
-        m2.row_3 = dst_mod.Vec4(_parent=m2, _root=m._root)
+
         m2.row_3.x = src_m2.row_3.x
         m2.row_3.y = src_m2.row_3.y
-        m2.row_3.z = src_m2.row_3.z
         m2.row_3.w = src_m2.row_3.w
-        m2.row_4 = dst_mod.Vec4(_parent=m2, _root=m._root)
-        m2.row_4.x = src_m2.row_4.x
-        m2.row_4.y = src_m2.row_4.y
-        m2.row_4.z = src_m2.row_4.z
+
         m2.row_4.w = src_m2.row_4.w
 
         bones_data.bones_hierarchy.append(bone)
