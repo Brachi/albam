@@ -947,7 +947,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_format = max_bones_per_vertex
     else:
         custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
-        stored_vertex_format = int(custom_properties["vertex_format"])
+        try:
+            stored_vertex_format = int(custom_properties.get("vertex_format"))
+        except (TypeError, ValueError):
+            stored_vertex_format = None
         if stored_vertex_format == VERTEX_FORMAT_HANDS:
             vertex_format = VERTEX_FORMAT_HANDS
             VertexCls = dst_mod.VertexC31f
