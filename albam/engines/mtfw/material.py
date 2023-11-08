@@ -34,12 +34,18 @@ MRL_RASTERIZER_STATE_HASH = 0x108CF1B2  # TODO: verify
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
 MRL_APPID_USES_ALBEDO2 = {"rev2"}
+MRL_APPID_USES_SHININESS2 = {"rev2"}
+MRL_APPID_USES_SPECULAR2MAP = {"rev2"}
+MRL_APPID_CB_GLOBALS_VERSION = {
+    "re1": 1,
+    "rev2": 2,
+}
 
 
 def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="material"):
     app_id = mod_file_item.app_id
     materials = {}
-    mrl = _infer_mrl(context, mod_file_item)
+    mrl = _infer_mrl(context, mod_file_item, app_id)
     if parsed_mod.header.version in VERSION_USES_MRL and not mrl:
         return materials
 
@@ -148,8 +154,9 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     dst_mod.materials_data.material_hashes = []
     exported_materials_map = {}
     app_id = model_asset.app_id
+    cb_globals_version = MRL_APPID_CB_GLOBALS_VERSION[app_id]
 
-    mrl = Mrl()
+    mrl = Mrl(cb_globals_version=cb_globals_version)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION
     mrl.unk_01 = MRL_UNK_01
@@ -176,6 +183,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
         # NOTE: taken from some observed REV2 models. Needs more research
+        shininess = "FShininess2" if app_id in MRL_APPID_USES_SHININESS2 else "FShininess"
         mat.resources = [
             _create_set_flag_resource(app_id, mrl, mat, "FVertexDisplacement"),
             _create_set_flag_resource(app_id, mrl, mat, "FUVTransformPrimary"),
@@ -188,7 +196,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
             *_create_texture_normal_resources(mrl, mat, app_id, tex_types),
             *_create_texture_diffuse_resources(mrl, mat, app_id, tex_types),
             _create_set_flag_resource(app_id, mrl, mat, "FTransparency"),
-            _create_set_flag_resource(app_id, mrl, mat, "FShininess", "FShininess2"),
+            _create_set_flag_resource(app_id, mrl, mat, "FShininess", shininess),
             _create_set_flag_resource(app_id, mrl, mat, "FLighting"),
             _create_set_flag_resource(app_id, mrl, mat, "FBRDF"),
             _create_set_flag_resource(app_id, mrl, mat, "FDiffuse"),
@@ -322,8 +330,8 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
     if specular_texture_index is None:
         return resources
 
-    # TODO: decide if using version "2" per app
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", "FSpecular2Map")
+    specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", specular_map)
     # XXX Not sure if it's associated with specular
     resource_2 = _create_set_flag_resource(app_id, mrl, mat, "FReflect")
     resource_3 = _create_set_texture_resource(mrl, mat, app_id, specular_texture_index + 1, "tSpecularMap")
@@ -419,8 +427,7 @@ def _create_cb_resource(mrl, bl_mat, mat, app_id, cb_name):
     resource.value_cmd = cb_offset
 
     if cb_name == "$Globals":
-        # TODO: parametric type based on app-id. This won't work for app_id "re1"
-        float_buffer = mrl.StrRev2CbGlobals(_parent=resource, _root=resource._root)
+        float_buffer = mrl.CbGlobals(_parent=resource, _root=resource._root)
 
     else:   # "CBMaterial":
         float_buffer = mrl.StrCbMaterial(_parent=resource, _root=resource._root)
@@ -702,7 +709,7 @@ def _create_mtfw_shader():
     return shader_group
 
 
-def _infer_mrl(context, mod_file_item):
+def _infer_mrl(context, mod_file_item, app_id):
     """
     Assuming mrl file is next to the .mod file with
     the same name.
@@ -716,8 +723,9 @@ def _infer_mrl(context, mod_file_item):
     except KeyError:
         return
 
+    cb_globals_version = MRL_APPID_CB_GLOBALS_VERSION[app_id]
     mrl_bytes = mrl_file_item.get_bytes()
-    mrl = Mrl.from_bytes(mrl_bytes)
+    mrl = Mrl(cb_globals_version, KaitaiStream(io.BytesIO(mrl_bytes)))
     mrl._read()
     return mrl
 

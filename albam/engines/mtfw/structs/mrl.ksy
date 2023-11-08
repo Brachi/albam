@@ -5,6 +5,10 @@ meta:
   id: mrl
   ks-version: 0.11
   title: MTFramework material format
+
+params:
+  - {id: cb_globals_version, type: u2}
+
 seq:
   - {id: id_magic, contents: [0x4d, 0x52, 0x4c, 0x00]}
   - {id: version, type: u4}
@@ -96,13 +100,9 @@ types:
         type:
           switch-on: shader_object_hash
           cases:
-            "shader_object_hash::globals": str_rev2_cb_globals  # TODO: use parametric types with global app_id
+            "shader_object_hash::globals": cb_globals
             "shader_object_hash::cbdistortion" : str_cb_distortion
             "shader_object_hash::cbmaterial" : str_cb_material
-            #0x7b2c2159: str_rehd_cb_globals # rehd
-            #0x7b2c215f: str_rehd_cb_globals # re0
-            #0x7b2c2155: str_rehd_cb_globals # rer1
-            #0x7b2c215e: str_rev2_cb_globals #rer2
             #0x7b2c214c: cb_s_globals # Re6
             #0xefca3222: str_cb_distortion
             #0xefca322b: str_cb_distortion
@@ -304,10 +304,11 @@ types:
     seq:
       - {id: ofs_const_buff, type: u4}
 
-  str_rev2_cb_globals:
+  cb_globals:
     instances:
       size_:
-        value: 480
+        value: "_root.cb_globals_version == 2 ? 480 : 288"
+
     seq:
       - {id: f_alpha_clip_threshold, type: f4} # 0
       - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
@@ -345,63 +346,23 @@ types:
       - {id: f_secondary_expo, type: f4} #63
       - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
       - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
-      - {id: f_albedo_color2, type: f4, repeat: expr, repeat-expr: 4} #72
-      - {id: f_specular_color2, type: f4, repeat: expr, repeat-expr: 3} #76
-      - {id: f_fresnel_schlick2, type: f4} #79
-      - {id: f_shininess2, type: f4, repeat: expr, repeat-expr: 4} #80
-      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4} #84
-      - {id: f_blend_uv, type: f4} #88
-      - {id: f_normal_power, type: f4, repeat: expr, repeat-expr: 3} #89
-      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4} #92
-      - {id: f_detail_normal_u_v_scale, type: f4, repeat: expr, repeat-expr: 2} #96
-      - {id: f_fresnel_legacy, type: f4, repeat: expr, repeat-expr: 2} #98
-      - {id: f_normal_mask_pow0, type: f4, repeat: expr, repeat-expr: 4} #100
-      - {id: f_normal_mask_pow1, type: f4, repeat: expr, repeat-expr: 4} #104
-      - {id: f_normal_mask_pow2, type: f4, repeat: expr, repeat-expr: 4} #108
-      - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4} #112
-      - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4} #116
 
-  str_rehd_cb_globals: #re0-rehd-rev 72 floats  # TODO: parametrize with app-id
-    seq:
-      - {id: f_alpha_clip_threshold, type: f4} # 0
-      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
-      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4 
-      - {id: f_detail_normal_power, type: f4} #8
-      - {id: f_detail_normal_uv_scale, type: f4} #9
-      - {id: f_detail_normal2_power, type: f4} #10
-      - {id: f_detail_normal2_uv_scale, type: f4} #11
-      - {id: f_primary_shift, type: f4} #12
-      - {id: f_secondary_shift, type: f4} #13
-      - {id: f_parallax_factor, type: f4} #14
-      - {id: f_parallax_self_occlusion, type: f4} #15
-      - {id: f_parallax_min_sample, type: f4} #16
-      - {id: f_parallax_max_sample, type: f4, repeat: expr, repeat-expr: 3} #17
-      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 4} #20
-      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
-      - {id: f_thin_scattering, type: f4} #27
-      - {id: f_screen_uv_scale, type: f4, repeat: expr, repeat-expr: 2} #28
-      - {id: f_screen_uv_offset, type: f4, repeat: expr, repeat-expr: 2} #30
-      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #32
-      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} #34
-      - {id: f_fresnel_schlick, type: f4} #36
-      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} #37
-      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} #40
-      - {id: f_shininess, type: f4} #43
-      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 4} #44
-      - {id: f_constant_color, type: f4, repeat: expr, repeat-expr: 4} #48
-      - {id: f_roughness, type: f4} #52
-      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} #53
-      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} #56
-      - {id: f_smoothness, type: f4} #59
-      - {id: f_anistropic_uv, type: f4,repeat: expr, repeat-expr: 2} #60
-      - {id: f_primary_expo, type: f4} #62
-      - {id: f_secondary_expo, type: f4} #63
-      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
-      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
+      - {id: f_albedo_color2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #72
+      - {id: f_specular_color2, type: f4, repeat: expr, repeat-expr: 3, if: _root.cb_globals_version == 2} #76
+      - {id: f_fresnel_schlick2, type: f4, if: _root.cb_globals_version == 2} #79
+      - {id: f_shininess2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #80
+      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #84
+      - {id: f_blend_uv, type: f4, if: _root.cb_globals_version == 2} #88
+      - {id: f_normal_power, type: f4, repeat: expr, repeat-expr: 3, if: _root.cb_globals_version == 2} #89
+      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #92
+      - {id: f_detail_normal_u_v_scale, type: f4, repeat: expr, repeat-expr: 2, if: _root.cb_globals_version == 2} #96
+      - {id: f_fresnel_legacy, type: f4, repeat: expr, repeat-expr: 2, if: _root.cb_globals_version == 2} #98
+      - {id: f_normal_mask_pow0, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #100
+      - {id: f_normal_mask_pow1, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #104
+      - {id: f_normal_mask_pow2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #108
+      - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #112
+      - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #116
 
-    instances:
-      size_:
-        value: 288
 
   str_cb_material: #all games 32 floats
     seq:
