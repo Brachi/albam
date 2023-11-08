@@ -6,7 +6,6 @@ from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
 
 
-@blender_registry.register_archive_loader(app_id="re0", extension="arc")
 @blender_registry.register_archive_loader(app_id="re1", extension="arc")
 @blender_registry.register_archive_loader(app_id="re5", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev2", extension="arc")
@@ -16,7 +15,6 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
         yield file_entry.file_path_with_ext
 
 
-@blender_registry.register_archive_accessor(app_id="re0", extension="arc")
 @blender_registry.register_archive_accessor(app_id="re1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="re5", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")

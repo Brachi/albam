@@ -2,7 +2,6 @@ import os
 
 
 APPS = [
-    ("re0", "Resident Evil 0", "", 0),
     ("re1", "Resident Evil 1", "", 1),
     ("re5", "Resident Evil 5", "", 6),
     ("rev2", "Resident Evil: Revelations 2", "", 8),

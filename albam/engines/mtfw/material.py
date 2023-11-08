@@ -831,7 +831,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 

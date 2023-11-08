@@ -67,7 +67,6 @@ TEX_VERSION_MAPPER = {
 }
 
 APPID_SERIALIZE_MAPPER = {
-    "re0": lambda: _serialize_texture_21,
     "re1": lambda: _serialize_texture_21,
     "re5": lambda: _serialize_texture_156,
     "rev2": lambda: _serialize_texture_21,
@@ -453,7 +452,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "rev2"))
+@blender_registry.register_custom_properties_image("tex_157", ("re1", "rev2"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):
     compression_format: bpy.props.IntProperty(default=0, min=2, max=43)

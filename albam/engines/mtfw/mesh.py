@@ -38,7 +38,6 @@ MOD_CLASS_MAPPER = {
     211: Mod21,
 }
 APPID_CLASS_MAPPER = {
-    "re0": Mod21,
     "re1": Mod21,
     "re5": Mod156,
     "rev2": Mod21,
@@ -69,7 +68,6 @@ VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod")
 @blender_registry.register_import_function(app_id="re1", extension="mod")
 @blender_registry.register_import_function(app_id="re5", extension="mod")
 @blender_registry.register_import_function(app_id="rev2", extension="mod")
@@ -1370,7 +1368,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "rev2",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re1", "rev2",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
