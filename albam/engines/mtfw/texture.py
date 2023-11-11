@@ -60,16 +60,16 @@ DDS_FORMAT_MAP = {
     b"DXT5": 31,
 }
 
-
-TEX_VERSION_MAPPER = {
-    156: Tex112,
-    210: Tex157,
-}
-
 APPID_SERIALIZE_MAPPER = {
     "re1": lambda: _serialize_texture_21,
     "re5": lambda: _serialize_texture_156,
     "rev2": lambda: _serialize_texture_21,
+}
+
+APPID_TEXCLS_MAP = {
+    "re1": Tex157,
+    "rev2": Tex157,
+    "re5" : Tex112,
 }
 
 
@@ -105,7 +105,7 @@ TEX_TYPE_MAPPER = {
 }
 
 
-def build_blender_textures(mod_file_item, context, parsed_mod, mrl=None):
+def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None):
     textures = [None]  # materials refer to textures in index-1
 
     file_list = context.scene.albam.file_explorer.file_list
@@ -113,7 +113,7 @@ def build_blender_textures(mod_file_item, context, parsed_mod, mrl=None):
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
     if not src_textures:
         return textures
-    TexCls = TEX_VERSION_MAPPER[parsed_mod.header.version]
+    TexCls = APPID_TEXCLS_MAP[app_id]
 
     for i, texture_slot in enumerate(src_textures):
         # FIXME: use VirtualFile and commit late

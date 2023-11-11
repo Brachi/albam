@@ -49,7 +49,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     if parsed_mod.header.version in VERSION_USES_MRL and not mrl:
         return materials
 
-    textures = build_blender_textures(mod_file_item, context, parsed_mod, mrl)
+    textures = build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl)
     if parsed_mod.header.version in VERSION_USES_MRL:
         src_materials = mrl.materials
     else:

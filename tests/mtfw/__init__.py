@@ -58,14 +58,14 @@ def _generate_tests_from_arcs(file_extension, metafunc):
         if not ARC_FILES:
             raise ValueError(f"No files ending in .arc found in {arc_dir}")
 
-        parsed_files, ids = files_per_arc(file_extension, ARC_FILES)
+        parsed_files, ids = files_per_arc(file_extension, ARC_FILES, app_id)
         total_parsed_files.extend(parsed_files)
         total_test_ids.extend(ids)
     # mrl fixture in tests/mtfw/conftest.py
     metafunc.parametrize(file_extension, total_parsed_files, indirect=True, ids=total_test_ids)
 
 
-def files_per_arc(file_extension, arc_paths):
+def files_per_arc(file_extension, arc_paths, app_id):
     # importing here to avoid errors in test collection.
     # Since collection happens before calling register() in `pytest_sessionstart`
     # sys.path is not modified to include albam_vendor, so the vendored dep kaitaistruct
@@ -84,6 +84,6 @@ def files_per_arc(file_extension, arc_paths):
             del arc
             continue
         for fe in file_entries:
-            final.append((arc, fe))
+            final.append((arc, fe, app_id))
             ids.append("::".join((arc_name, f"{fe.file_path}.{file_extension}")))
     return final, ids
