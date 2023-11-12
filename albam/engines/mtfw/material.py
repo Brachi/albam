@@ -475,15 +475,14 @@ def _create_set_flag_resource(app_id, mrl, mat, resource_name, param_name=None):
 
 def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
     tex_types = {}
-    for node in bl_mat.node_tree.nodes:
-        if node.type != "TEX_IMAGE":
-            continue
-        links = node.outputs["Color"].links
+    image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
+    for im_node in image_nodes:
+        links = im_node.outputs["Color"].links
         if not links:
             continue
         mtfw_shader_link_name = links[0].to_socket.name
         tex_type = NODE_NAMES_TO_TYPES[mtfw_shader_link_name]
-        image_name = node.image.name
+        image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
         if not mrl:

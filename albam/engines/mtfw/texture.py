@@ -13,6 +13,13 @@ from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 
 
+class TextureType2(Enum):  # TODO: unify
+    # TODO: complete
+    DIFFUSE = 20
+    SPECULAR = 25
+    NORMAL = 31
+
+
 class TextureType(Enum):  # TODO: TextureTypeSlot
     DIFFUSE = 1
     NORMAL = 2
@@ -32,6 +39,13 @@ NODE_NAMES_TO_TYPES = {
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
     'Detail DNM': TextureType.NORMAL_DETAIL
+}
+
+NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
+    'Diffuse BM': TextureType2.DIFFUSE,
+    'Normal NM': TextureType2.NORMAL,
+    'Specular MM': TextureType2.SPECULAR,
+    'Detail DNM': TextureType2.NORMAL
 }
 
 
@@ -307,14 +321,14 @@ def serialize_textures(app_id, bl_materials):
         )
 
     for dict_tex in exported_textures.values():
-        bl_im = dict_tex["image"]
-        vfile = serialize_func(bl_im, app_id)
+        vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
 
     return exported_textures
 
 
-def _serialize_texture_156(bl_im, app_id):
+def _serialize_texture_156(app_id, dict_tex):
+    bl_im = dict_tex["image"]
     dds_header = DDSHeader.from_bl_image(bl_im)
 
     tex = Tex112()
@@ -345,7 +359,8 @@ def _serialize_texture_156(bl_im, app_id):
     return vf
 
 
-def _serialize_texture_21(bl_im, app_id):
+def _serialize_texture_21(app_id, dict_tex):
+    bl_im = dict_tex["image"]
     dds_header = DDSHeader.from_bl_image(bl_im)
 
     tex = Tex157()
@@ -358,10 +373,7 @@ def _serialize_texture_21(bl_im, app_id):
     dimension = 2 if not dds_header.is_proper_cubemap else 6
 
     custom_properties = bl_im.albam_custom_properties.get_appid_custom_properties(app_id)
-    compression_format = custom_properties.compression_format
-    if not compression_format:
-        # Assign DXT1 or DXT5, without taking into account tex-type (BM/NM/MM, etc.) for now
-        compression_format = DDS_FORMAT_MAP[dds_header.pixelfmt_dwFourCC]
+    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     packed_data_1 = (
         (tex_type & 0xffff) |
@@ -398,6 +410,48 @@ def _serialize_texture_21(bl_im, app_id):
     relative_path = _handle_relative_path(bl_im)
     vf = VirtualFile(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
+
+
+def _infer_compression_format(dict_tex):
+    """
+    Infer the type of texture based on its usage in materials.
+    E.g. if the bl_image is linked to a "BM" socket, it's diffuse.
+    """
+    # NOTE: this logic is duplicated in `_gather_tex_types`
+
+    DEFAULT_COMPRESSION_FORMAT = TextureType2.DIFFUSE
+    bl_im = dict_tex["image"]
+    materials_dict = dict_tex["materials"]
+    materials = [m[0] for m in materials_dict.values()]
+
+    if not materials:
+        # means texture is disconnected, could still happend
+        # TODO: update then blender.lib function is updated
+        return DEFAULT_COMPRESSION_FORMAT.value
+
+    # Arbitrarily using the first material where the image is used to infer its type.
+    # TODO: report discrepancies in texture usage (e.g. texture used both as Diffuse and Lightmap)
+    bl_mat = materials[0]
+    image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
+    im_nodes = [node for node in image_nodes if node.image.name == bl_im.name]
+    im_node = im_nodes[0] if im_nodes else None
+    if not im_node:
+        return DEFAULT_COMPRESSION_FORMAT.value
+    links = im_node.outputs["Color"].links
+    if not links:
+        return DEFAULT_COMPRESSION_FORMAT.value
+    mtfw_shader_link_name = links[0].to_socket.name
+    try:
+        tex_type = NODE_NAMES_TO_TYPES_2[mtfw_shader_link_name]
+    except KeyError:
+        print(f"Can\'t get correct compression_format for image '{bl_im.name}'."
+              "Node '{mtfw_shader_link_name}' not supported yet. "
+              "Using default {DEFAULT_COMPRESSION_FORMAT}. "
+              "Set compression_format manually for now."
+              )
+        tex_type = DEFAULT_COMPRESSION_FORMAT
+
+    return tex_type.value
 
 
 def _handle_relative_path(bl_im):
@@ -455,7 +509,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_image("tex_157", ("re1", "rev2"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):
-    compression_format: bpy.props.IntProperty(default=0, min=2, max=43)
+    compression_format: bpy.props.IntProperty(default=0, min=0, max=43)
 
     # XXX copy paste in mesh, material
     def set_from_source(self, mesh):
