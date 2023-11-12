@@ -1,5 +1,5 @@
 from collections import namedtuple, deque
-from copy import copy
+from copy import deepcopy
 import math
 
 
@@ -240,8 +240,9 @@ def get_bl_teximage_nodes(bl_materials):
         if not mat.node_tree:
             continue  # TODO: pre-check
         for node in mat.node_tree.nodes:
+            # TODO: only list connected image nodes
             if node.type == "TEX_IMAGE":
-                im_mapped = images.setdefault(node.image.name, copy(default))
+                im_mapped = images.setdefault(node.image.name, deepcopy(default))
                 im_mapped["materials"][mat.name] = (mat, node)
                 im_mapped["image"] = node.image
     return images
