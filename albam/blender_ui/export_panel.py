@@ -5,6 +5,7 @@ import bpy
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
 from .import_panel import FileListItem
+from albam.engines.mtfw.archive import serialize_arc
 
 
 NODES_CACHE = {}
@@ -261,17 +262,30 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
     bl_idname = "albam.pack"
     bl_label = "Pack item"
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        # TODO
+        imported = [item for _, item in enumerate(bpy.context.scene.albam.file_explorer.file_list) if item.is_expandable == False]
+        serialize_arc(self.filepath, imported)
         return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
         # TODO
-        return False
+        #return False
         vfs = context.scene.albam.exported
         current_item = vfs.__class__.get_selected_item()
         return current_item and current_item.is_root

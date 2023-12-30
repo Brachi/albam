@@ -1,5 +1,7 @@
 import os
 import zlib
+import io
+from kaitaistruct import KaitaiStream
 
 from albam.registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
@@ -43,7 +45,13 @@ class ArcWrapper:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        self.parsed = Arc.from_file(file_path)
+        #self.parsed = Arc.from_file(file_path)
+        #with KaitaiStream(open(file_path, 'rb')) as _io:
+        #    self.parsed = Arc(_io)
+        #    self.parsed._read()
+        with open(file_path, 'rb') as f:
+            self.parsed  = Arc.from_bytes(f.read())
+            self.parsed._read()
 
     def get_file_entries_by_type(self, file_type):
         filtered = []
@@ -90,3 +98,47 @@ class ArcWrapper:
                     print(f"Requested to read out of bounds. Offset: {fe.offset}")
                     raise
         return file_
+
+
+def serialize_arc(filepath, files):
+    '''Curently hardcoded'''
+    arc = Arc()
+    # set header
+    header = Arc.ArcHeader(None, arc, arc._root)
+    header.ident = b"ARC\00"
+    header.version = 7
+    header.num_files = len(files)
+    header._check
+    arc.header = header
+    arc.file_entries = []
+
+    file_offset = 32768
+    data_size = 0
+
+    #set file entry
+    for f in files:
+        chunk = zlib.compress(f.get_bytes())
+        file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
+        path = os.path.normpath(f.relative_path)
+        file_entry.file_path = os.path.splitext (path)[0]
+        file_entry.file_type =  EXTENSION_TO_FILE_ID[f.extension]
+        file_entry.zsize = len(chunk)
+        file_entry.size = len(f.get_bytes())
+        file_entry.flags = 2
+        file_entry.offset = file_offset
+        file_entry.raw_data = chunk
+        file_entry._check
+        arc.file_entries.append(file_entry)
+        file_offset += file_entry.zsize
+        data_size += file_entry.zsize
+
+    arc.padding = bytearray(32760 - header.num_files * 80)
+    arc._check
+
+    stream = KaitaiStream(io.BytesIO(bytearray(32768 + data_size)))
+    arc._write(stream)
+    output = stream.to_byte_array()
+
+    #write
+    with open(filepath, "wb") as f:
+        f.write(output)
