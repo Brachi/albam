@@ -34,7 +34,10 @@ def arc_accessor(file_item, context):
     canonical_name = file_item.name.replace(prefix, "").replace("::", arc.PATH_SEPARATOR)
     file_path, ext = os.path.splitext(canonical_name)
     ext = ext.replace(".", "")
-    file_type = EXTENSION_TO_FILE_ID[ext]
+    try:
+        file_type = EXTENSION_TO_FILE_ID[ext]
+    except:
+        file_type = int(ext)
     file_bytes = arc.get_file(file_path, file_type)
 
     return file_bytes
@@ -100,8 +103,9 @@ class ArcWrapper:
         return file_
 
 
-def serialize_arc(filepath, files):
+def serialize_arc(files):
     '''Curently hardcoded'''
+    file_ = None
     arc = Arc()
     # set header
     header = Arc.ArcHeader(None, arc, arc._root)
@@ -121,7 +125,12 @@ def serialize_arc(filepath, files):
         file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
         path = os.path.normpath(f.relative_path)
         file_entry.file_path = os.path.splitext (path)[0]
-        file_entry.file_type =  EXTENSION_TO_FILE_ID[f.extension]
+        try:
+            file_type = EXTENSION_TO_FILE_ID[f.extension]
+        except:
+            file_type = int(f.extension)
+            print("unknow file id {}".format(hex(file_type)))
+        file_entry.file_type = file_type
         file_entry.zsize = len(chunk)
         file_entry.size = len(f.get_bytes())
         file_entry.flags = 2
@@ -137,8 +146,5 @@ def serialize_arc(filepath, files):
 
     stream = KaitaiStream(io.BytesIO(bytearray(32768 + data_size)))
     arc._write(stream)
-    output = stream.to_byte_array()
-
-    #write
-    with open(filepath, "wb") as f:
-        f.write(output)
+    file_ = stream.to_byte_array()
+    return file_

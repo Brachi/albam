@@ -279,7 +279,9 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         imported = [item for _, item in enumerate(bpy.context.scene.albam.file_explorer.file_list) if item.is_expandable == False]
-        serialize_arc(self.filepath, imported)
+        arc = serialize_arc(imported)
+        with open(self.filepath, "wb") as f:
+            f.write(arc)
         return {"FINISHED"}
 
     @classmethod
