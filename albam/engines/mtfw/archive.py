@@ -48,10 +48,6 @@ class ArcWrapper:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        #self.parsed = Arc.from_file(file_path)
-        #with KaitaiStream(open(file_path, 'rb')) as _io:
-        #    self.parsed = Arc(_io)
-        #    self.parsed._read()
         with open(file_path, 'rb') as f:
             self.parsed  = Arc.from_bytes(f.read())
             self.parsed._read()
@@ -117,11 +113,15 @@ def serialize_arc(files):
     arc.file_entries = []
 
     file_offset = 32768
-    data_size = 0
+    #data_size = 0
 
     #set file entry
     for f in files:
-        chunk = zlib.compress(f.get_bytes())
+        if f.vfs_id == "exported":
+            f_data = f.data_bytes
+        else:
+            f_data = f.get_bytes()
+        chunk = zlib.compress(f_data)
         file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
         path = os.path.normpath(f.relative_path)
         file_entry.file_path = os.path.splitext (path)[0]
@@ -132,19 +132,19 @@ def serialize_arc(files):
             print("unknow file id {}".format(hex(file_type)))
         file_entry.file_type = file_type
         file_entry.zsize = len(chunk)
-        file_entry.size = len(f.get_bytes())
+        file_entry.size = len(f_data)
         file_entry.flags = 2
         file_entry.offset = file_offset
         file_entry.raw_data = chunk
         file_entry._check
         arc.file_entries.append(file_entry)
         file_offset += file_entry.zsize
-        data_size += file_entry.zsize
+        #data_size += file_entry.zsize
 
     arc.padding = bytearray(32760 - header.num_files * 80)
     arc._check
 
-    stream = KaitaiStream(io.BytesIO(bytearray(32768 + data_size)))
+    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
     arc._write(stream)
     file_ = stream.to_byte_array()
     return file_

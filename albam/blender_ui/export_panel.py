@@ -278,8 +278,47 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
+        index = bpy.context.scene.albam.file_explorer.file_list_selected_index
+        item = bpy.context.scene.albam.file_explorer.file_list[index]
+
+
+        parent_node = ""
+        print("selected item name {}".format(item.name))
+        print ("selected intem extension is {}".format(item.extension))
+
+        if item.is_archive:
+            parent_node = item.name
+        else:
+            parent_node = item.tree_node_ancestors[0].node_id
+
         imported = [item for _, item in enumerate(bpy.context.scene.albam.file_explorer.file_list) if item.is_expandable == False]
-        arc = serialize_arc(imported)
+        print("imported list has {} entries".format(len(imported)))
+        arc_files ={}
+        for i in imported:
+            try:
+                parent = i.tree_node_ancestors[0].node_id
+            except:
+                print(i.name)
+                continue
+            if parent == parent_node:
+                arc_files[i.relative_path] = i
+                print(i.name)
+                
+        print(len(arc_files))
+        e_index = bpy.context.scene.albam.exported.file_list_selected_index
+        print("the index is {}".format(e_index))
+        e_item = bpy.context.scene.albam.exported.file_list[e_index]
+        print(e_item.name)
+        exported = [item for _, item in enumerate(bpy.context.scene.albam.exported.file_list) if item.is_expandable == False]
+        for e in exported:
+            try:
+                parent = e.tree_node_ancestors[0].node_id
+            except:
+                continue
+            if parent == e_item.name:
+                arc_files[e.relative_path] = e
+        files = list(arc_files.values())
+        arc = serialize_arc(files)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {"FINISHED"}
