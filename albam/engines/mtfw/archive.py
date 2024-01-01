@@ -100,7 +100,6 @@ class ArcWrapper:
 
 
 def serialize_arc(files):
-    '''Curently hardcoded'''
     file_ = None
     arc = Arc()
     # set header
@@ -110,12 +109,10 @@ def serialize_arc(files):
     header.num_files = len(files)
     header._check
     arc.header = header
-    arc.file_entries = []
-
-    file_offset = 32768
-    #data_size = 0
 
     #set file entry
+    arc.file_entries = []
+    file_offset = 32768
     for f in files:
         if f.vfs_id == "exported":
             f_data = f.data_bytes
@@ -129,7 +126,7 @@ def serialize_arc(files):
             file_type = EXTENSION_TO_FILE_ID[f.extension]
         except:
             file_type = int(f.extension)
-            print("unknow file id {}".format(hex(file_type)))
+            #print("unknow file id {}".format(hex(file_type)))
         file_entry.file_type = file_type
         file_entry.zsize = len(chunk)
         file_entry.size = len(f_data)
@@ -139,7 +136,6 @@ def serialize_arc(files):
         file_entry._check
         arc.file_entries.append(file_entry)
         file_offset += file_entry.zsize
-        #data_size += file_entry.zsize
 
     arc.padding = bytearray(32760 - header.num_files * 80)
     arc._check

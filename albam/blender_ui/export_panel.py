@@ -280,8 +280,6 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     def execute(self, context):  # pragma: no cover
         index = bpy.context.scene.albam.file_explorer.file_list_selected_index
         item = bpy.context.scene.albam.file_explorer.file_list[index]
-
-
         parent_node = ""
         print("selected item name {}".format(item.name))
         print ("selected intem extension is {}".format(item.extension))
@@ -298,17 +296,13 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             try:
                 parent = i.tree_node_ancestors[0].node_id
             except:
-                print(i.name)
+                #print(i.name)
                 continue
             if parent == parent_node:
                 arc_files[i.relative_path] = i
-                print(i.name)
-                
-        print(len(arc_files))
+                #print(i.name)
         e_index = bpy.context.scene.albam.exported.file_list_selected_index
-        print("the index is {}".format(e_index))
         e_item = bpy.context.scene.albam.exported.file_list[e_index]
-        print(e_item.name)
         exported = [item for _, item in enumerate(bpy.context.scene.albam.exported.file_list) if item.is_expandable == False]
         for e in exported:
             try:
@@ -318,7 +312,25 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             if parent == e_item.name:
                 arc_files[e.relative_path] = e
         files = list(arc_files.values())
-        arc = serialize_arc(files)
+        # sorting
+        f_sorted = []
+        f_mrl = []
+        f_mod = []
+        f_tail = []
+        for f in files:
+            if f.extension == "tex":
+                f_sorted.append(f)
+            elif f.extension == "mrl":
+                f_mrl.append(f)
+            elif f.extension == "mod":
+                f_mod.append(f)
+            else:
+                f_tail.append(f)
+        f_sorted.extend(f_mrl)
+        f_sorted.extend(f_mod)
+        f_sorted.extend(f_tail)
+
+        arc = serialize_arc(f_sorted)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {"FINISHED"}
