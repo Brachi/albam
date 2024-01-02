@@ -274,36 +274,47 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
+        vfs = context.scene.albam.file_explorer
+        index = vfs.file_list_selected_index
+        item = vfs.file_list[index]
+        parent_node = ""
+        if item .is_archive:
+            parent_node = item.display_name
+        else:
+            parent_node = (item.tree_node_ancestors[0].node_id).split("::")[1]
+        self.filepath = parent_node
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        index = bpy.context.scene.albam.file_explorer.file_list_selected_index
-        item = bpy.context.scene.albam.file_explorer.file_list[index]
+        vfs_i = context.scene.albam.file_explorer
+        vfs_e = context.scene.albam.exported
+        index = vfs_i.file_list_selected_index
+        item = vfs_i.file_list[index]
         parent_node = ""
-        print("selected item name {}".format(item.name))
-        print ("selected intem extension is {}".format(item.extension))
-
+        #print("selected item name {}".format(item.name))
+        #print ("selected intem extension is {}".format(item.extension))
+        # get parent name 
         if item.is_archive:
             parent_node = item.name
         else:
             parent_node = item.tree_node_ancestors[0].node_id
-
-        imported = [item for _, item in enumerate(bpy.context.scene.albam.file_explorer.file_list) if item.is_expandable == False]
-        print("imported list has {} entries".format(len(imported)))
+        #get only files from the virtual file system
+        imported = [item for item in vfs_i.file_list if item.is_expandable == False]
         arc_files ={}
+        #add only files the belong to selected arc parent to the dictionary
         for i in imported:
             try:
                 parent = i.tree_node_ancestors[0].node_id
             except:
-                #print(i.name)
                 continue
             if parent == parent_node:
                 arc_files[i.relative_path] = i
-                #print(i.name)
-        e_index = bpy.context.scene.albam.exported.file_list_selected_index
-        e_item = bpy.context.scene.albam.exported.file_list[e_index]
-        exported = [item for _, item in enumerate(bpy.context.scene.albam.exported.file_list) if item.is_expandable == False]
+
+        e_index = vfs_e.file_list_selected_index
+        e_item = vfs_e.file_list[e_index]
+        # get all exported files and add them to the dictionray
+        exported = [item for item in vfs_e.file_list if item.is_expandable == False]
         for e in exported:
             try:
                 parent = e.tree_node_ancestors[0].node_id
