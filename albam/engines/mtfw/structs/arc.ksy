@@ -9,8 +9,8 @@ meta:
 
 seq:
   - {id: header, type: arc_header}
-  - {id: files, type: file_entry, repeat: expr, repeat-expr: _root.header.num_files}
-  - {id: padding, size: 32760 - _root.header.num_files * 80}
+  - {id: file_entries, type: file_entry, repeat: expr, repeat-expr: _root.header.num_files}
+  - {id: padding, size: 32760 - (_root.header.num_files * 80) % 32760}
 
 types:
   arc_header:

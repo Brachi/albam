@@ -23,7 +23,7 @@ class Arc(ReadWriteKaitaiStruct):
             _t_file_entries._read()
             self.file_entries.append(_t_file_entries)
 
-        self.padding = self._io.read_bytes((32760 - (self._root.header.num_files * 80)))
+        self.padding = self._io.read_bytes((32760 - ((self._root.header.num_files * 80) % 32760)))
 
 
     def _fetch_instances(self):
@@ -60,8 +60,8 @@ class Arc(ReadWriteKaitaiStruct):
             if self.file_entries[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"file_entries", self.file_entries[i]._parent, self)
 
-        if (len(self.padding) != (32760 - (self._root.header.num_files * 80))):
-            raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), (32760 - (self._root.header.num_files * 80)))
+        if (len(self.padding) != (32760 - ((self._root.header.num_files * 80) % 32760))):
+            raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), (32760 - ((self._root.header.num_files * 80) % 32760)))
 
     class ArcHeader(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):

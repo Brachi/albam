@@ -31,7 +31,8 @@ def arc_accessor(file_item, context):
     arc_filename = os.path.basename(root.file_path)
 
     prefix = f"{app_id}::{arc_filename}::"
-    canonical_name = file_item.name.replace(prefix, "").replace("::", arc.PATH_SEPARATOR)
+    canonical_name = file_item.name.replace(
+        prefix, "").replace("::", arc.PATH_SEPARATOR)
     file_path, ext = os.path.splitext(canonical_name)
     ext = ext.replace(".", "")
     try:
@@ -49,7 +50,7 @@ class ArcWrapper:
     def __init__(self, file_path):
         self.file_path = file_path
         with open(file_path, 'rb') as f:
-            self.parsed  = Arc.from_bytes(f.read())
+            self.parsed = Arc.from_bytes(f.read())
             self.parsed._read()
 
     def get_file_entries_by_type(self, file_type):
@@ -73,7 +74,8 @@ class ArcWrapper:
             raise RuntimeError(f"Extension {extension} unknown")
         files = []
         for file_entry in self.get_file_entries_by_type(file_type):
-            t = (file_entry.file_path, self.get_file(file_entry.file_path, file_type))
+            t = (file_entry.file_path, self.get_file(
+                file_entry.file_path, file_type))
             files.append(t)
         return files
 
@@ -94,26 +96,27 @@ class ArcWrapper:
                     file_ = zlib.decompress(fe.raw_data)
                     break
                 except EOFError:
-                    print(f"Requested to read out of bounds. Offset: {fe.offset}")
+                    print(
+                        f"Requested to read out of bounds. Offset: {fe.offset}")
                     raise
         return file_
 
 
-def serialize_arc(files):
+def serialize_arc(vfiles):
     file_ = None
     arc = Arc()
     # set header
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
     header.version = 7
-    header.num_files = len(files)
-    header._check
+    header.num_files = len(vfiles)
+    header._check()
     arc.header = header
 
-    #set file entry
+    # set file entry
     arc.file_entries = []
     file_offset = 32768
-    for f in files:
+    for f in vfiles:
         if f.vfs_id == "exported":
             f_data = f.data_bytes
         else:
@@ -121,24 +124,24 @@ def serialize_arc(files):
         chunk = zlib.compress(f_data)
         file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
         path = os.path.normpath(f.relative_path)
-        file_entry.file_path = os.path.splitext (path)[0]
+        file_entry.file_path = os.path.splitext(path)[0]
         try:
             file_type = EXTENSION_TO_FILE_ID[f.extension]
         except:
             file_type = int(f.extension)
-            #print("unknow file id {}".format(hex(file_type)))
+            # print("unknow file id {}".format(hex(file_type)))
         file_entry.file_type = file_type
         file_entry.zsize = len(chunk)
         file_entry.size = len(f_data)
         file_entry.flags = 2
         file_entry.offset = file_offset
         file_entry.raw_data = chunk
-        file_entry._check
+        file_entry._check()
         arc.file_entries.append(file_entry)
         file_offset += file_entry.zsize
 
-    arc.padding = bytearray(32760 - header.num_files * 80)
-    arc._check
+    arc.padding = bytearray(32760 - (header.num_files * 80) % 32760)
+    arc._check()
 
     stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
     arc._write(stream)
