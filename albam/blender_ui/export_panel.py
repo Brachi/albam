@@ -292,17 +292,16 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         index = vfs_i.file_list_selected_index
         item = vfs_i.file_list[index]
         parent_node = ""
-        #print("selected item name {}".format(item.name))
-        #print ("selected intem extension is {}".format(item.extension))
-        # get parent name 
+        # get parent name
         if item.is_archive:
             parent_node = item.name
         else:
             parent_node = item.tree_node_ancestors[0].node_id
-        #get only files from the virtual file system
-        imported = [item for item in vfs_i.file_list if item.is_expandable == False]
-        arc_files ={}
-        #add only files the belong to selected arc parent to the dictionary
+        # get only files from the virtual file system
+        imported = [item for item in vfs_i.file_list
+                    if item.is_expandable is False]
+        arc_files = {}
+        # add only files the belong to selected arc parent to the dictionary
         for i in imported:
             try:
                 parent = i.tree_node_ancestors[0].node_id
@@ -314,7 +313,8 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         e_index = vfs_e.file_list_selected_index
         e_item = vfs_e.file_list[e_index]
         # get all exported files and add them to the dictionray
-        exported = [item for item in vfs_e.file_list if item.is_expandable == False]
+        exported = [item for item in vfs_e.file_list
+                    if item.is_expandable is False]
         for e in exported:
             try:
                 parent = e.tree_node_ancestors[0].node_id
@@ -348,8 +348,6 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        # TODO
-        #return False
         vfs = context.scene.albam.exported
         current_item = vfs.__class__.get_selected_item()
         return current_item and current_item.is_root

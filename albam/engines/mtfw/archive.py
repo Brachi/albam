@@ -115,7 +115,7 @@ def serialize_arc(vfiles):
 
     # set file entry
     arc.file_entries = []
-    file_offset = 32768
+    file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
     for f in vfiles:
         if f.vfs_id == "exported":
             f_data = f.data_bytes
@@ -129,7 +129,6 @@ def serialize_arc(vfiles):
             file_type = EXTENSION_TO_FILE_ID[f.extension]
         except:
             file_type = int(f.extension)
-            # print("unknow file id {}".format(hex(file_type)))
         file_entry.file_type = file_type
         file_entry.zsize = len(chunk)
         file_entry.size = len(f_data)
@@ -140,7 +139,7 @@ def serialize_arc(vfiles):
         arc.file_entries.append(file_entry)
         file_offset += file_entry.zsize
 
-    arc.padding = bytearray(32760 - (header.num_files * 80) % 32760)
+    arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
     arc._check()
 
     stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
