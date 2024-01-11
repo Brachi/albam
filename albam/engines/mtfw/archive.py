@@ -133,7 +133,7 @@ def update_arc(filepath, vfiles):
         try:
             extension = FILE_ID_TO_EXTENSION[fe.file_type]
         except:
-            extension = int(fe.file_type)
+            extension = str(fe.file_type)
         relative_path = (path + "." + extension)
         imported[relative_path] = fe
 
