@@ -5,8 +5,7 @@ import bpy
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
 from .import_panel import FileListItem
-from albam.engines.mtfw.archive import serialize_arc, patch_arc
-from albam.engines.mtfw.structs.arc import Arc
+from albam.engines.mtfw.archive import update_arc
 
 
 NODES_CACHE = {}
@@ -290,31 +289,20 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         vfs_i = context.scene.albam.file_explorer
-        vfs_e = context.scene.albam.exported
-        index = vfs_i.file_list_selected_index
-        item = vfs_i.file_list[index]
-        parent_node = ""
-        # get parent name
-        if item.is_archive:
-            parent_node = item.name
+        index_i = vfs_i.file_list_selected_index
+        item_i = vfs_i.file_list[index_i]
+        if item_i.is_archive:
+            path_i = item_i.file_path
         else:
-            parent_node = item.tree_node_ancestors[0].node_id
-        # get only files from the virtual file system
-        imported = [item for item in vfs_i.file_list
-                    if item.is_expandable is False]
-        arc_files = {}
-        # add only files the belong to selected arc parent to the dictionary
-        for i in imported:
-            try:
-                parent = i.tree_node_ancestors[0].node_id
-            except:
-                continue
-            if parent == parent_node:
-                arc_files[i.relative_path] = i
-
-        e_index = vfs_e.file_list_selected_index
-        e_item = vfs_e.file_list[e_index]
-        # get all exported files and add them to the dictionray
+            arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
+            arc_node = [item for item in vfs_i.file_list
+                        if item.is_archive is True
+                        and item.display_name == arc_name]
+            path_i = arc_node[0].file_path
+        files_e = []
+        vfs_e = context.scene.albam.exported
+        index_e = vfs_e.file_list_selected_index
+        item_e = vfs_e.file_list[index_e]
         exported = [item for item in vfs_e.file_list
                     if item.is_expandable is False]
         for e in exported:
@@ -322,28 +310,9 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 parent = e.tree_node_ancestors[0].node_id
             except:
                 continue
-            if parent == e_item.name:
-                arc_files[e.relative_path] = e
-        files = list(arc_files.values())
-        # sorting
-        f_sorted = []
-        f_mrl = []
-        f_mod = []
-        f_tail = []
-        for f in files:
-            if f.extension == "tex":
-                f_sorted.append(f)
-            elif f.extension == "mrl":
-                f_mrl.append(f)
-            elif f.extension == "mod":
-                f_mod.append(f)
-            else:
-                f_tail.append(f)
-        f_sorted.extend(f_mrl)
-        f_sorted.extend(f_mod)
-        f_sorted.extend(f_tail)
-
-        arc = serialize_arc(f_sorted)
+            if parent == item_e.name:
+                files_e.append(e)
+        arc = update_arc(path_i, files_e)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {"FINISHED"}
@@ -374,9 +343,19 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
+        files_e = []
         vfs_e = context.scene.albam.exported
+        index_e = vfs_e.file_list_selected_index
+        item_e = vfs_e.file_list[index_e]
         exported = [item for item in vfs_e.file_list if item.is_expandable is False]
-        arc = patch_arc(self.filepath, exported)
+        for e in exported:
+            try:
+                parent = e.tree_node_ancestors[0].node_id
+            except:
+                continue
+            if parent == item_e.name:
+                files_e.append(e)
+        arc = update_arc(self.filepath, files_e)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}

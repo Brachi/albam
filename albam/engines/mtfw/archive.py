@@ -102,55 +102,28 @@ class ArcWrapper:
         return file_
 
 
-def serialize_arc(vfiles):
+def update_arc(filepath, vfiles):
     file_ = None
     arc = Arc()
-    # set header
-    header = Arc.ArcHeader(None, arc, arc._root)
-    header.ident = b"ARC\00"
-    header.version = 7
-    header.num_files = len(vfiles)
-    header._check()
-    arc.header = header
-
-    # set file entry
-    arc.file_entries = []
-    file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
-    for f in vfiles:
-        if f.vfs_id == "exported":
-            f_data = f.data_bytes
-        else:
-            f_data = f.get_bytes()
-        chunk = zlib.compress(f_data)
-        file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
-        path = os.path.normpath(f.relative_path)
-        file_entry.file_path = os.path.splitext(path)[0]
-        try:
-            file_type = EXTENSION_TO_FILE_ID[f.extension]
-        except:
-            file_type = int(f.extension)
-        file_entry.file_type = file_type
-        file_entry.zsize = len(chunk)
-        file_entry.size = len(f_data)
-        file_entry.flags = 2
-        file_entry.offset = file_offset
-        file_entry.raw_data = chunk
-        file_entry._check()
-        arc.file_entries.append(file_entry)
-        file_offset += file_entry.zsize
-
-    arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
-    arc._check()
-
-    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
-    arc._write(stream)
-    file_ = stream.to_byte_array()
-    return file_
-
-
-def patch_arc(filepath, vfiles):
-    file_ = None
     imported = {}
+    exported = {}
+    # sort exported
+    vf_sorted = []
+    vf_mrl = []
+    vf_mod = []
+    vf_tail = []
+    for vf in vfiles:
+        if vf.extension == "tex":
+            vf_sorted.append(vf)
+        elif vf.extension == "mrl":
+            vf_mrl.append(vf)
+        elif vf.extension == "mod":
+            vf_mod.append(vf)
+        else:
+            vf_tail.append(vf)
+    vf_sorted.extend(vf_mrl)
+    vf_sorted.extend(vf_mod)
+    vf_sorted.extend(vf_tail)
     # build a dictionary for imported arc
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
@@ -165,7 +138,7 @@ def patch_arc(filepath, vfiles):
         imported[relative_path] = fe
 
     # patch dictionary with imported files
-    for vf in vfiles:
+    for vf in vf_sorted:
         vf_data = vf.data_bytes
         chunk = zlib.compress(vf_data)
         path = os.path.normpath(vf.relative_path)
@@ -174,24 +147,37 @@ def patch_arc(filepath, vfiles):
             file_type = EXTENSION_TO_FILE_ID[vf.extension]
         except:
             file_type = int(vf.extension)
+
         if imported.get(path):
             item = imported.get(path)
             item.zsize = len(chunk)
             item.size = len(vf_data)
             item.raw_data = chunk
+            imported[path] = item
+        else:
+            item = Arc.FileEntry(None, _parent=None, _root=None)
+            item.file_path = file_path
+            item.file_type = file_type
+            item.zsize = len(chunk)
+            item.size = len(vf_data)
+            item.flags = 2
+            item.offset = 0
+            item.raw_data = chunk
+            exported[path] = item
 
-    arc = Arc()
+    exported.update(imported)
+
     # set header
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
     header.version = 7
-    header.num_files = len(imported)
+    header.num_files = len(exported)
     header._check()
     arc.header = header
     file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
 
     arc.file_entries = []
-    for _, fe in enumerate(imported.values()):
+    for _, fe in enumerate(exported.values()):
         file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
         file_entry.file_path = fe.file_path
         file_entry.file_type = fe.file_type
