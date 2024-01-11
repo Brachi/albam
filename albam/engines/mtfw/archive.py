@@ -146,3 +146,68 @@ def serialize_arc(vfiles):
     arc._write(stream)
     file_ = stream.to_byte_array()
     return file_
+
+
+def patch_arc(filepath, vfiles):
+    file_ = None
+    imported = {}
+    # build a dictionary for imported arc
+    with open(filepath, 'rb') as f:
+        parsed = Arc.from_bytes(f.read())
+        parsed._read()
+    for fe in parsed.file_entries:
+        path = fe.file_path
+        try:
+            extension = FILE_ID_TO_EXTENSION[fe.file_type]
+        except:
+            extension = int(fe.file_type)
+        relative_path = (path + "." + extension)
+        imported[relative_path] = fe
+
+    # patch dictionary with imported files
+    for vf in vfiles:
+        vf_data = vf.data_bytes
+        chunk = zlib.compress(vf_data)
+        path = os.path.normpath(vf.relative_path)
+        file_path = os.path.splitext(path)[0]
+        try:
+            file_type = EXTENSION_TO_FILE_ID[vf.extension]
+        except:
+            file_type = int(vf.extension)
+        if imported.get(path):
+            item = imported.get(path)
+            item.zsize = len(chunk)
+            item.size = len(vf_data)
+            item.raw_data = chunk
+
+    arc = Arc()
+    # set header
+    header = Arc.ArcHeader(None, arc, arc._root)
+    header.ident = b"ARC\00"
+    header.version = 7
+    header.num_files = len(imported)
+    header._check()
+    arc.header = header
+    file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
+
+    arc.file_entries = []
+    for _, fe in enumerate(imported.values()):
+        file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
+        file_entry.file_path = fe.file_path
+        file_entry.file_type = fe.file_type
+        file_entry.zsize = fe.zsize
+        file_entry.size = fe.size
+        file_entry.flags = 2
+        file_entry.offset = file_offset
+        file_entry.raw_data = fe.raw_data
+        file_entry._check()
+        arc.file_entries.append(file_entry)
+        file_offset += file_entry.zsize
+
+    arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
+    arc._check()
+
+    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
+    arc._write(stream)
+    file_ = stream.to_byte_array()
+    return file_

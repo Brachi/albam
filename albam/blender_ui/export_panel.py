@@ -5,7 +5,8 @@ import bpy
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
 from .import_panel import FileListItem
-from albam.engines.mtfw.archive import serialize_arc
+from albam.engines.mtfw.archive import serialize_arc, patch_arc
+from albam.engines.mtfw.structs.arc import Arc
 
 
 NODES_CACHE = {}
@@ -97,6 +98,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
         col = split.column()
         col.operator("albam.save_file2", icon="SORT_ASC", text="")
         col.operator("albam.pack", icon="PACKAGE", text="")
+        col.operator("albam.patch", icon="FILE_REFRESH", text="")
         col = split.column()
         col.template_list(
             "ALBAM_UL_ExportedFileList",
@@ -345,6 +347,39 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {"FINISHED"}
+
+    @classmethod
+    def poll(cls, context):
+        vfs = context.scene.albam.exported
+        current_item = vfs.__class__.get_selected_item()
+        return current_item and current_item.is_root
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_Patch(bpy.types.Operator):
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    bl_idname = "albam.patch"
+    bl_label = "Update arc"
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        self.filepath = ""
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        vfs_e = context.scene.albam.exported
+        exported = [item for item in vfs_e.file_list if item.is_expandable is False]
+        arc = patch_arc(self.filepath, exported)
+        with open(self.filepath, "wb") as f:
+            f.write(arc)
+        return {'FINISHED'}
 
     @classmethod
     def poll(cls, context):
