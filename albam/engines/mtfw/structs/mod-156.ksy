@@ -1,8 +1,9 @@
 meta:
   endian: le
+  bit-endian: le
   file-extension: mod
   id: mod_156
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework model format 156
 
 seq:
@@ -162,34 +163,33 @@ types:
 
   material:
     seq:
-      - {id: use_translucent, type: b1}
+      - {id: surface_unk, type: b1} # 0 only for Moon
+      - {id: surface_opaque, type: b1} # render on top of transparent meshes
+      - {id: use_bridge_lines, type: b1}
+      - {id: unk_flag_04, type: b1} # always 0
+      - {id: unk_flag_05, type: b1} # always 0
+      - {id: use_alpha_clip, type: b1}
       - {id: use_opaque, type: b1}
-      - {id: unk_flag_03, type: b1}
-      - {id: unk_flag_04, type: b1}
-      - {id: unk_flag_05, type: b1}
-      - {id: unk_flag_06, type: b1}
-      - {id: unk_flag_07, type: b1}
-      - {id: unk_flag_08, type: b1}
-
-
-      - {id: unk_flag_09, type: b1}
-      - {id: unk_flag_10, type: b1}
-      - {id: unk_flag_11, type: b1}
-      - {id: unk_flag_12, type: b1}
-      - {id: unk_flag_13, type: b1}
-      - {id: unk_flag_14, type: b1}
+      - {id: use_translusent, type: b1}
+      - {id: use_alpha_transparency, type: b1}
+      
+      - {id: unk_flag_10, type: b1} # always 0
+      - {id: unk_flag_11, type: b1} # always 0
+      - {id: unk_flag_12, type: b1} # always 0
+      - {id: unk_flag_13, type: b1} # always 0
+      - {id: unk_flag_14, type: b1} # always 0
       - {id: unk_flag_15, type: b1}
-      - {id: use_alpha, type: b1}
+      - {id: unk_flag_16, type: b1}
 
       - {id: unk_flag_17, type: b1}
       - {id: unk_flag_18, type: b1}
       - {id: unk_flag_19, type: b1}
       - {id: unk_flag_20, type: b1}
-      - {id: unk_flag_21, type: b1}
-      - {id: unk_flag_22, type: b1}
-      - {id: unk_flag_23, type: b1}
+      - {id: unk_flag_21, type: b1} # always 0
+      - {id: unk_flag_22, type: b1} # always 0
+      - {id: unk_flag_23, type: b1} # always 0
+      
       - {id: unk_flag_24, type: b1}
-
       - {id: unk_flag_25, type: b1}
       - {id: unk_flag_26, type: b1}
       - {id: unk_flag_27, type: b1}
@@ -199,23 +199,20 @@ types:
       - {id: unk_flag_31, type: b1}
       - {id: unk_flag_32, type: b1}
 
-      - {id: unk_flag_33, type: b1}
-      - {id: unk_flag_34, type: b1}
-      - {id: unk_flag_35, type: b1}
-      - {id: unk_flag_36, type: b1}
-      - {id: unk_flag_37, type: b1}
-      - {id: unk_flag_38, type: b1}
-      - {id: unk_flag_39, type: b1}
+      - {id: skin_weights_type, type: b3}
+      - {id: unk_flag_36, type: b1} # always 0
+      - {id: unk_flag_37, type: b1} # always 0
+      - {id: unk_flag_38, type: b1} # always 0
+      - {id: unk_flag_39, type: b1} # flag 07
       - {id: unk_flag_40, type: b1}
-      - {id: unk_flag_41, type: b1}
-      - {id: unk_flag_42, type: b1}
+      - {id: use_emmisive_map, type: b1} # uses _AM slot texture
+      - {id: unk_flag_42, type: b1} # always 0
       - {id: unk_flag_43, type: b1}
-      - {id: unk_flag_44, type: b1}
-      - {id: unk_flag_45, type: b1}
-      - {id: unk_flag_46, type: b1}
-      - {id: unk_flag_47, type: b1}
-      - {id: unk_flag_48, type: b1}
-
+      - {id: use_detail_map, type: b1}
+      - {id: unk_flag_45, type: b1} # always 0
+      - {id: unk_flag_46, type: b1} # always 0
+      - {id: use_cubemap, type: b1} # if no map it uses one from the stage
+      - {id: unk_flag_48, type: b1} # always 0
 
       - {id: unk_01, type: u2}
       - {id: unk_02, type: u2}
@@ -237,8 +234,8 @@ types:
       - {id: unk_param_08, type: f4}
       - {id: unk_param_09, type: f4}
       - {id: unk_param_10, type: f4}
-      - {id: unk_param_11, type: f4}
       - {id: detail_normal_power, type: f4}
+      - {id: detail_normal_multiplier, type: f4}
       - {id: unk_param_13, type: f4}
       - {id: unk_param_14, type: f4}
       - {id: unk_param_15, type: f4}
@@ -275,12 +272,20 @@ types:
       - {id: idx_material, type: u2}
       - {id: constant, type: u1}
       - {id: level_of_detail, type: u1}
-      - {id: unk_01, type: u1}
+      - {id: z_buffer_order, type: u1}
       - {id: vertex_format, type: u1}
       - {id: vertex_stride, type: u1}
       - {id: vertex_stride_2, type: u1}
       - {id: unk_03, type: u1}
-      - {id: unk_flags, type: u1} # TODO: there's one known: cast_shadows
+      #- {id: unk_flags, type: u1} # TODO: there's one known: cast_shadows
+      - {id: unk_flag_01, type: b1}
+      - {id: unk_flag_02, type: b1}
+      - {id: unk_flag_03, type: b1}
+      - {id: unk_flag_04, type: b1}
+      - {id: unk_flag_05, type: b1}
+      - {id: use_cast_shadows, type: b1}
+      - {id: use_receive_shadows, type: b1}
+      - {id: unk_flag_08, type: b1}
       - {id: num_vertices, type: u2}
       - {id: vertex_position_end, type: u2}
       - {id: vertex_position_2, type: u4}

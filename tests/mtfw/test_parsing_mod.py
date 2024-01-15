@@ -58,3 +58,7 @@ def test_mod(mod):
     assert mod.header.version in SUPPORTED_MOD_VERSIONS
     assert not vertex_formats.difference(KNOWN_VERTEX_FORMATS)
     assert total_num_unique_bone_ids == num_weight_bounds == len(mod.meshes_data.weight_bounds)
+    if mod.header.version == 156:
+        for m in mod.materials_data.materials:
+            if m.skin_weights_type == 0:
+                assert m.unk_flag_39

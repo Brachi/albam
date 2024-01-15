@@ -383,7 +383,7 @@ class Mod156(ReadWriteKaitaiStruct):
             if (len(self.ident) != 4):
                 raise kaitaistruct.ConsistencyError(u"ident", len(self.ident), 4)
             if not (self.ident == b"\x4D\x4F\x44\x00"):
-                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x4F\x44\x00", self.ident, self._io, u"/types/mod_header/seq/0")
+                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x4F\x44\x00", self.ident, None, u"/types/mod_header/seq/0")
 
         @property
         def size_(self):
@@ -839,12 +839,19 @@ class Mod156(ReadWriteKaitaiStruct):
             self.idx_material = self._io.read_u2le()
             self.constant = self._io.read_u1()
             self.level_of_detail = self._io.read_u1()
-            self.unk_01 = self._io.read_u1()
+            self.z_buffer_order = self._io.read_u1()
             self.vertex_format = self._io.read_u1()
             self.vertex_stride = self._io.read_u1()
             self.vertex_stride_2 = self._io.read_u1()
             self.unk_03 = self._io.read_u1()
-            self.unk_flags = self._io.read_u1()
+            self.unk_flag_01 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_02 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_03 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_04 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_05 = self._io.read_bits_int_le(1) != 0
+            self.use_cast_shadows = self._io.read_bits_int_le(1) != 0
+            self.use_receive_shadows = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_08 = self._io.read_bits_int_le(1) != 0
             self.num_vertices = self._io.read_u2le()
             self.vertex_position_end = self._io.read_u2le()
             self.vertex_position_2 = self._io.read_u4le()
@@ -912,12 +919,19 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.idx_material)
             self._io.write_u1(self.constant)
             self._io.write_u1(self.level_of_detail)
-            self._io.write_u1(self.unk_01)
+            self._io.write_u1(self.z_buffer_order)
             self._io.write_u1(self.vertex_format)
             self._io.write_u1(self.vertex_stride)
             self._io.write_u1(self.vertex_stride_2)
             self._io.write_u1(self.unk_03)
-            self._io.write_u1(self.unk_flags)
+            self._io.write_bits_int_le(1, int(self.unk_flag_01))
+            self._io.write_bits_int_le(1, int(self.unk_flag_02))
+            self._io.write_bits_int_le(1, int(self.unk_flag_03))
+            self._io.write_bits_int_le(1, int(self.unk_flag_04))
+            self._io.write_bits_int_le(1, int(self.unk_flag_05))
+            self._io.write_bits_int_le(1, int(self.use_cast_shadows))
+            self._io.write_bits_int_le(1, int(self.use_receive_shadows))
+            self._io.write_bits_int_le(1, int(self.unk_flag_08))
             self._io.write_u2le(self.num_vertices)
             self._io.write_u2le(self.vertex_position_end)
             self._io.write_u4le(self.vertex_position_2)
@@ -1198,54 +1212,52 @@ class Mod156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.use_translucent = self._io.read_bits_int_be(1) != 0
-            self.use_opaque = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_03 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_04 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_05 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_06 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_07 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_08 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_09 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_10 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_11 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_12 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_13 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_14 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_15 = self._io.read_bits_int_be(1) != 0
-            self.use_alpha = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_17 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_18 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_19 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_20 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_21 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_22 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_23 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_24 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_25 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_26 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_27 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_28 = self._io.read_bits_int_be(1) != 0
-            self.use_8_bones = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_30 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_31 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_32 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_33 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_34 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_35 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_36 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_37 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_38 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_39 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_40 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_41 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_42 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_43 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_44 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_45 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_46 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_47 = self._io.read_bits_int_be(1) != 0
-            self.unk_flag_48 = self._io.read_bits_int_be(1) != 0
+            self.surface_unk = self._io.read_bits_int_le(1) != 0
+            self.surface_opaque = self._io.read_bits_int_le(1) != 0
+            self.use_bridge_lines = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_04 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_05 = self._io.read_bits_int_le(1) != 0
+            self.use_alpha_clip = self._io.read_bits_int_le(1) != 0
+            self.use_opaque = self._io.read_bits_int_le(1) != 0
+            self.use_translusent = self._io.read_bits_int_le(1) != 0
+            self.use_alpha_transparency = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_10 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_11 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_12 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_13 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_14 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_15 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_16 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_17 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_18 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_19 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_20 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_21 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_22 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_23 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_24 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_25 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_26 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_27 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_28 = self._io.read_bits_int_le(1) != 0
+            self.use_8_bones = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_30 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_31 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_32 = self._io.read_bits_int_le(1) != 0
+            self.skin_weights_type = self._io.read_bits_int_le(3)
+            self.unk_flag_36 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_37 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_38 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_39 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_40 = self._io.read_bits_int_le(1) != 0
+            self.use_emmisive_map = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_42 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_43 = self._io.read_bits_int_le(1) != 0
+            self.use_detail_map = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_45 = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_46 = self._io.read_bits_int_le(1) != 0
+            self.use_cubemap = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_48 = self._io.read_bits_int_le(1) != 0
             self.unk_01 = self._io.read_u2le()
             self.unk_02 = self._io.read_u2le()
             self.unk_03 = self._io.read_u2le()
@@ -1269,8 +1281,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self.unk_param_08 = self._io.read_f4le()
             self.unk_param_09 = self._io.read_f4le()
             self.unk_param_10 = self._io.read_f4le()
-            self.unk_param_11 = self._io.read_f4le()
             self.detail_normal_power = self._io.read_f4le()
+            self.detail_normal_multiplier = self._io.read_f4le()
             self.unk_param_13 = self._io.read_f4le()
             self.unk_param_14 = self._io.read_f4le()
             self.unk_param_15 = self._io.read_f4le()
@@ -1296,54 +1308,52 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mod156.Material, self)._write__seq(io)
-            self._io.write_bits_int_be(1, int(self.use_translucent))
-            self._io.write_bits_int_be(1, int(self.use_opaque))
-            self._io.write_bits_int_be(1, int(self.unk_flag_03))
-            self._io.write_bits_int_be(1, int(self.unk_flag_04))
-            self._io.write_bits_int_be(1, int(self.unk_flag_05))
-            self._io.write_bits_int_be(1, int(self.unk_flag_06))
-            self._io.write_bits_int_be(1, int(self.unk_flag_07))
-            self._io.write_bits_int_be(1, int(self.unk_flag_08))
-            self._io.write_bits_int_be(1, int(self.unk_flag_09))
-            self._io.write_bits_int_be(1, int(self.unk_flag_10))
-            self._io.write_bits_int_be(1, int(self.unk_flag_11))
-            self._io.write_bits_int_be(1, int(self.unk_flag_12))
-            self._io.write_bits_int_be(1, int(self.unk_flag_13))
-            self._io.write_bits_int_be(1, int(self.unk_flag_14))
-            self._io.write_bits_int_be(1, int(self.unk_flag_15))
-            self._io.write_bits_int_be(1, int(self.use_alpha))
-            self._io.write_bits_int_be(1, int(self.unk_flag_17))
-            self._io.write_bits_int_be(1, int(self.unk_flag_18))
-            self._io.write_bits_int_be(1, int(self.unk_flag_19))
-            self._io.write_bits_int_be(1, int(self.unk_flag_20))
-            self._io.write_bits_int_be(1, int(self.unk_flag_21))
-            self._io.write_bits_int_be(1, int(self.unk_flag_22))
-            self._io.write_bits_int_be(1, int(self.unk_flag_23))
-            self._io.write_bits_int_be(1, int(self.unk_flag_24))
-            self._io.write_bits_int_be(1, int(self.unk_flag_25))
-            self._io.write_bits_int_be(1, int(self.unk_flag_26))
-            self._io.write_bits_int_be(1, int(self.unk_flag_27))
-            self._io.write_bits_int_be(1, int(self.unk_flag_28))
-            self._io.write_bits_int_be(1, int(self.use_8_bones))
-            self._io.write_bits_int_be(1, int(self.unk_flag_30))
-            self._io.write_bits_int_be(1, int(self.unk_flag_31))
-            self._io.write_bits_int_be(1, int(self.unk_flag_32))
-            self._io.write_bits_int_be(1, int(self.unk_flag_33))
-            self._io.write_bits_int_be(1, int(self.unk_flag_34))
-            self._io.write_bits_int_be(1, int(self.unk_flag_35))
-            self._io.write_bits_int_be(1, int(self.unk_flag_36))
-            self._io.write_bits_int_be(1, int(self.unk_flag_37))
-            self._io.write_bits_int_be(1, int(self.unk_flag_38))
-            self._io.write_bits_int_be(1, int(self.unk_flag_39))
-            self._io.write_bits_int_be(1, int(self.unk_flag_40))
-            self._io.write_bits_int_be(1, int(self.unk_flag_41))
-            self._io.write_bits_int_be(1, int(self.unk_flag_42))
-            self._io.write_bits_int_be(1, int(self.unk_flag_43))
-            self._io.write_bits_int_be(1, int(self.unk_flag_44))
-            self._io.write_bits_int_be(1, int(self.unk_flag_45))
-            self._io.write_bits_int_be(1, int(self.unk_flag_46))
-            self._io.write_bits_int_be(1, int(self.unk_flag_47))
-            self._io.write_bits_int_be(1, int(self.unk_flag_48))
+            self._io.write_bits_int_le(1, int(self.surface_unk))
+            self._io.write_bits_int_le(1, int(self.surface_opaque))
+            self._io.write_bits_int_le(1, int(self.use_bridge_lines))
+            self._io.write_bits_int_le(1, int(self.unk_flag_04))
+            self._io.write_bits_int_le(1, int(self.unk_flag_05))
+            self._io.write_bits_int_le(1, int(self.use_alpha_clip))
+            self._io.write_bits_int_le(1, int(self.use_opaque))
+            self._io.write_bits_int_le(1, int(self.use_translusent))
+            self._io.write_bits_int_le(1, int(self.use_alpha_transparency))
+            self._io.write_bits_int_le(1, int(self.unk_flag_10))
+            self._io.write_bits_int_le(1, int(self.unk_flag_11))
+            self._io.write_bits_int_le(1, int(self.unk_flag_12))
+            self._io.write_bits_int_le(1, int(self.unk_flag_13))
+            self._io.write_bits_int_le(1, int(self.unk_flag_14))
+            self._io.write_bits_int_le(1, int(self.unk_flag_15))
+            self._io.write_bits_int_le(1, int(self.unk_flag_16))
+            self._io.write_bits_int_le(1, int(self.unk_flag_17))
+            self._io.write_bits_int_le(1, int(self.unk_flag_18))
+            self._io.write_bits_int_le(1, int(self.unk_flag_19))
+            self._io.write_bits_int_le(1, int(self.unk_flag_20))
+            self._io.write_bits_int_le(1, int(self.unk_flag_21))
+            self._io.write_bits_int_le(1, int(self.unk_flag_22))
+            self._io.write_bits_int_le(1, int(self.unk_flag_23))
+            self._io.write_bits_int_le(1, int(self.unk_flag_24))
+            self._io.write_bits_int_le(1, int(self.unk_flag_25))
+            self._io.write_bits_int_le(1, int(self.unk_flag_26))
+            self._io.write_bits_int_le(1, int(self.unk_flag_27))
+            self._io.write_bits_int_le(1, int(self.unk_flag_28))
+            self._io.write_bits_int_le(1, int(self.use_8_bones))
+            self._io.write_bits_int_le(1, int(self.unk_flag_30))
+            self._io.write_bits_int_le(1, int(self.unk_flag_31))
+            self._io.write_bits_int_le(1, int(self.unk_flag_32))
+            self._io.write_bits_int_le(3, self.skin_weights_type)
+            self._io.write_bits_int_le(1, int(self.unk_flag_36))
+            self._io.write_bits_int_le(1, int(self.unk_flag_37))
+            self._io.write_bits_int_le(1, int(self.unk_flag_38))
+            self._io.write_bits_int_le(1, int(self.unk_flag_39))
+            self._io.write_bits_int_le(1, int(self.unk_flag_40))
+            self._io.write_bits_int_le(1, int(self.use_emmisive_map))
+            self._io.write_bits_int_le(1, int(self.unk_flag_42))
+            self._io.write_bits_int_le(1, int(self.unk_flag_43))
+            self._io.write_bits_int_le(1, int(self.use_detail_map))
+            self._io.write_bits_int_le(1, int(self.unk_flag_45))
+            self._io.write_bits_int_le(1, int(self.unk_flag_46))
+            self._io.write_bits_int_le(1, int(self.use_cubemap))
+            self._io.write_bits_int_le(1, int(self.unk_flag_48))
             self._io.write_u2le(self.unk_01)
             self._io.write_u2le(self.unk_02)
             self._io.write_u2le(self.unk_03)
@@ -1367,8 +1377,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.unk_param_08)
             self._io.write_f4le(self.unk_param_09)
             self._io.write_f4le(self.unk_param_10)
-            self._io.write_f4le(self.unk_param_11)
             self._io.write_f4le(self.detail_normal_power)
+            self._io.write_f4le(self.detail_normal_multiplier)
             self._io.write_f4le(self.unk_param_13)
             self._io.write_f4le(self.unk_param_14)
             self._io.write_f4le(self.unk_param_15)

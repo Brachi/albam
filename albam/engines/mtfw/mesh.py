@@ -1340,10 +1340,17 @@ def _calculate_vertex_group_weight_bound(blender_mesh, armature, vertex_group, d
 class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_01: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    z_buffer_order: bpy.props.IntProperty(default=0)  # TODO: restrictions
     # we set this always to zero
     # unk_03: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_flags: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    unk_flag_01: bpy.props.BoolProperty(default=0)  # TODO: restrictions
+    unk_flag_02: bpy.props.BoolProperty(default=0) 
+    unk_flag_03: bpy.props.BoolProperty(default=0) 
+    unk_flag_04: bpy.props.BoolProperty(default=0) 
+    unk_flag_05: bpy.props.BoolProperty(default=0) 
+    use_cast_shadows: bpy.props.BoolProperty(default=0) 
+    use_receive_shadows: bpy.props.BoolProperty(default=0) 
+    unk_flag_08: bpy.props.BoolProperty(default=0) 
     unk_05: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_06: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_07: bpy.props.IntProperty(default=0)  # TODO: restrictions
