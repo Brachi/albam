@@ -965,7 +965,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     bytes_empty = b'\x00\x00'
     for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
-        vertex_struct.position = dst_mod.Vec4S2(_parent=vertex_struct, _root=vertex_struct._root)
+        if has_bones:
+            vertex_struct.position = dst_mod.Vec4S2(_parent=vertex_struct, _root=vertex_struct._root)
+        else:
+            vertex_struct.position = dst_mod.Vec3(_parent=vertex_struct, _root=vertex_struct._root)
         vertex_struct.tangent = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
         vertex_struct.uv = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
         if dst_mod.header.version == 156:
