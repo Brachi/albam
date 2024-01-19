@@ -193,8 +193,8 @@ types:
       - {id: unk_flag_25, type: b1}
       - {id: unk_flag_26, type: b1}
       - {id: unk_flag_27, type: b1}
-      - {id: unk_flag_28, type: b1}
-      - {id: use_8_bones, type: b1}
+      - {id: use_8_bones, type: b1} # probably switches vertex format reading
+      - {id: unk_flag_29, type: b1} # can cause invisible bug with 0
       - {id: unk_flag_30, type: b1}
       - {id: unk_flag_31, type: b1}
       - {id: unk_flag_32, type: b1}
@@ -277,7 +277,6 @@ types:
       - {id: vertex_stride, type: u1}
       - {id: vertex_stride_2, type: u1}
       - {id: unk_03, type: u1}
-      #- {id: unk_flags, type: u1} # TODO: there's one known: cast_shadows
       - {id: unk_flag_01, type: b1}
       - {id: unk_flag_02, type: b1}
       - {id: unk_flag_03, type: b1}
@@ -290,7 +289,7 @@ types:
       - {id: vertex_position_end, type: u2}
       - {id: vertex_position_2, type: u4}
       - {id: vertex_offset, type: u4}
-      - {id: unk_05, type: u4}
+      - {id: vertex_offset_2, type: u4} # second vertex buffer offset
       - {id: face_position, type: u4}
       - {id: num_indices, type: u4}
       - {id: face_offset, type: u4}

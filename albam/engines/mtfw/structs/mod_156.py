@@ -856,7 +856,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self.vertex_position_end = self._io.read_u2le()
             self.vertex_position_2 = self._io.read_u4le()
             self.vertex_offset = self._io.read_u4le()
-            self.unk_05 = self._io.read_u4le()
+            self.vertex_offset_2 = self._io.read_u4le()
             self.face_position = self._io.read_u4le()
             self.num_indices = self._io.read_u4le()
             self.face_offset = self._io.read_u4le()
@@ -936,7 +936,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.vertex_position_end)
             self._io.write_u4le(self.vertex_position_2)
             self._io.write_u4le(self.vertex_offset)
-            self._io.write_u4le(self.unk_05)
+            self._io.write_u4le(self.vertex_offset_2)
             self._io.write_u4le(self.face_position)
             self._io.write_u4le(self.num_indices)
             self._io.write_u4le(self.face_offset)
@@ -1239,8 +1239,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self.unk_flag_25 = self._io.read_bits_int_le(1) != 0
             self.unk_flag_26 = self._io.read_bits_int_le(1) != 0
             self.unk_flag_27 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_28 = self._io.read_bits_int_le(1) != 0
             self.use_8_bones = self._io.read_bits_int_le(1) != 0
+            self.unk_flag_29 = self._io.read_bits_int_le(1) != 0
             self.unk_flag_30 = self._io.read_bits_int_le(1) != 0
             self.unk_flag_31 = self._io.read_bits_int_le(1) != 0
             self.unk_flag_32 = self._io.read_bits_int_le(1) != 0
@@ -1335,8 +1335,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(1, int(self.unk_flag_25))
             self._io.write_bits_int_le(1, int(self.unk_flag_26))
             self._io.write_bits_int_le(1, int(self.unk_flag_27))
-            self._io.write_bits_int_le(1, int(self.unk_flag_28))
             self._io.write_bits_int_le(1, int(self.use_8_bones))
+            self._io.write_bits_int_le(1, int(self.unk_flag_29))
             self._io.write_bits_int_le(1, int(self.unk_flag_30))
             self._io.write_bits_int_le(1, int(self.unk_flag_31))
             self._io.write_bits_int_le(1, int(self.unk_flag_32))

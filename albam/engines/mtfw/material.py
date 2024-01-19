@@ -128,7 +128,7 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_appid_custom_properties(app_id)
         custom_properties.set_to_dest(mat)
-        mat.use_8_bones = 0  # limited before export
+        # mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
         mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
@@ -762,8 +762,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     unk_flag_25: bpy.props.BoolProperty(default=0)
     unk_flag_26: bpy.props.BoolProperty(default=0)
     unk_flag_27: bpy.props.BoolProperty(default=0)
-    unk_flag_28: bpy.props.BoolProperty(default=0)
     use_8_bones: bpy.props.BoolProperty(default=0)
+    unk_flag_29: bpy.props.BoolProperty(default=0)
     unk_flag_30: bpy.props.BoolProperty(default=0)
     unk_flag_31: bpy.props.BoolProperty(default=0)
     unk_flag_32: bpy.props.BoolProperty(default=0)

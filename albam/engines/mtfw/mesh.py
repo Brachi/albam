@@ -222,14 +222,20 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out):
-    if not hasattr(vertex, "rgba"):
-        return
-    if mod_version == 210:
+    if mod_version == 210 and hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
         r = vertex.rgba.z / 255
         a = vertex.rgba.w / 255
         rgba_out.append((r, g, b, a))
+    elif False:  # mod_version == 156 and hasattr(vertex, "uv3"):
+        r = (vertex.uv3.u & 0xFF) / 255
+        g = (vertex.uv3.u >> 8 & 0xFF) / 255
+        b = (vertex.uv3.v & 0xFF) / 255
+        a = (vertex.uv3.v >> 8 & 0xFF) / 255
+        rgba_out.append((r, g, b, a))
+    else:
+        return
 
 
 def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
@@ -937,30 +943,35 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
     normals = get_normals_per_vertex(bl_mesh.data)
     tangents = get_tangents_per_vertex(bl_mesh.data)
+    has_bones = bool(dst_mod.header.num_bones)
 
     vertex_count = len(bl_mesh.data.vertices)
     if dst_mod.header.version == 156:
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-    else:
+    elif dst_mod.header.version == 210:
         custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
         except (TypeError, ValueError):
             stored_vertex_format = None
-        if stored_vertex_format == VERTEX_FORMAT_HANDS:
-            vertex_format = VERTEX_FORMAT_HANDS
-            VertexCls = dst_mod.VertexC31f
-            vertex_size = 24
+        if has_bones:
+            if stored_vertex_format == VERTEX_FORMAT_HANDS:
+                vertex_format = VERTEX_FORMAT_HANDS
+                VertexCls = dst_mod.VertexC31f
+                vertex_size = 24
 
+            else:
+                vertex_format = VERTEX_FORMAT_DEFAULT
+                VertexCls = dst_mod.Vertex14d4  # using the most flexible one for now, no optimizations
+                vertex_size = 28  # TODO: size_
         else:
-            vertex_format = VERTEX_FORMAT_DEFAULT
-            VertexCls = dst_mod.Vertex14d4  # using the most flexible one for now, no optimizations
-            vertex_size = 28  # TODO: size_
+                vertex_format = 0x49b4f029
+                VertexCls = dst_mod.Vertex49b4  # using the most flexible one for now, no optimizations
+                vertex_size = 24  # TODO: size_
 
     MAX_BONES = 4  # enforces in `_process_weights_for_export`
-    has_bones = bool(dst_mod.header.num_bones)
     vertices_stream = KaitaiStream(BytesIO(bytearray(vertex_size * vertex_count)))
     bytes_empty = b'\x00\x00'
     for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
@@ -1347,14 +1358,14 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     # we set this always to zero
     # unk_03: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_flag_01: bpy.props.BoolProperty(default=0)  # TODO: restrictions
-    unk_flag_02: bpy.props.BoolProperty(default=0) 
-    unk_flag_03: bpy.props.BoolProperty(default=0) 
-    unk_flag_04: bpy.props.BoolProperty(default=0) 
-    unk_flag_05: bpy.props.BoolProperty(default=0) 
-    use_cast_shadows: bpy.props.BoolProperty(default=0) 
-    use_receive_shadows: bpy.props.BoolProperty(default=0) 
-    unk_flag_08: bpy.props.BoolProperty(default=0) 
-    unk_05: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    unk_flag_02: bpy.props.BoolProperty(default=0)
+    unk_flag_03: bpy.props.BoolProperty(default=0)
+    unk_flag_04: bpy.props.BoolProperty(default=0)
+    unk_flag_05: bpy.props.BoolProperty(default=0)
+    use_cast_shadows: bpy.props.BoolProperty(default=0)
+    use_receive_shadows: bpy.props.BoolProperty(default=0)
+    unk_flag_08: bpy.props.BoolProperty(default=0)
+    vertex_offset_2: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_06: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_07: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_08: bpy.props.IntProperty(default=0)  # TODO: restrictions
