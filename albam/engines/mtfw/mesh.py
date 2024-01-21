@@ -1166,25 +1166,49 @@ def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
     return sorted(unsorted_weight_bounds, key=lambda x: x.bone_id)
 
 
-def _set_static_mesh_weight_bounds(dst_mod, meshes_data):
+def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
+    bl_mesh = bl_mesh_ob.data
     wb = dst_mod.WeightBound(_parent=meshes_data, _root=meshes_data._root)
     bsphere = dst_mod.Vec4(_parent=wb, _root=wb._root)
-    bsphere.x = dst_mod.bsphere.x
-    bsphere.y = dst_mod.bsphere.y
-    bsphere.z = dst_mod.bsphere.z
-    bsphere.w = dst_mod.bsphere.w
 
     bbox_min = dst_mod.Vec4(_parent=wb, _root=wb._root)
-    bbox_min.x = dst_mod.bbox_min.x
-    bbox_min.y = dst_mod.bbox_min.y
-    bbox_min.z = dst_mod.bbox_min.z
-    bbox_min.w = dst_mod.bbox_min.w
+    min_x = min((v.co[0] for v in bl_mesh.vertices))
+    min_y = min((v.co[1] for v in bl_mesh.vertices))
+    min_z = min((v.co[2] for v in bl_mesh.vertices)) 
+    bbox_min.w = 0
 
     bbox_max = dst_mod.Vec4(_parent=wb, _root=wb._root)
-    bbox_max.x = dst_mod.bbox_max.x
-    bbox_max.y = dst_mod.bbox_max.y
-    bbox_max.z = dst_mod.bbox_max.z
-    bbox_max.w = dst_mod.bbox_max.w
+    max_x = max((v.co[0] for v in bl_mesh.vertices))
+    max_y = max((v.co[1] for v in bl_mesh.vertices))
+    max_z = max((v.co[2] for v in bl_mesh.vertices))
+
+    length_x = (max_x - min_x) / 2
+    length_y = (max_y - min_y) / 2
+    length_z = (max_z - min_z) / 2
+
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+    center_z = (min_z + max_z) / 2
+    center = (center_x, center_y, center_z)
+    radius = max(map(lambda vertex: get_dist(center, vertex.co[:]), bl_mesh.vertices))
+    bsphere_export = (center_x * 100, center_z * 100, -center_y * 100, radius * 100)
+
+    bsphere.x = center_x * 100
+    bsphere.y = center_z * 100
+    bsphere.z = -center_y * 100
+    bsphere.w = radius * 100
+
+    bbox_min_export = (min_x * 100, min_z * 100, -max_y * 100, 0.0)
+    bbox_min.x = min_x * 100
+    bbox_min.y = min_z * 100
+    bbox_min.z = -max_y * 100
+    bbox_min.w = 0.0
+
+    bbox_max_export = (max_x * 100, max_z * 100, -min_y * 100, 0.0)
+    bbox_max.x = max_x * 100
+    bbox_max.y = max_z * 100
+    bbox_max.z = -min_y * 100
+    bbox_max.w = 0.0
 
     oabb = dst_mod.Matrix4x4(_parent=wb, _root=wb._root)
     oabb.row_1 = dst_mod.Vec4(_parent=oabb, _root=oabb._root)
@@ -1204,16 +1228,16 @@ def _set_static_mesh_weight_bounds(dst_mod, meshes_data):
     oabb.row_3.z = 1
     oabb.row_3.w = 0
     # TODO: dimension/length is wrongly calculated in vertex groups?
-    oabb.row_4.x = (dst_mod.bbox_min.x + dst_mod.bbox_max.x) / 2
-    oabb.row_4.y = (dst_mod.bbox_min.y + dst_mod.bbox_max.y) / 2
-    oabb.row_4.z = (dst_mod.bbox_min.z + dst_mod.bbox_max.z) / 2
+    oabb.row_4.x = bsphere_export[0]
+    oabb.row_4.y = bsphere_export[1]
+    oabb.row_4.z = bsphere_export[2]
     oabb.row_4.w = 1
 
     oabb_dimension = dst_mod.Vec4(_parent=wb, _root=wb._root)
     # TODO: dimension/length is wrongly calculated in vertex groups?
-    oabb_dimension.x = (abs(dst_mod.bbox_min.x) + abs(dst_mod.bbox_max.x)) / 2
-    oabb_dimension.y = (abs(dst_mod.bbox_min.y) + abs(dst_mod.bbox_max.y)) / 2
-    oabb_dimension.z = (abs(dst_mod.bbox_min.z) + abs(dst_mod.bbox_max.z)) / 2
+    oabb_dimension.x = length_x * 100
+    oabb_dimension.y = length_z * 100
+    oabb_dimension.z = length_y * 100
     oabb_dimension.w = 0
 
     unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
