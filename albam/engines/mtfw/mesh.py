@@ -91,15 +91,22 @@ def build_blender_model(file_list_item, context):
     for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
+            material_hash = _get_material_hash(mod, mesh)
+            use_156rgba = False
+            if mod_version == 156:
+                if not skeleton:
+                    if materials.get(material_hash):
+                        use_156rgba = materials[material_hash].albam_custom_properties.mod_156_material.use_8_bones
+
             bl_mesh_ob = build_blender_mesh(
-                app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS
+                app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
             )
             bl_mesh_ob.parent = bl_object
             if skeleton:
                 modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
                 modifier.object = skeleton
                 modifier.use_vertex_groups = True
-            material_hash = _get_material_hash(mod, mesh)
+
             if materials.get(material_hash):
                 bl_mesh_ob.data.materials.append(materials[material_hash])
             else:
@@ -122,7 +129,7 @@ def build_blender_model(file_list_item, context):
     return bl_object
 
 
-def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False):
+def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False, use_156rgba=False):
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
@@ -139,7 +146,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3, uvs_4)
-        _process_vertex_colors(mod.header.version, vertex, vertex_colors)
+        _process_vertex_colors(mod.header.version, vertex, vertex_colors, use_156rgba)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
 
     indices = strip_triangles_to_triangles_list(mesh.indices) if use_tri_strips else mesh.indices
@@ -221,18 +228,18 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
     uvs_4_out.extend((u, 1 - v))
 
 
-def _process_vertex_colors(mod_version, vertex, rgba_out):
+def _process_vertex_colors(mod_version, vertex, rgba_out , use_156rgba):
     if mod_version == 210 and hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
         r = vertex.rgba.z / 255
         a = vertex.rgba.w / 255
         rgba_out.append((r, g, b, a))
-    elif False:  # mod_version == 156 and hasattr(vertex, "uv3"):
-        r = (vertex.uv3.u & 0xFF) / 255
-        g = (vertex.uv3.u >> 8 & 0xFF) / 255
-        b = (vertex.uv3.v & 0xFF) / 255
-        a = (vertex.uv3.v >> 8 & 0xFF) / 255
+    elif use_156rgba:
+        r = (unpack("H", vertex.uv3.u)[0] & 0xFF) / 255
+        g = (unpack("H", vertex.uv3.u)[0] >> 8 & 0xFF) / 255
+        b = (unpack("H", vertex.uv3.v)[0] & 0xFF) / 255
+        a = (unpack("H", vertex.uv3.u)[0] >> 8 & 0xFF) / 255
         rgba_out.append((r, g, b, a))
     else:
         return
@@ -775,6 +782,31 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
     return bones_data
 
 
+def _normalize_uv(uv_x, uv_y):
+    """Flip UV for .dds and replace forbidden for half float -0.0 values"""
+    uv_y *= -1
+    uv_y += 1
+    uv_y = 0.0 if uv_y == -0.0 else uv_y
+    uv_x = 0.0 if uv_x == -0.0 else uv_x
+    return uv_x, uv_y
+
+def _get_vertex_colors(blender_mesh):
+    mesh = blender_mesh.data
+    colors = {}
+    try:
+        color_layer = mesh.vertex_colors[0]
+    except:
+        return colors
+    mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
+    vtx_colors = {mesh_loops[li]: data.color for li, data in color_layer.data.items()}
+    for idx, color in vtx_colors.items():
+        b = round(color[0]*255)
+        g = round(color[1]*255)
+        r = round(color[2]*255)
+        a = round(color[3]*255)
+        colors[idx] = (r, g, b, a)
+    return colors
+
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
     if src_mod.header.version != 156:
         return {}
@@ -937,6 +969,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     VERTEX_FORMAT_DEFAULT = 0x14d40020
     VERTEX_FORMAT_HANDS = 0xc31f201c
     uvs_per_vertex = get_uvs_per_vertex(bl_mesh, 0)
+    uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
+    uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
+    uvs_per_vertex_4 = get_uvs_per_vertex(bl_mesh, 3)
+    color_per_vertex = {}
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
     weight_half_float = dst_mod.header.version == 210
     weights_per_vertex = _process_weights_for_export(weights_per_vertex, half_float=weight_half_float)
@@ -950,6 +986,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
+        use_special_vf = bl_mesh.material_slots[0].material.albam_custom_properties.mod_156_material.use_8_bones
+        if not has_bones and use_special_vf:
+            color_per_vertex = _get_vertex_colors(bl_mesh)
     elif dst_mod.header.version == 210:
         custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
         try:
@@ -967,9 +1006,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 VertexCls = dst_mod.Vertex14d4  # using the most flexible one for now, no optimizations
                 vertex_size = 28  # TODO: size_
         else:
-                vertex_format = 0x49b4f029
-                VertexCls = dst_mod.Vertex49b4  # using the most flexible one for now, no optimizations
-                vertex_size = 24  # TODO: size_
+            vertex_format = 0x49b4f029
+            VertexCls = dst_mod.Vertex49b4  # using the most flexible one for now, no optimizations
+            vertex_size = 24  # TODO: size_
 
     MAX_BONES = 4  # enforces in `_process_weights_for_export`
     vertices_stream = KaitaiStream(BytesIO(bytearray(vertex_size * vertex_count)))
@@ -1028,18 +1067,36 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 
         # UVS
         uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
-        # dds flipping
-        uv_y *= -1
-        uv_y += 1
-        uv_y = 0.0 if uv_y == -0.0 else uv_y
+        uv_x, uv_y = _normalize_uv(uv_x, uv_y)
         vertex_struct.uv.u = pack('e', uv_x)
         vertex_struct.uv.v = pack('e', uv_y)
         if dst_mod.header.version == 156:
-            # TODO uv2 and uv3
-            vertex_struct.uv2.u = bytes_empty
-            vertex_struct.uv2.v = bytes_empty
-            vertex_struct.uv3.u = bytes_empty
-            vertex_struct.uv3.v = bytes_empty
+            if uvs_per_vertex_2:
+                uv_x, uv_y = uvs_per_vertex_2.get(vertex_index, (0, 0))
+                uv_x, uv_y = _normalize_uv(uv_x, uv_y)
+                vertex_struct.uv2.u = pack('e', uv_x)
+                vertex_struct.uv2.v = pack('e', uv_y)
+            else:
+                vertex_struct.uv2.u = bytes_empty
+                vertex_struct.uv2.v = bytes_empty
+            if uvs_per_vertex_3:
+                if use_special_vf:
+                    try:
+                        color = color_per_vertex[vertex_index]
+                    except:
+                        color = (255, 255, 255, 255)
+                    _uv3_u = (color[1] << 8) | color[0]
+                    _uv3_v = (color[3] << 8) | color[2]
+                    vertex_struct.uv3.u = pack('H', _uv3_u)
+                    vertex_struct.uv3.v = pack('H', _uv3_v)
+                else:
+                    uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
+                    uv_x, uv_y = _normalize_uv(uv_x, uv_y)
+                    vertex_struct.uv3.u = pack('e', uv_x)
+                    vertex_struct.uv3.v = pack('e', uv_y)
+            else:
+                vertex_struct.uv3.u = bytes_empty
+                vertex_struct.uv3.v = bytes_empty
 
         if has_bones:
             # applying bounding box constraints
@@ -1155,7 +1212,7 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
 def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
     unsorted_weight_bounds = []
     if bl_obj.type != "ARMATURE":
-        weight_bound = _set_static_mesh_weight_bounds(dst_mod, meshes_data)
+        weight_bound = _set_static_mesh_weight_bounds(dst_mod, bl_mesh, meshes_data)
         unsorted_weight_bounds.append(weight_bound)
     else:
         for vg in bl_mesh.vertex_groups:
