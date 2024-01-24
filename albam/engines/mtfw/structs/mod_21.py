@@ -213,7 +213,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if (len(self.ident) != 4):
                 raise kaitaistruct.ConsistencyError(u"ident", len(self.ident), 4)
             if not (self.ident == b"\x4D\x4F\x44\x00"):
-                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x4F\x44\x00", self.ident, self._io, u"/types/mod_header/seq/0")
+                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x4F\x44\x00", self.ident, None, u"/types/mod_header/seq/0")
 
         @property
         def size_(self):
@@ -521,8 +521,9 @@ class Mod21(ReadWriteKaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.position._read()
-            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.normal = Mod21.Vec3U1(self._io, self, self._root)
             self.normal._read()
+            self.occlusion = self._io.read_u1()
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent._read()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
@@ -550,6 +551,7 @@ class Mod21(ReadWriteKaitaiStruct):
             super(Mod21.VertexB668, self)._write__seq(io)
             self.position._write__seq(self._io)
             self.normal._write__seq(self._io)
+            self._io.write_u1(self.occlusion)
             self.tangent._write__seq(self._io)
             self.uv._write__seq(self._io)
             self.uv2._write__seq(self._io)
@@ -4495,8 +4497,9 @@ class Mod21(ReadWriteKaitaiStruct):
         def _read(self):
             self.position = Mod21.Vec3(self._io, self, self._root)
             self.position._read()
-            self.normal = Mod21.Vec4U1(self._io, self, self._root)
+            self.normal = Mod21.Vec3U1(self._io, self, self._root)
             self.normal._read()
+            self.occlusion = self._io.read_u1()
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent._read()
             self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
@@ -4515,6 +4518,7 @@ class Mod21(ReadWriteKaitaiStruct):
             super(Mod21.Vertex8297, self)._write__seq(io)
             self.position._write__seq(self._io)
             self.normal._write__seq(self._io)
+            self._io.write_u1(self.occlusion)
             self.tangent._write__seq(self._io)
             self.uv._write__seq(self._io)
 

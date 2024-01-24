@@ -228,7 +228,7 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
     uvs_4_out.extend((u, 1 - v))
 
 
-def _process_vertex_colors(mod_version, vertex, rgba_out , use_156rgba):
+def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
     if mod_version == 210 and hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
@@ -790,6 +790,7 @@ def _normalize_uv(uv_x, uv_y):
     uv_x = 0.0 if uv_x == -0.0 else uv_x
     return uv_x, uv_y
 
+
 def _get_vertex_colors(blender_mesh):
     mesh = blender_mesh.data
     colors = {}
@@ -806,6 +807,7 @@ def _get_vertex_colors(blender_mesh):
         a = round(color[3]*255)
         colors[idx] = (r, g, b, a)
     return colors
+
 
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
     if src_mod.header.version != 156:
@@ -1007,7 +1009,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_size = 28  # TODO: size_
         else:
             vertex_format = 0x49b4f029
-            VertexCls = dst_mod.Vertex49b4  # using the most flexible one for now, no optimizations
+            VertexCls = dst_mod.Vertex49b4
             vertex_size = 24  # TODO: size_
 
     MAX_BONES = 4  # enforces in `_process_weights_for_export`
@@ -1231,7 +1233,7 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     bbox_min = dst_mod.Vec4(_parent=wb, _root=wb._root)
     min_x = min((v.co[0] for v in bl_mesh.vertices))
     min_y = min((v.co[1] for v in bl_mesh.vertices))
-    min_z = min((v.co[2] for v in bl_mesh.vertices)) 
+    min_z = min((v.co[2] for v in bl_mesh.vertices))
     bbox_min.w = 0
 
     bbox_max = dst_mod.Vec4(_parent=wb, _root=wb._root)
@@ -1255,13 +1257,13 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     bsphere.z = -center_y * 100
     bsphere.w = radius * 100
 
-    bbox_min_export = (min_x * 100, min_z * 100, -max_y * 100, 0.0)
+    # bbox_min_export = (min_x * 100, min_z * 100, -max_y * 100, 0.0)
     bbox_min.x = min_x * 100
     bbox_min.y = min_z * 100
     bbox_min.z = -max_y * 100
     bbox_min.w = 0.0
 
-    bbox_max_export = (max_x * 100, max_z * 100, -min_y * 100, 0.0)
+    # bbox_max_export = (max_x * 100, max_z * 100, -min_y * 100, 0.0)
     bbox_max.x = max_x * 100
     bbox_max.y = max_z * 100
     bbox_max.z = -min_y * 100
