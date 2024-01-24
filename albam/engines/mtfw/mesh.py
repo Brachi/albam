@@ -55,6 +55,120 @@ VERTEX_FORMATS_MAPPER = {
     8: Mod156.Vertex5,
 }
 
+VERTEX_FORMATS_RGBA = (
+    0xa14e003c,
+    0x207d6037,
+    0xb6681034,
+    0x9399c033,
+    0x926fd02e,
+    0x49b4f029,
+    0xd84e3026,
+    0x77d87022,
+    0xa013501e,
+    0xcbf6c01a,
+)
+
+VERTEX_FORMATS_TANGENT = (
+    0,
+    1,
+    2,
+    3,
+    4,
+    0x4325a03e,
+    0x2f55c03d,
+    0x37a4e035,
+    0xb6681034,
+    0x9399c033,
+    0x12553032,
+    0x747d1031,
+    0x63b6c02f,
+    0x926fd02e,
+    0xafa6302d,
+    0x5e7f202c,
+    0xb86de02a,
+    0x49b4f029,
+    0xd8297028,
+    0xcbcf7027,
+    0xd84e3026,
+    0x75c3e025,
+    0xbb424024,
+    0x64593023,
+    0x77d87022,
+    0xdA55a021,
+    0x14d40020,
+    0xb392101f,
+    0xa013501e,
+    0xd9e801d,
+    0xc31f201c,
+    0xd877801b,
+    0xcbf6c01a,
+    0x667b1019,
+    0xa8fab018,
+)
+
+VERTEX_FORMATS_UV2 = (
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    0x4325a03e,
+    0xa14e003c,
+    0x2082f03b,
+    0xc66fa03a,
+    0xd1a47038,
+    0x37a4e035,
+    0xb6681034,
+    0x9399c033,
+    0x12553032,
+    0x747d1031,
+    0x63b6c02f,
+    0x926fd02e,
+    0xafa6302d,
+    0x5e7f202c,
+    0xb86de02a,
+    0xcbcf7027,
+    0x75c3e025,
+    0x64593023,
+    0xdA55a021,
+    0xb392101f,
+    0xd877801b,
+    0x667b1019,
+)
+
+VERTEX_FORMATS_UV3 = (
+    0,
+    0x2082f03b,
+    0x37a4e035,
+    0xb6681034,
+    0x12553032,
+    0x747d1031,
+    0x63b6c02f,
+    0xcbcf7027,
+    0x64593023,
+    0xb392101f,
+    0xd877801b,
+)
+
+VERTEX_FORMATS_UV4 = (
+    0x37a4e035,
+    0xcbcf7027,
+    0x64593023,
+    0xb392101f,
+    0xd877801b,
+)
+
+VERTEX_FORMATS_BRIDGE = (
+    0xa320c016,
+    0xcb68015,
+    0xdb7da014,
+    0xb0983013,
+)
+
 BBOX_AFFECTED = [
     0x667B1019,
     0xCBF6C01A,
@@ -982,6 +1096,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     normals = get_normals_per_vertex(bl_mesh.data)
     tangents = get_tangents_per_vertex(bl_mesh.data)
     has_bones = bool(dst_mod.header.num_bones)
+    use_special_vf = False
 
     vertex_count = len(bl_mesh.data.vertices)
     if dst_mod.header.version == 156:
@@ -1010,27 +1125,37 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         else:
             vertex_format = 0x49b4f029
             VertexCls = dst_mod.Vertex49b4
-            vertex_size = 24  # TODO: size_
+            vertex_size = 28
 
     MAX_BONES = 4  # enforces in `_process_weights_for_export`
     vertices_stream = KaitaiStream(BytesIO(bytearray(vertex_size * vertex_count)))
     bytes_empty = b'\x00\x00'
     for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
+        
         if has_bones:
             vertex_struct.position = dst_mod.Vec4S2(_parent=vertex_struct, _root=vertex_struct._root)
         else:
             vertex_struct.position = dst_mod.Vec3(_parent=vertex_struct, _root=vertex_struct._root)
-        vertex_struct.tangent = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-        vertex_struct.uv = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
+
+        if vertex_format in VERTEX_FORMATS_TANGENT:
+            vertex_struct.tangent = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
+        if vertex_format not in VERTEX_FORMATS_BRIDGE:
+            vertex_struct.uv = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
         if dst_mod.header.version == 156:
             vertex_struct.normal = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-            vertex_struct.uv2 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
-            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
         else:
             vertex_struct.normal = dst_mod.Vec3U1(_parent=vertex_struct, _root=vertex_struct._root)
             vertex_struct.occlusion = 254
-
+        if vertex_format in VERTEX_FORMATS_UV2:
+            vertex_struct.uv2 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
+        if vertex_format in VERTEX_FORMATS_UV3:
+            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
+        if vertex_format in VERTEX_FORMATS_UV4:
+            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
+        if vertex_format in VERTEX_FORMATS_RGBA:
+            vertex_struct.rgba = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
+        # Position
         xyz = (vertex.co[0] * SCALE, vertex.co[1] * SCALE, vertex.co[2] * SCALE)
         xyz = (xyz[0], xyz[2], -xyz[1])  # z-up to y-up
         xyz = _apply_bbox_transforms(xyz, dst_mod, bbox_data) if has_bones else xyz
@@ -1038,7 +1163,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.y = xyz[1]
         vertex_struct.position.z = xyz[2]
         vertex_struct.position.w = 32767  # might be changed later
-
+        # Normals
         norms = normals.get(vertex_index, (0, 0, 0))
         try:
             # from [-1, 1] to [0, 255], and clipping bad blender normals
@@ -1054,7 +1179,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 raise
         if dst_mod.header.version == 156:
             vertex_struct.normal.w = 255  # is this occlusion as well?
-
+        # Tangents
         t = tangents.get(vertex_index, (0, 0, 0))
         try:
             vertex_struct.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
@@ -1066,13 +1191,13 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.tangent.y = 0
             vertex_struct.tangent.z = 0
             vertex_struct.tangent.w = 254
-
         # UVS
         uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
         uv_x, uv_y = _normalize_uv(uv_x, uv_y)
         vertex_struct.uv.u = pack('e', uv_x)
         vertex_struct.uv.v = pack('e', uv_y)
-        if dst_mod.header.version == 156:
+
+        if vertex_format in VERTEX_FORMATS_UV2:
             if uvs_per_vertex_2:
                 uv_x, uv_y = uvs_per_vertex_2.get(vertex_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
@@ -1081,8 +1206,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 vertex_struct.uv2.u = bytes_empty
                 vertex_struct.uv2.v = bytes_empty
+
+        if vertex_format in VERTEX_FORMATS_UV3:
             if uvs_per_vertex_3:
-                if use_special_vf:
+                if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
                     try:
                         color = color_per_vertex[vertex_index]
                     except:
@@ -1099,6 +1226,29 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 vertex_struct.uv3.u = bytes_empty
                 vertex_struct.uv3.v = bytes_empty
+
+        if vertex_format in VERTEX_FORMATS_UV4:
+            if uvs_per_vertex_4:
+                uv_x, uv_y = uvs_per_vertex_4.get(vertex_index, (0, 0))
+                uv_x, uv_y = _normalize_uv(uv_x, uv_y)
+                vertex_struct.uv4.u = pack('e', uv_x)
+                vertex_struct.uv4.v = pack('e', uv_y)
+            else:
+                vertex_struct.uv4.u = bytes_empty
+                vertex_struct.uv4.v = bytes_empty
+        # Vertex colors
+        if vertex_format in VERTEX_FORMATS_RGBA:
+            if color_per_vertex:
+                c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
+                vertex_struct.rgba.x = c[0]
+                vertex_struct.rgba.y = c[1]
+                vertex_struct.rgba.z = c[2]
+                vertex_struct.rgba.w = c[3]
+            else:
+                vertex_struct.rgba.x = 128
+                vertex_struct.rgba.y = 128
+                vertex_struct.rgba.z = 128
+                vertex_struct.rgba.w = 255
 
         if has_bones:
             # applying bounding box constraints
