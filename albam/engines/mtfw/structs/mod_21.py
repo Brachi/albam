@@ -270,6 +270,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 20
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex2082(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -331,6 +341,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec2HalfFloat(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -511,6 +531,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.normal._parent != self:
                 raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 12
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexB668(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -590,6 +620,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Matrix4x4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -748,6 +788,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.tangent._parent != self:
                 raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexD877(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -843,6 +893,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv4", self.uv4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexD84e(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -956,6 +1016,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 40
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex6459(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1069,6 +1139,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv4", self.uv4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 40
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex926f(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1140,6 +1220,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex667b(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1219,6 +1309,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex77d8(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1316,6 +1416,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex63b6(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1389,6 +1499,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex5e7f(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1452,6 +1572,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexA14e(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1513,6 +1643,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexB392(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1610,6 +1750,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv4", self.uv4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexD9e8(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1683,6 +1833,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Bone(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1887,6 +2047,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.morph_normal4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"morph_normal4", self.morph_normal4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 64
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex747d(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1958,6 +2128,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexC31f(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2031,6 +2211,16 @@ class Mod21(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"bone_indices", len(self.bone_indices[i]), 2)
 
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex75c3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2144,6 +2334,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 40
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexCbf6(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2223,6 +2423,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec4U1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2424,6 +2634,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex14d4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2513,6 +2733,16 @@ class Mod21(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"weight_values", len(self.weight_values[i]), 2)
 
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Mesh(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3423,6 +3653,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexD1a4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3476,6 +3716,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex37a4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3555,6 +3805,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv4", self.uv4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 36
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex4325(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3682,6 +3942,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.morph_normal4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"morph_normal4", self.morph_normal4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 64
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexDb7d(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3735,6 +4005,16 @@ class Mod21(ReadWriteKaitaiStruct):
                 pass
 
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexC66f(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3788,6 +4068,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexB86d(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3853,6 +4143,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Material(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3947,6 +4247,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class WeightBound(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4124,6 +4434,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.normal._parent != self:
                 raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec3S2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4371,6 +4691,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv4._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv4", self.uv4._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 48
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class BonesData(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4542,6 +4872,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 24
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex1255(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4613,6 +4953,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec4S2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4752,6 +5102,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexCb68(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4821,6 +5181,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.normal._parent != self:
                 raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 20
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vertex9399(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4892,6 +5262,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.rgba._parent != self:
                 raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class VertexDa55(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4989,6 +5369,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     @property
     def vertex_buffer(self):
