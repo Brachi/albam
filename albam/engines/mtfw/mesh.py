@@ -53,6 +53,46 @@ VERTEX_FORMATS_MAPPER = {
     6: Mod156.Vertex5,
     7: Mod156.Vertex5,
     8: Mod156.Vertex5,
+    #0x4325a03e: Mod21.Vertex4325,  # IANonSkinTBN_4M
+    #0x2f55c03d: Mod21.Vertex2f55,  # IASkinOTB_4WT_4M
+    0xa14e003c: Mod21.VertexA14e,  # IANonSkinBCA
+    0x2082f03b: Mod21.Vertex2082,  # IANonSkinBLA
+    0xc66fa03a: Mod21.VertexC66f,  # IANonSkinBA
+    0xd1a47038: Mod21.VertexD1a4,  # IANonSkinBL
+    0x207d6037: Mod21.Vertex207d,  # IANonSkinBC
+    0xa7d7d036: Mod21.VertexA7d7,  # IANonSkinB
+    0x37a4e035: Mod21.Vertex37a4,  # IANonSkinTBNLA
+    0xb6681034: Mod21.VertexB668,  # IANonSkinTBNCA
+    0x9399c033: Mod21.Vertex9399,  # IANonSkinTBCA
+    0x12553032: Mod21.Vertex1255,  # IANonSkinTBLA
+    0x747d1031: Mod21.Vertex747d,  # IANonSkinTBNA
+    #0x63b6c02f: Mod21.Vertex63b6,  # IANonSkinTBNL vertex alpha
+    0x926fd02e: Mod21.Vertex926f,  # IANonSkinTBNC
+    0xafa6302d: Mod21.VertexAfa6,  # IANonSkinTBA
+    0x5e7f202c: Mod21.Vertex5e7f,  # IANonSkinTBN
+    #0xb86de02a: Mod21.VertexB86d,  # IANonSkinTBL vertex alpha
+    0x49b4f029: Mod21.Vertex49b4,  # IANonSkinTBC
+    0xd8297028: Mod21.Vertex8297,  # IANonSkinTB
+    0xcbcf7027: Mod21.VertexCbcf,  # IASkinTBNLA8wt
+    0xd84e3026: Mod21.VertexD84e,  # IASkinTBC8wt
+    0x75c3e025: Mod21.Vertex75c3,  # IASkinTBN8wt
+    0xbb424024: Mod21.VertexBb42,  # IASkinTB8wt
+    0x64593023: Mod21.Vertex6459,  # IASkinTBNLA4wt
+    0x77d87022: Mod21.Vertex77d8,  # IASkinTBC4wt
+    0xdA55a021: Mod21.VertexDa55,  # IASkinTBN4wt
+    0x14d40020: Mod21.Vertex14d4,  # IASkinTB4wt
+    0xb392101f: Mod21.VertexB392,  # IASkinTBNLA2wt
+    0xa013501e: Mod21.VertexA013,  # IASkinTBC2wt
+    0xd9e801d: Mod21.VertexD9e8,  # IASkinTBN2wt
+    0xc31f201c: Mod21.VertexC31f,  # IASkinTB2wt
+    0xd877801b: Mod21.VertexD877,  # IASkinTBNLA1wt
+    0xcbf6c01a: Mod21.VertexCbf6,  # IASkinTBC1wt
+    0x667b1019: Mod21.Vertex667b,  # IASkinTBN1wt
+    0xa8fab018: Mod21.VertexA8fa,  # IASkinTB1wt
+    0xa320c016: Mod21.VertexA320,  # IASkinBridge8wt
+    0xcb68015: Mod21.VertexCb68,  # IASkinBridge4wt
+    0xdb7da014: Mod21.VertexDb7d,  # IASkinBridge2wt
+    0xb0983013: Mod21.VertexB098,  # IASkinBridge1wt
 }
 
 VERTEX_FORMATS_RGBA = (
@@ -198,9 +238,11 @@ def build_blender_model(file_list_item, context):
 
     bl_object_name = file_list_item.display_name
     bbox_data = _create_bbox_data(mod)
-    skeleton = None if mod.header.num_bones == 0 else build_blender_armature(mod, bl_object_name, bbox_data)
+    skeleton = None if mod.header.num_bones == 0 else build_blender_armature(
+        mod, bl_object_name, bbox_data)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
-    materials = build_blender_materials(file_list_item, context, mod, bl_object_name)
+    materials = build_blender_materials(
+        file_list_item, context, mod, bl_object_name)
 
     for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
         try:
@@ -217,7 +259,8 @@ def build_blender_model(file_list_item, context):
             )
             bl_mesh_ob.parent = bl_object
             if skeleton:
-                modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
+                modifier = bl_mesh_ob.modifiers.new(
+                    type="ARMATURE", name="armature")
                 modifier.object = skeleton
                 modifier.use_vertex_groups = True
 
@@ -257,17 +300,22 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False,
     weights_per_bone = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
-        _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
+        _process_locations(mod.header.version, mesh,
+                           vertex, locations, bbox_data)
         _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3, uvs_4)
-        _process_vertex_colors(mod.header.version, vertex, vertex_colors, use_156rgba)
+        _process_vertex_colors(mod.header.version, vertex,
+                               vertex_colors, use_156rgba)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
 
-    indices = strip_triangles_to_triangles_list(mesh.indices) if use_tri_strips else mesh.indices
+    indices = strip_triangles_to_triangles_list(
+        mesh.indices) if use_tri_strips else mesh.indices
     # convert indices for this mesh only, so they start at zero
     indices = [tri_idx - mesh.vertex_position for tri_idx in indices]
-    assert min(indices) >= 0, "Bad face indices"  # Blender crashes with corrrupt indices
-    assert locations, "No vertices could be processed"  # Blender crashes with an empty sequence
+    # Blender crashes with corrrupt indices
+    assert min(indices) >= 0, "Bad face indices"
+    # Blender crashes with an empty sequence
+    assert locations, "No vertices could be processed"
 
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
@@ -279,7 +327,8 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False,
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
-    custom_properties = me_ob.albam_custom_properties.get_appid_custom_properties(app_id)
+    custom_properties = me_ob.albam_custom_properties.get_appid_custom_properties(
+        app_id)
     custom_properties.set_from_source(mesh)
     return ob
 
@@ -391,7 +440,8 @@ def _get_bone_indices(mod, mesh, bone_indices):
                 real_bone_index = mod.bones_data.bone_map[bone_index]
             else:
                 try:
-                    real_bone_index = mod.bones_data.bone_palettes[mesh.idx_bone_palette].indices[bone_index]
+                    real_bone_index = mod.bones_data.bone_palettes[
+                        mesh.idx_bone_palette].indices[bone_index]
                 except IndexError:
                     # Behaviour not observed in original files so far
                     real_bone_index = bone_index
@@ -460,7 +510,8 @@ def _get_weights(mod, mesh, vertex):
         w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
         return (w1, w2, w3, w4, w5, w6, w7, w8)
     else:
-        print(f"Can't get weights for vertex_format '{hex(mesh.vertex_format)}'")
+        print(
+            f"Can't get weights for vertex_format '{hex(mesh.vertex_format)}'")
         return (0, 0, 0, 0)
 
 
@@ -536,8 +587,10 @@ def build_blender_armature(mod, armature_name, bbox_data):
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
         m = mod.bones_data.inverse_bind_matrices[i]
         head = _name_me(mod, m, bbox_data)
-        blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
-        blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
+        blender_bone.head = [head[0] * scale, -
+                             head[2] * scale, head[1] * scale]
+        blender_bone.tail = [head[0] * scale, -
+                             head[2] * scale, (head[1] * scale) + 0.01]
         blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
         blender_bones.append(blender_bone)
 
@@ -597,7 +650,8 @@ def _create_bbox_data(mod):
         ),
     )
     min_length = abs(min(mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z))
-    max_length = max(abs(mod.bbox_max.x), abs(mod.bbox_max.y), abs(mod.bbox_max.z))
+    max_length = max(abs(mod.bbox_max.x), abs(
+        mod.bbox_max.y), abs(mod.bbox_max.z))
     dimension = min_length + max_length
 
     bbox_data = BboxData(
@@ -647,13 +701,16 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    dst_mod.bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    dst_mod.bones_data = _serialize_bones_data(
+        bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
     dst_mod.groups = _serialize_groups(src_mod, dst_mod)
-    materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
+    materials_map, mrl, vtextures = serialize_materials_data(
+        asset, bl_meshes, src_mod, dst_mod)
 
     meshes_data, vertex_buffer, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
+    dst_mod.header.num_vertices = sum(
+        m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
     dst_mod.index_buffer = index_buffer
@@ -662,12 +719,16 @@ def export_mod(bl_obj):
     dst_mod.header.offset_bones_data = offset
     dst_mod.header.offset_groups = offset + dst_mod.bones_data_size_
     dst_mod.header.offset_materials_data = dst_mod.header.offset_groups + dst_mod.groups_size_
-    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + dst_mod.materials_data.size_
-    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + dst_mod.meshes_data.size_
-    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + len(vertex_buffer)
+    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + \
+        dst_mod.materials_data.size_
+    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + \
+        dst_mod.meshes_data.size_
+    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + \
+        len(vertex_buffer)
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
-    dst_mod.header.num_faces = (len(index_buffer) // 2) + 1  # TODO: revise, name accordingly
+    # TODO: revise, name accordingly
+    dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
     index_buffer.extend((0, 0))
 
     final_size = sum((
@@ -687,7 +748,8 @@ def export_mod(bl_obj):
     dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
-    mod_vf = VirtualFile(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
+    mod_vf = VirtualFile(app_id, asset.relative_path,
+                         data_bytes=stream.to_byte_array())
     vfiles.append(mod_vf)
     vfiles.extend(vtextures)
     if mrl:
@@ -791,7 +853,8 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         bones_data.bone_palettes = []
         dst_mod.header.num_bone_palettes = len(bone_palettes)
         for i, bp in enumerate(bone_palettes.values()):
-            bone_palette = dst_mod.BonePalette(_parent=bones_data, _root=bones_data._root)
+            bone_palette = dst_mod.BonePalette(
+                _parent=bones_data, _root=bones_data._root)
             bone_palette.unk_01 = len(bp)
             if len(bp) != 32:
                 padding = 32 - len(bp)
@@ -913,7 +976,8 @@ def _get_vertex_colors(blender_mesh):
     except:
         return colors
     mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
-    vtx_colors = {mesh_loops[li]: data.color for li, data in color_layer.data.items()}
+    vtx_colors = {mesh_loops[li]: data.color for li,
+                  data in color_layer.data.items()}
     for idx, color in vtx_colors.items():
         b = round(color[0]*255)
         g = round(color[1]*255)
@@ -931,8 +995,10 @@ def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
 
     bone_palette = {'mesh_indices': set(), 'bone_indices': set()}
     for i, mesh in enumerate(bl_meshes):
-        vertex_group_mapping = {vg.index: bl_armature.pose.bones.find(vg.name) for vg in mesh.vertex_groups}
-        vertex_group_mapping = {k: v for k, v in vertex_group_mapping.items() if v != -1}
+        vertex_group_mapping = {vg.index: bl_armature.pose.bones.find(
+            vg.name) for vg in mesh.vertex_groups}
+        vertex_group_mapping = {k: v for k,
+                                v in vertex_group_mapping.items() if v != -1}
         try:
             bone_indices = (
                 {vertex_group_mapping[vgroup.group]
@@ -942,14 +1008,16 @@ def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
         except Exception:
             print("Can't find vertex group in the armature")
 
-        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(mesh.name)
+        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(
+            mesh.name)
         assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
 
         current = bone_palette['bone_indices']
         potential = current.union(bone_indices)
         if len(potential) > MAX_BONE_PALETTE_SIZE:
             bone_palette_dicts.append(bone_palette)
-            bone_palette = {'mesh_indices': {i}, 'bone_indices': set(bone_indices)}
+            bone_palette = {'mesh_indices': {i},
+                            'bone_indices': set(bone_indices)}
         else:
             bone_palette['mesh_indices'].add(i)
             bone_palette['bone_indices'].update(bone_indices)
@@ -1016,10 +1084,12 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                     mesh_bone_palette = bp
                     break
             else:
-                raise ValueError(f"Mesh {mesh_index} doesn't have a bone_palette")
+                raise ValueError(
+                    f"Mesh {mesh_index} doesn't have a bone_palette")
 
         vertices, vertex_format, vertex_stride = (
-            _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data)
+            _export_vertices(app_id, bl_mesh, mesh,
+                             mesh_bone_palette, dst_mod, bbox_data)
         )
         vertex_buffer.extend(vertices.to_byte_array())
         if vertex_format != current_vertex_format:
@@ -1030,7 +1100,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         if use_strips:
             triangles = triangles_list_to_triangles_strip(bl_mesh)
         else:
-            triangles = list(chain.from_iterable(p.vertices for p in bl_mesh.data.polygons))
+            triangles = list(chain.from_iterable(
+                p.vertices for p in bl_mesh.data.polygons))
 
         triangles = [e + current_vertex_position for e in triangles]
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
@@ -1039,16 +1110,20 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         num_indices = len(triangles)
 
         # Beware of vertex_format being a string type, overriden below
-        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(
+            app_id)
         custom_properties.set_to_dest(mesh)
 
-        mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]  # TODO: pre-check for no materials
+        # TODO: pre-check for no materials
+        mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
         mesh.constant = 1
         mesh.vertex_format = vertex_format
         mesh.vertex_stride = vertex_stride
         mesh.vertex_stride_2 = 0
-        mesh.num_vertices = num_vertices  # assert num_vertices == len(vertices_array) // 32
-        mesh.vertex_position_end = current_vertex_position + mesh.num_vertices - 1  # XXX only a short!
+        # assert num_vertices == len(vertices_array) // 32
+        mesh.num_vertices = num_vertices
+        mesh.vertex_position_end = current_vertex_position + \
+            mesh.num_vertices - 1  # XXX only a short!
         mesh.vertex_position_2 = current_vertex_position
         mesh.vertex_offset = current_vertex_offset
         mesh.face_position = face_position
@@ -1056,14 +1131,16 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.face_offset = face_offset
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
-        mesh.num_unique_bone_ids = len(bl_mesh.vertex_groups) if is_skeletal else 1
+        mesh.num_unique_bone_ids = len(
+            bl_mesh.vertex_groups) if is_skeletal else 1
 
         if dst_mod.header.version in (156,):
             mesh.unk_03 = 0
 
         mesh._check()
         meshes_data.meshes.append(mesh)
-        mesh_weight_bounds = _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data)
+        mesh_weight_bounds = _calculate_weight_bounds(
+            bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
@@ -1091,8 +1168,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     color_per_vertex = {}
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
     weight_half_float = dst_mod.header.version == 210
-    weights_per_vertex = _process_weights_for_export(weights_per_vertex, half_float=weight_half_float)
-    max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
+    weights_per_vertex = _process_weights_for_export(
+        weights_per_vertex, half_float=weight_half_float)
+    max_bones_per_vertex = max(
+        {len(data) for data in weights_per_vertex.values()}, default=0)
     normals = get_normals_per_vertex(bl_mesh.data)
     tangents = get_tangents_per_vertex(bl_mesh.data)
     has_bones = bool(dst_mod.header.num_bones)
@@ -1107,7 +1186,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if not has_bones and use_special_vf:
             color_per_vertex = _get_vertex_colors(bl_mesh)
     elif dst_mod.header.version == 210:
-        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(
+            app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
         except (TypeError, ValueError):
@@ -1120,84 +1200,63 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 
             else:
                 vertex_format = VERTEX_FORMAT_DEFAULT
-                VertexCls = dst_mod.Vertex14d4  # using the most flexible one for now, no optimizations
+                # using the most flexible one for now, no optimizations
+                VertexCls = dst_mod.Vertex14d4
                 vertex_size = 28  # TODO: size_
         else:
-            vertex_format = 0x49b4f029
-            VertexCls = dst_mod.Vertex49b4
-            vertex_size = 28
+            vertex_format = stored_vertex_format
+            VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.VertexA7d7)
+            vertex_size = VertexCls().size_
 
     MAX_BONES = 4  # enforces in `_process_weights_for_export`
-    vertices_stream = KaitaiStream(BytesIO(bytearray(vertex_size * vertex_count)))
+    vertices_stream = KaitaiStream(
+        BytesIO(bytearray(vertex_size * vertex_count)))
     bytes_empty = b'\x00\x00'
     for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
-        
+        # Position types
         if has_bones:
-            vertex_struct.position = dst_mod.Vec4S2(_parent=vertex_struct, _root=vertex_struct._root)
+            vertex_struct.position = dst_mod.Vec4S2(
+                _parent=vertex_struct, _root=vertex_struct._root)
         else:
-            vertex_struct.position = dst_mod.Vec3(_parent=vertex_struct, _root=vertex_struct._root)
-
-        if vertex_format in VERTEX_FORMATS_TANGENT:
-            vertex_struct.tangent = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-        if vertex_format not in VERTEX_FORMATS_BRIDGE:
-            vertex_struct.uv = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
+            vertex_struct.position = dst_mod.Vec3(
+                _parent=vertex_struct, _root=vertex_struct._root)
+        # Normals types
         if dst_mod.header.version == 156:
-            vertex_struct.normal = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
+            vertex_struct.normal = dst_mod.Vec4U1(
+                _parent=vertex_struct, _root=vertex_struct._root)
         else:
-            vertex_struct.normal = dst_mod.Vec3U1(_parent=vertex_struct, _root=vertex_struct._root)
+            vertex_struct.normal = dst_mod.Vec3U1(
+                _parent=vertex_struct, _root=vertex_struct._root)
             vertex_struct.occlusion = 254
+        # Tangets
+        if vertex_format in VERTEX_FORMATS_TANGENT:
+            vertex_struct.tangent = dst_mod.Vec4U1(
+                _parent=vertex_struct, _root=vertex_struct._root)
+            # Tangents
+            t = tangents.get(vertex_index, (0, 0, 0))
+            try:
+                vertex_struct.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
+                vertex_struct.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
+                vertex_struct.tangent.z = round(((t[1] * -0.5) + 0.5) * 255)
+                vertex_struct.tangent.w = 254
+            except ValueError:
+                vertex_struct.tangent.x = 0
+                vertex_struct.tangent.y = 0
+                vertex_struct.tangent.z = 0
+                vertex_struct.tangent.w = 254
+        # UV
+        if vertex_format not in VERTEX_FORMATS_BRIDGE:
+            vertex_struct.uv = dst_mod.Vec2HalfFloat(
+                _parent=vertex_struct, _root=vertex_struct._root)
+            uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
+            uv_x, uv_y = _normalize_uv(uv_x, uv_y)
+            vertex_struct.uv.u = pack('e', uv_x)
+            vertex_struct.uv.v = pack('e', uv_y)
+        # UV2
         if vertex_format in VERTEX_FORMATS_UV2:
-            vertex_struct.uv2 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
-        if vertex_format in VERTEX_FORMATS_UV3:
-            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
-        if vertex_format in VERTEX_FORMATS_UV4:
-            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(_parent=vertex_struct, _root=vertex_struct._root)
-        if vertex_format in VERTEX_FORMATS_RGBA:
-            vertex_struct.rgba = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-        # Position
-        xyz = (vertex.co[0] * SCALE, vertex.co[1] * SCALE, vertex.co[2] * SCALE)
-        xyz = (xyz[0], xyz[2], -xyz[1])  # z-up to y-up
-        xyz = _apply_bbox_transforms(xyz, dst_mod, bbox_data) if has_bones else xyz
-        vertex_struct.position.x = xyz[0]
-        vertex_struct.position.y = xyz[1]
-        vertex_struct.position.z = xyz[2]
-        vertex_struct.position.w = 32767  # might be changed later
-        # Normals
-        norms = normals.get(vertex_index, (0, 0, 0))
-        try:
-            # from [-1, 1] to [0, 255], and clipping bad blender normals
-            vertex_struct.normal.x = max(0, min(255, round(((norms[0] * 0.5) + 0.5) * 255)))
-            vertex_struct.normal.y = max(0, min(255, round(((norms[2] * 0.5) + 0.5) * 255)))
-            vertex_struct.normal.z = max(0, min(255, round(((norms[1] * -0.5) + 0.5) * 255)))
-        except ValueError as err:
-            if "cannot convert float NaN to integer" in str(err):
-                vertex_struct.normal.x = 0
-                vertex_struct.normal.y = 0
-                vertex_struct.normal.z = 0
-            else:
-                raise
-        if dst_mod.header.version == 156:
-            vertex_struct.normal.w = 255  # is this occlusion as well?
-        # Tangents
-        t = tangents.get(vertex_index, (0, 0, 0))
-        try:
-            vertex_struct.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
-            vertex_struct.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
-            vertex_struct.tangent.z = round(((t[1] * -0.5) + 0.5) * 255)
-            vertex_struct.tangent.w = 254
-        except ValueError:
-            vertex_struct.tangent.x = 0
-            vertex_struct.tangent.y = 0
-            vertex_struct.tangent.z = 0
-            vertex_struct.tangent.w = 254
-        # UVS
-        uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
-        uv_x, uv_y = _normalize_uv(uv_x, uv_y)
-        vertex_struct.uv.u = pack('e', uv_x)
-        vertex_struct.uv.v = pack('e', uv_y)
-
-        if vertex_format in VERTEX_FORMATS_UV2:
+            vertex_struct.uv2 = dst_mod.Vec2HalfFloat(
+                _parent=vertex_struct, _root=vertex_struct._root)
             if uvs_per_vertex_2:
                 uv_x, uv_y = uvs_per_vertex_2.get(vertex_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
@@ -1206,8 +1265,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 vertex_struct.uv2.u = bytes_empty
                 vertex_struct.uv2.v = bytes_empty
-
+        # UV3
         if vertex_format in VERTEX_FORMATS_UV3:
+            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
+                _parent=vertex_struct, _root=vertex_struct._root)
             if uvs_per_vertex_3:
                 if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
                     try:
@@ -1226,8 +1287,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 vertex_struct.uv3.u = bytes_empty
                 vertex_struct.uv3.v = bytes_empty
-
         if vertex_format in VERTEX_FORMATS_UV4:
+            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
+                _parent=vertex_struct, _root=vertex_struct._root)
             if uvs_per_vertex_4:
                 uv_x, uv_y = uvs_per_vertex_4.get(vertex_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
@@ -1238,6 +1300,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.uv4.v = bytes_empty
         # Vertex colors
         if vertex_format in VERTEX_FORMATS_RGBA:
+            vertex_struct.rgba = dst_mod.Vec4U1(
+                _parent=vertex_struct, _root=vertex_struct._root)
             if color_per_vertex:
                 c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
                 vertex_struct.rgba.x = c[0]
@@ -1249,14 +1313,43 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.rgba.y = 128
                 vertex_struct.rgba.z = 128
                 vertex_struct.rgba.w = 255
-
+        # Set Position
+        xyz = (vertex.co[0] * SCALE, vertex.co[1]
+               * SCALE, vertex.co[2] * SCALE)
+        xyz = (xyz[0], xyz[2], -xyz[1])  # z-up to y-up
+        xyz = _apply_bbox_transforms(
+            xyz, dst_mod, bbox_data) if has_bones else xyz
+        vertex_struct.position.x = xyz[0]
+        vertex_struct.position.y = xyz[1]
+        vertex_struct.position.z = xyz[2]
+        vertex_struct.position.w = 32767  # might be changed later
+        # Set Normals
+        norms = normals.get(vertex_index, (0, 0, 0))
+        try:
+            # from [-1, 1] to [0, 255], and clipping bad blender normals
+            vertex_struct.normal.x = max(
+                0, min(255, round(((norms[0] * 0.5) + 0.5) * 255)))
+            vertex_struct.normal.y = max(
+                0, min(255, round(((norms[2] * 0.5) + 0.5) * 255)))
+            vertex_struct.normal.z = max(
+                0, min(255, round(((norms[1] * -0.5) + 0.5) * 255)))
+        except ValueError as err:
+            if "cannot convert float NaN to integer" in str(err):
+                vertex_struct.normal.x = 0
+                vertex_struct.normal.y = 0
+                vertex_struct.normal.z = 0
+            else:
+                raise
+        if dst_mod.header.version == 156:
+            vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])
             weight_values = [w for _, w in weights_data]
             weight_values.extend([0] * (MAX_BONES - len(weight_values)))
             if mesh_bone_palette:
-                bone_indices = [mesh_bone_palette.index(bone_index) for bone_index, _ in weights_data]
+                bone_indices = [mesh_bone_palette.index(
+                    bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
@@ -1264,12 +1357,15 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 
             if vertex_format == VERTEX_FORMAT_HANDS:
                 # TODO: validation of only 2 bones being affected
-                vertex_struct.bone_indices = [pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                vertex_struct.position.w = round(unpack('e', weight_values[0])[0] * 32767)
+                vertex_struct.bone_indices = [
+                    pack('e', bone_indices[0]), pack('e', bone_indices[1])]
+                vertex_struct.position.w = round(
+                    unpack('e', weight_values[0])[0] * 32767)
 
             elif dst_mod.header.version != 156:
                 # this is still buggy, see left-leg of em09.arc in re1
-                vertex_struct.position.w = round(unpack('e', weight_values[0])[0] * 32767)
+                vertex_struct.position.w = round(
+                    unpack('e', weight_values[0])[0] * 32767)
                 vertex_struct.weight_values = [0, 0]
                 vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
                 vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
@@ -1332,7 +1428,8 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
     for vertex_index, influence_list in weights_per_vertex.items():
         # limit max bones
         if len(influence_list) > limit:
-            influence_list = sorted(influence_list, key=lambda t: t[1])[-limit:]
+            influence_list = sorted(
+                influence_list, key=lambda t: t[1])[-limit:]
 
         # normalize
         weights = [t[1] for t in influence_list]
@@ -1342,7 +1439,8 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
             weights = [(w / total_weight) for w in weights]
 
         # float to byte
-        weights = [round(w * 255) or 1 for w in weights]  # can't have zero values
+        # can't have zero values
+        weights = [round(w * 255) or 1 for w in weights]
         # correct precision
         if not weights:
             # XXX vertex_position_2 research, beware
@@ -1364,7 +1462,8 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
 def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
     unsorted_weight_bounds = []
     if bl_obj.type != "ARMATURE":
-        weight_bound = _set_static_mesh_weight_bounds(dst_mod, bl_mesh, meshes_data)
+        weight_bound = _set_static_mesh_weight_bounds(
+            dst_mod, bl_mesh, meshes_data)
         unsorted_weight_bounds.append(weight_bound)
     else:
         for vg in bl_mesh.vertex_groups:
@@ -1399,8 +1498,10 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     center_y = (min_y + max_y) / 2
     center_z = (min_z + max_z) / 2
     center = (center_x, center_y, center_z)
-    radius = max(map(lambda vertex: get_dist(center, vertex.co[:]), bl_mesh.vertices))
-    bsphere_export = (center_x * 100, center_z * 100, -center_y * 100, radius * 100)
+    radius = max(map(lambda vertex: get_dist(
+        center, vertex.co[:]), bl_mesh.vertices))
+    bsphere_export = (center_x * 100, center_z * 100, -
+                      center_y * 100, radius * 100)
 
     bsphere.x = center_x * 100
     bsphere.y = center_z * 100
@@ -1479,7 +1580,8 @@ def _calculate_vertex_group_weight_bound(blender_mesh, armature, vertex_group, d
             continue
         vertices_in_group.append(v)
 
-    vertices_in_group_bone_space = [pose_bone_matrix @ v.co for v in vertices_in_group]
+    vertices_in_group_bone_space = [
+        pose_bone_matrix @ v.co for v in vertices_in_group]
 
     min_x = min((v[0] for v in vertices_in_group_bone_space))
     min_y = min((v[1] for v in vertices_in_group_bone_space))
@@ -1496,8 +1598,10 @@ def _calculate_vertex_group_weight_bound(blender_mesh, armature, vertex_group, d
     center_y = (min_y + max_y) / 2
     center_z = (min_z + max_z) / 2
     center = (center_x, center_y, center_z)
-    radius = max(map(lambda vertex: get_dist(center, vertex[:]), vertices_in_group_bone_space))
-    bsphere_export = (center_x * 100, center_z * 100, -center_y * 100, radius * 100)
+    radius = max(map(lambda vertex: get_dist(
+        center, vertex[:]), vertices_in_group_bone_space))
+    bsphere_export = (center_x * 100, center_z * 100, -
+                      center_y * 100, radius * 100)
 
     bbox_min_export = (min_x * 100, min_z * 100, -max_y * 100, 0.0)
     bbox_max_export = (max_x * 100, max_z * 100, -min_y * 100, 0.0)
@@ -1515,7 +1619,8 @@ def _calculate_vertex_group_weight_bound(blender_mesh, armature, vertex_group, d
         bsphere_export[0], bsphere_export[1], bsphere_export[2], 1
     ]
 
-    oabb_dimension_export = (length_x * 100, length_z * 100, length_y * 100, 0.0)
+    oabb_dimension_export = (
+        length_x * 100, length_z * 100, length_y * 100, 0.0)
 
     wb = dst_mod.WeightBound(_parent=meshes_data, _root=meshes_data._root)
 
