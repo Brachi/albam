@@ -51,18 +51,18 @@ NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
 
 TEX_FORMAT_MAPPER = {
     2: b"DXT1",  # FIXME: unchecked
-    14: b"DXT1",  # uncompressed
+    14: b"",  # uncompressed
     19: b"DXT1",
     20: b"DXT1",  # BM/Diffuse
     23: b"DXT5",
     24: b"DXT5",
     24: b"DXT5",  # BM/Diffuse (UI?)
-    25: b"DXT5",  # MM/Specular
+    25: b"DXT1",  # MM/Specular
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
-    39: b"DXT1",  # uncompressed
-    40: b"DXT1",  # uncompressed
+    39: b"",  # uncompressed
+    40: b"",  # uncompressed
     43: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
@@ -271,7 +271,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         shader_node_grp.inputs[6].default_value = 1
 
     elif texture_code == 5:
-        # Emissive mask ?
+        # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
 
     elif texture_code == 6:
@@ -279,6 +279,11 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         blender_texture_node.location = (-300, -1400)
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[7])
         shader_node_grp.inputs[8].default_value = 1
+
+    #elif texture_code == 7:
+    #    # Enviroment _CM
+    #    blender_texture_node.location = (-800, -350)
+    #    link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
 
     elif texture_code == 8:
         # Detail normal map
