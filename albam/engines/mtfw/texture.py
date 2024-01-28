@@ -75,15 +75,19 @@ DDS_FORMAT_MAP = {
 }
 
 APPID_SERIALIZE_MAPPER = {
+    "re0": lambda: _serialize_texture_21,
     "re1": lambda: _serialize_texture_21,
     "re5": lambda: _serialize_texture_156,
+    "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
 }
 
 APPID_TEXCLS_MAP = {
+    "re0": Tex157,
     "re1": Tex157,
+    "rev1": Tex157,
     "rev2": Tex157,
-    "re5" : Tex112,
+    "re5": Tex112,
 }
 
 
@@ -506,7 +510,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re1", "rev2"))
+@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):
     compression_format: bpy.props.IntProperty(default=0, min=0, max=43)

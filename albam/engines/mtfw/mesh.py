@@ -38,8 +38,10 @@ MOD_CLASS_MAPPER = {
     211: Mod21,
 }
 APPID_CLASS_MAPPER = {
+    "re0": Mod21,
     "re1": Mod21,
     "re5": Mod156,
+    "rev1": Mod21,
     "rev2": Mod21,
 }
 
@@ -222,8 +224,10 @@ VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 
 
+@blender_registry.register_import_function(app_id="re0", extension="mod")
 @blender_registry.register_import_function(app_id="re1", extension="mod")
 @blender_registry.register_import_function(app_id="re5", extension="mod")
+@blender_registry.register_import_function(app_id="rev1", extension="mod")
 @blender_registry.register_import_function(app_id="rev2", extension="mod")
 def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
@@ -682,8 +686,10 @@ def _get_material_hash(mod, mesh):
     return material_hash
 
 
+@blender_registry.register_export_function(app_id="re0", extension="mod")
 @blender_registry.register_export_function(app_id="re1", extension="mod")
 @blender_registry.register_export_function(app_id="re5", extension="mod")
+@blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 def export_mod(bl_obj):
     asset = bl_obj.albam_asset
@@ -1727,7 +1733,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re1", "rev2",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "rev1", "rev2",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)

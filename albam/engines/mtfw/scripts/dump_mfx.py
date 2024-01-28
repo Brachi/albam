@@ -2,6 +2,8 @@ import json
 import zlib
 
 import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent.parent.parent))
 from albam.engines.mtfw.structs.mfx import Mfx
 
 OUT = "albam/engines/mtfw/defines/shader-objects.json"

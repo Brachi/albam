@@ -28,16 +28,33 @@ VERSION_USES_MRL = {210, 211}
 VERSION_USES_MATERIAL_NAMES = {210}
 MRL_DEFAULT_VERSION = 34
 MRL_UNK_01 = 0x478ed2d7
-MRL_BLEND_STATE_HASH = 0x62B2D176  # TODO: verify in tests always the same or enums
-MRL_DEPTH_STENCIL_STATE_HASH = 0xC80A61AE  # TODO: verify
-MRL_RASTERIZER_STATE_HASH = 0x108CF1B2  # TODO: verify
+MRL_BLEND_STATE_HASH = {
+    "re0": 0x62b2d178,
+    "re1": 0x62b2d171,
+    "rev1": 0x62b2d16c,
+    "rev2": 0x62b2d176,
+}
+MRL_DEPTH_STENCIL_STATE_HASH = {
+    "re0": 0xc80a61b0,
+    "re1": 0xc80a61a9,
+    "rev1": 0xc80a61a4,
+    "rev2": 0xc80a61ae,
+}
+MRL_RASTERIZER_STATE_HASH = {
+    "re0": 0x108cf1b4,
+    "re1": 0x108cf1ad,
+    "rev1": 0x108cf1a8,
+    "rev2": 0x108cf1b2,
+}
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
 MRL_APPID_USES_ALBEDO2 = {"rev2"}
 MRL_APPID_USES_SHININESS2 = {"rev2"}
 MRL_APPID_USES_SPECULAR2MAP = {"rev2"}
 MRL_APPID_CB_GLOBALS_VERSION = {
+    "re0": 1,
     "re1": 1,
+    "rev1": 1,
     "rev2": 2,
 }
 
@@ -172,9 +189,9 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        mat.blend_state_hash = MRL_BLEND_STATE_HASH
-        mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH
-        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH
+        mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
+        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
         mat.unused = 0xA00DC  # TODO: research
         mat.material_info_flags = [16, 0, 128, 140]  # TODO: research
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
@@ -836,7 +853,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re1", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
