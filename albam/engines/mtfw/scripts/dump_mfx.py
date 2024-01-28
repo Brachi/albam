@@ -21,7 +21,7 @@ def dump_mfx(app_id, mfx_filepath):
         data = {}
 
     for i, entry_ptr in enumerate(mfx.entry_pointers):
-        if i == mfx.num_entry_pointers - 1:  # XXX last entry seems corrupted
+        if i == mfx.num_entries - 1:  # XXX last entry seems corrupted
             break
         mfx_entry = entry_ptr.mfx_entry
         mfx_name = mfx_entry.name
