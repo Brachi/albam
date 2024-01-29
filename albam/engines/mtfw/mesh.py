@@ -403,10 +403,10 @@ def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
         a = vertex.rgba.w / 255
         rgba_out.append((r, g, b, a))
     elif use_156rgba:
-        r = (unpack("H", vertex.uv3.u)[0] & 0xFF) / 255
+        b = (unpack("H", vertex.uv3.u)[0] & 0xFF) / 255
         g = (unpack("H", vertex.uv3.u)[0] >> 8 & 0xFF) / 255
-        b = (unpack("H", vertex.uv3.v)[0] & 0xFF) / 255
-        a = (unpack("H", vertex.uv3.u)[0] >> 8 & 0xFF) / 255
+        r = (unpack("H", vertex.uv3.v)[0] & 0xFF) / 255
+        a = (unpack("H", vertex.uv3.v)[0] >> 8 & 0xFF) / 255
         rgba_out.append((r, g, b, a))
     else:
         return
@@ -1275,24 +1275,24 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV3:
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_3:
-                if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
-                    try:
-                        color = color_per_vertex[vertex_index]
-                    except:
-                        color = (255, 255, 255, 255)
-                    _uv3_u = (color[1] << 8) | color[0]
-                    _uv3_v = (color[3] << 8) | color[2]
-                    vertex_struct.uv3.u = pack('H', _uv3_u)
-                    vertex_struct.uv3.v = pack('H', _uv3_v)
-                else:
-                    uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
-                    uv_x, uv_y = _normalize_uv(uv_x, uv_y)
-                    vertex_struct.uv3.u = pack('e', uv_x)
-                    vertex_struct.uv3.v = pack('e', uv_y)
+            if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
+                try:
+                    color = color_per_vertex[vertex_index]
+                except:
+                    color = (255, 255, 255, 255)
+                _uv3_u = (color[1] << 8) | color[0]
+                _uv3_v = (color[3] << 8) | color[2]
+                vertex_struct.uv3.u = pack('H', _uv3_u)
+                vertex_struct.uv3.v = pack('H', _uv3_v)
+            elif uvs_per_vertex_3:
+                uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
+                uv_x, uv_y = _normalize_uv(uv_x, uv_y)
+                vertex_struct.uv3.u = pack('e', uv_x)
+                vertex_struct.uv3.v = pack('e', uv_y)
             else:
                 vertex_struct.uv3.u = bytes_empty
                 vertex_struct.uv3.v = bytes_empty
+        # UV4
         if vertex_format in VERTEX_FORMATS_UV4:
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
