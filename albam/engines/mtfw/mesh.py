@@ -68,11 +68,11 @@ VERTEX_FORMATS_MAPPER = {
     0x9399c033: Mod21.Vertex9399,  # IANonSkinTBCA
     0x12553032: Mod21.Vertex1255,  # IANonSkinTBLA
     0x747d1031: Mod21.Vertex747d,  # IANonSkinTBNA
-    #0x63b6c02f: Mod21.Vertex63b6,  # IANonSkinTBNL vertex alpha
+    0x63b6c02f: Mod21.Vertex63b6,  # IANonSkinTBNL vertex alpha
     0x926fd02e: Mod21.Vertex926f,  # IANonSkinTBNC
     0xafa6302d: Mod21.VertexAfa6,  # IANonSkinTBA
     0x5e7f202c: Mod21.Vertex5e7f,  # IANonSkinTBN
-    #0xb86de02a: Mod21.VertexB86d,  # IANonSkinTBL vertex alpha
+    0xb86de02a: Mod21.VertexB86d,  # IANonSkinTBL vertex alpha
     0x49b4f029: Mod21.Vertex49b4,  # IANonSkinTBC
     0xd8297028: Mod21.Vertex8297,  # IANonSkinTB
     0xcbcf7027: Mod21.VertexCbcf,  # IASkinTBNLA8wt
@@ -108,6 +108,11 @@ VERTEX_FORMATS_RGBA = (
     0x77d87022,
     0xa013501e,
     0xcbf6c01a,
+)
+
+VERTEX_FORMATS_VERTEX_ALPHA = (
+    0x63b6c02f,
+    0xb86de02a,
 )
 
 VERTEX_FORMATS_TANGENT = (
@@ -205,6 +210,19 @@ VERTEX_FORMATS_UV4 = (
 )
 
 VERTEX_FORMATS_BRIDGE = (
+    0xa320c016,
+    0xcb68015,
+    0xdb7da014,
+    0xb0983013,
+)
+
+VERTEX_FORMATS_NORMAL4 = (
+    0xa14e003c,
+    0x2082f03b,
+    0xc66fa03a,
+    0xd1a47038,
+    0x207d6037,
+    0xa7d7d036,
     0xa320c016,
     0xcb68015,
     0xdb7da014,
@@ -1228,7 +1246,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.position = dst_mod.Vec3(
                 _parent=vertex_struct, _root=vertex_struct._root)
         # Normals types
-        if dst_mod.header.version == 156:
+        if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal = dst_mod.Vec4U1(
                 _parent=vertex_struct, _root=vertex_struct._root)
         else:
@@ -1319,6 +1337,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.rgba.y = 128
                 vertex_struct.rgba.z = 128
                 vertex_struct.rgba.w = 255
+        # Vertex Alpha
+        if vertex_format in VERTEX_FORMATS_VERTEX_ALPHA:
+            vertex_struct.vertex_alpha = 255
         # Set Position
         xyz = (vertex.co[0] * SCALE, vertex.co[1]
                * SCALE, vertex.co[2] * SCALE)
@@ -1346,7 +1367,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.normal.z = 0
             else:
                 raise
-        if dst_mod.header.version == 156:
+        if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
             # applying bounding box constraints
