@@ -26,8 +26,18 @@ MAPPER_SERIALIZE_FUNCS = {
 
 VERSION_USES_MRL = {210, 211}
 VERSION_USES_MATERIAL_NAMES = {210}
-MRL_DEFAULT_VERSION = 34
-MRL_UNK_01 = 0x478ed2d7
+MRL_DEFAULT_VERSION = {
+    "re0": 34,
+    "re1": 34,
+    "rev1": 32,
+    "rev2": 34,
+}
+MRL_UNK_01 = {
+    "re0": 0x419a398d,
+    "re1": 0x244bbc26,
+    "rev1": 0xe333fde9,
+    "rev2": 0x478ed2d7,
+}
 MRL_BLEND_STATE_HASH = {
     "re0": 0x62b2d178,
     "re1": 0x62b2d171,
@@ -175,8 +185,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
 
     mrl = Mrl(cb_globals_version=cb_globals_version)
     mrl.id_magic = b"MRL\x00"
-    mrl.version = MRL_DEFAULT_VERSION
-    mrl.unk_01 = MRL_UNK_01
+    mrl.version = MRL_DEFAULT_VERSION[app_id]
+    mrl.unk_01 = MRL_UNK_01[app_id]
     mrl.textures = []
     mrl.materials = []
     current_commands_offset = 0
