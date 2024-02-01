@@ -280,7 +280,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[7])
         shader_node_grp.inputs[8].default_value = 1
 
-    #elif texture_code == 7:
+    #  elif texture_code == 7:
     #    # Enviroment _CM
     #    blender_texture_node.location = (-800, -350)
     #    link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])

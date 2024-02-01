@@ -155,7 +155,9 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_appid_custom_properties(app_id)
         custom_properties.set_to_dest(mat)
-        # mat.use_8_bones = 0  # limited before export
+        if src_mod.bones_data is not None:
+            bl_mat.albam_custom_properties.use_8_bones = 0
+            mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
         mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
@@ -863,7 +865,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re1", "rev1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 

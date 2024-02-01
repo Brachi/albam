@@ -55,8 +55,8 @@ VERTEX_FORMATS_MAPPER = {
     6: Mod156.Vertex5,
     7: Mod156.Vertex5,
     8: Mod156.Vertex5,
-    #0x4325a03e: Mod21.Vertex4325,  # IANonSkinTBN_4M
-    #0x2f55c03d: Mod21.Vertex2f55,  # IASkinOTB_4WT_4M
+    # 0x4325a03e: Mod21.Vertex4325,  # IANonSkinTBN_4M shape keys not implemented yet
+    # 0x2f55c03d: Mod21.Vertex2f55,  # IASkinOTB_4WT_4M shape keys not implemented yet
     0xa14e003c: Mod21.VertexA14e,  # IANonSkinBCA
     0x2082f03b: Mod21.Vertex2082,  # IANonSkinBLA
     0xc66fa03a: Mod21.VertexC66f,  # IANonSkinBA
@@ -1189,7 +1189,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
     uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
     uvs_per_vertex_4 = get_uvs_per_vertex(bl_mesh, 3)
-    color_per_vertex = {}
+    color_per_vertex = _get_vertex_colors(bl_mesh)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
     weight_half_float = dst_mod.header.version == 210
     weights_per_vertex = _process_weights_for_export(
@@ -1207,8 +1207,6 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_size = 32
         vertex_format = max_bones_per_vertex
         use_special_vf = bl_mesh.material_slots[0].material.albam_custom_properties.mod_156_material.use_8_bones
-        if not has_bones and use_special_vf:
-            color_per_vertex = _get_vertex_colors(bl_mesh)
     elif dst_mod.header.version == 210:
         custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(
             app_id)
@@ -1294,10 +1292,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
             if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
-                try:
-                    color = color_per_vertex[vertex_index]
-                except:
-                    color = (255, 255, 255, 255)
+                color = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
                 _uv3_u = (color[1] << 8) | color[0]
                 _uv3_v = (color[3] << 8) | color[2]
                 vertex_struct.uv3.u = pack('H', _uv3_u)
@@ -1324,19 +1319,12 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.uv4.v = bytes_empty
         # Vertex colors
         if vertex_format in VERTEX_FORMATS_RGBA:
-            vertex_struct.rgba = dst_mod.Vec4U1(
-                _parent=vertex_struct, _root=vertex_struct._root)
-            if color_per_vertex:
-                c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
-                vertex_struct.rgba.x = c[0]
-                vertex_struct.rgba.y = c[1]
-                vertex_struct.rgba.z = c[2]
-                vertex_struct.rgba.w = c[3]
-            else:
-                vertex_struct.rgba.x = 128
-                vertex_struct.rgba.y = 128
-                vertex_struct.rgba.z = 128
-                vertex_struct.rgba.w = 255
+            vertex_struct.rgba = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
+            c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
+            vertex_struct.rgba.x = c[0]
+            vertex_struct.rgba.y = c[1]
+            vertex_struct.rgba.z = c[2]
+            vertex_struct.rgba.w = c[3]
         # Vertex Alpha
         if vertex_format in VERTEX_FORMATS_VERTEX_ALPHA:
             vertex_struct.vertex_alpha = 255
