@@ -38,23 +38,23 @@ MRL_UNK_01 = {
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
 }
+
+shader_objects = get_shader_objects()
+blend_state_obj = shader_objects["BSSolid"]
+stencil_obj = shader_objects["DSZTestWriteStencilWrite"]
+rasterizer_obj = shader_objects["RSMesh"]
+
 MRL_BLEND_STATE_HASH = {
-    "re0": 0x62b2d178,
-    "re1": 0x62b2d171,
-    "rev1": 0x62b2d16c,
-    "rev2": 0x62b2d176,
+    app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in blend_state_obj["apps"].items()
 }
 MRL_DEPTH_STENCIL_STATE_HASH = {
-    "re0": 0xc80a61b0,
-    "re1": 0xc80a61a9,
-    "rev1": 0xc80a61a4,
-    "rev2": 0xc80a61ae,
+    app_id: (stencil_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in stencil_obj["apps"].items()
 }
 MRL_RASTERIZER_STATE_HASH = {
-    "re0": 0x108cf1b4,
-    "re1": 0x108cf1ad,
-    "rev1": 0x108cf1a8,
-    "rev2": 0x108cf1b2,
+    app_id: (rasterizer_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in rasterizer_obj["apps"].items()
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
