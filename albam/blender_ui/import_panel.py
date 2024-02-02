@@ -316,7 +316,9 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
     def draw(self, context):
         row = self.layout.row()
         row.prop(context.scene.albam.file_explorer, "app_selected")
-        row.operator("albam.app_config_popup", icon="OPTIONS")
+        # Experimental for reengine
+        if os.getenv("ALBAM_ENABLE_REEN"):
+            row.operator("albam.app_config_popup", icon="OPTIONS")
 
 
 @blender_registry.register_blender_type
