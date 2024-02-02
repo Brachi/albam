@@ -3,8 +3,6 @@ import io
 
 import pytest
 
-from albam.engines.mtfw.material import MRL_APPID_CB_GLOBALS_VERSION
-
 
 class FileWrapper:
     def __init__(self, file_path):
@@ -36,6 +34,7 @@ def mrl(request):
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
     from albam.engines.mtfw.structs.mrl import Mrl
+    from albam.engines.mtfw.material import MRL_APPID_CB_GLOBALS_VERSION
     from kaitaistruct import KaitaiStream
     arc = request.param[0]
     mrl_file_entry = request.param[1]
