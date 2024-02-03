@@ -26,18 +26,45 @@ MAPPER_SERIALIZE_FUNCS = {
 
 VERSION_USES_MRL = {210, 211}
 VERSION_USES_MATERIAL_NAMES = {210}
-MRL_DEFAULT_VERSION = 34
-MRL_UNK_01 = 0x478ed2d7
-MRL_BLEND_STATE_HASH = 0x62B2D176  # TODO: verify in tests always the same or enums
-MRL_DEPTH_STENCIL_STATE_HASH = 0xC80A61AE  # TODO: verify
-MRL_RASTERIZER_STATE_HASH = 0x108CF1B2  # TODO: verify
+MRL_DEFAULT_VERSION = {
+    "re0": 34,
+    "re1": 34,
+    "rev1": 32,
+    "rev2": 34,
+}
+MRL_UNK_01 = {
+    "re0": 0x419a398d,
+    "re1": 0x244bbc26,
+    "rev1": 0xe333fde9,
+    "rev2": 0x478ed2d7,
+}
+
+shader_objects = get_shader_objects()
+blend_state_obj = shader_objects["BSSolid"]
+stencil_obj = shader_objects["DSZTestWriteStencilWrite"]
+rasterizer_obj = shader_objects["RSMesh"]
+
+MRL_BLEND_STATE_HASH = {
+    app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in blend_state_obj["apps"].items()
+}
+MRL_DEPTH_STENCIL_STATE_HASH = {
+    app_id: (stencil_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in stencil_obj["apps"].items()
+}
+MRL_RASTERIZER_STATE_HASH = {
+    app_id: (rasterizer_obj["hash"] << 12) + data["shader_object_index"]
+    for app_id, data in rasterizer_obj["apps"].items()
+}
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
 MRL_APPID_USES_ALBEDO2 = {"rev2"}
 MRL_APPID_USES_SHININESS2 = {"rev2"}
 MRL_APPID_USES_SPECULAR2MAP = {"rev2"}
 MRL_APPID_CB_GLOBALS_VERSION = {
+    "re0": 1,
     "re1": 1,
+    "rev1": 1,
     "rev2": 2,
 }
 
@@ -128,7 +155,9 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_appid_custom_properties(app_id)
         custom_properties.set_to_dest(mat)
-        mat.use_8_bones = 0  # limited before export
+        if src_mod.bones_data is not None:
+            bl_mat.albam_custom_properties.use_8_bones = 0
+            mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
         mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
@@ -158,8 +187,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
 
     mrl = Mrl(cb_globals_version=cb_globals_version)
     mrl.id_magic = b"MRL\x00"
-    mrl.version = MRL_DEFAULT_VERSION
-    mrl.unk_01 = MRL_UNK_01
+    mrl.version = MRL_DEFAULT_VERSION[app_id]
+    mrl.unk_01 = MRL_UNK_01[app_id]
     mrl.textures = []
     mrl.materials = []
     current_commands_offset = 0
@@ -172,9 +201,9 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        mat.blend_state_hash = MRL_BLEND_STATE_HASH
-        mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH
-        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH
+        mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
+        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
         mat.unused = 0xA00DC  # TODO: research
         mat.material_info_flags = [16, 0, 128, 140]  # TODO: research
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
@@ -732,23 +761,23 @@ def _infer_mrl(context, mod_file_item, app_id):
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
-    use_translucent: bpy.props.BoolProperty(default=0)
-    use_opaque: bpy.props.BoolProperty(default=0)
-    unk_flag_03: bpy.props.BoolProperty(default=0)
+    surface_unk: bpy.props.BoolProperty(default=0)
+    surface_opaque: bpy.props.BoolProperty(default=0)
+    use_bridge_lines: bpy.props.BoolProperty(default=0)
     unk_flag_04: bpy.props.BoolProperty(default=0)
     unk_flag_05: bpy.props.BoolProperty(default=0)
-    unk_flag_06: bpy.props.BoolProperty(default=0)
-    unk_flag_07: bpy.props.BoolProperty(default=0)
-    unk_flag_08: bpy.props.BoolProperty(default=0)
+    use_alpha_clip: bpy.props.BoolProperty(default=0)
+    use_opaque: bpy.props.BoolProperty(default=0)
+    use_translusent: bpy.props.BoolProperty(default=0)
 
-    unk_flag_09: bpy.props.BoolProperty(default=0)
+    use_alpha_transparency: bpy.props.BoolProperty(default=0)
     unk_flag_10: bpy.props.BoolProperty(default=0)
     unk_flag_11: bpy.props.BoolProperty(default=0)
     unk_flag_12: bpy.props.BoolProperty(default=0)
     unk_flag_13: bpy.props.BoolProperty(default=0)
     unk_flag_14: bpy.props.BoolProperty(default=0)
     unk_flag_15: bpy.props.BoolProperty(default=0)
-    use_alpha: bpy.props.BoolProperty(default=0)
+    unk_flag_16: bpy.props.BoolProperty(default=0)
 
     unk_flag_17: bpy.props.BoolProperty(default=0)
     unk_flag_18: bpy.props.BoolProperty(default=0)
@@ -762,28 +791,26 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     unk_flag_25: bpy.props.BoolProperty(default=0)
     unk_flag_26: bpy.props.BoolProperty(default=0)
     unk_flag_27: bpy.props.BoolProperty(default=0)
-    unk_flag_28: bpy.props.BoolProperty(default=0)
-    use_8_bones : bpy.props.BoolProperty(default=0)
+    use_8_bones: bpy.props.BoolProperty(default=0)
+    unk_flag_29: bpy.props.BoolProperty(default=0)
     unk_flag_30: bpy.props.BoolProperty(default=0)
     unk_flag_31: bpy.props.BoolProperty(default=0)
     unk_flag_32: bpy.props.BoolProperty(default=0)
 
-    unk_flag_33: bpy.props.BoolProperty(default=0)
-    unk_flag_34: bpy.props.BoolProperty(default=0)
-    unk_flag_35: bpy.props.BoolProperty(default=0)
+    skin_weights_type: bpy.props.IntProperty(default=0)
     unk_flag_36: bpy.props.BoolProperty(default=0)
     unk_flag_37: bpy.props.BoolProperty(default=0)
     unk_flag_38: bpy.props.BoolProperty(default=0)
     unk_flag_39: bpy.props.BoolProperty(default=0)
 
     unk_flag_40: bpy.props.BoolProperty(default=0)
-    unk_flag_41: bpy.props.BoolProperty(default=0)
+    use_emmisive_map: bpy.props.BoolProperty(default=0)
     unk_flag_42: bpy.props.BoolProperty(default=0)
     unk_flag_43: bpy.props.BoolProperty(default=0)
-    unk_flag_44: bpy.props.BoolProperty(default=0)
+    use_detail_map: bpy.props.BoolProperty(default=0)
     unk_flag_45: bpy.props.BoolProperty(default=0)
     unk_flag_46: bpy.props.BoolProperty(default=0)
-    unk_flag_47: bpy.props.BoolProperty(default=0)
+    use_cubemap: bpy.props.BoolProperty(default=0)
     unk_flag_48: bpy.props.BoolProperty(default=0)
 
     unk_01: bpy.props.IntProperty(default=0)
@@ -805,8 +832,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     unk_param_08: bpy.props.FloatProperty(default=0.0)
     unk_param_09: bpy.props.FloatProperty(default=0.0)
     unk_param_10: bpy.props.FloatProperty(default=0.0)
-    unk_param_11: bpy.props.FloatProperty(default=0.0)
     detail_normal_power: bpy.props.FloatProperty(default=0.0)
+    detail_normal_multiplier: bpy.props.FloatProperty(default=0.0)
     unk_param_13: bpy.props.FloatProperty(default=0.0)
     unk_param_14: bpy.props.FloatProperty(default=0.0)
     unk_param_15: bpy.props.FloatProperty(default=0.0)
@@ -838,7 +865,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
