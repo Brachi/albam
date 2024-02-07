@@ -90,6 +90,12 @@ APPID_TEXCLS_MAP = {
     "re5": Tex112,
 }
 
+APPID_TEX_TYPE_MAPPER = {
+    "re0": 0x209d,
+    "re1": 0x209d,
+    "rev1": 0xa09d,
+    "rev2": 0x209d,
+}
 
 TEX_TYPE_MAPPER = {
     0xcd06f: TextureType.DIFFUSE,
@@ -374,7 +380,7 @@ def _serialize_texture_21(app_id, dict_tex):
 
     tex = Tex157()
     tex.id_magic = b"TEX\x00"
-    tex_type = 0x209D  # TODO: enum
+    tex_type = APPID_TEX_TYPE_MAPPER[app_id]  # TODO: enum
     reserved_01 = 0
     shift = 0
     constant = 1  # XXX Not really, see tests
