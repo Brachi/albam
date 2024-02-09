@@ -228,6 +228,36 @@ VERTEX_FORMATS_NORMAL4 = (
     0xdb7da014,
     0xb0983013,
 )
+VERTEX_FORMATS_BONE_LIMIT = {
+    0xcbcf7027: 8,  # IASkinTBNLA8wt
+    0xd84e3026: 8,  # IASkinTBC8wt
+    0x75c3e025: 8,  # IASkinTBN8wt
+    0xbb424024: 8,  # IASkinTB8wt
+    0x64593023: 4,  # IASkinTBNLA4wt
+    0x77d87022: 4,  # IASkinTBC4wt
+    0xdA55a021: 4,  # IASkinTBN4wt
+    0x14d40020: 4,  # IASkinTB4wt
+    0xb392101f: 2,  # IASkinTBNLA2wt
+    0xa013501e: 2,  # IASkinTBC2wt
+    0xd9e801d: 2,  # IASkinTBN2wt
+    0xc31f201c: 2,  # IASkinTB2wt
+    0xd877801b: 1,  # IASkinTBNLA1wt
+    0xcbf6c01a: 1,  # IASkinTBC1wt
+    0x667b1019: 1,  # IASkinTBN1wt
+    0xa8fab018: 1,  # IASkinTB1wt
+    0xa320c016: 8,  # IASkinBridge8wt
+    0xcb68015: 4,  # IASkinBridge4wt
+    0xdb7da014: 2,  # IASkinBridge2wt
+    0xb0983013: 1,  # IASkinBridge1wt
+}
+
+VERTEX_FORMAT_POS3S2 = [
+    0xd877801b,
+    0xcbf6c01a,
+    0x667b1019,
+    0xb0983013,
+    0xa8fab018,
+]
 
 BBOX_AFFECTED = [
     0x667B1019,
@@ -1191,11 +1221,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     uvs_per_vertex_4 = get_uvs_per_vertex(bl_mesh, 3)
     color_per_vertex = _get_vertex_colors(bl_mesh)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
-    weight_half_float = dst_mod.header.version == 210
-    weights_per_vertex = _process_weights_for_export(
-        weights_per_vertex, half_float=weight_half_float)
-    max_bones_per_vertex = max(
-        {len(data) for data in weights_per_vertex.values()}, default=0)
+    max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
     normals = get_normals_per_vertex(bl_mesh.data)
     tangents = get_tangents_per_vertex(bl_mesh.data)
     has_bones = bool(dst_mod.header.num_bones)
@@ -1208,29 +1234,24 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_format = max_bones_per_vertex
         use_special_vf = bl_mesh.material_slots[0].material.albam_custom_properties.mod_156_material.use_8_bones
     elif dst_mod.header.version == 210:
-        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(
-            app_id)
+        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
         except (TypeError, ValueError):
             stored_vertex_format = None
         if has_bones:
-            if stored_vertex_format == VERTEX_FORMAT_HANDS:
-                vertex_format = VERTEX_FORMAT_HANDS
-                VertexCls = dst_mod.VertexC31f
-                vertex_size = 24
-
-            else:
-                vertex_format = VERTEX_FORMAT_DEFAULT
-                # using the most flexible one for now, no optimizations
-                VertexCls = dst_mod.Vertex14d4
-                vertex_size = 28  # TODO: size_
+            vertex_format = stored_vertex_format
+            VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.Vertex14d4)
+            vertex_size = VertexCls().size_
         else:
             vertex_format = stored_vertex_format
             VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.VertexA7d7)
             vertex_size = VertexCls().size_
 
-    MAX_BONES = 4  # enforces in `_process_weights_for_export`
+    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforces in `_process_weights_for_export`
+    weight_half_float = dst_mod.header.version == 210 and vertex_format not in VERTEX_FORMATS_BRIDGE
+    weights_per_vertex = _process_weights_for_export(
+        weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vertices_stream = KaitaiStream(
         BytesIO(bytearray(vertex_size * vertex_count)))
     bytes_empty = b'\x00\x00'
@@ -1238,8 +1259,12 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
         # Position types
         if has_bones:
-            vertex_struct.position = dst_mod.Vec4S2(
-                _parent=vertex_struct, _root=vertex_struct._root)
+            if MAX_BONES == 1:
+                vertex_struct.position = dst_mod.Vec3S2(
+                    _parent=vertex_struct, _root=vertex_struct._root)
+            else:
+                vertex_struct.position = dst_mod.Vec4S2(
+                    _parent=vertex_struct, _root=vertex_struct._root)
         else:
             vertex_struct.position = dst_mod.Vec3(
                 _parent=vertex_struct, _root=vertex_struct._root)
@@ -1355,35 +1380,57 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.normal.z = 0
             else:
                 raise
+        # Set Weights
         if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
             # applying bounding box constraints
-            weights_data = weights_per_vertex.get(vertex_index, [])
+            weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]
-            weight_values.extend([0] * (MAX_BONES - len(weight_values)))
+            weight_values.extend([0] * (MAX_BONES - len(weight_values)))  # add nulls if less than bone limit
             if mesh_bone_palette:
                 bone_indices = [mesh_bone_palette.index(
                     bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
+            if vertex_format == 0xdb7da014: # very strange bridge format
+                bone_indices.insert(1, 128)
+                bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
-
-            if vertex_format == VERTEX_FORMAT_HANDS:
-                # TODO: validation of only 2 bones being affected
-                vertex_struct.bone_indices = [
-                    pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                vertex_struct.position.w = round(
-                    unpack('e', weight_values[0])[0] * 32767)
-
-            elif dst_mod.header.version != 156:
-                # this is still buggy, see left-leg of em09.arc in re1
-                vertex_struct.position.w = round(
-                    unpack('e', weight_values[0])[0] * 32767)
-                vertex_struct.weight_values = [0, 0]
-                vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
-                vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
+            if dst_mod.header.version != 156 and not vertex_format in VERTEX_FORMATS_BRIDGE:
+                #if vertex_format == VERTEX_FORMAT_HANDS:
+                #if MAX_BONES == 1:
+                #    vertex_struct.bone_indices = bone_indices[0]
+                if MAX_BONES == 2:
+                    # TODO: validation of only 2 bones being affected
+                    vertex_struct.bone_indices = [
+                        pack('e', bone_indices[0]), pack('e', bone_indices[1])]
+                    vertex_struct.position.w = round(
+                        unpack('e', weight_values[0])[0] * 32767)
+                elif MAX_BONES == 4:
+                    vertex_struct.position.w = round(
+                        unpack('e', weight_values[0])[0] * 32767)
+                    vertex_struct.weight_values = [0, 0]
+                    vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
+                    vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
+                elif MAX_BONES == 8:
+                    vertex_struct.position.w = round(
+                        unpack('e', weight_values[0])[0] * 32767)
+                    vertex_struct.weight_values = [0, 0, 0, 0]
+                    test = round(
+                        unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
+                    vertex_struct.weight_values[0] = round(
+                        unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
+                    vertex_struct.weight_values[1] = round(
+                        unpack('e', weight_values[2])[0] * 255) if weight_values[2] else 0
+                    vertex_struct.weight_values[2] = round(
+                        unpack('e', weight_values[3])[0] * 255) if weight_values[3] else 0
+                    vertex_struct.weight_values[3] = round(
+                        unpack('e', weight_values[4])[0] * 255) if weight_values[4] else 0
+                    vertex_struct.weight_values2 = [0, 0]
+                    vertex_struct.weight_values2[0] = weight_values[5] if weight_values[5] else bytes_empty
+                    vertex_struct.weight_values2[1] = weight_values[6] if weight_values[6] else bytes_empty
             else:
                 vertex_struct.weight_values = weight_values
 

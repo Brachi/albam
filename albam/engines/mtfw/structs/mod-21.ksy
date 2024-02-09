@@ -686,6 +686,9 @@ types:
       - {id: occlusion, type: u1}
       - {id: tangent, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
+    instances:
+      size_:
+        value: 20
 
 # IASkinBridge4wt4M not found
 
