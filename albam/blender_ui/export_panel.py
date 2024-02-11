@@ -5,6 +5,7 @@ import bpy
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
 from .import_panel import FileListItem
+from albam.engines.mtfw.archive import update_arc
 
 
 NODES_CACHE = {}
@@ -96,6 +97,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
         col = split.column()
         col.operator("albam.save_file2", icon="SORT_ASC", text="")
         col.operator("albam.pack", icon="PACKAGE", text="")
+        col.operator("albam.patch", icon="FILE_REFRESH", text="")
         col = split.column()
         col.template_list(
             "ALBAM_UL_ExportedFileList",
@@ -261,17 +263,105 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
     bl_idname = "albam.pack"
     bl_label = "Pack item"
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        vfs = context.scene.albam.file_explorer
+        index = vfs.file_list_selected_index
+        item = vfs.file_list[index]
+        parent_node = ""
+        if item .is_archive:
+            parent_node = item.display_name
+        else:
+            parent_node = (item.tree_node_ancestors[0].node_id).split("::")[1]
+        self.filepath = parent_node
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        # TODO
+        vfs_i = context.scene.albam.file_explorer
+        index_i = vfs_i.file_list_selected_index
+        item_i = vfs_i.file_list[index_i]
+        if item_i.is_archive:
+            path_i = item_i.file_path
+        else:
+            arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
+            arc_node = [item for item in vfs_i.file_list
+                        if item.is_archive is True
+                        and item.display_name == arc_name]
+            path_i = arc_node[0].file_path
+        files_e = []
+        vfs_e = context.scene.albam.exported
+        index_e = vfs_e.file_list_selected_index
+        item_e = vfs_e.file_list[index_e]
+        exported = [item for item in vfs_e.file_list
+                    if item.is_expandable is False]
+        for e in exported:
+            try:
+                parent = e.tree_node_ancestors[0].node_id
+            except:
+                continue
+            if parent == item_e.name:
+                files_e.append(e)
+        arc = update_arc(path_i, files_e)
+        with open(self.filepath, "wb") as f:
+            f.write(arc)
         return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
-        # TODO
-        return False
+        vfs = context.scene.albam.exported
+        current_item = vfs.__class__.get_selected_item()
+        return current_item and current_item.is_root
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_Patch(bpy.types.Operator):
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    bl_idname = "albam.patch"
+    bl_label = "Update arc"
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        self.filepath = ""
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        files_e = []
+        vfs_e = context.scene.albam.exported
+        index_e = vfs_e.file_list_selected_index
+        item_e = vfs_e.file_list[index_e]
+        exported = [item for item in vfs_e.file_list if item.is_expandable is False]
+        for e in exported:
+            try:
+                parent = e.tree_node_ancestors[0].node_id
+            except:
+                continue
+            if parent == item_e.name:
+                files_e.append(e)
+        arc = update_arc(self.filepath, files_e)
+        with open(self.filepath, "wb") as f:
+            f.write(arc)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
         vfs = context.scene.albam.exported
         current_item = vfs.__class__.get_selected_item()
         return current_item and current_item.is_root
