@@ -3,8 +3,9 @@ import zlib
 
 import sys
 from pathlib import Path
+
+# XXX temp until proper script installation
 sys.path.append(str(Path(__file__).parent.parent.parent.parent.parent))
-from albam.engines.mtfw.structs.mfx import Mfx
 
 OUT = "albam/engines/mtfw/defines/shader-objects.json"
 
@@ -14,6 +15,9 @@ def generate_mfx_entry_id(mfx_entry_name, mfx_entry_index):
 
 
 def dump_mfx(app_id, mfx_filepath):
+    # XXX temp until proper script installation
+    from albam.engines.mtfw.structs.mfx import Mfx
+
     mfx = Mfx.from_file(mfx_filepath)
 
     try:
