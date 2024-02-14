@@ -52,9 +52,9 @@ NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
 TEX_FORMAT_MAPPER = {
     2: b"DXT1",  # FIXME: unchecked
     14: b"",  # uncompressed
-    19: b"DXT1",
-    20: b"DXT1",  # BM/Diffuse
-    23: b"DXT5",
+    19: b"DXT1",  # BM/Diffuse without alpha
+    20: b"DXT1",  # ? env cubemap in RE1
+    23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
@@ -93,7 +93,7 @@ APPID_TEXCLS_MAP = {
 APPID_TEX_TYPE_MAPPER = {
     "re0": 0x209d,
     "re1": 0x209d,
-    "rev1": 0xa09d,
+    "rev1": 0xa09d,  # only for stage geometry
     "rev2": 0x209d,
 }
 
@@ -105,7 +105,7 @@ TEX_TYPE_MAPPER = {
     0x75a53: TextureType.NORMAL_DETAIL,
     0x64c43: TextureType.ENVMAP,
     0x1698a: TextureType.ALPHAMAP,  # tTransparencyMap
-    # 0xff5be: TextureType.UNK_01, # tAlbedoBlendMap
+    0xff5be: TextureType.UNK_01, # tAlbedoBlendMap
     # 0x1cb2a: TextureType.UNK_01, # ttHairShiftMap
     # 0xed93b: TextureType.UNK_01, # tEmissionMap
     # 0xa9787: TextureType.UNK_01, # tShininessMap
@@ -164,7 +164,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
                 dwHeight=tex.height,
                 dwWidth=tex.width,
                 pixelfmt_dwFourCC=compression_fmt,
-                dwMipMapCount=tex.num_mipmaps_per_image // tex.num_images,
+                dwMipMapCount= tex.num_mipmaps_per_image  # // tex.num_images,
             )
             dds_header.set_constants()
             dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
@@ -286,10 +286,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[7])
         shader_node_grp.inputs[8].default_value = 1
 
-    #  elif texture_code == 7:
-    #    # Enviroment _CM
-    #    blender_texture_node.location = (-800, -350)
-    #    link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
+    elif texture_code == 7:
+        # Enviroment _CM
+        blender_texture_node.location = (-800, -350)
+        link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
 
     elif texture_code == 8:
         # Detail normal map
