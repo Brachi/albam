@@ -1213,8 +1213,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
 def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data):
     SCALE = 100
-    VERTEX_FORMAT_DEFAULT = 0x14d40020
-    VERTEX_FORMAT_HANDS = 0xc31f201c
     uvs_per_vertex = get_uvs_per_vertex(bl_mesh, 0)
     uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
     uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
@@ -1240,10 +1238,14 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         except (TypeError, ValueError):
             stored_vertex_format = None
         if has_bones:
+            if stored_vertex_format not in VERTEX_FORMATS_MAPPER:
+                stored_vertex_format = 0x14d40020
             vertex_format = stored_vertex_format
             VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.Vertex14d4)
             vertex_size = VertexCls().size_
         else:
+            if stored_vertex_format not in VERTEX_FORMATS_MAPPER:
+                stored_vertex_format = 0xa7d7d036
             vertex_format = stored_vertex_format
             VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.VertexA7d7)
             vertex_size = VertexCls().size_
@@ -1399,11 +1401,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
             if dst_mod.header.version != 156 and not vertex_format in VERTEX_FORMATS_BRIDGE:
-                #if vertex_format == VERTEX_FORMAT_HANDS:
-                #if MAX_BONES == 1:
-                #    vertex_struct.bone_indices = bone_indices[0]
                 if MAX_BONES == 2:
-                    # TODO: validation of only 2 bones being affected
                     vertex_struct.bone_indices = [
                         pack('e', bone_indices[0]), pack('e', bone_indices[1])]
                     vertex_struct.position.w = round(
@@ -1418,8 +1416,6 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     vertex_struct.position.w = round(
                         unpack('e', weight_values[0])[0] * 32767)
                     vertex_struct.weight_values = [0, 0, 0, 0]
-                    test = round(
-                        unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
                     vertex_struct.weight_values[0] = round(
                         unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
                     vertex_struct.weight_values[1] = round(
