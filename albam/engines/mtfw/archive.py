@@ -41,7 +41,7 @@ def arc_accessor(file_item, context):
     ext = ext.replace(".", "")
     try:
         file_type = EXTENSION_TO_FILE_ID[ext]
-    except:
+    except KeyError:
         file_type = int(ext)
     file_bytes = arc.get_file(file_path, file_type)
 
@@ -136,7 +136,7 @@ def update_arc(filepath, vfiles):
         path = fe.file_path
         try:
             extension = FILE_ID_TO_EXTENSION[fe.file_type]
-        except:
+        except KeyError:
             extension = str(fe.file_type)
         relative_path = (path + "." + extension)
         imported[relative_path] = fe
@@ -149,7 +149,7 @@ def update_arc(filepath, vfiles):
         file_path = os.path.splitext(path)[0]
         try:
             file_type = EXTENSION_TO_FILE_ID[vf.extension]
-        except:
+        except KeyError:
             file_type = int(vf.extension)
 
         if imported.get(path):

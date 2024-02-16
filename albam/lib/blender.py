@@ -241,11 +241,11 @@ def get_bl_teximage_nodes(bl_materials):
             continue  # TODO: pre-check
         for node in mat.node_tree.nodes:
             if node.type == "TEX_IMAGE":
-                color_out = node.outputs['Color'] 
+                color_out = node.outputs['Color']
                 try:
                     color_out.links[0].to_socket.name
-                except:
-                    print("The texture {} has no connections".format(node.image.name))
+                except Exception:
+                    print(f"The texture {node.image.name} has no connections")
                     continue
                 im_mapped = images.setdefault(node.image.name, deepcopy(default))
                 im_mapped["materials"][mat.name] = (mat, node)

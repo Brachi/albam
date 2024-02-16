@@ -296,8 +296,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         else:
             arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
             arc_node = [item for item in vfs_i.file_list
-                        if item.is_archive is True
-                        and item.display_name == arc_name]
+                        if item.is_archive is True and item.display_name == arc_name]
             path_i = arc_node[0].file_path
         files_e = []
         vfs_e = context.scene.albam.exported
@@ -308,7 +307,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         for e in exported:
             try:
                 parent = e.tree_node_ancestors[0].node_id
-            except:
+            except IndexError:
                 continue
             if parent == item_e.name:
                 files_e.append(e)
@@ -351,7 +350,7 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         for e in exported:
             try:
                 parent = e.tree_node_ancestors[0].node_id
-            except:
+            except IndexError:
                 continue
             if parent == item_e.name:
                 files_e.append(e)

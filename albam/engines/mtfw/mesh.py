@@ -301,10 +301,8 @@ def build_blender_model(file_list_item, context):
             name = f"{bl_object_name}_{str(i).zfill(4)}"
             material_hash = _get_material_hash(mod, mesh)
             use_156rgba = False
-            if mod_version == 156:
-                if not skeleton:
-                    if materials.get(material_hash):
-                        use_156rgba = materials[material_hash].albam_custom_properties.mod_156_material.use_8_bones
+            if mod_version == 156 and (not skeleton and materials.get(material_hash)):
+                use_156rgba = materials[material_hash].albam_custom_properties.mod_156_material.use_8_bones
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
@@ -1027,16 +1025,16 @@ def _get_vertex_colors(blender_mesh):
     colors = {}
     try:
         color_layer = mesh.vertex_colors[0]
-    except:
+    except IndexError:
         return colors
     mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
     vtx_colors = {mesh_loops[li]: data.color for li,
                   data in color_layer.data.items()}
     for idx, color in vtx_colors.items():
-        b = round(color[0]*255)
-        g = round(color[1]*255)
-        r = round(color[2]*255)
-        a = round(color[3]*255)
+        b = round(color[0] * 255)
+        g = round(color[1] * 255)
+        r = round(color[2] * 255)
+        a = round(color[3] * 255)
         colors[idx] = (r, g, b, a)
     return colors
 
@@ -1230,7 +1228,11 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-        use_special_vf = bl_mesh.material_slots[0].material.albam_custom_properties.mod_156_material.use_8_bones
+        use_special_vf = (
+            bl_mesh.material_slots[0]
+            .material.albam_custom_properties
+            .mod_156_material.use_8_bones
+        )
     elif dst_mod.header.version == 210:
         custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
         try:
@@ -1356,8 +1358,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_VERTEX_ALPHA:
             vertex_struct.vertex_alpha = 255
         # Set Position
-        xyz = (vertex.co[0] * SCALE, vertex.co[1]
-               * SCALE, vertex.co[2] * SCALE)
+        xyz = (vertex.co[0] * SCALE, vertex.co[1] * SCALE, vertex.co[2] * SCALE)
         xyz = (xyz[0], xyz[2], -xyz[1])  # z-up to y-up
         xyz = _apply_bbox_transforms(
             xyz, dst_mod, bbox_data) if has_bones else xyz
