@@ -39,9 +39,16 @@ MRL_UNK_01 = {
     "rev2": 0x478ed2d7,
 }
 
+MRL_UNUSED = {
+    "re0": 0xA00DC,
+    "re1": 0x200DC,
+    "rev1": 0x804DC,
+    "rev2": 0xA00DC,
+}
+
 shader_objects = get_shader_objects()
 blend_state_obj = shader_objects["BSSolid"]  # rev1 items uses BSAddAlpha
-stencil_obj = shader_objects["DSZTestWriteStencilWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
+stencil_obj = shader_objects["DSZTestWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
 rasterizer_obj = shader_objects["RSMesh"]
 
 MRL_BLEND_STATE_HASH = {
@@ -209,7 +216,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
         mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
         mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
-        mat.unused = 0x804DC  # 0xA00DC # TODO: research
+        mat.unused = MRL_UNUSED[app_id] # TODO: research rev2r requie 0xA00DC
         mat.material_info_flags = [16, 0, 128, 140] #[0, 0, 128, 140]  # TODO: research
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
         mat.anim_data_size = 0
@@ -296,47 +303,14 @@ def _create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types)
     return resources
 
 
-def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
-    # NO Albedo Color Mask for now
-    resources = []
-
-    diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
-    if diffuse_texture_index is None:
-        return resources
-    
-    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    albedo_blend_index = tex_types.get(TextureType.UNK_01, None)  # curently hardcoded to albedo blend
-    if albedo_blend_index is not None and app_id != "rev2":
-        param_name ="FAlbedoMapModulate"
-    else:
-        param_name = "FAlbedoMap2" if app_id in MRL_APPID_USES_ALBEDO2 else "FAlbedoMap"
-
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
-    resources.append(resource_1)
-    if normal_detail_texture_index is None and app_id != "rev2":
-        resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-        resources.append(resource_sg)
-    resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
-    resources.append(resource_2)
-    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
-    resources.append(resource_3)
-    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoMap", "FUVPrimary")
-    resources.append(resource_4)
-    if albedo_blend_index is not None and app_id != "rev2":
-        resource_5 = _create_set_texture_resource(mrl, mat, app_id, albedo_blend_index + 1, "tAlbedoBlendMap")
-        resources.append(resource_5)
-        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoBlendMap", "FUVViewNormal")
-        resources.append(resource_6)
-
-    return resources
-
-
 # FIXME: dedupe
 def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
     resources = []
 
     normal_texture_index = tex_types.get(TextureType.NORMAL, None)
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+    if normal_texture_index is None:
+        return resources
 
     if normal_texture_index is not None:
         if normal_detail_texture_index is not None:
@@ -344,6 +318,8 @@ def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
         else:
             param = "FBumpNormalMap"
     else:
+        if app_id == "rev2":
+            return resources
         param = None
 
     if app_id == "rev2":
@@ -363,6 +339,7 @@ def _create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types):
         return resources
 
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+    # hack for rev2 harcoded stack
     if app_id == "rev2":
         if normal_detail_texture_index is None:
             normal_detail_texture_index = -1
@@ -385,6 +362,47 @@ def _create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types):
         )
         resources.append(resource_5)
         resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVDetailNormalMap", detail_uv_param)
+        resources.append(resource_6)
+
+    return resources
+
+
+def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
+    # NO Albedo Color Mask for now
+    resources = []
+
+    diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
+    normal_map_texture_index = tex_types.get(TextureType.NORMAL, None)
+    if diffuse_texture_index is None:
+        if normal_map_texture_index is None and app_id != "rev2":
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
+            return resources
+        else:
+            return resources
+    
+    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+    albedo_blend_index = tex_types.get(TextureType.UNK_01, None)  # curently hardcoded to albedo blend
+    if albedo_blend_index is not None and app_id != "rev2":
+        param_name ="FAlbedoMapModulate"
+    else:
+        param_name = "FAlbedoMap2" if app_id in MRL_APPID_USES_ALBEDO2 else "FAlbedoMap"
+
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
+    resources.append(resource_1)
+    if normal_detail_texture_index is None : #and app_id != "rev2":
+        resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+        resources.append(resource_sg)
+    resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
+    resources.append(resource_2)
+    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
+    resources.append(resource_3)
+    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoMap", "FUVPrimary")
+    resources.append(resource_4)
+    if albedo_blend_index is not None and app_id != "rev2":
+        resource_5 = _create_set_texture_resource(mrl, mat, app_id, albedo_blend_index + 1, "tAlbedoBlendMap")
+        resources.append(resource_5)
+        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoBlendMap", "FUVViewNormal")
         resources.append(resource_6)
 
     return resources
