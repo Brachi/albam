@@ -9,6 +9,7 @@ from albam.lib.blender import get_bl_teximage_nodes
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
 from albam.vfs import VirtualFile
+from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 
@@ -38,7 +39,8 @@ NODE_NAMES_TO_TYPES = {
     'Lightmap LM': TextureType.LIGHTMAP,
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
-    'Detail DNM': TextureType.NORMAL_DETAIL
+    'Detail DNM': TextureType.NORMAL_DETAIL,
+    'Special Map': TextureType.UNK_01
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -53,7 +55,7 @@ TEX_FORMAT_MAPPER = {
     2: b"DXT1",  # FIXME: unchecked
     14: b"",  # uncompressed
     19: b"DXT1",  # BM/Diffuse without alpha
-    20: b"DXT1",  # ? env cubemap in RE1
+    20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
     23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",
     24: b"DXT5",  # BM/Diffuse (UI?)
@@ -197,7 +199,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
 
 def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
     for texture_type in TextureType:
-        tex_index = _find_texture_index(mtfw_material, texture_type, from_mrl)
+        tex_index , tex_unk_type = _find_texture_index(mtfw_material, texture_type, from_mrl)
         if tex_index == 0:
             continue
         try:
@@ -212,15 +214,17 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
             print("texture_type not supported", texture_type)
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
         texture_node.image = texture_target
         # change color settings for normal and detail maps
         if texture_type.value == 2 or texture_type.value == 8:
             texture_node.image.colorspace_settings.name = "Non-Color"
 
 
+
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
+    tex_unk_type = None
 
     if from_mrl is False:
         tex_index = mtfw_material.texture_slots[texture_type.value - 1]
@@ -234,11 +238,14 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
 
             if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
                 tex_index = resource.value_cmd.tex_idx
+                if texture_type.value == 5:
+                    shader_objects = get_shader_objects()
+                    tex_unk_type = shader_object_id
                 break
-    return tex_index
+    return tex_index, tex_unk_type
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material, tex_unk_type):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
@@ -279,6 +286,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 5:
         # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[13])
+        shader_node_grp.inputs[14].default_value = str(tex_unk_type)  # TODO set a proper string value
 
     elif texture_code == 6:
         # Alpha mask _AM
