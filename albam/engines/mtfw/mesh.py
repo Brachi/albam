@@ -1397,11 +1397,11 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 bone_indices = [bi for bi, _ in weights_data]
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
-            if vertex_format == 0xdb7da014: # very strange bridge format
+            if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
-            if dst_mod.header.version != 156 and not vertex_format in VERTEX_FORMATS_BRIDGE:
+            if dst_mod.header.version != 156 and vertex_format not in VERTEX_FORMATS_BRIDGE:
                 if MAX_BONES == 2:
                     vertex_struct.bone_indices = [
                         pack('e', bone_indices[0]), pack('e', bone_indices[1])]

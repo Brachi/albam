@@ -107,7 +107,7 @@ TEX_TYPE_MAPPER = {
     0x75a53: TextureType.NORMAL_DETAIL,
     0x64c43: TextureType.ENVMAP,
     0x1698a: TextureType.ALPHAMAP,  # tTransparencyMap
-    0xff5be: TextureType.UNK_01, # tAlbedoBlendMap
+    0xff5be: TextureType.UNK_01,  # tAlbedoBlendMap
     # 0x1cb2a: TextureType.UNK_01, # ttHairShiftMap
     # 0xed93b: TextureType.UNK_01, # tEmissionMap
     # 0xa9787: TextureType.UNK_01, # tShininessMap
