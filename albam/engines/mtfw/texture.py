@@ -127,7 +127,6 @@ TEX_TYPE_MAPPER = {
     # 0x7e9aa: TextureType.UNK_01, # not in re6 mxt
     # 0x62fde: TextureType.UNK_01, # not in re6 mxt
     # 0x52e1:  TextureType.UNK_01, # not in re6 mxt
-
 }
 
 
@@ -166,7 +165,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
                 dwHeight=tex.height,
                 dwWidth=tex.width,
                 pixelfmt_dwFourCC=compression_fmt,
-                dwMipMapCount= tex.num_mipmaps_per_image  # // tex.num_images,
+                dwMipMapCount=tex.num_mipmaps_per_image  # // tex.num_images,
             )
             dds_header.set_constants()
             dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
@@ -219,7 +218,6 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
         # change color settings for normal and detail maps
         if texture_type.value == 2 or texture_type.value == 8:
             texture_node.image.colorspace_settings.name = "Non-Color"
-
 
 
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):

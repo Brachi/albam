@@ -308,8 +308,6 @@ def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
 
     normal_texture_index = tex_types.get(TextureType.NORMAL, None)
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    if normal_texture_index is None:
-        return resources
 
     if normal_texture_index is not None:
         if normal_detail_texture_index is not None:
@@ -317,11 +315,10 @@ def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
         else:
             param = "FBumpNormalMap"
     else:
-        if app_id == "rev2":
-            return resources
         param = None
 
-    if app_id == "rev2":
+    # for some reason rev2 normal maps don't work without detail res
+    if app_id == "rev2" and normal_texture_index is not None:
         param = "FBumpDetailNormalMap"
     # Flag FBump already set
     # XXX maybe only for normaldetailmap? Verify
@@ -373,13 +370,13 @@ def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
     diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
     normal_map_texture_index = tex_types.get(TextureType.NORMAL, None)
     if diffuse_texture_index is None:
-        if normal_map_texture_index is None and app_id != "rev2":
+        if normal_map_texture_index is None:
             resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
             resources.append(resource_sg)
             return resources
         else:
             return resources
-    
+
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
     albedo_blend_index = tex_types.get(TextureType.UNK_01, None)  # curently hardcoded to albedo blend
     if albedo_blend_index is not None and app_id != "rev2":
@@ -389,9 +386,14 @@ def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
 
     resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
     resources.append(resource_1)
-    if normal_detail_texture_index is None:  # and app_id != "rev2":
-        resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-        resources.append(resource_sg)
+    if app_id == "rev2":
+        if normal_map_texture_index is None:
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
+    else:
+        if normal_detail_texture_index is None:
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
     resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
     resources.append(resource_2)
     resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
@@ -413,12 +415,6 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
 
     specular_texture_index = tex_types.get(TextureType.SPECULAR, None)
     enviroment_texture_index = tex_types.get(TextureType.ENVMAP, None)
-    if specular_texture_index is None:
-        return resources
-    
-    specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", specular_map)
-    resources.append(resource_1)
     if enviroment_texture_index is None:
         if app_id == "rev2":
             reflect_param = None
@@ -429,7 +425,16 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
     else:
         fresnel_param = "FFresnelSchlick"
         reflect_param = "FReflectCubeMap"
+    if specular_texture_index is None:
+        return [
+                _create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param),
+                _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
+                _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
+        ]
 
+    specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", specular_map)
+    resources.append(resource_1)
     # XXX Not sure if it's associated with specular
     resource_2 = _create_set_flag_resource(app_id, mrl, mat, "FReflect", reflect_param)
     resources.append(resource_2)
@@ -954,6 +959,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
+    blend_state_hash: bpy.props.IntProperty(default=0x62b2d)
+    material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0,0,128,140))
     f_alpha_clip_threshold: bpy.props.FloatProperty(default=0)
     f_albedo_color: bpy.props.FloatVectorProperty(default=(1, 1, 1))
     f_albedo_blend_color: bpy.props.FloatVectorProperty(size=4, default=(1, 1, 1, 1))
