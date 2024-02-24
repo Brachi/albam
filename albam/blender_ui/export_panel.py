@@ -98,6 +98,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
         col.operator("albam.save_file2", icon="SORT_ASC", text="")
         col.operator("albam.pack", icon="PACKAGE", text="")
         col.operator("albam.patch", icon="FILE_REFRESH", text="")
+        col.operator("albam.remove_exported", icon="X", text="")
         col = split.column()
         col.template_list(
             "ALBAM_UL_ExportedFileList",
@@ -320,7 +321,12 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     def poll(cls, context):
         vfs = context.scene.albam.exported
         current_item = vfs.__class__.get_selected_item()
-        return current_item and current_item.is_root
+        vfs_i = context.scene.albam.file_explorer
+        if len(vfs_i.file_list) == 0:
+            return False
+        index = vfs_i.file_list_selected_index
+        imported_item = vfs_i.file_list[index]
+        return imported_item.is_archive and current_item.is_root
 
 
 @blender_registry.register_blender_type
@@ -357,6 +363,33 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         arc = update_arc(self.filepath, files_e)
         with open(self.filepath, "wb") as f:
             f.write(arc)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        vfs = context.scene.albam.exported
+        current_item = vfs.__class__.get_selected_item()
+        return current_item and current_item.is_root
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_Remove_Exported(bpy.types.Operator):
+    bl_idname = "albam.remove_exported"
+    bl_label = "Remove exported files"
+
+    def execute(self, context):
+        vfs_e = context.scene.albam.exported
+        root_node_index = vfs_e.file_list_selected_index
+        root_node = vfs_e.file_list[root_node_index]
+        for i in range(len(vfs_e.file_list)):
+            try:
+                parent = vfs_e.file_list[i].tree_node_ancestors[0].node_id
+            except IndexError:
+                continue
+            if parent == root_node.name:
+                vfs_e.file_list.remove(i)
+        vfs_e.file_list.remove(root_node_index)
+
         return {'FINISHED'}
 
     @classmethod
