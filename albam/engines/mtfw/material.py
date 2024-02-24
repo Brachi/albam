@@ -51,6 +51,13 @@ blend_state_obj = shader_objects["BSSolid"]  # rev1 items uses BSAddAlpha
 stencil_obj = shader_objects["DSZTestWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
 rasterizer_obj = shader_objects["RSMesh"]
 
+MRL_BLEND_STATE_STR = {
+    0x62b2d: "BSSolid",
+    0x23baf: "BSBlendAlpha",
+    0xd3b1d: "BSAddAlpha",
+    0xc4064: "BSRevSubAlpha",
+}
+
 MRL_BLEND_STATE_HASH = {
     app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
     for app_id, data in blend_state_obj["apps"].items()
@@ -116,6 +123,14 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             gr = [r for r in material.resources if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
             custom_properties.set_from_source(gr.float_buffer)
+            #blend_state_str = ""
+            #for k, v in shader_objects.items():
+            #    if v['hash'] == material.blend_state_hash >> 12:
+            #        blend_state_str = k
+            #        break
+            #custom_properties.blend_state_hash = (blend_state_str)
+            custom_properties.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
+            custom_properties.material_info_flags = material.material_info_flags
         else:
             custom_properties.set_from_source(material)
 
@@ -212,11 +227,15 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        # mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        blend_state_type = bl_mat.albam_custom_properties.mrl_params.blend_state_type
+        shader_num = shader_objects[blend_state_type]["apps"][app_id]["shader_object_index"]
+        blend_state_hash = (shader_objects[blend_state_type]["hash"] << 12) + shader_num
+        mat.blend_state_hash = blend_state_hash
         mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
         mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
         mat.unused = MRL_UNUSED[app_id]  # wrong values can cause glitches
-        mat.material_info_flags = [16, 0, 128, 140]  # [0, 0, 128, 140]  # TODO: research
+        mat.material_info_flags = bl_mat.albam_custom_properties.mrl_params.material_info_flags  # [0, 0, 128, 140]  # TODO: research
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
@@ -959,7 +978,18 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
-    blend_state_hash: bpy.props.IntProperty(default=0x62b2d)
+    #blend_state_hash: bpy.props.StringProperty(default='BSSolid')
+    blend_state_type: bpy.props.EnumProperty(
+        name ="",
+        description="select surface",
+        items=[
+            ("BSSolid", "BSSolid","Opaque", 1),
+            ("BSBlendAlpha", "BSBlendAlpha","Alpha Channel transparency", 2),
+            ("BSAddAlpha", "BSAddAlpha","Additive transparency", 3),
+            ("BSRevSubAlpha", "BSRevSubAlpha","Unknown", 4),
+        ],
+        default="BSSolid"
+    )
     material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0,0,128,140))
     f_alpha_clip_threshold: bpy.props.FloatProperty(default=0)
     f_albedo_color: bpy.props.FloatVectorProperty(default=(1, 1, 1))
