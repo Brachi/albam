@@ -319,14 +319,17 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        vfs = context.scene.albam.exported
-        current_item = vfs.__class__.get_selected_item()
+        exported_item = None
+        imported_item = None
+        vfs_e = context.scene.albam.exported
+        index_e = vfs_e.file_list_selected_index
+        exported_item = vfs_e.file_list[index_e]
         vfs_i = context.scene.albam.file_explorer
-        if len(vfs_i.file_list) == 0:
-            return False
         index = vfs_i.file_list_selected_index
         imported_item = vfs_i.file_list[index]
-        return imported_item.is_archive and current_item.is_root
+        if not exported_item or not imported_item:
+            return False
+        return imported_item.is_archive and exported_item.is_root
 
 
 @blender_registry.register_blender_type
@@ -378,16 +381,17 @@ class ALBAM_OT_Remove_Exported(bpy.types.Operator):
     bl_label = "Remove exported files"
 
     def execute(self, context):
+        vfiles_to_remove = []
         vfs_e = context.scene.albam.exported
         root_node_index = vfs_e.file_list_selected_index
         root_node = vfs_e.file_list[root_node_index]
         for i in range(len(vfs_e.file_list)):
-            try:
-                parent = vfs_e.file_list[i].tree_node_ancestors[0].node_id
-            except IndexError:
-                continue
+            parent = vfs_e.file_list[i].tree_node.root_id
             if parent == root_node.name:
-                vfs_e.file_list.remove(i)
+                vfiles_to_remove.append(i)
+        vfiles_to_remove.reverse()
+        for i in range(len(vfiles_to_remove)):
+            vfs_e.file_list.remove(vfiles_to_remove[i])
         vfs_e.file_list.remove(root_node_index)
 
         return {'FINISHED'}

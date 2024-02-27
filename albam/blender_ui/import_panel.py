@@ -476,19 +476,21 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
 @blender_registry.register_blender_type
 class ALBAM_OT_Remove_Imported(bpy.types.Operator):
     bl_idname = "albam.remove_imported"
-    bl_label = "Remove imporder files"
+    bl_label = "Remove imported files"
 
     def execute(self, context):
+        vfiles_to_remove = []
         vfs_i = context.scene.albam.file_explorer
         root_node_index = vfs_i.file_list_selected_index
         archive_node = vfs_i.file_list[root_node_index]
         for i in range(len(vfs_i.file_list)):
-            try:
-                parent = vfs_i.file_list[i].tree_node_ancestors[0].node_id
-            except IndexError:
-                continue
+            parent = vfs_i.file_list[i].tree_node.root_id
             if parent == archive_node.name:
-                vfs_i.file_list.remove(i)
+                vfiles_to_remove.append(i)
+
+        vfiles_to_remove.reverse()
+        for i in range(len(vfiles_to_remove)):
+            vfs_i.file_list.remove(vfiles_to_remove[i])
         vfs_i.file_list.remove(root_node_index)
 
         return {'FINISHED'}
