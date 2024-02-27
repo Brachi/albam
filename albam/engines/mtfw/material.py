@@ -123,12 +123,6 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             gr = [r for r in material.resources if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
             custom_properties.set_from_source(gr.float_buffer)
-            #blend_state_str = ""
-            #for k, v in shader_objects.items():
-            #    if v['hash'] == material.blend_state_hash >> 12:
-            #        blend_state_str = k
-            #        break
-            #custom_properties.blend_state_hash = (blend_state_str)
             custom_properties.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
             custom_properties.material_info_flags = material.material_info_flags
         else:
@@ -241,10 +235,11 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.ofs_anim_data = 0
         tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
         # NOTE: taken from some observed REV2 models. Needs more research
-        normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
         transparency = None
-        if normal_detail_texture_index and app_id == "re1":
-            transparency = "FTransparencyAlpha"
+        normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+        # re1 requires "FTransparencyAlpha" for detail map
+        if blend_state_type == "BSBlendAlpha" or (normal_detail_texture_index and app_id == "re1"):
+            transparency = "FTransparencyAlpha"  # TODO add ability to set Alpha Clip
         shininess = "FShininess2" if app_id in MRL_APPID_USES_SHININESS2 else "FShininess"
         mat.resources = [
             _create_set_flag_resource(app_id, mrl, mat, "FVertexDisplacement"),
