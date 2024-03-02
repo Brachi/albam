@@ -1,27 +1,25 @@
 [project]
-name = "Albam"
+name = "albam"
 version = "0.3.6"
 description = "Import 3d models into Blender"
 readme = "README.md"
 authors = [ {name = "Sebastian A. Brachi"} ]
-requires-python = "==3.10"
+requires-python = "==3.10.*"
 license = {file = "LICENSE"}
 keywords = ["blender", "blender-addon", "import", "3d models", "3d formats"]
 
 dependencies = [
   "bpy",
-  "pybc7",
-  "zstd"
 ]
 
 [project.optional-dependencies]
 test = [
-  "black",
   "coverage[toml]",
   "flake8-pyproject",
   "pytest",
   "pytest-xdist",
-  "pytest-cov[all]"
+#  "pybc7",
+#  "zstd"
 ]
 
 

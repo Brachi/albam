@@ -1,0 +1,86 @@
+name: Test
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+env:
+  ALBAM_RE1_ARC_DIR: "tests/data/re1"
+  ALBAM_RE5_ARC_DIR: "tests/data/re5"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bpy-version: ["3.6"]  # TODO: add 4.0 when support is added
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10 with bpy ${{ matrix.bpy-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install bpy==${{ matrix.bpy-version }} -e .[test]
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --show-source --statistics
+    - name: Download test files
+      run: |
+        mkdir -p $ALBAM_RE1_ARC_DIR $ALBAM_RE5_ARC_DIR
+        curl -L -o sample-re1-1.arc --output-dir $ALBAM_RE1_ARC_DIR '${{ secrets.SAMPLE_LINK_RE1_1 }}'
+        curl -L -o sample-re5-1.arc --output-dir $ALBAM_RE5_ARC_DIR '${{ secrets.SAMPLE_LINK_RE5_1 }}'
+    - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
+      run: |
+        coverage run -m pytest --arcdir=re1::${ALBAM_RE1_ARC_DIR} --arcdir=re5::${ALBAM_RE5_ARC_DIR}
+        coverage json -o .coverage.json
+    - name: "Upload coverage data"
+      uses: actions/upload-artifact@v3
+      with:
+        name: covdata
+        path: .coverage*
+  coverage:
+    # thanks: https://nedbatchelder.com/blog/202209/making_a_coverage_badge.html
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v4"
+      - name: "Set up Python"
+        uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: 'requirements/*.txt'
+      - name: "Install dependencies"
+        run: |
+          python -m pip install coverage
+      - name: "Download coverage data"
+        uses: actions/download-artifact@v3
+        with:
+          name: covdata
+      - name: "Combine"
+        run: |
+          export TOTAL=$(python -c "import json;print(json.load(open('.coverage.json'))['totals']['percent_covered_display'])")
+          echo "total=$TOTAL" >> $GITHUB_ENV
+          echo "### Total coverage: ${TOTAL}%" >> $GITHUB_STEP_SUMMARY
+      - name: "Coverage report"
+        run: coverage report --sort cover
+      - name: "Make badge"
+        uses: schneegans/dynamic-badges-action@v1.4.0
+        with:
+          # GIST_TOKEN is a GitHub personal access token with scope "gist".
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: 879e4f106f38b080ff10d3f46e3336e6
+          filename: covbadge.json
+          label: Coverage
+          message: ${{ env.total }}%
+          minColorRange: 50
+          maxColorRange: 90
+          valColorRange: ${{ env.total }}
+
