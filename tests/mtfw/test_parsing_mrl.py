@@ -7,6 +7,7 @@ KNOWN_BLEND_STATE_STENSIL_HASH = [
     0xc4064,  # BSRevSubAlpha
 ]
 
+
 def test_global_resources_mandatory(mrl):
     """
     Test that every material has to include a $Globals shader object

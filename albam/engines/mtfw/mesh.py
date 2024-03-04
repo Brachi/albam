@@ -45,6 +45,9 @@ APPID_CLASS_MAPPER = {
     "rev2": Mod21,
 }
 
+DEFAULT_VERTEX_FORMAT_SKIN = Mod21.Vertex14d4
+DEFAULT_VERTEX_FORMAT_NONSKIN = Mod21.VertexA7d7
+
 VERTEX_FORMATS_MAPPER = {
     0: Mod156.Vertex0,
     1: Mod156.Vertex,
@@ -1239,18 +1242,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             stored_vertex_format = int(custom_properties.get("vertex_format"))
         except (TypeError, ValueError):
             stored_vertex_format = None
-        if has_bones:
-            if stored_vertex_format not in VERTEX_FORMATS_MAPPER:
-                stored_vertex_format = 0x14d40020
-            vertex_format = stored_vertex_format
-            VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.Vertex14d4)
-            vertex_size = VertexCls().size_
-        else:
-            if stored_vertex_format not in VERTEX_FORMATS_MAPPER:
-                stored_vertex_format = 0xa7d7d036
-            vertex_format = stored_vertex_format
-            VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, Mod21.VertexA7d7)
-            vertex_size = VertexCls().size_
+        default_vertex_format = DEFAULT_VERTEX_FORMAT_SKIN if has_bones else DEFAULT_VERTEX_FORMAT_NONSKIN
+        vertex_format = stored_vertex_format
+        VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, default_vertex_format)
+        vertex_size = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforces in `_process_weights_for_export`
     weight_half_float = dst_mod.header.version == 210 and vertex_format not in VERTEX_FORMATS_BRIDGE

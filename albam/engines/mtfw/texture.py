@@ -57,7 +57,6 @@ TEX_FORMAT_MAPPER = {
     19: b"DXT1",  # BM/Diffuse without alpha
     20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
     23: b"DXT5",  # BM/Diffuse with alpha
-    24: b"DXT5",
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
     31: b"DXT5",  # NM/Normal
@@ -165,7 +164,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
                 dwHeight=tex.height,
                 dwWidth=tex.width,
                 pixelfmt_dwFourCC=compression_fmt,
-                dwMipMapCount=tex.num_mipmaps_per_image  # // tex.num_images,
+                dwMipMapCount=tex.num_mipmaps_per_image
             )
             dds_header.set_constants()
             dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
@@ -237,7 +236,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
             if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
                 tex_index = resource.value_cmd.tex_idx
                 if texture_type.value == 5:
-                    shader_objects = get_shader_objects()
+                    # TODO get string from shader_objects = get_shader_objects()
                     tex_unk_type = shader_object_id
                 break
     return tex_index, tex_unk_type

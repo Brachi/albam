@@ -229,7 +229,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
         mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
         mat.unused = MRL_UNUSED[app_id]  # wrong values can cause glitches
-        mat.material_info_flags = bl_mat.albam_custom_properties.mrl_params.material_info_flags  # [0, 0, 128, 140]  # TODO: research
+        # TODO: research
+        mat.material_info_flags = bl_mat.albam_custom_properties.mrl_params.material_info_flags
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
@@ -318,8 +319,6 @@ def _create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types)
 
 # FIXME: dedupe
 def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
-    resources = []
-
     normal_texture_index = tex_types.get(TextureType.NORMAL, None)
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
 
@@ -441,9 +440,9 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
         reflect_param = "FReflectCubeMap"
     if specular_texture_index is None:
         return [
-                _create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param),
-                _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
-                _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
+            _create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param),
+            _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
+            _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
         ]
 
     specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
@@ -454,7 +453,12 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
     resources.append(resource_2)
     if reflect_param is not None:
         if enviroment_texture_index is not None:
-            resource_env = _create_set_texture_resource(mrl, mat, app_id, enviroment_texture_index + 1, "tEnvMap")
+            resource_env = _create_set_texture_resource(mrl,
+                                                        mat,
+                                                        app_id,
+                                                        enviroment_texture_index + 1,
+                                                        "tEnvMap"
+                                                        )
             resources.append(resource_env)
         # re1 detail map uses "SSEnvMapLODBias5" param
         resource_21 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSEnvMap")
@@ -973,19 +977,18 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
-    #blend_state_hash: bpy.props.StringProperty(default='BSSolid')
     blend_state_type: bpy.props.EnumProperty(
-        name ="",
+        name="",
         description="select surface",
         items=[
-            ("BSSolid", "BSSolid","Opaque", 1),
-            ("BSBlendAlpha", "BSBlendAlpha","Alpha Channel transparency", 2),
-            ("BSAddAlpha", "BSAddAlpha","Additive transparency", 3),
-            ("BSRevSubAlpha", "BSRevSubAlpha","Unknown", 4),
+            ("BSSolid", "BSSolid", "Opaque", 1),
+            ("BSBlendAlpha", "BSBlendAlpha", "Alpha Channel transparency", 2),
+            ("BSAddAlpha", "BSAddAlpha", "Additive transparency", 3),
+            ("BSRevSubAlpha", "BSRevSubAlpha", "Unknown", 4),
         ],
         default="BSSolid"
     )
-    material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0,0,128,140))
+    material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0, 0, 128, 140))
     f_alpha_clip_threshold: bpy.props.FloatProperty(default=0)
     f_albedo_color: bpy.props.FloatVectorProperty(default=(1, 1, 1))
     f_albedo_blend_color: bpy.props.FloatVectorProperty(size=4, default=(1, 1, 1, 1))
