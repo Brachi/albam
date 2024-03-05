@@ -9,7 +9,7 @@ from albam.lib.blender import get_bl_teximage_nodes
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
 from albam.vfs import VirtualFile
-from .defines import get_shader_objects
+# from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 
@@ -236,7 +236,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
             if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
                 tex_index = resource.value_cmd.tex_idx
                 if texture_type.value == 5:
-                    # TODO get string from shader_objects = get_shader_objects()
+                    # TODO get string shader_objects = get_shader_objects()
                     tex_unk_type = shader_object_id
                 break
     return tex_index, tex_unk_type

@@ -977,7 +977,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
-    blend_state_type: bpy.props.EnumProperty(
+    blend_state_enum = bpy.props.EnumProperty(
         name="",
         description="select surface",
         items=[
@@ -988,6 +988,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="BSSolid"
     )
+    blend_state_type: blend_state_enum
     material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0, 0, 128, 140))
     f_alpha_clip_threshold: bpy.props.FloatProperty(default=0)
     f_albedo_color: bpy.props.FloatVectorProperty(default=(1, 1, 1))
