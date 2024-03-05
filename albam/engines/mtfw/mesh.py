@@ -1228,11 +1228,11 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 
     vertex_count = len(bl_mesh.data.vertices)
     if dst_mod.header.version == 156:
+        if max_bones_per_vertex > 4:
+            max_bones_per_vertex = 4
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-        if vertex_format > 4:
-            vertex_format = 4
         use_special_vf = (
             bl_mesh.material_slots[0]
             .material.albam_custom_properties
