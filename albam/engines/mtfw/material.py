@@ -39,10 +39,24 @@ MRL_UNK_01 = {
     "rev2": 0x478ed2d7,
 }
 
+MRL_UNUSED = {
+    "re0": 0xA00DC,
+    "re1": 0x200DC,
+    "rev1": 0x804DC,
+    "rev2": 0xA00DC,
+}
+
 shader_objects = get_shader_objects()
-blend_state_obj = shader_objects["BSSolid"]
-stencil_obj = shader_objects["DSZTestWriteStencilWrite"]
+blend_state_obj = shader_objects["BSSolid"]  # rev1 items uses BSAddAlpha
+stencil_obj = shader_objects["DSZTestWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
 rasterizer_obj = shader_objects["RSMesh"]
+
+MRL_BLEND_STATE_STR = {
+    0x62b2d: "BSSolid",
+    0x23baf: "BSBlendAlpha",
+    0xd3b1d: "BSAddAlpha",
+    0xc4064: "BSRevSubAlpha",
+}
 
 MRL_BLEND_STATE_HASH = {
     app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
@@ -67,6 +81,10 @@ MRL_APPID_CB_GLOBALS_VERSION = {
     "rev1": 1,
     "rev2": 2,
 }
+MRL_APPID_USES_DETAIL_SECONDARY = {
+    "re1",
+    "rev1",
+}
 
 
 def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="material"):
@@ -86,7 +104,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     mat_inverse_hashes = {}
     if material_names_available:
         mat_inverse_hashes = {
-            crc32(mn.encode()) ^ 0xFFFFFFFF : mn for mn in parsed_mod.materials_data.material_names
+            crc32(mn.encode()) ^ 0xFFFFFFFF: mn for mn in parsed_mod.materials_data.material_names
         }
 
     _create_mtfw_shader()
@@ -105,6 +123,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             gr = [r for r in material.resources if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
             custom_properties.set_from_source(gr.float_buffer)
+            custom_properties.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
+            custom_properties.material_info_flags = material.material_info_flags
         else:
             custom_properties.set_from_source(material)
 
@@ -201,35 +221,42 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        # mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
+        blend_state_type = bl_mat.albam_custom_properties.mrl_params.blend_state_type
+        shader_num = shader_objects[blend_state_type]["apps"][app_id]["shader_object_index"]
+        blend_state_hash = (shader_objects[blend_state_type]["hash"] << 12) + shader_num
+        mat.blend_state_hash = blend_state_hash
         mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
         mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
-        mat.unused = 0xA00DC  # TODO: research
-        mat.material_info_flags = [16, 0, 128, 140]  # TODO: research
+        mat.unused = MRL_UNUSED[app_id]  # wrong values can cause glitches
+        # TODO: research
+        mat.material_info_flags = bl_mat.albam_custom_properties.mrl_params.material_info_flags
         mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
-
         tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
         # NOTE: taken from some observed REV2 models. Needs more research
+        transparency = None
+        normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+        # re1 requires "FTransparencyAlpha" for detail map
+        if blend_state_type == "BSBlendAlpha" or (normal_detail_texture_index and app_id == "re1"):
+            transparency = "FTransparencyAlpha"  # TODO add ability to set Alpha Clip
         shininess = "FShininess2" if app_id in MRL_APPID_USES_SHININESS2 else "FShininess"
         mat.resources = [
             _create_set_flag_resource(app_id, mrl, mat, "FVertexDisplacement"),
-            _create_set_flag_resource(app_id, mrl, mat, "FUVTransformPrimary"),
+            *_create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types),
             _create_set_flag_resource(app_id, mrl, mat, "FUVTransformSecondary"),
             _create_set_flag_resource(app_id, mrl, mat, "FUVTransformUnique"),
             _create_set_flag_resource(app_id, mrl, mat, "FUVTransformExtend"),
             _create_set_flag_resource(app_id, mrl, mat, "FOcclusion"),
             *_create_texture_normal_resources_init(mrl, mat, app_id, tex_types),
-            _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals"),
-            *_create_texture_normal_resources(mrl, mat, app_id, tex_types),
-            *_create_texture_diffuse_resources(mrl, mat, app_id, tex_types),
-            _create_set_flag_resource(app_id, mrl, mat, "FTransparency"),
+            *_create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types),
+            *_create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types),
+            _create_set_flag_resource(app_id, mrl, mat, "FTransparency", transparency),
             _create_set_flag_resource(app_id, mrl, mat, "FShininess", shininess),
             _create_set_flag_resource(app_id, mrl, mat, "FLighting"),
             _create_set_flag_resource(app_id, mrl, mat, "FBRDF"),
-            _create_set_flag_resource(app_id, mrl, mat, "FDiffuse"),
-            _create_cb_resource(mrl, bl_mat, mat, app_id, "CBMaterial"),
+            *_create_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types),
             _create_set_flag_resource(app_id, mrl, mat, "FAmbient", "FAmbientSH"),
             *_create_texture_specular_resources(mrl, mat, app_id, tex_types),
         ]
@@ -278,45 +305,34 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     return exported_materials_map, mrl_vf
 
 
-def _create_texture_diffuse_resources(mrl, mat, app_id, tex_types):
-    # NO Albedo Color Mask for now
+def _create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types):
     resources = []
+    uv_trans_prim = "FUVTransformOffset" if app_id == "re1" else None
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FUVTransformPrimary", uv_trans_prim)
+    resources.append(resource_1)
+    if uv_trans_prim is not None:
+        resource_2 = _create_cb_resource(mrl, bl_mat, mat, app_id, "CBMaterial")
+        resources.append(resource_2)
 
-    diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
-    if diffuse_texture_index is None:
-        return resources
-
-    param_name = "FAlbedoMap2" if app_id in MRL_APPID_USES_ALBEDO2 else "FAlbedoMap"
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
-    resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
-    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
-    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoMap", "FUVPrimary")
-
-    return [
-        resource_1,
-        resource_2,
-        resource_3,
-        resource_4,
-    ]
+    return resources
 
 
 # FIXME: dedupe
 def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
-    resources = []
-
     normal_texture_index = tex_types.get(TextureType.NORMAL, None)
-    if normal_texture_index is None:
-        return resources
-
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    if normal_detail_texture_index is not None:
-        param = "FBumpDetailNormalMap"
+
+    if normal_texture_index is not None:
+        if normal_detail_texture_index is not None:
+            param = "FBumpDetailNormalMap"
+        else:
+            param = "FBumpNormalMap"
     else:
-        param = "FBumpNormalMap"
+        param = None
 
-    # forcing always Detail
-    param = "FBumpDetailNormalMap"
-
+    # for some reason rev2 normal maps don't work without detail res
+    if app_id == "rev2" and normal_texture_index is not None:
+        param = "FBumpDetailNormalMap"
     # Flag FBump already set
     # XXX maybe only for normaldetailmap? Verify
     resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FBump", param)
@@ -324,7 +340,7 @@ def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
 
 
 # FIXME: dedupe
-def _create_texture_normal_resources(mrl, mat, app_id, tex_types):
+def _create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types):
     resources = []
 
     normal_texture_index = tex_types.get(TextureType.NORMAL, None)
@@ -332,23 +348,78 @@ def _create_texture_normal_resources(mrl, mat, app_id, tex_types):
         return resources
 
     normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    if normal_detail_texture_index is None:
-        normal_detail_texture_index = -1
-    resource_2 = _create_set_texture_resource(mrl, mat, app_id, normal_texture_index + 1, "tNormalMap")
-    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSNormalMap")
-    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVNormalMap", "FUVPrimary")
-    resource_5 = _create_set_texture_resource(
-        mrl, mat, app_id, normal_detail_texture_index + 1, "tDetailNormalMap"
-    )
-    resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVDetailNormalMap", "FUVPrimary")
+    # hack for rev2 harcoded stack
+    if app_id == "rev2":
+        if normal_detail_texture_index is None:
+            normal_detail_texture_index = -1
 
-    return [
-        resource_2,
-        resource_3,
-        resource_4,
-        resource_5,
-        resource_6
-    ]
+    if normal_detail_texture_index is not None:
+        resource_1 = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+        resources.append(resource_1)
+        detail_uv_param = "FUVSecondary" if app_id in MRL_APPID_USES_DETAIL_SECONDARY else "FUVPrimary"
+
+    resource_2 = _create_set_texture_resource(mrl, mat, app_id, normal_texture_index + 1, "tNormalMap")
+    resources.append(resource_2)
+    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSNormalMap")
+    resources.append(resource_3)
+    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVNormalMap", "FUVPrimary")
+    resources.append(resource_4)
+
+    if normal_detail_texture_index is not None:
+        resource_5 = _create_set_texture_resource(
+            mrl, mat, app_id, normal_detail_texture_index + 1, "tDetailNormalMap"
+        )
+        resources.append(resource_5)
+        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVDetailNormalMap", detail_uv_param)
+        resources.append(resource_6)
+
+    return resources
+
+
+def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
+    # NO Albedo Color Mask for now
+    resources = []
+
+    diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
+    normal_map_texture_index = tex_types.get(TextureType.NORMAL, None)
+    if diffuse_texture_index is None:
+        if normal_map_texture_index is None:
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
+            return resources
+        else:
+            return resources
+
+    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+    albedo_blend_index = tex_types.get(TextureType.UNK_01, None)  # curently hardcoded to albedo blend
+    if albedo_blend_index is not None and app_id != "rev2":
+        param_name = "FAlbedoMapModulate"
+    else:
+        param_name = "FAlbedoMap2" if app_id in MRL_APPID_USES_ALBEDO2 else "FAlbedoMap"
+
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
+    resources.append(resource_1)
+    if app_id == "rev2":
+        if normal_map_texture_index is None:
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
+    else:
+        if normal_detail_texture_index is None:
+            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
+            resources.append(resource_sg)
+    resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
+    resources.append(resource_2)
+    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
+    resources.append(resource_3)
+    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoMap", "FUVPrimary")
+    resources.append(resource_4)
+    if albedo_blend_index is not None and app_id != "rev2":
+        resource_5 = _create_set_texture_resource(mrl, mat, app_id, albedo_blend_index + 1, "tAlbedoBlendMap")
+        resources.append(resource_5)
+        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoBlendMap", "FUVViewNormal")
+        resources.append(resource_6)
+
+    return resources
 
 
 # FIXME: dedupe
@@ -356,29 +427,64 @@ def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
     resources = []
 
     specular_texture_index = tex_types.get(TextureType.SPECULAR, None)
+    enviroment_texture_index = tex_types.get(TextureType.ENVMAP, None)
+    if enviroment_texture_index is None:
+        if app_id == "rev2":
+            reflect_param = None
+            fresnel_param = None
+        else:
+            reflect_param = "FReflectGlobalCubeMap"
+            fresnel_param = "FFresnelSchlick"
+    else:
+        fresnel_param = "FFresnelSchlick"
+        reflect_param = "FReflectCubeMap"
     if specular_texture_index is None:
-        return resources
+        return [
+            _create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param),
+            _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
+            _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
+        ]
 
     specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
     resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", specular_map)
+    resources.append(resource_1)
     # XXX Not sure if it's associated with specular
-    resource_2 = _create_set_flag_resource(app_id, mrl, mat, "FReflect")
+    resource_2 = _create_set_flag_resource(app_id, mrl, mat, "FReflect", reflect_param)
+    resources.append(resource_2)
+    if reflect_param is not None:
+        if enviroment_texture_index is not None:
+            resource_env = _create_set_texture_resource(mrl,
+                                                        mat,
+                                                        app_id,
+                                                        enviroment_texture_index + 1,
+                                                        "tEnvMap"
+                                                        )
+            resources.append(resource_env)
+        # re1 detail map uses "SSEnvMapLODBias5" param
+        resource_21 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSEnvMap")
+        resources.append(resource_21)
     resource_3 = _create_set_texture_resource(mrl, mat, app_id, specular_texture_index + 1, "tSpecularMap")
+    resources.append(resource_3)
     resource_4 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSSpecularMap")
+    resources.append(resource_4)
     resource_5 = _create_set_flag_resource(app_id, mrl, mat, "FUVSpecularMap", "FUVPrimary")
+    resources.append(resource_5)
     resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FChannelSpecularMap")
+    resources.append(resource_6)
+    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param))
+    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FEmission"))
+    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FDistortion"))
+    return resources
 
-    return [
-        resource_1,
-        resource_2,
-        resource_3,
-        resource_4,
-        resource_5,
-        resource_6,
-        _create_set_flag_resource(app_id, mrl, mat, "FFresnel"),
-        _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
-        _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
-    ]
+
+def _create_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
+    resources = []
+    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FDiffuse")
+    resources.append(resource_1)
+    if app_id != "re1":
+        resource_2 = _create_cb_resource(mrl, bl_mat, mat, app_id, "CBMaterial")
+        resources.append(resource_2)
+    return resources
 
 
 def _create_set_texture_resource(mrl, mat, app_id, texture_index, resource_name):
@@ -574,6 +680,8 @@ def _create_mtfw_shader():
     shader_group.inputs.new("NodeSocketInt", "Use Detail Map")
     shader_group.inputs["Use Detail Map"].min_value = 0
     shader_group.inputs["Use Detail Map"].max_value = 1
+    shader_group.inputs.new("NodeSocketColor", "Special Map")
+    shader_group.inputs.new("NodeSocketString", "Special Map type")
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -869,6 +977,19 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
+    blend_state_enum = bpy.props.EnumProperty(
+        name="",
+        description="select surface",
+        items=[
+            ("BSSolid", "BSSolid", "Opaque", 1),
+            ("BSBlendAlpha", "BSBlendAlpha", "Alpha Channel transparency", 2),
+            ("BSAddAlpha", "BSAddAlpha", "Additive transparency", 3),
+            ("BSRevSubAlpha", "BSRevSubAlpha", "Unknown", 4),
+        ],
+        default="BSSolid"
+    )
+    blend_state_type: blend_state_enum
+    material_info_flags: bpy.props.IntVectorProperty(size=4, default=(0, 0, 128, 140))
     f_alpha_clip_threshold: bpy.props.FloatProperty(default=0)
     f_albedo_color: bpy.props.FloatVectorProperty(default=(1, 1, 1))
     f_albedo_blend_color: bpy.props.FloatVectorProperty(size=4, default=(1, 1, 1, 1))

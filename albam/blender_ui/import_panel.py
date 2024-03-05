@@ -338,6 +338,7 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col = split.column()
         col.operator("albam.add_files", icon="FILE_NEW", text="")
         col.operator("albam.save_file", icon="SORT_ASC", text="")
+        col.operator("albam.remove_imported", icon="X", text="")
         col = split.column()
         col.template_list(
             "ALBAM_UL_FileList",
@@ -470,6 +471,34 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
 
     def cancel(self, context):
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_Remove_Imported(bpy.types.Operator):
+    bl_idname = "albam.remove_imported"
+    bl_label = "Remove imported files"
+
+    def execute(self, context):
+        vfiles_to_remove = []
+        vfs_i = context.scene.albam.file_explorer
+        root_node_index = vfs_i.file_list_selected_index
+        archive_node = vfs_i.file_list[root_node_index]
+        for i in range(len(vfs_i.file_list)):
+            parent = vfs_i.file_list[i].tree_node.root_id
+            if parent == archive_node.name:
+                vfiles_to_remove.append(i)
+
+        vfiles_to_remove.reverse()
+        for i in range(len(vfiles_to_remove)):
+            vfs_i.file_list.remove(vfiles_to_remove[i])
+        vfs_i.file_list.remove(root_node_index)
+
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        current_item = ALBAM_OT_Import.get_selected_item(context)
+        return current_item and current_item.is_archive
 
 
 @blender_registry.register_blender_type

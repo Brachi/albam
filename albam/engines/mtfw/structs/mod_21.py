@@ -451,6 +451,16 @@ class Mod21(ReadWriteKaitaiStruct):
             if self.uv._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 20
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec3U1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):

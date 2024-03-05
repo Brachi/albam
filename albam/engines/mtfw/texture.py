@@ -9,6 +9,7 @@ from albam.lib.blender import get_bl_teximage_nodes
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
 from albam.vfs import VirtualFile
+# from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 
@@ -38,7 +39,8 @@ NODE_NAMES_TO_TYPES = {
     'Lightmap LM': TextureType.LIGHTMAP,
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
-    'Detail DNM': TextureType.NORMAL_DETAIL
+    'Detail DNM': TextureType.NORMAL_DETAIL,
+    'Special Map': TextureType.UNK_01
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -52,10 +54,9 @@ NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
 TEX_FORMAT_MAPPER = {
     2: b"DXT1",  # FIXME: unchecked
     14: b"",  # uncompressed
-    19: b"DXT1",
-    20: b"DXT1",  # BM/Diffuse
-    23: b"DXT5",
-    24: b"DXT5",
+    19: b"DXT1",  # BM/Diffuse without alpha
+    20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
+    23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
     31: b"DXT5",  # NM/Normal
@@ -90,6 +91,12 @@ APPID_TEXCLS_MAP = {
     "re5": Tex112,
 }
 
+APPID_TEX_TYPE_MAPPER = {
+    "re0": 0x209d,
+    "re1": 0x209d,
+    "rev1": 0xa09d,  # only for stage geometry
+    "rev2": 0x209d,
+}
 
 TEX_TYPE_MAPPER = {
     0xcd06f: TextureType.DIFFUSE,
@@ -99,7 +106,7 @@ TEX_TYPE_MAPPER = {
     0x75a53: TextureType.NORMAL_DETAIL,
     0x64c43: TextureType.ENVMAP,
     0x1698a: TextureType.ALPHAMAP,  # tTransparencyMap
-    # 0xff5be: TextureType.UNK_01, # tAlbedoBlendMap
+    0xff5be: TextureType.UNK_01,  # tAlbedoBlendMap
     # 0x1cb2a: TextureType.UNK_01, # ttHairShiftMap
     # 0xed93b: TextureType.UNK_01, # tEmissionMap
     # 0xa9787: TextureType.UNK_01, # tShininessMap
@@ -119,7 +126,6 @@ TEX_TYPE_MAPPER = {
     # 0x7e9aa: TextureType.UNK_01, # not in re6 mxt
     # 0x62fde: TextureType.UNK_01, # not in re6 mxt
     # 0x52e1:  TextureType.UNK_01, # not in re6 mxt
-
 }
 
 
@@ -158,7 +164,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
                 dwHeight=tex.height,
                 dwWidth=tex.width,
                 pixelfmt_dwFourCC=compression_fmt,
-                dwMipMapCount=tex.num_mipmaps_per_image // tex.num_images,
+                dwMipMapCount=tex.num_mipmaps_per_image
             )
             dds_header.set_constants()
             dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
@@ -191,7 +197,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
 
 def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
     for texture_type in TextureType:
-        tex_index = _find_texture_index(mtfw_material, texture_type, from_mrl)
+        tex_index , tex_unk_type = _find_texture_index(mtfw_material, texture_type, from_mrl)
         if tex_index == 0:
             continue
         try:
@@ -206,7 +212,7 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
             print("texture_type not supported", texture_type)
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
         texture_node.image = texture_target
         # change color settings for normal and detail maps
         if texture_type.value == 2 or texture_type.value == 8:
@@ -215,6 +221,7 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
 
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
+    tex_unk_type = None
 
     if from_mrl is False:
         tex_index = mtfw_material.texture_slots[texture_type.value - 1]
@@ -228,11 +235,14 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
 
             if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
                 tex_index = resource.value_cmd.tex_idx
+                if texture_type.value == 5:
+                    # TODO get string shader_objects = get_shader_objects()
+                    tex_unk_type = shader_object_id
                 break
-    return tex_index
+    return tex_index, tex_unk_type
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material, tex_unk_type):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
@@ -273,6 +283,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 5:
         # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[13])
+        shader_node_grp.inputs[14].default_value = str(tex_unk_type)  # TODO set a proper string value
 
     elif texture_code == 6:
         # Alpha mask _AM
@@ -280,10 +292,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[7])
         shader_node_grp.inputs[8].default_value = 1
 
-    #  elif texture_code == 7:
-    #    # Enviroment _CM
-    #    blender_texture_node.location = (-800, -350)
-    #    link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
+    elif texture_code == 7:
+        # Enviroment _CM
+        blender_texture_node.location = (-800, -350)
+        link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
 
     elif texture_code == 8:
         # Detail normal map
@@ -374,7 +386,7 @@ def _serialize_texture_21(app_id, dict_tex):
 
     tex = Tex157()
     tex.id_magic = b"TEX\x00"
-    tex_type = 0x209D  # TODO: enum
+    tex_type = APPID_TEX_TYPE_MAPPER[app_id]  # TODO: enum
     reserved_01 = 0
     shift = 0
     constant = 1  # XXX Not really, see tests
