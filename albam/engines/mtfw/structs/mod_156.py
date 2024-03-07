@@ -46,10 +46,10 @@ class Mod156(ReadWriteKaitaiStruct):
         self.unk_05 = self._io.read_u4le()
         self.unk_06 = self._io.read_u4le()
         self.unk_07 = self._io.read_u4le()
-        self.unk_08 = self._io.read_u4le()
         self.num_vtx8_unk_faces = self._io.read_u4le()
         self.num_vtx8_unk_uv = self._io.read_u4le()
         self.num_vtx8_unk_normals = self._io.read_u4le()
+        self.unk_08 = self._io.read_u4le()
         self.reserved_03 = self._io.read_u4le()
         self.vtx8_unk_faces = []
         for i in range(self.num_vtx8_unk_faces):
@@ -145,10 +145,10 @@ class Mod156(ReadWriteKaitaiStruct):
         self._io.write_u4le(self.unk_05)
         self._io.write_u4le(self.unk_06)
         self._io.write_u4le(self.unk_07)
-        self._io.write_u4le(self.unk_08)
         self._io.write_u4le(self.num_vtx8_unk_faces)
         self._io.write_u4le(self.num_vtx8_unk_uv)
         self._io.write_u4le(self.num_vtx8_unk_normals)
+        self._io.write_u4le(self.unk_08)
         self._io.write_u4le(self.reserved_03)
         for i in range(len(self.vtx8_unk_faces)):
             pass
@@ -833,6 +833,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self.indices__to_write = True
             self._should_write_vertices = False
             self.vertices__to_write = True
+            self._should_write_vertices2 = False
+            self.vertices2__to_write = True
 
         def _read(self):
             self.idx_group = self._io.read_u2le()
@@ -909,12 +911,27 @@ class Mod156(ReadWriteKaitaiStruct):
                     pass
                     self.vertices[i]._fetch_instances()
 
+            if (self.vertex_stride_2 > 0):
+                pass
+                _ = self.vertices2
+                for i in range(len(self._m_vertices2)):
+                    pass
+                    _on = self.vertex_stride_2
+                    if _on == 4:
+                        pass
+                        self.vertices2[i]._fetch_instances()
+                    elif _on == 8:
+                        pass
+                        self.vertices2[i]._fetch_instances()
+
+
 
 
         def _write__seq(self, io=None):
             super(Mod156.Mesh, self)._write__seq(io)
             self._should_write_indices = self.indices__to_write
             self._should_write_vertices = self.vertices__to_write
+            self._should_write_vertices2 = self.vertices2__to_write
             self._io.write_u2le(self.idx_group)
             self._io.write_u2le(self.idx_material)
             self._io.write_u1(self.constant)
@@ -1167,6 +1184,83 @@ class Mod156(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
                     if self.vertices[i]._parent != self:
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
+
+
+        @property
+        def vertices2(self):
+            if self._should_write_vertices2:
+                self._write_vertices2()
+            if hasattr(self, '_m_vertices2'):
+                return self._m_vertices2
+
+            if (self.vertex_stride_2 > 0):
+                pass
+                _pos = self._io.pos()
+                self._io.seek(((self._root.header.offset_vertex_buffer_2 + (self.vertex_position_2 * self.vertex_stride_2)) + self.vertex_offset_2))
+                self._m_vertices2 = []
+                for i in range(self.num_vertices):
+                    _on = self.vertex_stride_2
+                    if _on == 4:
+                        pass
+                        _t__m_vertices2 = Mod156.Vertex24(self._io, self, self._root)
+                        _t__m_vertices2._read()
+                        self._m_vertices2.append(_t__m_vertices2)
+                    elif _on == 8:
+                        pass
+                        _t__m_vertices2 = Mod156.Vertex28(self._io, self, self._root)
+                        _t__m_vertices2._read()
+                        self._m_vertices2.append(_t__m_vertices2)
+
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_vertices2', None)
+
+        @vertices2.setter
+        def vertices2(self, v):
+            self._m_vertices2 = v
+
+        def _write_vertices2(self):
+            self._should_write_vertices2 = False
+            if (self.vertex_stride_2 > 0):
+                pass
+                _pos = self._io.pos()
+                self._io.seek(((self._root.header.offset_vertex_buffer_2 + (self.vertex_position_2 * self.vertex_stride_2)) + self.vertex_offset_2))
+                for i in range(len(self._m_vertices2)):
+                    pass
+                    _on = self.vertex_stride_2
+                    if _on == 4:
+                        pass
+                        self.vertices2[i]._write__seq(self._io)
+                    elif _on == 8:
+                        pass
+                        self.vertices2[i]._write__seq(self._io)
+
+                self._io.seek(_pos)
+
+
+
+        def _check_vertices2(self):
+            pass
+            if (self.vertex_stride_2 > 0):
+                pass
+                if (len(self.vertices2) != self.num_vertices):
+                    raise kaitaistruct.ConsistencyError(u"vertices2", len(self.vertices2), self.num_vertices)
+                for i in range(len(self._m_vertices2)):
+                    pass
+                    _on = self.vertex_stride_2
+                    if _on == 4:
+                        pass
+                        if self.vertices2[i]._root != self._root:
+                            raise kaitaistruct.ConsistencyError(u"vertices2", self.vertices2[i]._root, self._root)
+                        if self.vertices2[i]._parent != self:
+                            raise kaitaistruct.ConsistencyError(u"vertices2", self.vertices2[i]._parent, self)
+                    elif _on == 8:
+                        pass
+                        if self.vertices2[i]._root != self._root:
+                            raise kaitaistruct.ConsistencyError(u"vertices2", self.vertices2[i]._root, self._root)
+                        if self.vertices2[i]._parent != self:
+                            raise kaitaistruct.ConsistencyError(u"vertices2", self.vertices2[i]._parent, self)
+
 
 
 
@@ -1596,6 +1690,35 @@ class Mod156(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    class Vertex24(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.occlusion = Mod156.Vec4U1(self._io, self, self._root)
+            self.occlusion._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.occlusion._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.Vertex24, self)._write__seq(io)
+            self.occlusion._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.occlusion._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._root, self._root)
+            if self.occlusion._parent != self:
+                raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._parent, self)
+
+
     class BonesData(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -1734,6 +1857,43 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
+
+    class Vertex28(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.occlusion = Mod156.Vec4U1(self._io, self, self._root)
+            self.occlusion._read()
+            self.tangent = Mod156.Vec4U1(self._io, self, self._root)
+            self.tangent._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.occlusion._fetch_instances()
+            self.tangent._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.Vertex28, self)._write__seq(io)
+            self.occlusion._write__seq(self._io)
+            self.tangent._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.occlusion._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._root, self._root)
+            if self.occlusion._parent != self:
+                raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._parent, self)
+            if self.tangent._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._root, self._root)
+            if self.tangent._parent != self:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
+
 
     class Vec4S2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):

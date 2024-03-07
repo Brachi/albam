@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_156
-  ks-version: 0.10
+  ks-version: 0.11
   title: MTFramework model format 156
 
 seq:
@@ -20,10 +20,10 @@ seq:
   - {id: unk_05, type: u4}
   - {id: unk_06, type: u4}
   - {id: unk_07, type: u4}
-  - {id: unk_08, type: u4}
   - {id: num_vtx8_unk_faces, type: u4}
   - {id: num_vtx8_unk_uv, type: u4}
   - {id: num_vtx8_unk_normals, type: u4}
+  - {id: unk_08, type: u4}
   - {id: reserved_03, type: u4}
   - {id: vtx8_unk_faces, type: unk_vtx8_block_00, repeat: expr, repeat-expr: num_vtx8_unk_faces}
   - {id: vtx8_unk_uv, type: unk_vtx8_block_01, repeat: expr, repeat-expr: num_vtx8_unk_uv}
@@ -330,7 +330,17 @@ types:
             6: vertex_5
             7: vertex_5
             8: vertex_5
-
+      vertices2:
+        pos: _root.header.offset_vertex_buffer_2 + (vertex_position_2 * vertex_stride_2) + vertex_offset_2
+        repeat: expr
+        repeat-expr: num_vertices
+        type:
+          switch-on: vertex_stride_2
+          cases:
+            4: vertex2_4
+            8: vertex2_8
+        if: vertex_stride_2>0
+  
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
@@ -409,3 +419,12 @@ types:
       - {id: weight_values, type: u1, repeat: expr, repeat-expr: 8}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
+
+  vertex2_4:
+    seq:
+      - {id: occlusion, type: vec4_u1}
+
+  vertex2_8:
+    seq:
+      - {id: occlusion, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
