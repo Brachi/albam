@@ -24,7 +24,7 @@ Traceback:
 
 @blender_registry.register_blender_type
 class ALBAM_OT_ErrorHandler(bpy.types.Operator):
-    bl_label = ""
+    bl_label = "Something went wrong"
     bl_idname = "albam.error_handler_popup"
     ISSUES_URL = "https://github.com/Brachi/albam/issues"
     DISCORD_INVITE_URL = "https://discord.gg/QC2FhGhxCh"
@@ -39,15 +39,19 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Something went wrong", icon="ERROR")
-        layout.label(text="An unexpected error happened.")
-        layout.label(text="Please Provide the error shown in the console for help")
+        layout.label(text="An unexpected error happened", icon="ERROR")
+        layout.separator()
+        layout.label(text="Please provide the error shown in the console for help")
+
+        layout.separator()
+        layout.separator()
 
         issues_op = layout.operator("wm.url_open", text="Report an issue on Github", icon="URL")
         issues_op.url = self.ISSUES_URL
         discord_op = layout.operator("wm.url_open", text="Ask on Discord #support", icon="URL")
         discord_op.url = self.DISCORD_INVITE_URL
-        layout.row()
+        layout.separator()
+        layout.separator()
 
     @staticmethod
     def _generate_error_report():
