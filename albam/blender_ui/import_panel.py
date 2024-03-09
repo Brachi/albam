@@ -44,7 +44,10 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         item = self.get_selected_item(context)
-        self._execute(item, context)
+        try:
+            self._execute(item, context)
+        except Exception:
+            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
     @staticmethod

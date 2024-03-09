@@ -12,12 +12,13 @@ from albam.blender_ui.data import (
     AlbamCustomPropertiesImageFactory,
 )
 from albam.registry import blender_registry
+from albam.__version__ import __version__
 
 
 bl_info = {
     "name": "Albam",
     "author": "Sebastian A. Brachi",
-    "version": (0, 3, 6),
+    "version": tuple(__version__.split(".")),
     "blender": (2, 80, 0),
     "location": "Properties Panel",
     "description": "Import-Export multiple video-game formats",
