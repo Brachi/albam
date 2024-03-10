@@ -208,6 +208,9 @@ class DDSHeader(Structure):
         else:
             with open(abspath(bl_im.filepath), "rb") as f:
                 data = f.read()
+        id_magic = data[:4]
+        if not id_magic == b"DDS ":
+            raise TypeError(f"Image {bl_im.name} is not a dds image. Id: {id_magic}")
         header_data = io.BytesIO(data[:header_size])  # FIXME unnecessary copy
         header_data.readinto(dds_header)
         dds_header._dds_data = data[header_size:]
