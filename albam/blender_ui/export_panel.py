@@ -222,7 +222,11 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         item = self.get_selected_item(context)
-        self._execute(item)
+        try:
+            self._execute(item)
+        except Exception:
+            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+
         return {"FINISHED"}
 
     @staticmethod
@@ -288,7 +292,14 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-    def execute(self, context):  # pragma: no cover
+    def execute(self, context):
+        try:
+            self._execute(context)
+        except Exception:
+            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+        return {"FINISHED"}
+
+    def _execute(self, context):  # pragma: no cover
         vfs_i = context.scene.albam.file_explorer
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
@@ -315,7 +326,6 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         arc = update_arc(path_i, files_e)
         with open(self.filepath, "wb") as f:
             f.write(arc)
-        return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
@@ -351,6 +361,13 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
+        try:
+            self._execute(context)
+        except Exception:
+            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+        return {"FINISHED"}
+
+    def _execute(self, context):
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
