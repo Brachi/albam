@@ -1,9 +1,11 @@
 from binascii import crc32
+import functools
 import io
 
 import bpy
 from kaitaistruct import KaitaiStream
 
+from albam.exceptions import AlbamCheckFailure
 from albam.lib.blender import get_bl_materials
 from albam.registry import blender_registry
 from albam.vfs import VirtualFile
@@ -16,6 +18,8 @@ from .texture import (
     TextureType,
     NODE_NAMES_TO_TYPES,
 )
+
+MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
 
 # Probably better with app_id
 MAPPER_SERIALIZE_FUNCS = {
@@ -133,7 +137,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         node_to_delete = blender_material.node_tree.nodes.get("Principled BSDF")
         blender_material.node_tree.nodes.remove(node_to_delete)
         shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
-        shader_node_group.node_tree = bpy.data.node_groups["MT Framework shader"]
+        shader_node_group.node_tree = bpy.data.node_groups[MTFW_SHADER_NODEGROUP_NAME]
         shader_node_group.name = "MTFrameworkGroup"
         shader_node_group.width = 300
         material_output = blender_material.node_tree.nodes.get("Material Output")
@@ -647,11 +651,11 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
 
 def _create_mtfw_shader():
     """Creates shader node group to hide all nodes from users under the hood"""
-    existing = bpy.data.node_groups.get("MT Framework shader")
+    existing = bpy.data.node_groups.get(MTFW_SHADER_NODEGROUP_NAME)
     if existing:
         return existing
 
-    shader_group = bpy.data.node_groups.new("MT Framework shader", "ShaderNodeTree")
+    shader_group = bpy.data.node_groups.new(MTFW_SHADER_NODEGROUP_NAME, "ShaderNodeTree")
     group_inputs = shader_group.nodes.new("NodeGroupInput")
     group_inputs.location = (-2000, -200)
 
@@ -1070,3 +1074,44 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
         setattr(dst, name, src_value)
+
+
+def check_mtfw_shader_group(func):
+    """
+    Function decorator that checks if all the meshes of a bl_object
+    have materials that contain the "MT Framework shader" node group.
+    Raises AlbamCheckFailure with instructions on how to fix it for the affected
+    materials
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        bl_objects = [a for a in args if isinstance(a, bpy.types.Object)]
+        if not bl_objects:
+            result = func(*args, **kwargs)
+        # No more than one root object in export functions
+        meshes = [c for c in bl_objects[0].children_recursive if c.type == "MESH"]
+        materials = get_bl_materials(meshes)
+        checks = [_has_mtfw_shader_group(m) for m in materials]
+        if not all(checks):
+            data = sorted(mat.name for mat, status in zip(materials, checks) if status is False)
+            raise AlbamCheckFailure(
+                f"Some materials are not using the '{MTFW_SHADER_NODEGROUP_NAME}' group",
+                details=f"materials: {data}",
+                solution="In the Shader Editor, Add -> Group -> MT Framework shader for the materials listed")
+        result = func(*args, **kwargs)
+
+        return result
+    return wrapper
+
+
+def _has_mtfw_shader_group(bl_mat):
+    mtfw_shader_group = None
+    try:
+        mtfw_shader_group = bpy.data.node_groups[MTFW_SHADER_NODEGROUP_NAME]
+    except KeyError:
+        return False
+    existing_mtfw_shader_groups = [
+        n for n in bl_mat.node_tree.nodes if isinstance(n, bpy.types.ShaderNodeGroup) and
+        n.node_tree is mtfw_shader_group
+    ]
+    return bool(existing_mtfw_shader_groups)
