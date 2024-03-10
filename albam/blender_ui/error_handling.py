@@ -101,6 +101,4 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         )
         needed = max(len(label) for label in using_space)
         width = max(needed * self.PIXELS_PER_CHAR, self.MIN_POPUP_WIDTH)
-        print("needed:", needed, "width", width)
-
         return width
