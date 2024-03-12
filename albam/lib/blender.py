@@ -2,6 +2,8 @@ from collections import namedtuple, deque
 from copy import deepcopy
 import math
 
+import bpy
+
 
 BoundingBox = namedtuple('bounding_box', (
     'min_x', 'min_y', 'min_z',
@@ -268,6 +270,20 @@ def get_bl_materials(blender_objects):
             materials.append(mat)
             cache.add(mat.name)
     return materials
+
+
+def is_blimage_dds(bl_im):
+    is_dds = False
+    if bl_im.packed_file:
+        data = bl_im.packed_file.data
+    else:
+        fp = bpy.path.abspath(bl_im.filepath)
+        with open(fp, 'rb') as f:
+            data = f.read(4)
+    id_magic = data[:4]
+    if id_magic == b"DDS ":
+        is_dds = True
+    return is_dds
 
 
 def get_dist(point_a, point_b):

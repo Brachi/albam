@@ -32,6 +32,7 @@ from .material import (
     serialize_materials_data,
     check_mtfw_shader_group,
 )
+from .texture import check_dds_textures
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
 
@@ -744,6 +745,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="re5", extension="mod")
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
+@check_dds_textures
 @check_mtfw_shader_group
 def export_mod(bl_obj):
     asset = bl_obj.albam_asset
