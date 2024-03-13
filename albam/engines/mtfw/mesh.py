@@ -1117,7 +1117,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     index_buffer = bytearray()
     bbox_data = _create_bbox_data(dst_mod)
     use_strips = dst_mod.header.version == 156
-    is_skeletal = dst_mod.header.num_bones > 0
 
     current_vertex_position = 0
     current_vertex_offset = 0
