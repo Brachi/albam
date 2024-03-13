@@ -167,6 +167,8 @@ def get_uvs_per_vertex(blender_mesh_object, layer_index):
     except IndexError:
         return vertices
     uvs_per_loop = uv_layer.data
+    if not uvs_per_loop:
+        return vertices
     for i, loop in enumerate(blender_mesh_object.data.loops):
         vertex_index = loop.vertex_index
         if vertex_index in vertices:
@@ -175,6 +177,21 @@ def get_uvs_per_vertex(blender_mesh_object, layer_index):
             uvs = uvs_per_loop[i].uv
             vertices[vertex_index] = (uvs[0], uvs[1])
     return vertices
+
+
+def get_mesh_vertex_groups(bl_mesh):
+    """
+    Given a mesh object, return a dict
+    with `vertex_group_index : [vertices...]
+    """
+    vertex_groups = {}  # index: vertices
+
+    for v in bl_mesh.data.vertices:
+        v_groups = {g.group for g in v.groups}
+        for v_group in v_groups:
+            vertex_groups.setdefault(v_group, []).append(v)
+
+    return vertex_groups
 
 
 def get_bone_indices_and_weights_per_vertex(blender_object):
