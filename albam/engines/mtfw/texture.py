@@ -1,11 +1,17 @@
 from enum import Enum
 import io
+import functools
 from pathlib import PureWindowsPath
 
 import bpy
 from kaitaistruct import KaitaiStream
 
-from albam.lib.blender import get_bl_teximage_nodes
+from albam.exceptions import AlbamCheckFailure
+from albam.lib.blender import (
+    get_bl_teximage_nodes,
+    get_bl_materials,
+    is_blimage_dds,
+)
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
 from albam.vfs import VirtualFile
@@ -547,3 +553,38 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
         setattr(dst, name, src_value)
+
+
+def check_dds_textures(func):
+    """
+    Function decorator that checks if all the meshes of a bl_object
+    have materials that use dds textures only
+    Raises AlbamCheckFailure with the list of
+    non-dds textures and materials where they are used
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        bl_objects = [a for a in args if isinstance(a, bpy.types.Object)]
+        if not bl_objects:
+            result = func(*args, **kwargs)
+        # No more than one root object in export functions
+        meshes = [c for c in bl_objects[0].children_recursive if c.type == "MESH"]
+        materials = get_bl_materials(meshes)
+        images = get_bl_teximage_nodes(materials)
+        non_dds = []
+        for bl_im_name, bl_im_dict in images.items():
+            if not is_blimage_dds(bl_im_dict["image"]):
+                non_dds.append((bl_im_name, bl_im_dict))
+        if any(non_dds):
+            data = [
+                f"Texture: {bl_im_name} -> materials: {list(bl_im_dict['materials'].keys())}"
+                for bl_im_name, bl_im_dict in non_dds
+            ]
+            raise AlbamCheckFailure(
+                "The materials to export contain some images that are not DDS",
+                details=" ".join(data),
+                solution="Edit the images externally (e.g. in GIMP) and reassign in the materials listed")
+        result = func(*args, **kwargs)
+
+        return result
+    return wrapper
