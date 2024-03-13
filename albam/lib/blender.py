@@ -167,6 +167,8 @@ def get_uvs_per_vertex(blender_mesh_object, layer_index):
     except IndexError:
         return vertices
     uvs_per_loop = uv_layer.data
+    if not uvs_per_loop:
+        return vertices
     for i, loop in enumerate(blender_mesh_object.data.loops):
         vertex_index = loop.vertex_index
         if vertex_index in vertices:
