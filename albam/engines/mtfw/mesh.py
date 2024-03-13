@@ -1189,8 +1189,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.face_offset = face_offset
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
-        mesh.num_unique_bone_ids = len(
-            bl_mesh.vertex_groups) if is_skeletal else 1
+        # TODO: rename to num_weight_bounds
+        mesh.num_unique_bone_ids = 1
 
         if dst_mod.header.version in (156,):
             mesh.unk_03 = 0
@@ -1200,6 +1200,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh_weight_bounds = _calculate_weight_bounds(
             bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
+        # TODO: rename to num_weight_bounds
+        mesh.num_unique_bone_ids = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
