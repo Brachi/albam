@@ -16,6 +16,7 @@ import numpy as np
 
 from albam.lib.blender import (
     get_bone_indices_and_weights_per_vertex,
+    get_mesh_vertex_groups,
     get_model_bounding_box,
     get_model_bounding_sphere,
     get_normals_per_vertex,
@@ -1057,21 +1058,16 @@ def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
 
     bone_palette = {'mesh_indices': set(), 'bone_indices': set()}
     for i, mesh in enumerate(bl_meshes):
-        vertex_group_mapping = {vg.index: bl_armature.pose.bones.find(
-            vg.name) for vg in mesh.vertex_groups}
-        vertex_group_mapping = {k: v for k,
-                                v in vertex_group_mapping.items() if v != -1}
-        try:
-            bone_indices = (
-                {vertex_group_mapping[vgroup.group]
-                 for vertex in mesh.data.vertices
-                 for vgroup in vertex.groups}
-            )
-        except Exception:
-            print("Can't find vertex group in the armature")
 
-        msg = "Mesh {} is influenced by more than 32 bones, which is not supported".format(
-            mesh.name)
+        mesh_vertex_groups = get_mesh_vertex_groups(mesh)
+        bone_indices = {
+            bl_armature.pose.bones.find(mesh.vertex_groups[vgi].name)
+            for vgi, vertices in mesh_vertex_groups.items() if vertices
+        }
+        bone_indices = {bi for bi in bone_indices if bi != -1}
+
+        # TODO: check at export time for all meshes
+        msg = f"Mesh {mesh.name} is influenced by more than 32 bones, which is not supported"
         assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
 
         current = bone_palette['bone_indices']
@@ -1529,11 +1525,13 @@ def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
             dst_mod, bl_mesh, meshes_data)
         unsorted_weight_bounds.append(weight_bound)
     else:
+        mesh_vertex_groups = get_mesh_vertex_groups(bl_mesh)
         for vg in bl_mesh.vertex_groups:
             weight_bound = _calculate_vertex_group_weight_bound(
-                bl_mesh.data, bl_obj, vg, dst_mod, meshes_data
+                mesh_vertex_groups, bl_obj, vg, dst_mod, meshes_data
             )
-            unsorted_weight_bounds.append(weight_bound)
+            if weight_bound:
+                unsorted_weight_bounds.append(weight_bound)
     return sorted(unsorted_weight_bounds, key=lambda x: x.bone_id)
 
 
@@ -1630,18 +1628,14 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     return wb
 
 
-def _calculate_vertex_group_weight_bound(blender_mesh, armature, vertex_group, dst_mod, meshes_data):
-    vertices_in_group = []
+def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data):
+    vertices_in_group = mesh_vertex_groups.get(vertex_group.index)
+    if not vertices_in_group:
+        return
 
     bone_index = armature.pose.bones.find(vertex_group.name)
     pose_bone = armature.pose.bones[bone_index]
     pose_bone_matrix = Matrix.Translation(pose_bone.head).inverted()
-
-    for v in blender_mesh.vertices:
-        v_groups = {g.group for g in v.groups}
-        if vertex_group.index not in v_groups:
-            continue
-        vertices_in_group.append(v)
 
     vertices_in_group_bone_space = [
         pose_bone_matrix @ v.co for v in vertices_in_group]
