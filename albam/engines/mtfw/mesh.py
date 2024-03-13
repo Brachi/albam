@@ -50,8 +50,8 @@ APPID_CLASS_MAPPER = {
     "rev2": Mod21,
 }
 
-DEFAULT_VERTEX_FORMAT_SKIN = Mod21.Vertex14d4
-DEFAULT_VERTEX_FORMAT_NONSKIN = Mod21.VertexA7d7
+DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
+DEFAULT_VERTEX_FORMAT_NONSKIN = 0xa7d7d036
 
 VERTEX_FORMATS_MAPPER = {
     0: Mod156.Vertex0,
@@ -1252,8 +1252,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         except (TypeError, ValueError):
             stored_vertex_format = None
         default_vertex_format = DEFAULT_VERTEX_FORMAT_SKIN if has_bones else DEFAULT_VERTEX_FORMAT_NONSKIN
-        vertex_format = stored_vertex_format
-        VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format, default_vertex_format)
+        vertex_format = stored_vertex_format if stored_vertex_format in VERTEX_FORMATS_MAPPER else default_vertex_format
+        VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vertex_size = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforces in `_process_weights_for_export`
