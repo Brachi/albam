@@ -1252,7 +1252,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         except (TypeError, ValueError):
             stored_vertex_format = None
         default_vertex_format = DEFAULT_VERTEX_FORMAT_SKIN if has_bones else DEFAULT_VERTEX_FORMAT_NONSKIN
-        vertex_format = stored_vertex_format if stored_vertex_format in VERTEX_FORMATS_MAPPER else default_vertex_format
+        vertex_format = stored_vertex_format
+        if vertex_format not in VERTEX_FORMATS_MAPPER:
+            vertex_format = default_vertex_format
         VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vertex_size = VertexCls().size_
 
