@@ -81,7 +81,14 @@ class StoreCustomPropsMat(bpy.types.Operator):
     bl_idname = "material.custom_props_store"
     bl_label = "Store to a file"
 
-    filepath: bpy.props.StringProperty(subtype="DIR_PATH")
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    filepath: FILEPATH
     filename = bpy.props.StringProperty(default="")
 
     @classmethod
@@ -91,7 +98,7 @@ class StoreCustomPropsMat(bpy.types.Operator):
     def execute(self, context):
         active_mat = context.material
         params = {}
-        not_array_types = [int, float, str]
+        not_array_types = [bool, int, float, str]
         albam_asset = self.albam_asset_uses_mat(active_mat)
         app_id = albam_asset.app_id
         custom_props = active_mat.albam_custom_properties.get_appid_custom_properties(app_id)
@@ -109,7 +116,6 @@ class StoreCustomPropsMat(bpy.types.Operator):
 
         with open(self.filepath, "w") as file:
             file.write(json.dumps(params, indent=4))
-            print("store mat params")
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -138,12 +144,19 @@ class LoadCustomPropsMat(bpy.types.Operator):
     bl_idname = "material.custom_props_load"
     bl_label = "Load from a file"
 
-    filepath: bpy.props.StringProperty(subtype="DIR_PATH")
-    filename = bpy.props.StringProperty(default="")
-    filter_glob: bpy.props.StringProperty(
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    EXTENSION_FILTER = bpy.props.StringProperty(
         default="*.json",
         options={'HIDDEN'},
     )
+    filepath: FILEPATH
+    filename = bpy.props.StringProperty(default="")
+    filter_glob: EXTENSION_FILTER
 
     @classmethod
     def poll(cls, context):
@@ -159,12 +172,12 @@ class LoadCustomPropsMat(bpy.types.Operator):
         for attr_name in custom_props.__annotations__:
             if loaded_param.get(attr_name):
                 if app_id == "re5":
-                    setattr(active_mat.albam_custom_properties.mrl_params,
+                    setattr(active_mat.albam_custom_properties.mod_156_material,
                             attr_name,
                             loaded_param[attr_name])
 
                 else:
-                    setattr(active_mat.albam_custom_properties.mod_156_material,
+                    setattr(active_mat.albam_custom_properties.mrl_params,
                             attr_name,
                             loaded_param[attr_name])
 
