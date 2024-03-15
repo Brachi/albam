@@ -1,15 +1,6 @@
 import bpy
 
 from albam.registry import blender_registry
-from .import_panel import APPS
-
-
-@blender_registry.register_blender_prop
-class AlbamAsset(bpy.types.PropertyGroup):
-    app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
-    original_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
-    relative_path : bpy.props.StringProperty()
-    extension: bpy.props.StringProperty()
 
 
 def AlbamDataFactory():

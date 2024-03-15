@@ -4,7 +4,8 @@ import sys
 
 import bpy
 
-from albam.blender_ui.data import AlbamDataFactory, AlbamAsset
+from albam.blender_ui.data import AlbamDataFactory
+from albam.blender_ui.asset import AlbamAsset
 from albam.blender_ui.custom_properties import AlbamCustomPropertiesFactory
 from albam.registry import blender_registry
 from albam.__version__ import __version__ as version
