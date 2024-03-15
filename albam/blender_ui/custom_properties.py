@@ -134,7 +134,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         custom_props = context_item.albam_custom_properties.get_appid_custom_properties(app_id)
-        props_name = context.material.albam_custom_properties.APPID_MAP[app_id]
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         self.layout.label(text=f"App: {app_id}")
         self.layout.label(text=f"Props: {props_name}")
         self.layout.separator()
