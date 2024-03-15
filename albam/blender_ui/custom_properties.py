@@ -3,6 +3,81 @@ import bpy
 from albam.registry import blender_registry
 
 
+def AlbamCustomPropertiesFactory(kind: str):
+    """
+    Generate subclasses of bpy.props.PropertyGroup
+    based on kind, which can be "mesh", "image", or "material".
+
+    These subclassess will use the blender registry to include
+    custom properties for each app_id.
+
+    E.g. to add custom properties for materials for app_id `app_test`
+    use the register_custom
+
+    ```
+    @blender_registry.register_custom_properties_material("app_test_properties", ("app_test",))
+    @blender_registry.register_blender_prop
+    class AppTestMaterialCustomProperties(bpy.types.PropertyGroup):
+        custom_property_1: bpy.props.IntVectorProperty(size=4, default=(0, 0, 128, 140))
+        custom_property_2: bpy.props.StringProperty(default="spam")
+        ...
+    ```
+
+    This later can be access from a material like this:
+
+    ```
+    >>> bpy.data.materials[0].albam_custom_properties.app_test_properties
+    bpy.data.materials[0].albam_custom_properties.app_test_properties
+    >>> type(bpy.data.materials[0].albam_custom_properties.app_test_properties)
+    <class "AppTestMaterialCustomProperties">
+    >>> bpy.data.materials[0].albam_custom_properties.app_test_properties.custom_property_2
+    spam
+    ```
+
+    Knowing the name of the custom properties is not necessary, since they can also be
+    obtained with the app_id:
+
+    >>> bpy.data.materials[0].albam_custom_properties.get_appid_custom_properties("app_test")
+    bpy.data.materials[0].albam_custom_properties.app_test_properties
+    >>> type(bpy.data.materials[0].albam_custom_properties.get_appid_custom_properties("app_test"))
+    <class "AppTestMaterialCustomProperties">
+
+    """
+
+    def create_data_custom_properties(registry_name):
+        data = {}
+        appid_map = {}
+        registry = getattr(blender_registry, registry_name)
+        for name, (cls, app_ids) in registry.items():
+            data[name] = bpy.props.PointerProperty(type=cls)
+            appid_map.update({app_id: name for app_id in app_ids})
+        return data, appid_map
+
+    def get_appid_custom_properties(self, app_id):
+        """
+        class method to return the custom_properties
+        associated with the app_id
+        """
+        # TODO: error handling
+        property_name = self.APPID_MAP[app_id]
+        return getattr(self, property_name)
+
+    # missing bl_label and bl_idname in cls dict?
+    # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
+    assert kind in ("mesh", "material", "image")
+    data, appid_map = create_data_custom_properties(f"custom_properties_{kind}")
+
+    return type(
+        f'AlbamCustomProperty{kind.title()}',
+        (bpy.types.PropertyGroup, ),
+        {
+            '__annotations__' : data,
+            'APPID_MAP': appid_map,
+            get_appid_custom_properties.__name__: get_appid_custom_properties,
+        }
+    )
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesMaterial(bpy.types.Panel):
     bl_idname = "ALBAM_PT_CustomPropertiesMaterial"
