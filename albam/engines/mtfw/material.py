@@ -121,7 +121,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             # by the mod file (will result in un-named materials)
             continue
         blender_material = bpy.data.materials.new(mat_name)
-        custom_properties = blender_material.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = blender_material.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if parsed_mod.header.version in VERSION_USES_MRL and material.resources:
             # verified in tests that $Globals and CBMaterial resources are always present
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
@@ -177,7 +177,7 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
 
     for mat_idx, bl_mat in enumerate(sorted(bl_materials, key=lambda x: x.name)):
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
-        custom_properties = bl_mat.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.set_to_dest(mat)
         if src_mod.bones_data is not None:
             bl_mat.albam_custom_properties.use_8_bones = 0
@@ -572,7 +572,7 @@ def _create_cb_resource(mrl, bl_mat, mat, app_id, cb_name):
         float_buffer = mrl.StrCbMaterial(_parent=resource, _root=resource._root)
 
     # we will set some extra attributes, but it's OK since they won't be serialized
-    custom_properties = bl_mat.albam_custom_properties.get_appid_custom_properties(app_id)
+    custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_properties.set_to_dest(float_buffer)
 
     float_buffer._check()

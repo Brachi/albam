@@ -193,7 +193,7 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
         bl_image.albam_asset.relative_path = texture_path + ".tex"
         bl_image.albam_asset.extension = "tex"
 
-        custom_properties = bl_image.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.set_from_source(tex)
 
         textures.append(bl_image)
@@ -373,7 +373,7 @@ def _serialize_texture_156(app_id, dict_tex):
     tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
     tex.dds_data = dds_header.data
 
-    custom_properties = bl_im.albam_custom_properties.get_appid_custom_properties(app_id)
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_properties.set_to_dest(tex)
 
     tex._check()
@@ -399,7 +399,7 @@ def _serialize_texture_21(app_id, dict_tex):
     reserved_02 = 0
     dimension = 2 if not dds_header.is_proper_cubemap else 6
 
-    custom_properties = bl_im.albam_custom_properties.get_appid_custom_properties(app_id)
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     packed_data_1 = (

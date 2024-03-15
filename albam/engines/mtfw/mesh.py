@@ -386,7 +386,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False,
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
-    custom_properties = me_ob.albam_custom_properties.get_appid_custom_properties(
+    custom_properties = me_ob.albam_custom_properties.get_custom_properties_for_appid(
         app_id)
     custom_properties.set_from_source(mesh)
     return ob
@@ -1167,7 +1167,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         num_indices = len(triangles)
 
         # Beware of vertex_format being a string type, overriden below
-        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(
+        custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
         custom_properties.set_to_dest(mesh)
 
@@ -1243,7 +1243,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             .mod_156_material.use_8_bones
         )
     elif dst_mod.header.version == 210:
-        custom_properties = bl_mesh.data.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
         except (TypeError, ValueError):

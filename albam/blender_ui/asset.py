@@ -44,7 +44,7 @@ class ALBAM_PT_AssetImage(bpy.types.Panel):
         self.layout.row().prop(im.albam_asset, "relative_path")
 
         app_id = im.albam_asset.app_id
-        custom_props = im.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_props = im.albam_custom_properties.get_custom_properties_for_appid(app_id)
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
 

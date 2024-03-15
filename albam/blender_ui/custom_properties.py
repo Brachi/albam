@@ -38,11 +38,23 @@ def AlbamCustomPropertiesFactory(kind: str):
     Knowing the name of the custom properties is not necessary, since they can also be
     obtained with the app_id:
 
-    >>> bpy.data.materials[0].albam_custom_properties.get_appid_custom_properties("app_test")
+    ```
+    # Assuming the material is associated with a mesh that is part of an Albam asset
+    >>> bpy.data.materials[0].albam_custom_properties.get_custom_properties_for_appid("app_test")
     bpy.data.materials[0].albam_custom_properties.app_test_properties
-    >>> type(bpy.data.materials[0].albam_custom_properties.get_appid_custom_properties("app_test"))
+    >>> type(bpy.data.materials[0].albam_custom_properties.get_custom_properties_for_appid("app_test"))
     <class "AppTestMaterialCustomProperties">
+    ```
 
+    Even easier, with the shortcut that will get the app_id for us:
+
+    ```
+    # Assuming the material is associated with a mesh that is part of an Albam asset
+    >>> bpy.data.materials[0].albam_custom_properties.get_custom_properties()
+    bpy.data.materials[0].albam_custom_properties.app_test_properties
+    >>> type(bpy.data.materials[0].albam_custom_properties.get_custom_properties())
+    <class "AppTestMaterialCustomProperties">
+    ```
     """
 
     def create_data_custom_properties(registry_name):
@@ -54,7 +66,16 @@ def AlbamCustomPropertiesFactory(kind: str):
             appid_map.update({app_id: name for app_id in app_ids})
         return data, appid_map
 
-    def get_appid_custom_properties(self, app_id):
+    def get_custom_properties(self):
+        """
+        Shortcut to get the custom properties based on the app_id
+        of the parent albam asset
+        """
+        albam_asset = self.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        return self.get_custom_properties_for_appid(app_id)
+
+    def get_custom_properties_for_appid(self, app_id):
         """
         class method to return the custom_properties
         associated with the app_id
@@ -108,7 +129,8 @@ def AlbamCustomPropertiesFactory(kind: str):
         {
             '__annotations__' : data,
             'APPID_MAP': appid_map,
-            get_appid_custom_properties.__name__: get_appid_custom_properties,
+            get_custom_properties.__name__: get_custom_properties,
+            get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
     )
@@ -135,7 +157,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         app_name = [app[1] for app in APPS if app[0] == app_id][0]
-        custom_props = context_item.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         self.layout.label(text=f"App: {app_name}")
         self.layout.label(text=f"Props: {props_name}")
