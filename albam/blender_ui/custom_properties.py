@@ -62,6 +62,40 @@ def AlbamCustomPropertiesFactory(kind: str):
         property_name = self.APPID_MAP[app_id]
         return getattr(self, property_name)
 
+    def _get_parent_albam_asset_mesh(mesh):
+        albam_asset = None
+        for obj in bpy.data.objects:
+            if not obj.albam_asset.relative_path:
+                continue
+            children = {c.data for c in obj.children_recursive if c.type == "MESH"}
+            if mesh in children:
+                albam_asset = obj.albam_asset
+                break
+        return albam_asset
+
+    def _get_parent_albam_asset_material(mat):
+        albam_asset = None
+        for obj in bpy.data.objects:
+            if not obj.albam_asset.relative_path:
+                continue
+            children = [c.data for c in obj.children_recursive if c.type == "MESH"]
+            is_mat_used = any(mesh.user_of_id(mat) for mesh in children)
+            if is_mat_used:
+                albam_asset = obj.albam_asset
+                break
+        return albam_asset
+
+    def get_parent_albam_asset(self):
+        custom_prop_context = self.id_data
+        albam_asset = None
+
+        if isinstance(custom_prop_context, bpy.types.Mesh):
+            albam_asset = _get_parent_albam_asset_mesh(custom_prop_context)
+        elif isinstance(custom_prop_context, bpy.types.Material):
+            albam_asset = _get_parent_albam_asset_material(custom_prop_context)
+
+        return albam_asset
+
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
     assert kind in ("mesh", "material", "image")
@@ -74,6 +108,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             '__annotations__' : data,
             'APPID_MAP': appid_map,
             get_appid_custom_properties.__name__: get_appid_custom_properties,
+            get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
     )
 
@@ -88,29 +123,18 @@ class ALBAM_PT_CustomPropertiesMaterial(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):  # pragma: no cover
-        return context.material and bool(cls.albam_asset_uses_mat(context.material))
+        return context.material and context.material.albam_custom_properties.get_parent_albam_asset()
 
     def draw(self, context):
-        mat = context.material
-        albam_asset = self.albam_asset_uses_mat(mat)  # already called in poll, can we save this?
+        albam_asset = context.material.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
-        custom_props = mat.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_props = context.material.albam_custom_properties.get_appid_custom_properties(app_id)
+        props_name = context.material.albam_custom_properties.APPID_MAP[app_id]
+        self.layout.label(text=f"App: {app_id}")
+        self.layout.label(text=f"Props: {props_name}")
+        self.layout.separator()
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
-
-    @staticmethod
-    def albam_asset_uses_mat(mat):
-        # XXX case where same material used in different
-        # albam assets with different app_ids not supported yet
-        albam_asset = None
-        for obj in bpy.data.objects:
-            if not obj.albam_asset.relative_path:
-                continue
-            children = [c.data for c in obj.children_recursive if c.type == "MESH"]
-            is_mat_used = any(mesh.user_of_id(mat) for mesh in children)
-            if is_mat_used:
-                albam_asset = obj.albam_asset
-        return albam_asset
 
 
 @blender_registry.register_blender_type
@@ -123,25 +147,15 @@ class ALBAM_PT_CustomPropertiesMesh(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):  # pragma: no cover
-        return context.mesh and bool(cls.albam_asset_uses_mesh(context.mesh))
+        return context.mesh and context.mesh.albam_custom_properties.get_parent_albam_asset()
 
     def draw(self, context):
-        albam_asset = self.albam_asset_uses_mesh(context.mesh)  # already called in poll, can we save this?
+        albam_asset = context.mesh.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         custom_props = context.mesh.albam_custom_properties.get_appid_custom_properties(app_id)
+        props_name = context.mesh.albam_custom_properties.APPID_MAP[app_id]
+        self.layout.label(text=f"App: {app_id}")
+        self.layout.label(text=f"Props: {props_name}")
+        self.layout.separator()
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
-
-    @staticmethod
-    def albam_asset_uses_mesh(mesh):
-        # XXX case where same material used in different
-        # albam assets with different app_ids not supported yet
-        albam_asset = None
-        for obj in bpy.data.objects:
-            if not obj.albam_asset.relative_path:
-                continue
-            children = {c.data for c in obj.children_recursive if c.type == "MESH"}
-            if mesh in children:
-                albam_asset = obj.albam_asset
-                break
-        return albam_asset
