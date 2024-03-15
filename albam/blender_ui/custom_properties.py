@@ -113,22 +113,27 @@ def AlbamCustomPropertiesFactory(kind: str):
     )
 
 
-@blender_registry.register_blender_type
-class ALBAM_PT_CustomPropertiesMaterial(bpy.types.Panel):
-    bl_idname = "ALBAM_PT_CustomPropertiesMaterial"
+class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
     bl_label = "Custom Properties (Albam)"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "material"
+    CONTEXT_ITEM_NAME = ""
 
     @classmethod
     def poll(cls, context):  # pragma: no cover
-        return context.material and context.material.albam_custom_properties.get_parent_albam_asset()
+        """
+        Only show custom properties panel if the contex_item (mesh or material)
+        are associated with an albam asset (e.g. a 3d model)
+        """
+        context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
+        return context_item and context_item.albam_custom_properties.get_parent_albam_asset()
 
     def draw(self, context):
-        albam_asset = context.material.albam_custom_properties.get_parent_albam_asset()
+        """
+        Draw the custom properties for the context_item (mesh or material)
+        """
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
-        custom_props = context.material.albam_custom_properties.get_appid_custom_properties(app_id)
+        custom_props = context_item.albam_custom_properties.get_appid_custom_properties(app_id)
         props_name = context.material.albam_custom_properties.APPID_MAP[app_id]
         self.layout.label(text=f"App: {app_id}")
         self.layout.label(text=f"Props: {props_name}")
@@ -138,24 +143,18 @@ class ALBAM_PT_CustomPropertiesMaterial(bpy.types.Panel):
 
 
 @blender_registry.register_blender_type
-class ALBAM_PT_CustomPropertiesMesh(bpy.types.Panel):
+class ALBAM_PT_CustomPropertiesMaterial(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesMaterial"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+    CONTEXT_ITEM_NAME = "material"
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_idname = "ALBAM_PT_CustomPropertiesMesh"
-    bl_label = "Custom Properties (Albam)"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
-
-    @classmethod
-    def poll(cls, context):  # pragma: no cover
-        return context.mesh and context.mesh.albam_custom_properties.get_parent_albam_asset()
-
-    def draw(self, context):
-        albam_asset = context.mesh.albam_custom_properties.get_parent_albam_asset()
-        app_id = albam_asset.app_id
-        custom_props = context.mesh.albam_custom_properties.get_appid_custom_properties(app_id)
-        props_name = context.mesh.albam_custom_properties.APPID_MAP[app_id]
-        self.layout.label(text=f"App: {app_id}")
-        self.layout.label(text=f"Props: {props_name}")
-        self.layout.separator()
-        for k in custom_props.__annotations__:
-            self.layout.prop(custom_props, k)
+    CONTEXT_ITEM_NAME = "mesh"
