@@ -8,7 +8,6 @@ def AlbamCustomPropertiesFactory(kind: str):
     """
     Generate subclasses of bpy.props.PropertyGroup
     based on kind, which can be "mesh", "image", or "material".
-
     These subclassess will use the blender registry to include
     custom properties for each app_id.
 

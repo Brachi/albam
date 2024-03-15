@@ -2,7 +2,6 @@ import bpy
 
 from albam.registry import blender_registry
 
-
 def AlbamDataFactory():
 
     def create_data():
