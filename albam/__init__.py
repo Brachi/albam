@@ -4,13 +4,9 @@ import sys
 
 import bpy
 
-from albam.blender_ui.data import (
-    AlbamDataFactory,
-    AlbamAsset,
-    AlbamCustomPropertiesMaterialFactory,
-    AlbamCustomPropertiesMeshFactory,
-    AlbamCustomPropertiesImageFactory,
-)
+from albam.blender_ui.data import AlbamDataFactory
+from albam.blender_ui.asset import AlbamAsset
+from albam.blender_ui.custom_properties import AlbamCustomPropertiesFactory
 from albam.registry import blender_registry
 from albam.__version__ import __version__ as version
 
@@ -51,9 +47,9 @@ def register():
         bpy.utils.register_class(cls)
 
     AlbamData = AlbamDataFactory()
-    AlbamCustomPropertiesMaterial = AlbamCustomPropertiesMaterialFactory()
-    AlbamCustomPropertiesMesh = AlbamCustomPropertiesMeshFactory()
-    AlbamCustomPropertiesImage = AlbamCustomPropertiesImageFactory()
+    AlbamCustomPropertiesMaterial = AlbamCustomPropertiesFactory("material")
+    AlbamCustomPropertiesMesh = AlbamCustomPropertiesFactory("mesh")
+    AlbamCustomPropertiesImage = AlbamCustomPropertiesFactory("image")
     bpy.utils.register_class(AlbamData)
     bpy.utils.register_class(AlbamCustomPropertiesMaterial)
     bpy.utils.register_class(AlbamCustomPropertiesMesh)
