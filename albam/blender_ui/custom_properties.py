@@ -1,3 +1,5 @@
+import json
+
 import bpy
 
 from albam.apps import APPS
@@ -122,6 +124,25 @@ def AlbamCustomPropertiesFactory(kind: str):
     assert kind in ("mesh", "material", "image")
     data, appid_map = create_data_custom_properties(f"custom_properties_{kind}")
 
+    def get_custom_properties_as_dict(self):
+        context_item = self.id_data
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+
+        final = {props_name: {}}
+        current = final[props_name]
+
+        for prop_item_name in props.__annotations__:
+            value = getattr(props, prop_item_name)
+            try:
+                value = value[:]
+            except TypeError:
+                pass
+            current[prop_item_name] = value
+        return final
+
     return type(
         f'AlbamCustomProperty{kind.title()}',
         (bpy.types.PropertyGroup, ),
@@ -129,6 +150,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             '__annotations__' : data,
             'APPID_MAP': appid_map,
             get_custom_properties.__name__: get_custom_properties,
+            get_custom_properties_as_dict.__name__: get_custom_properties_as_dict,
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
@@ -159,7 +181,11 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         self.layout.label(text=f"App: {app_name}")
-        self.layout.label(text=f"Props: {props_name}")
+        # TODO: layout, place next to app_name, not to the very right
+        row = self.layout.row()
+        row.label(text=f"Props: {props_name}")
+        row.operator("albam.custom_props_copy", icon="COPYDOWN", text="")
+        row.operator("albam.custom_props_paste", icon="PASTEDOWN", text="")
         self.layout.separator()
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
@@ -181,3 +207,49 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "data"
     CONTEXT_ITEM_NAME = "mesh"
+
+
+@blender_registry.register_blender_prop_albam(name="clipboard")
+class ClipboardData(bpy.types.PropertyGroup):
+    buff : bpy.props.StringProperty(default="{}")
+
+    def get_buffer(self):
+        return json.loads(self.buff)
+
+    def update_buffer(self, data: dict):
+        current = self.get_buffer()
+        current.update(data)
+        self.buff = json.dumps(current)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
+    """
+    Copy Operator for mesh and material context only
+    """
+    bl_idname = "albam.custom_props_copy"
+    bl_label = "Copy Albam Custom Properties"
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        props_dict = context_item.albam_custom_properties.get_custom_properties_as_dict()
+        context.scene.albam.clipboard.update_buffer(props_dict)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
+    bl_idname = "albam.custom_props_paste"
+    bl_label = "Paste Albam Custom Properties"
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        buff = context.scene.albam.clipboard.get_buffer()
+        to_paste = buff.get(props_name, {})
+        for k, v in to_paste.items():
+            setattr(custom_props, k, v)
+        return {'FINISHED'}
