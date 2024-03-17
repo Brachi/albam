@@ -189,6 +189,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         row.operator("albam.custom_props_copy", icon="COPYDOWN", text="")
         row.operator("albam.custom_props_paste", icon="PASTEDOWN", text="")
         row.operator("albam.custom_props_export", icon="EXPORT", text="")
+        row.operator("albam.custom_props_import", icon="IMPORT", text="")
 
         self.layout.separator(factor=3.0)
 
@@ -298,4 +299,69 @@ class ALBAM_OT_CustomPropertiesExport(bpy.types.Operator):
         to_export = context_item.albam_custom_properties.get_custom_properties_as_dict()
         with open(self.filepath, "w") as w:
             json.dump(to_export, w, indent=4)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
+    """
+    Import custom properties from a json file
+    """
+    bl_idname = "albam.custom_props_import"
+    bl_label = "Import props"
+
+    EXTENSION_FILTER = bpy.props.StringProperty(
+        default="*.json",
+        options={'HIDDEN'},
+    )
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    filepath: FILEPATH
+    filename = bpy.props.StringProperty(default="")
+    filter_glob: EXTENSION_FILTER
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        data = {}
+        with open(self.filepath) as f:
+            try:
+                data = json.load(f)
+            except UnicodeDecodeError:
+                self.report({"ERROR"}, "Failed opening the file in text mode. Is it a valid json?")
+                return {'FINISHED'}
+            except json.JSONDecodeError:
+                self.report({"ERROR"}, "Failed decoding json. Is it valid?"
+                            " Tip: validate it in https://jsonformatter.org")
+                return {'FINISHED'}
+            except Exception as err:
+                self.report({"ERROR"}, "An unexpted error happened, please check the console")
+                print(err)
+                return {'FINISHED'}
+
+        context_item = context.mesh or context.material
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        current_props = context_item.albam_custom_properties.get_custom_properties()
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props = {}
+        try:
+            props = data[props_name]
+        except KeyError:
+            self.report({"WARNING"}, f"Expected to find the key {props_name}. Nothing imported")
+            return {'FINISHED'}
+
+        imported = 0
+        for k, v in props.items():
+            # TODO: validate keys exist and emit a warning (e.g. for name changing)
+            setattr(current_props, k, v)
+            imported += 1
+        self.report({"INFO"}, f"Imported {imported} properties")
+
         return {'FINISHED'}
