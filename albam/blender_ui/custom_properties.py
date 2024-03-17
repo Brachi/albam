@@ -180,13 +180,17 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         app_name = [app[1] for app in APPS if app[0] == app_id][0]
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
-        self.layout.label(text=f"App: {app_name}")
-        # TODO: layout, place next to app_name, not to the very right
-        row = self.layout.row()
-        row.label(text=f"Props: {props_name}")
+
+        layout = self.layout
+        layout.use_property_split = True
+
+        row = layout.row(align=True)
+        row.label(text=f"{props_name} ({app_name})", icon="PROPERTIES")
         row.operator("albam.custom_props_copy", icon="COPYDOWN", text="")
         row.operator("albam.custom_props_paste", icon="PASTEDOWN", text="")
-        self.layout.separator()
+
+        self.layout.separator(factor=3.0)
+
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
 
@@ -225,7 +229,7 @@ class ClipboardData(bpy.types.PropertyGroup):
 @blender_registry.register_blender_type
 class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
     """
-    Copy Operator for mesh and material context only
+    Store properties in context.scene.albam.clipboard
     """
     bl_idname = "albam.custom_props_copy"
     bl_label = "Copy Albam Custom Properties"
@@ -239,6 +243,9 @@ class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
+    """
+    Paste properties stored in context.scene.albam.clipboard
+    """
     bl_idname = "albam.custom_props_paste"
     bl_label = "Paste Albam Custom Properties"
 
