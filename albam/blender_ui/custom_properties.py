@@ -1,3 +1,5 @@
+import json
+
 import bpy
 
 from albam.apps import APPS
@@ -8,7 +10,6 @@ def AlbamCustomPropertiesFactory(kind: str):
     """
     Generate subclasses of bpy.props.PropertyGroup
     based on kind, which can be "mesh", "image", or "material".
-
     These subclassess will use the blender registry to include
     custom properties for each app_id.
 
@@ -123,6 +124,25 @@ def AlbamCustomPropertiesFactory(kind: str):
     assert kind in ("mesh", "material", "image")
     data, appid_map = create_data_custom_properties(f"custom_properties_{kind}")
 
+    def get_custom_properties_as_dict(self):
+        context_item = self.id_data
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+
+        final = {props_name: {}}
+        current = final[props_name]
+
+        for prop_item_name in props.__annotations__:
+            value = getattr(props, prop_item_name)
+            try:
+                value = value[:]
+            except TypeError:
+                pass
+            current[prop_item_name] = value
+        return final
+
     return type(
         f'AlbamCustomProperty{kind.title()}',
         (bpy.types.PropertyGroup, ),
@@ -130,6 +150,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             '__annotations__' : data,
             'APPID_MAP': appid_map,
             get_custom_properties.__name__: get_custom_properties,
+            get_custom_properties_as_dict.__name__: get_custom_properties_as_dict,
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
@@ -159,9 +180,19 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         app_name = [app[1] for app in APPS if app[0] == app_id][0]
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
-        self.layout.label(text=f"App: {app_name}")
-        self.layout.label(text=f"Props: {props_name}")
-        self.layout.separator()
+
+        layout = self.layout
+        layout.use_property_split = True
+
+        row = layout.row(align=True)
+        row.label(text=f"{props_name} ({app_name})", icon="PROPERTIES")
+        row.operator("albam.custom_props_copy", icon="COPYDOWN", text="")
+        row.operator("albam.custom_props_paste", icon="PASTEDOWN", text="")
+        row.operator("albam.custom_props_export", icon="EXPORT", text="")
+        row.operator("albam.custom_props_import", icon="IMPORT", text="")
+
+        self.layout.separator(factor=3.0)
+
         for k in custom_props.__annotations__:
             self.layout.prop(custom_props, k)
 
@@ -182,3 +213,155 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "data"
     CONTEXT_ITEM_NAME = "mesh"
+
+
+@blender_registry.register_blender_prop_albam(name="clipboard")
+class ClipboardData(bpy.types.PropertyGroup):
+    buff : bpy.props.StringProperty(default="{}")
+
+    def get_buffer(self):
+        return json.loads(self.buff)
+
+    def update_buffer(self, data: dict):
+        current = self.get_buffer()
+        current.update(data)
+        self.buff = json.dumps(current)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
+    """
+    Store properties in context.scene.albam.clipboard
+    """
+    bl_idname = "albam.custom_props_copy"
+    bl_label = "Copy Albam Custom Properties"
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        props_dict = context_item.albam_custom_properties.get_custom_properties_as_dict()
+        context.scene.albam.clipboard.update_buffer(props_dict)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
+    """
+    Paste properties stored in context.scene.albam.clipboard
+    """
+    bl_idname = "albam.custom_props_paste"
+    bl_label = "Paste Albam Custom Properties"
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        buff = context.scene.albam.clipboard.get_buffer()
+        to_paste = buff.get(props_name, {})
+        for k, v in to_paste.items():
+            setattr(custom_props, k, v)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesExport(bpy.types.Operator):
+    """
+    Export properties stored context.scene.albam.clipboard
+    to a json file
+    """
+    bl_idname = "albam.custom_props_export"
+    bl_label = "Export props"
+
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    CHECK_EXISTING = bpy.props.BoolProperty(
+        name="Check Existing",
+        description="Check and warn on overwriting existing files",
+        default=True,
+        options={'HIDDEN'},
+    )
+    check_existing: CHECK_EXISTING
+    filepath: FILEPATH
+    filename = bpy.props.StringProperty(default="")
+
+    def invoke(self, context, event):
+        self.filepath = context.active_object.active_material.name + ".json"
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        to_export = context_item.albam_custom_properties.get_custom_properties_as_dict()
+        with open(self.filepath, "w") as w:
+            json.dump(to_export, w, indent=4)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
+    """
+    Import custom properties from a json file
+    """
+    bl_idname = "albam.custom_props_import"
+    bl_label = "Import props"
+
+    EXTENSION_FILTER = bpy.props.StringProperty(
+        default="*.json",
+        options={'HIDDEN'},
+    )
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    filepath: FILEPATH
+    filename = bpy.props.StringProperty(default="")
+    filter_glob: EXTENSION_FILTER
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        data = {}
+        with open(self.filepath) as f:
+            try:
+                data = json.load(f)
+            except UnicodeDecodeError:
+                self.report({"ERROR"}, "Failed opening the file in text mode. Is it a valid json?")
+                return {'FINISHED'}
+            except json.JSONDecodeError:
+                self.report({"ERROR"}, "Failed decoding json. Is it valid?"
+                            " Tip: validate it in https://jsonformatter.org")
+                return {'FINISHED'}
+            except Exception as err:
+                self.report({"ERROR"}, "An unexpted error happened, please check the console")
+                print(err)
+                return {'FINISHED'}
+
+        context_item = context.mesh or context.material
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        current_props = context_item.albam_custom_properties.get_custom_properties()
+        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props = {}
+        try:
+            props = data[props_name]
+        except KeyError:
+            self.report({"WARNING"}, f"Expected to find the key {props_name}. Nothing imported")
+            return {'FINISHED'}
+
+        imported = 0
+        for k, v in props.items():
+            # TODO: validate keys exist and emit a warning (e.g. for name changing)
+            setattr(current_props, k, v)
+            imported += 1
+        self.report({"INFO"}, f"Imported {imported} properties")
+
+        return {'FINISHED'}
