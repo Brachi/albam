@@ -470,16 +470,10 @@ def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
 def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
     if not hasattr(vertex, "bone_indices"):
         return
-
     bone_indices = _get_bone_indices(mod, mesh, vertex.bone_indices)
     weights = _get_weights(mod, mesh, vertex)
 
-    # TODO: verify in parsing tests that bone_index = 0 is never taken into account
     for bi, bone_index in enumerate(bone_indices):
-        if bone_index == 0 and (
-            (mesh.vertex_format not in (0xC31F201C,) and mod.header.num_bones != 1)
-        ):  # no root bone, 0 is acceptable
-            continue
         weight = weights[bi]
         if not weight:
             continue
