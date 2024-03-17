@@ -188,6 +188,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         row.label(text=f"{props_name} ({app_name})", icon="PROPERTIES")
         row.operator("albam.custom_props_copy", icon="COPYDOWN", text="")
         row.operator("albam.custom_props_paste", icon="PASTEDOWN", text="")
+        row.operator("albam.custom_props_export", icon="EXPORT", text="")
 
         self.layout.separator(factor=3.0)
 
@@ -259,4 +260,42 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
         to_paste = buff.get(props_name, {})
         for k, v in to_paste.items():
             setattr(custom_props, k, v)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CustomPropertiesExport(bpy.types.Operator):
+    """
+    Export properties stored context.scene.albam.clipboard
+    to a json file
+    """
+    bl_idname = "albam.custom_props_export"
+    bl_label = "Export props"
+
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    CHECK_EXISTING = bpy.props.BoolProperty(
+        name="Check Existing",
+        description="Check and warn on overwriting existing files",
+        default=True,
+        options={'HIDDEN'},
+    )
+    check_existing: CHECK_EXISTING
+    filepath: FILEPATH
+    filename = bpy.props.StringProperty(default="")
+
+    def invoke(self, context, event):
+        self.filepath = context.active_object.active_material.name + ".json"
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        context_item = context.mesh or context.material
+        to_export = context_item.albam_custom_properties.get_custom_properties_as_dict()
+        with open(self.filepath, "w") as w:
+            json.dump(to_export, w, indent=4)
         return {'FINISHED'}
