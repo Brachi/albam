@@ -1,6 +1,8 @@
+import io
+import ntpath
 import os
 import zlib
-import io
+
 from kaitaistruct import KaitaiStream
 
 from albam.registry import blender_registry
@@ -128,6 +130,7 @@ def update_arc(filepath, vfiles):
     vf_sorted.extend(vf_mrl)
     vf_sorted.extend(vf_mod)
     vf_sorted.extend(vf_tail)
+
     # build a dictionary for imported arc
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
@@ -145,8 +148,8 @@ def update_arc(filepath, vfiles):
     for vf in vf_sorted:
         vf_data = vf.data_bytes
         chunk = zlib.compress(vf_data)
-        path = os.path.normpath(vf.relative_path)
-        file_path = os.path.splitext(path)[0]
+        path = ntpath.normpath(vf.relative_path)
+        file_path = ntpath.splitext(path)[0]
         try:
             file_type = EXTENSION_TO_FILE_ID[vf.extension]
         except KeyError:
