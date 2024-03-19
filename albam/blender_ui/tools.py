@@ -12,6 +12,11 @@ def show_message_box(message="", title="Message Box", icon='INFO'):
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
+@blender_registry.register_blender_prop_albam(name="tools_settings")
+class ToolsSettings(bpy.types.PropertyGroup):
+    split_uv_seams_transfer_normals : bpy.props.BoolProperty(default=False)
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     '''UI Tool subpanel in 3D view'''
@@ -25,7 +30,13 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.operator('albam.split_uv_seams', text="Split UV Seams")
+        row.prop(
+            context.scene.albam.tools_settings,
+            "split_uv_seams_transfer_normals",
+            text="Transfer Normals",
+        )
+        op = row.operator('albam.split_uv_seams', text="Split UV Seams")
+        op.transfer_normals = context.scene.albam.tools_settings.split_uv_seams_transfer_normals
 
 
 @blender_registry.register_blender_type
