@@ -25,12 +25,17 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.operator('albam.split_uv_seams', text="Fix leaked textures")
+        row.operator('albam.split_uv_seams', text="Split UV Seams")
 
 
 @blender_registry.register_blender_type
 class ALBAM_OT_SplitUVSeams(bpy.types.Operator):
-    '''Fix leaked texures button operator'''
+    """
+    Split vertices that are part of a UV seam (edges of a UV island).
+    This is a workaround for a bug in the exporter[1] and necessary to avoid
+    artifacts in UV textures displayed in-game.
+    [1] https://github.com/Brachi/albam/issues/78
+    """
     bl_idname = "albam.split_uv_seams"
     bl_label = "Split UV seams"
 
