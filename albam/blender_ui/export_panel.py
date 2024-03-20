@@ -5,7 +5,6 @@ import bpy
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
 from .import_panel import FileListItem
-from albam.engines.mtfw.archive import update_arc
 
 
 NODES_CACHE = {}
@@ -300,6 +299,10 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         return {"FINISHED"}
 
     def _execute(self, context):  # pragma: no cover
+        # FIXME don't import function here, use method in archive type
+        # necessary for kaitaistruct unavailable when registering
+        # blender types
+        from albam.engines.mtfw.archive import update_arc
         vfs_i = context.scene.albam.file_explorer
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
@@ -368,6 +371,10 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         return {"FINISHED"}
 
     def _execute(self, context):
+        # FIXME don't import function here, use method in archive type
+        # necessary for kaitaistruct unavailable when registering
+        # blender types
+        from albam.engines.mtfw.archive import update_arc
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
