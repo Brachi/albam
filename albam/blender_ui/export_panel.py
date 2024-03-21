@@ -3,8 +3,11 @@ import time
 import bpy
 
 from albam.registry import blender_registry
-from albam.vfs import VirtualFileSystem, VirtualFile
-from .import_panel import VirtualFileBlender
+from albam.vfs import (
+        VirtualFileSystem,
+        VirtualFile,
+        VirtualFileBlender
+)
 from albam.engines.mtfw.archive import update_arc
 
 

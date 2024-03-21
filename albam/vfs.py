@@ -3,7 +3,199 @@ import os
 from pathlib import PureWindowsPath
 
 import bpy
+
+from albam.apps import APPS
+from albam.cache import NODES_CACHE
 from albam.registry import blender_registry
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
+    bl_idname = "albam.file_item_collapse_toggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
+
+    button_index: bpy.props.IntProperty(default=0)
+
+    def execute(self, context):
+        item_index = self.button_index
+        item_list = context.scene.albam.file_explorer.file_list
+        item = item_list[item_index]
+        item.is_expanded = not item.is_expanded
+        NODES_CACHE[item.name] = item.is_expanded
+
+        context.scene.albam.file_explorer.file_list_selected_index = self.button_index
+
+        item_list.update()
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_prop
+class TreeNode(bpy.types.PropertyGroup):
+    node_id: bpy.props.StringProperty()
+    root_id: bpy.props.StringProperty()
+    depth: bpy.props.IntProperty(default=0)
+
+
+@blender_registry.register_blender_prop
+class VirtualFileBlender(bpy.types.PropertyGroup):
+    display_name: bpy.props.StringProperty()
+    file_path: bpy.props.StringProperty()  # FIXME: change to abs
+    relative_path: bpy.props.StringProperty()
+    is_archive: bpy.props.BoolProperty(default=False)
+    is_root: bpy.props.BoolProperty(default=False)
+    is_expandable: bpy.props.BoolProperty(default=False)
+    is_expanded: bpy.props.BoolProperty(default=False)
+
+    tree_node: bpy.props.PointerProperty(type=TreeNode)  # consider adding the attributes here directly
+    # FIXME: consider strings, seems pretty inefficient
+    tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
+
+    app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
+    vfs_id: bpy.props.StringProperty()
+
+    data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
+
+    @property
+    def extension(self):
+        """
+        Allow up to 2 dots as an extension
+        e.g. texname.tex.34 -> tex.34
+        """
+        SEP = "."
+        name , _ , extension = self.display_name.rpartition(SEP)
+        if SEP in name:
+            _, __, extension0 = name.rpartition(SEP)
+            extension = SEP.join((extension0, extension))
+        return extension
+
+    def get_bytes(self):
+        accessor = self.get_accessor()
+        return accessor(self, bpy.context)
+
+    def get_accessor(self):
+        if self.file_path:
+            return self.real_file_accessor
+        if self.data_bytes:
+            return lambda _: self.data_bytes
+        vfs = getattr(bpy.context.scene.albam, self.vfs_id)
+        root = vfs.file_list[self.tree_node.root_id]
+        accessor_func = blender_registry.archive_accessor_registry.get(
+            (self.app_id, root.extension)
+        )
+        if not accessor_func:
+            raise RuntimeError("Archive item doesn't have an accessor")
+
+        return accessor_func
+
+    @staticmethod
+    def real_file_accessor(file_item, context):
+        with open(file_item.file_path, 'rb') as f:
+            return f.read()
+
+    def get_vfs(self):
+        return getattr(bpy.context.scene.albam, self.vfs_id)
+
+
+@blender_registry.register_blender_prop_albam(name="file_explorer")
+class VirtualFileSystemBlender(bpy.types.PropertyGroup):
+    file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
+    file_list_selected_index : bpy.props.IntProperty()
+    app_selected : bpy.props.EnumProperty(name="", items=APPS)
+    # FIXME: update_app_data necessary for reen configuration
+    # app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
+    # app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
+    # app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    mouse_x: bpy.props.IntProperty()
+    mouse_y: bpy.props.IntProperty()
+
+    # FIXME: move out of here, breaking reen
+    # def get_app_config_filepath(self, app_id):
+    # return APP_CONFIG_FILE_CACHE.get(app_id)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
+
+    bl_idname = "albam.add_files"
+    bl_label = "Add Files"
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
+    files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
+    # FIXME: use registry, un-hardcode
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})  # NOQA
+
+    def invoke(self, context, event):  # pragma: no cover
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):  # pragma: no cover
+        self._execute(context, self.directory, self.files)
+        context.scene.albam.file_explorer.file_list.update()
+        return {"FINISHED"}
+
+    @staticmethod
+    def _execute(context, directory, files):
+        app_id = context.scene.albam.file_explorer.app_selected
+        vfs_id = "file_explorer"
+        vfs = VirtualFileSystem(vfs_id)
+        for f in files:
+            file_path = os.path.join(directory, f.name)
+            virtual_file = VirtualFile.from_real_file(app_id, file_path)
+            vfs.append(virtual_file)
+
+        vfs.commit()
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
+    CHECK_EXISTING = bpy.props.BoolProperty(
+        name="Check Existing",
+        description="Check and warn on overwriting existing files",
+        default=True,
+        options={'HIDDEN'},
+    )
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    bl_idname = "albam.save_file"
+    bl_label = "Save files"
+    check_existing: CHECK_EXISTING
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        current_item = self.get_selected_item(context)
+        self.filepath = current_item.display_name
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):  # pragma: no cover
+        current_item = self.get_selected_item(context)
+        with open(self.filepath, 'wb') as w:
+            w.write(current_item.get_bytes())
+        return {"FINISHED"}
+
+    @classmethod
+    def poll(cls, context):
+        current_item = cls.get_selected_item(context)
+        if not current_item or current_item.is_expandable is True:
+            return False
+        return True
+
+    @staticmethod  # FIXME: duplicated in ALBAM_OT_Import
+    def get_selected_item(context):
+        if len(context.scene.albam.file_explorer.file_list) == 0:
+            return None
+        index = context.scene.albam.file_explorer.file_list_selected_index
+        try:
+            item = context.scene.albam.file_explorer.file_list[index]
+        except IndexError:
+            # list might have been cleared
+            return
+        return item
 
 
 class VirtualFileSystem:

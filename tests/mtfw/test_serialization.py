@@ -2,14 +2,13 @@
 import os
 
 import bpy
+import pytest
 # from kaitaistruct import KaitaiStream
 
 from .conftest import FileWrapper
-from albam.blender_ui.import_panel import (
-    ALBAM_OT_VirtualFileSystemBlenderAddFiles,
-    ALBAM_OT_Import,
-)
-import pytest
+from albam.blender_ui.import_panel import ALBAM_OT_Import
+from albam.vfs import ALBAM_OT_VirtualFileSystemBlenderAddFiles
+
 from albam.engines.mtfw.mesh import export_mod, APPID_CLASS_MAPPER
 
 
