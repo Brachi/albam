@@ -92,9 +92,9 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_FileItemCollapseToggle(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
     bl_idname = "albam.file_item_collapse_toggle"
-    bl_label = "ALBAM_OT_FileItemCollapseToggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
 
     button_index: bpy.props.IntProperty(default=0)
 
@@ -119,7 +119,7 @@ class TreeNode(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop
-class FileListItem(bpy.types.PropertyGroup):
+class VirtualFileBlender(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     file_path: bpy.props.StringProperty()  # FIXME: change to abs
     relative_path: bpy.props.StringProperty()
@@ -179,8 +179,8 @@ class FileListItem(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop_albam(name="file_explorer")
-class FileExplorerData(bpy.types.PropertyGroup):
-    file_list : bpy.props.CollectionProperty(type=FileListItem)
+class VirtualFileSystemBlender(bpy.types.PropertyGroup):
+    file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
     app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
     app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
@@ -196,7 +196,7 @@ class FileExplorerData(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_AddFiles(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
 
     bl_idname = "albam.add_files"
     bl_label = "Add Files"
@@ -229,7 +229,7 @@ class ALBAM_OT_AddFiles(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_SaveFile(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
     CHECK_EXISTING = bpy.props.BoolProperty(
         name="Check Existing",
         description="Check and warn on overwriting existing files",
@@ -269,7 +269,7 @@ class ALBAM_OT_SaveFile(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_UL_FileList(bpy.types.UIList):
+class ALBAM_UL_VirtualFileSystemBlenderUI(bpy.types.UIList):
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
         True: "TRIA_DOWN",
@@ -344,7 +344,7 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col.operator("albam.remove_imported", icon="X", text="")
         col = split.column()
         col.template_list(
-            "ALBAM_UL_FileList",
+            "ALBAM_UL_VirtualFileSystemBlenderUI",
             "",
             context.scene.albam.file_explorer,
             "file_list",

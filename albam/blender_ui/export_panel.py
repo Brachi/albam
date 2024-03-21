@@ -4,7 +4,8 @@ import bpy
 
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileSystem, VirtualFile
-from .import_panel import FileListItem
+from .import_panel import VirtualFileBlender
+from albam.engines.mtfw.archive import update_arc
 
 
 NODES_CACHE = {}
@@ -30,7 +31,7 @@ class ExportableItems(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="exported")
 class ExportedItems(bpy.types.PropertyGroup):
-    file_list: bpy.props.CollectionProperty(type=FileListItem)
+    file_list: bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index: bpy.props.IntProperty()
 
     @staticmethod
@@ -114,7 +115,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_SaveFile2(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemBlenderSaveFile2(bpy.types.Operator):
     CHECK_EXISTING = bpy.props.BoolProperty(
         name="Check Existing",
         description="Check and warn on overwriting existing files",
@@ -195,9 +196,10 @@ class ALBAM_UL_ExportedFileList(bpy.types.UIList):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_FileItemCollapseToggle2(bpy.types.Operator):  # XXX super dirty, quick copy paste
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle2(bpy.types.Operator):
+    # XXX super dirty, quick copy paste
     bl_idname = "albam.file_item_collapse_toggle_2"
-    bl_label = "ALBAM_OT_FileItemCollapseToggle2"
+    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle2"
 
     button_index: bpy.props.IntProperty(default=0)
 
