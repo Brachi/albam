@@ -112,6 +112,20 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     # def get_app_config_filepath(self, app_id):
     # return APP_CONFIG_FILE_CACHE.get(app_id)
 
+    @property
+    def selected_vfile(self):
+        if len(self.file_list) == 0:
+            return None
+        index = self.file_list_selected_index
+        try:
+            vfile = self.file_list[index]
+        except IndexError:
+            # list might have been cleared
+            return
+        if vfile.is_expandable:
+            return None
+        return vfile
+
 
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
@@ -167,35 +181,20 @@ class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
     filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
-        current_item = self.get_selected_item(context)
-        self.filepath = current_item.display_name
+        vfile = context.scene.albam.file_explorer.selected_vfile
+        self.filepath = vfile.display_name
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        current_item = self.get_selected_item(context)
+        vfile = context.scene.albam.file_explorer.selected_vfile
         with open(self.filepath, 'wb') as w:
-            w.write(current_item.get_bytes())
+            w.write(vfile.get_bytes())
         return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
-        current_item = cls.get_selected_item(context)
-        if not current_item or current_item.is_expandable is True:
-            return False
-        return True
-
-    @staticmethod  # FIXME: duplicated in ALBAM_OT_Import
-    def get_selected_item(context):
-        if len(context.scene.albam.file_explorer.file_list) == 0:
-            return None
-        index = context.scene.albam.file_explorer.file_list_selected_index
-        try:
-            item = context.scene.albam.file_explorer.file_list[index]
-        except IndexError:
-            # list might have been cleared
-            return
-        return item
+        return bool(context.scene.albam.file_explorer.selected_vfile)
 
 
 class VirtualFileSystem:

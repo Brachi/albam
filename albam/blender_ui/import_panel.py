@@ -78,6 +78,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
     @staticmethod
     def get_selected_item(context):
+        # TODO: delete
         if len(context.scene.albam.file_explorer.file_list) == 0:
             return None
         index = context.scene.albam.file_explorer.file_list_selected_index
