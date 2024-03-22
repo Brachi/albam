@@ -4,9 +4,9 @@ import bpy
 
 from albam.registry import blender_registry
 from albam.vfs import (
-        VirtualFileSystem,
-        VirtualFile,
-        VirtualFileBlender
+    VirtualFileSystem,
+    VirtualFile,
+    VirtualFileBlender
 )
 from albam.engines.mtfw.archive import update_arc
 

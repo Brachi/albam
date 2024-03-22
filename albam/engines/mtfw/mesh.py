@@ -758,16 +758,13 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    dst_mod.bones_data = _serialize_bones_data(
-        bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    dst_mod.bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
     dst_mod.groups = _serialize_groups(src_mod, dst_mod)
-    materials_map, mrl, vtextures = serialize_materials_data(
-        asset, bl_meshes, src_mod, dst_mod)
+    materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
     meshes_data, vertex_buffer, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    dst_mod.header.num_vertices = sum(
-        m.num_vertices for m in meshes_data.meshes)
+    dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
     dst_mod.index_buffer = index_buffer

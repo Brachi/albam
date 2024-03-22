@@ -9,26 +9,6 @@ from albam.cache import NODES_CACHE
 from albam.registry import blender_registry
 
 
-@blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
-    bl_idname = "albam.file_item_collapse_toggle"
-    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
-
-    button_index: bpy.props.IntProperty(default=0)
-
-    def execute(self, context):
-        item_index = self.button_index
-        item_list = context.scene.albam.file_explorer.file_list
-        item = item_list[item_index]
-        item.is_expanded = not item.is_expanded
-        NODES_CACHE[item.name] = item.is_expanded
-
-        context.scene.albam.file_explorer.file_list_selected_index = self.button_index
-
-        item_list.update()
-        return {"FINISHED"}
-
-
 @blender_registry.register_blender_prop
 class TreeNode(bpy.types.PropertyGroup):
     node_id: bpy.props.StringProperty()
@@ -195,6 +175,26 @@ class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return bool(context.scene.albam.file_explorer.selected_vfile)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
+    bl_idname = "albam.file_item_collapse_toggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
+
+    button_index: bpy.props.IntProperty(default=0)
+
+    def execute(self, context):
+        item_index = self.button_index
+        item_list = context.scene.albam.file_explorer.file_list
+        item = item_list[item_index]
+        item.is_expanded = not item.is_expanded
+        NODES_CACHE[item.name] = item.is_expanded
+
+        context.scene.albam.file_explorer.file_list_selected_index = self.button_index
+
+        item_list.update()
+        return {"FINISHED"}
 
 
 class VirtualFileSystem:
