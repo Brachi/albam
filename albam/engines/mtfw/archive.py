@@ -33,8 +33,8 @@ def arc_accessor(file_item, context):
     root = item_list[file_item.tree_node.root_id]
 
     # TODO: error handling, e.g. when file_path doesn't exist
-    arc = ArcWrapper(root.file_path)
-    arc_filename = os.path.basename(root.file_path)
+    arc = ArcWrapper(root.absolute_path)
+    arc_filename = os.path.basename(root.absolute_path)
 
     prefix = f"{app_id}::{arc_filename}::"
     canonical_name = file_item.name.replace(

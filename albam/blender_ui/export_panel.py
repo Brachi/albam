@@ -312,12 +312,12 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
         if item_i.is_archive:
-            path_i = item_i.file_path
+            path_i = item_i.absolute_path
         else:
             arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
             arc_node = [item for item in vfs_i.file_list
                         if item.is_archive is True and item.display_name == arc_name]
-            path_i = arc_node[0].file_path
+            path_i = arc_node[0].absolute_path
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index

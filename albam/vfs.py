@@ -19,7 +19,7 @@ class TreeNode(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class VirtualFileBlender(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
-    file_path: bpy.props.StringProperty()  # FIXME: change to abs
+    absolute_path: bpy.props.StringProperty()
     relative_path: bpy.props.StringProperty()
     is_archive: bpy.props.BoolProperty(default=False)
     is_root: bpy.props.BoolProperty(default=False)
@@ -53,7 +53,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
         return accessor(self, bpy.context)
 
     def get_accessor(self):
-        if self.file_path:
+        if self.absolute_path:
             return self.real_file_accessor
         if self.data_bytes:
             return lambda _: self.data_bytes
@@ -69,7 +69,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
 
     @staticmethod
     def real_file_accessor(file_item, context):
-        with open(file_item.file_path, 'rb') as f:
+        with open(file_item.absolute_path, 'rb') as f:
             return f.read()
 
     def get_vfs(self):
@@ -256,7 +256,7 @@ class VirtualFileSystem:
         bl_vf.app_id = vf.app_id
         bl_vf.name = f"{vf.app_id}::{vf.name}"
         bl_vf.display_name = vf.name
-        bl_vf.file_path = vf.absolute_path or ""
+        bl_vf.absolute_path = vf.absolute_path or ""
         bl_vf.data_bytes = vf.data_bytes or b""
 
         return bl_vf
