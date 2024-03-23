@@ -11,7 +11,6 @@ from albam.vfs import (
     VirtualFileData,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
-from albam.engines.mtfw.archive import update_arc
 
 
 @blender_registry.register_blender_prop
