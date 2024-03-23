@@ -1,6 +1,5 @@
 import io
 import ntpath
-import os
 import zlib
 
 from kaitaistruct import KaitaiStream
@@ -26,26 +25,19 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
 @blender_registry.register_archive_accessor(app_id="re5", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
-def arc_accessor(file_item, context):
-    app_id = file_item.app_id
-    vfs = file_item.get_vfs()
-    item_list = vfs.file_list
-    root = item_list[file_item.tree_node.root_id]
+def arc_accessor(vfile, context):
+    arc = ArcWrapper(vfile.root_vfile.absolute_path)
+
+    path = vfile.relative_path_windows
+    path_no_ext = str(vfile.relative_path_windows_no_ext)
+    ext = path.suffix.replace(".", "")
 
     # TODO: error handling, e.g. when file_path doesn't exist
-    arc = ArcWrapper(root.absolute_path)
-    arc_filename = os.path.basename(root.absolute_path)
-
-    prefix = f"{app_id}::{arc_filename}::"
-    canonical_name = file_item.name.replace(
-        prefix, "").replace("::", arc.PATH_SEPARATOR)
-    file_path, ext = os.path.splitext(canonical_name)
-    ext = ext.replace(".", "")
     try:
         file_type = EXTENSION_TO_FILE_ID[ext]
     except KeyError:
         file_type = int(ext)
-    file_bytes = arc.get_file(file_path, file_type)
+    file_bytes = arc.get_file(path_no_ext, file_type)
 
     return file_bytes
 

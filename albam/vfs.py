@@ -20,7 +20,7 @@ class TreeNode(bpy.types.PropertyGroup):
 class VirtualFileBlender(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     absolute_path: bpy.props.StringProperty()
-    relative_path: bpy.props.StringProperty()
+    relative_path: bpy.props.StringProperty()  # posix style
     is_archive: bpy.props.BoolProperty(default=False)
     is_root: bpy.props.BoolProperty(default=False)
     is_expandable: bpy.props.BoolProperty(default=False)
@@ -34,6 +34,22 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
     vfs_id: bpy.props.StringProperty()
 
     data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
+
+    @property
+    def relative_path_windows(self):
+        return self._get_relative_path_windows()
+
+    @property
+    def relative_path_windows_no_ext(self):
+        return self._get_relative_path_windows(include_extension=False)
+
+    @property
+    def root_vfile(self):
+        vfs = self.get_vfs()
+        try:
+            return vfs.file_list[self.tree_node.root_id]
+        except KeyError:
+            return None
 
     @property
     def extension(self):
@@ -75,6 +91,12 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
     def get_vfs(self):
         return getattr(bpy.context.scene.albam, self.vfs_id)
 
+    def _get_relative_path_windows(self, include_extension=True):
+        p = PureWindowsPath(self.relative_path)
+        if not include_extension:
+            return PureWindowsPath(*p.parts[:-1] + (p.stem,))
+        return p
+
 
 @blender_registry.register_blender_prop_albam(name="file_explorer")
 class VirtualFileSystemBlender(bpy.types.PropertyGroup):
@@ -89,9 +111,16 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
 
+    SEPARATOR = "::"
+
     # FIXME: move out of here, breaking reen
     # def get_app_config_filepath(self, app_id):
     # return APP_CONFIG_FILE_CACHE.get(app_id)
+
+    def get_vfile(self, app_id, relative_path):
+        path = PureWindowsPath(relative_path)
+        file_id = self.SEPARATOR.join((app_id,) + path.parts)
+        return self.file_list[file_id]
 
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
@@ -115,7 +144,7 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
         # is lost in the middle of the loop below if using vf.name directly,
         # we get an empty string instead! Don't know why
         root_id = vf.name
-        tree = Tree(root_id=vf.name)
+        tree = Tree(root_id=vf.name, app_id=app_id)
         # TODO: popup if calling failed. Known exceptions + unexpected
         for rel_path in archive_loader_func(vf):
             tree.add_node_from_path(rel_path)
@@ -360,10 +389,11 @@ class Tree:
     PATH_SEPARATOR = "::"
     OS_PATH_SEPARATOR = "/"
 
-    def __init__(self, root_id=None):
+    def __init__(self, root_id=None, app_id=None):  # FIXME: make app_id mandatory
         self.root = []
         self.root_id = root_id
         self.nodes = {}
+        self.app_id = app_id
 
     def _find_node_in_level(self, node_name, node_level):
         node_found = None
@@ -417,7 +447,7 @@ class Tree:
         self.nodes[node_id] = leaf_node
 
     def generate_node_id(self, parts, use_prefix=True):
-        prefix = (self.root_id or "") + self.PATH_SEPARATOR
+        prefix = (self.app_id or "") + self.PATH_SEPARATOR
         sep = self.PATH_SEPARATOR if use_prefix else self.OS_PATH_SEPARATOR
         body = sep.join(parts)
         if use_prefix:
