@@ -80,6 +80,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
 class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
+    # FIXME: move out of here, doesn't belong to the vfs
     app_selected : bpy.props.EnumProperty(name="", items=APPS)
     # FIXME: update_app_data necessary for reen configuration
     # app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
@@ -91,6 +92,52 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     # FIXME: move out of here, breaking reen
     # def get_app_config_filepath(self, app_id):
     # return APP_CONFIG_FILE_CACHE.get(app_id)
+
+    def add_real_file(self, app_id, absolute_path):
+        path = PureWindowsPath(absolute_path)
+        vf = self.file_list.add()
+        vf.name = f"{app_id}::{path.name}"
+        vf.vfs_id = "file_explorer"
+        vf.app_id = app_id
+        vf.display_name = path.name
+        vf.absolute_path = absolute_path
+
+        archive_loader_func = blender_registry.archive_loader_registry.get(
+            (vf.app_id, vf.extension)
+        )
+        if archive_loader_func:
+            vf.is_expandable = True
+            vf.is_archive = True
+            self._expand_archive(archive_loader_func, vf, app_id)
+
+    def _expand_archive(self, archive_loader_func, vf, app_id):
+        # Beware of chaning this, it was observed the reference
+        # is lost in the middle of the loop below if using vf.name directly,
+        # we get an empty string instead! Don't know why
+        root_id = vf.name
+        tree = Tree(root_id=vf.name)
+        # TODO: popup if calling failed. Known exceptions + unexpected
+        for rel_path in archive_loader_func(vf):
+            tree.add_node_from_path(rel_path)
+        for node in tree.flatten():
+            child_vf = self.file_list.add()
+            child_vf.vfs_id = "file_explorer"
+            child_vf.app_id = app_id
+            child_vf.name = node["node_id"]
+            child_vf.relative_path = node["relative_path"]
+            child_vf.display_name = node["name"]
+            child_vf.is_expandable = bool(node["children"])
+            # TODO: check where this is used
+            """
+            vfile = node["vfile"]  # ???
+            if vfile:
+                child_vf.data_bytes = vfile.data_bytes
+            """
+            child_vf.tree_node.depth = node["depth"] + 1
+            child_vf.tree_node.root_id = root_id
+            for ancestor_id in node["ancestors_ids"]:
+                ancestor_node = child_vf.tree_node_ancestors.add()
+                ancestor_node.node_id = ancestor_id
 
     @property
     def selected_vfile(self):
@@ -130,14 +177,10 @@ class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
     @staticmethod
     def _execute(context, directory, files):
         app_id = context.scene.albam.file_explorer.app_selected
-        vfs_id = "file_explorer"
-        vfs = VirtualFileSystem(vfs_id)
+        vfs = context.scene.albam.file_explorer
         for f in files:
-            file_path = os.path.join(directory, f.name)
-            virtual_file = VirtualFile.from_real_file(app_id, file_path)
-            vfs.append(virtual_file)
-
-        vfs.commit()
+            absolute_path = os.path.join(directory, f.name)
+            vfs.add_real_file(app_id, absolute_path)
 
 
 @blender_registry.register_blender_type
