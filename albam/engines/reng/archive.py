@@ -19,7 +19,7 @@ from .structs.pak import Pak
 @blender_registry.register_archive_loader(app_id="re2_non_rt", extension='pak')
 @blender_registry.register_archive_loader(app_id="re3_non_rt", extension='pak')
 def pak_loader(file_item):
-    app_config_filepath = bpy.context.scene.albam.file_explorer.app_config_filepath
+    app_config_filepath = bpy.context.scene.albam.vfs.app_config_filepath
     app_id = file_item.app_id  # blender bug, needs reference or might mutate
     if not app_config_filepath:
         # TODO: custom exception that will result in informative popup
@@ -36,13 +36,13 @@ def pak_loader(file_item):
 @blender_registry.register_archive_accessor(app_id="re3_non_rt", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re8", extension="pak")
 def pak_accessor(file_item, context):
-    item_list = context.scene.albam.file_explorer.file_list
+    item_list = context.scene.albam.vfs.file_list
     root = item_list[file_item.tree_node.root_id]
 
     # XXX hacky quicky begins
     file_virtual_path = file_item.name.replace(root.name + "::", "").replace("::", "/")
     # XXX hacky quicky ends
-    app_config_filepath = context.scene.albam.file_explorer.get_app_config_filepath(file_item.app_id)
+    app_config_filepath = context.scene.albam.vfs.get_app_config_filepath(file_item.app_id)
     if not app_config_filepath:
         # TODO: custom exception that will result in informative popup, with solution
         raise RuntimeError(f'App "{file_item.app_id}" doesn\'t have its file config loaded')

@@ -17,9 +17,9 @@ def test_export(arc_file):
     app_id = arc_file["app_id"]
     directory = os.path.dirname(arc_filepath)
     arc_name = os.path.basename(arc_filepath)
-    file_explorer = bpy.context.scene.albam.file_explorer
-    file_list = file_explorer.file_list
-    file_explorer.app_selected = app_id
+    vfs = bpy.context.scene.albam.vfs
+    file_list = vfs.file_list
+    vfs.app_selected = app_id
 
     ALBAM_OT_VirtualFileSystemBlenderAddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
     mod_files = sorted(

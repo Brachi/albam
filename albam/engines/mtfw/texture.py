@@ -147,7 +147,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         # FIXME: use VirtualFile and commit late
         texture_path = getattr(texture_slot, "texture_path", None) or texture_slot
         try:
-            texture_vfile = context.scene.albam.file_explorer.get_vfile(app_id, texture_path + ".tex")
+            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".tex")
             tex_bytes = texture_vfile.get_bytes()
         except KeyError:
             tex_bytes = None

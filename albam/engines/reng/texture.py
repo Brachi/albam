@@ -63,7 +63,7 @@ def build_blender_images(app_id, texture_headers, context):
         tex_path = tex_header.texture_path.lower().replace("/", "::")
         tex_path = f"{FIXME}::{prefix}::{tex_path}.{tex_version}"
         try:
-            tex_virtual_file = context.scene.albam.file_explorer.file_list[tex_path]
+            tex_virtual_file = context.scene.albam.vfs.file_list[tex_path]
         except KeyError:
             # TODO: rtex
             print("Texture not found in virtual file system, ignoring", tex_path)

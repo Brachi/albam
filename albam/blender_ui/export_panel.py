@@ -284,7 +284,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
-        vfs = context.scene.albam.file_explorer
+        vfs = context.scene.albam.vfs
         index = vfs.file_list_selected_index
         item = vfs.file_list[index]
         parent_node = ""
@@ -308,7 +308,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         # necessary for kaitaistruct unavailable when registering
         # blender types
         from albam.engines.mtfw.archive import update_arc
-        vfs_i = context.scene.albam.file_explorer
+        vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
         if item_i.is_archive:
@@ -338,7 +338,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         vfs_e = context.scene.albam.exported
-        vfs_i = context.scene.albam.file_explorer
+        vfs_i = context.scene.albam.vfs
         if len(vfs_e.file_list) == 0 or len(vfs_i.file_list) == 0:
             return False
         index_e = vfs_e.file_list_selected_index

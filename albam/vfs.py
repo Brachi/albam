@@ -98,7 +98,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
         return p
 
 
-@blender_registry.register_blender_prop_albam(name="file_explorer")
+@blender_registry.register_blender_prop_albam(name="vfs")
 class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
@@ -126,7 +126,7 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
         path = PureWindowsPath(absolute_path)
         vf = self.file_list.add()
         vf.name = f"{app_id}::{path.name}"
-        vf.vfs_id = "file_explorer"
+        vf.vfs_id = "vfs"
         vf.app_id = app_id
         vf.display_name = path.name
         vf.absolute_path = absolute_path
@@ -150,7 +150,7 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
             tree.add_node_from_path(rel_path)
         for node in tree.flatten():
             child_vf = self.file_list.add()
-            child_vf.vfs_id = "file_explorer"
+            child_vf.vfs_id = "vfs"
             child_vf.app_id = app_id
             child_vf.name = node["node_id"]
             child_vf.relative_path = node["relative_path"]
@@ -200,13 +200,13 @@ class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         self._execute(context, self.directory, self.files)
-        context.scene.albam.file_explorer.file_list.update()
+        context.scene.albam.vfs.file_list.update()
         return {"FINISHED"}
 
     @staticmethod
     def _execute(context, directory, files):
-        app_id = context.scene.albam.file_explorer.app_selected
-        vfs = context.scene.albam.file_explorer
+        app_id = context.scene.albam.vfs.app_selected
+        vfs = context.scene.albam.vfs
         for f in files:
             absolute_path = os.path.join(directory, f.name)
             vfs.add_real_file(app_id, absolute_path)
@@ -233,20 +233,20 @@ class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
     filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
-        vfile = context.scene.albam.file_explorer.selected_vfile
+        vfile = context.scene.albam.vfs.selected_vfile
         self.filepath = vfile.display_name
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        vfile = context.scene.albam.file_explorer.selected_vfile
+        vfile = context.scene.albam.vfs.selected_vfile
         with open(self.filepath, 'wb') as w:
             w.write(vfile.get_bytes())
         return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
-        return bool(context.scene.albam.file_explorer.selected_vfile)
+        return bool(context.scene.albam.vfs.selected_vfile)
 
 
 @blender_registry.register_blender_type
@@ -258,12 +258,12 @@ class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
 
     def execute(self, context):
         item_index = self.button_index
-        item_list = context.scene.albam.file_explorer.file_list
+        item_list = context.scene.albam.vfs.file_list
         item = item_list[item_index]
         item.is_expanded = not item.is_expanded
         NODES_CACHE[item.name] = item.is_expanded
 
-        context.scene.albam.file_explorer.file_list_selected_index = self.button_index
+        context.scene.albam.vfs.file_list_selected_index = self.button_index
 
         item_list.update()
         return {"FINISHED"}

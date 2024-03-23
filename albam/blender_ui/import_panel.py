@@ -12,24 +12,24 @@ APP_CONFIG_FILE_CACHE = {}
 
 
 def update_app_data(self, context):
-    current_app = context.scene.albam.file_explorer.app_selected
+    current_app = context.scene.albam.vfs.app_selected
     cached_dir = APP_DIRS_CACHE.get(current_app)
     cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
     if cached_dir:
-        context.scene.albam.file_explorer.app_dir = cached_dir
+        context.scene.albam.vfs.app_dir = cached_dir
     else:
-        context.scene.albam.file_explorer.app_dir = ""
+        context.scene.albam.vfs.app_dir = ""
 
     if cached_file:
-        context.scene.albam.file_explorer.app_config_filepath = cached_file
+        context.scene.albam.vfs.app_config_filepath = cached_file
     else:
-        context.scene.albam.file_explorer.app_config_filepath = ""
+        context.scene.albam.vfs.app_config_filepath = ""
 
 
 def update_app_caches(self, context):
-    current_app = context.scene.albam.file_explorer.app_selected
-    current_dir = context.scene.albam.file_explorer.app_dir
-    current_file = context.scene.albam.file_explorer.app_config_filepath
+    current_app = context.scene.albam.vfs.app_selected
+    current_dir = context.scene.albam.vfs.app_dir
+    current_file = context.scene.albam.vfs.app_config_filepath
 
     APP_DIRS_CACHE[current_app] = current_dir
     APP_CONFIG_FILE_CACHE[current_app] = current_file
@@ -79,11 +79,11 @@ class ALBAM_OT_Import(bpy.types.Operator):
     @staticmethod
     def get_selected_item(context):
         # TODO: delete
-        if len(context.scene.albam.file_explorer.file_list) == 0:
+        if len(context.scene.albam.vfs.file_list) == 0:
             return None
-        index = context.scene.albam.file_explorer.file_list_selected_index
+        index = context.scene.albam.vfs.file_list_selected_index
         try:
-            item = context.scene.albam.file_explorer.file_list[index]
+            item = context.scene.albam.vfs.file_list[index]
         except IndexError:
             # list might have been cleared
             return
@@ -140,7 +140,7 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
-        row.prop(context.scene.albam.file_explorer, "app_selected")
+        row.prop(context.scene.albam.vfs, "app_selected")
         # Experimental for reengine
         if os.getenv("ALBAM_ENABLE_REEN"):
             row.operator("albam.app_config_popup", icon="OPTIONS")
@@ -168,9 +168,9 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col.template_list(
             "ALBAM_UL_VirtualFileSystemBlenderUI",
             "",
-            context.scene.albam.file_explorer,
+            context.scene.albam.vfs,
             "file_list",
-            context.scene.albam.file_explorer,
+            context.scene.albam.vfs,
             "file_list_selected_index",
             sort_lock=True,
             rows=8,
@@ -219,39 +219,39 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
     # TODO: warning icon if required settings not present
 
     def invoke(self, context, event):
-        x = context.scene.albam.file_explorer.mouse_x
-        y = context.scene.albam.file_explorer.mouse_y
+        x = context.scene.albam.vfs.mouse_x
+        y = context.scene.albam.vfs.mouse_y
         if x and y:
             context.window.cursor_warp(x, y)
         else:
-            context.scene.albam.file_explorer.mouse_x = event.mouse_x
-            context.scene.albam.file_explorer.mouse_y = event.mouse_y
+            context.scene.albam.vfs.mouse_x = event.mouse_x
+            context.scene.albam.vfs.mouse_y = event.mouse_y
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        context.scene.albam.file_explorer.mouse_x = 0
-        context.scene.albam.file_explorer.mouse_y = 0
+        context.scene.albam.vfs.mouse_x = 0
+        context.scene.albam.vfs.mouse_y = 0
         return {'FINISHED'}
 
     def draw(self, context):
         layout = self.layout
 
-        file_explorer = context.scene.albam.file_explorer
+        vfs = context.scene.albam.vfs
         try:
-            app_index = file_explorer["app_selected"]
+            app_index = vfs["app_selected"]
         except KeyError:
             # default, before actually selecting
             app_index = 0
-        app_selected_name = file_explorer.bl_rna.properties["app_selected"].enum_items[app_index].name
+        app_selected_name = vfs.bl_rna.properties["app_selected"].enum_items[app_index].name
         layout.label(text=f"{app_selected_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
-        row.prop(context.scene.albam.file_explorer, "app_dir")
+        row.prop(context.scene.albam.vfs, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
         row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.file_explorer, "app_config_filepath")
+        row.prop(context.scene.albam.vfs, "app_config_filepath")
         row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
 
 
@@ -269,7 +269,7 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.file_explorer.app_dir = self.directory
+        context.scene.albam.vfs.app_dir = self.directory
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
@@ -290,7 +290,7 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.file_explorer.app_config_filepath = self.filepath
+        context.scene.albam.vfs.app_config_filepath = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
@@ -305,7 +305,7 @@ class ALBAM_OT_Remove_Imported(bpy.types.Operator):
 
     def execute(self, context):
         vfiles_to_remove = []
-        vfs_i = context.scene.albam.file_explorer
+        vfs_i = context.scene.albam.vfs
         root_node_index = vfs_i.file_list_selected_index
         archive_node = vfs_i.file_list[root_node_index]
         for i in range(len(vfs_i.file_list)):

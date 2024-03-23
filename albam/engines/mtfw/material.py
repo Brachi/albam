@@ -856,7 +856,7 @@ def _infer_mrl(context, mod_file_item, app_id):
     It's not always like this, e.g. RE6
     """
     mrl_file_id = mod_file_item.name.replace(".mod", ".mrl")
-    file_list = context.scene.albam.file_explorer.file_list
+    file_list = context.scene.albam.vfs.file_list
 
     try:
         mrl_file_item = file_list[mrl_file_id]
