@@ -103,6 +103,14 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
         if item.is_expandable:
             icon = self.EXPAND_ICONS[item.is_expanded]
+        elif item.category == "MESH":
+            icon = "OUTLINER_OB_MESH"
+        elif item.category == "ANIMATION":
+            icon = "ACTION"
+        elif item.category == "MATERIAL":
+            icon = "MATERIAL"
+        elif item.category == "TEXTURE":
+            icon = "TEXTURE"
         else:
             icon = "DOT"
         col = layout.column()

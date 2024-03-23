@@ -281,11 +281,11 @@ VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod")
-@blender_registry.register_import_function(app_id="re1", extension="mod")
-@blender_registry.register_import_function(app_id="re5", extension="mod")
-@blender_registry.register_import_function(app_id="rev1", extension="mod")
-@blender_registry.register_import_function(app_id="rev2", extension="mod")
+@blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
 

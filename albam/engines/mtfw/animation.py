@@ -19,7 +19,7 @@ ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
 
 
-@blender_registry.register_import_function(app_id="re5", extension='lmt')
+@blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
 def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))

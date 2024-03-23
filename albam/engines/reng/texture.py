@@ -21,11 +21,11 @@ KNOWN_TEXTURE_TYPES = {
 }
 
 
-@blender_registry.register_import_function(app_id="re2_non_rt", extension="tex.10")
-@blender_registry.register_import_function(app_id="re2", extension="tex.34")
-@blender_registry.register_import_function(app_id="re3_non_rt", extension="tex.190820018")
-@blender_registry.register_import_function(app_id="re3", extension="tex.34")
-@blender_registry.register_import_function(app_id="re8", extension="tex.30")
+@blender_registry.register_import_function("re2_non_rt", extension="tex.10", file_category="TEXTURE")
+@blender_registry.register_import_function("re2", extension="tex.34")
+@blender_registry.register_import_function("re3_non_rt", extension="tex.190820018", file_category="TEXTURE")
+@blender_registry.register_import_function("re3", extension="tex.34", file_category="TEXTURE")
+@blender_registry.register_import_function("re8", extension="tex.30", file_category="TEXTURE")
 def import_texture(file_list_item, context):
 
     tex_bytes = file_list_item.get_bytes()
