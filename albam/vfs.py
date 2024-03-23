@@ -127,25 +127,25 @@ class VirtualFileSystemBase:
             vf.is_archive = True
             self._expand_archive(archive_loader_func, vf, app_id)
 
-    def add_dummy_vfile(self, dummy_vfile):
+    def add_vfile(self, vfile_data):
         vf = self.file_list.add()
-        vf.vfs_id = "exported"
-        vf.app_id = dummy_vfile.app_id
-        vf.name = f"{dummy_vfile.app_id}::{dummy_vfile.name}"
-        vf.display_name = dummy_vfile.name
-        vf.data_bytes = dummy_vfile.data_bytes or b""
+        vf.vfs_id = self.VFS_ID
+        vf.app_id = vfile_data.app_id
+        vf.name = f"{vfile_data.app_id}::{vfile_data.name}"
+        vf.display_name = vfile_data.name
+        vf.data_bytes = vfile_data.data_bytes or b""
 
         return vf
 
-    def add_dummy_vfiles(self, root_vfile_dummy, dummy_vfiles):
-        root_id = f"{root_vfile_dummy.app_id}::{root_vfile_dummy.name}"
+    def add_vfiles_as_tree(self, root_vfile_data, vfiles_data):
+        root_id = f"{root_vfile_data.app_id}::{root_vfile_data.name}"
         tree = Tree(root_id)
-        bl_vf = self.add_dummy_vfile(root_vfile_dummy)
+        bl_vf = self.add_vfile(root_vfile_data)
         bl_vf.is_expandable = True
         bl_vf.is_root = True
 
-        for dummy_vfile in dummy_vfiles:
-            tree.add_node_from_path(dummy_vfile.relative_path, dummy_vfile)
+        for vfile_data in vfiles_data:
+            tree.add_node_from_path(vfile_data.relative_path, vfile_data)
 
         for node in tree.flatten():
             self._add_vf_from_treenode(bl_vf.app_id, root_id, node)
