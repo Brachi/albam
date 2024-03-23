@@ -8,7 +8,6 @@ from albam.vfs import (
     ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase,
     VirtualFileSystemBlenderBase,
-    VirtualFileSystem,
     VirtualFile,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemBlenderUIBase
@@ -133,25 +132,24 @@ class ALBAM_OT_Export(bpy.types.Operator):
     def execute(self, context):  # pragma: no cover
         item = self.get_selected_item(context)
         try:
-            self._execute(item)
+            self._execute(context, item)
         except Exception:
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
 
         return {"FINISHED"}
 
     @staticmethod
-    def _execute(item):
+    def _execute(context, item):
         asset = item.bl_object.albam_asset
         bl_obj = item.bl_object
         app_id = asset.app_id
-        vfs_id = "exported"
         export_function = blender_registry.export_registry[(asset.app_id, asset.extension)]
         vfiles = export_function(item.bl_object)
-        vfs = VirtualFileSystem(vfs_id)
-        vfs.extend(vfiles)
-        root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"  # TODO
+
+        root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
         vfile_root = VirtualFile(app_id, root_id)
-        vfs.commit(root_vfile=vfile_root)
+        vfs = context.scene.albam.exported
+        vfs.add_dummy_vfiles(vfile_root, vfiles)
 
     @classmethod
     def poll(cls, context):

@@ -140,17 +140,19 @@ class VirtualFileSystemBlenderBase:
             self._expand_archive(archive_loader_func, vf, app_id)
 
     def add_dummy_vfile(self, dummy_vfile):
-        vf = self.vfs.file_list.add()
+        vf = self.file_list.add()
         vf.vfs_id = "exported"  # XXX !!!! Won't work!?
         vf.app_id = dummy_vfile.app_id
         vf.name = f"{dummy_vfile.app_id}::{dummy_vfile.name}"
         vf.display_name = dummy_vfile.name
         vf.data_bytes = dummy_vfile.data_bytes or b""
 
+        return vf
+
     def add_dummy_vfiles(self, root_vfile_dummy, dummy_vfiles):
         root_id = f"{root_vfile_dummy.app_id}::{root_vfile_dummy.name}"
         tree = Tree(root_id)
-        bl_vf = self.vf_to_bl_vf_du(root_vfile_dummy)
+        bl_vf = self.add_dummy_vfile(root_vfile_dummy)
         bl_vf.is_expandable = True
         bl_vf.is_root = True
 
@@ -158,7 +160,7 @@ class VirtualFileSystemBlenderBase:
             tree.add_node_from_path(dummy_vfile.relative_path, dummy_vfile)
 
         for node in tree.flatten():
-            self.node_to_blvf(root_id, bl_vf.app_id, node)
+            self._add_vf_from_treenode(bl_vf.app_id, root_id, node)
 
         return bl_vf
 
@@ -355,89 +357,6 @@ class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFile(
     VFS_ID = "vfs"
 
 
-class VirtualFileSystem:
-
-    def __init__(self, vfs_id):
-        self.vfs_id = vfs_id
-        self.vfiles = []
-
-    def append(self, vfile):  # XXX deprecated, change to append
-        self.vfiles.append(vfile)
-
-    def extend(self, vfiles):
-        self.vfiles.extend(vfiles)
-
-    @property
-    def vfs(self):
-        return getattr(bpy.context.scene.albam, self.vfs_id)
-
-    def commit(self, root_vfile=None, vfiles=None):
-        # TODO: no archive_loader_func allowed if len(self.vfiles > 1) ?
-        vfiles = vfiles or self.vfiles
-
-        if root_vfile:
-            root_id = f"{root_vfile.app_id}::{root_vfile.name}"
-            tree = Tree(root_id)
-            bl_vf = self.vf_to_bl_vf(root_vfile)
-            bl_vf.is_expandable = True
-            bl_vf.is_root = True
-
-            for vfile in vfiles:
-                tree.add_node_from_path(vfile.relative_path, vfile)
-
-            for node in tree.flatten():
-                self.node_to_blvf(root_id, bl_vf.app_id, node)
-
-            return bl_vf
-
-        for vf in vfiles:
-            bl_vf = self.vf_to_bl_vf(vf)
-
-            archive_loader_func = blender_registry.archive_loader_registry.get(
-                (vf.app_id, vf.extension)
-            )
-            if archive_loader_func:
-                root_id = f"{vf.app_id}::{vf.name}"
-                tree = Tree(root_id=root_id)
-                bl_vf.is_expandable = True
-                bl_vf.is_archive = True
-                # TODO: popup if calling failed. Known exceptions + unexpected
-                for rel_path in archive_loader_func(vf):
-                    tree.add_node_from_path(rel_path)
-                for node in tree.flatten():
-                    self.node_to_blvf(root_id, vf.app_id, node)
-        return bl_vf  # XXX only last one!
-
-    def vf_to_bl_vf(self, vf):
-        bl_vf = self.vfs.file_list.add()
-        bl_vf.vfs_id = self.vfs_id
-        bl_vf.app_id = vf.app_id
-        bl_vf.name = f"{vf.app_id}::{vf.name}"
-        bl_vf.display_name = vf.name
-        bl_vf.data_bytes = vf.data_bytes or b""
-
-        return bl_vf
-
-    def node_to_blvf(self, root_id, app_id, node):
-        bl_vf = self.vfs.file_list.add()
-        bl_vf.vfs_id = self.vfs_id
-        bl_vf.app_id = app_id
-
-        bl_vf.name = node["node_id"]
-        bl_vf.relative_path = node["relative_path"]
-        bl_vf.display_name = node["name"]
-        bl_vf.is_expandable = bool(node["children"])
-        vfile = node["vfile"]
-        if vfile:
-            bl_vf.data_bytes = vfile.data_bytes
-
-        bl_vf.tree_node.depth = node["depth"] + 1
-        bl_vf.tree_node.root_id = root_id
-        for ancestor_id in node["ancestors_ids"]:
-            ancestor_node = bl_vf.tree_node_ancestors.add()
-            ancestor_node.node_id = ancestor_id
-
-
 class VirtualFile:
     # FIXME: normalize to posix path!
 
@@ -482,7 +401,11 @@ class Tree:
     def add_node_from_path(self, full_path, vfile=None):
         p = PureWindowsPath(full_path)
         path_parts = p.parts
-        leaf_name = path_parts[-1]
+        # FIXME: adding a single root node doesn't work
+        # E.g. when importing a single file mod, it doesn't have
+        # albam_asset.relative_path properly set, and when exporting
+        # the file will be nameless
+        leaf_name = path_parts[-1] if path_parts else p.name
 
         current_level = 0
         current_dir = self.root
