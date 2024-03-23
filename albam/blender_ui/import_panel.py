@@ -3,7 +3,7 @@ import os
 import bpy
 
 from albam.registry import blender_registry
-from albam.vfs import ALBAM_OT_VirtualFileSystemBlenderCollapseToggle
+from albam.vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
@@ -90,7 +90,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
         return item
 
 
-class ALBAM_UL_VirtualFileSystemBlenderUIBase:
+class ALBAM_UL_VirtualFileSystemUIBase:
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
         True: "TRIA_DOWN",
@@ -132,8 +132,8 @@ class ALBAM_UL_VirtualFileSystemBlenderUIBase:
 
 
 @blender_registry.register_blender_type
-class ALBAM_UL_VirtualFileSystemBlenderUI(ALBAM_UL_VirtualFileSystemBlenderUIBase, bpy.types.UIList):
-    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemBlenderCollapseToggle
+class ALBAM_UL_VirtualFileSystemUI(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UIList):
+    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemCollapseToggle
 
 
 @blender_registry.register_blender_type
@@ -172,7 +172,7 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col.operator("albam.remove_imported", icon="X", text="")
         col = split.column()
         col.template_list(
-            "ALBAM_UL_VirtualFileSystemBlenderUI",
+            "ALBAM_UL_VirtualFileSystemUI",
             "",
             context.scene.albam.vfs,
             "file_list",

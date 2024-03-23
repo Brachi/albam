@@ -7,7 +7,7 @@ import pytest
 
 from .conftest import FileWrapper
 from albam.blender_ui.import_panel import ALBAM_OT_Import
-from albam.vfs import ALBAM_OT_VirtualFileSystemBlenderAddFiles
+from albam.vfs import ALBAM_OT_VirtualFileSystemAddFiles
 
 from albam.engines.mtfw.mesh import export_mod, APPID_CLASS_MAPPER
 
@@ -21,7 +21,7 @@ def test_export(arc_file):
     file_list = vfs.file_list
     vfs.app_selected = app_id
 
-    ALBAM_OT_VirtualFileSystemBlenderAddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
+    ALBAM_OT_VirtualFileSystemAddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
     mod_files = sorted(
         [f for f in file_list if f.name.endswith('.mod') and arc_name in f.tree_node.root_id],
         key=lambda k: k.name

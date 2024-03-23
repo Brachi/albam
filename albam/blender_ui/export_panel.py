@@ -4,13 +4,13 @@ import bpy
 
 from albam.registry import blender_registry
 from albam.vfs import (
-    ALBAM_OT_VirtualFileSystemBlenderSaveFileBase,
-    ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase,
-    ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase,
-    VirtualFileSystemBlenderBase,
+    ALBAM_OT_VirtualFileSystemSaveFileBase,
+    ALBAM_OT_VirtualFileSystemCollapseToggleBase,
+    ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
+    VirtualFileSystemBase,
     VirtualFile,
 )
-from .import_panel import ALBAM_UL_VirtualFileSystemBlenderUIBase
+from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 from albam.engines.mtfw.archive import update_arc
 
 
@@ -33,7 +33,7 @@ class ExportableItems(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop_albam(name="exported")
-class ExportedItems(VirtualFileSystemBlenderBase, bpy.types.PropertyGroup):
+class ExportedItems(VirtualFileSystemBase, bpy.types.PropertyGroup):
     VFS_ID = "exported"
 
 
@@ -103,25 +103,25 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderSaveFileExported(
-        ALBAM_OT_VirtualFileSystemBlenderSaveFileBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemSaveFileExported(
+        ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
     bl_idname = "albam.save_file_exported"
     bl_label = "Save files"
     VFS_ID = "exported"
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderExportedCollapseToggle(
-        ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemExportedCollapseToggle(
+        ALBAM_OT_VirtualFileSystemCollapseToggleBase, bpy.types.Operator):
     bl_idname = "albam.file_item_exported_collapse_toggle"
-    bl_label = "ALBAM_OT_VirtualFileSystemBlenderExportedCollapseToggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemExportedCollapseToggle"
     VFS_ID = "exported"
     NODES_CACHE = {}
 
 
 @blender_registry.register_blender_type
-class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemBlenderUIBase, bpy.types.UIList):
-    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemBlenderExportedCollapseToggle
+class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UIList):
+    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemExportedCollapseToggle
 
 
 @blender_registry.register_blender_type
@@ -309,8 +309,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileExported(
-        ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
+        ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
     VFS_ID = "exported"

@@ -97,7 +97,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
         return p
 
 
-class VirtualFileSystemBlenderBase:
+class VirtualFileSystemBase:
     file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
     # FIXME: move out of here, doesn't belong to the vfs
@@ -209,12 +209,12 @@ class VirtualFileSystemBlenderBase:
 
 
 @blender_registry.register_blender_prop_albam(name="vfs")
-class VirtualFileSystemBlender(VirtualFileSystemBlenderBase, bpy.types.PropertyGroup):
+class VirtualFileSystem(VirtualFileSystemBase, bpy.types.PropertyGroup):
     pass
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     bl_idname = "albam.add_files"
     bl_label = "Add Files"
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
@@ -241,7 +241,7 @@ class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
             vfs.add_real_file(app_id, absolute_path)
 
 
-class ALBAM_OT_VirtualFileSystemBlenderSaveFileBase:
+class ALBAM_OT_VirtualFileSystemSaveFileBase:
     CHECK_EXISTING = bpy.props.BoolProperty(
         name="Check Existing",
         description="Check and warn on overwriting existing files",
@@ -285,12 +285,12 @@ class ALBAM_OT_VirtualFileSystemBlenderSaveFileBase:
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderSaveFile(
-        ALBAM_OT_VirtualFileSystemBlenderSaveFileBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemSaveFile(
+        ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
     VFS_ID = "vfs"
 
 
-class ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase:
+class ALBAM_OT_VirtualFileSystemCollapseToggleBase:
 
     button_index: bpy.props.IntProperty(default=0)
     VFS_ID = None
@@ -310,16 +310,16 @@ class ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase:
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(
-        ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemCollapseToggle(
+        ALBAM_OT_VirtualFileSystemCollapseToggleBase, bpy.types.Operator):
 
     bl_idname = "albam.file_item_collapse_toggle"
-    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemCollapseToggle"
     VFS_ID = "vfs"
     NODES_CACHE = {}
 
 
-class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase:
+class ALBAM_OT_VirtualFileSystemRemoveRootVFileBase:
     bl_idname = "albam.remove_imported"
     bl_label = "Remove imported files"
     VFS_ID = ""
@@ -349,8 +349,8 @@ class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase:
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFile(
-        ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase, bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemRemoveRootVFile(
+        ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
 
     bl_idname = "albam.remove_imported"
     bl_label = "Remove imported files"
