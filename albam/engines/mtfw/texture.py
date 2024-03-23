@@ -14,7 +14,7 @@ from albam.lib.blender import (
 )
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
@@ -373,7 +373,7 @@ def _serialize_texture_156(app_id, dict_tex):
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
-    vf = VirtualFile(app_id, relative_path, data_bytes=stream.to_byte_array())
+    vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 
@@ -426,7 +426,7 @@ def _serialize_texture_21(app_id, dict_tex):
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
-    vf = VirtualFile(app_id, relative_path, data_bytes=stream.to_byte_array())
+    vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 

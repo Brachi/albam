@@ -8,7 +8,7 @@ from albam.vfs import (
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
-    VirtualFile,
+    VirtualFileData,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 from albam.engines.mtfw.archive import update_arc
@@ -147,7 +147,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
         vfiles = export_function(item.bl_object)
 
         root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
-        vfile_root = VirtualFile(app_id, root_id)
+        vfile_root = VirtualFileData(app_id, root_id)
         vfs = context.scene.albam.exported
         vfs.add_dummy_vfiles(vfile_root, vfiles)
 

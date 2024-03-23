@@ -19,7 +19,7 @@ def test_export(arc_file):
     arc_name = os.path.basename(arc_filepath)
     vfs = bpy.context.scene.albam.vfs
     file_list = vfs.file_list
-    vfs.app_selected = app_id
+    bpy.context.scene.albam.apps.app_selected = app_id
 
     ALBAM_OT_VirtualFileSystemAddFiles._execute(bpy.context, directory, [FileWrapper(arc_filepath)])
     mod_files = sorted(

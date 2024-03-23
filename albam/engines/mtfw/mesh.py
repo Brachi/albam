@@ -27,7 +27,7 @@ from albam.lib.blender import (
 )
 from albam.lib.misc import chunks
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -799,7 +799,7 @@ def export_mod(bl_obj):
     dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
-    mod_vf = VirtualFile(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
+    mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(mod_vf)
     vfiles.extend(vtextures)
     if mrl:

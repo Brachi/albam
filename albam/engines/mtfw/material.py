@@ -8,7 +8,7 @@ from kaitaistruct import KaitaiStream
 from albam.exceptions import AlbamCheckFailure
 from albam.lib.blender import get_bl_materials
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
 from .texture import (
@@ -304,7 +304,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     mrl._write(stream)
     mrl_relative_path = model_asset.relative_path.replace(".mod", ".mrl")
-    mrl_vf = VirtualFile(app_id, mrl_relative_path, data_bytes=stream.to_byte_array())
+    mrl_vf = VirtualFileData(app_id, mrl_relative_path, data_bytes=stream.to_byte_array())
 
     return exported_materials_map, mrl_vf
 

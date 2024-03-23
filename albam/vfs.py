@@ -16,7 +16,7 @@ class TreeNode(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop
-class VirtualFileBlender(bpy.types.PropertyGroup):  # TODO: rename
+class VirtualFile(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     absolute_path: bpy.props.StringProperty()
     relative_path: bpy.props.StringProperty()  # posix style
@@ -98,7 +98,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):  # TODO: rename
 
 
 class VirtualFileSystemBase:
-    file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
+    file_list : bpy.props.CollectionProperty(type=VirtualFile)
     file_list_selected_index : bpy.props.IntProperty()
 
     SEPARATOR = "::"
@@ -346,7 +346,7 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFile(
     VFS_ID = "vfs"
 
 
-class VirtualFile:
+class VirtualFileData:
     # FIXME: normalize to posix path!
 
     def __init__(self, app_id, relative_path, data_bytes=None):
