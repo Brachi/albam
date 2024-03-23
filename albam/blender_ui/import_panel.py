@@ -2,6 +2,7 @@ import os
 
 import bpy
 
+from albam.apps import APPS
 from albam.registry import blender_registry
 from albam.vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
 
@@ -12,27 +13,39 @@ APP_CONFIG_FILE_CACHE = {}
 
 
 def update_app_data(self, context):
-    current_app = context.scene.albam.vfs.app_selected
+    current_app = context.scene.albam.apps.app_selected
     cached_dir = APP_DIRS_CACHE.get(current_app)
     cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
     if cached_dir:
-        context.scene.albam.vfs.app_dir = cached_dir
+        context.scene.albam.apps.app_dir = cached_dir
     else:
-        context.scene.albam.vfs.app_dir = ""
+        context.scene.albam.apps.app_dir = ""
 
     if cached_file:
-        context.scene.albam.vfs.app_config_filepath = cached_file
+        context.scene.albam.apps.app_config_filepath = cached_file
     else:
-        context.scene.albam.vfs.app_config_filepath = ""
+        context.scene.albam.apps.app_config_filepath = ""
 
 
 def update_app_caches(self, context):
-    current_app = context.scene.albam.vfs.app_selected
-    current_dir = context.scene.albam.vfs.app_dir
-    current_file = context.scene.albam.vfs.app_config_filepath
+    current_app = context.scene.albam.apps.app_selected
+    current_dir = context.scene.albam.apps.app_dir
+    current_file = context.scene.albam.apps.app_config_filepath
 
     APP_DIRS_CACHE[current_app] = current_dir
     APP_CONFIG_FILE_CACHE[current_app] = current_file
+
+
+@blender_registry.register_blender_prop_albam(name="apps")
+class AlbamApps(bpy.types.PropertyGroup):
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
+    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
+    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    mouse_x: bpy.props.IntProperty()
+    mouse_y: bpy.props.IntProperty()
+
+    def get_app_config_filepath(self, app_id):
+        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_type
@@ -154,7 +167,7 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
-        row.prop(context.scene.albam.vfs, "app_selected")
+        row.prop(context.scene.albam.apps, "app_selected")
         # Experimental for reengine
         if os.getenv("ALBAM_ENABLE_REEN"):
             row.operator("albam.app_config_popup", icon="OPTIONS")
@@ -233,39 +246,39 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
     # TODO: warning icon if required settings not present
 
     def invoke(self, context, event):
-        x = context.scene.albam.vfs.mouse_x
-        y = context.scene.albam.vfs.mouse_y
+        x = context.scene.albam.apps.mouse_x
+        y = context.scene.albam.apps.mouse_y
         if x and y:
             context.window.cursor_warp(x, y)
         else:
-            context.scene.albam.vfs.mouse_x = event.mouse_x
-            context.scene.albam.vfs.mouse_y = event.mouse_y
+            context.scene.albam.apps.mouse_x = event.mouse_x
+            context.scene.albam.apps.mouse_y = event.mouse_y
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        context.scene.albam.vfs.mouse_x = 0
-        context.scene.albam.vfs.mouse_y = 0
+        context.scene.albam.apps.mouse_x = 0
+        context.scene.albam.apps.mouse_y = 0
         return {'FINISHED'}
 
     def draw(self, context):
         layout = self.layout
 
-        vfs = context.scene.albam.vfs
+        apps = context.scene.albam.apps
         try:
-            app_index = vfs["app_selected"]
+            app_index = apps["app_selected"]
         except KeyError:
             # default, before actually selecting
             app_index = 0
-        app_selected_name = vfs.bl_rna.properties["app_selected"].enum_items[app_index].name
+        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
         layout.label(text=f"{app_selected_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
-        row.prop(context.scene.albam.vfs, "app_dir")
+        row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
         row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.vfs, "app_config_filepath")
+        row.prop(context.scene.albam.apps, "app_config_filepath")
         row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
 
 
@@ -283,7 +296,7 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.vfs.app_dir = self.directory
+        context.scene.albam.apps.app_dir = self.directory
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
@@ -304,7 +317,7 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.vfs.app_config_filepath = self.filepath
+        context.scene.albam.apps.app_config_filepath = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 

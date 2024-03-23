@@ -48,9 +48,7 @@ def build_blender_images(app_id, texture_headers, context):
     done = set()
 
     app_data = APPS_TODO[app_id]
-    # FIXME: this function shouldn't know about vfs internals
-    FIXME = f"{app_id}::re_chunk_000.pak"
-    prefix = app_data[0].replace("/", "::")
+    prefix = app_data[0]  # TODO: configure to use higher quality textures (prefix += streaming/)
     tex_version = app_data[3]
     skipped_types = set()
 
@@ -60,12 +58,10 @@ def build_blender_images(app_id, texture_headers, context):
             continue
         if tex_header.texture_path in done:
             continue
-        tex_path = tex_header.texture_path.lower().replace("/", "::")
-        tex_path = f"{FIXME}::{prefix}::{tex_path}.{tex_version}"
+        tex_path = f"{prefix}/{tex_header.texture_path.lower()}.{tex_version}"
         try:
-            tex_virtual_file = context.scene.albam.vfs.file_list[tex_path]
+            tex_virtual_file = context.scene.albam.vfs.get_vfile(app_id, tex_path)
         except KeyError:
-            # TODO: rtex
             print("Texture not found in virtual file system, ignoring", tex_path)
             continue
 

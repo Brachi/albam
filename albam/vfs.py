@@ -16,7 +16,7 @@ class TreeNode(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop
-class VirtualFileBlender(bpy.types.PropertyGroup):
+class VirtualFileBlender(bpy.types.PropertyGroup):  # TODO: rename
     display_name: bpy.props.StringProperty()
     absolute_path: bpy.props.StringProperty()
     relative_path: bpy.props.StringProperty()  # posix style
@@ -25,7 +25,6 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
     is_expandable: bpy.props.BoolProperty(default=False)
     is_expanded: bpy.props.BoolProperty(default=False)
     category: bpy.props.StringProperty()
-
     tree_node: bpy.props.PointerProperty(type=TreeNode)  # consider adding the attributes here directly
     # FIXME: consider strings, seems pretty inefficient
     tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
@@ -101,21 +100,9 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
 class VirtualFileSystemBase:
     file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
-    # FIXME: move out of here, doesn't belong to the vfs
-    app_selected : bpy.props.EnumProperty(name="", items=APPS)
-    # FIXME: update_app_data necessary for reen configuration
-    # app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    # app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    # app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
-    mouse_x: bpy.props.IntProperty()
-    mouse_y: bpy.props.IntProperty()
 
     SEPARATOR = "::"
     VFS_ID = "vfs"
-
-    # FIXME: move out of here, breaking reen
-    # def get_app_config_filepath(self, app_id):
-    # return APP_CONFIG_FILE_CACHE.get(app_id)
 
     def get_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
@@ -142,7 +129,7 @@ class VirtualFileSystemBase:
 
     def add_dummy_vfile(self, dummy_vfile):
         vf = self.file_list.add()
-        vf.vfs_id = "exported"  # XXX !!!! Won't work!?
+        vf.vfs_id = "exported"
         vf.app_id = dummy_vfile.app_id
         vf.name = f"{dummy_vfile.app_id}::{dummy_vfile.name}"
         vf.display_name = dummy_vfile.name
@@ -236,7 +223,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
 
     @staticmethod
     def _execute(context, directory, files):
-        app_id = context.scene.albam.vfs.app_selected
+        app_id = context.scene.albam.apps.app_selected
         vfs = context.scene.albam.vfs
         for f in files:
             absolute_path = os.path.join(directory, f.name)

@@ -1,5 +1,4 @@
 import io
-import os
 import struct
 
 import bpy
@@ -8,7 +7,6 @@ import pymmh3 as mmh3
 import zlib
 import zstd
 
-from albam.vfs import Tree
 from albam.registry import blender_registry
 from .structs.pak import Pak
 
@@ -19,7 +17,7 @@ from .structs.pak import Pak
 @blender_registry.register_archive_loader(app_id="re2_non_rt", extension='pak')
 @blender_registry.register_archive_loader(app_id="re3_non_rt", extension='pak')
 def pak_loader(file_item):
-    app_config_filepath = bpy.context.scene.albam.vfs.app_config_filepath
+    app_config_filepath = bpy.context.scene.albam.apps.app_config_filepath
     app_id = file_item.app_id  # blender bug, needs reference or might mutate
     if not app_config_filepath:
         # TODO: custom exception that will result in informative popup
@@ -35,19 +33,13 @@ def pak_loader(file_item):
 @blender_registry.register_archive_accessor(app_id="re3", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re3_non_rt", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re8", extension="pak")
-def pak_accessor(file_item, context):
-    item_list = context.scene.albam.vfs.file_list
-    root = item_list[file_item.tree_node.root_id]
-
-    # XXX hacky quicky begins
-    file_virtual_path = file_item.name.replace(root.name + "::", "").replace("::", "/")
-    # XXX hacky quicky ends
-    app_config_filepath = context.scene.albam.vfs.get_app_config_filepath(file_item.app_id)
+def pak_accessor(vfile, context):
+    app_config_filepath = context.scene.albam.apps.get_app_config_filepath(vfile.app_id)
     if not app_config_filepath:
         # TODO: custom exception that will result in informative popup, with solution
-        raise RuntimeError(f'App "{file_item.app_id}" doesn\'t have its file config loaded')
-    pak = PakWrapper(file_item.app_id, root.file_path, app_config_filepath)
-    return pak.get_file(file_virtual_path)
+        raise RuntimeError(f'App "{vfile.app_id}" doesn\'t have its file config loaded')
+    pak = PakWrapper(vfile.app_id, vfile.root_vfile.absolute_path, app_config_filepath)
+    return pak.get_file(vfile.relative_path)
 
 
 class PakWrapper:
@@ -96,17 +88,3 @@ class PakWrapper:
             else:
                 file_bytes = f.read(file_entry.zsize)
         return file_bytes
-
-    @property
-    def tree(self):
-        if self._tree is not None:
-            return self._tree
-
-        pak_filename = os.path.basename(self.file_path)
-        root_id = self.app_id + "::" + pak_filename
-        tree = Tree(root_id=root_id)
-        with open(self.file_list_path) as f:
-            for path in f:
-                tree.add_node_from_path(path.strip())
-        self._tree = tree
-        return self._tree
