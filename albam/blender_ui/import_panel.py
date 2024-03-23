@@ -3,7 +3,7 @@ import os
 import bpy
 
 from albam.registry import blender_registry
-from albam.cache import NODES_CACHE
+from albam.vfs import ALBAM_OT_VirtualFileSystemBlenderCollapseToggle
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
@@ -90,12 +90,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
         return item
 
 
-@blender_registry.register_blender_type
-class ALBAM_UL_VirtualFileSystemBlenderUI(bpy.types.UIList):
+class ALBAM_UL_VirtualFileSystemBlenderUIBase:
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
         True: "TRIA_DOWN",
     }
+    collapse_toggle_operator_cls = None
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         for _ in range(item.tree_node.depth):
@@ -107,7 +107,7 @@ class ALBAM_UL_VirtualFileSystemBlenderUI(bpy.types.UIList):
             icon = "DOT"
         col = layout.column()
         col.enabled = item.is_expandable
-        op = col.operator("albam.file_item_collapse_toggle", text="", icon=icon)
+        op = col.operator(self.collapse_toggle_operator_cls.bl_idname, text="", icon=icon)
         op.button_index = index
 
         layout.column().label(text=item.display_name)
@@ -115,19 +115,25 @@ class ALBAM_UL_VirtualFileSystemBlenderUI(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         filtered_items = []
         # TODO: self.filter_name
+        cache = self.collapse_toggle_operator_cls.NODES_CACHE
 
         item_list = getattr(data, propname)
         for item in item_list:
             if item.is_archive:
                 filtered_items.append(self.bitflag_filter_item)
 
-            elif all(NODES_CACHE.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            elif all(cache.get(anc.node_id, False) for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
 
             else:
                 filtered_items.append(0)
 
         return filtered_items, []
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_VirtualFileSystemBlenderUI(ALBAM_UL_VirtualFileSystemBlenderUIBase, bpy.types.UIList):
+    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemBlenderCollapseToggle
 
 
 @blender_registry.register_blender_type
@@ -296,34 +302,6 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
 
     def cancel(self, context):
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_Remove_Imported(bpy.types.Operator):
-    bl_idname = "albam.remove_imported"
-    bl_label = "Remove imported files"
-
-    def execute(self, context):
-        vfiles_to_remove = []
-        vfs_i = context.scene.albam.vfs
-        root_node_index = vfs_i.file_list_selected_index
-        archive_node = vfs_i.file_list[root_node_index]
-        for i in range(len(vfs_i.file_list)):
-            parent = vfs_i.file_list[i].tree_node.root_id
-            if parent == archive_node.name:
-                vfiles_to_remove.append(i)
-
-        vfiles_to_remove.reverse()
-        for i in range(len(vfiles_to_remove)):
-            vfs_i.file_list.remove(vfiles_to_remove[i])
-        vfs_i.file_list.remove(root_node_index)
-
-        return {'FINISHED'}
-
-    @classmethod
-    def poll(cls, context):
-        current_item = ALBAM_OT_Import.get_selected_item(context)
-        return current_item and current_item.is_archive
 
 
 @blender_registry.register_blender_type

@@ -773,12 +773,9 @@ def export_mod(bl_obj):
     dst_mod.header.offset_bones_data = offset
     dst_mod.header.offset_groups = offset + dst_mod.bones_data_size_
     dst_mod.header.offset_materials_data = dst_mod.header.offset_groups + dst_mod.groups_size_
-    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + \
-        dst_mod.materials_data.size_
-    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + \
-        dst_mod.meshes_data.size_
-    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + \
-        len(vertex_buffer)
+    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + dst_mod.materials_data.size_
+    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + dst_mod.meshes_data.size_
+    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + len(vertex_buffer)
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     # TODO: revise, name accordingly
@@ -802,8 +799,7 @@ def export_mod(bl_obj):
     dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
-    mod_vf = VirtualFile(app_id, asset.relative_path,
-                         data_bytes=stream.to_byte_array())
+    mod_vf = VirtualFile(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(mod_vf)
     vfiles.extend(vtextures)
     if mrl:

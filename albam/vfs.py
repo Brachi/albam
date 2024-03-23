@@ -5,7 +5,6 @@ from pathlib import PureWindowsPath
 import bpy
 
 from albam.apps import APPS
-from albam.cache import NODES_CACHE
 from albam.registry import blender_registry
 
 
@@ -72,7 +71,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
         if self.absolute_path:
             return self.real_file_accessor
         if self.data_bytes:
-            return lambda _: self.data_bytes
+            return lambda vfile, context: self.data_bytes
         vfs = getattr(bpy.context.scene.albam, self.vfs_id)
         root = vfs.file_list[self.tree_node.root_id]
         accessor_func = blender_registry.archive_accessor_registry.get(
@@ -98,8 +97,7 @@ class VirtualFileBlender(bpy.types.PropertyGroup):
         return p
 
 
-@blender_registry.register_blender_prop_albam(name="vfs")
-class VirtualFileSystemBlender(bpy.types.PropertyGroup):
+class VirtualFileSystemBlenderBase:
     file_list : bpy.props.CollectionProperty(type=VirtualFileBlender)
     file_list_selected_index : bpy.props.IntProperty()
     # FIXME: move out of here, doesn't belong to the vfs
@@ -112,6 +110,7 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     mouse_y: bpy.props.IntProperty()
 
     SEPARATOR = "::"
+    VFS_ID = "vfs"
 
     # FIXME: move out of here, breaking reen
     # def get_app_config_filepath(self, app_id):
@@ -125,8 +124,9 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
         vf = self.file_list.add()
+        vf.is_root = True
         vf.name = f"{app_id}::{path.name}"
-        vf.vfs_id = "vfs"
+        vf.vfs_id = self.VFS_ID
         vf.app_id = app_id
         vf.display_name = path.name
         vf.absolute_path = absolute_path
@@ -139,6 +139,29 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
             vf.is_archive = True
             self._expand_archive(archive_loader_func, vf, app_id)
 
+    def add_dummy_vfile(self, dummy_vfile):
+        vf = self.vfs.file_list.add()
+        vf.vfs_id = "exported"  # XXX !!!! Won't work!?
+        vf.app_id = dummy_vfile.app_id
+        vf.name = f"{dummy_vfile.app_id}::{dummy_vfile.name}"
+        vf.display_name = dummy_vfile.name
+        vf.data_bytes = dummy_vfile.data_bytes or b""
+
+    def add_dummy_vfiles(self, root_vfile_dummy, dummy_vfiles):
+        root_id = f"{root_vfile_dummy.app_id}::{root_vfile_dummy.name}"
+        tree = Tree(root_id)
+        bl_vf = self.vf_to_bl_vf_du(root_vfile_dummy)
+        bl_vf.is_expandable = True
+        bl_vf.is_root = True
+
+        for dummy_vfile in dummy_vfiles:
+            tree.add_node_from_path(dummy_vfile.relative_path, dummy_vfile)
+
+        for node in tree.flatten():
+            self.node_to_blvf(root_id, bl_vf.app_id, node)
+
+        return bl_vf
+
     def _expand_archive(self, archive_loader_func, vf, app_id):
         # Beware of chaning this, it was observed the reference
         # is lost in the middle of the loop below if using vf.name directly,
@@ -149,24 +172,24 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
         for rel_path in archive_loader_func(vf):
             tree.add_node_from_path(rel_path)
         for node in tree.flatten():
-            child_vf = self.file_list.add()
-            child_vf.vfs_id = "vfs"
-            child_vf.app_id = app_id
-            child_vf.name = node["node_id"]
-            child_vf.relative_path = node["relative_path"]
-            child_vf.display_name = node["name"]
-            child_vf.is_expandable = bool(node["children"])
-            # TODO: check where this is used
-            """
-            vfile = node["vfile"]  # ???
-            if vfile:
-                child_vf.data_bytes = vfile.data_bytes
-            """
-            child_vf.tree_node.depth = node["depth"] + 1
-            child_vf.tree_node.root_id = root_id
-            for ancestor_id in node["ancestors_ids"]:
-                ancestor_node = child_vf.tree_node_ancestors.add()
-                ancestor_node.node_id = ancestor_id
+            self._add_vf_from_treenode(app_id, root_id, node)
+
+    def _add_vf_from_treenode(self, app_id, root_id, node):
+        child_vf = self.file_list.add()
+        child_vf.vfs_id = self.VFS_ID
+        child_vf.app_id = app_id
+        child_vf.name = node["node_id"]
+        child_vf.relative_path = node["relative_path"]
+        child_vf.display_name = node["name"]
+        child_vf.is_expandable = bool(node["children"])
+        vfile = node["vfile"]
+        if vfile:
+            child_vf.data_bytes = vfile.data_bytes
+        child_vf.tree_node.depth = node["depth"] + 1
+        child_vf.tree_node.root_id = root_id
+        for ancestor_id in node["ancestors_ids"]:
+            ancestor_node = child_vf.tree_node_ancestors.add()
+            ancestor_node.node_id = ancestor_id
 
     @property
     def selected_vfile(self):
@@ -178,14 +201,18 @@ class VirtualFileSystemBlender(bpy.types.PropertyGroup):
         except IndexError:
             # list might have been cleared
             return
-        if vfile.is_expandable:
+        if not vfile.is_root and vfile.is_expandable:
             return None
         return vfile
 
 
+@blender_registry.register_blender_prop_albam(name="vfs")
+class VirtualFileSystemBlender(VirtualFileSystemBlenderBase, bpy.types.PropertyGroup):
+    pass
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
-
     bl_idname = "albam.add_files"
     bl_label = "Add Files"
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
@@ -212,8 +239,7 @@ class ALBAM_OT_VirtualFileSystemBlenderAddFiles(bpy.types.Operator):
             vfs.add_real_file(app_id, absolute_path)
 
 
-@blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
+class ALBAM_OT_VirtualFileSystemBlenderSaveFileBase:
     CHECK_EXISTING = bpy.props.BoolProperty(
         name="Check Existing",
         description="Check and warn on overwriting existing files",
@@ -232,41 +258,101 @@ class ALBAM_OT_VirtualFileSystemBlenderSaveFile(bpy.types.Operator):
     check_existing: CHECK_EXISTING
     filepath: FILEPATH
 
+    VFS_ID = "vfs"
+
     def invoke(self, context, event):  # pragma: no cover
-        vfile = context.scene.albam.vfs.selected_vfile
+        vfs = self.get_vfs(self, context)
+        vfile = vfs.selected_vfile
         self.filepath = vfile.display_name
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):  # pragma: no cover
-        vfile = context.scene.albam.vfs.selected_vfile
+        vfile = self.get_vfs(self, context).selected_vfile
         with open(self.filepath, 'wb') as w:
             w.write(vfile.get_bytes())
         return {"FINISHED"}
 
     @classmethod
     def poll(cls, context):
-        return bool(context.scene.albam.vfs.selected_vfile)
+        return bool(cls.get_vfs(cls, context).selected_vfile)
+
+    @staticmethod
+    def get_vfs(cls_or_self, context):
+        return getattr(context.scene.albam, cls_or_self.VFS_ID)
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(bpy.types.Operator):
-    bl_idname = "albam.file_item_collapse_toggle"
-    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
+class ALBAM_OT_VirtualFileSystemBlenderSaveFile(
+        ALBAM_OT_VirtualFileSystemBlenderSaveFileBase, bpy.types.Operator):
+    VFS_ID = "vfs"
+
+
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase:
 
     button_index: bpy.props.IntProperty(default=0)
+    VFS_ID = None
+    NODES_CACHE = None
 
     def execute(self, context):
         item_index = self.button_index
-        item_list = context.scene.albam.vfs.file_list
+        vfs = getattr(context.scene.albam, self.VFS_ID)
+        item_list = vfs.file_list
         item = item_list[item_index]
         item.is_expanded = not item.is_expanded
-        NODES_CACHE[item.name] = item.is_expanded
+        self.NODES_CACHE[item.name] = item.is_expanded
 
-        context.scene.albam.vfs.file_list_selected_index = self.button_index
-
+        vfs.file_list_selected_index = self.button_index
         item_list.update()
         return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderCollapseToggle(
+        ALBAM_OT_VirtualFileSystemBlenderCollapseToggleBase, bpy.types.Operator):
+
+    bl_idname = "albam.file_item_collapse_toggle"
+    bl_label = "ALBAM_OT_VirtualFileSystemBlenderCollapseToggle"
+    VFS_ID = "vfs"
+    NODES_CACHE = {}
+
+
+class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase:
+    bl_idname = "albam.remove_imported"
+    bl_label = "Remove imported files"
+    VFS_ID = ""
+
+    def execute(self, context):
+        vfs = getattr(context.scene.albam, self.VFS_ID)
+        vfiles_to_remove = []
+        root_node_index = vfs.file_list_selected_index
+        archive_node = vfs.file_list[root_node_index]
+        for i in range(len(vfs.file_list)):
+            parent = vfs.file_list[i].tree_node.root_id
+            if parent == archive_node.name:
+                vfiles_to_remove.append(i)
+
+        vfiles_to_remove.reverse()
+        for i in range(len(vfiles_to_remove)):
+            vfs.file_list.remove(vfiles_to_remove[i])
+        vfs.file_list.remove(root_node_index)
+
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        vfs = getattr(context.scene.albam, cls.VFS_ID)
+        current_item = vfs.selected_vfile
+        return current_item and current_item.is_root
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFile(
+        ALBAM_OT_VirtualFileSystemBlenderRemoveRootVFileBase, bpy.types.Operator):
+
+    bl_idname = "albam.remove_imported"
+    bl_label = "Remove imported files"
+    VFS_ID = "vfs"
 
 
 class VirtualFileSystem:
@@ -328,7 +414,6 @@ class VirtualFileSystem:
         bl_vf.app_id = vf.app_id
         bl_vf.name = f"{vf.app_id}::{vf.name}"
         bl_vf.display_name = vf.name
-        bl_vf.absolute_path = vf.absolute_path or ""
         bl_vf.data_bytes = vf.data_bytes or b""
 
         return bl_vf
@@ -358,7 +443,6 @@ class VirtualFile:
 
     def __init__(self, app_id, relative_path, data_bytes=None):
         self.app_id = app_id
-        self.absolute_path = None
         self.relative_path = relative_path
         self.name = os.path.basename(relative_path)  # TODO: posix only
         self.data_bytes = data_bytes
@@ -375,14 +459,6 @@ class VirtualFile:
             _, __, extension0 = name.rpartition(SEP)
             extension = SEP.join((extension0, extension))
         return extension
-
-    @classmethod
-    def from_real_file(cls, app_id, file_path):
-        relative_path = os.path.basename(file_path)  # TODO: optional prefix to calculate relative_path
-        # TODO: error handling
-        vf = cls(app_id, relative_path)
-        vf.absolute_path = file_path
-        return vf
 
 
 class Tree:

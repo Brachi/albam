@@ -1,2 +1,0 @@
-
-NODES_CACHE = {}

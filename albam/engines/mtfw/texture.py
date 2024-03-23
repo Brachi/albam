@@ -144,7 +144,6 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     TexCls = APPID_TEXCLS_MAP[app_id]
 
     for i, texture_slot in enumerate(src_textures):
-        # FIXME: use VirtualFile and commit late
         texture_path = getattr(texture_slot, "texture_path", None) or texture_slot
         try:
             texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".tex")
