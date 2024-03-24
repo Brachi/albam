@@ -14,7 +14,7 @@ from albam.lib.blender import (
 )
 from albam.lib.dds import DDSHeader
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
@@ -135,10 +135,8 @@ TEX_TYPE_MAPPER = {
 }
 
 
-def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None):
+def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     textures = [None]  # materials refer to textures in index-1
-
-    file_list = context.scene.albam.file_explorer.file_list
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
     if not src_textures:
@@ -146,17 +144,12 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
     TexCls = APPID_TEXCLS_MAP[app_id]
 
     for i, texture_slot in enumerate(src_textures):
-        # FIXME: use VirtualFile and commit late
         texture_path = getattr(texture_slot, "texture_path", None) or texture_slot
-        new_texture_path = (
-            mod_file_item.tree_node.root_id + "::" + texture_path.replace("\\", "::") + ".tex"
-        )
         try:
-            texture_item = file_list[new_texture_path]
-            tex_bytes = texture_item.get_bytes()
+            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".tex")
+            tex_bytes = texture_vfile.get_bytes()
         except KeyError:
             tex_bytes = None
-
         if not tex_bytes:
             print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
@@ -181,8 +174,6 @@ def build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl=None)
             textures.append(None)
             continue
 
-        # XXX Revisit
-        app_id = mod_file_item.app_id
         tex_name = PureWindowsPath(texture_path).name
         bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
         bl_image.source = "FILE"
@@ -382,7 +373,7 @@ def _serialize_texture_156(app_id, dict_tex):
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
-    vf = VirtualFile(app_id, relative_path, data_bytes=stream.to_byte_array())
+    vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 
@@ -435,7 +426,7 @@ def _serialize_texture_21(app_id, dict_tex):
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
-    vf = VirtualFile(app_id, relative_path, data_bytes=stream.to_byte_array())
+    vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 

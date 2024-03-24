@@ -16,7 +16,7 @@ def build_blender_materials(mesh_vfile, context):
     mdf_found = False
     for mdf_virtual_path in possible_mdf_virtual_paths:
         try:
-            mdf_virtual_file = context.scene.albam.file_explorer.file_list[mdf_virtual_path]
+            mdf_virtual_file = context.scene.albam.vfs.file_list[mdf_virtual_path]
             mdf_found = True
             break
         except KeyError:

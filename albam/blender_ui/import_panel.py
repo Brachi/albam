@@ -4,9 +4,8 @@ import bpy
 
 from albam.apps import APPS
 from albam.registry import blender_registry
-from albam.vfs import VirtualFileSystem, VirtualFile
+from albam.vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
 
-NODES_CACHE = {}
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
 # FIXME: store in app data
@@ -14,27 +13,39 @@ APP_CONFIG_FILE_CACHE = {}
 
 
 def update_app_data(self, context):
-    current_app = context.scene.albam.file_explorer.app_selected
+    current_app = context.scene.albam.apps.app_selected
     cached_dir = APP_DIRS_CACHE.get(current_app)
     cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
     if cached_dir:
-        context.scene.albam.file_explorer.app_dir = cached_dir
+        context.scene.albam.apps.app_dir = cached_dir
     else:
-        context.scene.albam.file_explorer.app_dir = ""
+        context.scene.albam.apps.app_dir = ""
 
     if cached_file:
-        context.scene.albam.file_explorer.app_config_filepath = cached_file
+        context.scene.albam.apps.app_config_filepath = cached_file
     else:
-        context.scene.albam.file_explorer.app_config_filepath = ""
+        context.scene.albam.apps.app_config_filepath = ""
 
 
 def update_app_caches(self, context):
-    current_app = context.scene.albam.file_explorer.app_selected
-    current_dir = context.scene.albam.file_explorer.app_dir
-    current_file = context.scene.albam.file_explorer.app_config_filepath
+    current_app = context.scene.albam.apps.app_selected
+    current_dir = context.scene.albam.apps.app_dir
+    current_file = context.scene.albam.apps.app_config_filepath
 
     APP_DIRS_CACHE[current_app] = current_dir
     APP_CONFIG_FILE_CACHE[current_app] = current_file
+
+
+@blender_registry.register_blender_prop_albam(name="apps")
+class AlbamApps(bpy.types.PropertyGroup):
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
+    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
+    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    mouse_x: bpy.props.IntProperty()
+    mouse_y: bpy.props.IntProperty()
+
+    def get_app_config_filepath(self, app_id):
+        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_type
@@ -80,200 +91,24 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
     @staticmethod
     def get_selected_item(context):
-        if len(context.scene.albam.file_explorer.file_list) == 0:
+        # TODO: delete
+        if len(context.scene.albam.vfs.file_list) == 0:
             return None
-        index = context.scene.albam.file_explorer.file_list_selected_index
+        index = context.scene.albam.vfs.file_list_selected_index
         try:
-            item = context.scene.albam.file_explorer.file_list[index]
+            item = context.scene.albam.vfs.file_list[index]
         except IndexError:
             # list might have been cleared
             return
         return item
 
 
-@blender_registry.register_blender_type
-class ALBAM_OT_FileItemCollapseToggle(bpy.types.Operator):
-    bl_idname = "albam.file_item_collapse_toggle"
-    bl_label = "ALBAM_OT_FileItemCollapseToggle"
-
-    button_index: bpy.props.IntProperty(default=0)
-
-    def execute(self, context):
-        item_index = self.button_index
-        item_list = context.scene.albam.file_explorer.file_list
-        item = item_list[item_index]
-        item.is_expanded = not item.is_expanded
-        NODES_CACHE[item.name] = item.is_expanded
-
-        context.scene.albam.file_explorer.file_list_selected_index = self.button_index
-
-        item_list.update()
-        return {"FINISHED"}
-
-
-@blender_registry.register_blender_prop
-class TreeNode(bpy.types.PropertyGroup):
-    node_id: bpy.props.StringProperty()
-    root_id: bpy.props.StringProperty()
-    depth: bpy.props.IntProperty(default=0)
-
-
-@blender_registry.register_blender_prop
-class FileListItem(bpy.types.PropertyGroup):
-    display_name: bpy.props.StringProperty()
-    file_path: bpy.props.StringProperty()  # FIXME: change to abs
-    relative_path: bpy.props.StringProperty()
-    is_archive: bpy.props.BoolProperty(default=False)
-    is_root: bpy.props.BoolProperty(default=False)
-    is_expandable: bpy.props.BoolProperty(default=False)
-    is_expanded: bpy.props.BoolProperty(default=False)
-
-    tree_node: bpy.props.PointerProperty(type=TreeNode)  # consider adding the attributes here directly
-    # FIXME: consider strings, seems pretty inefficient
-    tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
-
-    app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
-    vfs_id: bpy.props.StringProperty()
-
-    data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
-
-    @property
-    def extension(self):
-        """
-        Allow up to 2 dots as an extension
-        e.g. texname.tex.34 -> tex.34
-        """
-        SEP = "."
-        name , _ , extension = self.display_name.rpartition(SEP)
-        if SEP in name:
-            _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
-        return extension
-
-    def get_bytes(self):
-        accessor = self.get_accessor()
-        return accessor(self, bpy.context)
-
-    def get_accessor(self):
-        if self.file_path:
-            return self.real_file_accessor
-        if self.data_bytes:
-            return lambda _: self.data_bytes
-        vfs = getattr(bpy.context.scene.albam, self.vfs_id)
-        root = vfs.file_list[self.tree_node.root_id]
-        accessor_func = blender_registry.archive_accessor_registry.get(
-            (self.app_id, root.extension)
-        )
-        if not accessor_func:
-            raise RuntimeError("Archive item doesn't have an accessor")
-
-        return accessor_func
-
-    @staticmethod
-    def real_file_accessor(file_item, context):
-        with open(file_item.file_path, 'rb') as f:
-            return f.read()
-
-    def get_vfs(self):
-        return getattr(bpy.context.scene.albam, self.vfs_id)
-
-
-@blender_registry.register_blender_prop_albam(name="file_explorer")
-class FileExplorerData(bpy.types.PropertyGroup):
-    file_list : bpy.props.CollectionProperty(type=FileListItem)
-    file_list_selected_index : bpy.props.IntProperty()
-    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
-    mouse_x: bpy.props.IntProperty()
-    mouse_y: bpy.props.IntProperty()
-
-    def get_app_real_root_path(self, app_id):
-        return APP_DIRS_CACHE.get(app_id)
-
-    def get_app_config_filepath(self, app_id):
-        return APP_CONFIG_FILE_CACHE.get(app_id)
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_AddFiles(bpy.types.Operator):
-
-    bl_idname = "albam.add_files"
-    bl_label = "Add Files"
-    directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
-    files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
-    # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})  # NOQA
-
-    def invoke(self, context, event):  # pragma: no cover
-        wm = context.window_manager
-        wm.fileselect_add(self)
-        return {"RUNNING_MODAL"}
-
-    def execute(self, context):  # pragma: no cover
-        self._execute(context, self.directory, self.files)
-        context.scene.albam.file_explorer.file_list.update()
-        return {"FINISHED"}
-
-    @staticmethod
-    def _execute(context, directory, files):
-        app_id = context.scene.albam.file_explorer.app_selected
-        vfs_id = "file_explorer"
-        vfs = VirtualFileSystem(vfs_id)
-        for f in files:
-            file_path = os.path.join(directory, f.name)
-            virtual_file = VirtualFile.from_real_file(app_id, file_path)
-            vfs.append(virtual_file)
-
-        vfs.commit()
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_SaveFile(bpy.types.Operator):
-    CHECK_EXISTING = bpy.props.BoolProperty(
-        name="Check Existing",
-        description="Check and warn on overwriting existing files",
-        default=True,
-        options={'HIDDEN'},
-    )
-    FILEPATH = bpy.props.StringProperty(
-        name="File Path",
-        description="Filepath used for exporting the file",
-        maxlen=1024,
-        subtype='FILE_PATH',
-    )
-
-    bl_idname = "albam.save_file"
-    bl_label = "Save files"
-    check_existing: CHECK_EXISTING
-    filepath: FILEPATH
-
-    def invoke(self, context, event):  # pragma: no cover
-        current_item = ALBAM_OT_Import.get_selected_item(context)
-        self.filepath = current_item.display_name
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-    def execute(self, context):  # pragma: no cover
-        current_item = ALBAM_OT_Import.get_selected_item(context)
-        with open(self.filepath, 'wb') as w:
-            w.write(current_item.get_bytes())
-        return {"FINISHED"}
-
-    @classmethod
-    def poll(cls, context):
-        current_item = ALBAM_OT_Import.get_selected_item(context)
-        if not current_item or current_item.is_expandable is True:
-            return False
-        return True
-
-
-@blender_registry.register_blender_type
-class ALBAM_UL_FileList(bpy.types.UIList):
+class ALBAM_UL_VirtualFileSystemUIBase:
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
         True: "TRIA_DOWN",
     }
+    collapse_toggle_operator_cls = None
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         for _ in range(item.tree_node.depth):
@@ -281,11 +116,19 @@ class ALBAM_UL_FileList(bpy.types.UIList):
 
         if item.is_expandable:
             icon = self.EXPAND_ICONS[item.is_expanded]
+        elif item.category == "MESH":
+            icon = "OUTLINER_OB_MESH"
+        elif item.category == "ANIMATION":
+            icon = "ACTION"
+        elif item.category == "MATERIAL":
+            icon = "MATERIAL"
+        elif item.category == "TEXTURE":
+            icon = "TEXTURE"
         else:
             icon = "DOT"
         col = layout.column()
         col.enabled = item.is_expandable
-        op = col.operator("albam.file_item_collapse_toggle", text="", icon=icon)
+        op = col.operator(self.collapse_toggle_operator_cls.bl_idname, text="", icon=icon)
         op.button_index = index
 
         layout.column().label(text=item.display_name)
@@ -293,19 +136,25 @@ class ALBAM_UL_FileList(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         filtered_items = []
         # TODO: self.filter_name
+        cache = self.collapse_toggle_operator_cls.NODES_CACHE
 
         item_list = getattr(data, propname)
         for item in item_list:
             if item.is_archive:
                 filtered_items.append(self.bitflag_filter_item)
 
-            elif all(NODES_CACHE.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            elif all(cache.get(anc.node_id, False) for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
 
             else:
                 filtered_items.append(0)
 
         return filtered_items, []
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_VirtualFileSystemUI(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UIList):
+    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemCollapseToggle
 
 
 @blender_registry.register_blender_type
@@ -318,7 +167,7 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
-        row.prop(context.scene.albam.file_explorer, "app_selected")
+        row.prop(context.scene.albam.apps, "app_selected")
         # Experimental for reengine
         if os.getenv("ALBAM_ENABLE_REEN"):
             row.operator("albam.app_config_popup", icon="OPTIONS")
@@ -344,11 +193,11 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col.operator("albam.remove_imported", icon="X", text="")
         col = split.column()
         col.template_list(
-            "ALBAM_UL_FileList",
+            "ALBAM_UL_VirtualFileSystemUI",
             "",
-            context.scene.albam.file_explorer,
+            context.scene.albam.vfs,
             "file_list",
-            context.scene.albam.file_explorer,
+            context.scene.albam.vfs,
             "file_list_selected_index",
             sort_lock=True,
             rows=8,
@@ -397,39 +246,39 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
     # TODO: warning icon if required settings not present
 
     def invoke(self, context, event):
-        x = context.scene.albam.file_explorer.mouse_x
-        y = context.scene.albam.file_explorer.mouse_y
+        x = context.scene.albam.apps.mouse_x
+        y = context.scene.albam.apps.mouse_y
         if x and y:
             context.window.cursor_warp(x, y)
         else:
-            context.scene.albam.file_explorer.mouse_x = event.mouse_x
-            context.scene.albam.file_explorer.mouse_y = event.mouse_y
+            context.scene.albam.apps.mouse_x = event.mouse_x
+            context.scene.albam.apps.mouse_y = event.mouse_y
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        context.scene.albam.file_explorer.mouse_x = 0
-        context.scene.albam.file_explorer.mouse_y = 0
+        context.scene.albam.apps.mouse_x = 0
+        context.scene.albam.apps.mouse_y = 0
         return {'FINISHED'}
 
     def draw(self, context):
         layout = self.layout
 
-        file_explorer = context.scene.albam.file_explorer
+        apps = context.scene.albam.apps
         try:
-            app_index = file_explorer["app_selected"]
+            app_index = apps["app_selected"]
         except KeyError:
             # default, before actually selecting
             app_index = 0
-        app_selected_name = file_explorer.bl_rna.properties["app_selected"].enum_items[app_index].name
+        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
         layout.label(text=f"{app_selected_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
-        row.prop(context.scene.albam.file_explorer, "app_dir")
+        row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
         row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.file_explorer, "app_config_filepath")
+        row.prop(context.scene.albam.apps, "app_config_filepath")
         row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
 
 
@@ -447,7 +296,7 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.file_explorer.app_dir = self.directory
+        context.scene.albam.apps.app_dir = self.directory
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
@@ -468,40 +317,12 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.file_explorer.app_config_filepath = self.filepath
+        context.scene.albam.apps.app_config_filepath = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
     def cancel(self, context):
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_Remove_Imported(bpy.types.Operator):
-    bl_idname = "albam.remove_imported"
-    bl_label = "Remove imported files"
-
-    def execute(self, context):
-        vfiles_to_remove = []
-        vfs_i = context.scene.albam.file_explorer
-        root_node_index = vfs_i.file_list_selected_index
-        archive_node = vfs_i.file_list[root_node_index]
-        for i in range(len(vfs_i.file_list)):
-            parent = vfs_i.file_list[i].tree_node.root_id
-            if parent == archive_node.name:
-                vfiles_to_remove.append(i)
-
-        vfiles_to_remove.reverse()
-        for i in range(len(vfiles_to_remove)):
-            vfs_i.file_list.remove(vfiles_to_remove[i])
-        vfs_i.file_list.remove(root_node_index)
-
-        return {'FINISHED'}
-
-    @classmethod
-    def poll(cls, context):
-        current_item = ALBAM_OT_Import.get_selected_item(context)
-        return current_item and current_item.is_archive
 
 
 @blender_registry.register_blender_type

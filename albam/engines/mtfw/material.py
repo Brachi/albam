@@ -8,7 +8,7 @@ from kaitaistruct import KaitaiStream
 from albam.exceptions import AlbamCheckFailure
 from albam.lib.blender import get_bl_materials
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
 from .texture import (
@@ -98,7 +98,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     if parsed_mod.header.version in VERSION_USES_MRL and not mrl:
         return materials
 
-    textures = build_blender_textures(app_id, mod_file_item, context, parsed_mod, mrl)
+    textures = build_blender_textures(app_id, context, parsed_mod, mrl)
     if parsed_mod.header.version in VERSION_USES_MRL:
         src_materials = mrl.materials
     else:
@@ -304,7 +304,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     mrl._write(stream)
     mrl_relative_path = model_asset.relative_path.replace(".mod", ".mrl")
-    mrl_vf = VirtualFile(app_id, mrl_relative_path, data_bytes=stream.to_byte_array())
+    mrl_vf = VirtualFileData(app_id, mrl_relative_path, data_bytes=stream.to_byte_array())
 
     return exported_materials_map, mrl_vf
 
@@ -856,7 +856,7 @@ def _infer_mrl(context, mod_file_item, app_id):
     It's not always like this, e.g. RE6
     """
     mrl_file_id = mod_file_item.name.replace(".mod", ".mrl")
-    file_list = context.scene.albam.file_explorer.file_list
+    file_list = context.scene.albam.vfs.file_list
 
     try:
         mrl_file_item = file_list[mrl_file_id]

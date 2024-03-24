@@ -14,6 +14,7 @@ class BlenderRegistry:
         self.custom_properties_material = {}
         self.custom_properties_mesh = {}
         self.custom_properties_image = {}
+        self.file_categories = {}
 
     def register_blender_prop_albam(self, name):
         """
@@ -51,9 +52,10 @@ class BlenderRegistry:
             return f
         return decorator
 
-    def register_import_function(self, app_id, extension):
+    def register_import_function(self, app_id, extension, file_category=None):
         def decorator(f):
             self.import_registry[(app_id, extension)] = f
+            self.file_categories[(app_id, extension)] = file_category
             return f
         return decorator
 

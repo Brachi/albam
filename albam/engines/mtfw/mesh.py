@@ -27,7 +27,7 @@ from albam.lib.blender import (
 )
 from albam.lib.misc import chunks
 from albam.registry import blender_registry
-from albam.vfs import VirtualFile
+from albam.vfs import VirtualFileData
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -281,11 +281,11 @@ VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod")
-@blender_registry.register_import_function(app_id="re1", extension="mod")
-@blender_registry.register_import_function(app_id="re5", extension="mod")
-@blender_registry.register_import_function(app_id="rev1", extension="mod")
-@blender_registry.register_import_function(app_id="rev2", extension="mod")
+@blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     LODS_TO_IMPORT = (1, 255)
 
@@ -758,16 +758,13 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    dst_mod.bones_data = _serialize_bones_data(
-        bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    dst_mod.bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
     dst_mod.groups = _serialize_groups(src_mod, dst_mod)
-    materials_map, mrl, vtextures = serialize_materials_data(
-        asset, bl_meshes, src_mod, dst_mod)
+    materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
     meshes_data, vertex_buffer, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    dst_mod.header.num_vertices = sum(
-        m.num_vertices for m in meshes_data.meshes)
+    dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
     dst_mod.index_buffer = index_buffer
@@ -776,12 +773,9 @@ def export_mod(bl_obj):
     dst_mod.header.offset_bones_data = offset
     dst_mod.header.offset_groups = offset + dst_mod.bones_data_size_
     dst_mod.header.offset_materials_data = dst_mod.header.offset_groups + dst_mod.groups_size_
-    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + \
-        dst_mod.materials_data.size_
-    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + \
-        dst_mod.meshes_data.size_
-    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + \
-        len(vertex_buffer)
+    dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + dst_mod.materials_data.size_
+    dst_mod.header.offset_vertex_buffer = dst_mod.header.offset_meshes_data + dst_mod.meshes_data.size_
+    dst_mod.header.offset_index_buffer = dst_mod.header.offset_vertex_buffer + len(vertex_buffer)
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     # TODO: revise, name accordingly
@@ -805,8 +799,7 @@ def export_mod(bl_obj):
     dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
-    mod_vf = VirtualFile(app_id, asset.relative_path,
-                         data_bytes=stream.to_byte_array())
+    mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(mod_vf)
     vfiles.extend(vtextures)
     if mrl:

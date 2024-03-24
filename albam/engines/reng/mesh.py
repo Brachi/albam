@@ -14,11 +14,11 @@ from .material import build_blender_materials
 from .structs.reengine_mesh import ReengineMesh
 
 
-@blender_registry.register_import_function(app_id="re2", extension="mesh.2109108288")
-@blender_registry.register_import_function(app_id="re2_non_rt", extension="mesh.1808312334")
-@blender_registry.register_import_function(app_id="re3", extension="mesh.2109108288")
-@blender_registry.register_import_function(app_id="re3_non_rt", extension="mesh.1902042334")
-@blender_registry.register_import_function(app_id="re8", extension="mesh.2101050001")
+@blender_registry.register_import_function("re2", extension="mesh.2109108288", file_category="MESH")
+@blender_registry.register_import_function("re2_non_rt", extension="mesh.1808312334", file_category="MESH")
+@blender_registry.register_import_function("re3", extension="mesh.2109108288", file_category="MESH")
+@blender_registry.register_import_function("re3_non_rt", extension="mesh.1902042334", file_category="MESH")
+@blender_registry.register_import_function("re8", extension="mesh.2101050001", file_category="MESH")
 def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types.Object:
 
     mesh_bytes = file_list_item.get_bytes()
