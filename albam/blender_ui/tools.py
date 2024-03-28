@@ -170,7 +170,8 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         local_path = bpy.context.scene.albam.tools_settings.local_path_to_textures
         meshes = {ob.data for ob in bpy.context.selected_objects if ob.type == 'MESH'}
         if not meshes:
-            meshes = {child.data for child in bpy.context.selected_objects[0].children if child.type == 'MESH'}
+            meshes = {child.data for child in bpy.context.selected_objects[0].children
+                      if child.type == 'MESH'}
         for ob in meshes:
             mat = ob.materials[0]
             set_image_albam_attr(mat, app_id, local_path)
