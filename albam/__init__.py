@@ -27,6 +27,10 @@ ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 
 
+def mesh_filter(self, object):
+    return object.type == 'MESH'
+
+
 def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
@@ -63,6 +67,7 @@ def register():
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
+    bpy.types.Scene.albam_meshes = bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
 
 
 def unregister():
