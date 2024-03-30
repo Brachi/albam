@@ -13,11 +13,20 @@ def show_message_box(message="", title="Message Box", icon='INFO'):
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
+def mesh_filter(self, object):
+    return object.type == 'MESH'
+
+
+@blender_registry.register_blender_prop_albam(name="meshes")
+class AlbamMeshes(bpy.types.PropertyGroup):
+    all_meshes: bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
+
+
 @blender_registry.register_blender_prop_albam(name="tools_settings")
 class ToolsSettings(bpy.types.PropertyGroup):
     split_uv_seams_transfer_normals: bpy.props.BoolProperty(default=True)
-    def_path = "path\\to_textures\\"
-    local_path_to_textures: bpy.props.StringProperty(default=def_path)
+    default_path = "path\\to_textures\\"
+    relative_path_to_textures: bpy.props.StringProperty(default=default_path)
     bone_names_enum = bpy.props.EnumProperty(
         name="",
         description="select surface",
@@ -52,12 +61,12 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         )
         row = layout.row()
         row.operator('albam.transfer_normals', text="Transfer normals from")
-        row.prop(context.scene, "albam_meshes", text="")
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
         row = layout.row()
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
             context.scene.albam.tools_settings,
-            "local_path_to_textures",
+            "relative_path_to_textures",
             text="",)
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
@@ -133,7 +142,7 @@ class ALBAM_OT_TransferNormal(bpy.types.Operator):
 
     @classmethod
     def poll(self, context):
-        source_obj = context.scene.albam_meshes
+        source_obj = context.scene.albam.meshes.all_meshes
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH']
         if source_obj is None or not bpy.context.selected_objects:
@@ -144,7 +153,7 @@ class ALBAM_OT_TransferNormal(bpy.types.Operator):
 
     def execute(self, context):
         selection = bpy.context.selected_objects
-        source_obj = context.scene.albam_meshes
+        source_obj = context.scene.albam.meshes.all_meshes
         target_objs = [obj for obj in selection if obj.type == 'MESH']
         if target_objs and source_obj:
             transfer_normals(source_obj, target_objs)
@@ -167,7 +176,7 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
 
     def execute(self, context):
         app_id = context.scene.albam.apps.app_selected
-        local_path = bpy.context.scene.albam.tools_settings.local_path_to_textures
+        local_path = bpy.context.scene.albam.tools_settings.relative_path_to_textures
         meshes = {ob.data for ob in bpy.context.selected_objects if ob.type == 'MESH'}
         if not meshes:
             meshes = {child.data for child in bpy.context.selected_objects[0].children
@@ -296,8 +305,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
 def rename_bones(armature_ob, names_preset):
     armature = armature_ob.data
     bones = armature.bones
-    for eb in bones:
-        reference_bone_id = eb.get('mtfw.anim_retarget')
+    for bone in bones:
+        reference_bone_id = bone.get('mtfw.anim_retarget')
         bone_name = names_preset.get(int(reference_bone_id), None)
         if bone_name:
-            eb.name = bone_name
+            bone.name = bone_name
