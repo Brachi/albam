@@ -639,11 +639,9 @@ def build_blender_armature(mod, armature_name, bbox_data):
         blender_bone.parent = blender_bones[bone.idx_parent] if valid_parent else None
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
         m = mod.bones_data.inverse_bind_matrices[i]
-        head = _name_me(mod, m, bbox_data)
-        blender_bone.head = [head[0] * scale, -
-                             head[2] * scale, head[1] * scale]
-        blender_bone.tail = [head[0] * scale, -
-                             head[2] * scale, (head[1] * scale) + 0.01]
+        head = _transform_inverse_bind_matrix(mod, m, bbox_data)
+        blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
+        blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
         blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
         blender_bones.append(blender_bone)
 
@@ -651,39 +649,31 @@ def build_blender_armature(mod, armature_name, bbox_data):
     return armature_ob
 
 
-def _name_me(mod, matrix, bbox_data):
+def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
     m = matrix
-    if mod.header.version == 210:
-        row_1_x = round(m.row_1.x - bbox_data.dimension + 1, 1)
-        row_2_y = round(m.row_2.y - bbox_data.dimension + 1, 1)
-        row_3_z = round(m.row_3.z - bbox_data.dimension + 1, 1)
-        row_4_x = m.row_4.x - bbox_data.min_x
-        row_4_y = m.row_4.y - bbox_data.min_y
-        row_4_z = m.row_4.z - bbox_data.min_z
+    bl_matrix = Matrix((
+        (m.row_1.x, m.row_1.y, m.row_1.z, m.row_1.w),
+        (m.row_2.x, m.row_2.y, m.row_2.z, m.row_2.w),
+        (m.row_3.x, m.row_3.y, m.row_3.z, m.row_3.w),
+        (m.row_4.x, m.row_4.y, m.row_4.z, m.row_4.w),
+    )).transposed()  # directx to opengl style
 
-    elif mod.header.version == 156:
-        row_1_x = m.row_1.x
-        row_2_y = m.row_2.y
-        row_3_z = m.row_3.z
-        row_4_x = m.row_4.x
-        row_4_y = m.row_4.y
-        row_4_z = m.row_4.z
-
-    head_vector = (
-        Matrix(
-            (
-                (row_1_x, m.row_1.y, m.row_1.z, m.row_1.w),
-                (m.row_2.x, row_2_y, m.row_2.z, m.row_2.w),
-                (m.row_3.x, m.row_3.y, row_3_z, m.row_3.w),
-                (row_4_x, row_4_y, row_4_z, m.row_4.w),
-            )
+    if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+        # bbox-space to global-space
+        scale_matrix = Matrix.Scale(bbox_data.dimension, 4)
+        translation_matrix = (
+            Matrix.Translation((bbox_data.min_x, bbox_data.min_y, bbox_data.min_z)) - Matrix.Scale(1, 4)
         )
-        .inverted()
-        .transposed()
-        .to_translation()
-    )
+        rot_x, rot_y, rot_z = bl_matrix.to_euler("XYZ")
+        rotation_matrix = (
+            Matrix.Rotation(rot_x, 4, "X")
+            @ Matrix.Rotation(rot_y, 4, "Y")
+            @ Matrix.Rotation(rot_z, 4, "Z")
+        )
 
-    return head_vector
+        bl_matrix = ((bl_matrix @ scale_matrix.inverted()) @ rotation_matrix.inverted()) - translation_matrix
+
+    return bl_matrix.inverted().to_translation()
 
 
 def _create_bbox_data(mod):
