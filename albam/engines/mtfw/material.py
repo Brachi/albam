@@ -33,12 +33,14 @@ VERSION_USES_MATERIAL_NAMES = {210}
 MRL_DEFAULT_VERSION = {
     "re0": 34,
     "re1": 34,
+    "re6": 33,
     "rev1": 32,
     "rev2": 34,
 }
 MRL_UNK_01 = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
+    "re6": 0x6a5489b8,
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
 }
@@ -46,6 +48,7 @@ MRL_UNK_01 = {
 MRL_UNUSED = {
     "re0": 0xA00DC,
     "re1": 0x200DC,
+    "re6": 0x80024,  # FIXME: actually is used, in mrl.version == 33 apparently, see pl0000_0.mrl
     "rev1": 0x804DC,
     "rev2": 0xA00DC,
 }
@@ -874,20 +877,25 @@ def _create_mtfw_shader():
     return shader_group
 
 
-def _infer_mrl(context, mod_file_item, app_id):
+def _infer_mrl(context, mod_vfile, app_id):
     """
     Assuming mrl file is next to the .mod file with
-    the same name.
-    It's not always like this, e.g. RE6
+    the same name. Or try with different suffixes
     """
-    mrl_file_id = mod_file_item.name.replace(".mod", ".mrl")
-    file_list = context.scene.albam.vfs.file_list
+    vfs = context.scene.albam.vfs
+    base = str(mod_vfile.relative_path_windows_no_ext)
+    suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
+    mrl_vfile = None
 
-    try:
-        mrl_file_item = file_list[mrl_file_id]
-    except KeyError:
+    for suffix in suffixes:
+        try:
+            mrl_vfile = vfs.get_vfile(app_id, base + suffix)
+        except KeyError:
+            pass
+
+    if not mrl_vfile:
         return
-    mrl_bytes = mrl_file_item.get_bytes()
+    mrl_bytes = mrl_vfile.get_bytes()
     mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
     mrl._read()
     return mrl
@@ -1036,7 +1044,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
             setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "rev1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 

@@ -47,6 +47,7 @@ APPID_CLASS_MAPPER = {
     "re0": Mod21,
     "re1": Mod21,
     "re5": Mod156,
+    "re6": Mod21,
     "rev1": Mod21,
     "rev2": Mod21,
 }
@@ -285,6 +286,7 @@ MAIN_LODS = {1, 255}
 @blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
@@ -411,8 +413,8 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
 
-    elif (w is not None and mod_version == 210) or (
-            mod_version == 210 and mesh.vertex_format in BBOX_AFFECTED):
+    elif (w is not None and mod_version in (210, 211)) or (
+            mod_version in (210, 211) and mesh.vertex_format in BBOX_AFFECTED):
         x = x / 32767 * bbox_data.dimension + bbox_data.min_x
         y = y / 32767 * bbox_data.dimension + bbox_data.min_y
         z = z / 32767 * bbox_data.dimension + bbox_data.min_z
@@ -459,7 +461,7 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
-    if mod_version == 210 and hasattr(vertex, "rgba"):
+    if mod_version in (210, 211) and hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
         r = vertex.rgba.z / 255
@@ -736,6 +738,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="re0", extension="mod")
 @blender_registry.register_export_function(app_id="re1", extension="mod")
 @blender_registry.register_export_function(app_id="re5", extension="mod")
+@blender_registry.register_export_function(app_id="re6", extension="mod")
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @check_dds_textures
@@ -1192,7 +1195,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         face_position += num_indices
         total_num_vertices += mesh.num_vertices
 
-    if dst_mod.header.version != 210:
+    if dst_mod.header.version in (156, 211):
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)
@@ -1227,7 +1230,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_format = max_bones_per_vertex
         use_special_vf = mod_156_material_props.use_8_bones
 
-    elif dst_mod.header.version == 210:
+    elif dst_mod.header.version in (210, 211):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
@@ -1240,8 +1243,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vertex_size = VertexCls().size_
 
-    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforces in `_process_weights_for_export`
-    weight_half_float = dst_mod.header.version == 210 and vertex_format not in VERTEX_FORMATS_BRIDGE
+    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
+    weight_half_float = dst_mod.header.version in (210, 211) and vertex_format not in VERTEX_FORMATS_BRIDGE
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vertices_stream = KaitaiStream(
@@ -1324,7 +1327,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 vertex_struct.uv3.v = bytes_empty
         # UV4
         if vertex_format in VERTEX_FORMATS_UV4:
-            vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
+            vertex_struct.uv4 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
             if uvs_per_vertex_4:
                 uv_x, uv_y = uvs_per_vertex_4.get(vertex_index, (0, 0))
@@ -1767,7 +1770,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
             setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "rev1", "rev2",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)

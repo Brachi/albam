@@ -12,6 +12,7 @@ from .structs.arc import Arc
 @blender_registry.register_archive_loader(app_id="re0", extension="arc")
 @blender_registry.register_archive_loader(app_id="re1", extension="arc")
 @blender_registry.register_archive_loader(app_id="re5", extension="arc")
+@blender_registry.register_archive_loader(app_id="re6", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev1", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev2", extension="arc")
 def arc_loader(vfile, context=None):  # XXX context DEPRECATED
@@ -23,6 +24,7 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
 @blender_registry.register_archive_accessor(app_id="re0", extension="arc")
 @blender_registry.register_archive_accessor(app_id="re1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="re5", extension="arc")
+@blender_registry.register_archive_accessor(app_id="re6", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
 def arc_accessor(vfile, context):
