@@ -1,5 +1,4 @@
 
-
 class BlenderRegistry:
     def __init__(self):
         self.import_registry = {}
@@ -12,6 +11,7 @@ class BlenderRegistry:
         self.import_options_custom_poll_funcs = {}
         self.import_operator_poll_funcs = {}
         self.custom_properties_material = {}
+        self.custom_properties_material_secondary = {}
         self.custom_properties_mesh = {}
         self.custom_properties_image = {}
         self.file_categories = {}
@@ -78,21 +78,21 @@ class BlenderRegistry:
 
         return decorator
 
-    def register_custom_properties_material(self, name, app_ids):
+    def register_custom_properties_material(self, name, app_ids, is_secondary=False):
         def decorator(cls):
-            self.custom_properties_material[name] = (cls, app_ids)
+            self.custom_properties_material[name] = (cls, app_ids, is_secondary)
             return cls
         return decorator
 
-    def register_custom_properties_mesh(self, name, app_ids):
+    def register_custom_properties_mesh(self, name, app_ids, is_secondary=False):
         def decorator(cls):
-            self.custom_properties_mesh[name] = (cls, app_ids)
+            self.custom_properties_mesh[name] = (cls, app_ids, is_secondary)
             return cls
         return decorator
 
-    def register_custom_properties_image(self, name, app_ids):
+    def register_custom_properties_image(self, name, app_ids, is_secondary=False):
         def decorator(cls):
-            self.custom_properties_image[name] = (cls, app_ids)
+            self.custom_properties_image[name] = (cls, app_ids, is_secondary)
             return cls
         return decorator
 

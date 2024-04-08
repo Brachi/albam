@@ -50,7 +50,7 @@ class AlbamApps(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
-    bl_idname = "albam.import"
+    bl_idname = "albam.import_vfile"
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
@@ -338,5 +338,5 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
     def draw(self, context):
         self.layout.separator()
         row = self.layout.row()
-        row.operator("albam.import", text="Import")
+        row.operator("albam.import_vfile", text="Import")
         self.layout.row()

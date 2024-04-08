@@ -61,11 +61,39 @@ def AlbamCustomPropertiesFactory(kind: str):
     def create_data_custom_properties(registry_name):
         data = {}
         appid_map = {}
+        appid_map_secondary = {}
         registry = getattr(blender_registry, registry_name)
-        for name, (cls, app_ids) in registry.items():
+        for name, (cls, app_ids, is_secondary) in registry.items():
             data[name] = bpy.props.PointerProperty(type=cls)
-            appid_map.update({app_id: name for app_id in app_ids})
-        return data, appid_map
+            if not is_secondary:
+                appid_map.update({app_id: name for app_id in app_ids})
+            else:
+                _create_custom_properties_secondary_subpanel(name, name)
+                for app_id in app_ids:
+                    prop_names = appid_map_secondary.setdefault(app_id, [])
+                    prop_names.append(name)
+
+        return data, appid_map, appid_map_secondary
+
+    def _create_custom_properties_secondary_subpanel(label, custom_props_id):
+
+        bl_idname = f'ALBAM_PT_CustomProperties{kind.title()}Secondary{label.title()}'
+
+        SubPanel = type(
+            bl_idname,
+            (ALBAM_PT_CustomPropertiesMaterialSubPanelBase, ),
+            {
+                "bl_label": label,
+                "bl_idname": bl_idname,
+                "custom_props_to_draw": custom_props_id,
+            }
+        )
+        # Since these factories are created at the end, we need to register manually
+        # the window where they are registered in albam/__init__.py was lost
+        bpy.utils.register_class(SubPanel)
+        # Adding to the registry now anyways so auto-unregistering works
+        blender_registry.types.append(SubPanel)
+
 
     def get_custom_properties(self):
         """
@@ -84,6 +112,15 @@ def AlbamCustomPropertiesFactory(kind: str):
         # TODO: error handling
         property_name = self.APPID_MAP[app_id]
         return getattr(self, property_name)
+
+    def get_custom_properties_secondary_for_appid(self, app_id):
+        # TODO: error handling
+        try:
+            property_names = self.APPID_MAP_SECONDARY[app_id]
+        except KeyError:
+            return
+
+        return {pn: getattr(self, pn) for pn in property_names}
 
     def _get_parent_albam_asset_mesh(mesh):
         albam_asset = None
@@ -119,11 +156,6 @@ def AlbamCustomPropertiesFactory(kind: str):
 
         return albam_asset
 
-    # missing bl_label and bl_idname in cls dict?
-    # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image")
-    data, appid_map = create_data_custom_properties(f"custom_properties_{kind}")
-
     def get_custom_properties_as_dict(self):
         context_item = self.id_data
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
@@ -143,15 +175,22 @@ def AlbamCustomPropertiesFactory(kind: str):
             current[prop_item_name] = value
         return final
 
+    # missing bl_label and bl_idname in cls dict?
+    # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
+    assert kind in ("mesh", "material", "image")
+    data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
+
     return type(
         f'AlbamCustomProperty{kind.title()}',
         (bpy.types.PropertyGroup, ),
         {
             '__annotations__' : data,
             'APPID_MAP': appid_map,
+            'APPID_MAP_SECONDARY': appid_map_secondary,
             get_custom_properties.__name__: get_custom_properties,
             get_custom_properties_as_dict.__name__: get_custom_properties_as_dict,
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
+            get_custom_properties_secondary_for_appid.__name__: get_custom_properties_secondary_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
     )
@@ -204,6 +243,46 @@ class ALBAM_PT_CustomPropertiesMaterial(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "material"
     CONTEXT_ITEM_NAME = "material"
+
+
+class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+    bl_parent_id = "ALBAM_PT_CustomPropertiesMaterial"
+
+    custom_props_to_draw = None
+    CONTEXT_ITEM_NAME = "material"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
+        if not custom_props_sec:
+            return
+        custom_props = custom_props_sec.get(self.custom_props_to_draw)
+        if not custom_props:
+            return
+        for k in custom_props.__annotations__:
+            layout.prop(custom_props, k)
+
+    @classmethod
+    def poll(cls, context):
+        context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
+        if not custom_props_sec:
+            return False
+        custom_props = custom_props_sec.get(cls.custom_props_to_draw)
+        if not custom_props:
+            return False
+        return True
 
 
 @blender_registry.register_blender_type
