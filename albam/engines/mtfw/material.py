@@ -118,8 +118,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     _create_mtfw_shader()
     for idx_material, material in enumerate(src_materials):
         default_mat_name = f"{name_prefix}_{str(idx_material).zfill(2)}"
-        mat_name_hash = getattr(material, "name_hash_crcjam32", "")
-        mat_name = mat_inverse_hashes.get(mat_name_hash, default_mat_name)
+        mat_name_hash = getattr(material, "name_hash_crcjam32", default_mat_name)
+        mat_name = mat_inverse_hashes.get(mat_name_hash, str(mat_name_hash))
         if material_names_available and mat_name == default_mat_name:
             # don't create materials present in the mrl but not referenced
             # by the mod file (will result in un-named materials)
@@ -233,7 +233,11 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     current_commands_offset = 0
 
     for bl_mat_idx, bl_mat in enumerate(bl_materials):
-        material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+        try:
+            material_hash = int(bl_mat.name)
+        except ValueError:
+            material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+
         dst_mod.materials_data.material_names.append(bl_mat.name)
         dst_mod.materials_data.material_hashes.append(material_hash)
 
