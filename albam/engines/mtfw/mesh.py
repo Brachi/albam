@@ -554,7 +554,7 @@ def _get_weights(mod, mesh, vertex):
         w1 = vertex.position.w / 32767
         w2 = unpack("e", bytes(vertex.weight_values[0]))[0]
         w3 = unpack("e", bytes(vertex.weight_values[1]))[0]
-        w4 = 1.0 - w1 - w2 - w3
+        w4 = round(1.0 - w1 - w2 - w3, 3)
         return (w1, w2, w3, w4)
     # 8w
     elif mesh.vertex_format in (
