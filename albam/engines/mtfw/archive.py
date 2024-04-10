@@ -47,9 +47,8 @@ class ArcWrapper:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        with open(file_path, 'rb') as f:
-            self.parsed = Arc.from_bytes(f.read())
-            self.parsed._read()
+        self.parsed = Arc.from_file(file_path)
+        self.parsed._read()
 
     def get_file_entries_by_type(self, file_type):
         filtered = []
