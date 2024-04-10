@@ -43,6 +43,7 @@ def mrl(request):
     mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
     cb_globals_version = MRL_APPID_CB_GLOBALS_VERSION[app_id]
     parsed_mrl = Mrl(cb_globals_version, KaitaiStream(io.BytesIO(mrl_bytes)))
+    parsed_mrl.app_id = app_id
     parsed_mrl._read()
     parsed_mrl._arc_name = os.path.basename(arc.file_path)
     parsed_mrl._mrl_path = mrl_file_entry.file_path

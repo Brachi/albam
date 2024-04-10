@@ -7,6 +7,37 @@ KNOWN_BLEND_STATE_STENSIL_HASH = [
     0xc4064,  # BSRevSubAlpha
 ]
 
+KNOWN_CONSTANT_BUFFERS = {
+    "re0": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.globals,
+    },
+    "re1": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbdistortion,
+        Mrl.ShaderObjectHash.cbdistortionrefract,
+        Mrl.ShaderObjectHash.globals,
+    },
+    "rev1": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbdistortion,
+        Mrl.ShaderObjectHash.cbdistortionrefract,
+        Mrl.ShaderObjectHash.globals,
+    },
+    "rev2": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbbalphaclip,
+        Mrl.ShaderObjectHash.cbdistortion,
+        Mrl.ShaderObjectHash.cbcolormask,
+        Mrl.ShaderObjectHash.cbdistortionrefract,
+        Mrl.ShaderObjectHash.cbvertexdisplacement,
+        Mrl.ShaderObjectHash.cbvertexdisplacement2,
+        Mrl.ShaderObjectHash.cbvertexdisplacement3,
+        Mrl.ShaderObjectHash.cbvertexdispmaskuv,
+        Mrl.ShaderObjectHash.globals,
+    }
+}
+
 
 def test_global_resources_mandatory(mrl):
     """
@@ -18,3 +49,12 @@ def test_global_resources_mandatory(mrl):
         assert (m.blend_state_hash >> 12) in KNOWN_BLEND_STATE_STENSIL_HASH
         assert not hashes or Mrl.ShaderObjectHash.globals.value in hashes
         assert not hashes or Mrl.ShaderObjectHash.cbmaterial.value in hashes
+
+
+def test_known_constant_buffers(mrl, subtests):
+    for mat_idx, mat in enumerate(mrl.materials):
+        for r_idx, res in enumerate(mat.resources):
+            if not res.cmd_type == Mrl.CmdType.set_constant_buffer:
+                continue
+            with subtests.test(material_index=mat_idx, resource_index=r_idx):
+                assert res.shader_object_hash in KNOWN_CONSTANT_BUFFERS[mrl.app_id]
