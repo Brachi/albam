@@ -11,7 +11,7 @@ def pytest_addoption(parser):
         "--arcdir",
         action="append",
         help="Format: <app-id>::<dir>: Directory to look for arc files "
-        "to test with the app-id provieded. Can be passed multiple times",
+        "to test with the app-id provided. Can be passed multiple times",
     )
 
 
