@@ -109,6 +109,12 @@ class VirtualFileSystemBase:
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
         return self.file_list[file_id]
 
+    def select_vfile(self, app_id, relative_path):
+        path = PureWindowsPath(relative_path)
+        file_id = self.SEPARATOR.join((app_id,) + path.parts)
+        self.file_list_selected_index = self.file_list.find(file_id)
+        return self.file_list[file_id]
+
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
         vf = self.file_list.add()
