@@ -148,7 +148,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
         root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
         vfile_root = VirtualFileData(app_id, root_id)
         vfs = context.scene.albam.exported
-        vfs.add_vfiles_as_tree(vfile_root, vfiles)
+        vfs.add_vfiles_as_tree(app_id, vfile_root, vfiles)
 
     @classmethod
     def poll(cls, context):

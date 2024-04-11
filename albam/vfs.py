@@ -143,9 +143,9 @@ class VirtualFileSystemBase:
 
         return vf
 
-    def add_vfiles_as_tree(self, root_vfile_data, vfiles_data):
-        root_id = f"{root_vfile_data.app_id}::{root_vfile_data.name}"
-        tree = Tree(root_id)
+    def add_vfiles_as_tree(self, app_id, root_vfile_data, vfiles_data):
+        root_id = f"{app_id}::{root_vfile_data.name}"
+        tree = Tree(root_id, app_id)
         bl_vf = self.add_vfile(root_vfile_data)
         bl_vf.is_expandable = True
         bl_vf.is_root = True
