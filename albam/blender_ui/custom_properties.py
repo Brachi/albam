@@ -94,7 +94,6 @@ def AlbamCustomPropertiesFactory(kind: str):
         # Adding to the registry now anyways so auto-unregistering works
         blender_registry.types.append(SubPanel)
 
-
     def get_custom_properties(self):
         """
         Shortcut to get the custom properties based on the app_id
