@@ -314,7 +314,9 @@ def build_blender_model(file_list_item, context):
             material_hash = _get_material_hash(mod, mesh)
             use_156rgba = False
             if mod_version == 156 and (not skeleton and materials.get(material_hash)):
-                use_156rgba = materials[material_hash].albam_custom_properties.mod_156_material.use_8_bones
+                albam_custom_props = materials[material_hash].albam_custom_properties
+                mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
+                use_156rgba = mod_156_material_props.use_8_bones
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
@@ -1213,6 +1215,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     has_bones = bool(dst_mod.header.num_bones)
     use_special_vf = False
 
+    albam_custom_props = bl_mesh.material_slots[0].material.albam_custom_properties
+    mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
+
     vertex_count = len(bl_mesh.data.vertices)
     if dst_mod.header.version == 156:
         if max_bones_per_vertex > 4:
@@ -1220,11 +1225,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-        use_special_vf = (
-            bl_mesh.material_slots[0]
-            .material.albam_custom_properties
-            .mod_156_material.use_8_bones
-        )
+        use_special_vf = mod_156_material_props.use_8_bones
+
     elif dst_mod.header.version == 210:
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
