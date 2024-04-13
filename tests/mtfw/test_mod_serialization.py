@@ -12,14 +12,15 @@ def test_export_header(mod_imported, mod_exported):
     assert sheader.num_materials == dheader.num_materials
     assert sheader.reserved_01 == dheader.reserved_01
     assert sheader.num_groups == dheader.num_groups
+    assert sheader.num_meshes == dheader.num_meshes
+    assert sheader.num_vertices == dheader.num_vertices
+
     assert sheader.offset_bones_data == dheader.offset_bones_data
     assert sheader.offset_groups == dheader.offset_groups
     assert sheader.offset_materials_data == dheader.offset_materials_data
     assert sheader.offset_meshes_data == dheader.offset_meshes_data
     assert sheader.offset_vertex_buffer == dheader.offset_vertex_buffer
     assert sheader.offset_index_buffer == dheader.offset_index_buffer
-    assert sheader.num_meshes == dheader.num_meshes
-    assert sheader.num_vertices == dheader.num_vertices
     assert sheader.size_vertex_buffer == dheader.size_vertex_buffer
 
 
@@ -99,7 +100,9 @@ def test_materials_data(mod_imported, mod_exported):
             mod_imported.materials_data.material_names == mod_exported.materials_data.material_names)
 
 
-def test_meshes_data(mod_imported, mod_exported, subtests):
+def test_meshes_data_21(mod_imported, mod_exported, subtests):
+    if not mod_imported.header.version == 210:
+        pytest.skip()
 
     for i, mesh in enumerate(mod_imported.meshes_data.meshes):
         src_mesh = mesh

@@ -48,6 +48,11 @@ class AlbamApps(bpy.types.PropertyGroup):
         return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
+@blender_registry.register_blender_prop_albam(name="import_settings")
+class AlbamImportSettings(bpy.types.PropertyGroup):
+    import_only_main_lods : bpy.props.BoolProperty(default=True)
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
     bl_idname = "albam.import_vfile"

@@ -279,6 +279,7 @@ BBOX_AFFECTED = [
 VERSIONS_USE_BONE_PALETTES = {156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
+MAIN_LODS = {1, 255}
 
 
 @blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
@@ -287,8 +288,6 @@ VERSIONS_USE_TRISTRIPS = {156}
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
-    LODS_TO_IMPORT = (1, 255)
-
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
     mod_version = mod_bytes[4]
@@ -296,6 +295,8 @@ def build_blender_model(file_list_item, context):
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = ModCls.from_bytes(mod_bytes)
     mod._read()
+
+    import_settings = context.scene.albam.import_settings
 
     bl_object_name = file_list_item.display_name
     bbox_data = _create_bbox_data(mod)
@@ -305,7 +306,9 @@ def build_blender_model(file_list_item, context):
     materials = build_blender_materials(
         file_list_item, context, mod, bl_object_name)
 
-    for i, mesh in enumerate(m for m in mod.meshes_data.meshes if m.level_of_detail in LODS_TO_IMPORT):
+    for i, mesh in enumerate(mod.meshes_data.meshes):
+        if import_settings.import_only_main_lods and mesh.level_of_detail not in MAIN_LODS:
+            continue
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
             material_hash = _get_material_hash(mod, mesh)
@@ -330,6 +333,7 @@ def build_blender_model(file_list_item, context):
 
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
+            raise
             continue
 
     bl_object.albam_asset.original_bytes = mod_bytes
@@ -388,7 +392,9 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False,
 
     custom_properties = me_ob.albam_custom_properties.get_custom_properties_for_appid(
         app_id)
-    custom_properties.set_from_source(mesh)
+    custom_properties.copy_custom_properties_from(mesh)
+    # XXX TMP hack, TODO convert vertex formats to enums
+    custom_properties.vertex_format = str(mesh.vertex_format)
     return ob
 
 
@@ -1146,7 +1152,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
-        custom_properties.set_to_dest(mesh)
+        custom_properties.copy_custom_properties_to(mesh)
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
@@ -1748,20 +1754,15 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     unk_10: bpy.props.IntProperty(default=0)  # TODO: restrictions
     unk_11: bpy.props.IntProperty(default=0)  # TODO: restrictions
 
-    def set_from_source(self, mesh):
-        # XXX assume only properties are part of annotations
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
-            self.copy_attr(mesh, self, attr_name)
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
 
-    def set_to_dest(self, mesh):
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
-            self.copy_attr(self, mesh, attr_name)
-
-    @staticmethod
-    def copy_attr(src, dst, name):
-        # will raise, making sure there's consistency
-        src_value = getattr(src, name)
-        setattr(dst, name, src_value)
+            setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
 @blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "rev1", "rev2",))
@@ -1780,24 +1781,16 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     unk_01: bpy.props.IntProperty(default=0)  # TODO u1
     vertex_format: bpy.props.StringProperty()
 
-    # XXX copy paste above and in material
-    def set_from_source(self, mesh):
-        # XXX assume only properties are part of annotations
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
             try:
-                self.copy_attr(mesh, self, attr_name)
+                setattr(self, attr_name, getattr(src_obj, attr_name))
             except TypeError:
-                # hack for IntProperty apparently only being for signed integers
-                self.copy_attr(mesh, self, attr_name, func=str)
-
-    def set_to_dest(self, mesh):
-        for attr_name in self.__annotations__:
-            self.copy_attr(self, mesh, attr_name)
-
-    @staticmethod
-    def copy_attr(src, dst, name, func=None):
-        # will raise, making sure there's consistency
-        src_value = getattr(src, name)
-        if func:
-            src_value = func(src_value)
-        setattr(dst, name, src_value)
+                pass
+                # print(f"Type mismatch {attr_name}, {src_obj}")

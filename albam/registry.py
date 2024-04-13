@@ -11,7 +11,6 @@ class BlenderRegistry:
         self.import_options_custom_poll_funcs = {}
         self.import_operator_poll_funcs = {}
         self.custom_properties_material = {}
-        self.custom_properties_material_secondary = {}
         self.custom_properties_mesh = {}
         self.custom_properties_image = {}
         self.file_categories = {}
@@ -78,21 +77,25 @@ class BlenderRegistry:
 
         return decorator
 
-    def register_custom_properties_material(self, name, app_ids, is_secondary=False):
+    def register_custom_properties_material(self, name, app_ids, is_secondary=False, display_name=""):
         def decorator(cls):
-            self.custom_properties_material[name] = (cls, app_ids, is_secondary)
+            for app_id in app_ids:
+                self.custom_properties_material.setdefault(
+                    app_id, {})[name] = (cls, is_secondary, display_name)
             return cls
         return decorator
 
-    def register_custom_properties_mesh(self, name, app_ids, is_secondary=False):
+    def register_custom_properties_mesh(self, name, app_ids, is_secondary=False, display_name=""):
         def decorator(cls):
-            self.custom_properties_mesh[name] = (cls, app_ids, is_secondary)
+            for app_id in app_ids:
+                self.custom_properties_mesh.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
             return cls
         return decorator
 
-    def register_custom_properties_image(self, name, app_ids, is_secondary=False):
+    def register_custom_properties_image(self, name, app_ids, is_secondary=False, display_name=""):
         def decorator(cls):
-            self.custom_properties_image[name] = (cls, app_ids, is_secondary)
+            for app_id in app_ids:
+                self.custom_properties_image.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
             return cls
         return decorator
 

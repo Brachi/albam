@@ -4,6 +4,34 @@ import io
 import bpy
 import pytest
 
+TMP_DATASET = [
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em02/em02.mod",
+        "mrl_path": "model/em/em02/em02.mrl",
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl00/pl00.mod",
+        "mrl_path": "model/pl/pl00/pl00.mrl",
+    },
+    {
+        "app_id": "re5",
+        "mod_path": "pawn/pl/pl00/model/pl0000.mod",
+        "mrl_path": None,
+    },
+    {
+        "app_id": "rev1",
+        "mod_path": "model/chara/pl/pl1000/pl1000.mod",
+        "mrl_path": "model/chara/pl/pl1000/pl1000.mrl",
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2200_N/model/pl2200.mod",
+        "mrl_path": "data/chara/pl/pl2200_N/model/pl2200.mrl",
+    },
+]
+
 
 class FileWrapper:
     def __init__(self, file_path):
@@ -36,25 +64,29 @@ def mod_export(loaded_arcs):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
     from albam.engines.mtfw.structs.mrl import Mrl
     from kaitaistruct import KaitaiStream
-    app_id = "re1"  # FIXME: un-hardcode
-    mod_path = "model/pl/pl00/pl00.mod"
-    mrl_path = "model/pl/pl00/pl00.mrl"
+
+    dataset = TMP_DATASET[4]  # FIXME: un-hardcode
+    app_id = dataset["app_id"]
+    mod_path = dataset["mod_path"]
+    mrl_path = dataset["mrl_path"]
 
     bpy.context.scene.albam.apps.app_selected = app_id
+    bpy.context.scene.albam.import_settings.import_only_main_lods = False
 
     vfile_mod = bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
-    vfile_mrl = bpy.context.scene.albam.vfs.get_vfile(app_id, mrl_path)
-    assert vfile_mod and vfile_mrl
+    vfile_mrl = bpy.context.scene.albam.vfs.get_vfile(app_id, mrl_path) if mrl_path else None
+    assert vfile_mod and ((mrl_path and vfile_mrl) or (not mrl_path and not vfile_mrl))
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
-    print("Exported")
     assert result == {"FINISHED"}
 
     vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(app_id, mod_path)
-    vfile_mrl_exported = bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
-    assert vfile_mod_exported and vfile_mrl_exported
+    vfile_mrl_exported = bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path) if mrl_path else None
+    assert vfile_mod_exported and (
+        (mrl_path and vfile_mrl_exported) or
+        (not mrl_path and not vfile_mrl_exported))
 
     Mod = APPID_CLASS_MAPPER[app_id]
     src_mod = Mod.from_bytes(vfile_mod.get_bytes())
@@ -62,11 +94,11 @@ def mod_export(loaded_arcs):
     src_mod._read()
     dst_mod._read()
 
-    src_mrl = Mrl(2, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes())))
-    dst_mrl = Mrl(2, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
-    src_mrl._read()
-    dst_mrl._read()
-
+    src_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
+    dst_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes()))) if mrl_path else None
+    if mrl_path:
+        src_mrl._read()
+        dst_mrl._read()
     return src_mod, dst_mod, src_mrl, dst_mrl
 
 
