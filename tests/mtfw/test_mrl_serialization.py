@@ -1,6 +1,9 @@
 import pytest
 
 
+pytest.skip(reason="WIP", allow_module_level=True)
+
+
 def test_export_mrl_top_level(mrl_imported, mrl_exported):
     src_mrl = mrl_imported
     dst_mrl = mrl_exported

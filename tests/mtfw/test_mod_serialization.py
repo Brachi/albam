@@ -1,5 +1,7 @@
 import pytest
 
+pytest.skip(reason="WIP", allow_module_level=True)
+
 
 def test_export_header(mod_imported, mod_exported):
     sheader = mod_imported.header

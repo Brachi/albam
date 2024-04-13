@@ -122,6 +122,7 @@ def mrl_exported(mod_export):
     return mod_export[3]
 
 
+@pytest.fixture
 def lmt(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
@@ -146,15 +147,13 @@ def mrl(request):
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
     from albam.engines.mtfw.structs.mrl import Mrl
-    from albam.engines.mtfw.material import MRL_APPID_CB_GLOBALS_VERSION
     from kaitaistruct import KaitaiStream
     arc = request.param[0]
     mrl_file_entry = request.param[1]
     app_id = request.param[2]
 
     mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
-    cb_globals_version = MRL_APPID_CB_GLOBALS_VERSION[app_id]
-    parsed_mrl = Mrl(cb_globals_version, KaitaiStream(io.BytesIO(mrl_bytes)))
+    parsed_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
     parsed_mrl.app_id = app_id
     parsed_mrl._read()
     parsed_mrl._arc_name = os.path.basename(arc.file_path)
