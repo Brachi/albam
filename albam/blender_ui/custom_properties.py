@@ -164,8 +164,17 @@ def AlbamCustomPropertiesFactory(kind: str):
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
 
-        final = {props_name: {}}
-        current = final[props_name]
+        props_secondary = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+
+        final = {
+            app_id: {
+                props_name: {},
+
+            }
+        }
+        current = final[app_id][props_name]
 
         for prop_item_name in props.__annotations__:
             value = getattr(props, prop_item_name)
@@ -174,6 +183,17 @@ def AlbamCustomPropertiesFactory(kind: str):
             except TypeError:
                 pass
             current[prop_item_name] = value
+
+        for prop_sec_name, props_sec in props_secondary.items():
+            for prop_sec_item_name in props_sec.__annotations__:
+                value = getattr(props_sec, prop_sec_item_name)
+                try:
+                    value = value[:]
+                except TypeError:
+                    pass
+                final[app_id].setdefault(
+                    prop_sec_name, {})[prop_sec_item_name] = value
+
         return final
 
     # missing bl_label and bl_idname in cls dict?
@@ -339,11 +359,22 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         buff = context.scene.albam.clipboard.get_buffer()
-        to_paste = buff.get(props_name, {})
+
+        to_paste = buff.get(app_id, {}).get(props_name, {})
         for k, v in to_paste.items():
             setattr(custom_props, k, v)
+
+        for sec_prop_name, sec_prop in custom_props_sec.items():
+            to_paste = buff.get(app_id, {}).get(sec_prop_name, {})
+            for k, v in to_paste.items():
+                setattr(sec_prop, k, v)
+
+        # TODO: report items pasted
         return {'FINISHED'}
 
 
@@ -432,19 +463,48 @@ class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         current_props = context_item.albam_custom_properties.get_custom_properties()
-        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
-        props = {}
+        current_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+        props_name_main = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_main = {}
+        props_sec = {}
+        missing = []
+
         try:
-            props = data[props_name]
+            props_main = data[app_id][props_name_main]
         except KeyError:
-            self.report({"WARNING"}, f"Expected to find the key {props_name}. Nothing imported")
-            return {'FINISHED'}
+            missing.append(props_name_main)
+
+        for prop_name in current_props_sec:
+            try:
+                props_sec[prop_name] = data[app_id][prop_name]
+            except KeyError:
+                missing.append(prop_name)
 
         imported = 0
-        for k, v in props.items():
+        for k, v in props_main.items():
             # TODO: validate keys exist and emit a warning (e.g. for name changing)
             setattr(current_props, k, v)
             imported += 1
-        self.report({"INFO"}, f"Imported {imported} properties")
 
+        for prop_sec_name, data in props_sec.items():
+            for k, v in data.items():
+                # TODO: validate keys exist and emit a warning (e.g. for name changing)
+                target = current_props_sec[prop_sec_name]
+                setattr(target, k, v)
+                imported += 1
+
+        if missing and not imported:
+            self.report(
+                {"WARNING"}, f"Expected to find the keys {missing} under '{app_id}'. Nothing imported")
+
+        elif missing and imported:
+            self.report(
+                {"WARNING"},
+                f"Expected to find the keys {missing} under '{app_id}'. Imported {imported} properties")
+        else:
+            self.report({"INFO"}, f"Imported {imported} properties")
+
+        context.area.tag_redraw()
         return {'FINISHED'}
