@@ -56,6 +56,7 @@ MRL_UNUSED = {
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
     "re1": Mrl.CbGlobals1,
+    "re6": Mrl.CbGlobals1,
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
 }
@@ -1080,7 +1081,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1112,7 +1113,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re0", "re1", "rev1"), is_secondary=True, display_name="$Globals")
+    ("re0", "re1", "rev1", "re6"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties1(bpy.types.PropertyGroup):
     f_alpha_clip_threshold: bpy.props.FloatProperty(
