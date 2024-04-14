@@ -61,11 +61,40 @@ def AlbamCustomPropertiesFactory(kind: str):
     def create_data_custom_properties(registry_name):
         data = {}
         appid_map = {}
+        appid_map_secondary = {}
         registry = getattr(blender_registry, registry_name)
-        for name, (cls, app_ids) in registry.items():
-            data[name] = bpy.props.PointerProperty(type=cls)
-            appid_map.update({app_id: name for app_id in app_ids})
-        return data, appid_map
+        for app_id, props_dict in registry.items():
+            for name, (cls, is_secondary, display_name) in props_dict.items():
+                data[f"{app_id}__{name}"] = bpy.props.PointerProperty(type=cls)
+                if not is_secondary:
+                    appid_map[app_id] = name
+                else:
+                    _create_custom_properties_secondary_subpanel(app_id, display_name, name)
+                    prop_names = appid_map_secondary.setdefault(app_id, [])
+                    prop_names.append(name)
+
+        return data, appid_map, appid_map_secondary
+
+    def _create_custom_properties_secondary_subpanel(app_id, label, custom_props_id):
+
+        bl_idname = (f"ALBAM_PT_CustomProperties{kind.title()}Secondary"
+                     f"{custom_props_id.title()}{app_id.title()}")
+
+        SubPanel = type(
+            bl_idname,
+            (ALBAM_PT_CustomPropertiesMaterialSubPanelBase, ),
+            {
+                "bl_label": label,
+                "bl_idname": bl_idname,
+                "APP_ID": app_id,
+                "custom_props_to_draw": custom_props_id,
+            }
+        )
+        # Since these factories are created at the end, we need to register manually
+        # the window where they are registered in albam/__init__.py was lost
+        bpy.utils.register_class(SubPanel)
+        # Adding to the registry now anyways so auto-unregistering works
+        blender_registry.types.append(SubPanel)
 
     def get_custom_properties(self):
         """
@@ -83,7 +112,16 @@ def AlbamCustomPropertiesFactory(kind: str):
         """
         # TODO: error handling
         property_name = self.APPID_MAP[app_id]
-        return getattr(self, property_name)
+        return getattr(self, f"{app_id}__{property_name}")
+
+    def get_custom_properties_secondary_for_appid(self, app_id):
+        # TODO: error handling
+        try:
+            property_names = self.APPID_MAP_SECONDARY[app_id]
+        except KeyError:
+            return
+
+        return {pn: getattr(self, f"{app_id}__{pn}") for pn in property_names}
 
     def _get_parent_albam_asset_mesh(mesh):
         albam_asset = None
@@ -119,11 +157,6 @@ def AlbamCustomPropertiesFactory(kind: str):
 
         return albam_asset
 
-    # missing bl_label and bl_idname in cls dict?
-    # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image")
-    data, appid_map = create_data_custom_properties(f"custom_properties_{kind}")
-
     def get_custom_properties_as_dict(self):
         context_item = self.id_data
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
@@ -131,8 +164,17 @@ def AlbamCustomPropertiesFactory(kind: str):
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
 
-        final = {props_name: {}}
-        current = final[props_name]
+        props_secondary = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+
+        final = {
+            app_id: {
+                props_name: {},
+
+            }
+        }
+        current = final[app_id][props_name]
 
         for prop_item_name in props.__annotations__:
             value = getattr(props, prop_item_name)
@@ -141,7 +183,23 @@ def AlbamCustomPropertiesFactory(kind: str):
             except TypeError:
                 pass
             current[prop_item_name] = value
+
+        for prop_sec_name, props_sec in props_secondary.items():
+            for prop_sec_item_name in props_sec.__annotations__:
+                value = getattr(props_sec, prop_sec_item_name)
+                try:
+                    value = value[:]
+                except TypeError:
+                    pass
+                final[app_id].setdefault(
+                    prop_sec_name, {})[prop_sec_item_name] = value
+
         return final
+
+    # missing bl_label and bl_idname in cls dict?
+    # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
+    assert kind in ("mesh", "material", "image")
+    data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
         f'AlbamCustomProperty{kind.title()}',
@@ -149,9 +207,11 @@ def AlbamCustomPropertiesFactory(kind: str):
         {
             '__annotations__' : data,
             'APPID_MAP': appid_map,
+            'APPID_MAP_SECONDARY': appid_map_secondary,
             get_custom_properties.__name__: get_custom_properties,
             get_custom_properties_as_dict.__name__: get_custom_properties_as_dict,
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
+            get_custom_properties_secondary_for_appid.__name__: get_custom_properties_secondary_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
         }
     )
@@ -206,6 +266,49 @@ class ALBAM_PT_CustomPropertiesMaterial(ALBAM_PT_CustomPropertiesBase):
     CONTEXT_ITEM_NAME = "material"
 
 
+class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+    bl_parent_id = "ALBAM_PT_CustomPropertiesMaterial"
+
+    APP_ID = None
+    custom_props_to_draw = None
+    CONTEXT_ITEM_NAME = "material"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
+        if not custom_props_sec:
+            return
+        custom_props = custom_props_sec.get(self.custom_props_to_draw)
+        if not custom_props:
+            return
+        for k in custom_props.__annotations__:
+            layout.prop(custom_props, k)
+
+    @classmethod
+    def poll(cls, context):
+        context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        if cls.APP_ID != app_id:
+            return False
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
+        if not custom_props_sec:
+            return False
+        custom_props = custom_props_sec.get(cls.custom_props_to_draw)
+        if not custom_props:
+            return False
+        return True
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_idname = "ALBAM_PT_CustomPropertiesMesh"
@@ -256,11 +359,22 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
         buff = context.scene.albam.clipboard.get_buffer()
-        to_paste = buff.get(props_name, {})
+
+        to_paste = buff.get(app_id, {}).get(props_name, {})
         for k, v in to_paste.items():
             setattr(custom_props, k, v)
+
+        for sec_prop_name, sec_prop in custom_props_sec.items():
+            to_paste = buff.get(app_id, {}).get(sec_prop_name, {})
+            for k, v in to_paste.items():
+                setattr(sec_prop, k, v)
+
+        # TODO: report items pasted
         return {'FINISHED'}
 
 
@@ -349,19 +463,48 @@ class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         current_props = context_item.albam_custom_properties.get_custom_properties()
-        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
-        props = {}
+        current_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+        props_name_main = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_main = {}
+        props_sec = {}
+        missing = []
+
         try:
-            props = data[props_name]
+            props_main = data[app_id][props_name_main]
         except KeyError:
-            self.report({"WARNING"}, f"Expected to find the key {props_name}. Nothing imported")
-            return {'FINISHED'}
+            missing.append(props_name_main)
+
+        for prop_name in current_props_sec:
+            try:
+                props_sec[prop_name] = data[app_id][prop_name]
+            except KeyError:
+                missing.append(prop_name)
 
         imported = 0
-        for k, v in props.items():
+        for k, v in props_main.items():
             # TODO: validate keys exist and emit a warning (e.g. for name changing)
             setattr(current_props, k, v)
             imported += 1
-        self.report({"INFO"}, f"Imported {imported} properties")
 
+        for prop_sec_name, data in props_sec.items():
+            for k, v in data.items():
+                # TODO: validate keys exist and emit a warning (e.g. for name changing)
+                target = current_props_sec[prop_sec_name]
+                setattr(target, k, v)
+                imported += 1
+
+        if missing and not imported:
+            self.report(
+                {"WARNING"}, f"Expected to find the keys {missing} under '{app_id}'. Nothing imported")
+
+        elif missing and imported:
+            self.report(
+                {"WARNING"},
+                f"Expected to find the keys {missing} under '{app_id}'. Imported {imported} properties")
+        else:
+            self.report({"INFO"}, f"Imported {imported} properties")
+
+        context.area.tag_redraw()
         return {'FINISHED'}

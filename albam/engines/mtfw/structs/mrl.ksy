@@ -7,7 +7,7 @@ meta:
   title: MTFramework material format
 
 params:
-  - {id: cb_globals_version, type: u2}
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: id_magic, contents: [0x4d, 0x52, 0x4c, 0x00]}
@@ -102,35 +102,7 @@ types:
           cases:
             "shader_object_hash::globals": cb_globals
             "shader_object_hash::cbdistortion" : str_cb_distortion
-            "shader_object_hash::cbmaterial" : str_cb_material
-            #0x7b2c214c: cb_s_globals # Re6
-            #0xefca3222: str_cb_distortion
-            #0xefca322b: str_cb_distortion
-            #0xefca3227: str_cb_distortion
-            #0xefca3220: str_cb_distortion
-            #0x6c8011f9: str_cb_material
-            #0x6c801200: str_cb_material
-            #0x6c8011f4: str_cb_material
-            #0x6c8011fe: str_cb_material
-            #0x6c8011ea: str_cb_material
-
-            #0xc48f7223: str_cb_vtx_distortion_refract
-            #0xc48f722c: str_cb_vtx_distortion_refract
-            #0xc48f7228: str_cb_vtx_distortion_refract
-            #0x15419236: str_cb_vtx_displacement
-            #0x1541922f: str_cb_vtx_displacement
-            #0x51814237: str_cb_vtx_displacement2
-            #0x22882238: str_cb_vtx_displacement3
-            #0x6f01631b: str_cb_color_mask
-            #0x61c6e23d: str_cb_vtx_disp_mask_uv
-            #0xaee37319: str_cb_ba_alpha_clip
-            #0xaee3730c: cb_unk_01 #2934141708 alpha clip?
-            #0x6F01630e: cb_unk_02 # color mas ?
-            #0xc48f7221: cb_unk_01 #3297735201 distortion refract ?
-            #0x84115310: cb_unk_03 #2215727888
-            #0x61E43233: str_cb_vtx_disp_ex
-            #0x51814230: str_cb_vtx_displacement2
-            #0x22882231: str_cb_vtx_displacement3 #579346993
+            "shader_object_hash::cbmaterial" : cb_material
         if: cmd_type == cmd_type::set_constant_buffer
 
   anim_data:
@@ -304,15 +276,40 @@ types:
     seq:
       - {id: ofs_const_buff, type: u4}
 
+  cb_material:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"re0"': cb_material_1
+              '"re1"': cb_material_1
+              '"rev1"': cb_material_1
+              '"rev2"': cb_material_1
+              _ : cb_material_1
+
   cb_globals:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"re0"': cb_globals_1
+              '"re1"': cb_globals_1
+              '"rev1"': cb_globals_1
+              '"rev2"': cb_globals_2
+              _ : cb_globals_1
+
+  cb_globals_1:
     instances:
       size_:
-        value: "_root.cb_globals_version == 2 ? 480 : 288"
-
+        value: 288
     seq:
       - {id: f_alpha_clip_threshold, type: f4} # 0
       - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
-      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4 
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4
       - {id: f_detail_normal_power, type: f4} #8
       - {id: f_detail_normal_uv_scale, type: f4} #9
       - {id: f_detail_normal2_power, type: f4} #10
@@ -347,24 +344,68 @@ types:
       - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
       - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
 
-      - {id: f_albedo_color2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #72
-      - {id: f_specular_color2, type: f4, repeat: expr, repeat-expr: 3, if: _root.cb_globals_version == 2} #76
-      - {id: f_fresnel_schlick2, type: f4, if: _root.cb_globals_version == 2} #79
-      - {id: f_shininess2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #80
-      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #84
-      - {id: f_blend_uv, type: f4, if: _root.cb_globals_version == 2} #88
-      - {id: f_normal_power, type: f4, repeat: expr, repeat-expr: 3, if: _root.cb_globals_version == 2} #89
-      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #92
-      - {id: f_detail_normal_u_v_scale, type: f4, repeat: expr, repeat-expr: 2, if: _root.cb_globals_version == 2} #96
-      - {id: f_fresnel_legacy, type: f4, repeat: expr, repeat-expr: 2, if: _root.cb_globals_version == 2} #98
-      - {id: f_normal_mask_pow0, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #100
-      - {id: f_normal_mask_pow1, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #104
-      - {id: f_normal_mask_pow2, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #108
-      - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #112
-      - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4, if: _root.cb_globals_version == 2} #116
+  cb_globals_2:
+    instances:
+      size_:
+        value: 480
+    seq:
+      - {id: f_alpha_clip_threshold, type: f4} # 0
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #1
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4
+      - {id: f_detail_normal_power, type: f4} #8
+      - {id: f_detail_normal_uv_scale, type: f4} #9
+      - {id: f_detail_normal2_power, type: f4} #10
+      - {id: f_detail_normal2_uv_scale, type: f4} #11
+      - {id: f_primary_shift, type: f4} #12
+      - {id: f_secondary_shift, type: f4} #13
+      - {id: f_parallax_factor, type: f4} #14
+      - {id: f_parallax_self_occlusion, type: f4} #15
+      - {id: f_parallax_min_sample, type: f4} #16
+      - {id: f_parallax_max_sample, type: f4, repeat: expr, repeat-expr: 3} #17
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 4} #20
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
+      - {id: f_thin_scattering, type: f4} #27
+      - {id: f_screen_uv_scale, type: f4, repeat: expr, repeat-expr: 2} #28
+      - {id: f_screen_uv_offset, type: f4, repeat: expr, repeat-expr: 2} #30
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #32
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} #34
+      - {id: f_fresnel_schlick, type: f4} #36
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} #37
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} #40
+      - {id: f_shininess, type: f4} #43
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 3} #44
+      - {id: f_emission_threshold, type: f4} #47
+      - {id: f_constant_color, type: f4, repeat: expr, repeat-expr: 4} #48
+      - {id: f_roughness, type: f4} #52
+      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} #53
+      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} #56
+      - {id: f_smoothness, type: f4} #59
+      - {id: f_anistropic_uv, type: f4,repeat: expr, repeat-expr: 2} #60
+      - {id: f_primary_expo, type: f4} #62
+      - {id: f_secondary_expo, type: f4} #63
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 4} #64
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 4} #68
+      - {id: f_albedo_color2, type: f4, repeat: expr, repeat-expr: 4} #72
+      - {id: f_specular_color2, type: f4, repeat: expr, repeat-expr: 3} #76
+      - {id: f_fresnel_schlick2, type: f4} #79
+      - {id: f_shininess2, type: f4, repeat: expr, repeat-expr: 4} #80
+      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4} #84
+      - {id: f_blend_uv, type: f4} #88
+      - {id: f_normal_power, type: f4, repeat: expr, repeat-expr: 3} #89
+      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4} #92
+      - {id: f_detail_normal_u_v_scale, type: f4, repeat: expr, repeat-expr: 2} #96
+      - {id: f_fresnel_legacy, type: f4, repeat: expr, repeat-expr: 2} #98
+      - {id: f_normal_mask_pow0, type: f4, repeat: expr, repeat-expr: 4} #100
+      - {id: f_normal_mask_pow1, type: f4, repeat: expr, repeat-expr: 4} #104
+      - {id: f_normal_mask_pow2, type: f4, repeat: expr, repeat-expr: 4} #108
+      - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4} #112
+      - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4} #116
 
 
-  str_cb_material: #all games 32 floats
+  cb_material_1: #all games 32 floats
+    instances:
+      size_:
+        value: 128
     seq:
       - {id: f_diffuse_color, type: f4, repeat: expr, repeat-expr: 3}
       - {id: f_transparency, type: f4}
@@ -373,9 +414,6 @@ types:
       - {id: f_uv_transform, type: f4, repeat: expr, repeat-expr: 8}
       - {id: f_uv_transform2, type: f4, repeat: expr, repeat-expr: 8}
       - {id: f_uv_transform3, type: f4, repeat: expr, repeat-expr: 8}
-    instances:
-      size_:
-        value: 128
 
   str_cb_ba_alpha_clip: # 4 floats 0xaee37319
     seq:

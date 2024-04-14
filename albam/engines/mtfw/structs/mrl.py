@@ -3,28 +3,28 @@
 
 import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mrl(ReadWriteKaitaiStruct):
 
-    class MaterialType(Enum):
+    class MaterialType(IntEnum):
         type_n_draw__material_std = 1605430244
 
-    class TextureType(Enum):
+    class TextureType(IntEnum):
         type_r_texture = 606035435
 
-    class CmdType(Enum):
+    class CmdType(IntEnum):
         set_flag = 0
         set_constant_buffer = 1
         set_sampler_state = 2
         set_texture = 3
         set_unk = 4
 
-    class ShaderObjectHash(Enum):
+    class ShaderObjectHash(IntEnum):
         flinearcolor = 144
         getbiasedviewposition = 543
         fbaselightscattering = 1145
@@ -2972,11 +2972,11 @@ class Mrl(ReadWriteKaitaiStruct):
         cbshadowreceive0 = 1048082
         fgrassbillboardposition = 1048090
         fsystemcopygamma = 1048350
-    def __init__(self, cb_globals_version, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         self._io = _io
         self._parent = _parent
         self._root = _root if _root else self
-        self.cb_globals_version = cb_globals_version
+        self.app_id = app_id
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -3038,7 +3038,7 @@ class Mrl(ReadWriteKaitaiStruct):
         if (len(self.id_magic) != 4):
             raise kaitaistruct.ConsistencyError(u"id_magic", len(self.id_magic), 4)
         if not (self.id_magic == b"\x4D\x52\x4C\x00"):
-            raise kaitaistruct.ValidationNotEqualError(b"\x4D\x52\x4C\x00", self.id_magic, self._io, u"/seq/0")
+            raise kaitaistruct.ValidationNotEqualError(b"\x4D\x52\x4C\x00", self.id_magic, None, u"/seq/0")
         if (len(self.textures) != self.num_textures):
             raise kaitaistruct.ConsistencyError(u"textures", len(self.textures), self.num_textures)
         for i in range(len(self.textures)):
@@ -3117,6 +3117,497 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"values", self.values[i]._parent, self)
 
 
+
+    class CbMaterial(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re0":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev2":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbMaterial, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev1":
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re0":
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev2":
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev2":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev2":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
+
+    class CbGlobals1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.f_albedo_blend_color = []
+            for i in range(4):
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = []
+            for i in range(3):
+                self.f_parallax_max_sample.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(4):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_screen_uv_scale = []
+            for i in range(2):
+                self.f_screen_uv_scale.append(self._io.read_f4le())
+
+            self.f_screen_uv_offset = []
+            for i in range(2):
+                self.f_screen_uv_offset.append(self._io.read_f4le())
+
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(3):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.f_emission_threshold = self._io.read_f4le()
+            self.f_constant_color = []
+            for i in range(4):
+                self.f_constant_color.append(self._io.read_f4le())
+
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(4):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.f_secondary_color = []
+            for i in range(4):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbGlobals1, self)._write__seq(io)
+            self._io.write_f4le(self.f_alpha_clip_threshold)
+            for i in range(len(self.f_albedo_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_color[i])
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_blend_color[i])
+
+            self._io.write_f4le(self.f_detail_normal_power)
+            self._io.write_f4le(self.f_detail_normal_uv_scale)
+            self._io.write_f4le(self.f_detail_normal2_power)
+            self._io.write_f4le(self.f_detail_normal2_uv_scale)
+            self._io.write_f4le(self.f_primary_shift)
+            self._io.write_f4le(self.f_secondary_shift)
+            self._io.write_f4le(self.f_parallax_factor)
+            self._io.write_f4le(self.f_parallax_self_occlusion)
+            self._io.write_f4le(self.f_parallax_min_sample)
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+                self._io.write_f4le(self.f_parallax_max_sample[i])
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+                self._io.write_f4le(self.f_light_map_color[i])
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+                self._io.write_f4le(self.f_thin_map_color[i])
+
+            self._io.write_f4le(self.f_thin_scattering)
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_scale[i])
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_offset[i])
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+                self._io.write_f4le(self.f_indirect_offset[i])
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+                self._io.write_f4le(self.f_indirect_scale[i])
+
+            self._io.write_f4le(self.f_fresnel_schlick)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+                self._io.write_f4le(self.f_fresnel_schlick_rgb[i])
+
+            for i in range(len(self.f_specular_color)):
+                pass
+                self._io.write_f4le(self.f_specular_color[i])
+
+            self._io.write_f4le(self.f_shininess)
+            for i in range(len(self.f_emission_color)):
+                pass
+                self._io.write_f4le(self.f_emission_color[i])
+
+            self._io.write_f4le(self.f_emission_threshold)
+            for i in range(len(self.f_constant_color)):
+                pass
+                self._io.write_f4le(self.f_constant_color[i])
+
+            self._io.write_f4le(self.f_roughness)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+                self._io.write_f4le(self.f_roughness_rgb[i])
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+                self._io.write_f4le(self.f_anisotoropic_direction[i])
+
+            self._io.write_f4le(self.f_smoothness)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+                self._io.write_f4le(self.f_anistropic_uv[i])
+
+            self._io.write_f4le(self.f_primary_expo)
+            self._io.write_f4le(self.f_secondary_expo)
+            for i in range(len(self.f_primary_color)):
+                pass
+                self._io.write_f4le(self.f_primary_color[i])
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+                self._io.write_f4le(self.f_secondary_color[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_albedo_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_color", len(self.f_albedo_color), 3)
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            if (len(self.f_albedo_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_blend_color", len(self.f_albedo_blend_color), 4)
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            if (len(self.f_parallax_max_sample) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_parallax_max_sample", len(self.f_parallax_max_sample), 3)
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+
+            if (len(self.f_light_map_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_light_map_color", len(self.f_light_map_color), 4)
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            if (len(self.f_thin_map_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_thin_map_color", len(self.f_thin_map_color), 3)
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            if (len(self.f_screen_uv_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_scale", len(self.f_screen_uv_scale), 2)
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            if (len(self.f_screen_uv_offset) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_offset", len(self.f_screen_uv_offset), 2)
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            if (len(self.f_indirect_offset) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_offset", len(self.f_indirect_offset), 2)
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            if (len(self.f_indirect_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_scale", len(self.f_indirect_scale), 2)
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            if (len(self.f_fresnel_schlick_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_fresnel_schlick_rgb", len(self.f_fresnel_schlick_rgb), 3)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            if (len(self.f_specular_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_specular_color", len(self.f_specular_color), 3)
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            if (len(self.f_emission_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_emission_color", len(self.f_emission_color), 3)
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            if (len(self.f_constant_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_constant_color", len(self.f_constant_color), 4)
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            if (len(self.f_roughness_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_roughness_rgb", len(self.f_roughness_rgb), 3)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            if (len(self.f_anisotoropic_direction) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_anisotoropic_direction", len(self.f_anisotoropic_direction), 3)
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            if (len(self.f_anistropic_uv) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_anistropic_uv", len(self.f_anistropic_uv), 2)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            if (len(self.f_primary_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_primary_color", len(self.f_primary_color), 4)
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            if (len(self.f_secondary_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_secondary_color", len(self.f_secondary_color), 4)
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 288
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class StrCbBaAlphaClip(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -3477,7 +3968,7 @@ class Mrl(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mrl.ShaderObject, self)._write__seq(io)
             self._io.write_bits_int_le(12, self.index)
-            self._io.write_bits_int_le(20, self.name_hash.value)
+            self._io.write_bits_int_le(20, int(self.name_hash))
 
 
         def _check(self):
@@ -3489,735 +3980,239 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_alpha_clip_threshold = self._io.read_f4le()
-            self.f_albedo_color = []
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re0":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev2":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbGlobals, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev1":
+                pass
+                self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re0":
+                pass
+                self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev2":
+                pass
+                self._m_app_specific = Mrl.CbGlobals2(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev2":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"re1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev2":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
+
+    class CbMaterial1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_diffuse_color = []
             for i in range(3):
-                self.f_albedo_color.append(self._io.read_f4le())
+                self.f_diffuse_color.append(self._io.read_f4le())
 
-            self.f_albedo_blend_color = []
-            for i in range(4):
-                self.f_albedo_blend_color.append(self._io.read_f4le())
-
-            self.f_detail_normal_power = self._io.read_f4le()
-            self.f_detail_normal_uv_scale = self._io.read_f4le()
-            self.f_detail_normal2_power = self._io.read_f4le()
-            self.f_detail_normal2_uv_scale = self._io.read_f4le()
-            self.f_primary_shift = self._io.read_f4le()
-            self.f_secondary_shift = self._io.read_f4le()
-            self.f_parallax_factor = self._io.read_f4le()
-            self.f_parallax_self_occlusion = self._io.read_f4le()
-            self.f_parallax_min_sample = self._io.read_f4le()
-            self.f_parallax_max_sample = []
+            self.f_transparency = self._io.read_f4le()
+            self.f_reflective_color = []
             for i in range(3):
-                self.f_parallax_max_sample.append(self._io.read_f4le())
+                self.f_reflective_color.append(self._io.read_f4le())
 
-            self.f_light_map_color = []
-            for i in range(4):
-                self.f_light_map_color.append(self._io.read_f4le())
+            self.f_transparency_volume = self._io.read_f4le()
+            self.f_uv_transform = []
+            for i in range(8):
+                self.f_uv_transform.append(self._io.read_f4le())
 
-            self.f_thin_map_color = []
-            for i in range(3):
-                self.f_thin_map_color.append(self._io.read_f4le())
+            self.f_uv_transform2 = []
+            for i in range(8):
+                self.f_uv_transform2.append(self._io.read_f4le())
 
-            self.f_thin_scattering = self._io.read_f4le()
-            self.f_screen_uv_scale = []
-            for i in range(2):
-                self.f_screen_uv_scale.append(self._io.read_f4le())
-
-            self.f_screen_uv_offset = []
-            for i in range(2):
-                self.f_screen_uv_offset.append(self._io.read_f4le())
-
-            self.f_indirect_offset = []
-            for i in range(2):
-                self.f_indirect_offset.append(self._io.read_f4le())
-
-            self.f_indirect_scale = []
-            for i in range(2):
-                self.f_indirect_scale.append(self._io.read_f4le())
-
-            self.f_fresnel_schlick = self._io.read_f4le()
-            self.f_fresnel_schlick_rgb = []
-            for i in range(3):
-                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
-
-            self.f_specular_color = []
-            for i in range(3):
-                self.f_specular_color.append(self._io.read_f4le())
-
-            self.f_shininess = self._io.read_f4le()
-            self.f_emission_color = []
-            for i in range(3):
-                self.f_emission_color.append(self._io.read_f4le())
-
-            self.f_emission_threshold = self._io.read_f4le()
-            self.f_constant_color = []
-            for i in range(4):
-                self.f_constant_color.append(self._io.read_f4le())
-
-            self.f_roughness = self._io.read_f4le()
-            self.f_roughness_rgb = []
-            for i in range(3):
-                self.f_roughness_rgb.append(self._io.read_f4le())
-
-            self.f_anisotoropic_direction = []
-            for i in range(3):
-                self.f_anisotoropic_direction.append(self._io.read_f4le())
-
-            self.f_smoothness = self._io.read_f4le()
-            self.f_anistropic_uv = []
-            for i in range(2):
-                self.f_anistropic_uv.append(self._io.read_f4le())
-
-            self.f_primary_expo = self._io.read_f4le()
-            self.f_secondary_expo = self._io.read_f4le()
-            self.f_primary_color = []
-            for i in range(4):
-                self.f_primary_color.append(self._io.read_f4le())
-
-            self.f_secondary_color = []
-            for i in range(4):
-                self.f_secondary_color.append(self._io.read_f4le())
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_albedo_color2 = []
-                for i in range(4):
-                    self.f_albedo_color2.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_specular_color2 = []
-                for i in range(3):
-                    self.f_specular_color2.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_fresnel_schlick2 = self._io.read_f4le()
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_shininess2 = []
-                for i in range(4):
-                    self.f_shininess2.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_transparency_clip_threshold = []
-                for i in range(4):
-                    self.f_transparency_clip_threshold.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_blend_uv = self._io.read_f4le()
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_normal_power = []
-                for i in range(3):
-                    self.f_normal_power.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_albedo_blend2_color = []
-                for i in range(4):
-                    self.f_albedo_blend2_color.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_detail_normal_u_v_scale = []
-                for i in range(2):
-                    self.f_detail_normal_u_v_scale.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_fresnel_legacy = []
-                for i in range(2):
-                    self.f_fresnel_legacy.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_normal_mask_pow0 = []
-                for i in range(4):
-                    self.f_normal_mask_pow0.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_normal_mask_pow1 = []
-                for i in range(4):
-                    self.f_normal_mask_pow1.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_normal_mask_pow2 = []
-                for i in range(4):
-                    self.f_normal_mask_pow2.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_texture_blend_rate = []
-                for i in range(4):
-                    self.f_texture_blend_rate.append(self._io.read_f4le())
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self.f_texture_blend_color = []
-                for i in range(4):
-                    self.f_texture_blend_color.append(self._io.read_f4le())
-
+            self.f_uv_transform3 = []
+            for i in range(8):
+                self.f_uv_transform3.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_albedo_color)):
+            for i in range(len(self.f_diffuse_color)):
                 pass
 
-            for i in range(len(self.f_albedo_blend_color)):
+            for i in range(len(self.f_reflective_color)):
                 pass
 
-            for i in range(len(self.f_parallax_max_sample)):
+            for i in range(len(self.f_uv_transform)):
                 pass
 
-            for i in range(len(self.f_light_map_color)):
+            for i in range(len(self.f_uv_transform2)):
                 pass
 
-            for i in range(len(self.f_thin_map_color)):
+            for i in range(len(self.f_uv_transform3)):
                 pass
-
-            for i in range(len(self.f_screen_uv_scale)):
-                pass
-
-            for i in range(len(self.f_screen_uv_offset)):
-                pass
-
-            for i in range(len(self.f_indirect_offset)):
-                pass
-
-            for i in range(len(self.f_indirect_scale)):
-                pass
-
-            for i in range(len(self.f_fresnel_schlick_rgb)):
-                pass
-
-            for i in range(len(self.f_specular_color)):
-                pass
-
-            for i in range(len(self.f_emission_color)):
-                pass
-
-            for i in range(len(self.f_constant_color)):
-                pass
-
-            for i in range(len(self.f_roughness_rgb)):
-                pass
-
-            for i in range(len(self.f_anisotoropic_direction)):
-                pass
-
-            for i in range(len(self.f_anistropic_uv)):
-                pass
-
-            for i in range(len(self.f_primary_color)):
-                pass
-
-            for i in range(len(self.f_secondary_color)):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_albedo_color2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_specular_color2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_shininess2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_transparency_clip_threshold)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_power)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_albedo_blend2_color)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_detail_normal_u_v_scale)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_fresnel_legacy)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow0)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow1)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_texture_blend_rate)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_texture_blend_color)):
-                    pass
-
 
 
 
         def _write__seq(self, io=None):
-            super(Mrl.CbGlobals, self)._write__seq(io)
-            self._io.write_f4le(self.f_alpha_clip_threshold)
-            for i in range(len(self.f_albedo_color)):
+            super(Mrl.CbMaterial1, self)._write__seq(io)
+            for i in range(len(self.f_diffuse_color)):
                 pass
-                self._io.write_f4le(self.f_albedo_color[i])
+                self._io.write_f4le(self.f_diffuse_color[i])
 
-            for i in range(len(self.f_albedo_blend_color)):
+            self._io.write_f4le(self.f_transparency)
+            for i in range(len(self.f_reflective_color)):
                 pass
-                self._io.write_f4le(self.f_albedo_blend_color[i])
+                self._io.write_f4le(self.f_reflective_color[i])
 
-            self._io.write_f4le(self.f_detail_normal_power)
-            self._io.write_f4le(self.f_detail_normal_uv_scale)
-            self._io.write_f4le(self.f_detail_normal2_power)
-            self._io.write_f4le(self.f_detail_normal2_uv_scale)
-            self._io.write_f4le(self.f_primary_shift)
-            self._io.write_f4le(self.f_secondary_shift)
-            self._io.write_f4le(self.f_parallax_factor)
-            self._io.write_f4le(self.f_parallax_self_occlusion)
-            self._io.write_f4le(self.f_parallax_min_sample)
-            for i in range(len(self.f_parallax_max_sample)):
+            self._io.write_f4le(self.f_transparency_volume)
+            for i in range(len(self.f_uv_transform)):
                 pass
-                self._io.write_f4le(self.f_parallax_max_sample[i])
+                self._io.write_f4le(self.f_uv_transform[i])
 
-            for i in range(len(self.f_light_map_color)):
+            for i in range(len(self.f_uv_transform2)):
                 pass
-                self._io.write_f4le(self.f_light_map_color[i])
+                self._io.write_f4le(self.f_uv_transform2[i])
 
-            for i in range(len(self.f_thin_map_color)):
+            for i in range(len(self.f_uv_transform3)):
                 pass
-                self._io.write_f4le(self.f_thin_map_color[i])
-
-            self._io.write_f4le(self.f_thin_scattering)
-            for i in range(len(self.f_screen_uv_scale)):
-                pass
-                self._io.write_f4le(self.f_screen_uv_scale[i])
-
-            for i in range(len(self.f_screen_uv_offset)):
-                pass
-                self._io.write_f4le(self.f_screen_uv_offset[i])
-
-            for i in range(len(self.f_indirect_offset)):
-                pass
-                self._io.write_f4le(self.f_indirect_offset[i])
-
-            for i in range(len(self.f_indirect_scale)):
-                pass
-                self._io.write_f4le(self.f_indirect_scale[i])
-
-            self._io.write_f4le(self.f_fresnel_schlick)
-            for i in range(len(self.f_fresnel_schlick_rgb)):
-                pass
-                self._io.write_f4le(self.f_fresnel_schlick_rgb[i])
-
-            for i in range(len(self.f_specular_color)):
-                pass
-                self._io.write_f4le(self.f_specular_color[i])
-
-            self._io.write_f4le(self.f_shininess)
-            for i in range(len(self.f_emission_color)):
-                pass
-                self._io.write_f4le(self.f_emission_color[i])
-
-            self._io.write_f4le(self.f_emission_threshold)
-            for i in range(len(self.f_constant_color)):
-                pass
-                self._io.write_f4le(self.f_constant_color[i])
-
-            self._io.write_f4le(self.f_roughness)
-            for i in range(len(self.f_roughness_rgb)):
-                pass
-                self._io.write_f4le(self.f_roughness_rgb[i])
-
-            for i in range(len(self.f_anisotoropic_direction)):
-                pass
-                self._io.write_f4le(self.f_anisotoropic_direction[i])
-
-            self._io.write_f4le(self.f_smoothness)
-            for i in range(len(self.f_anistropic_uv)):
-                pass
-                self._io.write_f4le(self.f_anistropic_uv[i])
-
-            self._io.write_f4le(self.f_primary_expo)
-            self._io.write_f4le(self.f_secondary_expo)
-            for i in range(len(self.f_primary_color)):
-                pass
-                self._io.write_f4le(self.f_primary_color[i])
-
-            for i in range(len(self.f_secondary_color)):
-                pass
-                self._io.write_f4le(self.f_secondary_color[i])
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_albedo_color2)):
-                    pass
-                    self._io.write_f4le(self.f_albedo_color2[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_specular_color2)):
-                    pass
-                    self._io.write_f4le(self.f_specular_color2[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self._io.write_f4le(self.f_fresnel_schlick2)
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_shininess2)):
-                    pass
-                    self._io.write_f4le(self.f_shininess2[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_transparency_clip_threshold)):
-                    pass
-                    self._io.write_f4le(self.f_transparency_clip_threshold[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                self._io.write_f4le(self.f_blend_uv)
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_power)):
-                    pass
-                    self._io.write_f4le(self.f_normal_power[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_albedo_blend2_color)):
-                    pass
-                    self._io.write_f4le(self.f_albedo_blend2_color[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_detail_normal_u_v_scale)):
-                    pass
-                    self._io.write_f4le(self.f_detail_normal_u_v_scale[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_fresnel_legacy)):
-                    pass
-                    self._io.write_f4le(self.f_fresnel_legacy[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow0)):
-                    pass
-                    self._io.write_f4le(self.f_normal_mask_pow0[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow1)):
-                    pass
-                    self._io.write_f4le(self.f_normal_mask_pow1[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_normal_mask_pow2)):
-                    pass
-                    self._io.write_f4le(self.f_normal_mask_pow2[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_texture_blend_rate)):
-                    pass
-                    self._io.write_f4le(self.f_texture_blend_rate[i])
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                for i in range(len(self.f_texture_blend_color)):
-                    pass
-                    self._io.write_f4le(self.f_texture_blend_color[i])
-
+                self._io.write_f4le(self.f_uv_transform3[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.f_albedo_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_albedo_color", len(self.f_albedo_color), 3)
-            for i in range(len(self.f_albedo_color)):
+            if (len(self.f_diffuse_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_diffuse_color", len(self.f_diffuse_color), 3)
+            for i in range(len(self.f_diffuse_color)):
                 pass
 
-            if (len(self.f_albedo_blend_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_albedo_blend_color", len(self.f_albedo_blend_color), 4)
-            for i in range(len(self.f_albedo_blend_color)):
+            if (len(self.f_reflective_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_reflective_color", len(self.f_reflective_color), 3)
+            for i in range(len(self.f_reflective_color)):
                 pass
 
-            if (len(self.f_parallax_max_sample) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_parallax_max_sample", len(self.f_parallax_max_sample), 3)
-            for i in range(len(self.f_parallax_max_sample)):
+            if (len(self.f_uv_transform) != 8):
+                raise kaitaistruct.ConsistencyError(u"f_uv_transform", len(self.f_uv_transform), 8)
+            for i in range(len(self.f_uv_transform)):
                 pass
 
-            if (len(self.f_light_map_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_light_map_color", len(self.f_light_map_color), 4)
-            for i in range(len(self.f_light_map_color)):
+            if (len(self.f_uv_transform2) != 8):
+                raise kaitaistruct.ConsistencyError(u"f_uv_transform2", len(self.f_uv_transform2), 8)
+            for i in range(len(self.f_uv_transform2)):
                 pass
 
-            if (len(self.f_thin_map_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_thin_map_color", len(self.f_thin_map_color), 3)
-            for i in range(len(self.f_thin_map_color)):
+            if (len(self.f_uv_transform3) != 8):
+                raise kaitaistruct.ConsistencyError(u"f_uv_transform3", len(self.f_uv_transform3), 8)
+            for i in range(len(self.f_uv_transform3)):
                 pass
-
-            if (len(self.f_screen_uv_scale) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_screen_uv_scale", len(self.f_screen_uv_scale), 2)
-            for i in range(len(self.f_screen_uv_scale)):
-                pass
-
-            if (len(self.f_screen_uv_offset) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_screen_uv_offset", len(self.f_screen_uv_offset), 2)
-            for i in range(len(self.f_screen_uv_offset)):
-                pass
-
-            if (len(self.f_indirect_offset) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_indirect_offset", len(self.f_indirect_offset), 2)
-            for i in range(len(self.f_indirect_offset)):
-                pass
-
-            if (len(self.f_indirect_scale) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_indirect_scale", len(self.f_indirect_scale), 2)
-            for i in range(len(self.f_indirect_scale)):
-                pass
-
-            if (len(self.f_fresnel_schlick_rgb) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_fresnel_schlick_rgb", len(self.f_fresnel_schlick_rgb), 3)
-            for i in range(len(self.f_fresnel_schlick_rgb)):
-                pass
-
-            if (len(self.f_specular_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_specular_color", len(self.f_specular_color), 3)
-            for i in range(len(self.f_specular_color)):
-                pass
-
-            if (len(self.f_emission_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_emission_color", len(self.f_emission_color), 3)
-            for i in range(len(self.f_emission_color)):
-                pass
-
-            if (len(self.f_constant_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_constant_color", len(self.f_constant_color), 4)
-            for i in range(len(self.f_constant_color)):
-                pass
-
-            if (len(self.f_roughness_rgb) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_roughness_rgb", len(self.f_roughness_rgb), 3)
-            for i in range(len(self.f_roughness_rgb)):
-                pass
-
-            if (len(self.f_anisotoropic_direction) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_anisotoropic_direction", len(self.f_anisotoropic_direction), 3)
-            for i in range(len(self.f_anisotoropic_direction)):
-                pass
-
-            if (len(self.f_anistropic_uv) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_anistropic_uv", len(self.f_anistropic_uv), 2)
-            for i in range(len(self.f_anistropic_uv)):
-                pass
-
-            if (len(self.f_primary_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_primary_color", len(self.f_primary_color), 4)
-            for i in range(len(self.f_primary_color)):
-                pass
-
-            if (len(self.f_secondary_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_secondary_color", len(self.f_secondary_color), 4)
-            for i in range(len(self.f_secondary_color)):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_albedo_color2) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_albedo_color2", len(self.f_albedo_color2), 4)
-                for i in range(len(self.f_albedo_color2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_specular_color2) != 3):
-                    raise kaitaistruct.ConsistencyError(u"f_specular_color2", len(self.f_specular_color2), 3)
-                for i in range(len(self.f_specular_color2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_shininess2) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_shininess2", len(self.f_shininess2), 4)
-                for i in range(len(self.f_shininess2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_transparency_clip_threshold) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_transparency_clip_threshold", len(self.f_transparency_clip_threshold), 4)
-                for i in range(len(self.f_transparency_clip_threshold)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_normal_power) != 3):
-                    raise kaitaistruct.ConsistencyError(u"f_normal_power", len(self.f_normal_power), 3)
-                for i in range(len(self.f_normal_power)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_albedo_blend2_color) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_albedo_blend2_color", len(self.f_albedo_blend2_color), 4)
-                for i in range(len(self.f_albedo_blend2_color)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_detail_normal_u_v_scale) != 2):
-                    raise kaitaistruct.ConsistencyError(u"f_detail_normal_u_v_scale", len(self.f_detail_normal_u_v_scale), 2)
-                for i in range(len(self.f_detail_normal_u_v_scale)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_fresnel_legacy) != 2):
-                    raise kaitaistruct.ConsistencyError(u"f_fresnel_legacy", len(self.f_fresnel_legacy), 2)
-                for i in range(len(self.f_fresnel_legacy)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_normal_mask_pow0) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow0", len(self.f_normal_mask_pow0), 4)
-                for i in range(len(self.f_normal_mask_pow0)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_normal_mask_pow1) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow1", len(self.f_normal_mask_pow1), 4)
-                for i in range(len(self.f_normal_mask_pow1)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_normal_mask_pow2) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow2", len(self.f_normal_mask_pow2), 4)
-                for i in range(len(self.f_normal_mask_pow2)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_texture_blend_rate) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_texture_blend_rate", len(self.f_texture_blend_rate), 4)
-                for i in range(len(self.f_texture_blend_rate)):
-                    pass
-
-
-            if (self._root.cb_globals_version == 2):
-                pass
-                if (len(self.f_texture_blend_color) != 4):
-                    raise kaitaistruct.ConsistencyError(u"f_texture_blend_color", len(self.f_texture_blend_color), 4)
-                for i in range(len(self.f_texture_blend_color)):
-                    pass
-
 
 
         @property
@@ -4225,7 +4220,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (480 if (self._root.cb_globals_version == 2) else 288)
+            self._m_size_ = 128
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -4527,121 +4522,6 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
 
 
-    class StrCbMaterial(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_diffuse_color = []
-            for i in range(3):
-                self.f_diffuse_color.append(self._io.read_f4le())
-
-            self.f_transparency = self._io.read_f4le()
-            self.f_reflective_color = []
-            for i in range(3):
-                self.f_reflective_color.append(self._io.read_f4le())
-
-            self.f_transparency_volume = self._io.read_f4le()
-            self.f_uv_transform = []
-            for i in range(8):
-                self.f_uv_transform.append(self._io.read_f4le())
-
-            self.f_uv_transform2 = []
-            for i in range(8):
-                self.f_uv_transform2.append(self._io.read_f4le())
-
-            self.f_uv_transform3 = []
-            for i in range(8):
-                self.f_uv_transform3.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.f_diffuse_color)):
-                pass
-
-            for i in range(len(self.f_reflective_color)):
-                pass
-
-            for i in range(len(self.f_uv_transform)):
-                pass
-
-            for i in range(len(self.f_uv_transform2)):
-                pass
-
-            for i in range(len(self.f_uv_transform3)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbMaterial, self)._write__seq(io)
-            for i in range(len(self.f_diffuse_color)):
-                pass
-                self._io.write_f4le(self.f_diffuse_color[i])
-
-            self._io.write_f4le(self.f_transparency)
-            for i in range(len(self.f_reflective_color)):
-                pass
-                self._io.write_f4le(self.f_reflective_color[i])
-
-            self._io.write_f4le(self.f_transparency_volume)
-            for i in range(len(self.f_uv_transform)):
-                pass
-                self._io.write_f4le(self.f_uv_transform[i])
-
-            for i in range(len(self.f_uv_transform2)):
-                pass
-                self._io.write_f4le(self.f_uv_transform2[i])
-
-            for i in range(len(self.f_uv_transform3)):
-                pass
-                self._io.write_f4le(self.f_uv_transform3[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.f_diffuse_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_diffuse_color", len(self.f_diffuse_color), 3)
-            for i in range(len(self.f_diffuse_color)):
-                pass
-
-            if (len(self.f_reflective_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_reflective_color", len(self.f_reflective_color), 3)
-            for i in range(len(self.f_reflective_color)):
-                pass
-
-            if (len(self.f_uv_transform) != 8):
-                raise kaitaistruct.ConsistencyError(u"f_uv_transform", len(self.f_uv_transform), 8)
-            for i in range(len(self.f_uv_transform)):
-                pass
-
-            if (len(self.f_uv_transform2) != 8):
-                raise kaitaistruct.ConsistencyError(u"f_uv_transform2", len(self.f_uv_transform2), 8)
-            for i in range(len(self.f_uv_transform2)):
-                pass
-
-            if (len(self.f_uv_transform3) != 8):
-                raise kaitaistruct.ConsistencyError(u"f_uv_transform3", len(self.f_uv_transform3), 8)
-            for i in range(len(self.f_uv_transform3)):
-                pass
-
-
-        @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
-
-            self._m_size_ = 128
-            return getattr(self, '_m_size_', None)
-
-        def _invalidate_size_(self):
-            del self._m_size_
-
     class TextureSlot(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4668,7 +4548,7 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mrl.TextureSlot, self)._write__seq(io)
-            self._io.write_u4le(self.type_hash.value)
+            self._io.write_u4le(int(self.type_hash))
             self._io.write_u4le(self.unk_02)
             self._io.write_u4le(self.unk_03)
             self._io.write_bytes((self.texture_path).encode(u"ASCII"))
@@ -5382,6 +5262,573 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
+    class CbGlobals2(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.f_albedo_blend_color = []
+            for i in range(4):
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = []
+            for i in range(3):
+                self.f_parallax_max_sample.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(4):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_screen_uv_scale = []
+            for i in range(2):
+                self.f_screen_uv_scale.append(self._io.read_f4le())
+
+            self.f_screen_uv_offset = []
+            for i in range(2):
+                self.f_screen_uv_offset.append(self._io.read_f4le())
+
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(3):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.f_emission_threshold = self._io.read_f4le()
+            self.f_constant_color = []
+            for i in range(4):
+                self.f_constant_color.append(self._io.read_f4le())
+
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(4):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.f_secondary_color = []
+            for i in range(4):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+            self.f_albedo_color2 = []
+            for i in range(4):
+                self.f_albedo_color2.append(self._io.read_f4le())
+
+            self.f_specular_color2 = []
+            for i in range(3):
+                self.f_specular_color2.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick2 = self._io.read_f4le()
+            self.f_shininess2 = []
+            for i in range(4):
+                self.f_shininess2.append(self._io.read_f4le())
+
+            self.f_transparency_clip_threshold = []
+            for i in range(4):
+                self.f_transparency_clip_threshold.append(self._io.read_f4le())
+
+            self.f_blend_uv = self._io.read_f4le()
+            self.f_normal_power = []
+            for i in range(3):
+                self.f_normal_power.append(self._io.read_f4le())
+
+            self.f_albedo_blend2_color = []
+            for i in range(4):
+                self.f_albedo_blend2_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_u_v_scale = []
+            for i in range(2):
+                self.f_detail_normal_u_v_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_legacy = []
+            for i in range(2):
+                self.f_fresnel_legacy.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow0 = []
+            for i in range(4):
+                self.f_normal_mask_pow0.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow1 = []
+            for i in range(4):
+                self.f_normal_mask_pow1.append(self._io.read_f4le())
+
+            self.f_normal_mask_pow2 = []
+            for i in range(4):
+                self.f_normal_mask_pow2.append(self._io.read_f4le())
+
+            self.f_texture_blend_rate = []
+            for i in range(4):
+                self.f_texture_blend_rate.append(self._io.read_f4le())
+
+            self.f_texture_blend_color = []
+            for i in range(4):
+                self.f_texture_blend_color.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            for i in range(len(self.f_albedo_color2)):
+                pass
+
+            for i in range(len(self.f_specular_color2)):
+                pass
+
+            for i in range(len(self.f_shininess2)):
+                pass
+
+            for i in range(len(self.f_transparency_clip_threshold)):
+                pass
+
+            for i in range(len(self.f_normal_power)):
+                pass
+
+            for i in range(len(self.f_albedo_blend2_color)):
+                pass
+
+            for i in range(len(self.f_detail_normal_u_v_scale)):
+                pass
+
+            for i in range(len(self.f_fresnel_legacy)):
+                pass
+
+            for i in range(len(self.f_normal_mask_pow0)):
+                pass
+
+            for i in range(len(self.f_normal_mask_pow1)):
+                pass
+
+            for i in range(len(self.f_normal_mask_pow2)):
+                pass
+
+            for i in range(len(self.f_texture_blend_rate)):
+                pass
+
+            for i in range(len(self.f_texture_blend_color)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbGlobals2, self)._write__seq(io)
+            self._io.write_f4le(self.f_alpha_clip_threshold)
+            for i in range(len(self.f_albedo_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_color[i])
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_blend_color[i])
+
+            self._io.write_f4le(self.f_detail_normal_power)
+            self._io.write_f4le(self.f_detail_normal_uv_scale)
+            self._io.write_f4le(self.f_detail_normal2_power)
+            self._io.write_f4le(self.f_detail_normal2_uv_scale)
+            self._io.write_f4le(self.f_primary_shift)
+            self._io.write_f4le(self.f_secondary_shift)
+            self._io.write_f4le(self.f_parallax_factor)
+            self._io.write_f4le(self.f_parallax_self_occlusion)
+            self._io.write_f4le(self.f_parallax_min_sample)
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+                self._io.write_f4le(self.f_parallax_max_sample[i])
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+                self._io.write_f4le(self.f_light_map_color[i])
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+                self._io.write_f4le(self.f_thin_map_color[i])
+
+            self._io.write_f4le(self.f_thin_scattering)
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_scale[i])
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_offset[i])
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+                self._io.write_f4le(self.f_indirect_offset[i])
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+                self._io.write_f4le(self.f_indirect_scale[i])
+
+            self._io.write_f4le(self.f_fresnel_schlick)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+                self._io.write_f4le(self.f_fresnel_schlick_rgb[i])
+
+            for i in range(len(self.f_specular_color)):
+                pass
+                self._io.write_f4le(self.f_specular_color[i])
+
+            self._io.write_f4le(self.f_shininess)
+            for i in range(len(self.f_emission_color)):
+                pass
+                self._io.write_f4le(self.f_emission_color[i])
+
+            self._io.write_f4le(self.f_emission_threshold)
+            for i in range(len(self.f_constant_color)):
+                pass
+                self._io.write_f4le(self.f_constant_color[i])
+
+            self._io.write_f4le(self.f_roughness)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+                self._io.write_f4le(self.f_roughness_rgb[i])
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+                self._io.write_f4le(self.f_anisotoropic_direction[i])
+
+            self._io.write_f4le(self.f_smoothness)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+                self._io.write_f4le(self.f_anistropic_uv[i])
+
+            self._io.write_f4le(self.f_primary_expo)
+            self._io.write_f4le(self.f_secondary_expo)
+            for i in range(len(self.f_primary_color)):
+                pass
+                self._io.write_f4le(self.f_primary_color[i])
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+                self._io.write_f4le(self.f_secondary_color[i])
+
+            for i in range(len(self.f_albedo_color2)):
+                pass
+                self._io.write_f4le(self.f_albedo_color2[i])
+
+            for i in range(len(self.f_specular_color2)):
+                pass
+                self._io.write_f4le(self.f_specular_color2[i])
+
+            self._io.write_f4le(self.f_fresnel_schlick2)
+            for i in range(len(self.f_shininess2)):
+                pass
+                self._io.write_f4le(self.f_shininess2[i])
+
+            for i in range(len(self.f_transparency_clip_threshold)):
+                pass
+                self._io.write_f4le(self.f_transparency_clip_threshold[i])
+
+            self._io.write_f4le(self.f_blend_uv)
+            for i in range(len(self.f_normal_power)):
+                pass
+                self._io.write_f4le(self.f_normal_power[i])
+
+            for i in range(len(self.f_albedo_blend2_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_blend2_color[i])
+
+            for i in range(len(self.f_detail_normal_u_v_scale)):
+                pass
+                self._io.write_f4le(self.f_detail_normal_u_v_scale[i])
+
+            for i in range(len(self.f_fresnel_legacy)):
+                pass
+                self._io.write_f4le(self.f_fresnel_legacy[i])
+
+            for i in range(len(self.f_normal_mask_pow0)):
+                pass
+                self._io.write_f4le(self.f_normal_mask_pow0[i])
+
+            for i in range(len(self.f_normal_mask_pow1)):
+                pass
+                self._io.write_f4le(self.f_normal_mask_pow1[i])
+
+            for i in range(len(self.f_normal_mask_pow2)):
+                pass
+                self._io.write_f4le(self.f_normal_mask_pow2[i])
+
+            for i in range(len(self.f_texture_blend_rate)):
+                pass
+                self._io.write_f4le(self.f_texture_blend_rate[i])
+
+            for i in range(len(self.f_texture_blend_color)):
+                pass
+                self._io.write_f4le(self.f_texture_blend_color[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_albedo_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_color", len(self.f_albedo_color), 3)
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            if (len(self.f_albedo_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_blend_color", len(self.f_albedo_blend_color), 4)
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            if (len(self.f_parallax_max_sample) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_parallax_max_sample", len(self.f_parallax_max_sample), 3)
+            for i in range(len(self.f_parallax_max_sample)):
+                pass
+
+            if (len(self.f_light_map_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_light_map_color", len(self.f_light_map_color), 4)
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            if (len(self.f_thin_map_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_thin_map_color", len(self.f_thin_map_color), 3)
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            if (len(self.f_screen_uv_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_scale", len(self.f_screen_uv_scale), 2)
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            if (len(self.f_screen_uv_offset) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_offset", len(self.f_screen_uv_offset), 2)
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            if (len(self.f_indirect_offset) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_offset", len(self.f_indirect_offset), 2)
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            if (len(self.f_indirect_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_scale", len(self.f_indirect_scale), 2)
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            if (len(self.f_fresnel_schlick_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_fresnel_schlick_rgb", len(self.f_fresnel_schlick_rgb), 3)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            if (len(self.f_specular_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_specular_color", len(self.f_specular_color), 3)
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            if (len(self.f_emission_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_emission_color", len(self.f_emission_color), 3)
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            if (len(self.f_constant_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_constant_color", len(self.f_constant_color), 4)
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            if (len(self.f_roughness_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_roughness_rgb", len(self.f_roughness_rgb), 3)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            if (len(self.f_anisotoropic_direction) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_anisotoropic_direction", len(self.f_anisotoropic_direction), 3)
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            if (len(self.f_anistropic_uv) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_anistropic_uv", len(self.f_anistropic_uv), 2)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            if (len(self.f_primary_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_primary_color", len(self.f_primary_color), 4)
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            if (len(self.f_secondary_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_secondary_color", len(self.f_secondary_color), 4)
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            if (len(self.f_albedo_color2) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_color2", len(self.f_albedo_color2), 4)
+            for i in range(len(self.f_albedo_color2)):
+                pass
+
+            if (len(self.f_specular_color2) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_specular_color2", len(self.f_specular_color2), 3)
+            for i in range(len(self.f_specular_color2)):
+                pass
+
+            if (len(self.f_shininess2) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_shininess2", len(self.f_shininess2), 4)
+            for i in range(len(self.f_shininess2)):
+                pass
+
+            if (len(self.f_transparency_clip_threshold) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_transparency_clip_threshold", len(self.f_transparency_clip_threshold), 4)
+            for i in range(len(self.f_transparency_clip_threshold)):
+                pass
+
+            if (len(self.f_normal_power) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_normal_power", len(self.f_normal_power), 3)
+            for i in range(len(self.f_normal_power)):
+                pass
+
+            if (len(self.f_albedo_blend2_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_blend2_color", len(self.f_albedo_blend2_color), 4)
+            for i in range(len(self.f_albedo_blend2_color)):
+                pass
+
+            if (len(self.f_detail_normal_u_v_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_detail_normal_u_v_scale", len(self.f_detail_normal_u_v_scale), 2)
+            for i in range(len(self.f_detail_normal_u_v_scale)):
+                pass
+
+            if (len(self.f_fresnel_legacy) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_fresnel_legacy", len(self.f_fresnel_legacy), 2)
+            for i in range(len(self.f_fresnel_legacy)):
+                pass
+
+            if (len(self.f_normal_mask_pow0) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow0", len(self.f_normal_mask_pow0), 4)
+            for i in range(len(self.f_normal_mask_pow0)):
+                pass
+
+            if (len(self.f_normal_mask_pow1) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow1", len(self.f_normal_mask_pow1), 4)
+            for i in range(len(self.f_normal_mask_pow1)):
+                pass
+
+            if (len(self.f_normal_mask_pow2) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_normal_mask_pow2", len(self.f_normal_mask_pow2), 4)
+            for i in range(len(self.f_normal_mask_pow2)):
+                pass
+
+            if (len(self.f_texture_blend_rate) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_texture_blend_rate", len(self.f_texture_blend_rate), 4)
+            for i in range(len(self.f_texture_blend_rate)):
+                pass
+
+            if (len(self.f_texture_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_texture_blend_color", len(self.f_texture_blend_color), 4)
+            for i in range(len(self.f_texture_blend_color)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 480
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class Material(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -5438,7 +5885,7 @@ class Mrl(ReadWriteKaitaiStruct):
             super(Mrl.Material, self)._write__seq(io)
             self._should_write_resources = self.resources__to_write
             self._should_write_anims = self.anims__to_write
-            self._io.write_u4le(self.type_hash.value)
+            self._io.write_u4le(int(self.type_hash))
             self._io.write_u4le(self.name_hash_crcjam32)
             self._io.write_u4le(self.cmd_buffer_size)
             self._io.write_u4le(self.blend_state_hash)
@@ -5984,7 +6431,7 @@ class Mrl(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mrl.ResourceBinding, self)._write__seq(io)
             self._should_write_float_buffer = self.float_buffer__to_write
-            self._io.write_bits_int_le(4, self.cmd_type.value)
+            self._io.write_bits_int_le(4, int(self.cmd_type))
             self._io.write_bits_int_le(16, self.unused)
             self._io.write_bits_int_le(12, self.shader_obj_idx)
             _on = self.cmd_type
@@ -6082,7 +6529,7 @@ class Mrl(ReadWriteKaitaiStruct):
                     self._m_float_buffer._read()
                 elif _on == Mrl.ShaderObjectHash.cbmaterial:
                     pass
-                    self._m_float_buffer = Mrl.StrCbMaterial(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
                     self._m_float_buffer._read()
                 self._io.seek(_pos)
 

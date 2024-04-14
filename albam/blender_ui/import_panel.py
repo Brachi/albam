@@ -48,9 +48,14 @@ class AlbamApps(bpy.types.PropertyGroup):
         return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
+@blender_registry.register_blender_prop_albam(name="import_settings")
+class AlbamImportSettings(bpy.types.PropertyGroup):
+    import_only_main_lods : bpy.props.BoolProperty(default=True)
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
-    bl_idname = "albam.import"
+    bl_idname = "albam.import_vfile"
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
@@ -338,5 +343,5 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
     def draw(self, context):
         self.layout.separator()
         row = self.layout.row()
-        row.operator("albam.import", text="Import")
+        row.operator("albam.import_vfile", text="Import")
         self.layout.row()
