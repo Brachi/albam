@@ -123,7 +123,7 @@ types:
         value: |
           _root.header.version == 210 ?
           _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
-          _root.header.num_meshes * meshes[0].size_ + num_weight_bounds * weight_bounds[0].size_
+          _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
     seq:
       - {id: idx_group, type: u2}

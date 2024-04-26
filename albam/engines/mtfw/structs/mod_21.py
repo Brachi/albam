@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod21(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -2558,7 +2558,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if (self._root.header.version == 210) else ((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)))
+            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if (self._root.header.version == 210) else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):

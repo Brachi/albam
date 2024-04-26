@@ -33,12 +33,14 @@ VERSION_USES_MATERIAL_NAMES = {210}
 MRL_DEFAULT_VERSION = {
     "re0": 34,
     "re1": 34,
+    "re6": 33,
     "rev1": 32,
     "rev2": 34,
 }
 MRL_UNK_01 = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
+    "re6": 0x6a5489b8,
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
 }
@@ -46,6 +48,7 @@ MRL_UNK_01 = {
 MRL_UNUSED = {
     "re0": 0xA00DC,
     "re1": 0x200DC,
+    "re6": 0x80024,  # FIXME: actually is used, in mrl.version == 33 apparently, see pl0000_0.mrl
     "rev1": 0x804DC,
     "rev2": 0xA00DC,
 }
@@ -53,6 +56,7 @@ MRL_UNUSED = {
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
     "re1": Mrl.CbGlobals1,
+    "re6": Mrl.CbGlobals1,
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
 }
@@ -115,8 +119,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     _create_mtfw_shader()
     for idx_material, material in enumerate(src_materials):
         default_mat_name = f"{name_prefix}_{str(idx_material).zfill(2)}"
-        mat_name_hash = getattr(material, "name_hash_crcjam32", "")
-        mat_name = mat_inverse_hashes.get(mat_name_hash, default_mat_name)
+        mat_name_hash = getattr(material, "name_hash_crcjam32", default_mat_name)
+        mat_name = mat_inverse_hashes.get(mat_name_hash, str(mat_name_hash))
         if material_names_available and mat_name == default_mat_name:
             # don't create materials present in the mrl but not referenced
             # by the mod file (will result in un-named materials)
@@ -230,7 +234,11 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     current_commands_offset = 0
 
     for bl_mat_idx, bl_mat in enumerate(bl_materials):
-        material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+        try:
+            material_hash = int(bl_mat.name)
+        except ValueError:
+            material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+
         dst_mod.materials_data.material_names.append(bl_mat.name)
         dst_mod.materials_data.material_hashes.append(material_hash)
 
@@ -874,20 +882,25 @@ def _create_mtfw_shader():
     return shader_group
 
 
-def _infer_mrl(context, mod_file_item, app_id):
+def _infer_mrl(context, mod_vfile, app_id):
     """
     Assuming mrl file is next to the .mod file with
-    the same name.
-    It's not always like this, e.g. RE6
+    the same name. Or try with different suffixes
     """
-    mrl_file_id = mod_file_item.name.replace(".mod", ".mrl")
-    file_list = context.scene.albam.vfs.file_list
+    vfs = context.scene.albam.vfs
+    base = str(mod_vfile.relative_path_windows_no_ext)
+    suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
+    mrl_vfile = None
 
-    try:
-        mrl_file_item = file_list[mrl_file_id]
-    except KeyError:
+    for suffix in suffixes:
+        try:
+            mrl_vfile = vfs.get_vfile(app_id, base + suffix)
+        except KeyError:
+            pass
+
+    if not mrl_vfile:
         return
-    mrl_bytes = mrl_file_item.get_bytes()
+    mrl_bytes = mrl_vfile.get_bytes()
     mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
     mrl._read()
     return mrl
@@ -1036,7 +1049,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
             setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "rev1", "rev2"))
+@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
@@ -1068,7 +1081,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1100,7 +1113,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re0", "re1", "rev1"), is_secondary=True, display_name="$Globals")
+    ("re0", "re1", "rev1", "re6"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties1(bpy.types.PropertyGroup):
     f_alpha_clip_threshold: bpy.props.FloatProperty(
