@@ -890,19 +890,20 @@ def _infer_mrl(context, mod_vfile, app_id):
     vfs = context.scene.albam.vfs
     base = str(mod_vfile.relative_path_windows_no_ext)
     suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
-    mrl_vfile = None
+    mrl = None
 
     for suffix in suffixes:
         try:
             mrl_vfile = vfs.get_vfile(app_id, base + suffix)
+            mrl_bytes = mrl_vfile.get_bytes()
+            mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
+            mrl._read()
+            assert mrl.materials and mrl.textures
         except KeyError:
             pass
+        except AssertionError:
+            pass
 
-    if not mrl_vfile:
-        return
-    mrl_bytes = mrl_vfile.get_bytes()
-    mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
-    mrl._read()
     return mrl
 
 
