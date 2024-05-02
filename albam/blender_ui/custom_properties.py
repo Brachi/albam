@@ -119,7 +119,7 @@ def AlbamCustomPropertiesFactory(kind: str):
         try:
             property_names = self.APPID_MAP_SECONDARY[app_id]
         except KeyError:
-            return
+            return {}
 
         return {pn: getattr(self, f"{app_id}__{pn}") for pn in property_names}
 
