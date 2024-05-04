@@ -116,12 +116,20 @@ def mod_exported(mod_export):
 
 @pytest.fixture(scope="session")
 def mrl_imported(mod_export):
-    return mod_export[2]
+    mrl = mod_export[2]
+    if not mrl:
+        pytest.skip("No mrl available")
+    else:
+        return mrl
 
 
 @pytest.fixture(scope="session")
 def mrl_exported(mod_export):
-    return mod_export[3]
+    mrl = mod_export[3]
+    if not mrl:
+        pytest.skip("No mrl available")
+    else:
+        return mrl
 
 
 @pytest.fixture
