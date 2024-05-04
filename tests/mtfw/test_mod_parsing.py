@@ -45,7 +45,8 @@ KNOWN_VERTEX_FORMATS = {
 }
 
 
-def test_mod(mod):
+def test_mod(mod_imported):
+    mod = mod_imported
     vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
     total_num_unique_bone_ids = sum(m.num_unique_bone_ids for m in mod.meshes_data.meshes)
     # FIXME: mod.header.version == 211

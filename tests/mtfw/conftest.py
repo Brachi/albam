@@ -31,14 +31,8 @@ def pytest_generate_tests(metafunc):
             argvalues.append((app_id, mod_path, mrl_path))
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "arc_file" in metafunc.fixturenames:
-        _generate_tests_arc_file_path(metafunc)
     elif "lmt" in metafunc.fixturenames:
         _generate_tests_from_arcs("lmt", metafunc)
-    elif "mod" in metafunc.fixturenames:
-        _generate_tests_from_arcs("mod", metafunc)
-    elif "mrl" in metafunc.fixturenames:
-        _generate_tests_from_arcs("mrl", metafunc)
     elif "tex" in metafunc.fixturenames:
         _generate_tests_from_arcs("tex", metafunc)
 
@@ -133,26 +127,7 @@ def mrl_exported(mod_export):
 
 
 @pytest.fixture
-def lmt(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.structs.lmt import Lmt
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-
-    parsed = Lmt.from_bytes(src_bytes)
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._file_path = file_entry.file_path
-
-    return parsed
-
-
-@pytest.fixture
-def mrl(request):
+def parsed_mrl_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -174,7 +149,7 @@ def mrl(request):
 
 
 @pytest.fixture
-def mod(request):
+def parsed_mod_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -217,32 +192,23 @@ def tex(request):
     return parsed_tex
 
 
-def _generate_tests_arc_file_path(metafunc):
-    arc_dirs = metafunc.config.getoption("arcdir")
+@pytest.fixture
+def lmt(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.structs.lmt import Lmt
 
-    if not arc_dirs:
-        pytest.skip("No arc directory or app_id supplied")
-        return
+    arc = request.param[0]
+    file_entry = request.param[1]
 
-    total_arc_files = []
-    total_test_ids = []
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
 
-    for app_id_and_arc_dir in arc_dirs:
-        # TODO: error handling
-        app_id, arc_dir = app_id_and_arc_dir.split("::")
-        assert type(arc_dir) is str
-        ARC_FILES = [
-            {"filepath": os.path.join(root, f), "app_id": app_id}
-            for root, _, files in os.walk(arc_dir)
-            for f in files
-            if f.endswith(".arc")
-        ]
-        total_arc_files.extend(ARC_FILES)
-        test_ids = [f"{af['app_id']}::{os.path.basename(af['filepath'])}" for af in ARC_FILES]
-        assert len(ARC_FILES) == len(test_ids)
-        total_test_ids.extend(test_ids)
+    parsed = Lmt.from_bytes(src_bytes)
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._file_path = file_entry.file_path
 
-    metafunc.parametrize("arc_file", total_arc_files, ids=total_test_ids)
+    return parsed
 
 
 def _generate_tests_from_arcs(file_extension, metafunc):
@@ -272,14 +238,13 @@ def _generate_tests_from_arcs(file_extension, metafunc):
         if not ARC_FILES:
             raise ValueError(f"No files ending in .arc found in {arc_dir}")
 
-        parsed_files, ids = files_per_arc(file_extension, ARC_FILES, app_id)
+        parsed_files, ids = _files_per_arc(file_extension, ARC_FILES, app_id)
         total_parsed_files.extend(parsed_files)
         total_test_ids.extend(ids)
-    # mrl fixture in tests/mtfw/conftest.py
     metafunc.parametrize(file_extension, total_parsed_files, indirect=True, ids=total_test_ids)
 
 
-def files_per_arc(file_extension, arc_paths, app_id):
+def _files_per_arc(file_extension, arc_paths, app_id):
     # importing here to avoid errors in test collection.
     # Since collection happens before calling register() in `pytest_sessionstart`
     # sys.path is not modified to include albam_vendor, so the vendored dep kaitaistruct
