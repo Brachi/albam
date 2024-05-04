@@ -3638,47 +3638,6 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
 
 
-    class StrCbDistortion(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_distortion_factor = self._io.read_f4le()
-            self.f_distortion_blend = self._io.read_f4le()
-            self.filler = []
-            for i in range(2):
-                self.filler.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.filler)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbDistortion, self)._write__seq(io)
-            self._io.write_f4le(self.f_distortion_factor)
-            self._io.write_f4le(self.f_distortion_blend)
-            for i in range(len(self.filler)):
-                pass
-                self._io.write_f4le(self.filler[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.filler) != 2):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
-            for i in range(len(self.filler)):
-                pass
-
-
-
     class AnimSubEntry5(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -3753,6 +3712,182 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
+
+
+    class CbColorMask(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbColorMask, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
+
+    class CbVertexDisplacement(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbVertexDisplacement, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
     class StrCbVtxDispEx(ReadWriteKaitaiStruct):
@@ -3974,6 +4109,45 @@ class Mrl(ReadWriteKaitaiStruct):
         def _check(self):
             pass
 
+
+    class CbVertexDisplacement21(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_vtx_disp_start2 = self._io.read_f4le()
+            self.f_vtx_disp_scales = self._io.read_f4le()
+            self.f_vtx_disp_inv_area2 = self._io.read_f4le()
+            self.f_vtx_disp_rcn2 = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbVertexDisplacement21, self)._write__seq(io)
+            self._io.write_f4le(self.f_vtx_disp_start2)
+            self._io.write_f4le(self.f_vtx_disp_scales)
+            self._io.write_f4le(self.f_vtx_disp_inv_area2)
+            self._io.write_f4le(self.f_vtx_disp_rcn2)
+
+
+        def _check(self):
+            pass
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class CbGlobals(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -4421,6 +4595,65 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
+    class CbVertexDisplacement1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_vtx_disp_start = self._io.read_f4le()
+            self.f_vtx_disp_scale = self._io.read_f4le()
+            self.f_vtx_disp_inv_area = self._io.read_f4le()
+            self.f_vtx_disp_rcn = self._io.read_f4le()
+            self.f_vtx_disp_tilt_u = self._io.read_f4le()
+            self.f_vtx_disp_tilt_v = self._io.read_f4le()
+            self.filler = []
+            for i in range(2):
+                self.filler.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.filler)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbVertexDisplacement1, self)._write__seq(io)
+            self._io.write_f4le(self.f_vtx_disp_start)
+            self._io.write_f4le(self.f_vtx_disp_scale)
+            self._io.write_f4le(self.f_vtx_disp_inv_area)
+            self._io.write_f4le(self.f_vtx_disp_rcn)
+            self._io.write_f4le(self.f_vtx_disp_tilt_u)
+            self._io.write_f4le(self.f_vtx_disp_tilt_v)
+            for i in range(len(self.filler)):
+                pass
+                self._io.write_f4le(self.filler[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.filler) != 2):
+                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
+            for i in range(len(self.filler)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class AnimSubEntry7(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4641,55 +4874,6 @@ class Mrl(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"body", self.body._parent, self)
 
 
-    class StrCbVtxDisplacement(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_vtx_disp_start = self._io.read_f4le()
-            self.f_vtx_disp_scale = self._io.read_f4le()
-            self.f_vtx_disp_inv_area = self._io.read_f4le()
-            self.f_vtx_disp_rcn = self._io.read_f4le()
-            self.f_vtx_disp_tilt_u = self._io.read_f4le()
-            self.f_vtx_disp_tilt_v = self._io.read_f4le()
-            self.filler = []
-            for i in range(2):
-                self.filler.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.filler)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDisplacement, self)._write__seq(io)
-            self._io.write_f4le(self.f_vtx_disp_start)
-            self._io.write_f4le(self.f_vtx_disp_scale)
-            self._io.write_f4le(self.f_vtx_disp_inv_area)
-            self._io.write_f4le(self.f_vtx_disp_rcn)
-            self._io.write_f4le(self.f_vtx_disp_tilt_u)
-            self._io.write_f4le(self.f_vtx_disp_tilt_v)
-            for i in range(len(self.filler)):
-                pass
-                self._io.write_f4le(self.filler[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.filler) != 2):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
-            for i in range(len(self.filler)):
-                pass
-
-
-
     class CmdOfsBuffer(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4751,6 +4935,174 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
 
 
+
+    class CbDistortion(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_distortion_factor = self._io.read_f4le()
+            self.f_distortion_blend = self._io.read_f4le()
+            self.filler = []
+            for i in range(2):
+                self.filler.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.filler)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbDistortion, self)._write__seq(io)
+            self._io.write_f4le(self.f_distortion_factor)
+            self._io.write_f4le(self.f_distortion_blend)
+            for i in range(len(self.filler)):
+                pass
+                self._io.write_f4le(self.filler[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.filler) != 2):
+                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
+            for i in range(len(self.filler)):
+                pass
+
+
+
+    class CbColorMask1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_color_mask_threshold = []
+            for i in range(4):
+                self.f_color_mask_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask_offset = []
+            for i in range(4):
+                self.f_color_mask_offset.append(self._io.read_f4le())
+
+            self.f_clip_threshold = []
+            for i in range(4):
+                self.f_clip_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask_color = []
+            for i in range(4):
+                self.f_color_mask_color.append(self._io.read_f4le())
+
+            self.f_color_mask2_threshold = []
+            for i in range(4):
+                self.f_color_mask2_threshold.append(self._io.read_f4le())
+
+            self.f_color_mask2_color = []
+            for i in range(4):
+                self.f_color_mask2_color.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_color_mask_threshold)):
+                pass
+
+            for i in range(len(self.f_color_mask_offset)):
+                pass
+
+            for i in range(len(self.f_clip_threshold)):
+                pass
+
+            for i in range(len(self.f_color_mask_color)):
+                pass
+
+            for i in range(len(self.f_color_mask2_threshold)):
+                pass
+
+            for i in range(len(self.f_color_mask2_color)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbColorMask1, self)._write__seq(io)
+            for i in range(len(self.f_color_mask_threshold)):
+                pass
+                self._io.write_f4le(self.f_color_mask_threshold[i])
+
+            for i in range(len(self.f_color_mask_offset)):
+                pass
+                self._io.write_f4le(self.f_color_mask_offset[i])
+
+            for i in range(len(self.f_clip_threshold)):
+                pass
+                self._io.write_f4le(self.f_clip_threshold[i])
+
+            for i in range(len(self.f_color_mask_color)):
+                pass
+                self._io.write_f4le(self.f_color_mask_color[i])
+
+            for i in range(len(self.f_color_mask2_threshold)):
+                pass
+                self._io.write_f4le(self.f_color_mask2_threshold[i])
+
+            for i in range(len(self.f_color_mask2_color)):
+                pass
+                self._io.write_f4le(self.f_color_mask2_color[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_color_mask_threshold) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_color_mask_threshold", len(self.f_color_mask_threshold), 4)
+            for i in range(len(self.f_color_mask_threshold)):
+                pass
+
+            if (len(self.f_color_mask_offset) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_color_mask_offset", len(self.f_color_mask_offset), 4)
+            for i in range(len(self.f_color_mask_offset)):
+                pass
+
+            if (len(self.f_clip_threshold) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_clip_threshold", len(self.f_clip_threshold), 4)
+            for i in range(len(self.f_clip_threshold)):
+                pass
+
+            if (len(self.f_color_mask_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_color_mask_color", len(self.f_color_mask_color), 4)
+            for i in range(len(self.f_color_mask_color)):
+                pass
+
+            if (len(self.f_color_mask2_threshold) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_color_mask2_threshold", len(self.f_color_mask2_threshold), 4)
+            for i in range(len(self.f_color_mask2_threshold)):
+                pass
+
+            if (len(self.f_color_mask2_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_color_mask2_color", len(self.f_color_mask2_color), 4)
+            for i in range(len(self.f_color_mask2_color)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 96
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class AnimType6(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -5141,123 +5493,6 @@ class Mrl(ReadWriteKaitaiStruct):
             if (len(self.data) != 8):
                 raise kaitaistruct.ConsistencyError(u"data", len(self.data), 8)
             for i in range(len(self.data)):
-                pass
-
-
-
-    class StrCbColorMask(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_color_mask_threshold = []
-            for i in range(4):
-                self.f_color_mask_threshold.append(self._io.read_f4le())
-
-            self.f_color_mask_offset = []
-            for i in range(4):
-                self.f_color_mask_offset.append(self._io.read_f4le())
-
-            self.f_clip_threshold = []
-            for i in range(4):
-                self.f_clip_threshold.append(self._io.read_f4le())
-
-            self.f_color_mask_color = []
-            for i in range(4):
-                self.f_color_mask_color.append(self._io.read_f4le())
-
-            self.f_color_mask2_threshold = []
-            for i in range(4):
-                self.f_color_mask2_threshold.append(self._io.read_f4le())
-
-            self.f_color_mask2_color = []
-            for i in range(4):
-                self.f_color_mask2_color.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.f_color_mask_threshold)):
-                pass
-
-            for i in range(len(self.f_color_mask_offset)):
-                pass
-
-            for i in range(len(self.f_clip_threshold)):
-                pass
-
-            for i in range(len(self.f_color_mask_color)):
-                pass
-
-            for i in range(len(self.f_color_mask2_threshold)):
-                pass
-
-            for i in range(len(self.f_color_mask2_color)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbColorMask, self)._write__seq(io)
-            for i in range(len(self.f_color_mask_threshold)):
-                pass
-                self._io.write_f4le(self.f_color_mask_threshold[i])
-
-            for i in range(len(self.f_color_mask_offset)):
-                pass
-                self._io.write_f4le(self.f_color_mask_offset[i])
-
-            for i in range(len(self.f_clip_threshold)):
-                pass
-                self._io.write_f4le(self.f_clip_threshold[i])
-
-            for i in range(len(self.f_color_mask_color)):
-                pass
-                self._io.write_f4le(self.f_color_mask_color[i])
-
-            for i in range(len(self.f_color_mask2_threshold)):
-                pass
-                self._io.write_f4le(self.f_color_mask2_threshold[i])
-
-            for i in range(len(self.f_color_mask2_color)):
-                pass
-                self._io.write_f4le(self.f_color_mask2_color[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.f_color_mask_threshold) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_color_mask_threshold", len(self.f_color_mask_threshold), 4)
-            for i in range(len(self.f_color_mask_threshold)):
-                pass
-
-            if (len(self.f_color_mask_offset) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_color_mask_offset", len(self.f_color_mask_offset), 4)
-            for i in range(len(self.f_color_mask_offset)):
-                pass
-
-            if (len(self.f_clip_threshold) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_clip_threshold", len(self.f_clip_threshold), 4)
-            for i in range(len(self.f_clip_threshold)):
-                pass
-
-            if (len(self.f_color_mask_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_color_mask_color", len(self.f_color_mask_color), 4)
-            for i in range(len(self.f_color_mask_color)):
-                pass
-
-            if (len(self.f_color_mask2_threshold) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_color_mask2_threshold", len(self.f_color_mask2_threshold), 4)
-            for i in range(len(self.f_color_mask2_threshold)):
-                pass
-
-            if (len(self.f_color_mask2_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_color_mask2_color", len(self.f_color_mask2_color), 4)
-            for i in range(len(self.f_color_mask2_color)):
                 pass
 
 
@@ -6116,35 +6351,6 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
-    class StrCbVtxDisplacement2(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_vtx_disp_start2 = self._io.read_f4le()
-            self.f_vtx_disp_scales = self._io.read_f4le()
-            self.f_vtx_disp_inv_area2 = self._io.read_f4le()
-            self.f_vtx_disp_rcn2 = self._io.read_f4le()
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDisplacement2, self)._write__seq(io)
-            self._io.write_f4le(self.f_vtx_disp_start2)
-            self._io.write_f4le(self.f_vtx_disp_scales)
-            self._io.write_f4le(self.f_vtx_disp_inv_area2)
-            self._io.write_f4le(self.f_vtx_disp_rcn2)
-
-
-        def _check(self):
-            pass
-
-
     class AnimData(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -6222,6 +6428,94 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
+
+
+    class CbVertexDisplacement2(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbVertexDisplacement2, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"rev2":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
     class CbSGlobals(ReadWriteKaitaiStruct):
@@ -6416,13 +6710,22 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 _ = self.float_buffer
                 _on = self.shader_object_hash
-                if _on == Mrl.ShaderObjectHash.globals:
+                if _on == Mrl.ShaderObjectHash.cbvertexdisplacement:
+                    pass
+                    self.float_buffer._fetch_instances()
+                elif _on == Mrl.ShaderObjectHash.cbcolormask:
                     pass
                     self.float_buffer._fetch_instances()
                 elif _on == Mrl.ShaderObjectHash.cbdistortion:
                     pass
                     self.float_buffer._fetch_instances()
                 elif _on == Mrl.ShaderObjectHash.cbmaterial:
+                    pass
+                    self.float_buffer._fetch_instances()
+                elif _on == Mrl.ShaderObjectHash.globals:
+                    pass
+                    self.float_buffer._fetch_instances()
+                elif _on == Mrl.ShaderObjectHash.cbvertexdisplacement2:
                     pass
                     self.float_buffer._fetch_instances()
 
@@ -6519,17 +6822,29 @@ class Mrl(ReadWriteKaitaiStruct):
                 _pos = self._io.pos()
                 self._io.seek((self._parent.ofs_cmd + self.value_cmd.ofs_float_buff))
                 _on = self.shader_object_hash
-                if _on == Mrl.ShaderObjectHash.globals:
+                if _on == Mrl.ShaderObjectHash.cbvertexdisplacement:
                     pass
-                    self._m_float_buffer = Mrl.CbGlobals(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbVertexDisplacement(self._io, self, self._root)
+                    self._m_float_buffer._read()
+                elif _on == Mrl.ShaderObjectHash.cbcolormask:
+                    pass
+                    self._m_float_buffer = Mrl.CbColorMask(self._io, self, self._root)
                     self._m_float_buffer._read()
                 elif _on == Mrl.ShaderObjectHash.cbdistortion:
                     pass
-                    self._m_float_buffer = Mrl.StrCbDistortion(self._io, self, self._root)
+                    self._m_float_buffer = Mrl.CbDistortion(self._io, self, self._root)
                     self._m_float_buffer._read()
                 elif _on == Mrl.ShaderObjectHash.cbmaterial:
                     pass
                     self._m_float_buffer = Mrl.CbMaterial(self._io, self, self._root)
+                    self._m_float_buffer._read()
+                elif _on == Mrl.ShaderObjectHash.globals:
+                    pass
+                    self._m_float_buffer = Mrl.CbGlobals(self._io, self, self._root)
+                    self._m_float_buffer._read()
+                elif _on == Mrl.ShaderObjectHash.cbvertexdisplacement2:
+                    pass
+                    self._m_float_buffer = Mrl.CbVertexDisplacement2(self._io, self, self._root)
                     self._m_float_buffer._read()
                 self._io.seek(_pos)
 
@@ -6546,13 +6861,22 @@ class Mrl(ReadWriteKaitaiStruct):
                 _pos = self._io.pos()
                 self._io.seek((self._parent.ofs_cmd + self.value_cmd.ofs_float_buff))
                 _on = self.shader_object_hash
-                if _on == Mrl.ShaderObjectHash.globals:
+                if _on == Mrl.ShaderObjectHash.cbvertexdisplacement:
+                    pass
+                    self.float_buffer._write__seq(self._io)
+                elif _on == Mrl.ShaderObjectHash.cbcolormask:
                     pass
                     self.float_buffer._write__seq(self._io)
                 elif _on == Mrl.ShaderObjectHash.cbdistortion:
                     pass
                     self.float_buffer._write__seq(self._io)
                 elif _on == Mrl.ShaderObjectHash.cbmaterial:
+                    pass
+                    self.float_buffer._write__seq(self._io)
+                elif _on == Mrl.ShaderObjectHash.globals:
+                    pass
+                    self.float_buffer._write__seq(self._io)
+                elif _on == Mrl.ShaderObjectHash.cbvertexdisplacement2:
                     pass
                     self.float_buffer._write__seq(self._io)
                 self._io.seek(_pos)
@@ -6564,7 +6888,13 @@ class Mrl(ReadWriteKaitaiStruct):
             if (self.cmd_type == Mrl.CmdType.set_constant_buffer):
                 pass
                 _on = self.shader_object_hash
-                if _on == Mrl.ShaderObjectHash.globals:
+                if _on == Mrl.ShaderObjectHash.cbvertexdisplacement:
+                    pass
+                    if self.float_buffer._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._root, self._root)
+                    if self.float_buffer._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._parent, self)
+                elif _on == Mrl.ShaderObjectHash.cbcolormask:
                     pass
                     if self.float_buffer._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._root, self._root)
@@ -6577,6 +6907,18 @@ class Mrl(ReadWriteKaitaiStruct):
                     if self.float_buffer._parent != self:
                         raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._parent, self)
                 elif _on == Mrl.ShaderObjectHash.cbmaterial:
+                    pass
+                    if self.float_buffer._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._root, self._root)
+                    if self.float_buffer._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._parent, self)
+                elif _on == Mrl.ShaderObjectHash.globals:
+                    pass
+                    if self.float_buffer._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._root, self._root)
+                    if self.float_buffer._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._parent, self)
+                elif _on == Mrl.ShaderObjectHash.cbvertexdisplacement2:
                     pass
                     if self.float_buffer._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"float_buffer", self.float_buffer._root, self._root)

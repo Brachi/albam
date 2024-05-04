@@ -1,0 +1,28 @@
+
+[
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em02/em02.mod",
+        "mrl_path": "model/em/em02/em02.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl00/pl00.mod",
+        "mrl_path": "model/pl/pl00/pl00.mrl"
+    },
+    {
+        "app_id": "re5",
+        "mod_path": "pawn/pl/pl00/model/pl0000.mod",
+        "mrl_path": null
+    },
+    {
+        "app_id": "rev1",
+        "mod_path": "model/chara/pl/pl1000/pl1000.mod",
+        "mrl_path": "model/chara/pl/pl1000/pl1000.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2200_N/model/pl2200.mod",
+        "mrl_path": "data/chara/pl/pl2200_N/model/pl2200.mrl"
+    }
+]

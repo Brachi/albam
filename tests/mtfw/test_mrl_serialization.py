@@ -1,23 +1,44 @@
+from pprint import pprint
+
 import pytest
+
+from albam.engines.mtfw.structs.mrl import Mrl
+from albam.engines.mtfw.material import MRL_BLEND_STATE_STR
 
 
 def test_export_mrl_top_level(mrl_imported, mrl_exported):
     src_mrl = mrl_imported
     dst_mrl = mrl_exported
     num_missing_materials = len(src_mrl.materials) - len(dst_mrl.materials)
+    num_missing_textures = len(src_mrl.textures) - len(dst_mrl.textures)
     error_no_padding = (
         src_mrl.ofs_resources_calculated_no_padding - dst_mrl.ofs_resources_calculated_no_padding)
+    expected_diff = (
+        num_missing_materials * src_mrl.materials[0].size_ +
+        num_missing_textures * src_mrl.textures[0].size_)
 
-    assert num_missing_materials * src_mrl.materials[0].size_ == error_no_padding
+    assert expected_diff == error_no_padding
+
+    return error_no_padding, num_missing_materials, num_missing_textures
+
+
+
+def test_top_level(mrl_imported, mrl_exported):
+    src_mrl = mrl_imported
+    dst_mrl = mrl_exported
+
+    #error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
+    error, num_missing_materials, num_missing_textures = (0, 0, 0)
+
     assert src_mrl.id_magic == dst_mrl.id_magic
     assert src_mrl.version == dst_mrl.version
-    assert src_mrl.num_textures == dst_mrl.num_textures
+    assert src_mrl.num_textures == dst_mrl.num_textures + num_missing_textures
     assert src_mrl.num_materials == dst_mrl.num_materials + num_missing_materials
     assert src_mrl.unk_01 == dst_mrl.unk_01
     assert src_mrl.ofs_textures == dst_mrl.ofs_textures
-    assert src_mrl.ofs_materials == dst_mrl.ofs_materials
+    assert src_mrl.ofs_materials == dst_mrl.ofs_materials + error
     assert (src_mrl.ofs_resources_calculated_no_padding ==
-            dst_mrl.ofs_resources_calculated_no_padding + error_no_padding)
+            dst_mrl.ofs_resources_calculated_no_padding + error)
 
 
 def test_textures(mrl_imported, mrl_exported, subtests):
@@ -52,10 +73,9 @@ def test_materials(mrl_imported, mrl_exported, subtests):
     src_mrl = mrl_imported
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
     dst_mrl = mrl_exported
-    num_missing_materials = len(src_mrl.materials) - len(dst_mrl.materials)
-    error_no_padding = (
-        src_mrl.ofs_resources_calculated_no_padding - dst_mrl.ofs_resources_calculated_no_padding)
-    assert num_missing_materials * src_mrl.materials[0].size_ == error_no_padding
+
+    # error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
+    error, num_missing_materials, num_missing_textures = (0, 0, 0)
 
     for i, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
@@ -71,25 +91,12 @@ def test_materials(mrl_imported, mrl_exported, subtests):
             assert src_material.unused == dst_material.unused
             assert src_material.material_info_flags == dst_material.material_info_flags
             assert src_material.unk_nulls == dst_material.unk_nulls
-        with subtests.test(material_index=i):
-            if error_no_padding:
+
+        with subtests.test(material_hash=src_material.name_hash_crcjam32):
+            if error:
                 pytest.xfail(reason="Difference in offset expected due to missing materials")
             assert src_material.anim_data_size == dst_material.anim_data_size
             assert src_material.ofs_anim_data == dst_material.ofs_anim_data
-
-
-def test_resource_names(mrl_imported, mrl_exported, subtests):
-    src_mrl = mrl_imported
-    src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
-    dst_mrl = mrl_exported
-
-    for mi, dst_material in enumerate(dst_mrl.materials):
-        src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
-        src_resource_names = [r.shader_object_hash.name for r in src_material.resources]
-        dst_resource_names = [r.shader_object_hash.name for r in dst_material.resources]
-
-        with subtests.test(material_index=mi):
-            assert sorted(src_resource_names) == sorted(dst_resource_names)
 
 
 def test_resources(mrl_imported, mrl_exported, subtests):
@@ -99,11 +106,33 @@ def test_resources(mrl_imported, mrl_exported, subtests):
 
     for mi, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
+        src_resources = [r for r in src_material.resources]
+        dst_resources = [r for r in dst_material.resources]
+        src_resource_names = [r.shader_object_hash.name for r in src_resources]
+        dst_resource_names = [r.shader_object_hash.name for r in dst_resources]
+        src_resources_sorted = sorted(src_resources, key=lambda r: r.shader_object_hash.name)
+        dst_resources_sorted = sorted(dst_resources, key=lambda r: r.shader_object_hash.name)
+        print_me = sorted(src_resource_names)
 
-        for ri, dst_resource in enumerate(dst_material.resources):
-            src_resource = src_material.resources[ri]
-            with subtests.test(material_index=mi, resource_index=ri):
+        with subtests.test(material_hash=src_material.name_hash_crcjam32):
+            assert sorted(src_resource_names) == sorted(dst_resource_names)
+            assert src_resource_names == dst_resource_names
+
+        for ri, dst_resource in enumerate(dst_resources_sorted):
+            src_resource = src_resources_sorted[ri]
+            with subtests.test(
+                    material_hash=src_material.name_hash_crcjam32,
+                    resource_name=dst_resources_sorted[ri].shader_object_hash.name,
+                    blend_state=MRL_BLEND_STATE_STR[src_material.blend_state_hash >> 12]
+                    ):
                 assert src_resource.cmd_type == dst_resource.cmd_type
+                assert src_resource.shader_obj_idx == dst_resource.shader_obj_idx
+                assert src_resource.cmd_type != Mrl.CmdType.set_flag or (
+                    #src_resource.value_cmd.index == dst_resource.value_cmd.index and
+                    src_resource.value_cmd.name_hash == dst_resource.value_cmd.name_hash
+                )
+        #if mi == 9:
+        #    break
 
 
 @pytest.mark.parametrize("float_buffer_name", ["globals", "cbmaterial"])
