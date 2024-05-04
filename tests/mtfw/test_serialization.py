@@ -3,13 +3,16 @@ import os
 
 import bpy
 import pytest
-# from kaitaistruct import KaitaiStream
 
-from .conftest import FileWrapper
 from albam.blender_ui.import_panel import ALBAM_OT_Import
 from albam.vfs import ALBAM_OT_VirtualFileSystemAddFiles
 
 from albam.engines.mtfw.mesh import export_mod, APPID_CLASS_MAPPER
+
+
+class FileWrapper:
+    def __init__(self, file_path):
+        self.name = os.path.basename(file_path)
 
 
 def test_export(arc_file):

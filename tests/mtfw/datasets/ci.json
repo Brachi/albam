@@ -1,0 +1,12 @@
+[
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl00/pl00.mod",
+        "mrl_path": "model/pl/pl00/pl00.mrl"
+    },
+    {
+        "app_id": "re5",
+        "mod_path": "pawn/pl/pl00/model/pl0000.mod",
+        "mrl_path": null
+    }
+]

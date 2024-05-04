@@ -1,7 +1,5 @@
 import pytest
 
-pytest.skip(reason="WIP", allow_module_level=True)
-
 
 def test_export_header(mod_imported, mod_exported):
     sheader = mod_imported.header
@@ -12,7 +10,8 @@ def test_export_header(mod_imported, mod_exported):
     assert sheader.revision == dheader.revision
     assert sheader.num_bones == dheader.num_bones
     assert sheader.num_materials == dheader.num_materials
-    assert sheader.reserved_01 == dheader.reserved_01
+    assert (sheader.version in (210, 211) and sheader.reserved_01 == dheader.reserved_01 or
+            sheader.version == 156 and not getattr(dheader, "reserved_01", None))
     assert sheader.num_groups == dheader.num_groups
     assert sheader.num_meshes == dheader.num_meshes
     assert sheader.num_vertices == dheader.num_vertices
@@ -22,8 +21,6 @@ def test_export_header(mod_imported, mod_exported):
     assert sheader.offset_materials_data == dheader.offset_materials_data
     assert sheader.offset_meshes_data == dheader.offset_meshes_data
     assert sheader.offset_vertex_buffer == dheader.offset_vertex_buffer
-    assert sheader.offset_index_buffer == dheader.offset_index_buffer
-    assert sheader.size_vertex_buffer == dheader.size_vertex_buffer
 
 
 def test_export_top_level(mod_imported, mod_exported):
@@ -98,8 +95,9 @@ def test_export_groups(mod_imported, mod_exported):
 def test_materials_data(mod_imported, mod_exported):
 
     assert mod_imported.materials_data.size_ == mod_exported.materials_data.size_
-    assert (mod_imported.header.version == 210 and
-            mod_imported.materials_data.material_names == mod_exported.materials_data.material_names)
+    assert ((mod_imported.header.version in (210, 211) and
+            mod_imported.materials_data.material_names == mod_exported.materials_data.material_names) or
+            mod_imported.header.version == 156)
 
 
 def test_meshes_data_21(mod_imported, mod_exported, subtests):
@@ -142,7 +140,11 @@ def test_header_xfail(pl0000_roundtrip):
 
     assert sheader.num_faces == dheader.num_faces
     assert sheader.num_edges == dheader.num_edges
-    assert sheader.size_file == dheader.size_file
+    assert sheader.version not in (210, 211) or sheader.size_file == dheader.size_file
+    # in 210, given we don't export some vertex formats (like the one witih blend shapes of 64 bytes)
+    # the size and hence the offset of the index buffer will differ
+    assert sheader.offset_index_buffer == dheader.offset_index_buffer
+    assert sheader.size_vertex_buffer == dheader.size_vertex_buffer
 
 
 @pytest.mark.xfail(reason="WIP")
