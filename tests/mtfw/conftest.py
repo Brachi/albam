@@ -1,41 +1,40 @@
 import os
 import io
+import json
 
 import bpy
 import pytest
 
-TMP_DATASET = [
-    {
-        "app_id": "re0",
-        "mod_path": "model/em/em02/em02.mod",
-        "mrl_path": "model/em/em02/em02.mrl",
-    },
-    {
-        "app_id": "re1",
-        "mod_path": "model/pl/pl00/pl00.mod",
-        "mrl_path": "model/pl/pl00/pl00.mrl",
-    },
-    {
-        "app_id": "re5",
-        "mod_path": "pawn/pl/pl00/model/pl0000.mod",
-        "mrl_path": None,
-    },
-    {
-        "app_id": "rev1",
-        "mod_path": "model/chara/pl/pl1000/pl1000.mod",
-        "mrl_path": "model/chara/pl/pl1000/pl1000.mrl",
-    },
-    {
-        "app_id": "rev2",
-        "mod_path": "data/chara/pl/pl2200_N/model/pl2200.mod",
-        "mrl_path": "data/chara/pl/pl2200_N/model/pl2200.mrl",
-    },
-]
+
+MTFW_DATASET = []
 
 
-class FileWrapper:
-    def __init__(self, file_path):
-        self.name = os.path.basename(file_path)
+def pytest_generate_tests(metafunc):
+    global MTFW_DATASET
+    mtfw_dataset_path = metafunc.config.getoption("mtfw_dataset")
+    if mtfw_dataset_path and not MTFW_DATASET:
+        # if loading multiple times will generate multiple
+        # tests even with scope=session. We want only one
+        # import-export per item in the dataset
+        with open(mtfw_dataset_path) as f:
+            MTFW_DATASET = json.load(f)
+
+    if ("app_id" in metafunc.fixturenames and
+            "mod_path" in metafunc.fixturenames and
+            "mrl_path" in metafunc.fixturenames):
+        argnames = ("app_id", "mod_path", "mrl_path")
+        argvalues = []
+        for data_dict in MTFW_DATASET:
+            app_id = data_dict["app_id"]
+            mod_path = data_dict["mod_path"]
+            mrl_path = data_dict["mrl_path"]
+            argvalues.append((app_id, mod_path, mrl_path))
+        metafunc.parametrize(argnames, argvalues, scope="session")
+
+    elif "lmt" in metafunc.fixturenames:
+        _generate_tests_from_arcs("lmt", metafunc)
+    elif "tex" in metafunc.fixturenames:
+        _generate_tests_from_arcs("tex", metafunc)
 
 
 @pytest.fixture(scope="session")
@@ -55,20 +54,15 @@ def loaded_arcs(pytestconfig):
     for app_id_and_arc_dir in arc_dirs:
         app_id, arc_dir = app_id_and_arc_dir.split("::")
         bpy.context.scene.albam.apps.app_selected = app_id
-        files = [{'name': name} for name in os.listdir(arc_dir)]
+        files = [{'name': name} for name in os.listdir(arc_dir) if name.endswith(".arc")]
         bpy.ops.albam.add_files(directory=arc_dir, files=files)
 
 
 @pytest.fixture(scope="session")
-def mod_export(loaded_arcs):
+def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
     from albam.engines.mtfw.structs.mrl import Mrl
     from kaitaistruct import KaitaiStream
-
-    dataset = TMP_DATASET[4]  # FIXME: un-hardcode
-    app_id = dataset["app_id"]
-    mod_path = dataset["mod_path"]
-    mrl_path = dataset["mrl_path"]
 
     bpy.context.scene.albam.apps.app_selected = app_id
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
@@ -79,6 +73,8 @@ def mod_export(loaded_arcs):
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
 
@@ -114,35 +110,24 @@ def mod_exported(mod_export):
 
 @pytest.fixture(scope="session")
 def mrl_imported(mod_export):
-    return mod_export[2]
+    mrl = mod_export[2]
+    if not mrl:
+        pytest.skip("No mrl available")
+    else:
+        return mrl
 
 
 @pytest.fixture(scope="session")
 def mrl_exported(mod_export):
-    return mod_export[3]
+    mrl = mod_export[3]
+    if not mrl:
+        pytest.skip("No mrl available")
+    else:
+        return mrl
 
 
 @pytest.fixture
-def lmt(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.structs.lmt import Lmt
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-
-    parsed = Lmt.from_bytes(src_bytes)
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._file_path = file_entry.file_path
-
-    return parsed
-
-
-@pytest.fixture
-def mrl(request):
+def parsed_mrl_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -164,7 +149,7 @@ def mrl(request):
 
 
 @pytest.fixture
-def mod(request):
+def parsed_mod_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -205,3 +190,79 @@ def tex(request):
     parsed_tex._num_bytes = len(tex_bytes)
 
     return parsed_tex
+
+
+@pytest.fixture
+def lmt(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.structs.lmt import Lmt
+
+    arc = request.param[0]
+    file_entry = request.param[1]
+
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
+
+    parsed = Lmt.from_bytes(src_bytes)
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._file_path = file_entry.file_path
+
+    return parsed
+
+
+def _generate_tests_from_arcs(file_extension, metafunc):
+    """
+    Generate one parsed object for file_extension, based on provided arcs.
+    Defer decompression and parsing to test-run time, not
+    collection time.
+    It requires a fixture named after the extension
+    """
+    arc_dirs = metafunc.config.getoption("arcdir")
+    if not arc_dirs:
+        pytest.skip("No arc directory supplied")
+        return
+
+    total_parsed_files = []
+    total_test_ids = []
+
+    for arc_dir in arc_dirs:
+        app_id, arc_dir = arc_dir.split("::")
+        ARC_FILES = [
+            os.path.join(root, f)
+            for root, _, files in os.walk(arc_dir)
+            for f in files
+            if f.endswith(".arc")
+        ]
+
+        if not ARC_FILES:
+            raise ValueError(f"No files ending in .arc found in {arc_dir}")
+
+        parsed_files, ids = _files_per_arc(file_extension, ARC_FILES, app_id)
+        total_parsed_files.extend(parsed_files)
+        total_test_ids.extend(ids)
+    metafunc.parametrize(file_extension, total_parsed_files, indirect=True, ids=total_test_ids)
+
+
+def _files_per_arc(file_extension, arc_paths, app_id):
+    # importing here to avoid errors in test collection.
+    # Since collection happens before calling register() in `pytest_sessionstart`
+    # sys.path is not modified to include albam_vendor, so the vendored dep kaitaistruct
+    # is not found when needed.
+    from albam.engines.mtfw.archive import ArcWrapper
+    final = []
+    ids = []
+    for arc_path in arc_paths:
+        arc_name = os.path.basename(arc_path)
+        try:
+            arc = ArcWrapper(arc_path)
+        except Exception:  # TODO: skip/xfail
+            continue
+        file_entries = arc.get_file_entries_by_extension(file_extension)
+        if not file_entries:
+            del arc
+            continue
+        for fe in file_entries:
+            final.append((arc, fe, app_id))
+            ids.append("::".join((arc_name, f"{fe.file_path}.{file_extension}")))
+    return final, ids

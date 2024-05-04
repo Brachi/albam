@@ -37,7 +37,7 @@ jobs:
         curl -L -o sample-re5-1.arc --output-dir $ALBAM_RE5_ARC_DIR '${{ secrets.SAMPLE_LINK_RE5_1 }}'
     - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
       run: |
-        coverage run -m pytest --arcdir=re1::${ALBAM_RE1_ARC_DIR} --arcdir=re5::${ALBAM_RE5_ARC_DIR}
+        coverage run -m pytest --mtfw-dataset=tests/mtfw/datasets/ci.json --arcdir=re1::${ALBAM_RE1_ARC_DIR} --arcdir=re5::${ALBAM_RE5_ARC_DIR}
         coverage json -o .coverage.json
     - name: "Upload coverage data"
       uses: actions/upload-artifact@v3
