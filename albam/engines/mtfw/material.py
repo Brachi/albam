@@ -527,7 +527,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         ))
 
     if (TextureType.HAIR_SHIFT in tex_types or
-            (TextureType.NORMAL not in tex_types and TextureType.EMISSION not in tex_types)):
+            (TextureType.NORMAL not in tex_types and
+             TextureType.EMISSION not in tex_types and
+             TextureType.ALBEDO_BLEND not in tex_types)):
         r.append(set_constant_buffer("CBMaterial"))
 
     if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] in ("BSBlendAlpha", "BSAddAlpha"):
@@ -554,6 +556,17 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         set_flag("FBRDF", brdf_sec),
         set_flag("FDiffuse"),
     ))
+
+    if (
+        TextureType.DIFFUSE in tex_types and
+        TextureType.ALBEDO_BLEND in tex_types and
+        TextureType.NORMAL not in tex_types and
+        TextureType.NORMAL_DETAIL not in tex_types and
+        TextureType.EMISSION not in tex_types and
+        TextureType.SPECULAR not in tex_types
+        ):
+        r.append(set_constant_buffer("CBMaterial"))
+
 
     if TextureType.LIGHTMAP in tex_types:
         r.extend((

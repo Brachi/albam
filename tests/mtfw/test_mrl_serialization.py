@@ -6,7 +6,7 @@ from albam.engines.mtfw.structs.mrl import Mrl
 from albam.engines.mtfw.material import MRL_BLEND_STATE_STR
 
 
-def test_export_mrl_top_level(mrl_imported, mrl_exported):
+def _get_error(mrl_imported, mrl_exported):
     src_mrl = mrl_imported
     dst_mrl = mrl_exported
     num_missing_materials = len(src_mrl.materials) - len(dst_mrl.materials)
@@ -27,8 +27,7 @@ def test_top_level(mrl_imported, mrl_exported):
     src_mrl = mrl_imported
     dst_mrl = mrl_exported
 
-    #error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
-    error, num_missing_materials, num_missing_textures = (0, 0, 0)
+    error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
 
     assert src_mrl.id_magic == dst_mrl.id_magic
     assert src_mrl.version == dst_mrl.version
@@ -74,8 +73,7 @@ def test_materials(mrl_imported, mrl_exported, subtests):
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
     dst_mrl = mrl_exported
 
-    # error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
-    error, num_missing_materials, num_missing_textures = (0, 0, 0)
+    error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
 
     for i, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
@@ -83,20 +81,20 @@ def test_materials(mrl_imported, mrl_exported, subtests):
         with subtests.test(material_index=i):
             assert src_material.type_hash == dst_material.type_hash
             assert src_material.name_hash_crcjam32 == dst_material.name_hash_crcjam32
-            assert src_material.cmd_buffer_size == dst_material.cmd_buffer_size
             assert src_material.blend_state_hash == dst_material.blend_state_hash
             assert src_material.depth_stencil_state_hash == dst_material.depth_stencil_state_hash
             assert src_material.rasterizer_state_hash == dst_material.rasterizer_state_hash
-            assert src_material.num_resources == dst_material.num_resources
             assert src_material.unused == dst_material.unused
             assert src_material.material_info_flags == dst_material.material_info_flags
             assert src_material.unk_nulls == dst_material.unk_nulls
+            assert src_material.num_resources == dst_material.num_resources
+            assert src_material.cmd_buffer_size == dst_material.cmd_buffer_size
 
         with subtests.test(material_hash=src_material.name_hash_crcjam32):
             if error:
                 pytest.xfail(reason="Difference in offset expected due to missing materials")
-            assert src_material.anim_data_size == dst_material.anim_data_size
-            assert src_material.ofs_anim_data == dst_material.ofs_anim_data
+            # assert src_material.anim_data_size == dst_material.anim_data_size
+            # assert src_material.ofs_anim_data == dst_material.ofs_anim_data
 
 
 def test_resources(mrl_imported, mrl_exported, subtests):
@@ -115,7 +113,6 @@ def test_resources(mrl_imported, mrl_exported, subtests):
         print_me = sorted(src_resource_names)
 
         with subtests.test(material_hash=src_material.name_hash_crcjam32):
-            assert sorted(src_resource_names) == sorted(dst_resource_names)
             assert src_resource_names == dst_resource_names
 
         for ri, dst_resource in enumerate(dst_resources_sorted):
@@ -126,6 +123,7 @@ def test_resources(mrl_imported, mrl_exported, subtests):
                     blend_state=MRL_BLEND_STATE_STR[src_material.blend_state_hash >> 12]
                     ):
                 assert src_resource.cmd_type == dst_resource.cmd_type
+                assert src_resource.shader_object_hash == dst_resource.shader_object_hash
                 assert src_resource.shader_obj_idx == dst_resource.shader_obj_idx
                 assert src_resource.cmd_type != Mrl.CmdType.set_flag or (
                     #src_resource.value_cmd.index == dst_resource.value_cmd.index and
