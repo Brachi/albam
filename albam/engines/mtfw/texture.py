@@ -257,7 +257,8 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
     unknown_textype = set()
     assert len(mrl.textures) == len(textures), f"{len(mrl.textures)} != {len(textures)}"
     for ri, (resource, i) in enumerate(set_texture_resources):
-        tex_index = resource.value_cmd.tex_idx - 1
+        tex_index = resource.value_cmd.tex_idx
+        real_tex_index = tex_index - 1
         tex_type_mtfw = resource.shader_object_hash.name
         try:
             tex_type_blender = TEX_TYPE_MAP_2.get(tex_type_mtfw)
@@ -266,7 +267,7 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
                 continue
 
             if tex_index > 0:
-                texture_target = textures[tex_index]
+                texture_target = textures[real_tex_index]
                 texture_name = texture_target.name if texture_target else f"TEXTURE CONVERSION FAILED or DUMMY if 0: {tex_index}"
                 # print(bl_material.name, i, tex_index, tex_type_mtfw, texture_name)
             else:
