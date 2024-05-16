@@ -112,8 +112,15 @@ def test_resources(mrl_imported, mrl_exported, subtests):
         dst_resources_sorted = sorted(dst_resources, key=lambda r: r.shader_object_hash.name)
         print_me = sorted(src_resource_names)
 
+        same_num_resources = src_resource_names == dst_resource_names
+
         with subtests.test(material_hash=src_material.name_hash_crcjam32):
             assert src_resource_names == dst_resource_names
+
+        if not same_num_resources:
+            # no point in comparing resources if we start with having a different
+            # amount. This will just add noise in test failures
+            continue
 
         for ri, dst_resource in enumerate(dst_resources_sorted):
             src_resource = src_resources_sorted[ri]
@@ -126,11 +133,9 @@ def test_resources(mrl_imported, mrl_exported, subtests):
                 assert src_resource.shader_object_hash == dst_resource.shader_object_hash
                 assert src_resource.shader_obj_idx == dst_resource.shader_obj_idx
                 assert src_resource.cmd_type != Mrl.CmdType.set_flag or (
-                    #src_resource.value_cmd.index == dst_resource.value_cmd.index and
-                    src_resource.value_cmd.name_hash == dst_resource.value_cmd.name_hash
+                    src_resource.value_cmd.name_hash == dst_resource.value_cmd.name_hash and
+                    src_resource.value_cmd.index == dst_resource.value_cmd.index
                 )
-        #if mi == 9:
-        #    break
 
 
 @pytest.mark.parametrize("float_buffer_name", ["globals", "cbmaterial"])
