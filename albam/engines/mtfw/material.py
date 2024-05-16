@@ -1,6 +1,7 @@
 from binascii import crc32
 import functools
 import io
+import re
 
 import bpy
 from kaitaistruct import KaitaiStream
@@ -276,7 +277,11 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         try:
             material_hash = int(bl_mat.name)
         except ValueError:
-            material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+            # remove suffix added by blender when there are duplicate names
+            # Mostly useful for import-export tests
+            # TODO: make it optional, enable it in tests only
+            bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat.name)
+            material_hash = crc32(bl_mat_name.encode()) ^ 0xFFFFFFFF
 
         dst_mod.materials_data.material_names.append(bl_mat.name)
         dst_mod.materials_data.material_hashes.append(material_hash)
