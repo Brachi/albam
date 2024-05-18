@@ -460,6 +460,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
 
     if TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
         fbump_sec = "FBumpHairNormal"
+    elif TextureType.HAIR_SHIFT in tex_types:
+        fbump_sec = "FBumpHair"
     elif TextureType.HEIGHTMAP in tex_types:
         fbump_sec = "FBumpParallaxOcclusion"
     elif TextureType.NORMAL_DETAIL in tex_types:
@@ -495,6 +497,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
     if TextureType.NORMAL not in tex_types:
         if TextureType.ALBEDO_BLEND_2 in tex_types:
             sec = "FColorMaskAlbedoMapModulate"
+        if TextureType.ALBEDO_BLEND in tex_types and BLEND_STATE == "BSBlendAlpha":
+            sec = "FAlbedoMapAdd"
         if TextureType.ALBEDO_BLEND in tex_types:
             sec = "FAlbedoMapModulate"
         elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
@@ -518,7 +522,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
 
     if TextureType.NORMAL_DETAIL in tex_types:
         if app_id == "re1":
-            param = "FUVSecondary"
+        #if app_id in ("re0", "re1"):
+            param = "FUVSecondary"  # sometimes in re0 as well
+        #if app_id in ("re0", "re1"):
         else:
             param = "FUVPrimary"
 
@@ -529,6 +535,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
     if TextureType.NORMAL in tex_types:
         if TextureType.ALBEDO_BLEND_2 in tex_types:
             sec = "FColorMaskAlbedoMapModulate"
+        if TextureType.ALBEDO_BLEND in tex_types:
+            sec = "FAlbedoMapModulate"
         elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
             sec = "FAlbedoMapModulate"
         elif TextureType.ENVMAP in tex_types:  #
@@ -536,7 +544,10 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         elif TextureType.HEIGHTMAP in tex_types:  # XXX might be blend_state related
             sec = "FAlbedoMapAdd"
         else:
-            sec = "FAlbedoMap2"
+            if app_id == "rev2":
+                sec = "FAlbedoMap2"
+            else:
+                sec = "FAlbedoMap"
 
         r.append(set_flag("FAlbedo", sec))  # FIXME: only works for rev2
 
@@ -643,13 +654,16 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         if TextureType.ENVMAP in tex_types:
             reflect_sec = "FReflectCubeMap"
         else:
-            reflect_sec = None
+            if app_id in ("re0", ):
+                reflect_sec = "FReflectGlobalCubeMap"
+            else:
+                reflect_sec = None
         r.append((set_flag("FReflect", reflect_sec)))
     if TextureType.ENVMAP in tex_types:
         r.extend((
             set_texture("tEnvMap"),
         ))
-    if TextureType.ENVMAP in tex_types:
+    if TextureType.ENVMAP in tex_types or app_id == "re0":  # TODO: verify re0
         r.append(set_sampler_state("SSEnvMap"))
 
     if TextureType.SPECULAR in tex_types:
@@ -660,7 +674,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_flag("FChannelSpecularMap"),
         ))
     if TextureType.LIGHTMAP not in tex_types or TextureType.SPECULAR in tex_types:
-        if app_id == "re1":
+        if app_id in ("re0", "re1"):
             fresnel_param = "FFresnelSchlick"
         else:
             fresnel_param = None
