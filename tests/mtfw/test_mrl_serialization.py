@@ -112,14 +112,14 @@ def test_resources(mrl_imported, mrl_exported, subtests):
         dst_resources_sorted = sorted(dst_resources, key=lambda r: r.shader_object_hash.name)
         print_me = sorted(src_resource_names)
 
-        same_num_resources = src_resource_names == dst_resource_names
+        same_resources = src_resource_names == dst_resource_names
 
         with subtests.test(material_hash=src_material.name_hash_crcjam32):
             assert src_resource_names == dst_resource_names
 
-        if not same_num_resources:
+        if not same_resources:
             # no point in comparing resources if we start with having a different
-            # amount. This will just add noise in test failures
+            # amount or names. This will just add noise in test failures
             continue
 
         for ri, dst_resource in enumerate(dst_resources_sorted):
