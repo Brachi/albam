@@ -485,9 +485,13 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_texture("tHairShiftMap"),
         ))
         if TextureType.NORMAL not in tex_types:
+            if app_id == "rev1":
+                fuvnorm_param = "FUVPrimary"
+            else:
+                fuvnorm_param = None
             r.extend((
                 set_sampler_state("SSNormalMap"),
-                set_flag("FUVNormalMap"),
+                set_flag("FUVNormalMap", fuvnorm_param),
             ))
 
     if TextureType.HEIGHTMAP in tex_types:
@@ -521,8 +525,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             r.append(set_texture("tNormalMap"))
 
     if TextureType.NORMAL_DETAIL in tex_types:
-        if app_id == "re1":
-        #if app_id in ("re0", "re1"):
+        if app_id in MRL_APPID_USES_DETAIL_SECONDARY:
             param = "FUVSecondary"  # sometimes in re0 as well
         #if app_id in ("re0", "re1"):
         else:
@@ -611,11 +614,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
 
     if TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
         brdf_sec = "FBRDFHairHalfLambert"
+    elif TextureType.HAIR_SHIFT in tex_types and app_id == "rev1":
+        brdf_sec = "FBRDFHair"
     else:
         brdf_sec = "FBRDF"
 
     r.extend((
-        # FIXME: only works for rev2. FIXME: not always uses 2
         set_flag("FShininess", transparency_param),
         set_flag("FLighting"),
         set_flag("FBRDF", brdf_sec),
@@ -654,7 +658,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         if TextureType.ENVMAP in tex_types:
             reflect_sec = "FReflectCubeMap"
         else:
-            if app_id in ("re0", ):
+            if app_id in ("re0", "rev1"):
                 reflect_sec = "FReflectGlobalCubeMap"
             else:
                 reflect_sec = None
@@ -663,7 +667,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         r.extend((
             set_texture("tEnvMap"),
         ))
-    if TextureType.ENVMAP in tex_types or app_id == "re0":  # TODO: verify re0
+    if TextureType.ENVMAP in tex_types or app_id in ("re0", "rev1"):  # TODO: verify re0
         r.append(set_sampler_state("SSEnvMap"))
 
     if TextureType.SPECULAR in tex_types:
@@ -674,7 +678,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_flag("FChannelSpecularMap"),
         ))
     if TextureType.LIGHTMAP not in tex_types or TextureType.SPECULAR in tex_types:
-        if app_id in ("re0", "re1"):
+        if app_id in ("re0", "re1", "rev1"):
             fresnel_param = "FFresnelSchlick"
         else:
             fresnel_param = None
