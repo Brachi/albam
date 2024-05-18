@@ -458,10 +458,10 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_flag("FChannelOcclusionMap"),
         ))
 
-    if TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
-        fbump_sec = "FBumpHairNormal"
-    elif TextureType.HAIR_SHIFT in tex_types:
+    if TextureType.HAIR_SHIFT in tex_types:
         fbump_sec = "FBumpHair"
+    elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
+        fbump_sec = "FBumpHairNormal"
     elif TextureType.HEIGHTMAP in tex_types:
         fbump_sec = "FBumpParallaxOcclusion"
     elif TextureType.NORMAL_DETAIL in tex_types:
@@ -501,9 +501,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
     if TextureType.NORMAL not in tex_types:
         if TextureType.ALBEDO_BLEND_2 in tex_types:
             sec = "FColorMaskAlbedoMapModulate"
-        if TextureType.ALBEDO_BLEND in tex_types and BLEND_STATE == "BSBlendAlpha":
+        elif TextureType.ALBEDO_BLEND in tex_types and BLEND_STATE == "BSBlendAlpha" and app_id == "re0":
             sec = "FAlbedoMapAdd"
-        if TextureType.ALBEDO_BLEND in tex_types:
+        elif TextureType.ALBEDO_BLEND in tex_types:
             sec = "FAlbedoMapModulate"
         elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
             sec = "FAlbedoMapModulate"
@@ -538,7 +538,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
     if TextureType.NORMAL in tex_types:
         if TextureType.ALBEDO_BLEND_2 in tex_types:
             sec = "FColorMaskAlbedoMapModulate"
-        if TextureType.ALBEDO_BLEND in tex_types:
+        elif TextureType.ALBEDO_BLEND in tex_types:
             sec = "FAlbedoMapModulate"
         elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
             sec = "FAlbedoMapModulate"
@@ -608,6 +608,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         transparency_param = "FShininess"
     else:
         if app_id == "rev2":
+            # FIXME: not always
             transparency_param = "FShininess2"
         else:
             transparency_param = "FShininess"
@@ -634,17 +635,14 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         ))
 
     if TextureType.SPECULAR in tex_types:
-        if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] in ("BSBlendAlpha", "BSAddAlpha"):
-            specular_param = "FSpecularMap"
-        elif TextureType.HEIGHTMAP in tex_types:
-            specular_param = "FSpecularMap"
+        if app_id == "rev2":
+            # FIXME: not always
+            specular_param = "FSpecular2Map"
         else:
-            if app_id == "rev2":
-                specular_param = "FSpecular2Map"
-            else:
-                specular_param = "FSpecularMap"
+            specular_param = "FSpecularMap"
     else:
-        specular_param = "FSpecular"
+        # TODO: specularDisable
+        specular_param = None
 
     r.extend((
         set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
