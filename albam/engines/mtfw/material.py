@@ -308,7 +308,9 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.ofs_anim_data = 0
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
-        mat.resources = _create_resources(app_id, tex_types, mat, custom_props_secondary)
+        resources = _create_resources(app_id, tex_types, mat, custom_props_secondary)
+        mat.resources = _insert_constant_buffers(resources, app_id, mat, custom_props_secondary)
+
         mat.num_resources = len(mat.resources)
         resources_size = sum(r.size_ for r in mat.resources)
         padding = -resources_size % MRL_PAD
@@ -353,6 +355,51 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     mrl_vf = VirtualFileData(app_id, mrl_relative_path, data_bytes=stream.to_byte_array())
 
     return exported_materials_map, mrl_vf
+
+
+def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
+    set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props)
+
+
+    globals_users = {
+        "fbumpdetailnormalmap",
+        "fbumphairnormal",
+        "fbumphair",
+        "falbedomap",
+        "falbedomapmodulate",
+        "fbumpparallaxocclusion"
+    }
+
+    cb_material_users = {
+        "fdiffuse",
+        "ftransparencyalpha",
+    }
+
+    globals_first_user_index = None
+    cb_material_first_user_index = None
+
+
+    for ri, resource in enumerate(resources):
+        if resource.cmd_type != Mrl.CmdType.set_flag:
+            continue
+        if resource.value_cmd.name_hash.name in globals_users and not globals_first_user_index:
+            globals_first_user_index = ri
+        if resource.value_cmd.name_hash.name in cb_material_users and not cb_material_first_user_index:
+            cb_material_first_user_index = ri
+
+
+    if globals_first_user_index:
+        resources.insert(globals_first_user_index + 1, set_constant_buffer("$Globals"))
+
+    if cb_material_first_user_index:
+        # index might have changed due to previous insertion
+        if cb_material_first_user_index > globals_first_user_index:
+            idx = cb_material_first_user_index + 2
+        else:
+            idx = cb_material_first_user_index + 1
+        resources.insert(idx, set_constant_buffer("CBMaterial"))
+
+    return resources
 
 
 def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
@@ -416,9 +463,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         fbump_sec = "FBump"
 
     r.append(set_flag("FBump", fbump_sec))  # FIXME: only for rev2
-    # XXX ordering
-    if TextureType.NORMAL in tex_types and TextureType.ENVMAP not in tex_types:
-        r.append(set_constant_buffer("$Globals"))
+
 
     if TextureType.HEIGHTMAP in tex_types:
         r.extend((
@@ -483,12 +528,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
 
         r.append(set_flag("FAlbedo", sec))  # FIXME: only works for rev2
 
-    if TextureType.ENVMAP in tex_types or TextureType.NORMAL not in tex_types:
-        r.append(set_constant_buffer("$Globals"))
-
+    # XXX remove me
     if TextureType.ALBEDO_BLEND_2 in tex_types:
         r.extend((
-            # set_constant_buffer("$Globals"),
             set_constant_buffer("CBColorMask"),
         ))
 
@@ -510,7 +552,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_texture("tAlbedoBlend2Map"),
             set_flag("FUVAlbedoBlend2Map", "FUVSecondary"),
         ))
-    if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] == "BSBlendAlpha":
+    if BLEND_STATE == "BSBlendAlpha":
         transparency_param = "FTransparencyAlpha"
     else:
         transparency_param = "FTransparency"
@@ -531,11 +573,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_flag("FUVIndirectSource"),
         ))
 
-    if (TextureType.HAIR_SHIFT in tex_types or
-            (TextureType.NORMAL not in tex_types and
-             TextureType.EMISSION not in tex_types and
-             TextureType.ALBEDO_BLEND not in tex_types)):
-        r.append(set_constant_buffer("CBMaterial"))
 
     if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] in ("BSBlendAlpha", "BSAddAlpha"):
         transparency_param = "FShininess"
@@ -562,26 +599,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
         set_flag("FDiffuse"),
     ))
 
-    if (
-        TextureType.DIFFUSE in tex_types and
-        TextureType.ALBEDO_BLEND in tex_types and
-        TextureType.NORMAL not in tex_types and
-        TextureType.NORMAL_DETAIL not in tex_types and
-        TextureType.EMISSION not in tex_types and
-        TextureType.SPECULAR not in tex_types
-        ):
-        r.append(set_constant_buffer("CBMaterial"))
-
 
     if TextureType.LIGHTMAP in tex_types:
         r.extend((
             set_flag("tLightMap"),
             set_flag("FUVLightMap"),
         ))
-
-    if (TextureType.HAIR_SHIFT not in tex_types and
-            (TextureType.NORMAL in tex_types or TextureType.EMISSION in tex_types)):
-        r.append(set_constant_buffer("CBMaterial"))
 
     if TextureType.SPECULAR in tex_types:
         if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] in ("BSBlendAlpha", "BSAddAlpha"):
