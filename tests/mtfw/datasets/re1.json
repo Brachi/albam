@@ -1,0 +1,33 @@
+
+[
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl00/pl00.mod",
+        "mrl_path": "model/pl/pl00/pl00.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl01/pl01.mod",
+        "mrl_path": "model/pl/pl01/pl01.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl02/pl02.mod",
+        "mrl_path": "model/pl/pl02/pl02.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl03/pl03.mod",
+        "mrl_path": "model/pl/pl03/pl03.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl04/pl04.mod",
+        "mrl_path": "model/pl/pl04/pl04.mrl"
+    },
+    {
+        "app_id": "re1",
+        "mod_path": "model/pl/pl05/pl05.mod",
+        "mrl_path": "model/pl/pl05/pl05.mrl"
+    }
+]

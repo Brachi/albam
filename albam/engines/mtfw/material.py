@@ -371,6 +371,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     }
 
     cb_material_users = {
+        "fuvtransformoffset",
         "fdiffuse",
         "ftransparencyalpha",
     }
@@ -436,8 +437,14 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_texture("tVtxDispMask"),  # not always
             set_flag("FVDMaskUVTransform"),  # not always
         ))
+
+    if app_id == "re1":
+        uv_transform_primary = "FUVTransformOffset"
+    else:
+        uv_transform_primary = None
+
     r.extend((
-        set_flag("FUVTransformPrimary"),
+        set_flag("FUVTransformPrimary", uv_transform_primary),
         # FIXME: only with normal detail
         set_flag("FUVTransformSecondary"),
         set_flag("FUVTransformUnique"),
@@ -510,9 +517,14 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             r.append(set_texture("tNormalMap"))
 
     if TextureType.NORMAL_DETAIL in tex_types:
+        if app_id == "re1":
+            param = "FUVSecondary"
+        else:
+            param = "FUVPrimary"
+
         r.extend((
             set_texture("tDetailNormalMap"),
-            set_flag("FUVDetailNormalMap", "FUVPrimary"),
+            set_flag("FUVDetailNormalMap", param),
         ))
     if TextureType.NORMAL in tex_types:
         if TextureType.ALBEDO_BLEND_2 in tex_types:
@@ -552,7 +564,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_texture("tAlbedoBlend2Map"),
             set_flag("FUVAlbedoBlend2Map", "FUVSecondary"),
         ))
-    if BLEND_STATE == "BSBlendAlpha":
+    if BLEND_STATE == "BSBlendAlpha" or (app_id == "re1" and TextureType.NORMAL_DETAIL in tex_types):
         transparency_param = "FTransparencyAlpha"
     else:
         transparency_param = "FTransparency"
@@ -648,8 +660,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None):
             set_flag("FChannelSpecularMap"),
         ))
     if TextureType.LIGHTMAP not in tex_types or TextureType.SPECULAR in tex_types:
+        if app_id == "re1":
+            fresnel_param = "FFresnelSchlick"
+        else:
+            fresnel_param = None
         r.extend((
-            set_flag("FFresnel"),
+            set_flag("FFresnel", fresnel_param),
         ))
 
     if TextureType.EMISSION in tex_types:
