@@ -118,9 +118,13 @@ def test_resources(mrl_imported, mrl_exported, subtests):
             assert src_resource_names == dst_resource_names
 
         if not same_resources:
-            # no point in comparing resources if we start with having a different
-            # amount or names. This will just add noise in test failures
-            continue
+            # discard not matching resources so we can test them
+            # later
+            dst_resources_sorted = [r for r in dst_resources_sorted
+                                    if r.shader_object_hash.name in src_resource_names]
+
+            assert len(src_resources_sorted) == len(dst_resources_sorted)
+            assert sorted(src_resource_names) == [r.shader_object_hash.name for r in dst_resources_sorted]
 
         for ri, dst_resource in enumerate(dst_resources_sorted):
             src_resource = src_resources_sorted[ri]
