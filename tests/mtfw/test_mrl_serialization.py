@@ -11,6 +11,7 @@ def test_top_level(mrl_imported, mrl_exported):
     dst_mrl = mrl_exported
 
     error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
+    error_tex = num_missing_textures * mrl_exported.textures[0].size_
 
     assert src_mrl.id_magic == dst_mrl.id_magic
     assert src_mrl.version == dst_mrl.version
@@ -18,7 +19,7 @@ def test_top_level(mrl_imported, mrl_exported):
     assert src_mrl.num_materials == dst_mrl.num_materials + num_missing_materials
     assert src_mrl.unk_01 == dst_mrl.unk_01
     assert src_mrl.ofs_textures == dst_mrl.ofs_textures
-    assert src_mrl.ofs_materials == dst_mrl.ofs_materials + error
+    assert src_mrl.ofs_materials == dst_mrl.ofs_materials + error_tex
     assert (src_mrl.ofs_resources_calculated_no_padding ==
             dst_mrl.ofs_resources_calculated_no_padding + error)
     assert len(src_mrl.textures) == len(dst_mrl.textures) + num_missing_textures
@@ -53,7 +54,8 @@ def test_materials(mrl_imported, mrl_exported, subtests):
     current_resources_offset = dst_mrl.ofs_resources_calculated
 
     # Materials can be exported with different order than the original
-    assert num_missing_materials > 0 or sorted(src_buffer_sizes) == sorted(dst_buffer_sizes)
+    with subtests.test():
+        assert num_missing_materials > 0 or sorted(src_buffer_sizes) == sorted(dst_buffer_sizes)
 
     for i, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
@@ -71,7 +73,7 @@ def test_materials(mrl_imported, mrl_exported, subtests):
             assert src_material.cmd_buffer_size == dst_material.cmd_buffer_size
 
             assert  dst_material.ofs_cmd == current_resources_offset
-            current_resources_offset += dst_material.cmd_buffer_size
+        current_resources_offset += dst_material.cmd_buffer_size
 
 
 def test_resources(mrl_imported, mrl_exported, subtests):

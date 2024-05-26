@@ -207,6 +207,26 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
                     custom_props_top_level.f_uv_normal_map_enabled = True
                     custom_props_top_level.f_uv_normal_map_param = param
 
+                f_emission = [r for r in material.resources
+                              if r.shader_object_hash == Mrl.ShaderObjectHash.femission]
+                if f_emission:
+                    param = f_emission[0].value_cmd.name_hash.name
+                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
+                    custom_props_top_level.f_emission_param = param
+
+                f_occlusion = [r for r in material.resources
+                               if r.shader_object_hash == Mrl.ShaderObjectHash.focclusion]
+                if f_occlusion:
+                    param = f_occlusion[0].value_cmd.name_hash.name
+                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
+                    custom_props_top_level.f_occlusion_param = param
+
+                ssenvmap = [r for r in material.resources
+                            if r.shader_object_hash == Mrl.ShaderObjectHash.ssenvmap]
+                if not ssenvmap:
+                    custom_props_top_level.ssenvmap_disable = True
+
+
                 globals_cb = [r for r in material.resources
                               if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
                 custom_props_globals = (albam_custom_props
@@ -430,6 +450,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
         "fbumphairnormal",
         "fbumphair",
         "falbedomap",
+        "falbedomapadd",
         "falbedomapmodulate",
         "fbumpparallaxocclusion"
     }
@@ -438,6 +459,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
         "fuvtransformoffset",
         "fdiffuse",
         "ftransparencyalpha",
+        "ftransparencyvolume",
     }
 
     globals_first_user_index = None
@@ -458,7 +480,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
 
     if cb_material_first_user_index:
         # index might have changed due to previous insertion
-        if cb_material_first_user_index > globals_first_user_index:
+        if globals_first_user_index and cb_material_first_user_index > globals_first_user_index:
             idx = cb_material_first_user_index + 2
         else:
             idx = cb_material_first_user_index + 1
@@ -513,7 +535,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVTransformSecondary"),
         set_flag("FUVTransformUnique"),
         set_flag("FUVTransformExtend"),
-        set_flag("FOcclusion"),
+        set_flag("FOcclusion", custom_props.f_occlusion_param),
     ))
     if TextureType.OCCLUSION in tex_types:
         r.extend((
@@ -734,7 +756,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_texture("tEnvMap"),
         ))
     if TextureType.ENVMAP in tex_types or app_id in ("re0", "rev1"):  # TODO: verify re0
-        r.append(set_sampler_state("SSEnvMap"))
+        if not custom_props.ssenvmap_disable:
+            r.append(set_sampler_state("SSEnvMap"))
 
     if TextureType.SPECULAR in tex_types:
         r.extend((
@@ -761,7 +784,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         else:
             sec = "FUVViewNormal"
         r.extend((
-            set_flag("FEmission", "FEmissionMap"),
+            set_flag("FEmission", custom_props.f_emission_param),
             # set_flag("FEmission", "FUVViewNormal"),
             set_texture("tEmissionMap"),
             set_flag("FUVEmissionMap", sec),
@@ -769,7 +792,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         ))
     else:
         r.extend((
-            set_flag("FEmission"),
+            set_flag("FEmission", custom_props.f_emission_param),
         ))
 
     r.extend((
@@ -1350,6 +1373,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FTransparency", "fTransparency", "", 1),
             ("FTransparencyAlpha", "fTransparencyAlpha", "", 2),
+            ("FTransparencyVolume", "FTransparencyVolume", "", 3),
         ],
         options=set()
     )
@@ -1433,7 +1457,24 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
+    f_emission_param : bpy.props.EnumProperty(
+        name="FEmission",
+        items=[
+            ("FEmission", "FEmission", "", 1),
+            ("FEmissionConstant", "FEmissionConstant", "", 2),
+        ],
+        options=set()
+    )
+    f_occlusion_param : bpy.props.EnumProperty(
+        name="FOcclusion",
+        items=[
+            ("FOcclusion", "FOcclusion", "", 1),
+            ("FOcclusionAmbient", "FOcclusionAmbient", "", 2),
+        ],
+        options=set()
+    )
 
+    ssenvmap_disable : bpy.props.BoolProperty(name="SSEnvMap", options=set(), default=False)
 
 
     material_info_flags: bpy.props.IntVectorProperty(
