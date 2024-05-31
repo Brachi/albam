@@ -60,7 +60,7 @@ types:
       - {id: depth_stencil_state_hash, type: u4}
       - {id: rasterizer_state_hash, type: u4}
       - {id: num_resources, type: b12}
-      - {id: unused, type: b20}
+      - {id: unk_01, type: b20}
       - {id: material_info_flags, type: u1, repeat: expr, repeat-expr: 4}  # rename to unk_
       - {id: unk_nulls, type: u4, repeat: expr, repeat-expr: 4}  # TODO: rename to "reserved", they are always null
       - {id: anim_data_size, type: u4}
@@ -280,6 +280,7 @@ types:
             cases:
               '"re0"': cb_globals_1
               '"re1"': cb_globals_1
+              '"re6"': cb_globals_3
               '"rev1"': cb_globals_1
               '"rev2"': cb_globals_2
               _ : cb_globals_1
@@ -317,7 +318,6 @@ types:
               # TODO: check other apps
               '"rev2"': cb_vertex_displacement2_1
               _ : cb_vertex_displacement2_1
-
   cb_globals_1:
     instances:
       size_:
@@ -417,6 +417,58 @@ types:
       - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4} #112
       - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4} #116
 
+
+  cb_globals_3:
+    instances:
+      size_:
+        value: 336
+        # value: 328
+    seq:
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} # 0
+      - {id: padding_1, type: f4}
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} # 4
+      - {id: f_detail_normal_power, type: f4} #8
+      - {id: f_detail_normal_uv_scale, type: f4} #9
+      - {id: f_detail_normal2_power, type: f4} #10
+      - {id: f_detail_normal2_uv_scale, type: f4} #11
+      - {id: f_primary_shift, type: f4} #12
+      - {id: f_secondary_shift, type: f4} #13
+      - {id: f_parallax_factor, type: f4} #14
+      - {id: f_parallax_self_occlusion, type: f4} #15
+      - {id: f_parallax_min_sample, type: f4} #16
+      - {id: f_parallax_max_sample, type: f4} #17
+      - {id: padding_2, type: f4, repeat: expr, repeat-expr: 2} # 18
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 3} #20
+      - {id: padding_3, type: f4}  # 23
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
+      - {id: f_thin_scattering, type: f4} #27
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #28
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} # 30
+      - {id: f_fresnel_schlick, type: f4} # 32
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} # 33
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} # 36
+      - {id: f_shininess, type: f4} # 39
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 3} # 40
+      - {id: f_alpha_clip_threshold, type: f4}  # 43
+      - {id: f_primary_expo, type: f4} # 44
+      - {id: f_secondary_expo, type: f4} # 45
+      - {id: padding_4, type: f4, repeat: expr, repeat-expr: 2}  # 46
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 3} #  48
+      - {id: padding_5, type: f4}  # 51
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 3} # 52
+      - {id: padding_6, type: f4}  # 55
+      - {id: f_albedo_color_2, type: f4, repeat: expr, repeat-expr: 3} # 56
+      - {id: padding_7, type: f4}  # 59
+      - {id: f_specular_color_2, type: f4, repeat: expr, repeat-expr: 3}  # 60
+      - {id: f_fresnel_schlick_2, type: f4}  # 63
+      - {id: f_shininess_2, type: f4} # 64
+      - {id: padding_8, type: f4, repeat: expr, repeat-expr: 3}  # 65
+      - {id: f_transparency_clip_threshold, type: f4, repeat: expr, repeat-expr: 4} # 68
+      - {id: f_blend_uv, type: f4} # 72
+      - {id: padding_9, type: f4, repeat: expr, repeat-expr: 3}  # 73
+      - {id: f_albedo_blend2_color, type: f4, repeat: expr, repeat-expr: 4}  # 76
+      - {id: f_detail_normalu_vscale, type: f4, repeat: expr, repeat-expr: 2}  # 80
+      - {id: padding_10, type: f4, repeat: expr, repeat-expr: 2}  # 82
 
   cb_material_1: #all games 32 floats
     instances:

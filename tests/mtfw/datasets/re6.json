@@ -1,0 +1,12 @@
+[
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0000.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0000_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0003.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0003_0.mrl"
+    }
+]

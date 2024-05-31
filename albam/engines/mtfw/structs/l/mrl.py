@@ -5001,10 +5001,6 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(2):
                 self.f_detail_normalu_vscale.append(self._io.read_f4le())
 
-            self.padding_10 = []
-            for i in range(2):
-                self.padding_10.append(self._io.read_f4le())
-
 
 
         def _fetch_instances(self):
@@ -5067,9 +5063,6 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
 
             for i in range(len(self.f_detail_normalu_vscale)):
-                pass
-
-            for i in range(len(self.padding_10)):
                 pass
 
 
@@ -5180,10 +5173,6 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.f_detail_normalu_vscale[i])
 
-            for i in range(len(self.padding_10)):
-                pass
-                self._io.write_f4le(self.padding_10[i])
-
 
 
         def _check(self):
@@ -5288,18 +5277,13 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(len(self.f_detail_normalu_vscale)):
                 pass
 
-            if (len(self.padding_10) != 2):
-                raise kaitaistruct.ConsistencyError(u"padding_10", len(self.padding_10), 2)
-            for i in range(len(self.padding_10)):
-                pass
-
 
         @property
         def size_(self):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 336
+            self._m_size_ = 328
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
