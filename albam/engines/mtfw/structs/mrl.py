@@ -6082,7 +6082,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self.depth_stencil_state_hash = self._io.read_u4le()
             self.rasterizer_state_hash = self._io.read_u4le()
             self.num_resources = self._io.read_bits_int_le(12)
-            self.unused = self._io.read_bits_int_le(20)
+            self.unk_01 = self._io.read_bits_int_le(20)
             self.material_info_flags = []
             for i in range(4):
                 self.material_info_flags.append(self._io.read_u1())
@@ -6127,7 +6127,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.depth_stencil_state_hash)
             self._io.write_u4le(self.rasterizer_state_hash)
             self._io.write_bits_int_le(12, self.num_resources)
-            self._io.write_bits_int_le(20, self.unused)
+            self._io.write_bits_int_le(20, self.unk_01)
             for i in range(len(self.material_info_flags)):
                 pass
                 self._io.write_u1(self.material_info_flags[i])

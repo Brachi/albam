@@ -48,13 +48,6 @@ MRL_UNK_01 = {
     "rev2": 0x478ed2d7,
 }
 
-MRL_UNUSED = {
-    "re0": 0xA00DC,
-    "re1": 0x200DC,
-    "re6": 0x80024,  # FIXME: actually is used, in mrl.version == 33 apparently, see pl0000_0.mrl
-    "rev1": 0x804DC,
-    "rev2": 0xA00DC,
-}
 
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
@@ -137,8 +130,9 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             custom_props_top_level.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
             # might not fit in 32 bits
             custom_props_top_level.depth_stencil_state_hash = str(material.depth_stencil_state_hash)
+            custom_props_top_level.rasterizer_state_hash = str(material.rasterizer_state_hash)
             custom_props_top_level.material_info_flags = material.material_info_flags
-            custom_props_top_level.unused = material.unused
+            custom_props_top_level.unk_01 = material.unk_01
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
@@ -206,6 +200,23 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
                     param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
                     custom_props_top_level.f_uv_normal_map_enabled = True
                     custom_props_top_level.f_uv_normal_map_param = param
+
+                f_uv_detail_normal_map = [r for r in material.resources
+                                                if r.shader_object_hash == Mrl.ShaderObjectHash.fuvdetailnormalmap]
+                if f_uv_detail_normal_map:
+                    param = f_uv_detail_normal_map[0].value_cmd.name_hash.name
+                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
+                    custom_props_top_level.f_uv_detail_normal_map_param = param
+
+
+                f_brdf = [r for r in material.resources
+                          if r.shader_object_hash == Mrl.ShaderObjectHash.fbrdf]
+                if f_brdf:
+                    param = f_brdf[0].value_cmd.name_hash.name
+                    print("param", param, blender_material.name)
+                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
+                    custom_props_top_level.f_brdf_param = param
+
 
                 f_emission = [r for r in material.resources
                               if r.shader_object_hash == Mrl.ShaderObjectHash.femission]
@@ -365,6 +376,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
             # Mostly useful for import-export tests
             # TODO: make it optional, enable it in tests only
             bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat.name)
+            # bl_mat_name = bl_mat.name  # FIXME: won't assign properly later in mesh
             material_hash = crc32(bl_mat_name.encode()) ^ 0xFFFFFFFF
 
         dst_mod.materials_data.material_names.append(bl_mat.name)
@@ -377,15 +389,13 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        # mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
         blend_state_type = mrl_params.blend_state_type
         shader_num = shader_objects[blend_state_type]["apps"][app_id]["shader_object_index"]
         blend_state_hash = (shader_objects[blend_state_type]["hash"] << 12) + shader_num
         mat.blend_state_hash = blend_state_hash
         mat.depth_stencil_state_hash = int(mrl_params.depth_stencil_state_hash)  # TODO: change to enum
-        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
-        # mat.unused = MRL_UNUSED[app_id]  # wrong values can cause glitches
-        mat.unused = mrl_params.unused
+        mat.rasterizer_state_hash = int(mrl_params.rasterizer_state_hash)  # TODO: change to enum
+        mat.unk_01 = mrl_params.unk_01
         mat.material_info_flags = mrl_params.material_info_flags  #
         mat.unk_nulls = [0, 0, 0, 0]
         mat.anim_data_size = 0
@@ -544,19 +554,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FChannelOcclusionMap"),
         ))
 
-    #if TextureType.HAIR_SHIFT in tex_types:
-    #    fbump_sec = "FBumpHair"
-    #elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
-    #    fbump_sec = "FBumpHairNormal"
-    #elif TextureType.HEIGHTMAP in tex_types:
-    #    fbump_sec = "FBumpParallaxOcclusion"
-    #elif TextureType.NORMAL_DETAIL in tex_types:
-    #    fbump_sec = "FBumpDetailNormalMap"
-    #elif TextureType.NORMAL in tex_types:
-    #    fbump_sec = "FBumpNormalMap"
-    #else:
-    #    fbump_sec = "FBump"
-
     r.append(set_flag("FBump", custom_props.f_bump_param))  # FIXME: only for rev2
 
 
@@ -580,24 +577,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
                 set_flag("FUVNormalMap", custom_props.f_uv_normal_map_param),  # TODO: use custom_props.f_uv_normal_map_enabled
             ))
 
-    if TextureType.HEIGHTMAP in tex_types:
-        # TODO
-        pass
 
     f_albedo_param = custom_props.f_albedo_param
     if TextureType.NORMAL not in tex_types:
-        #if TextureType.ALBEDO_BLEND_2 in tex_types:
-        #    sec = "FColorMaskAlbedoMapModulate"
-        #elif TextureType.ALBEDO_BLEND in tex_types and BLEND_STATE == "BSBlendAlpha" and app_id == "re0":
-        #    sec = "FAlbedoMapAdd"
-        #elif TextureType.ALBEDO_BLEND in tex_types:
-        #    sec = "FAlbedoMapModulate"
-        #elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
-        #    sec = "FAlbedoMapModulate"
-        #elif TextureType.HEIGHTMAP in tex_types:  # XXX might be blend_state related
-        #    sec = "FAlbedoMapAdd"
-        #else:
-        #    sec = "FAlbedoMap"
         r.append(set_flag("FAlbedo", f_albedo_param))  # FIXME: per app, works only on rev2
 
     if TextureType.NORMAL in tex_types:
@@ -612,33 +594,11 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             r.append(set_texture("tNormalMap"))
 
     if TextureType.NORMAL_DETAIL in tex_types:
-        if app_id in MRL_APPID_USES_DETAIL_SECONDARY:
-            param = "FUVSecondary"  # sometimes in re0 as well
-        #if app_id in ("re0", "re1"):
-        else:
-            param = "FUVPrimary"
-
         r.extend((
             set_texture("tDetailNormalMap"),
-            set_flag("FUVDetailNormalMap", param),
+            set_flag("FUVDetailNormalMap", custom_props.f_uv_detail_normal_map_param),
         ))
     if TextureType.NORMAL in tex_types:
-        #if TextureType.ALBEDO_BLEND_2 in tex_types:
-        #    sec = "FColorMaskAlbedoMapModulate"
-        #elif TextureType.ALBEDO_BLEND in tex_types:
-        #    sec = "FAlbedoMapModulate"
-        #elif TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
-        #    sec = "FAlbedoMapModulate"
-        #elif TextureType.ENVMAP in tex_types:  #
-        #    sec = "FAlbedoMap"
-        #elif TextureType.HEIGHTMAP in tex_types:  # XXX might be blend_state related
-        #    sec = "FAlbedoMapAdd"
-        #else:
-        #    if app_id == "rev2":
-        #        sec = "FAlbedoMap2"
-        #    else:
-        #        sec = "FAlbedoMap"
-
         r.append(set_flag("FAlbedo", f_albedo_param))  # FIXME: only works for rev2
 
     # XXX remove me
@@ -665,10 +625,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_texture("tAlbedoBlend2Map"),
             set_flag("FUVAlbedoBlend2Map", "FUVSecondary"),
         ))
-    #if BLEND_STATE == "BSBlendAlpha" or (app_id == "re1" and TextureType.NORMAL_DETAIL in tex_types):
-    #    transparency_param = "FTransparencyAlpha"
-    #else:
-    #    transparency_param = "FTransparency"
     r.extend((
         set_flag("FTransparency", custom_props.f_transparency),  # TODO: rename to f_transparency_param
     ))
@@ -686,31 +642,10 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVIndirectSource"),
         ))
 
-
-    #if MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12] in ("BSBlendAlpha", "BSAddAlpha"):
-    #    transparency_param = "FShininess"
-    #elif TextureType.HEIGHTMAP in tex_types:
-    #    transparency_param = "FShininess"
-    #elif TextureType.NORMAL not in tex_types:
-    #    transparency_param = "FShininess"
-    #else:
-    #    if app_id == "rev2":
-    #        # FIXME: not always
-    #        transparency_param = "FShininess2"
-    #    else:
-    #        transparency_param = "FShininess"
-
-    if TextureType.VERTEX_DISPLACEMENT_MASK in tex_types and BLEND_STATE in ("BSBlendAlpha", "BSAddAlpha"):
-        brdf_sec = "FBRDFHairHalfLambert"
-    elif TextureType.HAIR_SHIFT in tex_types and app_id == "rev1":
-        brdf_sec = "FBRDFHair"
-    else:
-        brdf_sec = "FBRDF"
-
     r.extend((
         set_flag("FShininess", custom_props.f_shininess_param),
         set_flag("FLighting"),
-        set_flag("FBRDF", brdf_sec),
+        set_flag("FBRDF", custom_props.f_brdf_param),
         set_flag("FDiffuse"),
     ))
 
@@ -721,15 +656,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVLightMap"),
         ))
 
-    #if TextureType.SPECULAR in tex_types:
-    #    if app_id == "rev2":
-    #        # FIXME: not always
-    #        specular_param = "FSpecular2Map"
-    #    else:
-    #        specular_param = "FSpecularMap"
-    #else:
-    #    # TODO: specularDisable
-    #    specular_param = None
     specular_param = custom_props.f_specular_param
     r.extend((
         set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
@@ -739,15 +665,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     if TextureType.SPHERE in tex_types:
         r.append(set_texture("tSphereMap"))
 
-    #if TextureType.LIGHTMAP not in tex_types or TextureType.SPECULAR in tex_types:
-    #    if TextureType.ENVMAP in tex_types:
-    #        reflect_sec = "FReflectCubeMap"
-    #    else:
-    #        if app_id in ("re0", "rev1"):
-    #            reflect_sec = "FReflectGlobalCubeMap"
-    #        else:
-    #            reflect_sec = None
-    #    r.append((set_flag("FReflect", reflect_sec)))
     if custom_props.f_reflect_enabled:
         r.append(set_flag("FReflect", custom_props.f_reflect_param))
 
@@ -766,15 +683,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVSpecularMap", "FUVPrimary"),
             set_flag("FChannelSpecularMap"),
         ))
-    #if TextureType.LIGHTMAP not in tex_types or TextureType.SPECULAR in tex_types:
-    #    if app_id in ("re0", "re1", "rev1"):
-    #        fresnel_param = "FFresnelSchlick"
-    #    else:
-    #        fresnel_param = None
-    #    r.extend((
-    #        set_flag("FFresnel", fresnel_param),
-    #    ))
-
     if custom_props.f_fresnel_enabled:
         r.append(set_flag("FFresnel", custom_props.f_fresnel_param))
 
@@ -1367,7 +1275,8 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
     blend_state_type: blend_state_enum
     # TODO: make enum, and filter by app if possible
     depth_stencil_state_hash: bpy.props.StringProperty(name="Depth Stencil State", default="0", options=set())
-    unused: bpy.props.IntProperty(name="Not really unused", options=set())
+    rasterizer_state_hash: bpy.props.StringProperty(name="Rasterizer State", default="0", options=set())
+    unk_01: bpy.props.IntProperty(name="Unk_01", options=set())
     f_transparency : bpy.props.EnumProperty(
         name="FTransparency",
         items=[
@@ -1415,6 +1324,18 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
+    f_brdf_param : bpy.props.EnumProperty(
+        name="FBRDF",
+        items=[
+            ("FBRDF", "FBRDF", "", 1),
+            ("FBRDFHair", "FBRDFHair", "", 2),
+            ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),
+            ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),
+        ],
+        options=set()
+    )
+
+
     f_fresnel_enabled : bpy.props.BoolProperty(name="FFresnel Enabled", options=set())
     f_fresnel_param : bpy.props.EnumProperty(
         name="FFresnel",
@@ -1457,11 +1378,22 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
+    f_uv_detail_normal_map_param : bpy.props.EnumProperty(
+        name="FUVDetailNormalMap",
+        items=[
+            ("FUVDetailNormalMap", "FUVDetailNormalMap", "", 1),
+            ("FUVPrimary", "FUVPrimary", "", 2),
+            ("FUVSecondary", "FUVSecondary", "", 3),
+        ],
+        options=set()
+    )
+
     f_emission_param : bpy.props.EnumProperty(
         name="FEmission",
         items=[
             ("FEmission", "FEmission", "", 1),
-            ("FEmissionConstant", "FEmissionConstant", "", 2),
+            ("FEmissionMap", "FEmissionMap", "", 2),
+            ("FEmissionConstant", "FEmissionConstant", "", 3),
         ],
         options=set()
     )
