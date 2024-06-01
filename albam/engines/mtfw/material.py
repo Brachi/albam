@@ -135,162 +135,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
                 # TODO: helper function
-
-                shader_objects = get_shader_objects()
-
-                def _temp(shader_object_enum, custom_prop_name):
-                    resource = [r for r in material.resources
-                                if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, shader_object_enum, None)]
-                    if resource:
-                        param = resource[0].value_cmd.name_hash.name
-                        param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                        setattr(custom_props_top_level, custom_prop_name, param)
-
-
-                _temp("fuvtransformsecondary", "f_uv_transform_secondary")
-
-                f_transparency = [r for r in material.resources
-                                  if r.shader_object_hash == Mrl.ShaderObjectHash.ftransparency]
-                if f_transparency:
-                    param = f_transparency[0].value_cmd.name_hash.name
-                    name = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_transparency = name
-
-                f_specular = [r for r in material.resources
-                                  if r.shader_object_hash == Mrl.ShaderObjectHash.fspecular]
-                if f_specular:
-                    param = f_specular[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_specular_param = param
-
-                f_albedo = [r for r in material.resources
-                            if r.shader_object_hash == Mrl.ShaderObjectHash.falbedo]
-                if f_albedo:
-                    param = f_albedo[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_albedo_param = param
-
-
-                f_bump = [r for r in material.resources
-                            if r.shader_object_hash == Mrl.ShaderObjectHash.fbump]
-                if f_bump:
-                    param = f_bump[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_bump_param = param
-
-
-                f_fresnel = [r for r in material.resources
-                            if r.shader_object_hash == Mrl.ShaderObjectHash.ffresnel]
-                if f_fresnel:
-                    param = f_fresnel[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_fresnel_enabled = True
-                    custom_props_top_level.f_fresnel_param = param
-
-                f_reflect = [r for r in material.resources
-                            if r.shader_object_hash == Mrl.ShaderObjectHash.freflect]
-                if f_reflect:
-                    param = f_reflect[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_reflect_enabled = True
-                    custom_props_top_level.f_reflect_param = param
-
-                f_shininess = [r for r in material.resources
-                               if r.shader_object_hash == Mrl.ShaderObjectHash.fshininess]
-                if f_shininess:
-                    param = f_shininess[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_shininess_param = param
-
-                f_uv_normal_map = [r for r in material.resources
-                                   if r.shader_object_hash == Mrl.ShaderObjectHash.fuvnormalmap]
-                if f_uv_normal_map:
-                    param = f_uv_normal_map[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_uv_normal_map_enabled = True
-                    custom_props_top_level.f_uv_normal_map_param = param
-
-                f_uv_detail_normal_map = [r for r in material.resources
-                                                if r.shader_object_hash == Mrl.ShaderObjectHash.fuvdetailnormalmap]
-                if f_uv_detail_normal_map:
-                    param = f_uv_detail_normal_map[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_uv_detail_normal_map_param = param
-
-
-                f_brdf = [r for r in material.resources
-                          if r.shader_object_hash == Mrl.ShaderObjectHash.fbrdf]
-                if f_brdf:
-                    param = f_brdf[0].value_cmd.name_hash.name
-                    print("param", param, blender_material.name)
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_brdf_param = param
-
-
-                f_emission = [r for r in material.resources
-                              if r.shader_object_hash == Mrl.ShaderObjectHash.femission]
-                if f_emission:
-                    param = f_emission[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_emission_param = param
-
-                f_occlusion = [r for r in material.resources
-                               if r.shader_object_hash == Mrl.ShaderObjectHash.focclusion]
-                if f_occlusion:
-                    param = f_occlusion[0].value_cmd.name_hash.name
-                    param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
-                    custom_props_top_level.f_occlusion_param = param
-
-                ssenvmap = [r for r in material.resources
-                            if r.shader_object_hash == Mrl.ShaderObjectHash.ssenvmap]
-                if not ssenvmap:
-                    custom_props_top_level.ssenvmap_disable = True
-
-
-                globals_cb = [r for r in material.resources
-                              if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
-                custom_props_globals = (albam_custom_props
-                                        .get_custom_properties_secondary_for_appid(app_id)["globals"])
-
-                custom_props_globals.copy_custom_properties_from(globals_cb.float_buffer.app_specific)
-
-                cb_material = [r for r in material.resources
-                               if r.shader_object_hash == Mrl.ShaderObjectHash.cbmaterial][0]
-                custom_props_cb_material = (albam_custom_props
-                                            .get_custom_properties_secondary_for_appid(app_id)["cb_material"])
-                custom_props_cb_material.copy_custom_properties_from(cb_material.float_buffer.app_specific)
-
-                cb_color_mask = [r for r in material.resources
-                                 if r.shader_object_hash == Mrl.ShaderObjectHash.cbcolormask]
-                if cb_color_mask:
-
-                    custom_props_cb_color_mask = (
-                        albam_custom_props.get_custom_properties_secondary_for_appid(app_id)["cb_color_mask"])
-                    custom_props_cb_color_mask.copy_custom_properties_from(
-                        cb_color_mask[0].float_buffer.app_specific)
-
-                cb_vertex_displacement = [
-                    r for r in material.resources
-                    if r.shader_object_hash == Mrl.ShaderObjectHash.cbvertexdisplacement]
-                if cb_vertex_displacement:
-
-                    custom_props_cb_vertex_disp = (
-                        albam_custom_props
-                        .get_custom_properties_secondary_for_appid(app_id)["cb_vertex_disp"])
-                    (custom_props_cb_vertex_disp
-                     .copy_custom_properties_from(cb_vertex_displacement[0].float_buffer.app_specific))
-
-                cb_vertex_displacement_2 = [
-                    r for r in material.resources
-                    if r.shader_object_hash == Mrl.ShaderObjectHash.cbvertexdisplacement2]
-                if cb_vertex_displacement_2:
-
-                    custom_props_cb_vertex_disp2 = (
-                        albam_custom_props
-                        .get_custom_properties_secondary_for_appid(app_id)["cb_vertex_disp2"])
-                    (custom_props_cb_vertex_disp2
-                     .copy_custom_properties_from(cb_vertex_displacement_2[0].float_buffer.app_specific))
-
+                _copy_resources_to_bl_mat(app_id, material, blender_material)
         else:
             custom_props_top_level.copy_custom_properties_from(material)
 
@@ -315,6 +160,61 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             materials[material.name_hash_crcjam32] = blender_material
 
     return materials
+
+
+
+def _copy_resources_to_bl_mat(app_id, material, blender_material):
+    shader_objects = get_shader_objects()
+    albam_custom_props = blender_material.albam_custom_properties
+    features = (albam_custom_props.get_custom_properties_secondary_for_appid(app_id)["features"])
+
+    def copy_feature(shader_object_enum, custom_prop_name, enabler=None):
+        resource = [r for r in material.resources
+                    if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, shader_object_enum, None)]
+        if resource:
+            param = resource[0].value_cmd.name_hash.name
+            param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
+            setattr(features, custom_prop_name, param)
+        if enabler and not resource:
+            setattr(features, enabler, False)
+        elif enabler and resource:
+            setattr(features, enabler, True)
+
+    def copy_float_buffer(buffer_name, custom_prop_name):
+        cb = [r for r in material.resources
+              if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, buffer_name)]
+        if cb:
+            cb = cb[0]
+        else:
+            return
+        cb_custom_props = (albam_custom_props.get_custom_properties_secondary_for_appid(app_id)[custom_prop_name])
+        cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
+
+    copy_feature("fuvtransformsecondary", "f_uv_transform_secondary")
+    copy_feature("ftransparency", "f_transparency")  # TODO: rename to f_transparency_param
+    copy_feature("fspecular", "f_specular_param")
+    copy_feature("falbedo", "f_albedo_param")
+    copy_feature("fbump", "f_bump_param")
+    copy_feature("ffresnel", "f_fresnel_param", "f_fresnel_enabled")
+    copy_feature("freflect", "f_reflect_param", "f_reflect_enabled")
+    copy_feature("fshininess", "f_shininess_param", "f_reflect_enabled")
+    copy_feature("fuvnormalmap", "f_uv_normal_map_param", "f_uv_normal_map_enabled")
+    copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")  # TODO: enabler
+    copy_feature("fbrdf", "f_brdf_param")
+    copy_feature("femission", "f_emission_param")
+    copy_feature("focclusion", "f_occlusion_param")
+    copy_float_buffer("globals", "globals")
+    copy_float_buffer("cbmaterial", "cb_material")
+    copy_float_buffer("cbcolormask", "cb_color_mask")
+    copy_float_buffer("cbvertexdisplacement", "cb_vertex_disp")
+    copy_float_buffer("cbvertexdisplacement2", "cb_vertex_disp2")
+
+    ssenvmap = [r for r in material.resources
+                if r.shader_object_hash == Mrl.ShaderObjectHash.ssenvmap]
+    if ssenvmap:
+        features.ssenvmap_enable = True
+    else:
+        features.ssenvmap_enable = False
 
 
 def serialize_materials_data(model_asset, bl_objects, src_mod, dst_mod):
@@ -468,7 +368,6 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
 def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props)
 
-
     globals_users = {
         "fbumpdetailnormalmap",
         "fbumphairnormal",
@@ -513,14 +412,15 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     return resources
 
 
-def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_props_secondary=None):
+def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_props_sec=None):
     """
     XXX rough and wild ifs to quickly iterate. Hopefully not the final version!
     """
     set_flag = functools.partial(_create_set_flag_resource, app_id, mrl_mat)
     set_sampler_state = functools.partial(_create_set_sampler_state_resource, app_id, mrl_mat)
     set_texture = functools.partial(_create_set_texture_resource, app_id, mrl_mat, tex_types)
-    set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props_secondary)
+    set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props_sec)
+    features = custom_props_sec["features"]
 
     BLEND_STATE = MRL_BLEND_STATE_STR[mrl_mat.blend_state_hash >> 12]
 
@@ -556,10 +456,10 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     r.extend((
         set_flag("FUVTransformPrimary", uv_transform_primary),
         # FIXME: only with normal detail
-        set_flag("FUVTransformSecondary", custom_props.f_uv_transform_secondary),
+        set_flag("FUVTransformSecondary", features.f_uv_transform_secondary),
         set_flag("FUVTransformUnique"),
         set_flag("FUVTransformExtend"),
-        set_flag("FOcclusion", custom_props.f_occlusion_param),
+        set_flag("FOcclusion", features.f_occlusion_param),
     ))
     if TextureType.OCCLUSION in tex_types:
         r.extend((
@@ -568,12 +468,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FChannelOcclusionMap"),
         ))
 
-    r.append(set_flag("FBump", custom_props.f_bump_param))  # FIXME: only for rev2
+    r.append(set_flag("FBump", features.f_bump_param))  # FIXME: only for rev2
 
 
     if TextureType.HEIGHTMAP in tex_types:
         r.extend((
-            set_flag("FUVNormalMap", custom_props.f_uv_normal_map_param),
+            set_flag("FUVNormalMap", features.f_uv_normal_map_param),
             set_texture("tHeightMap"),
         ))
 
@@ -588,13 +488,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
                 fuvnorm_param = None
             r.extend((
                 set_sampler_state("SSNormalMap"),  
-                set_flag("FUVNormalMap", custom_props.f_uv_normal_map_param),  # TODO: use custom_props.f_uv_normal_map_enabled
+                set_flag("FUVNormalMap", features.f_uv_normal_map_param),  # TODO: use features.f_uv_normal_map_enabled
             ))
 
 
-    f_albedo_param = custom_props.f_albedo_param
     if TextureType.NORMAL not in tex_types:
-        r.append(set_flag("FAlbedo", f_albedo_param))  # FIXME: per app, works only on rev2
+        r.append(set_flag("FAlbedo", features.f_albedo_param))
 
     if TextureType.NORMAL in tex_types:
         if TextureType.HAIR_SHIFT not in tex_types:
@@ -602,7 +501,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         if TextureType.HEIGHTMAP not in tex_types:
             r.extend((
                 set_sampler_state("SSNormalMap"),
-                set_flag("FUVNormalMap", custom_props.f_uv_normal_map_param),
+                set_flag("FUVNormalMap", features.f_uv_normal_map_param),
             ))
         if TextureType.HAIR_SHIFT in tex_types:
             r.append(set_texture("tNormalMap"))
@@ -610,10 +509,10 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     if TextureType.NORMAL_DETAIL in tex_types:
         r.extend((
             set_texture("tDetailNormalMap"),
-            set_flag("FUVDetailNormalMap", custom_props.f_uv_detail_normal_map_param),
+            set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param),
         ))
     if TextureType.NORMAL in tex_types:
-        r.append(set_flag("FAlbedo", f_albedo_param))  # FIXME: only works for rev2
+        r.append(set_flag("FAlbedo", features.f_albedo_param))
 
     # XXX remove me
     if TextureType.ALBEDO_BLEND_2 in tex_types:
@@ -640,7 +539,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVAlbedoBlend2Map", "FUVSecondary"),
         ))
     r.extend((
-        set_flag("FTransparency", custom_props.f_transparency),  # TODO: rename to f_transparency_param
+        set_flag("FTransparency", features.f_transparency),  # TODO: rename to f_transparency_param
     ))
     if TextureType.TRANSPARENCY_MAP in tex_types:
         r.extend((
@@ -657,9 +556,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         ))
 
     r.extend((
-        set_flag("FShininess", custom_props.f_shininess_param),
+        set_flag("FShininess", features.f_shininess_param),
         set_flag("FLighting"),
-        set_flag("FBRDF", custom_props.f_brdf_param),
+        set_flag("FBRDF", features.f_brdf_param),
         set_flag("FDiffuse"),
     ))
 
@@ -670,7 +569,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVLightMap"),
         ))
 
-    specular_param = custom_props.f_specular_param
+    specular_param = features.f_specular_param
     r.extend((
         set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
         set_flag("FSpecular", specular_param),
@@ -679,14 +578,14 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     if TextureType.SPHERE in tex_types:
         r.append(set_texture("tSphereMap"))
 
-    if custom_props.f_reflect_enabled:
-        r.append(set_flag("FReflect", custom_props.f_reflect_param))
+    if features.f_reflect_enabled:
+        r.append(set_flag("FReflect", features.f_reflect_param))
 
     if TextureType.ENVMAP in tex_types:
         r.extend((
             set_texture("tEnvMap"),
         ))
-    if not custom_props.ssenvmap_disable:
+    if features.ssenvmap_enable:
         r.append(set_sampler_state("SSEnvMap"))
 
     if TextureType.SPECULAR in tex_types:
@@ -696,8 +595,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_flag("FUVSpecularMap", "FUVPrimary"),
             set_flag("FChannelSpecularMap"),
         ))
-    if custom_props.f_fresnel_enabled:
-        r.append(set_flag("FFresnel", custom_props.f_fresnel_param))
+    if features.f_fresnel_enabled:
+        r.append(set_flag("FFresnel", features.f_fresnel_param))
 
     if TextureType.EMISSION in tex_types:
         if TextureType.NORMAL not in tex_types:
@@ -705,7 +604,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         else:
             sec = "FUVViewNormal"
         r.extend((
-            set_flag("FEmission", custom_props.f_emission_param),
+            set_flag("FEmission", features.f_emission_param),
             # set_flag("FEmission", "FUVViewNormal"),
             set_texture("tEmissionMap"),
             set_flag("FUVEmissionMap", sec),
@@ -713,7 +612,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         ))
     else:
         r.extend((
-            set_flag("FEmission", custom_props.f_emission_param),
+            set_flag("FEmission", features.f_emission_param),
         ))
 
     r.extend((
@@ -1325,6 +1224,29 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
     unk_01: bpy.props.IntProperty(name="Unk_01", options=set())
 
 
+
+
+    material_info_flags: bpy.props.IntVectorProperty(
+        name="Material Info Flags", size=4, default=(0, 0, 128, 140), options=set())
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
+
+
+@blender_registry.register_custom_properties_material(
+    "features", ("re0", "re1", "rev1", "rev2", "re6"),
+    is_secondary=True, display_name="Features")
+@blender_registry.register_blender_prop
+class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
+
+
     f_uv_transform_secondary : bpy.props.EnumProperty(
         name="FUVTransformSecondary",
         items=[
@@ -1464,11 +1386,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
-    ssenvmap_disable : bpy.props.BoolProperty(name="SSEnvMap", options=set(), default=False)
-
-
-    material_info_flags: bpy.props.IntVectorProperty(
-        name="Material Info Flags", size=4, default=(0, 0, 128, 140), options=set())
+    ssenvmap_enable : bpy.props.BoolProperty(name="SSEnvMap", options=set(), default=True)
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1479,6 +1397,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
     def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
             setattr(self, attr_name, getattr(src_obj, attr_name))
+
 
 
 @blender_registry.register_custom_properties_material(
