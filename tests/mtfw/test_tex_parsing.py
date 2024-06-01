@@ -11,8 +11,8 @@ ACCEPTABLE_SIZES.add(1280)
 TEX_TYPES_157 = {0x209d, 0x9a, 0xa09d}
 
 
-def test_parse_tex(tex):
-
+def test_parse_tex(parsed_tex_from_arc):
+    tex = parsed_tex_from_arc
     assert tex.width in ACCEPTABLE_SIZES
     assert tex.height in ACCEPTABLE_SIZES
     assert tex.num_images in (1, 6)  # XXX FAILS sometimes

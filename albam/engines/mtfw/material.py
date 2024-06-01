@@ -24,7 +24,6 @@ from .texture import (
 
 MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
 
-# Probably better with app_id
 MAPPER_SERIALIZE_FUNCS = {
     156: lambda: _serialize_materials_data_156,
     210: lambda: _serialize_materials_data_21,
@@ -40,6 +39,8 @@ MRL_DEFAULT_VERSION = {
     "rev1": 32,
     "rev2": 34,
 }
+MRL_FILLER = 0xDCDC
+MRL_PAD = 16
 MRL_UNK_01 = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
@@ -57,10 +58,6 @@ MRL_CBGLOBALS_MAP = {
     "rev2": Mrl.CbGlobals2,
 }
 
-shader_objects = get_shader_objects()
-blend_state_obj = shader_objects["BSSolid"]  # rev1 items uses BSAddAlpha
-stencil_obj = shader_objects["DSZTestWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
-rasterizer_obj = shader_objects["RSMesh"]
 
 MRL_BLEND_STATE_STR = {
     0x62b2d: "BSSolid",
@@ -69,27 +66,29 @@ MRL_BLEND_STATE_STR = {
     0xc4064: "BSRevSubAlpha",
 }
 
+MRL_DEPTH_STENCIL_STATE_STR = {
+    0x7d2f6: "DSZTest",
+    0xb8139: "DSZTestWrite",
+    0xc80a6: "DSZTestWriteStencilWrite",
+    0x30511: "DSZTestStencilWrite",
+    0xa967c: "DSZWrite",
+}
 
-MRL_BLEND_STATE_HASH = {
-    app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in blend_state_obj["apps"].items()
-}
-MRL_DEPTH_STENCIL_STATE_HASH = {
-    app_id: (stencil_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in stencil_obj["apps"].items()
-}
-MRL_RASTERIZER_STATE_HASH = {
-    app_id: (rasterizer_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in rasterizer_obj["apps"].items()
-}
-MRL_FILLER = 0xDCDC
-MRL_PAD = 16
-MRL_APPID_USES_ALBEDO2 = {"rev2"}
-MRL_APPID_USES_SHININESS2 = {"rev2"}
-MRL_APPID_USES_SPECULAR2MAP = {"rev2"}
-MRL_APPID_USES_DETAIL_SECONDARY = {
-    "re1",
-    "rev1",
+MRL_RASTERIZER_STATE_STR = {
+    0x108cf: "RSMesh",
+    0x92333: "RSMeshCN",
+    0x2ab01: "RSMeshCF",
+    0xc220b: "RSMeshBias1",
+    0x573b1: "RSMeshBias2",
+    0x24327: "RSMeshBias3",
+    0x6d684: "RSMeshBias4",
+    0x1e612: "RSMeshBias5",
+    0x8b7a8: "RSMeshBias6",
+    0x9aaf:  "RSMeshBias8",
+    0x7aa39: "RSMeshBias9",
+    0xb5506: "RSMeshBias10",
+    0xc6590: "RSMeshBias11",
+    0x5342a: "RSMeshBias12",
 }
 
 
@@ -128,15 +127,16 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         custom_props_top_level = albam_custom_props.get_custom_properties_for_appid(app_id)
         if parsed_mod.header.version in VERSION_USES_MRL:
             custom_props_top_level.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
-            # might not fit in 32 bits
-            custom_props_top_level.depth_stencil_state_hash = str(material.depth_stencil_state_hash)
-            custom_props_top_level.rasterizer_state_hash = str(material.rasterizer_state_hash)
+            custom_props_top_level.depth_stencil_state_type = MRL_DEPTH_STENCIL_STATE_STR[(material.depth_stencil_state_hash >> 12)]
+            custom_props_top_level.rasterizer_state_type = MRL_RASTERIZER_STATE_STR[(material.rasterizer_state_hash >> 12)]
             custom_props_top_level.material_info_flags = material.material_info_flags
             custom_props_top_level.unk_01 = material.unk_01
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
                 # TODO: helper function
+
+                shader_objects = get_shader_objects()
 
                 def _temp(shader_object_enum, custom_prop_name):
                     resource = [r for r in material.resources
@@ -146,7 +146,6 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
                         param = [k for k,v in shader_objects.items() if v["friendly_name"] == param][0]
                         setattr(custom_props_top_level, custom_prop_name, param)
 
-                shader_objects = get_shader_objects()
 
                 _temp("fuvtransformsecondary", "f_uv_transform_secondary")
 
@@ -379,6 +378,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     mrl.materials = []
     current_commands_offset = 0
 
+    shader_objects = get_shader_objects()
+
     for bl_mat_idx, bl_mat in enumerate(bl_materials):
         try:
             material_hash = int(bl_mat.name)
@@ -386,26 +387,28 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
             # remove suffix added by blender when there are duplicate names
             # Mostly useful for import-export tests
             # TODO: make it optional, enable it in tests only
-            bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat.name)
-            # bl_mat_name = bl_mat.name  # FIXME: won't assign properly later in mesh
+            if True:  # export setting
+                bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat.name)
+            else:
+                bl_mat_name = bl_mat.name  # FIXME: won't assign properly later in mesh
             material_hash = crc32(bl_mat_name.encode()) ^ 0xFFFFFFFF
 
-        dst_mod.materials_data.material_names.append(bl_mat.name)
+        dst_mod.materials_data.material_names.append(bl_mat_name)
         dst_mod.materials_data.material_hashes.append(material_hash)
 
         albam_custom_props = bl_mat.albam_custom_properties
         mrl_params = albam_custom_props.get_custom_properties_for_appid(app_id)
         custom_props_secondary = albam_custom_props.get_custom_properties_secondary_for_appid(app_id)
+        blend_state_index = shader_objects[mrl_params.blend_state_type]["apps"][app_id]["shader_object_index"]
+        depth_stencil_state_index = shader_objects[mrl_params.depth_stencil_state_type]["apps"][app_id]["shader_object_index"]
+        rasterizer_state_index = shader_objects[mrl_params.rasterizer_state_type]["apps"][app_id]["shader_object_index"]
 
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        blend_state_type = mrl_params.blend_state_type
-        shader_num = shader_objects[blend_state_type]["apps"][app_id]["shader_object_index"]
-        blend_state_hash = (shader_objects[blend_state_type]["hash"] << 12) + shader_num
-        mat.blend_state_hash = blend_state_hash
-        mat.depth_stencil_state_hash = int(mrl_params.depth_stencil_state_hash)  # TODO: change to enum
-        mat.rasterizer_state_hash = int(mrl_params.rasterizer_state_hash)  # TODO: change to enum
+        mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
+        mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index
+        mat.rasterizer_state_hash = (shader_objects[mrl_params.rasterizer_state_type]["hash"] << 12) + rasterizer_state_index
         mat.unk_01 = mrl_params.unk_01
         mat.material_info_flags = mrl_params.material_info_flags  #
         mat.unk_nulls = [0, 0, 0, 0]
@@ -1282,10 +1285,43 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         default="BSSolid",
         options=set()
     )
+    # from MRL_DEPTH_STENCIL_STATE_STR
+    depth_stencil_enum = bpy.props.EnumProperty(
+        name="Depth Stencil State",
+        items=[
+            ("DSZTest", "DSZTest", "", 1),
+            ("DSZTestWrite", "DSZTestWrite", "", 2),
+            ("DSZTestWriteStencilWrite", "DSZTestWriteStencilWrite", "", 3),
+            ("DSZTestStencilWrite", "DSZTestStencilWrite", "", 4),
+            ("DSZWrite", "DSZWrite", "", 5)
+        ],
+        options=set()
+    )
+    # from MRL_RASTERIZER_STATE_STR
+    rasterizer_state_enum = bpy.props.EnumProperty(
+        name="Rasterizer State",
+        items=[
+            ("RSMesh", "RSMesh", "", 1),
+            ("RSMeshCN", "RSMeshCN", "", 2),
+            ("RSMeshCF", "RSMeshCF", "", 3),
+            ("RSMeshBias1", "RSMeshBias1", "", 4),
+            ("RSMeshBias2", "RSMeshBias2", "", 5),
+            ("RSMeshBias3", "RSMeshBias3", "", 6),
+            ("RSMeshBias4", "RSMeshBias4", "", 7),
+            ("RSMeshBias5", "RSMeshBias5", "", 8),
+            ("RSMeshBias6", "RSMeshBias6", "", 9),
+            ("RSMeshBias8", "RSMeshBias8", "", 10),
+            ("RSMeshBias9", "RSMeshBias9", "", 11),
+            ("RSMeshBias10", "RSMeshBias10", "", 12),
+            ("RSMeshBias11", "RSMeshBias11", "", 13),
+            ("RSMeshBias12", "RSMeshBias12", "", 14)
+        ],
+        options=set()
+    )
+
     blend_state_type: blend_state_enum
-    # TODO: make enum, and filter by app if possible
-    depth_stencil_state_hash: bpy.props.StringProperty(name="Depth Stencil State", default="0", options=set())
-    rasterizer_state_hash: bpy.props.StringProperty(name="Rasterizer State", default="0", options=set())
+    depth_stencil_state_type: depth_stencil_enum
+    rasterizer_state_type: rasterizer_state_enum
     unk_01: bpy.props.IntProperty(name="Unk_01", options=set())
 
 
