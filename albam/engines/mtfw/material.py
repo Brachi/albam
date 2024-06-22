@@ -269,6 +269,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     dst_mod.materials_data.material_hashes = []
     exported_materials_map = {}
     app_id = model_asset.app_id
+    export_settings = bpy.context.scene.albam.export_settings
 
     mrl = Mrl(app_id=app_id)
     mrl.id_magic = b"MRL\x00"
@@ -281,16 +282,12 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     shader_objects = get_shader_objects()
 
     for bl_mat_idx, bl_mat in enumerate(bl_materials):
+        bl_mat_name = bl_mat.name
+        if export_settings.remove_duplicate_materials_suffix:
+            bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat_name)
         try:
-            material_hash = int(bl_mat.name)
+            material_hash = int(bl_mat_name)
         except ValueError:
-            # remove suffix added by blender when there are duplicate names
-            # Mostly useful for import-export tests
-            # TODO: make it optional, enable it in tests only
-            if True:  # export setting
-                bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat.name)
-            else:
-                bl_mat_name = bl_mat.name  # FIXME: won't assign properly later in mesh
             material_hash = crc32(bl_mat_name.encode()) ^ 0xFFFFFFFF
 
         dst_mod.materials_data.material_names.append(bl_mat_name)
