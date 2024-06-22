@@ -1018,6 +1018,7 @@ def _infer_mrl(context, mod_vfile, app_id):
             mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
             mrl._read()
             assert mrl.materials and mrl.textures
+            break
         except KeyError:
             pass
         except AssertionError:
