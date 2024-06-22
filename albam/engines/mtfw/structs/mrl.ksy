@@ -292,7 +292,7 @@ types:
           type:
             switch-on: "_root.app_id"
             cases:
-              # TODO: check other apps
+              '"re6"': cb_color_mask_1
               '"rev2"': cb_color_mask_1
               _ : cb_color_mask_1
 
@@ -303,7 +303,10 @@ types:
           type:
             switch-on: "_root.app_id"
             cases:
-              # TODO: check other apps
+              '"re0"': cb_vertex_displacement_1
+              '"re1"': cb_vertex_displacement_1
+              '"re6"': cb_vertex_displacement_1
+              '"rev1"': cb_vertex_displacement_1
               '"rev2"': cb_vertex_displacement_1
               _ : cb_vertex_displacement_1
 
@@ -315,7 +318,10 @@ types:
           type:
             switch-on: "_root.app_id"
             cases:
-              # TODO: check other apps
+              '"re0"': cb_vertex_displacement2_1
+              '"re1"': cb_vertex_displacement2_1
+              '"re6"': cb_vertex_displacement2_1
+              '"rev1"': cb_vertex_displacement2_1
               '"rev2"': cb_vertex_displacement2_1
               _ : cb_vertex_displacement2_1
   cb_globals_1:
@@ -514,7 +520,7 @@ types:
         value: 16
     seq:
       - {id: f_vtx_disp_start2, type: f4}
-      - {id: f_vtx_disp_scales, type: f4}
+      - {id: f_vtx_disp_scale2, type: f4}
       - {id: f_vtx_disp_inv_area2, type: f4}
       - {id: f_vtx_disp_rcn2, type: f4}
 

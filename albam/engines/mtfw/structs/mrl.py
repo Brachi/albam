@@ -3730,7 +3730,10 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
             _ = self.app_specific
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re6":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
             else:
@@ -3756,7 +3759,11 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re6":
+                pass
+                self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
                 self._m_app_specific._read()
@@ -3776,7 +3783,10 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re6":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev2":
                 pass
                 self.app_specific._write__seq(self._io)
             else:
@@ -3788,7 +3798,13 @@ class Mrl(ReadWriteKaitaiStruct):
         def _check_app_specific(self):
             pass
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re6":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev2":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
@@ -3818,7 +3834,19 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
             _ = self.app_specific
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re6":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re0":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
             else:
@@ -3844,7 +3872,23 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev1":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re6":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re0":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
                 self._m_app_specific._read()
@@ -3864,7 +3908,19 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re6":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev2":
                 pass
                 self.app_specific._write__seq(self._io)
             else:
@@ -3876,7 +3932,31 @@ class Mrl(ReadWriteKaitaiStruct):
         def _check_app_specific(self):
             pass
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re6":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev2":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
@@ -4118,7 +4198,7 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.f_vtx_disp_start2 = self._io.read_f4le()
-            self.f_vtx_disp_scales = self._io.read_f4le()
+            self.f_vtx_disp_scale2 = self._io.read_f4le()
             self.f_vtx_disp_inv_area2 = self._io.read_f4le()
             self.f_vtx_disp_rcn2 = self._io.read_f4le()
 
@@ -4130,7 +4210,7 @@ class Mrl(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mrl.CbVertexDisplacement21, self)._write__seq(io)
             self._io.write_f4le(self.f_vtx_disp_start2)
-            self._io.write_f4le(self.f_vtx_disp_scales)
+            self._io.write_f4le(self.f_vtx_disp_scale2)
             self._io.write_f4le(self.f_vtx_disp_inv_area2)
             self._io.write_f4le(self.f_vtx_disp_rcn2)
 
@@ -6877,7 +6957,19 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
             _ = self.app_specific
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev1":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re6":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"re0":
+                pass
+                self.app_specific._fetch_instances()
+            elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
             else:
@@ -6903,7 +6995,23 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev1":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re6":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"re0":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
+            elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
                 self._m_app_specific._read()
@@ -6923,7 +7031,19 @@ class Mrl(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev1":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re6":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"rev2":
                 pass
                 self.app_specific._write__seq(self._io)
             else:
@@ -6935,7 +7055,31 @@ class Mrl(ReadWriteKaitaiStruct):
         def _check_app_specific(self):
             pass
             _on = self._root.app_id
-            if _on == u"rev2":
+            if _on == u"re1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev1":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re6":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"rev2":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
