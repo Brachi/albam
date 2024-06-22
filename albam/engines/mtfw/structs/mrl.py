@@ -6514,13 +6514,13 @@ class Mrl(ReadWriteKaitaiStruct):
             self.rasterizer_state_hash = self._io.read_u4le()
             self.num_resources = self._io.read_bits_int_le(12)
             self.unk_01 = self._io.read_bits_int_le(20)
-            self.material_info_flags = []
+            self.unk_flags = []
             for i in range(4):
-                self.material_info_flags.append(self._io.read_u1())
+                self.unk_flags.append(self._io.read_u1())
 
-            self.unk_nulls = []
+            self.reserved = []
             for i in range(4):
-                self.unk_nulls.append(self._io.read_u4le())
+                self.reserved.append(self._io.read_u4le())
 
             self.anim_data_size = self._io.read_u4le()
             self.ofs_cmd = self._io.read_u4le()
@@ -6529,10 +6529,10 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.material_info_flags)):
+            for i in range(len(self.unk_flags)):
                 pass
 
-            for i in range(len(self.unk_nulls)):
+            for i in range(len(self.reserved)):
                 pass
 
             _ = self.resources
@@ -6559,13 +6559,13 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.rasterizer_state_hash)
             self._io.write_bits_int_le(12, self.num_resources)
             self._io.write_bits_int_le(20, self.unk_01)
-            for i in range(len(self.material_info_flags)):
+            for i in range(len(self.unk_flags)):
                 pass
-                self._io.write_u1(self.material_info_flags[i])
+                self._io.write_u1(self.unk_flags[i])
 
-            for i in range(len(self.unk_nulls)):
+            for i in range(len(self.reserved)):
                 pass
-                self._io.write_u4le(self.unk_nulls[i])
+                self._io.write_u4le(self.reserved[i])
 
             self._io.write_u4le(self.anim_data_size)
             self._io.write_u4le(self.ofs_cmd)
@@ -6574,14 +6574,14 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if (len(self.material_info_flags) != 4):
-                raise kaitaistruct.ConsistencyError(u"material_info_flags", len(self.material_info_flags), 4)
-            for i in range(len(self.material_info_flags)):
+            if (len(self.unk_flags) != 4):
+                raise kaitaistruct.ConsistencyError(u"unk_flags", len(self.unk_flags), 4)
+            for i in range(len(self.unk_flags)):
                 pass
 
-            if (len(self.unk_nulls) != 4):
-                raise kaitaistruct.ConsistencyError(u"unk_nulls", len(self.unk_nulls), 4)
-            for i in range(len(self.unk_nulls)):
+            if (len(self.reserved) != 4):
+                raise kaitaistruct.ConsistencyError(u"reserved", len(self.reserved), 4)
+            for i in range(len(self.reserved)):
                 pass
 
 

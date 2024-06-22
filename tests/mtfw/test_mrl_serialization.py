@@ -67,8 +67,8 @@ def test_materials(mrl_imported, mrl_exported, subtests):
             assert src_material.depth_stencil_state_hash == dst_material.depth_stencil_state_hash
             assert src_material.rasterizer_state_hash == dst_material.rasterizer_state_hash
             assert src_material.unk_01 == dst_material.unk_01
-            assert src_material.material_info_flags == dst_material.material_info_flags
-            assert src_material.unk_nulls == dst_material.unk_nulls
+            assert src_material.unk_flags == dst_material.unk_flags
+            assert src_material.reserved == dst_material.reserved
             assert (src_material.num_resources == dst_material.num_resources or
                     src_material.type_hash == 139777156 and src_material.num_resources == 0)
             assert (src_material.cmd_buffer_size == dst_material.cmd_buffer_size or

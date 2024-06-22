@@ -61,8 +61,8 @@ types:
       - {id: rasterizer_state_hash, type: u4}
       - {id: num_resources, type: b12}
       - {id: unk_01, type: b20}
-      - {id: material_info_flags, type: u1, repeat: expr, repeat-expr: 4}  # rename to unk_
-      - {id: unk_nulls, type: u4, repeat: expr, repeat-expr: 4}  # TODO: rename to "reserved", they are always null
+      - {id: unk_flags, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: reserved, type: u4, repeat: expr, repeat-expr: 4}
       - {id: anim_data_size, type: u4}
       - {id: ofs_cmd, type: u4}
       - {id: ofs_anim_data, type: u4}

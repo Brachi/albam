@@ -131,7 +131,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             custom_props_top_level.blend_state_type = blend_state_type
             custom_props_top_level.depth_stencil_state_type = depth_stencil_state_type
             custom_props_top_level.rasterizer_state_type = rasterizer_state_type
-            custom_props_top_level.material_info_flags = material.material_info_flags
+            custom_props_top_level.unk_flags = material.unk_flags
             custom_props_top_level.unk_01 = material.unk_01
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
@@ -308,8 +308,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
         mat.rasterizer_state_hash = (shader_objects[mrl_params.rasterizer_state_type]["hash"] << 12) + rasterizer_state_index  # noqa
         mat.unk_01 = mrl_params.unk_01
-        mat.material_info_flags = mrl_params.material_info_flags  #
-        mat.unk_nulls = [0, 0, 0, 0]
+        mat.unk_flags = mrl_params.unk_flags
+        mat.reserved = [0, 0, 0, 0]
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
 
@@ -1210,8 +1210,8 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     rasterizer_state_type: rasterizer_state_enum
     unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
 
-    material_info_flags: bpy.props.IntVectorProperty(
-        name="Material Info Flags", size=4, default=(0, 0, 128, 140), options=set())
+    unk_flags: bpy.props.IntVectorProperty(
+        name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
