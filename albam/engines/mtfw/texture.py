@@ -253,8 +253,9 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
     if not mrl:
         old_assignment(mtfw_material, bl_material, textures)
         return
-    set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources) if r.cmd_type == Mrl.CmdType.set_texture]
-    unknown_textype = set()
+    set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
+                             if r.cmd_type == Mrl.CmdType.set_texture]
+
     assert len(mrl.textures) == len(textures), f"{len(mrl.textures)} != {len(textures)}"
     for ri, (resource, i) in enumerate(set_texture_resources):
         tex_index = resource.value_cmd.tex_idx
@@ -268,8 +269,6 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
 
             if tex_index > 0:
                 texture_target = textures[real_tex_index]
-                texture_name = texture_target.name if texture_target else f"TEXTURE CONVERSION FAILED or DUMMY if 0: {tex_index}"
-                # print(bl_material.name, i, tex_index, tex_type_mtfw, texture_name)
             else:
                 texture_target = None
 
@@ -357,7 +356,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Special Map"])
-        shader_node_grp.inputs["Special Map type"].default_value = str(tex_unk_type)  # TODO set a proper string value
+        # TODO set a proper string value or remove
+        shader_node_grp.inputs["Special Map type"].default_value = str(tex_unk_type)
 
     elif texture_code == 6:
         # Alpha mask _AM
@@ -402,7 +402,6 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 14:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend 2 BM"])
         blender_texture_node.location = (-700, 350)
-
 
     elif texture_code == 10:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Vertex Displacement"])

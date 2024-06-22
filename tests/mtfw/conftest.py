@@ -82,10 +82,12 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
 
     vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(app_id, mod_path)
     try:
-        vfile_mrl_exported = bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path) if mrl_path else None
+        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
+                              if mrl_path else None)
     except KeyError:
         mrl_path = mrl_path.replace("_0.mrl", ".mrl")
-        vfile_mrl_exported = bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path) if mrl_path else None
+        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
+                              if mrl_path else None)
 
     assert vfile_mod_exported and (
         (mrl_path and vfile_mrl_exported) or

@@ -6,7 +6,6 @@ from albam.engines.mtfw.material import (
 )
 
 
-
 KNOWN_CONSTANT_BUFFERS = {
     "re0": {
         Mrl.ShaderObjectHash.cbmaterial,
@@ -46,7 +45,6 @@ def test_materials(parsed_mrl_from_arc, subtests):
             assert material.blend_state_hash >> 12 in MRL_BLEND_STATE_STR
             assert material.depth_stencil_state_hash >> 12 in MRL_DEPTH_STENCIL_STATE_STR
             assert material.rasterizer_state_hash >> 12 in MRL_RASTERIZER_STATE_STR
-
 
 
 def test_global_resources_mandatory(mrl_imported):

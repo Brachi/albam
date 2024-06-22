@@ -1,5 +1,3 @@
-from pprint import pprint
-
 import pytest
 
 from albam.engines.mtfw.structs.mrl import Mrl
@@ -56,18 +54,14 @@ def test_materials(mrl_imported, mrl_exported, subtests):
 
     # Materials can be exported with different order than the original
     with subtests.test():
-        assert (num_missing_materials > 0 or sorted(src_buffer_sizes) == sorted(dst_buffer_sizes)
-         or bool(material_no_resources) is True)
+        assert (num_missing_materials > 0 or sorted(src_buffer_sizes) == sorted(dst_buffer_sizes) or
+                bool(material_no_resources) is True)
 
     for i, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
-        #if src_material.type_hash == 139777156: # no resources, observed in
-        #    # re0::model/em/em02/em02.mod-model/em/em02/em02.mrl.materials[244052465]
-        #    # (Scene_Material)
-        #    continue
 
         with subtests.test(material_index=i, material_hash=src_material.name_hash_crcjam32):
-            assert src_material.type_hash == dst_material.type_hash or src_material.type_hash == 139777156  # unk
+            assert src_material.type_hash == dst_material.type_hash or src_material.type_hash == 139777156
             assert src_material.name_hash_crcjam32 == dst_material.name_hash_crcjam32
             assert src_material.blend_state_hash == dst_material.blend_state_hash
             assert src_material.depth_stencil_state_hash == dst_material.depth_stencil_state_hash
@@ -91,7 +85,7 @@ def test_resources(mrl_imported, mrl_exported, subtests):
 
     for mi, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
-        if src_material.type_hash == 139777156: # no resources, observed in
+        if src_material.type_hash == 139777156:  # no resources, observed in
             # re0::model/em/em02/em02.mod-model/em/em02/em02.mrl.materials[244052465]
             # (Scene_Material)
             continue
@@ -101,7 +95,6 @@ def test_resources(mrl_imported, mrl_exported, subtests):
         dst_resource_names = [r.shader_object_hash.name for r in dst_resources]
         src_resources_sorted = sorted(src_resources, key=lambda r: r.shader_object_hash.name)
         dst_resources_sorted = sorted(dst_resources, key=lambda r: r.shader_object_hash.name)
-        print_me = sorted(src_resource_names)
 
         same_resources = src_resource_names == dst_resource_names
 
@@ -123,7 +116,7 @@ def test_resources(mrl_imported, mrl_exported, subtests):
                     material_hash=src_material.name_hash_crcjam32,
                     resource_name=dst_resources_sorted[ri].shader_object_hash.name,
                     blend_state=MRL_BLEND_STATE_STR[src_material.blend_state_hash >> 12]
-                    ):
+            ):
                 assert src_resource.cmd_type == dst_resource.cmd_type
                 assert src_resource.shader_object_hash == dst_resource.shader_object_hash
                 assert src_resource.shader_obj_idx == dst_resource.shader_obj_idx
@@ -148,7 +141,7 @@ def test_resource_float_buffer(mrl_imported, mrl_exported, subtests, float_buffe
 
     for mi, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]
-        if src_material.type_hash == 139777156: # no resources, observed in
+        if src_material.type_hash == 139777156:  # no resources, observed in
             # re0::model/em/em02/em02.mod-model/em/em02/em02.mrl.materials[244052465]
             # (Scene_Material)
             continue
