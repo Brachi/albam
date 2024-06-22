@@ -133,7 +133,13 @@ def test_resources(mrl_imported, mrl_exported, subtests):
                 )
 
 
-@pytest.mark.parametrize("float_buffer_name", ["globals", "cbmaterial"])
+@pytest.mark.parametrize("float_buffer_name", [
+    "globals",
+    "cbmaterial",
+    "cbcolormask",
+    "cbvertexdisplacement",
+    "cbvertexdisplacement2",
+])
 def test_resource_float_buffer(mrl_imported, mrl_exported, subtests, float_buffer_name):
     src_mrl = mrl_imported
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
@@ -151,6 +157,8 @@ def test_resource_float_buffer(mrl_imported, mrl_exported, subtests, float_buffe
         dst_shader_object = [r for r in dst_material.resources
                              if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, float_buffer_name)]
         # TODO: ignore buffers not present
+        if not src_shader_object:
+            return
         src_float_buffer = src_shader_object[0].float_buffer.app_specific
         dst_float_buffer = dst_shader_object[0].float_buffer.app_specific
 
@@ -158,7 +166,11 @@ def test_resource_float_buffer(mrl_imported, mrl_exported, subtests, float_buffe
         for attr_name, attr_value in dst_float_buffer.__dict__.items():
             if attr_name.startswith("_"):
                 continue
-            with subtests.test(material_index=mi, float_buffer=float_buffer_name, attribute=attr_name):
+            with subtests.test(
+                    material_hash=src_material.name_hash_crcjam32,
+                    material_index=mi,
+                    float_buffer=float_buffer_name,
+                    attribute=attr_name):
                 assert getattr(src_float_buffer, attr_name) == attr_value
 
 
