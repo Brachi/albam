@@ -8,7 +8,8 @@ from albam.apps import APPS
 class AlbamAsset(bpy.types.PropertyGroup):
     app_id: bpy.props.EnumProperty(name="", description="", items=APPS)
     original_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
-    relative_path : bpy.props.StringProperty()
+    relative_path: bpy.props.StringProperty()
+    render_target: bpy.props.BoolProperty(default=False)
     extension: bpy.props.StringProperty()
 
 
@@ -42,6 +43,7 @@ class ALBAM_PT_AssetImage(bpy.types.Panel):
 
         self.layout.row().prop(im.albam_asset, "app_id")
         self.layout.row().prop(im.albam_asset, "relative_path")
+        self.layout.row().prop(im.albam_asset, "render_target")
 
         app_id = im.albam_asset.app_id
         custom_props = im.albam_custom_properties.get_custom_properties_for_appid(app_id)

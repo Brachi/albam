@@ -18,6 +18,8 @@ from albam.vfs import VirtualFileData
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
+from .structs.rtex_112 import Rtex112
+from .structs.rtex_157 import Rtex157
 from .structs.mrl import Mrl
 
 
@@ -86,6 +88,7 @@ NODE_NAMES_TO_TYPES = {
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
     'Detail DNM': TextureType.NORMAL_DETAIL,
+    'Detail 2 Map': TextureType.NORMAL_DETAIL_2,
     'Special Map': TextureType.UNK_01,
     'Albedo Blend BM': TextureType.ALBEDO_BLEND,
     'Albedo Blend 2 BM': TextureType.ALBEDO_BLEND_2,
@@ -192,50 +195,74 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     if not src_textures:
         return textures
     TexCls = APPID_TEXCLS_MAP[app_id]
+    RtexCls = Rtex157
 
     for i, texture_slot in enumerate(src_textures):
         texture_path = getattr(texture_slot, "texture_path", None) or texture_slot
-        try:
-            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".tex")
-            tex_bytes = texture_vfile.get_bytes()
-        except KeyError:
-            tex_bytes = None
-        if not tex_bytes:
-            print(f"texture_path {texture_path} not found in arc")
-            textures.append(None)
-            # TODO: handle missing texture
-            continue
-        tex = TexCls.from_bytes(tex_bytes)
-        tex._read()
-        try:
-            compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
-            dds_header = DDSHeader(
-                dwHeight=tex.height,
-                dwWidth=tex.width,
-                pixelfmt_dwFourCC=compression_fmt,
-                dwMipMapCount=tex.num_mipmaps_per_image
-            )
-            dds_header.set_constants()
-            dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
-            dds = bytes(dds_header) + tex.dds_data
-        except Exception as err:
-            # TODO: log this instead of printing it
-            print(f'Error converting "{texture_path}" to dds: {err}')
-            textures.append(None)
-            continue
+        texture_type = getattr(texture_slot, "type_hash", None)
+        if texture_type == 2013850128:
+            try:
+                texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".rtex")
+                tex_bytes = texture_vfile.get_bytes()
+            except KeyError:
+                tex_bytes = None
+            if not tex_bytes:
+                print(f"texture_path {texture_path} not found in arc")
+                textures.append(None)
+                # TODO: handle missing texture
+                continue
+            rtex = RtexCls.from_bytes(tex_bytes)
+            rtex._read()
+            rtex_name = PureWindowsPath(texture_path).name
+            bl_image = bpy.data.images.new(f"{rtex_name}.rtex", rtex.width, rtex.height)
+            bl_image.generated_type = 'UV_GRID'
+            bl_image.albam_asset.app_id = app_id
+            bl_image.albam_asset.relative_path = texture_path + ".rtex"
+            bl_image.albam_asset.render_target = True
+            bl_image.albam_asset.extension = "rtex"
+            custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            custom_properties.set_from_source(rtex)
+        else:
+            try:
+                texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".tex")
+                tex_bytes = texture_vfile.get_bytes()
+            except KeyError:
+                tex_bytes = None
+            if not tex_bytes:
+                print(f"texture_path {texture_path} not found in arc")
+                textures.append(None)
+                # TODO: handle missing texture
+                continue
+            tex = TexCls.from_bytes(tex_bytes)
+            tex._read()
+            try:
+                compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
+                dds_header = DDSHeader(
+                    dwHeight=tex.height,
+                    dwWidth=tex.width,
+                    pixelfmt_dwFourCC=compression_fmt,
+                    dwMipMapCount=tex.num_mipmaps_per_image
+                )
+                dds_header.set_constants()
+                dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
+                dds = bytes(dds_header) + tex.dds_data
+            except Exception as err:
+                # TODO: log this instead of printing it
+                print(f'Error converting "{texture_path}" to dds: {err}')
+                textures.append(None)
+                continue
 
-        tex_name = PureWindowsPath(texture_path).name
-        bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
-        bl_image.source = "FILE"
-        bl_image.pack(data=dds, data_len=len(dds))
+            tex_name = PureWindowsPath(texture_path).name
+            bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
+            bl_image.source = "FILE"
+            bl_image.pack(data=dds, data_len=len(dds))
 
-        bl_image.albam_asset.original_bytes = tex_bytes
-        bl_image.albam_asset.app_id = app_id
-        bl_image.albam_asset.relative_path = texture_path + ".tex"
-        bl_image.albam_asset.extension = "tex"
-
-        custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        custom_properties.set_from_source(tex)
+            bl_image.albam_asset.original_bytes = tex_bytes
+            bl_image.albam_asset.app_id = app_id
+            bl_image.albam_asset.relative_path = texture_path + ".tex"
+            bl_image.albam_asset.extension = "tex"
+            custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            custom_properties.set_from_source(tex)
 
         textures.append(bl_image)
 
@@ -423,6 +450,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 15:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Height Map"])
         blender_texture_node.location = (-600, -700)
+    
+    elif texture_code == 20:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 Map"])
+        blender_texture_node.location = (-600, -700)
 
     else:
         print("texture_code not supported", texture_code)
@@ -485,52 +516,91 @@ def _serialize_texture_156(app_id, dict_tex):
 
 def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    dds_header = DDSHeader.from_bl_image(bl_im)
+    render_target = bl_im.albam_asset.render_target
+    if render_target:
+        rtex = Rtex157()
+        rtex.id_magic = b"RTX\x00"
+        tex_type = 158
+        reserved_01 = 0
+        shift = 0
+        constant = 0  # XXX Not really, see tests
+        reserved_02 = 2
+        dimension = 2
+        custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
+        packed_data_1 = (
+            (tex_type & 0xffff) |
+            ((reserved_01 & 0x00ff) << 16) |
+            ((shift & 0x000f) << 24) |
+            ((dimension & 0x000f) << 28)
+        )
 
-    tex = Tex157()
-    tex.id_magic = b"TEX\x00"
-    tex_type = APPID_TEX_TYPE_MAPPER[app_id]  # TODO: enum
-    reserved_01 = 0
-    shift = 0
-    constant = 1  # XXX Not really, see tests
-    reserved_02 = 0
-    dimension = 2 if not dds_header.is_proper_cubemap else 6
+        width = bl_im.size[0]
+        height = bl_im.size[1]
+        packed_data_2 = (
+            (8 & 0x3f) |
+            ((width & 0x1fff) << 6) |
+            ((height & 0x1fff) << 19)
+        )
+        packed_data_3 = (
+            (1 & 0xff) |
+            ((compression_format & 0xff) << 8) |
+            ((constant & 0x1fff) << 16) |
+            ((reserved_02 & 0x003) << 29)
+        )
+        rtex.packed_data_1 = packed_data_1
+        rtex.packed_data_2 = packed_data_2
+        rtex.packed_data_3 = packed_data_3
+        rtex._check()
+        final_size = 16
+        stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
+        rtex._write(stream)
+    else:
+        dds_header = DDSHeader.from_bl_image(bl_im)
+        tex = Tex157()
+        tex.id_magic = b"TEX\x00"
+        tex_type = APPID_TEX_TYPE_MAPPER[app_id]  # TODO: enum
+        reserved_01 = 0
+        shift = 0
+        constant = 1  # XXX Not really, see tests
+        reserved_02 = 0
+        dimension = 2 if not dds_header.is_proper_cubemap else 6
 
-    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
-    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
+        custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
-    packed_data_1 = (
-        (tex_type & 0xffff) |
-        ((reserved_01 & 0x00ff) << 16) |
-        ((shift & 0x000f) << 24) |
-        ((dimension & 0x000f) << 28)
-    )
+        packed_data_1 = (
+            (tex_type & 0xffff) |
+            ((reserved_01 & 0x00ff) << 16) |
+            ((shift & 0x000f) << 24) |
+            ((dimension & 0x000f) << 28)
+        )
 
-    width = bl_im.size[0]
-    height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-    num_mipmaps = dds_header.dwMipMapCount
-    packed_data_2 = (
-        (num_mipmaps & 0x3f) |
-        ((width & 0x1fff) << 6) |
-        ((height & 0x1fff) << 19)
-    )
-    packed_data_3 = (
-        (dds_header.image_count & 0xff) |
-        ((compression_format & 0xff) << 8) |
-        ((constant & 0x1fff) << 16) |
-        ((reserved_02 & 0x003) << 29)
-    )
-    tex.packed_data_1 = packed_data_1
-    tex.packed_data_2 = packed_data_2
-    tex.packed_data_3 = packed_data_3
-    tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
-    tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
-    tex.dds_data = dds_header.data
+        width = bl_im.size[0]
+        height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
+        num_mipmaps = dds_header.dwMipMapCount
+        packed_data_2 = (
+            (num_mipmaps & 0x3f) |
+            ((width & 0x1fff) << 6) |
+            ((height & 0x1fff) << 19)
+        )
+        packed_data_3 = (
+            (dds_header.image_count & 0xff) |
+            ((compression_format & 0xff) << 8) |
+            ((constant & 0x1fff) << 16) |
+            ((reserved_02 & 0x003) << 29)
+        )
+        tex.packed_data_1 = packed_data_1
+        tex.packed_data_2 = packed_data_2
+        tex.packed_data_3 = packed_data_3
+        tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
+        tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
+        tex.dds_data = dds_header.data
 
-    tex._check()
-    final_size = tex.size_before_data_ + len(tex.dds_data)
-    stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
-    tex._write(stream)
+        tex._check()
+        final_size = tex.size_before_data_ + len(tex.dds_data)
+        stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
+        tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
@@ -581,10 +651,14 @@ def _infer_compression_format(dict_tex):
 def _handle_relative_path(bl_im):
     path = bl_im.albam_asset.relative_path or bl_im.name
     before, _, after = path.rpartition(".")
-    if not before:
-        path = f"{path}.tex"
+    if bl_im.albam_asset.render_target:
+        extension = "rtex"
     else:
-        path = f"{before}.tex"
+        extension = "tex"
+    if not before:
+        path = f"{path}.{extension}"
+    else:
+        path = f"{before}.{extension}"
     return path
 
 
@@ -670,6 +744,8 @@ def check_dds_textures(func):
         images = get_bl_teximage_nodes(materials)
         non_dds = []
         for bl_im_name, bl_im_dict in images.items():
+            if bl_im_dict["image"].albam_asset.render_target is True:
+                continue
             if not is_blimage_dds(bl_im_dict["image"]):
                 non_dds.append((bl_im_name, bl_im_dict))
         if any(non_dds):

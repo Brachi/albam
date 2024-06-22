@@ -190,6 +190,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
         cb_custom_props = (albam_custom_props.get_custom_properties_secondary_for_appid(app_id)[custom_prop_name])
         cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
 
+    copy_feature("fuvtransformprimary", "f_uv_transform_primary")
     copy_feature("fuvtransformsecondary", "f_uv_transform_secondary")
     copy_feature("ftransparency", "f_transparency")  # TODO: rename to f_transparency_param
     copy_feature("fspecular", "f_specular_param")
@@ -201,6 +202,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("fuvnormalmap", "f_uv_normal_map_param", "f_uv_normal_map_enabled")
     copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")  # TODO: enabler
     copy_feature("fbrdf", "f_brdf_param")
+    copy_feature("fdiffuse", "f_diffuse_param")
     copy_feature("femission", "f_emission_param")
     copy_feature("focclusion", "f_occlusion_param")
     copy_float_buffer("globals", "globals")
@@ -375,12 +377,14 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
         "falbedomap",
         "falbedomapadd",
         "falbedomapmodulate",
-        "fbumpparallaxocclusion"
+        "fbumpparallaxocclusion",
+        "fbumpdetailnormalmap2"
     }
 
     cb_material_users = {
         "fuvtransformoffset",
         "fdiffuse",
+        "fdiffuselightmapocclusion",
         "ftransparencyalpha",
         "ftransparencyvolume",
     }
@@ -454,7 +458,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         uv_transform_primary = None
 
     r.extend((
-        set_flag("FUVTransformPrimary", uv_transform_primary),
+        set_flag("FUVTransformPrimary", features.f_uv_transform_primary),
         # FIXME: only with normal detail
         set_flag("FUVTransformSecondary", features.f_uv_transform_secondary),
         set_flag("FUVTransformUnique"),
@@ -469,7 +473,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         ))
 
     r.append(set_flag("FBump", features.f_bump_param))  # FIXME: only for rev2
-
 
     if TextureType.HEIGHTMAP in tex_types:
         r.extend((
@@ -491,7 +494,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
                 set_flag("FUVNormalMap", features.f_uv_normal_map_param),  # TODO: use features.f_uv_normal_map_enabled
             ))
 
-
     if TextureType.NORMAL not in tex_types:
         r.append(set_flag("FAlbedo", features.f_albedo_param))
 
@@ -511,6 +513,13 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
             set_texture("tDetailNormalMap"),
             set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param),
         ))
+
+    if TextureType.NORMAL_DETAIL_2 in tex_types:
+        r.extend((
+            set_texture("tDetailNormalMap2"),
+            set_flag("FUVDetailNormalMap2", "FUVSecondary"),
+        ))
+
     if TextureType.NORMAL in tex_types:
         r.append(set_flag("FAlbedo", features.f_albedo_param))
 
@@ -559,19 +568,19 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FShininess", features.f_shininess_param),
         set_flag("FLighting"),
         set_flag("FBRDF", features.f_brdf_param),
-        set_flag("FDiffuse"),
+        set_flag("FDiffuse", features.f_diffuse_param),
     ))
-
 
     if TextureType.LIGHTMAP in tex_types:
         r.extend((
-            set_flag("tLightMap"),
-            set_flag("FUVLightMap"),
+            set_texture("tLightMap"),
+            set_flag("FUVLightMap", "FUVUnique"),
         ))
 
     specular_param = features.f_specular_param
     r.extend((
-        set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
+        #set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
+        set_flag("FAmbient", "FAmbient"),
         set_flag("FSpecular", specular_param),
     ))
 
@@ -769,6 +778,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
+        relative_path_no_ext = relative_path_no_ext.replace(".rtex", "")
         if not mrl:
             try:
                 real_tex_idx = textures_list.index(relative_path_no_ext)
@@ -781,7 +791,10 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             except ValueError:
 
                 tex = mrl.TextureSlot(_parent=mrl, _root=mrl._root)
-                tex.type_hash = mrl.TextureType.type_r_texture
+                if im_node.image.albam_asset.render_target is True:
+                    tex.type_hash = 2013850128
+                else:
+                    tex.type_hash = mrl.TextureType.type_r_texture
                 tex.unk_02 = 0  # TODO: research
                 tex.unk_03 = 0  # TODO: research
                 tex.texture_path = relative_path_no_ext
@@ -832,7 +845,8 @@ def _create_mtfw_shader():
     shader_group.inputs["Use Detail Map"].min_value = 0
     shader_group.inputs["Use Detail Map"].max_value = 1
     shader_group.inputs.new("NodeSocketColor", "Special Map")
-    shader_group.inputs.new("NodeSocketString", "Special Map type")
+    shader_group.inputs.new("NodeSocketColor", "Detail 2 Map")
+    # shader_group.inputs.new("NodeSocketString", "Special Map type")
     shader_group.inputs.new("NodeSocketColor", "Vertex Displacement")  # TODO: Try to use it in Blender
     shader_group.inputs.new("NodeSocketColor", "Vertex Displacement Mask")  # TODO: Try to use it in Blender
     shader_group.inputs.new("NodeSocketColor", "Hair Shift")  # TODO: Try to use it in Blender
@@ -1246,6 +1260,14 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
 
+    f_uv_transform_primary : bpy.props.EnumProperty(
+        name="FUVTransformPrimary",
+        items=[
+            ("FUVTransformPrimary", "FUVTransformPrimary", "", 1),
+            ("FUVTransformOffset", "FUVTransformOffset", "", 2),
+        ],
+        options=set()
+    )
 
     f_uv_transform_secondary : bpy.props.EnumProperty(
         name="FUVTransformSecondary",
@@ -1255,7 +1277,6 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-
 
     f_transparency : bpy.props.EnumProperty(
         name="FTransparency",
@@ -1300,6 +1321,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBumpHair", "FBumpHair", "", 4),
             ("FBumpHairNormal", "FBumpHair", "", 5),
             ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 6),
+            ("FBumpDetailNormalMap2", "FBumpDetailNormalMap2", "", 7)
         ],
         options=set()
     )
@@ -1311,6 +1333,16 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFHair", "FBRDFHair", "", 2),
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),
+        ],
+        options=set()
+    )
+
+    f_diffuse_param : bpy.props.EnumProperty(
+        name="FDiffuse",
+        items=[
+            ("FDiffuse", "FDiffuse", "", 1),
+            ("FDiffuseLightMapOcclusion", "FDiffuseLightMapOcclusion", "", 2),
+            ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 3),
         ],
         options=set()
     )
