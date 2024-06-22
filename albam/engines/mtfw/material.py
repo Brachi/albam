@@ -382,234 +382,158 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
         "ftransparencyalpha",
         "ftransparencyvolume",
     }
+    cb_color_mask_users = {
+        "fcolormaskalbedomapmodulate"
+    }
 
-    globals_first_user_index = None
-    cb_material_first_user_index = None
+    # calculate insertion index (1 after the first user)
+    # and adjust based on position relative to other constant buffers to be inserted
+    current_position = 0
+    cb_used = {}
 
     for ri, resource in enumerate(resources):
         if resource.cmd_type != Mrl.CmdType.set_flag:
             continue
-        if resource.value_cmd.name_hash.name in globals_users and not globals_first_user_index:
-            globals_first_user_index = ri
-        if resource.value_cmd.name_hash.name in cb_material_users and not cb_material_first_user_index:
-            cb_material_first_user_index = ri
+        if resource.value_cmd.name_hash.name in globals_users and not cb_used.get("$Globals"):
+            pos = current_position
+            current_position += 1
+            cb_used["$Globals"] = [ri + 1, pos]
+        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial"):
+            pos = current_position
+            current_position += 1
+            cb_used["CBMaterial"] = [ri + 1, pos]
+        elif resource.value_cmd.name_hash.name in cb_color_mask_users and not cb_used.get("CBColorMask"):
+            pos = current_position
+            current_position += 1
+            cb_used["CBColorMask"] = [ri + 1, pos]
 
-    if globals_first_user_index:
-        resources.insert(globals_first_user_index + 1, set_constant_buffer("$Globals"))
-
-    if cb_material_first_user_index:
-        # index might have changed due to previous insertion
-        if globals_first_user_index and cb_material_first_user_index > globals_first_user_index:
-            idx = cb_material_first_user_index + 2
-        else:
-            idx = cb_material_first_user_index + 1
-        resources.insert(idx, set_constant_buffer("CBMaterial"))
+    for cb_name, (idx, pos) in sorted(cb_used.items(), key=lambda item: item[1][1]):
+        resources.insert(idx + pos, set_constant_buffer(cb_name))
 
     return resources
 
 
 def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_props_sec=None):
-    """
-    XXX rough and wild ifs to quickly iterate. Hopefully not the final version!
-    """
+
     set_flag = functools.partial(_create_set_flag_resource, app_id, mrl_mat)
     set_sampler_state = functools.partial(_create_set_sampler_state_resource, app_id, mrl_mat)
     set_texture = functools.partial(_create_set_texture_resource, app_id, mrl_mat, tex_types)
     set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props_sec)
     features = custom_props_sec["features"]
 
-    r = []
+    TT = TextureType
+    tt = tex_types
+    HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
+    USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
+
+    # FIXME: custom param
     if TextureType.VERTEX_DISPLACEMENT in tex_types:
         vd_sec = "FVertexDisplacementCurveUV"
     else:
         vd_sec = None
 
-    r.append(set_flag("FVertexDisplacement", vd_sec))
-
-    if TextureType.VERTEX_DISPLACEMENT in tex_types:
-        r.extend((
-            set_constant_buffer("CBVertexDisplacement"),
-            set_constant_buffer("CBVertexDisplacement2"),
-            set_flag("FUVVertexDisplacement", "FVDUVPrimary"),
-            set_texture("tVtxDisplacement"),
-        ))
-
-    if TextureType.VERTEX_DISPLACEMENT_MASK in tex_types:
-        r.extend((
-            set_flag("FVDGetMask"),
-            set_texture("tVtxDispMask"),  # not always
-            set_flag("FVDMaskUVTransform"),  # not always
-        ))
-
+    # FIXME: custom param
     if app_id == "re1":
         uv_transform_primary = "FUVTransformOffset"
     else:
         uv_transform_primary = None
 
-    r.extend((
+    # FIXME: custom param
+    if TextureType.NORMAL not in tex_types:
+        f_uv_emission_map_param = "FUVPrimary"
+    else:
+        f_uv_emission_map_param = "FUVViewNormal"
+
+    r = [
+        set_flag("FVertexDisplacement", vd_sec),
+        set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_flag("FUVVertexDisplacement", "FVDUVPrimary", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_texture("tVtxDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_flag("FVDGetMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
+        set_texture("tVtxDispMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
+        set_flag("FVDMaskUVTransform", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
+
         set_flag("FUVTransformPrimary", uv_transform_primary),
-        # FIXME: only with normal detail
         set_flag("FUVTransformSecondary", features.f_uv_transform_secondary),
         set_flag("FUVTransformUnique"),
         set_flag("FUVTransformExtend"),
+
         set_flag("FOcclusion", features.f_occlusion_param),
-    ))
-    if TextureType.OCCLUSION in tex_types:
-        r.extend((
-            set_texture("tOcclusionMap"),
-            set_flag("FUVOcclusionMap"),
-            set_flag("FChannelOcclusionMap"),
-        ))
+        set_texture("tOcclusionMap", onlyif=TT.OCCLUSION in tt),
+        set_flag("FUVOcclusionMap", onlyif=TT.OCCLUSION in tt),
+        set_flag("FChannelOcclusionMap", onlyif=TT.OCCLUSION in tt),
 
-    r.append(set_flag("FBump", features.f_bump_param))  # FIXME: only for rev2
+        set_flag("FBump", features.f_bump_param),
+        set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and USES_PARALLAX),
+        set_texture("tHeightMap", onlyif=TT.HEIGHTMAP in tt),
+        set_texture("tNormalMap", onlyif=TT.NORMAL in tt and TT.HAIR_SHIFT not in tt),
+        set_texture("tHairShiftMap", onlyif=TT.HAIR_SHIFT in tt),
+        set_sampler_state("SSNormalMap", onlyif=HAS_NORMAL_MAPS and not USES_PARALLAX),
+        set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and not USES_PARALLAX),  # noqa: E501
+        set_texture("tNormalMap", onlyif=TT.NORMAL in tt and TT.HAIR_SHIFT in tt),
+        set_texture("tDetailNormalMap", onlyif=TT.NORMAL_DETAIL in tt),
+        set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param, onlyif=TT.NORMAL_DETAIL in tt),
 
-    if TextureType.HEIGHTMAP in tex_types:
-        r.extend((
-            set_flag("FUVNormalMap", features.f_uv_normal_map_param),
-            set_texture("tHeightMap"),
-        ))
+        set_flag("FAlbedo", features.f_albedo_param),
+        set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
+        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt),
+        set_flag("FUVAlbedoMap", "FUVPrimary", onlyif=TT.DIFFUSE in tt),  # FIXME: only rev2 checked
+        set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
+        set_flag("FUVAlbedoBlendMap", "FUVViewNormal", onlyif=TT.ALBEDO_BLEND in tt),
+        set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
+        set_flag("FUVAlbedoBlend2Map", "FUVSecondary", onlyif=TT.ALBEDO_BLEND_2 in tt),
 
-    if TextureType.HAIR_SHIFT in tex_types:
-        r.extend((
-            set_texture("tHairShiftMap"),
-        ))
-        if TextureType.NORMAL not in tex_types:
-            r.extend((
-                set_sampler_state("SSNormalMap"),
-                # TODO: use features.f_uv_normal_map_enabled
-                set_flag("FUVNormalMap", features.f_uv_normal_map_param),
-            ))
-
-    if TextureType.NORMAL not in tex_types:
-        r.append(set_flag("FAlbedo", features.f_albedo_param))
-
-    if TextureType.NORMAL in tex_types:
-        if TextureType.HAIR_SHIFT not in tex_types:
-            r.append(set_texture("tNormalMap"))
-        if TextureType.HEIGHTMAP not in tex_types:
-            r.extend((
-                set_sampler_state("SSNormalMap"),
-                set_flag("FUVNormalMap", features.f_uv_normal_map_param),
-            ))
-        if TextureType.HAIR_SHIFT in tex_types:
-            r.append(set_texture("tNormalMap"))
-
-    if TextureType.NORMAL_DETAIL in tex_types:
-        r.extend((
-            set_texture("tDetailNormalMap"),
-            set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param),
-        ))
-    if TextureType.NORMAL in tex_types:
-        r.append(set_flag("FAlbedo", features.f_albedo_param))
-
-    # XXX remove me
-    if TextureType.ALBEDO_BLEND_2 in tex_types:
-        r.extend((
-            set_constant_buffer("CBColorMask"),
-        ))
-
-    if TextureType.DIFFUSE in tex_types:
-        r.extend((
-            set_texture("tAlbedoMap"),
-            set_sampler_state("SSAlbedoMap"),
-            set_flag("FUVAlbedoMap", "FUVPrimary"),  # FIXME: only rev2 checked
-        ))
-
-    if TextureType.ALBEDO_BLEND in tex_types:
-        r.extend((
-            # set_constant_buffer("CBColorMask"),
-            set_texture("tAlbedoBlendMap"),
-            set_flag("FUVAlbedoBlendMap", "FUVViewNormal"),
-        ))
-    if TextureType.ALBEDO_BLEND_2 in tex_types:
-        r.extend((
-            set_texture("tAlbedoBlend2Map"),
-            set_flag("FUVAlbedoBlend2Map", "FUVSecondary"),
-        ))
-    r.extend((
         set_flag("FTransparency", features.f_transparency),  # TODO: rename to f_transparency_param
-    ))
-    if TextureType.TRANSPARENCY_MAP in tex_types:
-        r.extend((
-            set_flag("tTransparencyMap"),
-            set_flag("FUVTransparencyMap"),
-            set_flag("FChannelTransparencyMap"),
-        ))
+        set_texture("tTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
+        set_flag("FUVTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
+        set_flag("FChannelTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
 
-    if TextureType.INDIRECT in tex_types:
-        r.extend((
-            set_flag("tIndirectMap"),
-            set_flag("FUVIndirectMap"),
-            set_flag("FUVIndirectSource"),
-        ))
+        set_flag("tIndirectMap", onlyif=TT.INDIRECT in tt),
+        set_flag("FUVIndirectMap", onlyif=TT.INDIRECT in tt),
+        set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),
 
-    r.extend((
         set_flag("FShininess", features.f_shininess_param),
         set_flag("FLighting"),
         set_flag("FBRDF", features.f_brdf_param),
         set_flag("FDiffuse"),
-    ))
 
-    if TextureType.LIGHTMAP in tex_types:
-        r.extend((
-            set_flag("tLightMap"),
-            set_flag("FUVLightMap"),
-        ))
+        set_flag("tLightMap", onlyif=TT.LIGHTMAP in tt),
+        set_flag("FUVLightMap", onlyif=TT.LIGHTMAP in tt),
 
-    specular_param = features.f_specular_param
-    r.extend((
         set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
-        set_flag("FSpecular", specular_param),
-    ))
+        set_flag("FSpecular", features.f_specular_param),
 
-    if TextureType.SPHERE in tex_types:
-        r.append(set_texture("tSphereMap"))
+        set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
 
-    if features.f_reflect_enabled:
-        r.append(set_flag("FReflect", features.f_reflect_param))
+        set_flag("FReflect", features.f_reflect_param, onlyif=features.f_reflect_enabled),
 
-    if TextureType.ENVMAP in tex_types:
-        r.extend((
-            set_texture("tEnvMap"),
-        ))
-    if features.ssenvmap_enable:
-        r.append(set_sampler_state("SSEnvMap"))
+        set_texture("tEnvMap", onlyif=TT.ENVMAP in tt),
+        set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enable),  # FIXME: rename to enabled
 
-    if TextureType.SPECULAR in tex_types:
-        r.extend((
-            set_texture("tSpecularMap"),
-            set_sampler_state("SSSpecularMap"),
-            set_flag("FUVSpecularMap", "FUVPrimary"),
-            set_flag("FChannelSpecularMap"),
-        ))
-    if features.f_fresnel_enabled:
-        r.append(set_flag("FFresnel", features.f_fresnel_param))
+        set_texture("tSpecularMap", onlyif=TT.SPECULAR in tt),
+        set_sampler_state("SSSpecularMap", onlyif=TT.SPECULAR in tt),
+        set_flag("FUVSpecularMap", "FUVPrimary", onlyif=TT.SPECULAR in tt),
+        set_flag("FChannelSpecularMap", onlyif=TT.SPECULAR in tt),
 
-    if TextureType.EMISSION in tex_types:
-        if TextureType.NORMAL not in tex_types:
-            sec = "FUVPrimary"
-        else:
-            sec = "FUVViewNormal"
-        r.extend((
-            set_flag("FEmission", features.f_emission_param),
-            # set_flag("FEmission", "FUVViewNormal"),
-            set_texture("tEmissionMap"),
-            set_flag("FUVEmissionMap", sec),
-            set_flag("FChannelEmissionMap"),
-        ))
-    else:
-        r.extend((
-            set_flag("FEmission", features.f_emission_param),
-        ))
+        set_flag("FFresnel", features.f_fresnel_param, onlyif=features.f_fresnel_enabled),
 
-    r.extend((
+        set_flag("FEmission", features.f_emission_param),
+        set_texture("tEmissionMap", onlyif=TT.EMISSION in tt),
+        set_flag("FUVEmissionMap", f_uv_emission_map_param, onlyif=TT.EMISSION in tt),
+        set_flag("FChannelEmissionMap", onlyif=TT.EMISSION in tt),
+
         set_flag("FDistortion"),
-    ))
+    ]
+
+    r = [item for item in r if item is not None]
 
     return r
 
 
-def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=None):
+def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=None, onlyif=True):
+    if onlyif is False:
+        return
     shader_objects = get_shader_objects()
     shader_obj_data = shader_objects[resource_name]
 
@@ -646,7 +570,9 @@ _create_set_sampler_state_resource = functools.partial(
     _create_resource_generic, Mrl.CmdType.set_sampler_state)
 
 
-def _create_set_texture_resource(app_id, mat, tex_types, resource_name):
+def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=True):
+    if onlyif is False:
+        return None
     resource_name_friendly = resource_name.lower()
     target_tex_type = TEX_TYPE_MAP_2[resource_name_friendly]
     texture_index = tex_types[target_tex_type]
@@ -671,7 +597,9 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name):
     return resource
 
 
-def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name):
+def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
+    if onlyif is False:
+        return None
     known_names = {
         "$Globals", "CBMaterial", "CBColorMask",
         "CBVertexDisplacement", "CBVertexDisplacement2",
@@ -1446,8 +1374,8 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 class CBVtxDisp2(bpy.types.PropertyGroup):
     f_vtx_disp_start2: bpy.props.FloatProperty(
         name="fVtxDispStart2", options=set())  # noqa: F821
-    f_vtx_disp_scales: bpy.props.FloatProperty(
-        name="fVtxDispScales", options=set())  # noqa: F821
+    f_vtx_disp_scale2: bpy.props.FloatProperty(
+        name="fVtxDispScale2", options=set())  # noqa: F821
     f_vtx_disp_inv_area2: bpy.props.FloatProperty(
         name="fVtxDispInvArea2", options=set())  # noqa: F821
     f_vtx_disp_rcn2: bpy.props.FloatProperty(
