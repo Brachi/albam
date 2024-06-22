@@ -38,5 +38,25 @@
         "app_id": "rev2",
         "mod_path": "data/chara/pl/pl2400_N/model/pl2413.mod",
         "mrl_path": "data/chara/pl/pl2400_N/model/pl2413.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5300/model/pl5300.mod",
+        "mrl_path": "data/chara/pl/pl5300/model/pl5300.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5300/model/pl5303.mod",
+        "mrl_path": "data/chara/pl/pl5300/model/pl5303.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5400/model/pl5400.mod",
+        "mrl_path": "data/chara/pl/pl5400/model/pl5400.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5400/model/pl5403.mod",
+        "mrl_path": "data/chara/pl/pl5400/model/pl5403.mrl"
     }
 ]
