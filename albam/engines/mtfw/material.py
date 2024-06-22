@@ -192,7 +192,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
         cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
 
     copy_feature("fuvtransformsecondary", "f_uv_transform_secondary")
-    copy_feature("ftransparency", "f_transparency")  # TODO: rename to f_transparency_param
+    copy_feature("ftransparency", "f_transparency_param")
     copy_feature("fspecular", "f_specular_param")
     copy_feature("falbedo", "f_albedo_param")
     copy_feature("fbump", "f_bump_param")
@@ -212,10 +212,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
 
     ssenvmap = [r for r in material.resources
                 if r.shader_object_hash == Mrl.ShaderObjectHash.ssenvmap]
-    if ssenvmap:
-        features.ssenvmap_enable = True
-    else:
-        features.ssenvmap_enable = False
+    features.ssenvmap_enabled = bool(ssenvmap)
 
 
 def serialize_materials_data(model_asset, bl_objects, src_mod, dst_mod):
@@ -484,7 +481,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
         set_flag("FUVAlbedoBlend2Map", "FUVSecondary", onlyif=TT.ALBEDO_BLEND_2 in tt),
 
-        set_flag("FTransparency", features.f_transparency),  # TODO: rename to f_transparency_param
+        set_flag("FTransparency", features.f_transparency_param),
         set_texture("tTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
         set_flag("FUVTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
         set_flag("FChannelTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
@@ -509,7 +506,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FReflect", features.f_reflect_param, onlyif=features.f_reflect_enabled),
 
         set_texture("tEnvMap", onlyif=TT.ENVMAP in tt),
-        set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enable),  # FIXME: rename to enabled
+        set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enabled),
 
         set_texture("tSpecularMap", onlyif=TT.SPECULAR in tt),
         set_sampler_state("SSSpecularMap", onlyif=TT.SPECULAR in tt),
@@ -640,21 +637,21 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
 
     elif cb_name == "CBColorMask":
         float_buffer_parent = Mrl.CbColorMask(_parent=resource, _root=resource._root)
-        # Always the same for all apps, no need for map TODO: verify
+        # Always the same for all apps, no need for map
         float_buffer = Mrl.CbColorMask1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_color_mask"]
 
     elif cb_name == "CBVertexDisplacement":
         float_buffer_parent = Mrl.CbVertexDisplacement(_parent=resource, _root=resource._root)
-        # Always the same for all apps, no need for map TODO: verify
+        # Always the same for all apps, no need for map
         float_buffer = Mrl.CbVertexDisplacement1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_vertex_disp"]
 
     elif cb_name == "CBVertexDisplacement2":
         float_buffer_parent = Mrl.CbVertexDisplacement2(_parent=resource, _root=resource._root)
-        # Always the same for all apps, no need for map TODO: verify
+        # Always the same for all apps, no need for map
         float_buffer = Mrl.CbVertexDisplacement21(_parent=float_buffer_parent, _root=float_buffer_parent._root)  # noqa: E501
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_vertex_disp2"]
@@ -1166,7 +1163,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_transparency : bpy.props.EnumProperty(
+    f_transparency_param : bpy.props.EnumProperty(
         name="FTransparency",  # noqa: F821
         items=[
             ("FTransparency", "FTransparency", "", 1),  # noqa: F821
@@ -1291,7 +1288,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
-    ssenvmap_enable : bpy.props.BoolProperty(
+    ssenvmap_enabled : bpy.props.BoolProperty(
         name="SSEnvMap", options=set(), default=True)  # noqa: F821
 
     # FIXME: dedupe
