@@ -197,7 +197,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("fbump", "f_bump_param")
     copy_feature("ffresnel", "f_fresnel_param", "f_fresnel_enabled")
     copy_feature("freflect", "f_reflect_param", "f_reflect_enabled")
-    copy_feature("fshininess", "f_shininess_param", "f_reflect_enabled")
+    copy_feature("fshininess", "f_shininess_param", "f_shininess_enabled")
     copy_feature("fuvnormalmap", "f_uv_normal_map_param", "f_uv_normal_map_enabled")
     copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")  # TODO: enabler
     copy_feature("fbrdf", "f_brdf_param")
@@ -1338,6 +1338,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
 
+    f_shininess_enabled : bpy.props.BoolProperty(name="FShininess", options=set())
     f_shininess_param : bpy.props.EnumProperty(
         name="FShininess",
         items=[
