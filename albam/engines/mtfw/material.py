@@ -206,7 +206,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("ffresnel", "f_fresnel_param", "f_fresnel_enabled")
     copy_feature("freflect", "f_reflect_param", "f_reflect_enabled")
     copy_feature("fshininess", "f_shininess_param", "f_shininess_enabled")
-    copy_feature("fuvnormalmap", "f_uv_normal_map_param", "f_uv_normal_map_enabled")
+    copy_feature("fuvnormalmap", "f_uv_normal_map_param")
     copy_feature("fuvtransformprimary", "f_uv_transform_primary_param")
     copy_feature("fuvemissionmap", "f_uv_emission_map_param")
     copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")
@@ -1373,8 +1373,6 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_uv_normal_map_enabled : bpy.props.BoolProperty(
-        name="FUVNormalMap", options=set())  # noqa: F821
     f_uv_normal_map_param : bpy.props.EnumProperty(
         name="FUVNormalMap",  # noqa: F821
         items=[
