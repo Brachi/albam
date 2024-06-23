@@ -86,6 +86,7 @@ NODE_NAMES_TO_TYPES = {
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
     'Detail DNM': TextureType.NORMAL_DETAIL,
+    'Detail 2 DNM': TextureType.NORMAL_DETAIL_2,
     'Special Map': TextureType.UNK_01,
     'Albedo Blend BM': TextureType.ALBEDO_BLEND,
     'Albedo Blend 2 BM': TextureType.ALBEDO_BLEND_2,
@@ -422,6 +423,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 15:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Height Map"])
         blender_texture_node.location = (-600, -700)
+
+    elif texture_code == 20:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 DNM"])
+        blender_texture_node.location = (-600, -800)
 
     else:
         print("texture_code not supported", texture_code)

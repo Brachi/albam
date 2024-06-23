@@ -191,19 +191,33 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
                            .get_custom_properties_secondary_for_appid(app_id)[custom_prop_name])
         cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
 
-    copy_feature("fuvtransformsecondary", "f_uv_transform_secondary")
+    copy_feature("fvertexdisplacement", "f_vertex_displacement_param")
+    copy_feature("fuvtransformsecondary", "f_uv_transform_secondary_param")
+    copy_feature("fuvvertexdisplacement", "f_uv_vertex_displacement_param")
+    copy_feature("fuvocclusionmap", "f_uv_occlusion_map_param")
     copy_feature("ftransparency", "f_transparency_param")
+    copy_feature("fuvtransparencymap", "f_uv_transparency_map_param")
     copy_feature("fspecular", "f_specular_param")
     copy_feature("falbedo", "f_albedo_param")
+    copy_feature("fuvalbedomap", "f_uv_albedo_map_param")
+    copy_feature("fuvalbedoblendmap", "f_uv_albedo_blend_map_param")
+    copy_feature("fuvalbedoblend2map", "f_uv_albedo_blend_2_map_param")
     copy_feature("fbump", "f_bump_param")
     copy_feature("ffresnel", "f_fresnel_param", "f_fresnel_enabled")
     copy_feature("freflect", "f_reflect_param", "f_reflect_enabled")
     copy_feature("fshininess", "f_shininess_param", "f_shininess_enabled")
     copy_feature("fuvnormalmap", "f_uv_normal_map_param", "f_uv_normal_map_enabled")
-    copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")  # TODO: enabler
+    copy_feature("fuvtransformprimary", "f_uv_transform_primary_param")
+    copy_feature("fuvemissionmap", "f_uv_emission_map_param")
+    copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")
+    copy_feature("fuvdetailnormalmap2", "f_uv_detail_normal_map_2_param")
     copy_feature("fbrdf", "f_brdf_param")
+    copy_feature("fdiffuse", "f_diffuse_param")
+    copy_feature("fambient", "f_ambient_param")
+    copy_feature("fuvspecularmap", "f_uv_specular_map_param")
     copy_feature("femission", "f_emission_param")
     copy_feature("focclusion", "f_occlusion_param")
+    copy_feature("fdistortion", "f_distortion_param")
     copy_float_buffer("globals", "globals")
     copy_float_buffer("cbmaterial", "cb_material")
     copy_float_buffer("cbcolormask", "cb_color_mask")
@@ -364,9 +378,16 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props)
 
     globals_users = {
-        "fbumpdetailnormalmap",
-        "fbumphairnormal",
-        "fbumphair",
+        # FBump
+        'fblend2bumpdetailnormalmap',
+        'fbumpdetailnormalmap',
+        'fbumpdetailnormalmap2',
+        'fbumphair',
+        'fbumphairnormal',
+        # 'fbumpnormalmap',
+        'fbumpnormalmapblendtransparencymap',
+        'fbumpparallaxocclusion',
+        # FAlbedo
         "falbedomap",
         "falbedomapadd",
         "falbedomapmodulate",
@@ -374,10 +395,17 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     }
 
     cb_material_users = {
-        "fuvtransformoffset",
+        # FDiffuse
         "fdiffuse",
+        'fdiffuseconstant',
+        'fdiffuselightmap',
+        'fdiffuselightmapocclusion',
+        'fdiffusesh',
+        'fdiffusevertexcolor',
+        'fdiffusevertexcolorocclusion',
         "ftransparencyalpha",
         "ftransparencyvolume",
+        "fuvtransformoffset",
     }
     cb_color_mask_users = {
         "fcolormaskalbedomapmodulate"
@@ -423,42 +451,24 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
 
-    # FIXME: custom param
-    if TextureType.VERTEX_DISPLACEMENT in tex_types:
-        vd_sec = "FVertexDisplacementCurveUV"
-    else:
-        vd_sec = None
-
-    # FIXME: custom param
-    if app_id == "re1":
-        uv_transform_primary = "FUVTransformOffset"
-    else:
-        uv_transform_primary = None
-
-    # FIXME: custom param
-    if TextureType.NORMAL not in tex_types:
-        f_uv_emission_map_param = "FUVPrimary"
-    else:
-        f_uv_emission_map_param = "FUVViewNormal"
-
     r = [
-        set_flag("FVertexDisplacement", vd_sec),
+        set_flag("FVertexDisplacement", features.f_vertex_displacement_param),
         set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
-        set_flag("FUVVertexDisplacement", "FVDUVPrimary", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
         set_texture("tVtxDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_flag("FVDGetMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
         set_texture("tVtxDispMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
         set_flag("FVDMaskUVTransform", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
 
-        set_flag("FUVTransformPrimary", uv_transform_primary),
-        set_flag("FUVTransformSecondary", features.f_uv_transform_secondary),
+        set_flag("FUVTransformPrimary", features.f_uv_transform_primary_param),
+        set_flag("FUVTransformSecondary", features.f_uv_transform_secondary_param),
         set_flag("FUVTransformUnique"),
         set_flag("FUVTransformExtend"),
 
         set_flag("FOcclusion", features.f_occlusion_param),
         set_texture("tOcclusionMap", onlyif=TT.OCCLUSION in tt),
-        set_flag("FUVOcclusionMap", onlyif=TT.OCCLUSION in tt),
+        set_flag("FUVOcclusionMap", features.f_uv_occlusion_map_param, onlyif=TT.OCCLUSION in tt),
         set_flag("FChannelOcclusionMap", onlyif=TT.OCCLUSION in tt),
 
         set_flag("FBump", features.f_bump_param),
@@ -471,34 +481,36 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_texture("tNormalMap", onlyif=TT.NORMAL in tt and TT.HAIR_SHIFT in tt),
         set_texture("tDetailNormalMap", onlyif=TT.NORMAL_DETAIL in tt),
         set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param, onlyif=TT.NORMAL_DETAIL in tt),
+        set_texture("tDetailNormalMap2", onlyif=TT.NORMAL_DETAIL_2 in tt),
+        set_flag("FUVDetailNormalMap2", features.f_uv_detail_normal_map_2_param, onlyif=TT.NORMAL_DETAIL_2 in tt),  # noqa: E501
 
         set_flag("FAlbedo", features.f_albedo_param),
         set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
         set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt),
-        set_flag("FUVAlbedoMap", "FUVPrimary", onlyif=TT.DIFFUSE in tt),  # FIXME: only rev2 checked
+        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt),
         set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
-        set_flag("FUVAlbedoBlendMap", "FUVViewNormal", onlyif=TT.ALBEDO_BLEND in tt),
+        set_flag("FUVAlbedoBlendMap", features.f_uv_albedo_blend_map_param, onlyif=TT.ALBEDO_BLEND in tt),
         set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
-        set_flag("FUVAlbedoBlend2Map", "FUVSecondary", onlyif=TT.ALBEDO_BLEND_2 in tt),
+        set_flag("FUVAlbedoBlend2Map", features.f_uv_albedo_blend_2_map_param, onlyif=TT.ALBEDO_BLEND_2 in tt),  # noqa: E501
 
         set_flag("FTransparency", features.f_transparency_param),
         set_texture("tTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
-        set_flag("FUVTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
+        set_flag("FUVTransparencyMap", features.f_uv_transparency_map_param, onlyif=TT.TRANSPARENCY_MAP in tt),  # noqa: E501
         set_flag("FChannelTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
 
         set_flag("tIndirectMap", onlyif=TT.INDIRECT in tt),
-        set_flag("FUVIndirectMap", onlyif=TT.INDIRECT in tt),
-        set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),
+        set_flag("FUVIndirectMap", onlyif=TT.INDIRECT in tt),  # no params found
+        set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),  # no params found
 
         set_flag("FShininess", features.f_shininess_param),
-        set_flag("FLighting"),
+        set_flag("FLighting"),  # no params found
         set_flag("FBRDF", features.f_brdf_param),
-        set_flag("FDiffuse"),
+        set_flag("FDiffuse", features.f_diffuse_param),
 
-        set_flag("tLightMap", onlyif=TT.LIGHTMAP in tt),
-        set_flag("FUVLightMap", onlyif=TT.LIGHTMAP in tt),
+        set_texture("tLightMap", onlyif=TT.LIGHTMAP in tt),
+        set_flag("FUVLightMap", "FUVUnique", onlyif=TT.LIGHTMAP in tt),  # same param always
 
-        set_flag("FAmbient", "FAmbientSH"),  # FIXME: only for rev2
+        set_flag("FAmbient", features.f_ambient_param),
         set_flag("FSpecular", features.f_specular_param),
 
         set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
@@ -510,15 +522,15 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
 
         set_texture("tSpecularMap", onlyif=TT.SPECULAR in tt),
         set_sampler_state("SSSpecularMap", onlyif=TT.SPECULAR in tt),
-        set_flag("FUVSpecularMap", "FUVPrimary", onlyif=TT.SPECULAR in tt),
-        set_flag("FChannelSpecularMap", onlyif=TT.SPECULAR in tt),
+        set_flag("FUVSpecularMap", features.f_uv_specular_map_param, onlyif=TT.SPECULAR in tt),
+        set_flag("FChannelSpecularMap", onlyif=TT.SPECULAR in tt),  # same param always
 
         set_flag("FFresnel", features.f_fresnel_param, onlyif=features.f_fresnel_enabled),
 
         set_flag("FEmission", features.f_emission_param),
         set_texture("tEmissionMap", onlyif=TT.EMISSION in tt),
-        set_flag("FUVEmissionMap", f_uv_emission_map_param, onlyif=TT.EMISSION in tt),
-        set_flag("FChannelEmissionMap", onlyif=TT.EMISSION in tt),
+        set_flag("FUVEmissionMap", features.f_uv_emission_map_param, onlyif=TT.EMISSION in tt),
+        set_flag("FChannelEmissionMap", onlyif=TT.EMISSION in tt),  # same param always
 
         set_flag("FDistortion"),
     ]
@@ -736,7 +748,9 @@ def _create_mtfw_shader():
     shader_group.inputs["Use Alpha Mask"].max_value = 1
     shader_group.inputs.new("NodeSocketColor", "Environment CM")
     shader_group.inputs.new("NodeSocketColor", "Detail DNM")
+    shader_group.inputs.new("NodeSocketColor", "Detail 2 DNM")
     shader_group.inputs["Detail DNM"].default_value = (1, 0.5, 1, 1)
+    shader_group.inputs["Detail 2 DNM"].default_value = (1, 0.5, 1, 1)
     shader_group.inputs.new("NodeSocketFloat", "Alpha DNM")
     shader_group.inputs["Alpha DNM"].default_value = 0.5
     shader_group.inputs.new("NodeSocketInt", "Use Detail Map")
@@ -1154,12 +1168,29 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
+    f_uv_vertex_displacement_param : bpy.props.EnumProperty(
+        name="FUVVertexDisplacement",  # noqa: F821
+        items=[
+            ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
+            ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
+            ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
 
-    f_uv_transform_secondary : bpy.props.EnumProperty(
+    f_uv_transform_secondary_param : bpy.props.EnumProperty(
         name="FUVTransformSecondary",  # noqa: F821
         items=[
             ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
             ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_occlusion_map_param : bpy.props.EnumProperty(
+        name="FUVOcclusionMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
         ],
         options=set()
     )
@@ -1172,26 +1203,82 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
+    f_uv_transparency_map_param : bpy.props.EnumProperty(
+        name="FUVTransparencyMap",  # noqa: F821
+        items=[
+            ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
+            ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
+            ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+
     f_specular_param : bpy.props.EnumProperty(
         name="FSpecular",  # noqa: F821
         items=[
             ("FSpecular", "Default", "", 1),  # noqa: F821
             ("FSpecularMap", "FSpecularMap", "", 2),  # noqa: F821
             ("FSpecular2Map", "FSpecular2Map", "", 3),  # noqa: F821
-            ("FSpecularDisable", "FSpecularDisable", "", 4),  # noqa: F821
+            ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
+            ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
         ],
         options=set(),
     )
+    f_vertex_displacement_param : bpy.props.EnumProperty(
+        name="FVertexDisplacement",  # noqa: F821
+        items=[
+            ("FVertexDisplacement", "Default", "", 1),  # noqa: F821
+            ("FVertexDisplacementCurveUV", "FVertexDisplacementCurveUV", "", 2),  # noqa: F821
+            ("FVertexDisplacementCurveU", "FVertexDisplacementCurveU", "", 3),  # noqa: F821
+            ("FVertexDisplacementCurveV", "FVertexDisplacementCurveV", "", 4),  # noqa: F821
+        ],
+        options=set(),
+    )
+
     f_albedo_param : bpy.props.EnumProperty(  # noqa: F821
         name="FAlbedo",  # noqa: F821
         items=[
             ("FAlbedo", "Default", "", 1),  # noqa: F821
-            ("FAlbedoMap", "FAlbedoMap", "", 2),  # noqa: F821
-            ("FAlbedoMap2", "FAlbedoMap2", "", 3),  # noqa: F821
-            ("FAlbedoMapBlend", "FAlbedoMapBlend", "", 4),  # noqa: F821
+            ("FAlbedo2MapModulate", "FAlbedo2MapModulate", "", 2),  # noqa: F821
+            ("FAlbedoMap", "FAlbedoMap", "", 3),  # noqa: F821
+            ("FAlbedoMap2", "FAlbedoMap2", "", 4),  # noqa: F821
             ("FAlbedoMapAdd", "FAlbedoMapAdd", "", 5),  # noqa: F821
-            ("FAlbedoMapModulate", "FAlbedoMapModulate", "", 6),  # noqa: F821
-            ("FColorMaskAlbedoMapModulate", "FColorMaskAlbedoMapModulate", "", 7),  # noqa: F821
+            ("FAlbedoMapBlend", "FAlbedoMapBlend", "", 6),  # noqa: F821
+            ("FAlbedoMapBlendAlpha", "FAlbedoMapBlendAlpha", "", 7),  # noqa: F821
+            ("FAlbedoMapBlendTransparencyMap", "FAlbedoMapBlendTransparencyMap", "", 8),  # noqa: F821
+            ("FAlbedoMapModulate", "FAlbedoMapModulate", "", 9),  # noqa: F821
+            ("FBlendAlbedoMap", "FBlendAlbedoMap", "", 10),  # noqa: F821
+            ("FColorMaskAlbedoMapModulate", "FColorMaskAlbedoMapModulate", "", 11),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_blend_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoBlendMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_blend_2_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoBlend2Map",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
         ],
         options=set()
     )
@@ -1199,11 +1286,14 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         name="FBump",  # noqa: F821
         items=[
             ("FBump", "Default", "", 1),  # noqa: F821
-            ("FBumpNormalMap", "FBumpNormalMap", "", 2),  # noqa: F821
+            ("FBlend2BumpDetailNormalMap", "FBlend2BumpDetailNormalMap", "", 2),  # noqa: F821
             ("FBumpDetailNormalMap", "FBumpDetailNormalMap", "", 3),  # noqa: F821
-            ("FBumpHair", "FBumpHair", "", 4),  # noqa: F821
-            ("FBumpHairNormal", "FBumpHair", "", 5),  # noqa: F821
-            ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 6),  # noqa: F821
+            ("FBumpDetailNormalMap2", "FBumpDetailNormalMap2", "", 4),  # noqa: F821
+            ("FBumpHair", "FBumpHair", "", 5),  # noqa: F821
+            ("FBumpHairNormal", "FBumpHair", "", 6),  # noqa: F821
+            ("FBumpNormalMap", "FBumpNormalMap", "", 7),  # noqa: F821
+            ("FBumpNormalMapBlendTransparencyMap", "FBumpNormalMapBlendTransparencyMap", "", 8),  # noqa: F821
+            ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 9),  # noqa: F821
         ],
         options=set()
     )
@@ -1217,6 +1307,36 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
+    f_diffuse_param : bpy.props.EnumProperty(
+        name="FDiffuse",  # noqa: F821
+        items=[
+            ("FDiffuse", "Default", "", 1),  # noqa: F821
+            ("FDiffuseConstant", "FDiffuseConstant", "", 2),  # noqa: F821
+            ("FDiffuseLightMap", "FDiffuseLightMap", "", 3),  # noqa: F821
+            ("FDiffuseLightMapOcclusion", "FDiffuseLightMapOcclusion", "", 4),  # noqa: F821
+            ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
+            ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
+            ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 7),  # noqa: F821
+            ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 8),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_ambient_param : bpy.props.EnumProperty(
+        name="FAmbient",  # noqa: F821
+        items=[
+            ("FAmbient", "Default", "", 1),  # noqa: F821
+            ("FAmbientSH", "FAmbientSH", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_specular_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVSpecularMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
     f_fresnel_enabled : bpy.props.BoolProperty(
         name="FFresnel Enabled", options=set())  # noqa: F821
     f_fresnel_param : bpy.props.EnumProperty(
@@ -1224,7 +1344,9 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FFresnel", "Default", "", 1),  # noqa: F821
             ("FFresnelSchlick", "FFresnelSchlick", "", 2),  # noqa: F821
-            ("FFresnelSchlick2", "FFresnelSchlick", "", 3),  # noqa: F821
+            ("FFresnelSchlickRGB", "FFresnelSchlickRGB", "", 3),  # noqa: F821
+            ("FFresnelSchlick2", "FFresnelSchlick2", "", 4),  # noqa: F821
+            ("FFresnelLegacy", "FFresnelLegacy", "", 5),  # noqa: F821
         ],
         options=set()
     )
@@ -1264,12 +1386,40 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_uv_detail_normal_map_param : bpy.props.EnumProperty(  # noqa: F82
         name="FUVDetailNormalMap",  # noqa: F821
         items=[
-            ("FUVDetailNormalMap", "Default", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
             ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
-            ("FUVSecondary", "FUVSecondary", "", 3),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
         ],
         options=set()
     )
+
+    f_uv_detail_normal_map_2_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVDetailNormalMap2",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_emission_map_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVEmissionMap",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 2),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+
+    f_uv_transform_primary_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVTransformPrimary",  # noqa: F821
+        items=[
+            ("FUVTransformPrimary", "Default", "", 1),  # noqa: F821
+            ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+
     f_emission_param : bpy.props.EnumProperty(  # noqa: F82
         name="FEmission",  # noqa: F821
         items=[
@@ -1284,10 +1434,27 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FOcclusion", "Default", "", 1),  # noqa: F821
             ("FOcclusionAmbient", "FOcclusionAmbient", "", 2),  # noqa: F821
+            ("FOcclusionAmbientMap", "FOcclusionAmbientMap", "", 3),  # noqa: F821
+            ("FOcclusionMap", "FOcclusionMap", "", 4),  # noqa: F821
         ],
         options=set()
     )
-
+    f_uv_occlusion_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVOcclusionMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_distortion_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FDistortion",  # noqa: F821
+        items=[
+            ("FDistortion", "Default", "", 1),  # noqa: F821
+            ("FDistortionRefract", "FDistortionRefract", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
     ssenvmap_enabled : bpy.props.BoolProperty(
         name="SSEnvMap", options=set(), default=True)  # noqa: F821
 

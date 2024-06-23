@@ -24,5 +24,10 @@
         "app_id": "rev1",
         "mod_path": "model/chara/pl/pl1100/pl1100.mod",
         "mrl_path": "model/chara/pl/pl1100/pl1100.mrl"
+    },
+    {
+        "app_id": "rev1",
+        "mod_path": "model/stage/s1/s100/scr01/Kanpan.mod",
+        "mrl_path": "model/stage/s1/s100/scr01/Kanpan.mrl"
     }
 ]
