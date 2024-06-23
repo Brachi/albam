@@ -258,7 +258,6 @@ def _generate_tests_from_arcs(file_extension, metafunc, fixturename):
 
         if not ARC_FILES:
             raise ValueError(f"No files ending in .arc found in {arc_dir}")
-
         parsed_files, ids = _files_per_arc(file_extension, ARC_FILES, app_id)
         total_parsed_files.extend(parsed_files)
         total_test_ids.extend(ids)
@@ -277,8 +276,9 @@ def _files_per_arc(file_extension, arc_paths, app_id):
         arc_name = os.path.basename(arc_path)
         try:
             arc = ArcWrapper(arc_path)
-        except Exception:  # TODO: skip/xfail
-            continue
+        except OSError as err:  # TODO: skip/xfail
+            if err.errno == 24:
+                raise RuntimeError("Exceeded open file limits. Try running `ulimit -S -n 4096`")
         file_entries = arc.get_file_entries_by_extension(file_extension)
         if not file_entries:
             del arc
