@@ -291,6 +291,7 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         if not custom_props:
             return
         for k in custom_props.__annotations__:
+            # TODO: don't draw if marked as "HIDDEN"
             layout.prop(custom_props, k)
 
     @classmethod
