@@ -1535,7 +1535,7 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
-    is_secondary=True, display_name="CB Vertex Displacement")
+    is_secondary=True, display_name="CB Vertex Displacement 2")
 @blender_registry.register_blender_prop
 class CBVtxDisp2(bpy.types.PropertyGroup):
     f_vtx_disp_start2: bpy.props.FloatProperty(
