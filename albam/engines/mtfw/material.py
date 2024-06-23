@@ -546,7 +546,7 @@ def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=No
     resource.shader_object_id = shader_obj_id
 
     so = Mrl.ShaderObject(_parent=resource, _root=resource._root)
-    if param_name is None:
+    if not param_name:
         so.index = shader_obj_index
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly)
     else:
@@ -1158,7 +1158,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_uv_transform_secondary : bpy.props.EnumProperty(
         name="FUVTransformSecondary",  # noqa: F821
         items=[
-            ("FUVTransformSecondary", "FUVTransformSecondary", "", 1),  # noqa: F821
+            ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
             ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
         ],
         options=set()
@@ -1166,7 +1166,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_transparency_param : bpy.props.EnumProperty(
         name="FTransparency",  # noqa: F821
         items=[
-            ("FTransparency", "FTransparency", "", 1),  # noqa: F821
+            ("FTransparency", "Default", "", 1),  # noqa: F821
             ("FTransparencyAlpha", "FTransparencyAlpha", "", 2),  # noqa: F821
             ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
         ],
@@ -1175,7 +1175,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_specular_param : bpy.props.EnumProperty(
         name="FSpecular",  # noqa: F821
         items=[
-            ("FSpecular", "FSpecular", "", 1),  # noqa: F821
+            ("FSpecular", "Default", "", 1),  # noqa: F821
             ("FSpecularMap", "FSpecularMap", "", 2),  # noqa: F821
             ("FSpecular2Map", "FSpecular2Map", "", 3),  # noqa: F821
             ("FSpecularDisable", "FSpecularDisable", "", 4),  # noqa: F821
@@ -1185,7 +1185,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_albedo_param : bpy.props.EnumProperty(  # noqa: F821
         name="FAlbedo",  # noqa: F821
         items=[
-            ("FAlbedo", "FAlbedo", "", 1),  # noqa: F821
+            ("FAlbedo", "Default", "", 1),  # noqa: F821
             ("FAlbedoMap", "FAlbedoMap", "", 2),  # noqa: F821
             ("FAlbedoMap2", "FAlbedoMap2", "", 3),  # noqa: F821
             ("FAlbedoMapBlend", "FAlbedoMapBlend", "", 4),  # noqa: F821
@@ -1198,7 +1198,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_bump_param : bpy.props.EnumProperty(
         name="FBump",  # noqa: F821
         items=[
-            ("FBump", "FBump", "", 1),  # noqa: F821
+            ("FBump", "Default", "", 1),  # noqa: F821
             ("FBumpNormalMap", "FBumpNormalMap", "", 2),  # noqa: F821
             ("FBumpDetailNormalMap", "FBumpDetailNormalMap", "", 3),  # noqa: F821
             ("FBumpHair", "FBumpHair", "", 4),  # noqa: F821
@@ -1210,7 +1210,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_brdf_param : bpy.props.EnumProperty(
         name="FBRDF",  # noqa: F821
         items=[
-            ("FBRDF", "FBRDF", "", 1),  # noqa: F821
+            ("FBRDF", "Default", "", 1),  # noqa: F821
             ("FBRDFHair", "FBRDFHair", "", 2),  # noqa: F821
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
@@ -1222,7 +1222,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_fresnel_param : bpy.props.EnumProperty(
         name="FFresnel",  # noqa: F821
         items=[
-            ("FFresnel", "FFresnel", "", 1),  # noqa: F821
+            ("FFresnel", "Default", "", 1),  # noqa: F821
             ("FFresnelSchlick", "FFresnelSchlick", "", 2),  # noqa: F821
             ("FFresnelSchlick2", "FFresnelSchlick", "", 3),  # noqa: F821
         ],
@@ -1233,7 +1233,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_reflect_param : bpy.props.EnumProperty(
         name="FReflect",  # noqa: F821
         items=[
-            ("FReflect", "FReflect", "", 1),  # noqa: F821
+            ("FReflect", "Default", "", 1),  # noqa: F821
             ("FReflectCubeMap", "FReflectCubeMap", "", 2),  # noqa: F821
             ("FReflectGlobalCubeMap", "FReflectGlobalCubeMap", "", 3),  # noqa: F821
             ("FReflectSphereMap", "FReflectSphereMap", "", 4),  # noqa: F821
@@ -1245,7 +1245,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_shininess_param : bpy.props.EnumProperty(
         name="FShininess",  # noqa: F821
         items=[
-            ("FShininess", "FShininess", "", 1),  # noqa: F821
+            ("FShininess", "Default", "", 1),  # noqa: F821
             ("FShininess2", "FShininess2", "", 2),  # noqa: F821
             ("FShininessMap", "FShininessMap", "", 3),  # noqa: F821
         ],
@@ -1256,15 +1256,15 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_uv_normal_map_param : bpy.props.EnumProperty(
         name="FUVNormalMap",  # noqa: F821
         items=[
-            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
-            ("FUVNormalMap", "FUVNormalMap", "", 2),  # noqa: F821
+            ("FUVNormalMap", "Default", "", 1),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
         ],
         options=set()
     )
     f_uv_detail_normal_map_param : bpy.props.EnumProperty(  # noqa: F82
         name="FUVDetailNormalMap",  # noqa: F821
         items=[
-            ("FUVDetailNormalMap", "FUVDetailNormalMap", "", 1),  # noqa: F821
+            ("FUVDetailNormalMap", "Default", "", 1),  # noqa: F821
             ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 3),  # noqa: F821
         ],
@@ -1273,7 +1273,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_emission_param : bpy.props.EnumProperty(  # noqa: F82
         name="FEmission",  # noqa: F821
         items=[
-            ("FEmission", "FEmission", "", 1),  # noqa: F821
+            ("FEmission", "Default", "", 1),  # noqa: F821
             ("FEmissionMap", "FEmissionMap", "", 2),  # noqa: F821
             ("FEmissionConstant", "FEmissionConstant", "", 3),  # noqa: F821
         ],
@@ -1282,7 +1282,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
     f_occlusion_param : bpy.props.EnumProperty(
         name="FOcclusion",  # noqa: F821
         items=[
-            ("FOcclusion", "FOcclusion", "", 1),  # noqa: F821
+            ("FOcclusion", "Default", "", 1),  # noqa: F821
             ("FOcclusionAmbient", "FOcclusionAmbient", "", 2),  # noqa: F821
         ],
         options=set()
