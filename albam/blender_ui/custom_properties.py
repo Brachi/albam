@@ -88,6 +88,7 @@ def AlbamCustomPropertiesFactory(kind: str):
                 "bl_idname": bl_idname,
                 "APP_ID": app_id,
                 "custom_props_to_draw": custom_props_id,
+                "bl_options": {"DEFAULT_CLOSED"},
             }
         )
         # Since these factories are created at the end, we need to register manually
@@ -290,6 +291,7 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         if not custom_props:
             return
         for k in custom_props.__annotations__:
+            # TODO: don't draw if marked as "HIDDEN"
             layout.prop(custom_props, k)
 
     @classmethod

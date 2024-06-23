@@ -1,0 +1,23 @@
+
+[
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em02/em02.mod",
+        "mrl_path": "model/em/em02/em02.mrl"
+    },
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em08/em08.mod",
+        "mrl_path": "model/em/em08/em08.mrl"
+    },
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em05/em05.mod",
+        "mrl_path": "model/em/em05/em05.mrl"
+    },
+    {
+        "app_id": "re0",
+        "mod_path": "model/em/em09/em09.mod",
+        "mrl_path": "model/em/em09/em09.mrl"
+    }
+]

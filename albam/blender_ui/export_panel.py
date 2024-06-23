@@ -13,6 +13,16 @@ from albam.vfs import (
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 
 
+@blender_registry.register_blender_prop_albam(name="export_settings")
+class AlbamExportSettings(bpy.types.PropertyGroup):
+    # remove suffix added by blender when there are duplicate material names.
+    # e.g. rename pl_skin.001 to pl_skin at export time.
+    # Mostly useful for import-export tests to be able to compare exported vs original,
+    # since many models can share a name and the blender database
+    # is not cleaned in each test.
+    remove_duplicate_materials_suffix : bpy.props.BoolProperty(default=True)
+
+
 @blender_registry.register_blender_prop
 class ExportableItem(bpy.types.PropertyGroup):
     # FIXME: hook to remove from list when object is deleted

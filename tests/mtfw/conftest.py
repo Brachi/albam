@@ -31,10 +31,12 @@ def pytest_generate_tests(metafunc):
             argvalues.append((app_id, mod_path, mrl_path))
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "lmt" in metafunc.fixturenames:
-        _generate_tests_from_arcs("lmt", metafunc)
-    elif "tex" in metafunc.fixturenames:
-        _generate_tests_from_arcs("tex", metafunc)
+    elif "parsed_mrl_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("mrl", metafunc, "parsed_mrl_from_arc")
+    elif "parsed_lmt_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("lmt", metafunc, "parsed_lmt_from_arc")
+    elif "parsed_tex_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
 
 
 @pytest.fixture(scope="session")
@@ -79,7 +81,14 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
     assert result == {"FINISHED"}
 
     vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(app_id, mod_path)
-    vfile_mrl_exported = bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path) if mrl_path else None
+    try:
+        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
+                              if mrl_path else None)
+    except KeyError:
+        mrl_path = mrl_path.replace("_0.mrl", ".mrl")
+        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
+                              if mrl_path else None)
+
     assert vfile_mod_exported and (
         (mrl_path and vfile_mrl_exported) or
         (not mrl_path and not vfile_mrl_exported))
@@ -127,10 +136,12 @@ def mrl_exported(mod_export):
 
 
 @pytest.fixture
-def parsed_mrl_from_arc(request):
+def parsed_mrl_from_arc(request, scope="session"):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
+
+    # TODO: cache, avoid duplicating mrls for each test
     from albam.engines.mtfw.structs.mrl import Mrl
     from kaitaistruct import KaitaiStream
     arc = request.param[0]
@@ -172,7 +183,7 @@ def parsed_mod_from_arc(request):
 
 
 @pytest.fixture
-def tex(request):
+def parsed_tex_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -193,7 +204,7 @@ def tex(request):
 
 
 @pytest.fixture
-def lmt(request):
+def parsed_lmt_from_arc(request):
     # test collection before calling register() in pytest_session_start
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
@@ -211,22 +222,32 @@ def lmt(request):
     return parsed
 
 
-def _generate_tests_from_arcs(file_extension, metafunc):
+ARC_DIRS = None
+
+
+def _generate_tests_from_arcs(file_extension, metafunc, fixturename):
     """
     Generate one parsed object for file_extension, based on provided arcs.
     Defer decompression and parsing to test-run time, not
     collection time.
     It requires a fixture named after the extension
     """
+    global ARC_DIRS
     arc_dirs = metafunc.config.getoption("arcdir")
     if not arc_dirs:
         pytest.skip("No arc directory supplied")
         return
 
+    if arc_dirs and not ARC_DIRS:
+        # if loading multiple times will generate multiple
+        # tests even with scope=session. We want only one
+        # import-export per item in the dataset
+        ARC_DIRS = arc_dirs
+
     total_parsed_files = []
     total_test_ids = []
 
-    for arc_dir in arc_dirs:
+    for arc_dir in ARC_DIRS:
         app_id, arc_dir = arc_dir.split("::")
         ARC_FILES = [
             os.path.join(root, f)
@@ -237,11 +258,10 @@ def _generate_tests_from_arcs(file_extension, metafunc):
 
         if not ARC_FILES:
             raise ValueError(f"No files ending in .arc found in {arc_dir}")
-
         parsed_files, ids = _files_per_arc(file_extension, ARC_FILES, app_id)
         total_parsed_files.extend(parsed_files)
         total_test_ids.extend(ids)
-    metafunc.parametrize(file_extension, total_parsed_files, indirect=True, ids=total_test_ids)
+    metafunc.parametrize(fixturename, total_parsed_files, indirect=True, ids=total_test_ids)
 
 
 def _files_per_arc(file_extension, arc_paths, app_id):
@@ -256,8 +276,9 @@ def _files_per_arc(file_extension, arc_paths, app_id):
         arc_name = os.path.basename(arc_path)
         try:
             arc = ArcWrapper(arc_path)
-        except Exception:  # TODO: skip/xfail
-            continue
+        except OSError as err:  # TODO: skip/xfail
+            if err.errno == 24:
+                raise RuntimeError("Exceeded open file limits. Try running `ulimit -S -n 4096`")
         file_entries = arc.get_file_entries_by_extension(file_extension)
         if not file_entries:
             del arc

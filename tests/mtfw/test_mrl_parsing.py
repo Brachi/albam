@@ -1,11 +1,10 @@
 from albam.engines.mtfw.structs.mrl import Mrl
+from albam.engines.mtfw.material import (
+    MRL_BLEND_STATE_STR,
+    MRL_DEPTH_STENCIL_STATE_STR,
+    MRL_RASTERIZER_STATE_STR,
+)
 
-KNOWN_BLEND_STATE_STENSIL_HASH = [
-    0x62b2d,  # BSSolid
-    0x23baf,  # BSBlendAlpha
-    0xd3b1d,  # BSAddAlpha
-    0xc4064,  # BSRevSubAlpha
-]
 
 KNOWN_CONSTANT_BUFFERS = {
     "re0": {
@@ -39,6 +38,15 @@ KNOWN_CONSTANT_BUFFERS = {
 }
 
 
+def test_materials(parsed_mrl_from_arc, subtests):
+
+    for material in parsed_mrl_from_arc.materials:
+        with subtests.test(material_hash=material.name_hash_crcjam32):
+            assert material.blend_state_hash >> 12 in MRL_BLEND_STATE_STR
+            assert material.depth_stencil_state_hash >> 12 in MRL_DEPTH_STENCIL_STATE_STR
+            assert material.rasterizer_state_hash >> 12 in MRL_RASTERIZER_STATE_STR
+
+
 def test_global_resources_mandatory(mrl_imported):
     """
     Test that every material has to include a $Globals shader object
@@ -46,7 +54,6 @@ def test_global_resources_mandatory(mrl_imported):
     """
     for m in mrl_imported.materials:
         hashes = {r.shader_object_hash.value for r in m.resources}
-        assert (m.blend_state_hash >> 12) in KNOWN_BLEND_STATE_STENSIL_HASH
         assert not hashes or Mrl.ShaderObjectHash.globals.value in hashes
         assert not hashes or Mrl.ShaderObjectHash.cbmaterial.value in hashes
 

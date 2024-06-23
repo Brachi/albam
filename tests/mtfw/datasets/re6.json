@@ -1,0 +1,54 @@
+[
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0000.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0000_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0003.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0003_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0010.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0010_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0000/model/pl0013.mod",
+        "mrl_path": "data/chara/pl/pl0000/model/pl0013_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0100/model/pl0100.mod",
+        "mrl_path": "data/chara/pl/pl0100/model/pl0100_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0100/model/pl0103.mod",
+        "mrl_path": "data/chara/pl/pl0100/model/pl0103_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0100/model/pl0110.mod",
+        "mrl_path": "data/chara/pl/pl0100/model/pl0110_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0100/model/pl0103.mod",
+        "mrl_path": "data/chara/pl/pl0100/model/pl0103_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0200/model/pl0200.mod",
+        "mrl_path": "data/chara/pl/pl0200/model/pl0200_0.mrl"
+    },
+    {
+        "app_id": "re6",
+        "mod_path": "data/chara/pl/pl0200/model/pl0203.mod",
+        "mrl_path": "data/chara/pl/pl0200/model/pl0203_0.mrl"
+    }
+
+
+]

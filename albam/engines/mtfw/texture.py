@@ -18,6 +18,7 @@ from albam.vfs import VirtualFileData
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
+from .structs.mrl import Mrl
 
 
 class TextureType2(Enum):  # TODO: unify
@@ -36,6 +37,45 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     ALPHAMAP = 6
     ENVMAP = 7
     NORMAL_DETAIL = 8
+    #  HERE ends RE5 support
+    ALBEDO_BLEND = 9
+    VERTEX_DISPLACEMENT = 10
+    VERTEX_DISPLACEMENT_MASK = 11
+    HAIR_SHIFT = 12
+    EMISSION = 13
+    ALBEDO_BLEND_2 = 14
+    HEIGHTMAP = 15
+    TRANSPARENCY_MAP = 16
+    NORMAL_BLEND = 17
+    OCCLUSION = 18
+    SPHERE = 19
+    NORMAL_DETAIL_2 = 20
+    INDIRECT = 21
+    SPECULAR_BLEND = 22
+
+
+TEX_TYPE_MAP_2 = {
+    "talbedomap": TextureType.DIFFUSE,
+    "talbedoblendmap": TextureType.ALBEDO_BLEND,
+    "talbedoblend2map": TextureType.ALBEDO_BLEND_2,
+    "tnormalmap": TextureType.NORMAL,
+    "tdetailnormalmap": TextureType.NORMAL_DETAIL,
+    "tdetailnormalmap2": TextureType.NORMAL_DETAIL_2,
+    "tspecularmap": TextureType.SPECULAR,
+    "tenvmap": TextureType.ENVMAP,
+    "tvtxdisplacement": TextureType.VERTEX_DISPLACEMENT,
+    "tvtxdispmask": TextureType.VERTEX_DISPLACEMENT_MASK,
+    "thairshiftmap": TextureType.HAIR_SHIFT,
+    "temissionmap": TextureType.EMISSION,
+    "theightmap": TextureType.HEIGHTMAP,
+    "tlightmap": TextureType.LIGHTMAP,
+    "ttransparencymap": TextureType.TRANSPARENCY_MAP,
+    "tnormalblendmap": TextureType.NORMAL_BLEND,
+    "tocclusionmap": TextureType.OCCLUSION,
+    "tspheremap": TextureType.SPHERE,
+    "tindirectmap": TextureType.INDIRECT,
+    "tspecularblendmap": TextureType.SPECULAR_BLEND,
+}
 
 
 NODE_NAMES_TO_TYPES = {
@@ -46,7 +86,15 @@ NODE_NAMES_TO_TYPES = {
     'Alpha Mask AM': TextureType.ALPHAMAP,
     'Environment CM': TextureType.ENVMAP,
     'Detail DNM': TextureType.NORMAL_DETAIL,
-    'Special Map': TextureType.UNK_01
+    'Detail 2 DNM': TextureType.NORMAL_DETAIL_2,
+    'Special Map': TextureType.UNK_01,
+    'Albedo Blend BM': TextureType.ALBEDO_BLEND,
+    'Albedo Blend 2 BM': TextureType.ALBEDO_BLEND_2,
+    'Vertex Displacement': TextureType.VERTEX_DISPLACEMENT,
+    'Vertex Displacement Mask': TextureType.VERTEX_DISPLACEMENT_MASK,
+    'Hair Shift': TextureType.HAIR_SHIFT,
+    'Height Map': TextureType.HEIGHTMAP,
+    'Emission': TextureType.EMISSION,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -139,7 +187,7 @@ TEX_TYPE_MAPPER = {
 
 
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):
-    textures = [None]  # materials refer to textures in index-1
+    textures = []
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
     if not src_textures:
@@ -192,16 +240,57 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
 
         textures.append(bl_image)
 
+    if len(src_textures) != len(textures):
+        import ntpath
+        from pprint import pprint
+        a = {ntpath.basename(t.texture_path) for t in src_textures}
+        b = {t.name for t in textures if t}
+        pprint(list(zip(sorted(a), sorted(b))))
+        pprint(sorted(b))
     return textures
 
 
-def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
+def assign_textures(mtfw_material, bl_material, textures, mrl):
+    if not mrl:
+        old_assignment(mtfw_material, bl_material, textures)
+        return
+    set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
+                             if r.cmd_type == Mrl.CmdType.set_texture]
+
+    assert len(mrl.textures) == len(textures), f"{len(mrl.textures)} != {len(textures)}"
+    for ri, (resource, i) in enumerate(set_texture_resources):
+        tex_index = resource.value_cmd.tex_idx
+        real_tex_index = tex_index - 1
+        tex_type_mtfw = resource.shader_object_hash.name
+        try:
+            tex_type_blender = TEX_TYPE_MAP_2.get(tex_type_mtfw)
+            if not tex_type_blender:
+                print("         Unknown tex type: ", tex_type_mtfw)
+                continue
+
+            if tex_index > 0:
+                texture_target = textures[real_tex_index]
+            else:
+                texture_target = None
+
+            texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
+            if texture_target is not None:
+                texture_node.image = texture_target
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
+        except IndexError:
+            print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
+            continue
+
+
+def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
     for texture_type in TextureType:
+        if texture_type.value > 8:
+            break
         tex_index , tex_unk_type = _find_texture_index(mtfw_material, texture_type, from_mrl)
         if tex_index == 0:
             continue
         try:
-            texture_target = textures[tex_index]
+            texture_target = textures[tex_index - 1]
         except IndexError:
             print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
             continue
@@ -212,8 +301,8 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
             print("texture_type not supported", texture_type)
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
         texture_node.image = texture_target
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
         # change color settings for normal and detail maps
         if texture_type.value == 2 or texture_type.value == 8:
             texture_node.image.colorspace_settings.name = "Non-Color"
@@ -222,23 +311,7 @@ def assign_textures(mtfw_material, bl_material, textures, from_mrl=False):
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
     tex_unk_type = None
-
-    if from_mrl is False:
-        tex_index = mtfw_material.texture_slots[texture_type.value - 1]
-    else:
-        for resource in mtfw_material.resources:
-            try:
-                shader_object_id = resource.shader_object_id.value
-            except AttributeError:
-                # TODO: report as warnings, this means the enum doesn't exit for this app
-                shader_object_id = resource.shader_object_id
-
-            if TEX_TYPE_MAPPER.get((shader_object_id >> 12)) == texture_type:
-                tex_index = resource.value_cmd.tex_idx
-                if texture_type.value == 5:
-                    # TODO get string shader_objects = get_shader_objects()
-                    tex_unk_type = shader_object_id
-                break
+    tex_index = mtfw_material.texture_slots[texture_type.value - 1]
     return tex_index, tex_unk_type
 
 
@@ -255,20 +328,20 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
 
     if texture_code == 1:
         # Diffuse _BM
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[0])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs[1])
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Diffuse BM"])
+        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
         blender_texture_node.location = (-300, 350)
         # blender_texture_node.use_map_color_diffuse = True
     elif texture_code == 2:
         # Normal _NM
         blender_texture_node.location = (-300, 0)
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[2])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs[3])
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Normal NM"])
+        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha NM"])
 
     elif texture_code == 3:
         # Specular _MM
         blender_texture_node.location = (-300, -350)
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[4])
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Specular MM"])
 
     elif texture_code == 4:
         # Lightmap _LM
@@ -277,25 +350,26 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         uv_map_node.location = (-500, -700)
         uv_map_node.uv_map = "uv2"
         link(uv_map_node.outputs[0], blender_texture_node.inputs[0])
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[5])
-        shader_node_grp.inputs[6].default_value = 1
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Lightmap LM"])
+        shader_node_grp.inputs["Use Lightmap"].default_value = 1
 
     elif texture_code == 5:
         # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[13])
-        shader_node_grp.inputs[14].default_value = str(tex_unk_type)  # TODO set a proper string value
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Special Map"])
+        # TODO set a proper string value or remove
+        shader_node_grp.inputs["Special Map type"].default_value = str(tex_unk_type)
 
     elif texture_code == 6:
         # Alpha mask _AM
         blender_texture_node.location = (-300, -1400)
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[7])
-        shader_node_grp.inputs[8].default_value = 1
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Alpha Mask AM"])
+        shader_node_grp.inputs["Use Alpha Mask"].default_value = 1
 
     elif texture_code == 7:
         # Enviroment _CM
         blender_texture_node.location = (-800, -350)
-        link(blender_texture_node.outputs['Color'], shader_node_grp.inputs[9])
+        link(blender_texture_node.outputs['Color'], shader_node_grp.inputs["Environment CM"])
 
     elif texture_code == 8:
         # Detail normal map
@@ -307,10 +381,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
 
         link(tex_coord_node.outputs[2], mapping_node.inputs[0])
         link(mapping_node.outputs[0], blender_texture_node.inputs[0])
-        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs[10])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs[11])
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail DNM"])
+        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha DNM"])
 
-        shader_node_grp.inputs[12].default_value = 1
+        shader_node_grp.inputs["Use Detail Map"].default_value = 1
         # TODO move it to function
         # Link the material properites value
         for x in range(3):
@@ -321,6 +395,39 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
             var1.targets[0].id = blender_material
             var1.targets[0].data_path = '["unk_detail_factor"]'
             d.driver.expression = var1.name
+
+    elif texture_code == 9:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend BM"])
+        blender_texture_node.location = (-600, 350)
+
+    elif texture_code == 14:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend 2 BM"])
+        blender_texture_node.location = (-700, 350)
+
+    elif texture_code == 10:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Vertex Displacement"])
+        blender_texture_node.location = (-600, -1800)
+
+    elif texture_code == 11:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Vertex Displacement Mask"])
+        blender_texture_node.location = (-600, -1850)
+
+    elif texture_code == 12:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Hair Shift"])
+        blender_texture_node.location = (-600, -1900)
+
+    elif texture_code == 13:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Emission"])
+        blender_texture_node.location = (-600, -1950)
+
+    elif texture_code == 15:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Height Map"])
+        blender_texture_node.location = (-600, -700)
+
+    elif texture_code == 20:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 DNM"])
+        blender_texture_node.location = (-600, -800)
+
     else:
         print("texture_code not supported", texture_code)
         # TODO: 7 CM cubemap

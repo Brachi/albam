@@ -1,6 +1,7 @@
 from binascii import crc32
 import functools
 import io
+import re
 
 import bpy
 from kaitaistruct import KaitaiStream
@@ -17,11 +18,12 @@ from .texture import (
     serialize_textures,
     TextureType,
     NODE_NAMES_TO_TYPES,
+    TEX_TYPE_MAP_2,
+
 )
 
 MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
 
-# Probably better with app_id
 MAPPER_SERIALIZE_FUNCS = {
     156: lambda: _serialize_materials_data_156,
     210: lambda: _serialize_materials_data_21,
@@ -37,6 +39,8 @@ MRL_DEFAULT_VERSION = {
     "rev1": 32,
     "rev2": 34,
 }
+MRL_FILLER = 0xDCDC
+MRL_PAD = 16
 MRL_UNK_01 = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
@@ -45,26 +49,15 @@ MRL_UNK_01 = {
     "rev2": 0x478ed2d7,
 }
 
-MRL_UNUSED = {
-    "re0": 0xA00DC,
-    "re1": 0x200DC,
-    "re6": 0x80024,  # FIXME: actually is used, in mrl.version == 33 apparently, see pl0000_0.mrl
-    "rev1": 0x804DC,
-    "rev2": 0xA00DC,
-}
 
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
     "re1": Mrl.CbGlobals1,
-    "re6": Mrl.CbGlobals1,
+    "re6": Mrl.CbGlobals3,
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
 }
 
-shader_objects = get_shader_objects()
-blend_state_obj = shader_objects["BSSolid"]  # rev1 items uses BSAddAlpha
-stencil_obj = shader_objects["DSZTestWrite"]  # rev2 uses DSZTestWriteStencilWrite else DSZTestWrite
-rasterizer_obj = shader_objects["RSMesh"]
 
 MRL_BLEND_STATE_STR = {
     0x62b2d: "BSSolid",
@@ -73,26 +66,29 @@ MRL_BLEND_STATE_STR = {
     0xc4064: "BSRevSubAlpha",
 }
 
-MRL_BLEND_STATE_HASH = {
-    app_id: (blend_state_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in blend_state_obj["apps"].items()
+MRL_DEPTH_STENCIL_STATE_STR = {
+    0x7d2f6: "DSZTest",
+    0xb8139: "DSZTestWrite",
+    0xc80a6: "DSZTestWriteStencilWrite",
+    0x30511: "DSZTestStencilWrite",
+    0xa967c: "DSZWrite",
 }
-MRL_DEPTH_STENCIL_STATE_HASH = {
-    app_id: (stencil_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in stencil_obj["apps"].items()
-}
-MRL_RASTERIZER_STATE_HASH = {
-    app_id: (rasterizer_obj["hash"] << 12) + data["shader_object_index"]
-    for app_id, data in rasterizer_obj["apps"].items()
-}
-MRL_FILLER = 0xDCDC
-MRL_PAD = 16
-MRL_APPID_USES_ALBEDO2 = {"rev2"}
-MRL_APPID_USES_SHININESS2 = {"rev2"}
-MRL_APPID_USES_SPECULAR2MAP = {"rev2"}
-MRL_APPID_USES_DETAIL_SECONDARY = {
-    "re1",
-    "rev1",
+
+MRL_RASTERIZER_STATE_STR = {
+    0x108cf: "RSMesh",
+    0x92333: "RSMeshCN",
+    0x2ab01: "RSMeshCF",
+    0xc220b: "RSMeshBias1",
+    0x573b1: "RSMeshBias2",
+    0x24327: "RSMeshBias3",
+    0x6d684: "RSMeshBias4",
+    0x1e612: "RSMeshBias5",
+    0x8b7a8: "RSMeshBias6",
+    0x9aaf: "RSMeshBias8",
+    0x7aa39: "RSMeshBias9",
+    0xb5506: "RSMeshBias10",
+    0xc6590: "RSMeshBias11",
+    0x5342a: "RSMeshBias12",
 }
 
 
@@ -129,23 +125,18 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         albam_custom_props = blender_material.albam_custom_properties
         custom_props_top_level = albam_custom_props.get_custom_properties_for_appid(app_id)
         if parsed_mod.header.version in VERSION_USES_MRL:
-            custom_props_top_level.blend_state_type = MRL_BLEND_STATE_STR[(material.blend_state_hash >> 12)]
-            custom_props_top_level.material_info_flags = material.material_info_flags
+            blend_state_type = MRL_BLEND_STATE_STR[material.blend_state_hash >> 12]
+            depth_stencil_state_type = MRL_DEPTH_STENCIL_STATE_STR[(material.depth_stencil_state_hash >> 12)]
+            rasterizer_state_type = MRL_RASTERIZER_STATE_STR[(material.rasterizer_state_hash >> 12)]
+            custom_props_top_level.blend_state_type = blend_state_type
+            custom_props_top_level.depth_stencil_state_type = depth_stencil_state_type
+            custom_props_top_level.rasterizer_state_type = rasterizer_state_type
+            custom_props_top_level.unk_flags = material.unk_flags
+            custom_props_top_level.unk_01 = material.unk_01
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
-                globals_cb = [r for r in material.resources
-                              if r.shader_object_hash == Mrl.ShaderObjectHash.globals][0]
-                custom_props_globals = (albam_custom_props
-                                        .get_custom_properties_secondary_for_appid(app_id)["globals"])
-                custom_props_globals.copy_custom_properties_from(globals_cb.float_buffer.app_specific)
-
-                cb_material = [r for r in material.resources
-                               if r.shader_object_hash == Mrl.ShaderObjectHash.cbmaterial][0]
-                custom_props_cb_material = (albam_custom_props
-                                            .get_custom_properties_secondary_for_appid(app_id)["cb_material"])
-                custom_props_cb_material.copy_custom_properties_from(cb_material.float_buffer.app_specific)
-
+                _copy_resources_to_bl_mat(app_id, material, blender_material)
         else:
             custom_props_top_level.copy_custom_properties_from(material)
 
@@ -162,7 +153,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
 
-        assign_textures(material, blender_material, textures, from_mrl=bool(mrl))
+        assign_textures(material, blender_material, textures, mrl=mrl)
 
         if not bool(mrl):
             materials[idx_material] = blender_material
@@ -170,6 +161,74 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             materials[material.name_hash_crcjam32] = blender_material
 
     return materials
+
+
+def _copy_resources_to_bl_mat(app_id, material, blender_material):
+    shader_objects = get_shader_objects()
+    albam_custom_props = blender_material.albam_custom_properties
+    features = (albam_custom_props.get_custom_properties_secondary_for_appid(app_id)["features"])
+
+    def copy_feature(shader_object_enum, custom_prop_name, enabler=None):
+        resource = [r for r in material.resources
+                    if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, shader_object_enum, None)]
+        if resource:
+            param = resource[0].value_cmd.name_hash.name
+            param = [k for k, v in shader_objects.items() if v["friendly_name"] == param][0]
+            setattr(features, custom_prop_name, param)
+        if enabler and not resource:
+            setattr(features, enabler, False)
+        elif enabler and resource:
+            setattr(features, enabler, True)
+
+    def copy_float_buffer(buffer_name, custom_prop_name):
+        cb = [r for r in material.resources
+              if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, buffer_name)]
+        if cb:
+            cb = cb[0]
+        else:
+            return
+        cb_custom_props = (albam_custom_props
+                           .get_custom_properties_secondary_for_appid(app_id)[custom_prop_name])
+        cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
+
+    copy_feature("fvertexdisplacement", "f_vertex_displacement_param")
+    copy_feature("fvdgetmask", "f_vd_get_mask_param")
+    copy_feature("fvdmaskuvtransform", "f_vd_mask_uv_transform_param")
+    copy_feature("fuvtransformsecondary", "f_uv_transform_secondary_param")
+    copy_feature("fuvvertexdisplacement", "f_uv_vertex_displacement_param")
+    copy_feature("fuvocclusionmap", "f_uv_occlusion_map_param")
+    copy_feature("ftransparency", "f_transparency_param")
+    copy_feature("fuvtransparencymap", "f_uv_transparency_map_param")
+    copy_feature("fspecular", "f_specular_param")
+    copy_feature("falbedo", "f_albedo_param")
+    copy_feature("fuvalbedomap", "f_uv_albedo_map_param")
+    copy_feature("fuvalbedoblendmap", "f_uv_albedo_blend_map_param")
+    copy_feature("fuvalbedoblend2map", "f_uv_albedo_blend_2_map_param")
+    copy_feature("fbump", "f_bump_param")
+    copy_feature("ffresnel", "f_fresnel_param", "f_fresnel_enabled")
+    copy_feature("freflect", "f_reflect_param", "f_reflect_enabled")
+    copy_feature("fshininess", "f_shininess_param", "f_shininess_enabled")
+    copy_feature("fuvnormalmap", "f_uv_normal_map_param")
+    copy_feature("fuvtransformprimary", "f_uv_transform_primary_param")
+    copy_feature("fuvemissionmap", "f_uv_emission_map_param")
+    copy_feature("fuvdetailnormalmap", "f_uv_detail_normal_map_param")
+    copy_feature("fuvdetailnormalmap2", "f_uv_detail_normal_map_2_param")
+    copy_feature("fbrdf", "f_brdf_param")
+    copy_feature("fdiffuse", "f_diffuse_param")
+    copy_feature("fambient", "f_ambient_param")
+    copy_feature("fuvspecularmap", "f_uv_specular_map_param")
+    copy_feature("femission", "f_emission_param")
+    copy_feature("focclusion", "f_occlusion_param")
+    copy_feature("fdistortion", "f_distortion_param")
+    copy_float_buffer("globals", "globals")
+    copy_float_buffer("cbmaterial", "cb_material")
+    copy_float_buffer("cbcolormask", "cb_color_mask")
+    copy_float_buffer("cbvertexdisplacement", "cb_vertex_disp")
+    copy_float_buffer("cbvertexdisplacement2", "cb_vertex_disp2")
+
+    ssenvmap = [r for r in material.resources
+                if r.shader_object_hash == Mrl.ShaderObjectHash.ssenvmap]
+    features.ssenvmap_enabled = bool(ssenvmap)
 
 
 def serialize_materials_data(model_asset, bl_objects, src_mod, dst_mod):
@@ -224,6 +283,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     dst_mod.materials_data.material_hashes = []
     exported_materials_map = {}
     app_id = model_asset.app_id
+    export_settings = bpy.context.scene.albam.export_settings
 
     mrl = Mrl(app_id=app_id)
     mrl.id_magic = b"MRL\x00"
@@ -233,60 +293,43 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     mrl.materials = []
     current_commands_offset = 0
 
-    for bl_mat_idx, bl_mat in enumerate(bl_materials):
-        try:
-            material_hash = int(bl_mat.name)
-        except ValueError:
-            material_hash = crc32(bl_mat.name.encode()) ^ 0xFFFFFFFF
+    shader_objects = get_shader_objects()
 
-        dst_mod.materials_data.material_names.append(bl_mat.name)
+    for bl_mat_idx, bl_mat in enumerate(bl_materials):
+        bl_mat_name = bl_mat.name
+        if export_settings.remove_duplicate_materials_suffix:
+            bl_mat_name = re.sub(r"\.\d\d\d$", "", bl_mat_name)
+        try:
+            material_hash = int(bl_mat_name)
+        except ValueError:
+            material_hash = crc32(bl_mat_name.encode()) ^ 0xFFFFFFFF
+
+        dst_mod.materials_data.material_names.append(bl_mat_name)
         dst_mod.materials_data.material_hashes.append(material_hash)
 
         albam_custom_props = bl_mat.albam_custom_properties
         mrl_params = albam_custom_props.get_custom_properties_for_appid(app_id)
+        custom_props_secondary = albam_custom_props.get_custom_properties_secondary_for_appid(app_id)
+        blend_state_index = shader_objects[mrl_params.blend_state_type]["apps"][app_id]["shader_object_index"]
+        depth_stencil_state_index = shader_objects[mrl_params.depth_stencil_state_type]["apps"][app_id]["shader_object_index"]  # noqa
+        rasterizer_state_index = shader_objects[mrl_params.rasterizer_state_type]["apps"][app_id]["shader_object_index"]  # noqa
 
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
         mat.type_hash = mrl.MaterialType.type_n_draw__material_std
         mat.name_hash_crcjam32 = material_hash
-        # mat.blend_state_hash = MRL_BLEND_STATE_HASH[app_id]
-        blend_state_type = mrl_params.blend_state_type
-        shader_num = shader_objects[blend_state_type]["apps"][app_id]["shader_object_index"]
-        blend_state_hash = (shader_objects[blend_state_type]["hash"] << 12) + shader_num
-        mat.blend_state_hash = blend_state_hash
-        mat.depth_stencil_state_hash = MRL_DEPTH_STENCIL_STATE_HASH[app_id]
-        mat.rasterizer_state_hash = MRL_RASTERIZER_STATE_HASH[app_id]
-        mat.unused = MRL_UNUSED[app_id]  # wrong values can cause glitches
-        # TODO: research
-        mat.material_info_flags = mrl_params.material_info_flags  # XXX
-        mat.unk_nulls = [0, 0, 0, 0]  # TODO: verify in tests
+        mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
+        mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
+        mat.rasterizer_state_hash = (shader_objects[mrl_params.rasterizer_state_type]["hash"] << 12) + rasterizer_state_index  # noqa
+        mat.unk_01 = mrl_params.unk_01
+        mat.unk_flags = mrl_params.unk_flags
+        mat.reserved = [0, 0, 0, 0]
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
+
         tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
-        # NOTE: taken from some observed REV2 models. Needs more research
-        transparency = None
-        normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-        # re1 requires "FTransparencyAlpha" for detail map
-        if blend_state_type == "BSBlendAlpha" or (normal_detail_texture_index and app_id == "re1"):
-            transparency = "FTransparencyAlpha"  # TODO add ability to set Alpha Clip
-        shininess = "FShininess2" if app_id in MRL_APPID_USES_SHININESS2 else "FShininess"
-        mat.resources = [
-            _create_set_flag_resource(app_id, mrl, mat, "FVertexDisplacement"),
-            *_create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types),
-            _create_set_flag_resource(app_id, mrl, mat, "FUVTransformSecondary"),
-            _create_set_flag_resource(app_id, mrl, mat, "FUVTransformUnique"),
-            _create_set_flag_resource(app_id, mrl, mat, "FUVTransformExtend"),
-            _create_set_flag_resource(app_id, mrl, mat, "FOcclusion"),
-            *_create_texture_normal_resources_init(mrl, mat, app_id, tex_types),
-            *_create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types),
-            *_create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types),
-            _create_set_flag_resource(app_id, mrl, mat, "FTransparency", transparency),
-            _create_set_flag_resource(app_id, mrl, mat, "FShininess", shininess),
-            _create_set_flag_resource(app_id, mrl, mat, "FLighting"),
-            _create_set_flag_resource(app_id, mrl, mat, "FBRDF"),
-            *_create_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types),
-            _create_set_flag_resource(app_id, mrl, mat, "FAmbient", "FAmbientSH"),
-            *_create_texture_specular_resources(mrl, mat, app_id, tex_types),
-        ]
+        resources = _create_resources(app_id, tex_types, mat, mrl_params, custom_props_secondary)
+        mat.resources = _insert_constant_buffers(resources, app_id, mat, custom_props_secondary)
+
         mat.num_resources = len(mat.resources)
         resources_size = sum(r.size_ for r in mat.resources)
         padding = -resources_size % MRL_PAD
@@ -333,211 +376,175 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     return exported_materials_map, mrl_vf
 
 
-def _create_uv_transform_primary_resourcers(mrl, bl_mat, mat, app_id, tex_types):
-    resources = []
-    uv_trans_prim = "FUVTransformOffset" if app_id == "re1" else None
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FUVTransformPrimary", uv_trans_prim)
-    resources.append(resource_1)
-    if uv_trans_prim is not None:
-        resource_2 = _create_cb_resource(mrl, bl_mat, mat, app_id, "CBMaterial")
-        resources.append(resource_2)
+def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
+    set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props)
+
+    globals_users = {
+        # FBump
+        'fblend2bumpdetailnormalmap',
+        'fbumpdetailnormalmap',
+        'fbumpdetailnormalmap2',
+        'fbumphair',
+        'fbumphairnormal',
+        # 'fbumpnormalmap',
+        'fbumpnormalmapblendtransparencymap',
+        'fbumpparallaxocclusion',
+        # FAlbedo
+        "falbedomap",
+        "falbedomapadd",
+        "falbedomapmodulate",
+        "fbumpparallaxocclusion"
+    }
+
+    cb_material_users = {
+        # FDiffuse
+        "fdiffuse",
+        'fdiffuseconstant',
+        'fdiffuselightmap',
+        'fdiffuselightmapocclusion',
+        'fdiffusesh',
+        'fdiffusevertexcolor',
+        'fdiffusevertexcolorocclusion',
+        "ftransparencyalpha",
+        "ftransparencyvolume",
+        "fuvtransformoffset",
+    }
+    cb_color_mask_users = {
+        "fcolormaskalbedomapmodulate"
+    }
+
+    # calculate insertion index (1 after the first user)
+    # and adjust based on position relative to other constant buffers to be inserted
+    current_position = 0
+    cb_used = {}
+
+    for ri, resource in enumerate(resources):
+        if resource.cmd_type != Mrl.CmdType.set_flag:
+            continue
+        if resource.value_cmd.name_hash.name in globals_users and not cb_used.get("$Globals"):
+            pos = current_position
+            current_position += 1
+            cb_used["$Globals"] = [ri + 1, pos]
+        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial"):
+            pos = current_position
+            current_position += 1
+            cb_used["CBMaterial"] = [ri + 1, pos]
+        elif resource.value_cmd.name_hash.name in cb_color_mask_users and not cb_used.get("CBColorMask"):
+            pos = current_position
+            current_position += 1
+            cb_used["CBColorMask"] = [ri + 1, pos]
+
+    for cb_name, (idx, pos) in sorted(cb_used.items(), key=lambda item: item[1][1]):
+        resources.insert(idx + pos, set_constant_buffer(cb_name))
 
     return resources
 
 
-# FIXME: dedupe
-def _create_texture_normal_resources_init(mrl, mat, app_id, tex_types):
-    normal_texture_index = tex_types.get(TextureType.NORMAL, None)
-    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
+def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_props_sec=None):
 
-    if normal_texture_index is not None:
-        if normal_detail_texture_index is not None:
-            param = "FBumpDetailNormalMap"
-        else:
-            param = "FBumpNormalMap"
-    else:
-        param = None
+    set_flag = functools.partial(_create_set_flag_resource, app_id, mrl_mat)
+    set_sampler_state = functools.partial(_create_set_sampler_state_resource, app_id, mrl_mat)
+    set_texture = functools.partial(_create_set_texture_resource, app_id, mrl_mat, tex_types)
+    set_constant_buffer = functools.partial(_create_cb_resource, app_id, mrl_mat, custom_props_sec)
+    features = custom_props_sec["features"]
 
-    # for some reason rev2 normal maps don't work without detail res
-    if app_id == "rev2" and normal_texture_index is not None:
-        param = "FBumpDetailNormalMap"
-    # Flag FBump already set
-    # XXX maybe only for normaldetailmap? Verify
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FBump", param)
-    return [resource_1]
+    TT = TextureType
+    tt = tex_types
+    HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
+    USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
 
+    r = [
+        set_flag("FVertexDisplacement", features.f_vertex_displacement_param),
+        set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
+        set_texture("tVtxDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
+        set_flag("FVDGetMask", features.f_vd_get_mask_param, onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
+        set_texture("tVtxDispMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
+        set_flag("FVDMaskUVTransform", features.f_vd_mask_uv_transform_param, onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),  # noqa: E501
 
-# FIXME: dedupe
-def _create_texture_normal_resources(mrl, bl_mat, mat, app_id, tex_types):
-    resources = []
+        set_flag("FUVTransformPrimary", features.f_uv_transform_primary_param),
+        set_flag("FUVTransformSecondary", features.f_uv_transform_secondary_param),
+        set_flag("FUVTransformUnique"),  # always same param
+        set_flag("FUVTransformExtend"),  # always same param
 
-    normal_texture_index = tex_types.get(TextureType.NORMAL, None)
-    if normal_texture_index is None:
-        return resources
+        set_flag("FOcclusion", features.f_occlusion_param),
+        set_texture("tOcclusionMap", onlyif=TT.OCCLUSION in tt),
+        set_flag("FUVOcclusionMap", features.f_uv_occlusion_map_param, onlyif=TT.OCCLUSION in tt),
+        set_flag("FChannelOcclusionMap", onlyif=TT.OCCLUSION in tt),
 
-    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    # hack for rev2 harcoded stack
-    if app_id == "rev2":
-        if normal_detail_texture_index is None:
-            normal_detail_texture_index = -1
+        set_flag("FBump", features.f_bump_param),
+        set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and USES_PARALLAX),
+        set_texture("tHeightMap", onlyif=TT.HEIGHTMAP in tt),
+        set_texture("tNormalMap", onlyif=TT.NORMAL in tt and TT.HAIR_SHIFT not in tt),
+        set_texture("tHairShiftMap", onlyif=TT.HAIR_SHIFT in tt),
+        set_sampler_state("SSNormalMap", onlyif=HAS_NORMAL_MAPS and not USES_PARALLAX),
+        set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and not USES_PARALLAX),  # noqa: E501
+        set_texture("tNormalMap", onlyif=TT.NORMAL in tt and TT.HAIR_SHIFT in tt),
+        set_texture("tDetailNormalMap", onlyif=TT.NORMAL_DETAIL in tt),
+        set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param, onlyif=TT.NORMAL_DETAIL in tt),
+        set_texture("tDetailNormalMap2", onlyif=TT.NORMAL_DETAIL_2 in tt),
+        set_flag("FUVDetailNormalMap2", features.f_uv_detail_normal_map_2_param, onlyif=TT.NORMAL_DETAIL_2 in tt),  # noqa: E501
 
-    if normal_detail_texture_index is not None:
-        resource_1 = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-        resources.append(resource_1)
-        detail_uv_param = "FUVSecondary" if app_id in MRL_APPID_USES_DETAIL_SECONDARY else "FUVPrimary"
+        set_flag("FAlbedo", features.f_albedo_param),
+        set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
+        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt),
+        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt),
+        set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
+        set_flag("FUVAlbedoBlendMap", features.f_uv_albedo_blend_map_param, onlyif=TT.ALBEDO_BLEND in tt),
+        set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
+        set_flag("FUVAlbedoBlend2Map", features.f_uv_albedo_blend_2_map_param, onlyif=TT.ALBEDO_BLEND_2 in tt),  # noqa: E501
 
-    resource_2 = _create_set_texture_resource(mrl, mat, app_id, normal_texture_index + 1, "tNormalMap")
-    resources.append(resource_2)
-    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSNormalMap")
-    resources.append(resource_3)
-    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVNormalMap", "FUVPrimary")
-    resources.append(resource_4)
+        set_flag("FTransparency", features.f_transparency_param),
+        set_texture("tTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
+        set_flag("FUVTransparencyMap", features.f_uv_transparency_map_param, onlyif=TT.TRANSPARENCY_MAP in tt),  # noqa: E501
+        set_flag("FChannelTransparencyMap", onlyif=TT.TRANSPARENCY_MAP in tt),
 
-    if normal_detail_texture_index is not None:
-        resource_5 = _create_set_texture_resource(
-            mrl, mat, app_id, normal_detail_texture_index + 1, "tDetailNormalMap"
-        )
-        resources.append(resource_5)
-        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVDetailNormalMap", detail_uv_param)
-        resources.append(resource_6)
+        set_flag("tIndirectMap", onlyif=TT.INDIRECT in tt),
+        set_flag("FUVIndirectMap", onlyif=TT.INDIRECT in tt),  # no params found
+        set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),  # no params found
 
-    return resources
+        set_flag("FShininess", features.f_shininess_param),
+        set_flag("FLighting"),  # no params found
+        set_flag("FBRDF", features.f_brdf_param),
+        set_flag("FDiffuse", features.f_diffuse_param),
 
+        set_texture("tLightMap", onlyif=TT.LIGHTMAP in tt),
+        set_flag("FUVLightMap", "FUVUnique", onlyif=TT.LIGHTMAP in tt),  # same param always
 
-def _create_texture_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
-    # NO Albedo Color Mask for now
-    resources = []
+        set_flag("FAmbient", features.f_ambient_param),
+        set_flag("FSpecular", features.f_specular_param),
 
-    diffuse_texture_index = tex_types.get(TextureType.DIFFUSE, None)
-    normal_map_texture_index = tex_types.get(TextureType.NORMAL, None)
-    if diffuse_texture_index is None:
-        if normal_map_texture_index is None:
-            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-            resources.append(resource_sg)
-            return resources
-        else:
-            return resources
+        set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
 
-    normal_detail_texture_index = tex_types.get(TextureType.NORMAL_DETAIL, None)
-    albedo_blend_index = tex_types.get(TextureType.UNK_01, None)  # curently hardcoded to albedo blend
-    if albedo_blend_index is not None and app_id != "rev2":
-        param_name = "FAlbedoMapModulate"
-    else:
-        param_name = "FAlbedoMap2" if app_id in MRL_APPID_USES_ALBEDO2 else "FAlbedoMap"
+        set_flag("FReflect", features.f_reflect_param, onlyif=features.f_reflect_enabled),
 
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FAlbedo", param_name)
-    resources.append(resource_1)
-    if app_id == "rev2":
-        if normal_map_texture_index is None:
-            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-            resources.append(resource_sg)
-    else:
-        if normal_detail_texture_index is None:
-            resource_sg = _create_cb_resource(mrl, bl_mat, mat, app_id, "$Globals")
-            resources.append(resource_sg)
-    resource_2 = _create_set_texture_resource(mrl, mat, app_id, diffuse_texture_index + 1, "tAlbedoMap")
-    resources.append(resource_2)
-    resource_3 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSAlbedoMap")
-    resources.append(resource_3)
-    resource_4 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoMap", "FUVPrimary")
-    resources.append(resource_4)
-    if albedo_blend_index is not None and app_id != "rev2":
-        resource_5 = _create_set_texture_resource(mrl, mat, app_id, albedo_blend_index + 1, "tAlbedoBlendMap")
-        resources.append(resource_5)
-        resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FUVAlbedoBlendMap", "FUVViewNormal")
-        resources.append(resource_6)
+        set_texture("tEnvMap", onlyif=TT.ENVMAP in tt),
+        set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enabled),
 
-    return resources
+        set_texture("tSpecularMap", onlyif=TT.SPECULAR in tt),
+        set_sampler_state("SSSpecularMap", onlyif=TT.SPECULAR in tt),
+        set_flag("FUVSpecularMap", features.f_uv_specular_map_param, onlyif=TT.SPECULAR in tt),
+        set_flag("FChannelSpecularMap", onlyif=TT.SPECULAR in tt),  # same param always
+
+        set_flag("FFresnel", features.f_fresnel_param, onlyif=features.f_fresnel_enabled),
+
+        set_flag("FEmission", features.f_emission_param),
+        set_texture("tEmissionMap", onlyif=TT.EMISSION in tt),
+        set_flag("FUVEmissionMap", features.f_uv_emission_map_param, onlyif=TT.EMISSION in tt),
+        set_flag("FChannelEmissionMap", onlyif=TT.EMISSION in tt),  # same param always
+
+        set_flag("FDistortion"),
+    ]
+
+    r = [item for item in r if item is not None]
+
+    return r
 
 
-# FIXME: dedupe
-def _create_texture_specular_resources(mrl, mat, app_id, tex_types):
-    resources = []
-
-    specular_texture_index = tex_types.get(TextureType.SPECULAR, None)
-    enviroment_texture_index = tex_types.get(TextureType.ENVMAP, None)
-    if enviroment_texture_index is None:
-        if app_id == "rev2":
-            reflect_param = None
-            fresnel_param = None
-        else:
-            reflect_param = "FReflectGlobalCubeMap"
-            fresnel_param = "FFresnelSchlick"
-    else:
-        fresnel_param = "FFresnelSchlick"
-        reflect_param = "FReflectCubeMap"
-    if specular_texture_index is None:
-        return [
-            _create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param),
-            _create_set_flag_resource(app_id, mrl, mat, "FEmission"),
-            _create_set_flag_resource(app_id, mrl, mat, "FDistortion"),
-        ]
-
-    specular_map = "FSpecular2Map" if app_id in MRL_APPID_USES_SPECULAR2MAP else "FSpecularMap"
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FSpecular", specular_map)
-    resources.append(resource_1)
-    # XXX Not sure if it's associated with specular
-    resource_2 = _create_set_flag_resource(app_id, mrl, mat, "FReflect", reflect_param)
-    resources.append(resource_2)
-    if reflect_param is not None:
-        if enviroment_texture_index is not None:
-            resource_env = _create_set_texture_resource(mrl,
-                                                        mat,
-                                                        app_id,
-                                                        enviroment_texture_index + 1,
-                                                        "tEnvMap"
-                                                        )
-            resources.append(resource_env)
-        # re1 detail map uses "SSEnvMapLODBias5" param
-        resource_21 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSEnvMap")
-        resources.append(resource_21)
-    resource_3 = _create_set_texture_resource(mrl, mat, app_id, specular_texture_index + 1, "tSpecularMap")
-    resources.append(resource_3)
-    resource_4 = _create_resource_set_sampler_state(app_id, mrl, mat, "SSSpecularMap")
-    resources.append(resource_4)
-    resource_5 = _create_set_flag_resource(app_id, mrl, mat, "FUVSpecularMap", "FUVPrimary")
-    resources.append(resource_5)
-    resource_6 = _create_set_flag_resource(app_id, mrl, mat, "FChannelSpecularMap")
-    resources.append(resource_6)
-    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FFresnel", fresnel_param))
-    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FEmission"))
-    resources.append(_create_set_flag_resource(app_id, mrl, mat, "FDistortion"))
-    return resources
-
-
-def _create_diffuse_resources(mrl, bl_mat, mat, app_id, tex_types):
-    resources = []
-    resource_1 = _create_set_flag_resource(app_id, mrl, mat, "FDiffuse")
-    resources.append(resource_1)
-    if app_id != "re1":
-        resource_2 = _create_cb_resource(mrl, bl_mat, mat, app_id, "CBMaterial")
-        resources.append(resource_2)
-    return resources
-
-
-def _create_set_texture_resource(mrl, mat, app_id, texture_index, resource_name):
-    shader_objects = get_shader_objects()
-    shader_obj_data = shader_objects[resource_name]
-
-    shader_obj_index = shader_obj_data["apps"][app_id]["shader_object_index"]
-    shader_obj_name_hash = shader_obj_data["hash"]
-    shader_obj_id = (shader_obj_name_hash << 12) + shader_obj_index
-
-    resource = mrl.ResourceBinding(_parent=mat, _root=mat._root)
-    resource.cmd_type = mrl.CmdType.set_texture
-    resource.unused = MRL_FILLER
-    resource.shader_obj_idx = shader_obj_index
-    resource.shader_object_id = shader_obj_id
-
-    set_texture = mrl.CmdTexIdx(_parent=resource, _root=resource._root)
-    set_texture.tex_idx = texture_index
-    resource.value_cmd = set_texture
-
-    return resource
-
-
-# FIXME: super copy paste with set_flag
-def _create_resource_set_sampler_state(app_id, mrl, mat, resource_name, param_name=None):
+def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=None, onlyif=True):
+    if onlyif is False:
+        return
     shader_objects = get_shader_objects()
     shader_obj_data = shader_objects[resource_name]
 
@@ -546,30 +553,68 @@ def _create_resource_set_sampler_state(app_id, mrl, mat, resource_name, param_na
     shader_obj_id = (shader_obj_name_hash << 12) + shader_obj_index
     shader_obj_name_friendly = shader_obj_data["friendly_name"]
 
-    resource = mrl.ResourceBinding(_parent=mat, _root=mat._root)
-    resource.cmd_type = mrl.CmdType.set_sampler_state
+    resource = Mrl.ResourceBinding(_parent=mat, _root=mat._root)
+    resource.cmd_type = cmd_type
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
 
-    so = mrl.ShaderObject(_parent=resource, _root=resource._root)
-    if param_name is None:
+    so = Mrl.ShaderObject(_parent=resource, _root=resource._root)
+    if not param_name:
         so.index = shader_obj_index
-        so.name_hash = getattr(mrl.ShaderObjectHash, shader_obj_name_friendly)
+        so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly)
     else:
         shader_obj_data_2 = shader_objects[param_name]
         shader_obj_index_2 = shader_obj_data_2["apps"][app_id]["shader_object_index"]
         shader_obj_name_friendly_2 = shader_obj_data_2["friendly_name"]
         so.index = shader_obj_index_2
-        so.name_hash = getattr(mrl.ShaderObjectHash, shader_obj_name_friendly_2)
+        so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly_2)
 
     resource.value_cmd = so
 
     return resource
 
 
-def _create_cb_resource(mrl, bl_mat, mat, app_id, cb_name):
-    known_names = {"$Globals", "CBMaterial"}
+_create_set_flag_resource = functools.partial(
+    _create_resource_generic, Mrl.CmdType.set_flag)
+_create_set_sampler_state_resource = functools.partial(
+    _create_resource_generic, Mrl.CmdType.set_sampler_state)
+
+
+def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=True):
+    if onlyif is False:
+        return None
+    resource_name_friendly = resource_name.lower()
+    target_tex_type = TEX_TYPE_MAP_2[resource_name_friendly]
+    texture_index = tex_types[target_tex_type]
+
+    shader_objects = get_shader_objects()
+    shader_obj_data = shader_objects[resource_name]
+
+    shader_obj_index = shader_obj_data["apps"][app_id]["shader_object_index"]
+    shader_obj_name_hash = shader_obj_data["hash"]
+    shader_obj_id = (shader_obj_name_hash << 12) + shader_obj_index
+
+    resource = Mrl.ResourceBinding(_parent=mat, _root=mat._root)
+    resource.cmd_type = Mrl.CmdType.set_texture
+    resource.unused = MRL_FILLER
+    resource.shader_obj_idx = shader_obj_index
+    resource.shader_object_id = shader_obj_id
+
+    set_texture = Mrl.CmdTexIdx(_parent=resource, _root=resource._root)
+    set_texture.tex_idx = texture_index + 1  # zero is used for "dummy texture"
+    resource.value_cmd = set_texture
+
+    return resource
+
+
+def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
+    if onlyif is False:
+        return None
+    known_names = {
+        "$Globals", "CBMaterial", "CBColorMask",
+        "CBVertexDisplacement", "CBVertexDisplacement2",
+    }
     assert cb_name in known_names, cb_name
 
     shader_objects = get_shader_objects()
@@ -579,68 +624,56 @@ def _create_cb_resource(mrl, bl_mat, mat, app_id, cb_name):
     shader_obj_name_hash = shader_obj_data["hash"]
     shader_obj_id = (shader_obj_name_hash << 12) + shader_obj_index
 
-    resource = mrl.ResourceBinding(_parent=mat, _root=mat._root)
-    resource.cmd_type = mrl.CmdType.set_constant_buffer
+    resource = Mrl.ResourceBinding(_parent=mrl_mat, _root=mrl_mat._root)
+    resource.cmd_type = Mrl.CmdType.set_constant_buffer
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
 
-    cb_offset = mrl.CmdOfsBuffer(_parent=resource, _root=resource._root)
+    cb_offset = Mrl.CmdOfsBuffer(_parent=resource, _root=resource._root)
     cb_offset.ofs_float_buff = 0  # will be set later
     resource.value_cmd = cb_offset
 
-    albam_custom_props = bl_mat.albam_custom_properties
-    custom_props_secondary = albam_custom_props.get_custom_properties_secondary_for_appid(app_id)
     if cb_name == "$Globals":
-        float_buffer_parent = mrl.CbGlobals(_parent=resource, _root=resource._root)
+        float_buffer_parent = Mrl.CbGlobals(_parent=resource, _root=resource._root)
         # TODO: app_id mapping
         CbGlobalsCls = MRL_CBGLOBALS_MAP[app_id]
         float_buffer = CbGlobalsCls(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
-        custom_props = custom_props_secondary["globals"]
+        float_buffer_custom_props = custom_props["globals"]
 
-    else:   # "CBMaterial":
-        float_buffer_parent = mrl.CbMaterial(_parent=resource, _root=resource._root)
+    elif cb_name == "CBMaterial":
+        float_buffer_parent = Mrl.CbMaterial(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
-        float_buffer = mrl.CbMaterial1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer = Mrl.CbMaterial1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
-        custom_props = custom_props_secondary["cb_material"]
+        float_buffer_custom_props = custom_props["cb_material"]
 
-    custom_props.copy_custom_properties_to(float_buffer)
+    elif cb_name == "CBColorMask":
+        float_buffer_parent = Mrl.CbColorMask(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbColorMask1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_color_mask"]
+
+    elif cb_name == "CBVertexDisplacement":
+        float_buffer_parent = Mrl.CbVertexDisplacement(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbVertexDisplacement1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_vertex_disp"]
+
+    elif cb_name == "CBVertexDisplacement2":
+        float_buffer_parent = Mrl.CbVertexDisplacement2(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbVertexDisplacement21(_parent=float_buffer_parent, _root=float_buffer_parent._root)  # noqa: E501
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_vertex_disp2"]
+
+    float_buffer_custom_props.copy_custom_properties_to(float_buffer)
     float_buffer_parent._check()
     float_buffer._check()
     resource.float_buffer = float_buffer_parent
-
-    return resource
-
-
-def _create_set_flag_resource(app_id, mrl, mat, resource_name, param_name=None):
-    shader_objects = get_shader_objects()
-    shader_obj_data = shader_objects[resource_name]
-
-    shader_obj_index = shader_obj_data["apps"][app_id]["shader_object_index"]
-    shader_obj_name_hash = shader_obj_data["hash"]
-    shader_obj_id = (shader_obj_name_hash << 12) + shader_obj_index
-    shader_obj_name_friendly = shader_obj_data["friendly_name"]
-
-    resource = mrl.ResourceBinding(_parent=mat, _root=mat._root)
-    resource.cmd_type = mrl.CmdType.set_flag
-    resource.unused = MRL_FILLER
-    resource.shader_obj_idx = shader_obj_index
-    resource.shader_object_id = shader_obj_id
-
-    so = mrl.ShaderObject(_parent=resource, _root=resource._root)
-    if param_name is None:
-        so.index = shader_obj_index
-        so.name_hash = getattr(mrl.ShaderObjectHash, shader_obj_name_friendly)
-    else:
-        shader_obj_data_2 = shader_objects[param_name]
-        shader_obj_index_2 = shader_obj_data_2["apps"][app_id]["shader_object_index"]
-        shader_obj_name_friendly_2 = shader_obj_data_2["friendly_name"]
-        so.index = shader_obj_index_2
-        so.name_hash = getattr(mrl.ShaderObjectHash, shader_obj_name_friendly_2)
-
-    resource.value_cmd = so
 
     return resource
 
@@ -654,6 +687,10 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             continue
         mtfw_shader_link_name = links[0].to_socket.name
         tex_type = NODE_NAMES_TO_TYPES[mtfw_shader_link_name]
+        if not im_node.image:
+            # dummy texture, index 0
+            tex_types[tex_type] = -1
+            continue
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
@@ -696,6 +733,8 @@ def _create_mtfw_shader():
     shader_group.inputs.new("NodeSocketColor", "Diffuse BM")
     shader_group.inputs.new("NodeSocketFloat", "Alpha BM")
     shader_group.inputs["Alpha BM"].default_value = 1
+    shader_group.inputs.new("NodeSocketColor", "Albedo Blend BM")
+    shader_group.inputs.new("NodeSocketColor", "Albedo Blend 2 BM")
     shader_group.inputs.new("NodeSocketColor", "Normal NM")
     shader_group.inputs["Normal NM"].default_value = (1, 0.5, 1, 1)
     shader_group.inputs.new("NodeSocketFloat", "Alpha NM")
@@ -711,7 +750,9 @@ def _create_mtfw_shader():
     shader_group.inputs["Use Alpha Mask"].max_value = 1
     shader_group.inputs.new("NodeSocketColor", "Environment CM")
     shader_group.inputs.new("NodeSocketColor", "Detail DNM")
+    shader_group.inputs.new("NodeSocketColor", "Detail 2 DNM")
     shader_group.inputs["Detail DNM"].default_value = (1, 0.5, 1, 1)
+    shader_group.inputs["Detail 2 DNM"].default_value = (1, 0.5, 1, 1)
     shader_group.inputs.new("NodeSocketFloat", "Alpha DNM")
     shader_group.inputs["Alpha DNM"].default_value = 0.5
     shader_group.inputs.new("NodeSocketInt", "Use Detail Map")
@@ -719,6 +760,11 @@ def _create_mtfw_shader():
     shader_group.inputs["Use Detail Map"].max_value = 1
     shader_group.inputs.new("NodeSocketColor", "Special Map")
     shader_group.inputs.new("NodeSocketString", "Special Map type")
+    shader_group.inputs.new("NodeSocketColor", "Vertex Displacement")  # TODO: Try to use it in Blender
+    shader_group.inputs.new("NodeSocketColor", "Vertex Displacement Mask")  # TODO: Try to use it in Blender
+    shader_group.inputs.new("NodeSocketColor", "Hair Shift")  # TODO: Try to use it in Blender
+    shader_group.inputs.new("NodeSocketColor", "Height Map")  # TODO: Try to use it in Blender
+    shader_group.inputs.new("NodeSocketColor", "Emission")  # TODO: Try to use it in Blender
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -836,28 +882,28 @@ def _create_mtfw_shader():
     link = shader_group.links.new
 
     link(bsdf_shader.outputs[0], group_outputs.inputs[0])
-    link(group_inputs.outputs[0], multiply_diff_light.inputs[1])
+    link(group_inputs.outputs["Diffuse BM"], multiply_diff_light.inputs[1])
     link(multiply_diff_light.outputs[0], use_lightmap.inputs[2])
-    link(group_inputs.outputs[0], use_lightmap.inputs[1])
+    link(group_inputs.outputs["Diffuse BM"], use_lightmap.inputs[1])
     link(use_lightmap.outputs[0], bsdf_shader.inputs[0])
-    link(group_inputs.outputs[1], use_alpha_mask.inputs[1])
+    link(group_inputs.outputs["Alpha BM"], use_alpha_mask.inputs[1])
     link(use_alpha_mask.outputs[0], bsdf_shader.inputs[21])
-    link(group_inputs.outputs[2], normal_separate.inputs[0])
+    link(group_inputs.outputs["Normal NM"], normal_separate.inputs[0])
     link(normal_separate.outputs[1], normal_combine.inputs[1])
     link(normal_separate.outputs[2], normal_combine.inputs[2])
-    link(group_inputs.outputs[3], normal_combine.inputs[0])
+    link(group_inputs.outputs["Alpha NM"], normal_combine.inputs[0])
     link(normal_combine.outputs[0], use_detail_map.inputs[1])
     link(normal_combine.outputs[0], separate_rgb_n.inputs[0])
 
-    link(group_inputs.outputs[4], invert_spec.inputs[1])
+    link(group_inputs.outputs["Specular MM"], invert_spec.inputs[1])
     link(invert_spec.outputs[0], bsdf_shader.inputs[9])
-    link(group_inputs.outputs[5], multiply_diff_light.inputs[2])
-    link(group_inputs.outputs[6], use_lightmap.inputs[0])
-    link(group_inputs.outputs[7], use_alpha_mask.inputs[2])  # use alpha mask > color 2
-    link(group_inputs.outputs[8], use_alpha_mask.inputs[0])  # use alpha mask int
+    link(group_inputs.outputs["Lightmap LM"], multiply_diff_light.inputs[2])
+    link(group_inputs.outputs["Use Lightmap"], use_lightmap.inputs[0])
+    link(group_inputs.outputs["Alpha Mask AM"], use_alpha_mask.inputs[2])  # use alpha mask > color 2
+    link(group_inputs.outputs["Use Alpha Mask"], use_alpha_mask.inputs[0])  # use alpha mask int
 
-    link(group_inputs.outputs[10], detail_separate.inputs[0])
-    link(group_inputs.outputs[11], detail_combine.inputs[0])
+    link(group_inputs.outputs["Detail DNM"], detail_separate.inputs[0])
+    link(group_inputs.outputs["Alpha DNM"], detail_combine.inputs[0])
     link(detail_separate.outputs[1], detail_combine.inputs[1])
     link(detail_separate.outputs[2], detail_combine.inputs[2])
     link(detail_combine.outputs[0], separate_rgb_d.inputs[0])
@@ -877,7 +923,7 @@ def _create_mtfw_shader():
     link(use_detail_map.outputs[0], invert_green.inputs[1])
     link(invert_green.outputs[0], normal_map.inputs[1])
     link(normal_map.outputs[0], bsdf_shader.inputs[22])
-    link(group_inputs.outputs[12], use_detail_map.inputs[0])
+    link(group_inputs.outputs["Use Detail Map"], use_detail_map.inputs[0])
 
     return shader_group
 
@@ -899,6 +945,7 @@ def _infer_mrl(context, mod_vfile, app_id):
             mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
             mrl._read()
             assert mrl.materials and mrl.textures
+            break
         except KeyError:
             pass
         except AssertionError:
@@ -1052,8 +1099,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2"))
 @blender_registry.register_blender_prop
-class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
-
+class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     blend_state_enum = bpy.props.EnumProperty(
         name="Blend State",
         description="select surface",
@@ -1066,9 +1112,353 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):
         default="BSSolid",
         options=set()
     )
+    # from MRL_DEPTH_STENCIL_STATE_STR
+    depth_stencil_enum = bpy.props.EnumProperty(
+        name="Depth Stencil State",
+        items=[
+            ("DSZTest", "DSZTest", "", 1),
+            ("DSZTestWrite", "DSZTestWrite", "", 2),
+            ("DSZTestWriteStencilWrite", "DSZTestWriteStencilWrite", "", 3),
+            ("DSZTestStencilWrite", "DSZTestStencilWrite", "", 4),
+            ("DSZWrite", "DSZWrite", "", 5)
+        ],
+        options=set()
+    )
+    # from MRL_RASTERIZER_STATE_STR
+    rasterizer_state_enum = bpy.props.EnumProperty(
+        name="Rasterizer State",
+        items=[
+            ("RSMesh", "RSMesh", "", 1),
+            ("RSMeshCN", "RSMeshCN", "", 2),
+            ("RSMeshCF", "RSMeshCF", "", 3),
+            ("RSMeshBias1", "RSMeshBias1", "", 4),
+            ("RSMeshBias2", "RSMeshBias2", "", 5),
+            ("RSMeshBias3", "RSMeshBias3", "", 6),
+            ("RSMeshBias4", "RSMeshBias4", "", 7),
+            ("RSMeshBias5", "RSMeshBias5", "", 8),
+            ("RSMeshBias6", "RSMeshBias6", "", 9),
+            ("RSMeshBias8", "RSMeshBias8", "", 10),
+            ("RSMeshBias9", "RSMeshBias9", "", 11),
+            ("RSMeshBias10", "RSMeshBias10", "", 12),
+            ("RSMeshBias11", "RSMeshBias11", "", 13),
+            ("RSMeshBias12", "RSMeshBias12", "", 14)
+        ],
+        options=set()
+    )
+
     blend_state_type: blend_state_enum
-    material_info_flags: bpy.props.IntVectorProperty(
-        name="Material Info Flags", size=4, default=(0, 0, 128, 140), options=set())
+    depth_stencil_state_type: depth_stencil_enum
+    rasterizer_state_type: rasterizer_state_enum
+    unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
+
+    unk_flags: bpy.props.IntVectorProperty(
+        name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
+
+
+@blender_registry.register_custom_properties_material(
+    "features", ("re0", "re1", "rev1", "rev2", "re6"),
+    is_secondary=True, display_name="Features")
+@blender_registry.register_blender_prop
+class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
+    f_vertex_displacement_param : bpy.props.EnumProperty(
+        name="FVertexDisplacement",  # noqa: F821
+        items=[
+            ("FVertexDisplacement", "Default", "", 1),  # noqa: F821
+            ("FVertexDisplacementCurveUV", "FVertexDisplacementCurveUV", "", 2),  # noqa: F821
+            ("FVertexDisplacementCurveU", "FVertexDisplacementCurveU", "", 3),  # noqa: F821
+            ("FVertexDisplacementCurveV", "FVertexDisplacementCurveV", "", 4),  # noqa: F821
+        ],
+        options=set(),
+    )
+    f_uv_vertex_displacement_param : bpy.props.EnumProperty(
+        name="FUVVertexDisplacement",  # noqa: F821
+        items=[
+            ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
+            ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
+            ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_vd_mask_uv_transform_param : bpy.props.EnumProperty(
+        name="FVDMaskUVTransform",  # noqa: F821
+        items=[
+            ("FVDMaskUVTransform", "Default", "", 1),  # noqa: F821
+            ("FVDMaskUVTransformOffset", "FVDMaskUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_vd_get_mask_param : bpy.props.EnumProperty(
+        name="FVDGetMask",  # noqa: F821
+        items=[
+            ("FVDGetMask", "Default", "", 1),  # noqa: F821
+            ("FVDGetMaskFromAO", "FVDGetMaskFromAO", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_transform_primary_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVTransformPrimary",  # noqa: F821
+        items=[
+            ("FUVTransformPrimary", "Default", "", 1),  # noqa: F821
+            ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_transform_secondary_param : bpy.props.EnumProperty(
+        name="FUVTransformSecondary",  # noqa: F821
+        items=[
+            ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
+            ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_occlusion_param : bpy.props.EnumProperty(
+        name="FOcclusion",  # noqa: F821
+        items=[
+            ("FOcclusion", "Default", "", 1),  # noqa: F821
+            ("FOcclusionAmbient", "FOcclusionAmbient", "", 2),  # noqa: F821
+            ("FOcclusionAmbientMap", "FOcclusionAmbientMap", "", 3),  # noqa: F821
+            ("FOcclusionMap", "FOcclusionMap", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_occlusion_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVOcclusionMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_bump_param : bpy.props.EnumProperty(
+        name="FBump",  # noqa: F821
+        items=[
+            ("FBump", "Default", "", 1),  # noqa: F821
+            ("FBlend2BumpDetailNormalMap", "FBlend2BumpDetailNormalMap", "", 2),  # noqa: F821
+            ("FBumpDetailNormalMap", "FBumpDetailNormalMap", "", 3),  # noqa: F821
+            ("FBumpDetailNormalMap2", "FBumpDetailNormalMap2", "", 4),  # noqa: F821
+            ("FBumpHair", "FBumpHair", "", 5),  # noqa: F821
+            ("FBumpHairNormal", "FBumpHair", "", 6),  # noqa: F821
+            ("FBumpNormalMap", "FBumpNormalMap", "", 7),  # noqa: F821
+            ("FBumpNormalMapBlendTransparencyMap", "FBumpNormalMapBlendTransparencyMap", "", 8),  # noqa: F821
+            ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 9),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_normal_map_param : bpy.props.EnumProperty(
+        name="FUVNormalMap",  # noqa: F821
+        items=[
+            ("FUVNormalMap", "Default", "", 1),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_detail_normal_map_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVDetailNormalMap",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_detail_normal_map_2_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVDetailNormalMap2",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_albedo_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FAlbedo",  # noqa: F821
+        items=[
+            ("FAlbedo", "Default", "", 1),  # noqa: F821
+            ("FAlbedo2MapModulate", "FAlbedo2MapModulate", "", 2),  # noqa: F821
+            ("FAlbedoMap", "FAlbedoMap", "", 3),  # noqa: F821
+            ("FAlbedoMap2", "FAlbedoMap2", "", 4),  # noqa: F821
+            ("FAlbedoMapAdd", "FAlbedoMapAdd", "", 5),  # noqa: F821
+            ("FAlbedoMapBlend", "FAlbedoMapBlend", "", 6),  # noqa: F821
+            ("FAlbedoMapBlendAlpha", "FAlbedoMapBlendAlpha", "", 7),  # noqa: F821
+            ("FAlbedoMapBlendTransparencyMap", "FAlbedoMapBlendTransparencyMap", "", 8),  # noqa: F821
+            ("FAlbedoMapModulate", "FAlbedoMapModulate", "", 9),  # noqa: F821
+            ("FBlendAlbedoMap", "FBlendAlbedoMap", "", 10),  # noqa: F821
+            ("FColorMaskAlbedoMapModulate", "FColorMaskAlbedoMapModulate", "", 11),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_blend_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoBlendMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_albedo_blend_2_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVAlbedoBlend2Map",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVScreen", "FUVScreen", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_transparency_param : bpy.props.EnumProperty(
+        name="FTransparency",  # noqa: F821
+        items=[
+            ("FTransparency", "Default", "", 1),  # noqa: F821
+            ("FTransparencyAlpha", "FTransparencyAlpha", "", 2),  # noqa: F821
+            ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_transparency_map_param : bpy.props.EnumProperty(
+        name="FUVTransparencyMap",  # noqa: F821
+        items=[
+            ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
+            ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
+            ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_shininess_enabled : bpy.props.BoolProperty(
+        name="FShininess", options=set())  # noqa: F821
+    f_shininess_param : bpy.props.EnumProperty(
+        name="FShininess",  # noqa: F821
+        items=[
+            ("FShininess", "Default", "", 1),  # noqa: F821
+            ("FShininess2", "FShininess2", "", 2),  # noqa: F821
+            ("FShininessMap", "FShininessMap", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_brdf_param : bpy.props.EnumProperty(
+        name="FBRDF",  # noqa: F821
+        items=[
+            ("FBRDF", "Default", "", 1),  # noqa: F821
+            ("FBRDFHair", "FBRDFHair", "", 2),  # noqa: F821
+            ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
+            ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_diffuse_param : bpy.props.EnumProperty(
+        name="FDiffuse",  # noqa: F821
+        items=[
+            ("FDiffuse", "Default", "", 1),  # noqa: F821
+            ("FDiffuseConstant", "FDiffuseConstant", "", 2),  # noqa: F821
+            ("FDiffuseLightMap", "FDiffuseLightMap", "", 3),  # noqa: F821
+            ("FDiffuseLightMapOcclusion", "FDiffuseLightMapOcclusion", "", 4),  # noqa: F821
+            ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
+            ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
+            ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 7),  # noqa: F821
+            ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 8),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_ambient_param : bpy.props.EnumProperty(
+        name="FAmbient",  # noqa: F821
+        items=[
+            ("FAmbient", "Default", "", 1),  # noqa: F821
+            ("FAmbientSH", "FAmbientSH", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_specular_param : bpy.props.EnumProperty(
+        name="FSpecular",  # noqa: F821
+        items=[
+            ("FSpecular", "Default", "", 1),  # noqa: F821
+            ("FSpecularMap", "FSpecularMap", "", 2),  # noqa: F821
+            ("FSpecular2Map", "FSpecular2Map", "", 3),  # noqa: F821
+            ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
+            ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
+        ],
+        options=set(),
+    )
+    f_uv_specular_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVSpecularMap",  # noqa: F821
+        items=[
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_reflect_enabled : bpy.props.BoolProperty(
+        name="FReflect", options=set())  # noqa: F821
+    f_reflect_param : bpy.props.EnumProperty(
+        name="FReflect",  # noqa: F821
+        items=[
+            ("FReflect", "Default", "", 1),  # noqa: F821
+            ("FReflectCubeMap", "FReflectCubeMap", "", 2),  # noqa: F821
+            ("FReflectGlobalCubeMap", "FReflectGlobalCubeMap", "", 3),  # noqa: F821
+            ("FReflectSphereMap", "FReflectSphereMap", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_fresnel_enabled : bpy.props.BoolProperty(
+        name="FFresnel Enabled", options=set())  # noqa: F821
+    f_fresnel_param : bpy.props.EnumProperty(
+        name="FFresnel",  # noqa: F821
+        items=[
+            ("FFresnel", "Default", "", 1),  # noqa: F821
+            ("FFresnelSchlick", "FFresnelSchlick", "", 2),  # noqa: F821
+            ("FFresnelSchlickRGB", "FFresnelSchlickRGB", "", 3),  # noqa: F821
+            ("FFresnelSchlick2", "FFresnelSchlick2", "", 4),  # noqa: F821
+            ("FFresnelLegacy", "FFresnelLegacy", "", 5),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_emission_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FEmission",  # noqa: F821
+        items=[
+            ("FEmission", "Default", "", 1),  # noqa: F821
+            ("FEmissionMap", "FEmissionMap", "", 2),  # noqa: F821
+            ("FEmissionConstant", "FEmissionConstant", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_emission_map_param : bpy.props.EnumProperty(  # noqa: F82
+        name="FUVEmissionMap",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 2),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_distortion_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FDistortion",  # noqa: F821
+        items=[
+            ("FDistortion", "Default", "", 1),  # noqa: F821
+            ("FDistortionRefract", "FDistortionRefract", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    ssenvmap_enabled : bpy.props.BoolProperty(
+        name="SSEnvMap", options=set(), default=True)  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1113,8 +1503,93 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
+    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6"),
+    is_secondary=True, display_name="CB Vertex Displacement")
+@blender_registry.register_blender_prop
+class CBVtxDisp(bpy.types.PropertyGroup):
+    f_vtx_disp_start: bpy.props.FloatProperty(
+        name="fVtxDispStart", options=set())  # noqa: F821
+    f_vtx_disp_scale: bpy.props.FloatProperty(
+        name="fVtxDispScale", options=set())  # noqa: F821
+    f_vtx_disp_inv_area: bpy.props.FloatProperty(
+        name="fVtxDispInvArea", options=set())  # noqa: F821
+    f_vtx_disp_rcn: bpy.props.FloatProperty(
+        name="fVtxDispRcn", options=set())  # noqa: F821
+    f_vtx_disp_tilt_u: bpy.props.FloatProperty(
+        name="fVtxDispTiltU", options=set())  # noqa: F821
+    f_vtx_disp_tilt_v: bpy.props.FloatProperty(
+        name="fVtxDispTiltV", options=set())  # noqa: F821
+    filler: bpy.props.FloatVectorProperty(
+        name="fVtxDispTiltV", size=2, options={"HIDDEN"})  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
+
+
+@blender_registry.register_custom_properties_material(
+    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
+    is_secondary=True, display_name="CB Vertex Displacement 2")
+@blender_registry.register_blender_prop
+class CBVtxDisp2(bpy.types.PropertyGroup):
+    f_vtx_disp_start2: bpy.props.FloatProperty(
+        name="fVtxDispStart2", options=set())  # noqa: F821
+    f_vtx_disp_scale2: bpy.props.FloatProperty(
+        name="fVtxDispScale2", options=set())  # noqa: F821
+    f_vtx_disp_inv_area2: bpy.props.FloatProperty(
+        name="fVtxDispInvArea2", options=set())  # noqa: F821
+    f_vtx_disp_rcn2: bpy.props.FloatProperty(
+        name="fVtxDispRcn2", options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
+
+
+@blender_registry.register_custom_properties_material(
+    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6"),
+    is_secondary=True, display_name="CB Color Mask")
+@blender_registry.register_blender_prop
+class CBColorMaskCustomProperties(bpy.types.PropertyGroup):
+    f_color_mask_threshold: bpy.props.FloatVectorProperty(
+        name="fColorMaskThreshold", size=4, options=set())  # noqa: F821
+    f_color_mask_offset: bpy.props.FloatVectorProperty(
+        name="fColorMaskOffset", size=4, options=set())  # noqa: F821
+    f_clip_threshold: bpy.props.FloatVectorProperty(
+        name="fClipThreshold", size=4, options=set())  # noqa: F821
+    f_color_mask_color: bpy.props.FloatVectorProperty(
+        name="fColorMaskColor", size=4, subtype="COLOR", options=set())  # noqa: F821
+    f_color_mask2_threshold: bpy.props.FloatVectorProperty(
+        name="fColorMask2Threshold", size=4, options=set())  # noqa: F821
+    f_color_mask2_color: bpy.props.FloatVectorProperty(
+        name="fColorMask2Color", size=4, subtype="COLOR", options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
+
+
+@blender_registry.register_custom_properties_material(
     "globals",
-    ("re0", "re1", "rev1", "re6"), is_secondary=True, display_name="$Globals")
+    ("re0", "re1", "rev1"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties1(bpy.types.PropertyGroup):
     f_alpha_clip_threshold: bpy.props.FloatProperty(
@@ -1311,6 +1786,110 @@ class GlobalsCustomProperties2(bpy.types.PropertyGroup):
         name="fTextureBlendRate", size=4, options=set())  # noqa: F821
     f_texture_blend_color: bpy.props.FloatVectorProperty(
         name="fTextureBlendcolor", size=4, subtype="COLOR", options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        # TODO: warning of missing attributes
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except AttributeError:
+                print(f"{attr_name} not found on source object {src_obj}")
+
+
+@blender_registry.register_custom_properties_material(
+    "globals",
+    ("re6",), is_secondary=True, display_name="$Globals")
+@blender_registry.register_blender_prop
+class GlobalsCustomProperties3(bpy.types.PropertyGroup):
+    f_albedo_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoColor", default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_1 : bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_albedo_blend_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoBlendColor", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_detail_normal_power: bpy.props.FloatProperty(
+        name="fDetailNormalPower", default=1, options=set())  # noqa: F821
+    f_detail_normal_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormalUVScale", default=1, options=set())  # noqa: F821
+    f_detail_normal2_power: bpy.props.FloatProperty(
+        name="fDetailNormal2Power", default=1, options=set())  # noqa: F821
+    f_detail_normal2_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormal2UVScale", default=1, options=set())  # noqa: F821
+    f_primary_shift: bpy.props.FloatProperty(
+        name="fPrimaryShift", default=0, options=set())  # noqa: F821
+    f_secondary_shift: bpy.props.FloatProperty(
+        name="fSecondaryShift", options=set())  # noqa: F821
+    f_parallax_factor: bpy.props.FloatProperty(
+        name="fParalallaxFactor", options=set())  # noqa: F821
+    f_parallax_self_occlusion: bpy.props.FloatProperty(
+        name="fParalallaxSelfOcclusion", default=1, options=set())  # noqa: F821
+    f_parallax_min_sample: bpy.props.FloatProperty(
+        name="fParallaxMinSample", default=4, options=set())  # noqa: F821
+    f_parallax_max_sample: bpy.props.FloatProperty(
+        name="fParallaxMaxSample", options=set())  # noqa: F821
+
+    padding_2 : bpy.props.FloatVectorProperty(size=2, default=(0, 0), options={"HIDDEN"})  # noqa: F821
+
+    f_light_map_color: bpy.props.FloatVectorProperty(
+        name="fLightMapColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_3 : bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+
+    f_thin_map_color: bpy.props.FloatVectorProperty(
+        name="fThinMapColor", default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_thin_scattering: bpy.props.FloatProperty(
+        name="fThinScattering", options=set())  # noqa: F821
+    f_indirect_offset: bpy.props.FloatVectorProperty(
+        name="fIndirectOffset", size=2, options=set())  # noqa: F821
+    f_indirect_scale: bpy.props.FloatVectorProperty(
+        name="fIndirectScale", size=2, options=set())  # noqa: F821
+    f_fresnel_schlick: bpy.props.FloatProperty(
+        name="fFresnelSchlick", default=1, options=set())  # noqa: F821
+    f_fresnel_schlick_rgb: bpy.props.FloatVectorProperty(
+        name="fFresnelSchlickRGB", default=(1, 1, 1), options=set())  # noqa: F821
+    f_specular_color: bpy.props.FloatVectorProperty(
+        name="fSpecularColor", default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    f_shininess: bpy.props.FloatProperty(
+        name="fShininess", default=30, options=set())  # noqa: F821
+    f_emission_color: bpy.props.FloatVectorProperty(
+        name="fEmissionColor", default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    f_alpha_clip_threshold: bpy.props.FloatProperty(
+        name="fAlphaClipThreshold", default=0, options=set())  # noqa: F821
+    f_primary_expo: bpy.props.FloatProperty(
+        name="fPrimaryExpo", default=1, options=set())  # noqa: F821
+    f_secondary_expo: bpy.props.FloatProperty(
+        name="fSecondaryExpo", default=0.2, options=set())  # noqa: F821
+    padding_4 : bpy.props.FloatVectorProperty(size=2, default=(0, 0), options={"HIDDEN"})  # noqa: F821
+    f_primary_color: bpy.props.FloatVectorProperty(
+        name="fPrimaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_5 : bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_secondary_color: bpy.props.FloatVectorProperty(
+        name="fSecondaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_6 : bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_albedo_color_2: bpy.props.FloatVectorProperty(
+        name="fAlbedoColor2", default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_7 : bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_specular_color_2: bpy.props.FloatVectorProperty(
+        name="fSpecularColor2", default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    f_fresnel_schlick_2: bpy.props.FloatProperty(
+        name="fFresnelSchlick2", default=1, options=set())  # noqa: F821
+    f_shininess_2: bpy.props.FloatProperty(
+        name="fShininess2", default=30, options=set())  # noqa: F821
+    padding_8 : bpy.props.FloatVectorProperty(size=3, default=(0, 0, 0), options={"HIDDEN"})  # noqa: F821
+    f_transparency_clip_threshold: bpy.props.FloatVectorProperty(
+        name="fTransparencyClipThreshold", size=4, default=(0, 0, 0, 0), options=set())  # noqa: F821
+    f_blend_uv: bpy.props.FloatProperty(
+        name="fBlendUV", default=1, options=set())  # noqa: F821
+    padding_9 : bpy.props.FloatVectorProperty(size=3, default=(0, 0, 0), options={"HIDDEN"})  # noqa: F821
+    f_albedo_blend2_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoBlend2Color", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_detail_normalu_vscale: bpy.props.FloatVectorProperty(
+        name="fDetailNormalU_VScale", size=2, default=(0, 0), options=set())  # noqa: F821
+    padding_10 : bpy.props.FloatVectorProperty(size=2, default=(0, 0), options={"HIDDEN"})  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

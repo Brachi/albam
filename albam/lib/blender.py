@@ -264,9 +264,13 @@ def get_bl_teximage_nodes(bl_materials):
                 try:
                     color_out.links[0].to_socket.name
                 except Exception:
-                    print(f"The texture {node.image.name} has no connections")
+                    # print(f"The texture {node.image.name} has no connections")
                     continue
-                im_mapped = images.setdefault(node.image.name, deepcopy(default))
+                try:
+                    im_mapped = images.setdefault(node.image.name, deepcopy(default))
+                except AttributeError:
+                    # print(f"The node {node.name} has no image")
+                    continue
                 im_mapped["materials"][mat.name] = (mat, node)
                 im_mapped["image"] = node.image
     return images

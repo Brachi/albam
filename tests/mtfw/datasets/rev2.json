@@ -1,0 +1,62 @@
+[
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2100_N/model/pl2100.mod",
+        "mrl_path": "data/chara/pl/pl2100_N/model/pl2100.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2100_N/model/pl2103.mod",
+        "mrl_path": "data/chara/pl/pl2100_N/model/pl2103.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2200_N/model/pl2200.mod",
+        "mrl_path": "data/chara/pl/pl2200_N/model/pl2200.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2200_N/model/pl2203.mod",
+        "mrl_path": "data/chara/pl/pl2200_N/model/pl2203.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2300_N/model/pl2300.mod",
+        "mrl_path": "data/chara/pl/pl2300_N/model/pl2300.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2300_N/model/pl2303.mod",
+        "mrl_path": "data/chara/pl/pl2300_N/model/pl2303.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2400_N/model/pl2400.mod",
+        "mrl_path": "data/chara/pl/pl2400_N/model/pl2400.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl2400_N/model/pl2413.mod",
+        "mrl_path": "data/chara/pl/pl2400_N/model/pl2413.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5300/model/pl5300.mod",
+        "mrl_path": "data/chara/pl/pl5300/model/pl5300.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5300/model/pl5303.mod",
+        "mrl_path": "data/chara/pl/pl5300/model/pl5303.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5400/model/pl5400.mod",
+        "mrl_path": "data/chara/pl/pl5400/model/pl5400.mrl"
+    },
+    {
+        "app_id": "rev2",
+        "mod_path": "data/chara/pl/pl5400/model/pl5403.mod",
+        "mrl_path": "data/chara/pl/pl5400/model/pl5403.mrl"
+    }
+]
