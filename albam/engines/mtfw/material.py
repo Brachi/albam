@@ -192,6 +192,8 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
         cb_custom_props.copy_custom_properties_from(cb.float_buffer.app_specific)
 
     copy_feature("fvertexdisplacement", "f_vertex_displacement_param")
+    copy_feature("fvdgetmask", "f_vd_get_mask_param")
+    copy_feature("fvdmaskuvtransform", "f_vd_mask_uv_transform_param")
     copy_feature("fuvtransformsecondary", "f_uv_transform_secondary_param")
     copy_feature("fuvvertexdisplacement", "f_uv_vertex_displacement_param")
     copy_feature("fuvocclusionmap", "f_uv_occlusion_map_param")
@@ -457,9 +459,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
         set_texture("tVtxDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
-        set_flag("FVDGetMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),  # TODO: param
+        set_flag("FVDGetMask", features.f_vd_get_mask_param, onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
         set_texture("tVtxDispMask", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),
-        set_flag("FVDMaskUVTransform", onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),  # TODO: param
+        set_flag("FVDMaskUVTransform", features.f_vd_mask_uv_transform_param, onlyif=TT.VERTEX_DISPLACEMENT_MASK in tt),  # noqa: E501
 
         set_flag("FUVTransformPrimary", features.f_uv_transform_primary_param),
         set_flag("FUVTransformSecondary", features.f_uv_transform_secondary_param),
@@ -1184,6 +1186,22 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
             ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
             ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_vd_mask_uv_transform_param : bpy.props.EnumProperty(
+        name="FVDMaskUVTransform",  # noqa: F821
+        items=[
+            ("FVDMaskUVTransform", "Default", "", 1),  # noqa: F821
+            ("FVDMaskUVTransformOffset", "FVDMaskUVTransformOffset", "", 2),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_vd_get_mask_param : bpy.props.EnumProperty(
+        name="FVDGetMask",  # noqa: F821
+        items=[
+            ("FVDGetMask", "Default", "", 1),  # noqa: F821
+            ("FVDGetMaskFromAO", "FVDGetMaskFromAO", "", 2),  # noqa: F821
         ],
         options=set()
     )
