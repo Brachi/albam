@@ -1218,6 +1218,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
             ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+            ("FUVTransformOffset2", "FUVTransformOffset2", "", 3),  # noqa: F821
         ],
         options=set()
     )
