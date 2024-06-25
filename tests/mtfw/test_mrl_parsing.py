@@ -34,6 +34,18 @@ KNOWN_CONSTANT_BUFFERS = {
         Mrl.ShaderObjectHash.cbvertexdisplacement3,
         Mrl.ShaderObjectHash.cbvertexdispmaskuv,
         Mrl.ShaderObjectHash.globals,
+    },
+    "re6": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbbalphaclip,
+        Mrl.ShaderObjectHash.cbdistortion,
+        Mrl.ShaderObjectHash.cbcolormask,
+        Mrl.ShaderObjectHash.cbdistortionrefract,
+        Mrl.ShaderObjectHash.cbvertexdisplacement,
+        Mrl.ShaderObjectHash.cbvertexdisplacement2,
+        Mrl.ShaderObjectHash.cbvertexdisplacement3,
+        Mrl.ShaderObjectHash.cbvertexdispmaskuv,
+        Mrl.ShaderObjectHash.globals,
     }
 }
 

@@ -17,7 +17,7 @@ seq:
 instances:
   size_before_data_:
     value: "num_images == 1 ? 16 + (4 * num_mipmaps_per_image * num_images) : 16 + (4 * num_mipmaps_per_image * num_images)  + 36 * 3"
-  type:
+  unk_type:
     value: packed_data_1 & 0xffff
   reserved_01:
     value: (packed_data_1  >> 16) & 0x00ff

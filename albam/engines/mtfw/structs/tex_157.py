@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Tex157(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -78,7 +78,7 @@ class Tex157(ReadWriteKaitaiStruct):
         if (len(self.id_magic) != 4):
             raise kaitaistruct.ConsistencyError(u"id_magic", len(self.id_magic), 4)
         if not (self.id_magic == b"\x54\x45\x58\x00"):
-            raise kaitaistruct.ValidationNotEqualError(b"\x54\x45\x58\x00", self.id_magic, self._io, u"/seq/0")
+            raise kaitaistruct.ValidationNotEqualError(b"\x54\x45\x58\x00", self.id_magic, None, u"/seq/0")
         if (self.num_images == 6):
             pass
             if (len(self.cube_faces) != 3):
@@ -219,6 +219,16 @@ class Tex157(ReadWriteKaitaiStruct):
     def _invalidate_constant(self):
         del self._m_constant
     @property
+    def unk_type(self):
+        if hasattr(self, '_m_unk_type'):
+            return self._m_unk_type
+
+        self._m_unk_type = (self.packed_data_1 & 65535)
+        return getattr(self, '_m_unk_type', None)
+
+    def _invalidate_unk_type(self):
+        del self._m_unk_type
+    @property
     def dimension(self):
         if hasattr(self, '_m_dimension'):
             return self._m_dimension
@@ -258,16 +268,6 @@ class Tex157(ReadWriteKaitaiStruct):
 
     def _invalidate_reserved_01(self):
         del self._m_reserved_01
-    @property
-    def type(self):
-        if hasattr(self, '_m_type'):
-            return self._m_type
-
-        self._m_type = (self.packed_data_1 & 65535)
-        return getattr(self, '_m_type', None)
-
-    def _invalidate_type(self):
-        del self._m_type
     @property
     def reserved_02(self):
         if hasattr(self, '_m_reserved_02'):
