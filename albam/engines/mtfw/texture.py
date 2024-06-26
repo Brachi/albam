@@ -551,7 +551,7 @@ def _serialize_texture_21(app_id, dict_tex):
 
     width = bl_im.size[0]
     if is_rtex:
-        image_count = 1 # curently hardcoded
+        image_count = 1  # curently hardcoded
         height = bl_im.size[1]
         num_mipmaps = 8  # curently hardcoded
     else:
