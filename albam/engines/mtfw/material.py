@@ -694,6 +694,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
+        relative_path_no_ext = relative_path_no_ext.replace(".rtex", "")
         if not mrl:
             try:
                 real_tex_idx = textures_list.index(relative_path_no_ext)
