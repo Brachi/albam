@@ -706,7 +706,10 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             except ValueError:
 
                 tex = mrl.TextureSlot(_parent=mrl, _root=mrl._root)
-                tex.type_hash = mrl.TextureType.type_r_texture
+                if im_node.image.albam_asset.render_target is True:
+                    tex.type_hash = 2013850128  # TYPE_rRenderTargetTexture
+                else:
+                    tex.type_hash = mrl.TextureType.type_r_texture
                 tex.unk_02 = 0  # TODO: research
                 tex.unk_03 = 0  # TODO: research
                 tex.texture_path = relative_path_no_ext
