@@ -87,8 +87,8 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
     bl_label = "Export Options"
     bl_idname = "wm.export_options"
 
-    export_visible :  bpy.props.BoolProperty(name="Export only visible meshes", default=False)
-    force_lod255 : bpy.props.BoolProperty(name="Set LOD=255 for exported meshes", default=False)
+    export_visible: bpy.props.BoolProperty(name="Export only visible meshes", default=False)
+    force_lod255: bpy.props.BoolProperty(name="Set LOD=255 for exported meshes", default=False)
 
     def execute(self, context):
         export_settings = context.scene.albam.export_settings
