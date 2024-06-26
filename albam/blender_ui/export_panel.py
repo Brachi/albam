@@ -21,8 +21,8 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     # since many models can share a name and the blender database
     # is not cleaned in each test.
     remove_duplicate_materials_suffix : bpy.props.BoolProperty(default=True)
-    export_visible : bpy.props.BoolProperty(default=True)
-    force_lod255 : bpy.props.BoolProperty(default=True)
+    export_visible : bpy.props.BoolProperty(default=False)
+    force_lod255 : bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -76,19 +76,28 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
             rows=1,
             maxrows=3,
         )
-        self.layout.row().operator("albam.export", text="Export")
         row = self.layout.row()
-        row.prop(
-            context.scene.albam.export_settings,
-            "export_visible",
-            text="Export only visible meshes",
-        )
-        row = self.layout.row()
-        row.prop(
-            context.scene.albam.export_settings,
-            "force_lod255",
-            text="Set LOD=255 for exported meshes",
-        )
+        row.operator("albam.export", text="Export")
+        row.operator("wm.export_options", icon="OPTIONS", text="")
+
+
+@blender_registry.register_blender_type
+class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
+    """Set settings for exporting"""
+    bl_label = "Export Options"
+    bl_idname = "wm.export_options"
+
+    export_visible :  bpy.props.BoolProperty(name="Export only visible meshes", default=False)
+    force_lod255 : bpy.props.BoolProperty(name="Set LOD=255 for exported meshes", default=False)
+
+    def execute(self, context):
+        export_settings = context.scene.albam.export_settings
+        export_settings.export_visible = self.export_visible
+        export_settings.force_lod255 = self.force_lod255
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
 
 
 @blender_registry.register_blender_type
