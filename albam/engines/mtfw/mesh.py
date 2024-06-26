@@ -744,6 +744,7 @@ def _get_material_hash(mod, mesh):
 @check_dds_textures
 @check_mtfw_shader_group
 def export_mod(bl_obj):
+    export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
     app_id = asset.app_id
     Mod = APPID_CLASS_MAPPER[app_id]
@@ -754,6 +755,8 @@ def export_mod(bl_obj):
     dst_mod = Mod()
     # TODO: export options like visibility
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    if export_settings.export_visible:
+        bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
     _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
@@ -1095,6 +1098,7 @@ def _serialize_groups(src_mod, dst_mod):
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
+    export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
     dst_mod.header.num_meshes = len(bl_meshes)
     meshes_data = dst_mod.MeshesData(_parent=dst_mod, _root=dst_mod._root)
@@ -1157,6 +1161,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
+        if export_settings.force_lod255:
+            custom_properties.level_of_detail = 255
         custom_properties.copy_custom_properties_to(mesh)
 
         # TODO: pre-check for no materials

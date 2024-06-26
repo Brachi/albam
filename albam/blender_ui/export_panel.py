@@ -21,6 +21,8 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     # since many models can share a name and the blender database
     # is not cleaned in each test.
     remove_duplicate_materials_suffix : bpy.props.BoolProperty(default=True)
+    export_visible : bpy.props.BoolProperty(default=True)
+    force_lod255 : bpy.props.BoolProperty(default=True)
 
 
 @blender_registry.register_blender_prop
@@ -75,6 +77,18 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
             maxrows=3,
         )
         self.layout.row().operator("albam.export", text="Export")
+        row = self.layout.row()
+        row.prop(
+            context.scene.albam.export_settings,
+            "export_visible",
+            text="Export only visible meshes",
+        )
+        row = self.layout.row()
+        row.prop(
+            context.scene.albam.export_settings,
+            "force_lod255",
+            text="Set LOD=255 for exported meshes",
+        )
 
 
 @blender_registry.register_blender_type
