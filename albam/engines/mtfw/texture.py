@@ -147,14 +147,6 @@ APPID_TEXCLS_MAP = {
     "rev2": Tex157,
 }
 
-APPID_TEX_TYPE_MAPPER = {
-    "re0": 0x209d,
-    "re1": 0x209d,
-    "re6": 0x209d,  # TODO: verify
-    "rev1": 0xa09d,  # only for stage geometry
-    "rev2": 0x209d,
-}
-
 TEX_TYPE_MAPPER = {
     0xcd06f: TextureType.DIFFUSE,
     0x22660: TextureType.NORMAL,
@@ -491,17 +483,17 @@ def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
     dds_header = DDSHeader.from_bl_image(bl_im)
 
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
+
     tex = Tex157()
     tex.id_magic = b"TEX\x00"
-    tex_type = APPID_TEX_TYPE_MAPPER[app_id]  # TODO: enum
+    tex_type = int(custom_properties.unk_type, 16)
     reserved_01 = 0
     shift = 0
     constant = 1  # XXX Not really, see tests
     reserved_02 = 0
     dimension = 2 if not dds_header.is_proper_cubemap else 6
-
-    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
-    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     packed_data_1 = (
         (tex_type & 0xffff) |
@@ -636,8 +628,17 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2"))
 @blender_registry.register_blender_prop
-class Tex157CustomProperties(bpy.types.PropertyGroup):
-    compression_format: bpy.props.IntProperty(default=0, min=0, max=43)
+class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
+    compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
+    unk_type: bpy.props.EnumProperty(
+        name="Unknown Type",
+        items=[
+            ("0x209d", "0x209d", "", 1),
+            ("0x9a", "0x9a", "", 2),
+            ("0xa09d", "0xa09d", "", 3),
+        ],
+        options=set()
+    )
 
     # XXX copy paste in mesh, material
     def set_from_source(self, mesh):
@@ -653,7 +654,10 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):
     def copy_attr(src, dst, name):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
-        setattr(dst, name, src_value)
+        try:
+            setattr(dst, name, src_value)
+        except TypeError:
+            setattr(dst, name, hex(src_value))
 
 
 def check_dds_textures(func):
