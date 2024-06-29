@@ -142,13 +142,20 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
 
         blender_material.use_nodes = True
         blender_material.blend_method = "CLIP"
-        node_to_delete = blender_material.node_tree.nodes.get("Principled BSDF")
-        blender_material.node_tree.nodes.remove(node_to_delete)
+        node_to_delete = None
+        for node in blender_material.node_tree.nodes:
+            if node.type == 'BSDF_PRINCIPLED':
+                node_to_delete = node
+                blender_material.node_tree.nodes.remove(node_to_delete)
+                break
         shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
         shader_node_group.node_tree = bpy.data.node_groups[MTFW_SHADER_NODEGROUP_NAME]
         shader_node_group.name = "MTFrameworkGroup"
         shader_node_group.width = 300
-        material_output = blender_material.node_tree.nodes.get("Material Output")
+        for node in blender_material.node_tree.nodes:
+            if node.type == 'OUTPUT_MATERIAL':
+                material_output = node
+                break
         material_output.location = (400, 0)
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
@@ -1333,6 +1340,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparency", "Default", "", 1),  # noqa: F821
             ("FTransparencyAlpha", "FTransparencyAlpha", "", 2),  # noqa: F821
             ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
+            ("FTransparencyAlphaClip", "FTransparencyAlphaClip", "", 4),  # noqa: F821
         ],
         options=set()
     )
