@@ -37,8 +37,8 @@ class ToolsSettings(bpy.types.PropertyGroup):
         default="Body"
     )
     bone_names_preset: bone_names_enum
-    vg_a: bpy.props.StringProperty(name="Main vertex group")
-    vg_b: bpy.props.StringProperty(name="Merged_vertex group")
+    vg_a: bpy.props.StringProperty()
+    vg_b: bpy.props.StringProperty()
 
 
 @blender_registry.register_blender_type
@@ -379,7 +379,7 @@ def merge_vgroups(vg_a, vg_b):
     ob = bpy.context.active_object
     if (vg_a in ob.vertex_groups and vg_b in ob.vertex_groups):
 
-        vg_merged = ob.vertex_groups.new(name=vg_a+"+"+vg_b)
+        vg_merged = ob.vertex_groups.new(name=vg_a + "+" + vg_b)
 
         for id, vert in enumerate(ob.data.vertices):
             available_groups = [v_group_elem.group for v_group_elem in vert.groups]
