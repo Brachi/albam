@@ -81,12 +81,12 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
 @blender_registry.register_blender_type
 class ALBAM_PT_VGMerger(bpy.types.Panel):
     '''UI Tool subpanel in Mesh Object Data'''
-    bl_label = "Vertex Groups Merger (Albam)"
+    bl_label = "Vertex Groups Merger"
     bl_idname = "ALBAM_PT_VGMerger"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "data"
-    CONTEXT_ITEM_NAME = "mesh"
+    bl_category = "Albam [Beta]"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         layout = self.layout
@@ -101,7 +101,13 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return bool(context.mesh)
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selection:
+            if selected_meshes:
+                return True
+        else:
+            return False
 
 
 @blender_registry.register_blender_type
@@ -224,6 +230,7 @@ class MergeVertexGroups(bpy.types.Operator):
     '''
     bl_idname = "albam.vg_merge"
     bl_label = "Merge vertex groups"
+    bl_options = {'UNDO'}
 
     @classmethod
     def poll(self, context):
