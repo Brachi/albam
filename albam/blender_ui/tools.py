@@ -37,6 +37,8 @@ class ToolsSettings(bpy.types.PropertyGroup):
         default="Body"
     )
     bone_names_preset: bone_names_enum
+    vg_a: bpy.props.StringProperty()
+    vg_b: bpy.props.StringProperty()
 
 
 @blender_registry.register_blender_type
@@ -77,6 +79,38 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
 
 
 @blender_registry.register_blender_type
+class ALBAM_PT_VGMerger(bpy.types.Panel):
+    '''UI Tool subpanel in Mesh Object Data'''
+    bl_label = "Vertex Groups Merger"
+    bl_idname = "ALBAM_PT_VGMerger"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+
+        scn = context.scene.albam.tools_settings
+        row = layout.row()
+        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Group A")
+        row = layout.row()
+        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Group B")
+        row = layout.row()
+        row.operator("albam.vg_merge")
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selection:
+            if selected_meshes:
+                return True
+        else:
+            return False
+
+
+@blender_registry.register_blender_type
 class ALBAM_OT_SplitUVSeams(bpy.types.Operator):
     '''
     Split vertices that are part of a UV seam (edges of a UV island).
@@ -90,7 +124,7 @@ class ALBAM_OT_SplitUVSeams(bpy.types.Operator):
     transfer_normals: bpy.props.BoolProperty(default=False)
 
     @classmethod
-    def poll(self, context):  # pragma: no cover
+    def poll(self, context):
         if not bpy.context.selected_objects:
             return False
         return True
@@ -185,6 +219,36 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
             mat = ob.materials[0]
             set_image_albam_attr(mat, app_id, local_path)
 
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class MergeVertexGroups(bpy.types.Operator):
+    '''
+    Merges weights from groups A and B to group A
+    The B group will be removed
+    '''
+    bl_idname = "albam.vg_merge"
+    bl_label = "Merge vertex groups"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        ob = bpy.context.active_object
+        scn = bpy.context.scene.albam.tools_settings
+        if scn.vg_a == "" or scn.vg_b == "":
+            return False
+        elif scn.vg_a == scn.vg_b:
+            return False
+        elif not (scn.vg_a in ob.vertex_groups and scn.vg_b in ob.vertex_groups):
+            return False
+        else:
+            return True
+
+    def execute(self, context):
+        scn = bpy.context.scene.albam.tools_settings
+        merge_vgroups(scn.vg_a, scn.vg_b)
+        scn.vg_b = ""
         return {'FINISHED'}
 
 
@@ -313,3 +377,30 @@ def rename_bones(armature_ob, names_preset):
         bone_name = names_preset.get(int(reference_bone_id), None)
         if bone_name:
             bone.name = bone_name
+
+
+def merge_vgroups(vg_a, vg_b):
+    # based on https://blender.stackexchange.com/a/42779
+
+    # Get both groups and add them into third
+    ob = bpy.context.active_object
+    if (vg_a in ob.vertex_groups and vg_b in ob.vertex_groups):
+
+        vg_merged = ob.vertex_groups.new(name=vg_a + "+" + vg_b)
+
+        for id, vert in enumerate(ob.data.vertices):
+            available_groups = [v_group_elem.group for v_group_elem in vert.groups]
+            A = B = 0
+            if ob.vertex_groups[vg_a].index in available_groups:
+                A = ob.vertex_groups[vg_a].weight(id)
+            if ob.vertex_groups[vg_b].index in available_groups:
+                B = ob.vertex_groups[vg_b].weight(id)
+
+            # only add to vertex group is weight is > 0
+            sum = A + B
+            if sum > 0:
+                vg_merged.add([id], sum, 'REPLACE')
+        # remove two vertex groups and rename the third as Group A
+        ob.vertex_groups.remove(ob.vertex_groups[vg_a])
+        ob.vertex_groups.remove(ob.vertex_groups[vg_b])
+        vg_merged.name = vg_a
