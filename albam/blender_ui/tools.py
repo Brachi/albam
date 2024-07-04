@@ -83,7 +83,7 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
     '''UI Tool subpanel in Mesh Object Data'''
     bl_label = "Vertex Groups Merger"
     bl_idname = "ALBAM_PT_VGMerger"
-    bl_category = "Albam [Beta]"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_options = {"DEFAULT_CLOSED"}
