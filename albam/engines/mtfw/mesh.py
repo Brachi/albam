@@ -581,17 +581,25 @@ def _get_weights(mod, mesh, vertex):
 def _build_normals(bl_mesh, normals):
     if not normals:
         return
-    bl_mesh.create_normals_split()
+    try:
+        bl_mesh.create_normals_split()
+    except AttributeError:
+        # blender 4.1+
+        pass
     bl_mesh.validate(clean_customdata=False)
     bl_mesh.update(calc_edges=True)
-    bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
+    # bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
 
     vert_normals = np.array(normals, dtype=np.float32)
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
     np.divide(vert_normals, norms, out=vert_normals, where=norms != 0)
 
     bl_mesh.normals_split_custom_set_from_vertices(vert_normals)
-    bl_mesh.use_auto_smooth = True
+    try:
+        bl_mesh.use_auto_smooth = True
+    except AttributeError:
+        # blender 4.1+
+        pass
 
 
 def _build_uvs(bl_mesh, uvs, name="uv"):

@@ -349,8 +349,6 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         # Lightmap with Alpha mask in Re5
         blender_texture_node.location = (-300, -1050)
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Special Map"])
-        # TODO set a proper string value or remove
-        shader_node_grp.inputs["Special Map type"].default_value = str(tex_unk_type)
 
     elif texture_code == 6:
         # Alpha mask _AM

@@ -227,7 +227,11 @@ def get_normals_per_vertex(blender_mesh):
     normals = {}
 
     if blender_mesh.has_custom_normals:
-        blender_mesh.calc_normals_split()
+        try:
+            blender_mesh.calc_normals_split()
+        except AttributeError:
+            # blender 4.1+
+            pass
         for loop in blender_mesh.loops:
             normals.setdefault(loop.vertex_index, loop.normal)
     else:
@@ -315,3 +319,26 @@ def get_dist(point_a, point_b):
     z3 = z1 - z2
     magnitude = math.sqrt((x3 * x3) + (y3 * y3) + (z3 * z3))
     return magnitude
+
+
+class ShaderGroupCompat:
+
+    def __init__(self, shader_group, compat="NEW"):
+        self.shader_group = shader_group
+        self.compat = compat
+
+    def new_socket(self, name, description="", in_out='INPUT', socket_type='DEFAULT', parent=None):
+        if self.compat == "NEW":
+            return self.shader_group.interface.new_socket(
+                name, description=description, in_out=in_out, socket_type=socket_type, parent=parent)
+        elif in_out == "INPUT":
+            return self.shader_group.inputs.new(socket_type, name)
+        elif in_out == "OUTPUT":
+            return self.shader_group.outputs.new(socket_type, name)
+
+    @property
+    def inputs(self):
+        if self.compat != "NEW":
+            return self.shader_group.inputs
+        return {item.name: item for item in self.shader_group.interface.items_tree
+                if item.item_type == "SOCKET" and item.in_out == "INPUT"}
