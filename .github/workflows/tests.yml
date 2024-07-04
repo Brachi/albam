@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bpy: [{"bpy-version": 3.6, "python-version": 3.10}, {"bpy-version": 4.1, "python-version": 3.11}]
+        bpy: [{"bpy-version": "3.6", "python-version": "3.10"}, {"bpy-version": "4.1", "python-version": "3.11"}]
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python ${{ matrix.bpy.python-version }} with bpy ${{ matrix.bpy-version }}
