@@ -4,12 +4,13 @@ version = "0.3.6"
 description = "Import 3d models into Blender"
 readme = "README.md"
 authors = [ {name = "Sebastian A. Brachi"} ]
-requires-python = "==3.10.*"
+requires-python = ">=3.10,<3.12"
 license = {file = "LICENSE"}
 keywords = ["blender", "blender-addon", "import", "3d models", "3d formats"]
 
 dependencies = [
-  "bpy==3.6",
+  'bpy == 3.6.0; python_version == "3.10.*"',
+  'bpy == 4.1.0; python_version == "3.11.*"',
 ]
 
 [project.optional-dependencies]

@@ -7,7 +7,7 @@ import bpy
 from kaitaistruct import KaitaiStream
 
 from albam.exceptions import AlbamCheckFailure
-from albam.lib.blender import get_bl_materials
+from albam.lib.blender import get_bl_materials, ShaderGroupCompat
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
 from .defines import get_shader_objects
@@ -736,47 +736,51 @@ def _create_mtfw_shader():
     group_inputs = shader_group.nodes.new("NodeGroupInput")
     group_inputs.location = (-2000, -200)
 
+    bl_major, _, _ = bpy.app.version
+    compat = "OLD" if bl_major <= 3 else "NEW"
+
+    sg = ShaderGroupCompat(shader_group, compat)
+
     # Create group inputs
-    shader_group.inputs.new("NodeSocketColor", "Diffuse BM")
-    shader_group.inputs.new("NodeSocketFloat", "Alpha BM")
-    shader_group.inputs["Alpha BM"].default_value = 1
-    shader_group.inputs.new("NodeSocketColor", "Albedo Blend BM")
-    shader_group.inputs.new("NodeSocketColor", "Albedo Blend 2 BM")
-    shader_group.inputs.new("NodeSocketColor", "Normal NM")
-    shader_group.inputs["Normal NM"].default_value = (1, 0.5, 1, 1)
-    shader_group.inputs.new("NodeSocketFloat", "Alpha NM")
-    shader_group.inputs["Alpha NM"].default_value = 0.5
-    shader_group.inputs.new("NodeSocketColor", "Specular MM")
-    shader_group.inputs.new("NodeSocketColor", "Lightmap LM")
-    shader_group.inputs.new("NodeSocketInt", "Use Lightmap")
-    shader_group.inputs["Use Lightmap"].min_value = 0
-    shader_group.inputs["Use Lightmap"].max_value = 1
-    shader_group.inputs.new("NodeSocketColor", "Alpha Mask AM")
-    shader_group.inputs.new("NodeSocketInt", "Use Alpha Mask")
-    shader_group.inputs["Use Alpha Mask"].min_value = 0
-    shader_group.inputs["Use Alpha Mask"].max_value = 1
-    shader_group.inputs.new("NodeSocketColor", "Environment CM")
-    shader_group.inputs.new("NodeSocketColor", "Detail DNM")
-    shader_group.inputs.new("NodeSocketColor", "Detail 2 DNM")
-    shader_group.inputs["Detail DNM"].default_value = (1, 0.5, 1, 1)
-    shader_group.inputs["Detail 2 DNM"].default_value = (1, 0.5, 1, 1)
-    shader_group.inputs.new("NodeSocketFloat", "Alpha DNM")
-    shader_group.inputs["Alpha DNM"].default_value = 0.5
-    shader_group.inputs.new("NodeSocketInt", "Use Detail Map")
-    shader_group.inputs["Use Detail Map"].min_value = 0
-    shader_group.inputs["Use Detail Map"].max_value = 1
-    shader_group.inputs.new("NodeSocketColor", "Special Map")
-    shader_group.inputs.new("NodeSocketString", "Special Map type")
-    shader_group.inputs.new("NodeSocketColor", "Vertex Displacement")  # TODO: Try to use it in Blender
-    shader_group.inputs.new("NodeSocketColor", "Vertex Displacement Mask")  # TODO: Try to use it in Blender
-    shader_group.inputs.new("NodeSocketColor", "Hair Shift")  # TODO: Try to use it in Blender
-    shader_group.inputs.new("NodeSocketColor", "Height Map")  # TODO: Try to use it in Blender
-    shader_group.inputs.new("NodeSocketColor", "Emission")  # TODO: Try to use it in Blender
+    sg.new_socket("Diffuse BM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Alpha BM", in_out="INPUT", socket_type="NodeSocketFloat")
+    sg.inputs["Alpha BM"].default_value = 1
+    sg.new_socket("Albedo Blend BM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Albedo Blend 2 BM", in_out="INPUT", socket_type="NodeSocketColor", )
+    sg.new_socket("Normal NM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.inputs["Normal NM"].default_value = (1, 0.5, 1, 1)
+    sg.new_socket("Alpha NM", in_out="INPUT", socket_type="NodeSocketFloat", )
+    sg.inputs["Alpha NM"].default_value = 0.5
+    sg.new_socket("Specular MM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Lightmap LM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Use Lightmap", in_out="INPUT", socket_type="NodeSocketInt")
+    sg.inputs["Use Lightmap"].min_value = 0
+    sg.inputs["Use Lightmap"].max_value = 1
+    sg.new_socket("Alpha Mask AM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Use Alpha Mask", in_out="INPUT", socket_type="NodeSocketInt")
+    sg.inputs["Use Alpha Mask"].min_value = 0
+    sg.inputs["Use Alpha Mask"].max_value = 1
+    sg.new_socket("Environment CM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Detail DNM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Detail 2 DNM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.inputs["Detail DNM"].default_value = (1, 0.5, 1, 1)
+    sg.inputs["Detail 2 DNM"].default_value = (1, 0.5, 1, 1)
+    sg.new_socket("Alpha DNM", in_out="INPUT", socket_type="NodeSocketFloat")
+    sg.inputs["Alpha DNM"].default_value = 0.5
+    sg.new_socket("Use Detail Map", in_out="INPUT", socket_type="NodeSocketInt")
+    sg.inputs["Use Detail Map"].min_value = 0
+    sg.inputs["Use Detail Map"].max_value = 1
+    sg.new_socket("Special Map", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Vertex Displacement", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Vertex Displacement Mask", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Hair Shift", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Height Map", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Emission", in_out="INPUT", socket_type="NodeSocketColor", )
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
     group_outputs.location = (300, -90)
-    shader_group.outputs.new("NodeSocketShader", "Surface")
+    sg.new_socket("Surface", in_out="OUTPUT", socket_type="NodeSocketShader")
 
     # Shader node
     bsdf_shader = shader_group.nodes.new("ShaderNodeBsdfPrincipled")
@@ -892,9 +896,9 @@ def _create_mtfw_shader():
     link(group_inputs.outputs["Diffuse BM"], multiply_diff_light.inputs[1])
     link(multiply_diff_light.outputs[0], use_lightmap.inputs[2])
     link(group_inputs.outputs["Diffuse BM"], use_lightmap.inputs[1])
-    link(use_lightmap.outputs[0], bsdf_shader.inputs[0])
+    link(use_lightmap.outputs[0], bsdf_shader.inputs["Base Color"])
     link(group_inputs.outputs["Alpha BM"], use_alpha_mask.inputs[1])
-    link(use_alpha_mask.outputs[0], bsdf_shader.inputs[21])
+    link(use_alpha_mask.outputs[0], bsdf_shader.inputs["Alpha"])
     link(group_inputs.outputs["Normal NM"], normal_separate.inputs[0])
     link(normal_separate.outputs[1], normal_combine.inputs[1])
     link(normal_separate.outputs[2], normal_combine.inputs[2])
@@ -903,7 +907,7 @@ def _create_mtfw_shader():
     link(normal_combine.outputs[0], separate_rgb_n.inputs[0])
 
     link(group_inputs.outputs["Specular MM"], invert_spec.inputs[1])
-    link(invert_spec.outputs[0], bsdf_shader.inputs[9])
+    link(invert_spec.outputs[0], bsdf_shader.inputs["Roughness"])
     link(group_inputs.outputs["Lightmap LM"], multiply_diff_light.inputs[2])
     link(group_inputs.outputs["Use Lightmap"], use_lightmap.inputs[0])
     link(group_inputs.outputs["Alpha Mask AM"], use_alpha_mask.inputs[2])  # use alpha mask > color 2
@@ -929,7 +933,7 @@ def _create_mtfw_shader():
     link(normalize_normals.outputs[0], use_detail_map.inputs[2])
     link(use_detail_map.outputs[0], invert_green.inputs[1])
     link(invert_green.outputs[0], normal_map.inputs[1])
-    link(normal_map.outputs[0], bsdf_shader.inputs[22])
+    link(normal_map.outputs[0], bsdf_shader.inputs["Normal"])
     link(group_inputs.outputs["Use Detail Map"], use_detail_map.inputs[0])
 
     return shader_group
