@@ -2,6 +2,7 @@ from enum import Enum
 import io
 import functools
 from pathlib import PureWindowsPath
+import math
 
 import bpy
 from kaitaistruct import KaitaiStream
@@ -485,29 +486,46 @@ def serialize_textures(app_id, bl_materials):
 
 def _serialize_texture_156(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    dds_header = DDSHeader.from_bl_image(bl_im)
+    is_rtex = bl_im.albam_asset.render_target
 
-    tex = Tex112()
-    tex.id_magic = b"TEX\x00"
-    tex.version = 112
-    tex.revision = 34  # FIXME: not really, changes with cubemaps
-    tex.num_mipmaps_per_image = dds_header.dwMipMapCount
-    tex.num_images = dds_header.image_count
-    tex.width = bl_im.size[0]
-    tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-    tex.reserved = 0
-    tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
+    if is_rtex:
+        tex = Rtex112()
+        tex.id_magic = b"RTX\x00"
+        tex.version = 112
+        tex.revision = 514
+        tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
+        tex.num_images = 1
+        tex.width = bl_im.size[0]
+        tex.height = bl_im.size[1]
+        tex.reserved = 0
+        tex.compression_format = b"\x15\x00\x00\x00".decode("ascii")
+        dds_data_len = 0
+        size_before_data_ = 40
+    else:
+        dds_header = DDSHeader.from_bl_image(bl_im)
+        tex = Tex112()
+        tex.id_magic = b"TEX\x00"
+        tex.version = 112
+        tex.revision = 34  # FIXME: not really, changes with cubemaps
+        tex.num_mipmaps_per_image = dds_header.dwMipMapCount
+        tex.num_images = dds_header.image_count
+        tex.width = bl_im.size[0]
+        tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
+        tex.reserved = 0
+        tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
+        size_before_data_ = tex.size_before_data_
 
-    tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
-    tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
-    tex.dds_data = dds_header.data
+        tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
+        tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
+        tex.dds_data = dds_header.data
+        dds_data_len = len(tex.dds_data)
 
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_properties.set_to_dest(tex)
 
     tex._check()
 
-    final_size = tex.size_before_data_ + len(tex.dds_data)
+    final_size = size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
