@@ -66,4 +66,14 @@ class Rtex112(ReadWriteKaitaiStruct):
         if (len((self.compression_format).encode(u"ASCII")) != 4):
             raise kaitaistruct.ConsistencyError(u"compression_format", len((self.compression_format).encode(u"ASCII")), 4)
 
+    @property
+    def size_before_data_(self):
+        if hasattr(self, '_m_size_before_data_'):
+            return self._m_size_before_data_
+
+        self._m_size_before_data_ = 40
+        return getattr(self, '_m_size_before_data_', None)
+
+    def _invalidate_size_before_data_(self):
+        del self._m_size_before_data_
 

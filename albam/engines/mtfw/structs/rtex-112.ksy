@@ -21,3 +21,7 @@ seq:
   - {id: green, type: f4}
   - {id: blue, type: f4}
   - {id: alpha, type: f4}
+
+instances:
+  size_before_data_:
+    value: 40

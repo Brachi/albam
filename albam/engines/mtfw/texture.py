@@ -500,7 +500,6 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.reserved = 0
         tex.compression_format = b"\x15\x00\x00\x00".decode("ascii")
         dds_data_len = 0
-        size_before_data_ = 40
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
         tex = Tex112()
@@ -513,7 +512,6 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
         tex.reserved = 0
         tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
-        size_before_data_ = tex.size_before_data_
 
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
@@ -525,7 +523,7 @@ def _serialize_texture_156(app_id, dict_tex):
 
     tex._check()
 
-    final_size = size_before_data_ + dds_data_len
+    final_size = tex.size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
@@ -546,9 +544,10 @@ def _serialize_texture_21(app_id, dict_tex):
         tex_type = int(custom_properties.unk_type, 16)
         reserved_01 = 0
         shift = 0
-        constant = 0  # XXX Not really, see tests
+        constant = 0
         reserved_02 = 2
         dimension = 2
+        dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
         tex = Tex157()
@@ -571,11 +570,12 @@ def _serialize_texture_21(app_id, dict_tex):
     if is_rtex:
         image_count = 1  # curently hardcoded
         height = bl_im.size[1]
-        num_mipmaps = 8  # curently hardcoded
+        num_mipmaps = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2))
     else:
         image_count = dds_header.image_count
         height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
         num_mipmaps = dds_header.dwMipMapCount
+
     packed_data_2 = (
         (num_mipmaps & 0x3f) |
         ((width & 0x1fff) << 6) |
@@ -594,11 +594,10 @@ def _serialize_texture_21(app_id, dict_tex):
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
+        dds_data_size = len(tex.dds_data)
     tex._check()
-    if is_rtex:
-        final_size = 16
-    else:
-        final_size = tex.size_before_data_ + len(tex.dds_data)
+
+    final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
     relative_path = _handle_relative_path(bl_im)
