@@ -51,23 +51,23 @@ class Mod156(ReadWriteKaitaiStruct):
         self.num_vtx8_unk_normals = self._io.read_u4le()
         self.unk_08 = self._io.read_u4le()
         self.reserved_03 = self._io.read_u4le()
-        self.vtx8_unk_faces = []
+        self.rcn_table = []
         for i in range(self.num_vtx8_unk_faces):
-            _t_vtx8_unk_faces = Mod156.UnkVtx8Block00(self._io, self, self._root)
-            _t_vtx8_unk_faces._read()
-            self.vtx8_unk_faces.append(_t_vtx8_unk_faces)
+            _t_rcn_table = Mod156.UnkVtx8Block00(self._io, self, self._root)
+            _t_rcn_table._read()
+            self.rcn_table.append(_t_rcn_table)
 
-        self.vtx8_unk_uv = []
+        self.rcn_vertex = []
         for i in range(self.num_vtx8_unk_uv):
-            _t_vtx8_unk_uv = Mod156.UnkVtx8Block01(self._io, self, self._root)
-            _t_vtx8_unk_uv._read()
-            self.vtx8_unk_uv.append(_t_vtx8_unk_uv)
+            _t_rcn_vertex = Mod156.UnkVtx8Block01(self._io, self, self._root)
+            _t_rcn_vertex._read()
+            self.rcn_vertex.append(_t_rcn_vertex)
 
-        self.vtx8_unk_normals = []
+        self.rcn_trianlge = []
         for i in range(self.num_vtx8_unk_normals):
-            _t_vtx8_unk_normals = Mod156.UnkVtx8Block02(self._io, self, self._root)
-            _t_vtx8_unk_normals._read()
-            self.vtx8_unk_normals.append(_t_vtx8_unk_normals)
+            _t_rcn_trianlge = Mod156.UnkVtx8Block02(self._io, self, self._root)
+            _t_rcn_trianlge._read()
+            self.rcn_trianlge.append(_t_rcn_trianlge)
 
 
 
@@ -77,17 +77,17 @@ class Mod156(ReadWriteKaitaiStruct):
         self.bsphere._fetch_instances()
         self.bbox_min._fetch_instances()
         self.bbox_max._fetch_instances()
-        for i in range(len(self.vtx8_unk_faces)):
+        for i in range(len(self.rcn_table)):
             pass
-            self.vtx8_unk_faces[i]._fetch_instances()
+            self.rcn_table[i]._fetch_instances()
 
-        for i in range(len(self.vtx8_unk_uv)):
+        for i in range(len(self.rcn_vertex)):
             pass
-            self.vtx8_unk_uv[i]._fetch_instances()
+            self.rcn_vertex[i]._fetch_instances()
 
-        for i in range(len(self.vtx8_unk_normals)):
+        for i in range(len(self.rcn_trianlge)):
             pass
-            self.vtx8_unk_normals[i]._fetch_instances()
+            self.rcn_trianlge[i]._fetch_instances()
 
         if (self.header.offset_vertex_buffer > 0):
             pass
@@ -150,17 +150,17 @@ class Mod156(ReadWriteKaitaiStruct):
         self._io.write_u4le(self.num_vtx8_unk_normals)
         self._io.write_u4le(self.unk_08)
         self._io.write_u4le(self.reserved_03)
-        for i in range(len(self.vtx8_unk_faces)):
+        for i in range(len(self.rcn_table)):
             pass
-            self.vtx8_unk_faces[i]._write__seq(self._io)
+            self.rcn_table[i]._write__seq(self._io)
 
-        for i in range(len(self.vtx8_unk_uv)):
+        for i in range(len(self.rcn_vertex)):
             pass
-            self.vtx8_unk_uv[i]._write__seq(self._io)
+            self.rcn_vertex[i]._write__seq(self._io)
 
-        for i in range(len(self.vtx8_unk_normals)):
+        for i in range(len(self.rcn_trianlge)):
             pass
-            self.vtx8_unk_normals[i]._write__seq(self._io)
+            self.rcn_trianlge[i]._write__seq(self._io)
 
 
 
@@ -182,32 +182,32 @@ class Mod156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._root, self._root)
         if self.bbox_max._parent != self:
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._parent, self)
-        if (len(self.vtx8_unk_faces) != self.num_vtx8_unk_faces):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", len(self.vtx8_unk_faces), self.num_vtx8_unk_faces)
-        for i in range(len(self.vtx8_unk_faces)):
+        if (len(self.rcn_table) != self.num_vtx8_unk_faces):
+            raise kaitaistruct.ConsistencyError(u"rcn_table", len(self.rcn_table), self.num_vtx8_unk_faces)
+        for i in range(len(self.rcn_table)):
             pass
-            if self.vtx8_unk_faces[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", self.vtx8_unk_faces[i]._root, self._root)
-            if self.vtx8_unk_faces[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", self.vtx8_unk_faces[i]._parent, self)
+            if self.rcn_table[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_table", self.rcn_table[i]._root, self._root)
+            if self.rcn_table[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_table", self.rcn_table[i]._parent, self)
 
-        if (len(self.vtx8_unk_uv) != self.num_vtx8_unk_uv):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", len(self.vtx8_unk_uv), self.num_vtx8_unk_uv)
-        for i in range(len(self.vtx8_unk_uv)):
+        if (len(self.rcn_vertex) != self.num_vtx8_unk_uv):
+            raise kaitaistruct.ConsistencyError(u"rcn_vertex", len(self.rcn_vertex), self.num_vtx8_unk_uv)
+        for i in range(len(self.rcn_vertex)):
             pass
-            if self.vtx8_unk_uv[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", self.vtx8_unk_uv[i]._root, self._root)
-            if self.vtx8_unk_uv[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", self.vtx8_unk_uv[i]._parent, self)
+            if self.rcn_vertex[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_vertex", self.rcn_vertex[i]._root, self._root)
+            if self.rcn_vertex[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_vertex", self.rcn_vertex[i]._parent, self)
 
-        if (len(self.vtx8_unk_normals) != self.num_vtx8_unk_normals):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", len(self.vtx8_unk_normals), self.num_vtx8_unk_normals)
-        for i in range(len(self.vtx8_unk_normals)):
+        if (len(self.rcn_trianlge) != self.num_vtx8_unk_normals):
+            raise kaitaistruct.ConsistencyError(u"rcn_trianlge", len(self.rcn_trianlge), self.num_vtx8_unk_normals)
+        for i in range(len(self.rcn_trianlge)):
             pass
-            if self.vtx8_unk_normals[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", self.vtx8_unk_normals[i]._root, self._root)
-            if self.vtx8_unk_normals[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", self.vtx8_unk_normals[i]._parent, self)
+            if self.rcn_trianlge[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_trianlge", self.rcn_trianlge[i]._root, self._root)
+            if self.rcn_trianlge[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_trianlge", self.rcn_trianlge[i]._parent, self)
 
 
     class Vec4(ReadWriteKaitaiStruct):
@@ -714,6 +714,31 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._root, self._root)
             if self.uv3._parent != self:
                 raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
+
+
+    class Vec2(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.Vec2, self)._write__seq(io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
+
+
+        def _check(self):
+            pass
 
 
     class Vec4U1(ReadWriteKaitaiStruct):
@@ -1306,194 +1331,160 @@ class Mod156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.surface_unk = self._io.read_bits_int_le(1) != 0
-            self.surface_opaque = self._io.read_bits_int_le(1) != 0
-            self.use_bridge_lines = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_04 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_05 = self._io.read_bits_int_le(1) != 0
-            self.use_alpha_clip = self._io.read_bits_int_le(1) != 0
-            self.use_opaque = self._io.read_bits_int_le(1) != 0
-            self.use_translusent = self._io.read_bits_int_le(1) != 0
-            self.use_alpha_transparency = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_10 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_11 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_12 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_13 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_14 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_15 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_16 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_17 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_18 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_19 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_20 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_21 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_22 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_23 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_24 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_25 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_26 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_27 = self._io.read_bits_int_le(1) != 0
-            self.use_8_bones = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_29 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_30 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_31 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_32 = self._io.read_bits_int_le(1) != 0
-            self.skin_weights_type = self._io.read_bits_int_le(3)
-            self.unk_flag_36 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_37 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_38 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_39 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_40 = self._io.read_bits_int_le(1) != 0
-            self.use_emmisive_map = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_42 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_43 = self._io.read_bits_int_le(1) != 0
-            self.use_detail_map = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_45 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_46 = self._io.read_bits_int_le(1) != 0
-            self.use_cubemap = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_48 = self._io.read_bits_int_le(1) != 0
-            self.unk_01 = self._io.read_u2le()
-            self.unk_02 = self._io.read_u2le()
-            self.unk_03 = self._io.read_u2le()
-            self.unk_04 = self._io.read_u2le()
-            self.unk_05 = self._io.read_u2le()
-            self.unk_06 = self._io.read_u2le()
-            self.unk_07 = self._io.read_u2le()
-            self.unk_08 = self._io.read_u2le()
-            self.unk_09 = self._io.read_u2le()
-            self.texture_slots = []
-            for i in range(8):
-                self.texture_slots.append(self._io.read_u4le())
+            self.fog_enable = self._io.read_bits_int_le(1) != 0
+            self.zwrite = self._io.read_bits_int_le(1) != 0
+            self.attr = self._io.read_bits_int_le(12)
+            self.num = self._io.read_bits_int_le(8)
+            self.envmap_bias = self._io.read_bits_int_le(5)
+            self.vtype = self._io.read_bits_int_le(3)
+            self.uvscroll_enable = self._io.read_bits_int_le(1) != 0
+            self.ztest = self._io.read_bits_int_le(1) != 0
+            self.func_skin = self._io.read_bits_int_le(4)
+            self.func_reserved2 = self._io.read_bits_int_le(2)
+            self.func_lighting = self._io.read_bits_int_le(4)
+            self.func_normalmap = self._io.read_bits_int_le(4)
+            self.func_specular = self._io.read_bits_int_le(4)
+            self.func_lightmap = self._io.read_bits_int_le(4)
+            self.func_multitexture = self._io.read_bits_int_le(4)
+            self.func_reserved = self._io.read_bits_int_le(6)
+            self.htechnique = self._io.read_u4le()
+            self.pipeline = self._io.read_u4le()
+            self.pvdeclbase = self._io.read_u4le()
+            self.pvdecl = self._io.read_u4le()
+            self.basemap = self._io.read_u4le()
+            self.normalmap = self._io.read_u4le()
+            self.maskmap = self._io.read_u4le()
+            self.lightmap = self._io.read_u4le()
+            self.shadowmap = self._io.read_u4le()
+            self.additionalmap = self._io.read_u4le()
+            self.envmap = self._io.read_u4le()
+            self.detailmap = self._io.read_u4le()
+            self.occlusionmap = self._io.read_u4le()
+            self.transparency = self._io.read_f4le()
+            self.fresnel_factor = []
+            for i in range(4):
+                self.fresnel_factor.append(self._io.read_f4le())
 
-            self.unk_param_01 = self._io.read_f4le()
-            self.unk_param_02 = self._io.read_f4le()
-            self.unk_param_03 = self._io.read_f4le()
-            self.unk_param_04 = self._io.read_f4le()
-            self.unk_param_05 = self._io.read_f4le()
-            self.cubemap_roughness = self._io.read_f4le()
-            self.unk_param_07 = self._io.read_f4le()
-            self.unk_param_08 = self._io.read_f4le()
-            self.unk_param_09 = self._io.read_f4le()
-            self.unk_param_10 = self._io.read_f4le()
-            self.detail_normal_power = self._io.read_f4le()
-            self.detail_normal_multiplier = self._io.read_f4le()
-            self.unk_param_13 = self._io.read_f4le()
-            self.unk_param_14 = self._io.read_f4le()
-            self.unk_param_15 = self._io.read_f4le()
-            self.unk_param_16 = self._io.read_f4le()
-            self.unk_param_17 = self._io.read_f4le()
-            self.unk_param_18 = self._io.read_f4le()
-            self.unk_param_19 = self._io.read_f4le()
-            self.unk_param_20 = self._io.read_f4le()
-            self.normal_scale = self._io.read_f4le()
-            self.unk_param_22 = self._io.read_f4le()
-            self.unk_param_23 = self._io.read_f4le()
-            self.unk_param_24 = self._io.read_f4le()
-            self.unk_param_25 = self._io.read_f4le()
-            self.unk_param_26 = self._io.read_f4le()
+            self.lightmap_factor = []
+            for i in range(4):
+                self.lightmap_factor.append(self._io.read_f4le())
+
+            self.detail_factor = []
+            for i in range(4):
+                self.detail_factor.append(self._io.read_f4le())
+
+            self.reserved1 = self._io.read_u4le()
+            self.reserved2 = self._io.read_u4le()
+            self.lightblendmap = self._io.read_u4le()
+            self.shadowblendmap = self._io.read_u4le()
+            self.parallax_factor = []
+            for i in range(2):
+                self.parallax_factor.append(self._io.read_f4le())
+
+            self.flip_binormal = self._io.read_f4le()
+            self.heightmap_occ = self._io.read_f4le()
+            self.blend_state = self._io.read_u4le()
+            self.alpha_ref = self._io.read_u4le()
+            self.heightmap = self._io.read_u4le()
+            self.glossmap = self._io.read_u4le()
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.texture_slots)):
+            for i in range(len(self.fresnel_factor)):
+                pass
+
+            for i in range(len(self.lightmap_factor)):
+                pass
+
+            for i in range(len(self.detail_factor)):
+                pass
+
+            for i in range(len(self.parallax_factor)):
                 pass
 
 
 
         def _write__seq(self, io=None):
             super(Mod156.Material, self)._write__seq(io)
-            self._io.write_bits_int_le(1, int(self.surface_unk))
-            self._io.write_bits_int_le(1, int(self.surface_opaque))
-            self._io.write_bits_int_le(1, int(self.use_bridge_lines))
-            self._io.write_bits_int_le(1, int(self.unk_flag_04))
-            self._io.write_bits_int_le(1, int(self.unk_flag_05))
-            self._io.write_bits_int_le(1, int(self.use_alpha_clip))
-            self._io.write_bits_int_le(1, int(self.use_opaque))
-            self._io.write_bits_int_le(1, int(self.use_translusent))
-            self._io.write_bits_int_le(1, int(self.use_alpha_transparency))
-            self._io.write_bits_int_le(1, int(self.unk_flag_10))
-            self._io.write_bits_int_le(1, int(self.unk_flag_11))
-            self._io.write_bits_int_le(1, int(self.unk_flag_12))
-            self._io.write_bits_int_le(1, int(self.unk_flag_13))
-            self._io.write_bits_int_le(1, int(self.unk_flag_14))
-            self._io.write_bits_int_le(1, int(self.unk_flag_15))
-            self._io.write_bits_int_le(1, int(self.unk_flag_16))
-            self._io.write_bits_int_le(1, int(self.unk_flag_17))
-            self._io.write_bits_int_le(1, int(self.unk_flag_18))
-            self._io.write_bits_int_le(1, int(self.unk_flag_19))
-            self._io.write_bits_int_le(1, int(self.unk_flag_20))
-            self._io.write_bits_int_le(1, int(self.unk_flag_21))
-            self._io.write_bits_int_le(1, int(self.unk_flag_22))
-            self._io.write_bits_int_le(1, int(self.unk_flag_23))
-            self._io.write_bits_int_le(1, int(self.unk_flag_24))
-            self._io.write_bits_int_le(1, int(self.unk_flag_25))
-            self._io.write_bits_int_le(1, int(self.unk_flag_26))
-            self._io.write_bits_int_le(1, int(self.unk_flag_27))
-            self._io.write_bits_int_le(1, int(self.use_8_bones))
-            self._io.write_bits_int_le(1, int(self.unk_flag_29))
-            self._io.write_bits_int_le(1, int(self.unk_flag_30))
-            self._io.write_bits_int_le(1, int(self.unk_flag_31))
-            self._io.write_bits_int_le(1, int(self.unk_flag_32))
-            self._io.write_bits_int_le(3, self.skin_weights_type)
-            self._io.write_bits_int_le(1, int(self.unk_flag_36))
-            self._io.write_bits_int_le(1, int(self.unk_flag_37))
-            self._io.write_bits_int_le(1, int(self.unk_flag_38))
-            self._io.write_bits_int_le(1, int(self.unk_flag_39))
-            self._io.write_bits_int_le(1, int(self.unk_flag_40))
-            self._io.write_bits_int_le(1, int(self.use_emmisive_map))
-            self._io.write_bits_int_le(1, int(self.unk_flag_42))
-            self._io.write_bits_int_le(1, int(self.unk_flag_43))
-            self._io.write_bits_int_le(1, int(self.use_detail_map))
-            self._io.write_bits_int_le(1, int(self.unk_flag_45))
-            self._io.write_bits_int_le(1, int(self.unk_flag_46))
-            self._io.write_bits_int_le(1, int(self.use_cubemap))
-            self._io.write_bits_int_le(1, int(self.unk_flag_48))
-            self._io.write_u2le(self.unk_01)
-            self._io.write_u2le(self.unk_02)
-            self._io.write_u2le(self.unk_03)
-            self._io.write_u2le(self.unk_04)
-            self._io.write_u2le(self.unk_05)
-            self._io.write_u2le(self.unk_06)
-            self._io.write_u2le(self.unk_07)
-            self._io.write_u2le(self.unk_08)
-            self._io.write_u2le(self.unk_09)
-            for i in range(len(self.texture_slots)):
+            self._io.write_bits_int_le(1, int(self.fog_enable))
+            self._io.write_bits_int_le(1, int(self.zwrite))
+            self._io.write_bits_int_le(12, self.attr)
+            self._io.write_bits_int_le(8, self.num)
+            self._io.write_bits_int_le(5, self.envmap_bias)
+            self._io.write_bits_int_le(3, self.vtype)
+            self._io.write_bits_int_le(1, int(self.uvscroll_enable))
+            self._io.write_bits_int_le(1, int(self.ztest))
+            self._io.write_bits_int_le(4, self.func_skin)
+            self._io.write_bits_int_le(2, self.func_reserved2)
+            self._io.write_bits_int_le(4, self.func_lighting)
+            self._io.write_bits_int_le(4, self.func_normalmap)
+            self._io.write_bits_int_le(4, self.func_specular)
+            self._io.write_bits_int_le(4, self.func_lightmap)
+            self._io.write_bits_int_le(4, self.func_multitexture)
+            self._io.write_bits_int_le(6, self.func_reserved)
+            self._io.write_u4le(self.htechnique)
+            self._io.write_u4le(self.pipeline)
+            self._io.write_u4le(self.pvdeclbase)
+            self._io.write_u4le(self.pvdecl)
+            self._io.write_u4le(self.basemap)
+            self._io.write_u4le(self.normalmap)
+            self._io.write_u4le(self.maskmap)
+            self._io.write_u4le(self.lightmap)
+            self._io.write_u4le(self.shadowmap)
+            self._io.write_u4le(self.additionalmap)
+            self._io.write_u4le(self.envmap)
+            self._io.write_u4le(self.detailmap)
+            self._io.write_u4le(self.occlusionmap)
+            self._io.write_f4le(self.transparency)
+            for i in range(len(self.fresnel_factor)):
                 pass
-                self._io.write_u4le(self.texture_slots[i])
+                self._io.write_f4le(self.fresnel_factor[i])
 
-            self._io.write_f4le(self.unk_param_01)
-            self._io.write_f4le(self.unk_param_02)
-            self._io.write_f4le(self.unk_param_03)
-            self._io.write_f4le(self.unk_param_04)
-            self._io.write_f4le(self.unk_param_05)
-            self._io.write_f4le(self.cubemap_roughness)
-            self._io.write_f4le(self.unk_param_07)
-            self._io.write_f4le(self.unk_param_08)
-            self._io.write_f4le(self.unk_param_09)
-            self._io.write_f4le(self.unk_param_10)
-            self._io.write_f4le(self.detail_normal_power)
-            self._io.write_f4le(self.detail_normal_multiplier)
-            self._io.write_f4le(self.unk_param_13)
-            self._io.write_f4le(self.unk_param_14)
-            self._io.write_f4le(self.unk_param_15)
-            self._io.write_f4le(self.unk_param_16)
-            self._io.write_f4le(self.unk_param_17)
-            self._io.write_f4le(self.unk_param_18)
-            self._io.write_f4le(self.unk_param_19)
-            self._io.write_f4le(self.unk_param_20)
-            self._io.write_f4le(self.normal_scale)
-            self._io.write_f4le(self.unk_param_22)
-            self._io.write_f4le(self.unk_param_23)
-            self._io.write_f4le(self.unk_param_24)
-            self._io.write_f4le(self.unk_param_25)
-            self._io.write_f4le(self.unk_param_26)
+            for i in range(len(self.lightmap_factor)):
+                pass
+                self._io.write_f4le(self.lightmap_factor[i])
+
+            for i in range(len(self.detail_factor)):
+                pass
+                self._io.write_f4le(self.detail_factor[i])
+
+            self._io.write_u4le(self.reserved1)
+            self._io.write_u4le(self.reserved2)
+            self._io.write_u4le(self.lightblendmap)
+            self._io.write_u4le(self.shadowblendmap)
+            for i in range(len(self.parallax_factor)):
+                pass
+                self._io.write_f4le(self.parallax_factor[i])
+
+            self._io.write_f4le(self.flip_binormal)
+            self._io.write_f4le(self.heightmap_occ)
+            self._io.write_u4le(self.blend_state)
+            self._io.write_u4le(self.alpha_ref)
+            self._io.write_u4le(self.heightmap)
+            self._io.write_u4le(self.glossmap)
 
 
         def _check(self):
             pass
-            if (len(self.texture_slots) != 8):
-                raise kaitaistruct.ConsistencyError(u"texture_slots", len(self.texture_slots), 8)
-            for i in range(len(self.texture_slots)):
+            if (len(self.fresnel_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"fresnel_factor", len(self.fresnel_factor), 4)
+            for i in range(len(self.fresnel_factor)):
+                pass
+
+            if (len(self.lightmap_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"lightmap_factor", len(self.lightmap_factor), 4)
+            for i in range(len(self.lightmap_factor)):
+                pass
+
+            if (len(self.detail_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"detail_factor", len(self.detail_factor), 4)
+            for i in range(len(self.detail_factor)):
+                pass
+
+            if (len(self.parallax_factor) != 2):
+                raise kaitaistruct.ConsistencyError(u"parallax_factor", len(self.parallax_factor), 2)
+            for i in range(len(self.parallax_factor)):
                 pass
 
 

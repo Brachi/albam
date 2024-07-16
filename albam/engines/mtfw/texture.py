@@ -54,6 +54,19 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     SPECULAR_BLEND = 22
 
 
+SYMBOL_TEX_TYPES = {
+    1: "basemap",
+    2: "normalmap",
+    3: "maskmap",
+    4: "lightmap",
+    5: "shadowmap",
+    6: "additionalmap",
+    7: "envmap",
+    8: "detailmap",
+    9: "occlusionmap",
+}
+
+
 TEX_TYPE_MAP_2 = {
     "talbedomap": TextureType.DIFFUSE,
     "talbedoblendmap": TextureType.ALBEDO_BLEND,
@@ -278,7 +291,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
     for texture_type in TextureType:
         if texture_type.value > 8:
             break
-        tex_index , tex_unk_type = _find_texture_index(mtfw_material, texture_type, from_mrl)
+        tex_index = _find_texture_index(mtfw_material, texture_type, from_mrl)
         if tex_index == 0:
             continue
         try:
@@ -294,7 +307,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
         # change color settings for normal and detail maps
         if texture_type.value == 2 or texture_type.value == 8:
             texture_node.image.colorspace_settings.name = "Non-Color"
@@ -302,12 +315,11 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
 
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
-    tex_unk_type = None
-    tex_index = mtfw_material.texture_slots[texture_type.value - 1]
-    return tex_index, tex_unk_type
+    tex_index = getattr(mtfw_material, SYMBOL_TEX_TYPES[texture_type.value])
+    return tex_index
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material, tex_unk_type):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture

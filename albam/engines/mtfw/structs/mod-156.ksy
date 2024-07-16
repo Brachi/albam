@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_156
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework model format 156
 
 seq:
@@ -25,9 +25,9 @@ seq:
   - {id: num_vtx8_unk_normals, type: u4}
   - {id: unk_08, type: u4}
   - {id: reserved_03, type: u4}
-  - {id: vtx8_unk_faces, type: unk_vtx8_block_00, repeat: expr, repeat-expr: num_vtx8_unk_faces}
-  - {id: vtx8_unk_uv, type: unk_vtx8_block_01, repeat: expr, repeat-expr: num_vtx8_unk_uv}
-  - {id: vtx8_unk_normals, type: unk_vtx8_block_02, repeat: expr, repeat-expr: num_vtx8_unk_normals}
+  - {id: rcn_table, type: unk_vtx8_block_00, repeat: expr, repeat-expr: num_vtx8_unk_faces}
+  - {id: rcn_vertex, type: unk_vtx8_block_01, repeat: expr, repeat-expr: num_vtx8_unk_uv}
+  - {id: rcn_trianlge, type: unk_vtx8_block_02, repeat: expr, repeat-expr: num_vtx8_unk_normals}
 
 instances:
   bones_data:
@@ -163,93 +163,53 @@ types:
 
   material:
     seq:
-      - {id: surface_unk, type: b1} # 0 only for Moon
-      - {id: surface_opaque, type: b1} # render on top of transparent meshes
-      - {id: use_bridge_lines, type: b1}
-      - {id: unk_flag_04, type: b1} # always 0
-      - {id: unk_flag_05, type: b1} # always 0
-      - {id: use_alpha_clip, type: b1}
-      - {id: use_opaque, type: b1}
-      - {id: use_translusent, type: b1}
-      - {id: use_alpha_transparency, type: b1}
+      - {id: fog_enable, type: b1}
+      - {id: zwrite, type: b1}
+      - {id: attr, type: b12}
+      - {id: num, type: b8}
+      - {id: envmap_bias, type: b5}
+      - {id: vtype, type: b3}
+      - {id: uvscroll_enable, type: b1}
+      - {id: ztest, type: b1}
       
-      - {id: unk_flag_10, type: b1} # always 0
-      - {id: unk_flag_11, type: b1} # always 0
-      - {id: unk_flag_12, type: b1} # always 0
-      - {id: unk_flag_13, type: b1} # always 0
-      - {id: unk_flag_14, type: b1} # always 0
-      - {id: unk_flag_15, type: b1}
-      - {id: unk_flag_16, type: b1}
+      - {id: func_skin, type: b4}
+      - {id: func_reserved2, type: b2}
+      - {id: func_lighting, type: b4}
+      - {id: func_normalmap, type: b4}
+      - {id: func_specular, type: b4} 
+      - {id: func_lightmap, type: b4}
+      - {id: func_multitexture, type: b4}
+      - {id: func_reserved, type: b6}
 
-      - {id: unk_flag_17, type: b1}
-      - {id: unk_flag_18, type: b1}
-      - {id: unk_flag_19, type: b1}
-      - {id: unk_flag_20, type: b1}
-      - {id: unk_flag_21, type: b1} # always 0
-      - {id: unk_flag_22, type: b1} # always 0
-      - {id: unk_flag_23, type: b1} # always 0
-      
-      - {id: unk_flag_24, type: b1}
-      - {id: unk_flag_25, type: b1}
-      - {id: unk_flag_26, type: b1}
-      - {id: unk_flag_27, type: b1}
-      - {id: use_8_bones, type: b1} # probably switches vertex format reading
-      - {id: unk_flag_29, type: b1} # can cause invisible bug with 0
-      - {id: unk_flag_30, type: b1}
-      - {id: unk_flag_31, type: b1}
-      - {id: unk_flag_32, type: b1}
+      - {id: htechnique, type: u4}
+      - {id: pipeline, type: u4}
+      - {id: pvdeclbase, type: u4}
+      - {id: pvdecl, type: u4}
+      - {id: basemap, type: u4}
+      - {id: normalmap, type: u4}
+      - {id: maskmap, type: u4}
+      - {id: lightmap, type: u4}
+      - {id: shadowmap, type: u4}
+      - {id: additionalmap, type: u4}
+      - {id: envmap, type: u4}
+      - {id: detailmap, type: u4}
+      - {id: occlusionmap, type: u4}
+      - {id: transparency, type: f4}
 
-      - {id: skin_weights_type, type: b3}
-      - {id: unk_flag_36, type: b1} # always 0
-      - {id: unk_flag_37, type: b1} # always 0
-      - {id: unk_flag_38, type: b1} # always 0
-      - {id: unk_flag_39, type: b1} # flag 07
-      - {id: unk_flag_40, type: b1}
-      - {id: use_emmisive_map, type: b1} # uses _AM slot texture
-      - {id: unk_flag_42, type: b1} # always 0
-      - {id: unk_flag_43, type: b1}
-      - {id: use_detail_map, type: b1}
-      - {id: unk_flag_45, type: b1} # always 0
-      - {id: unk_flag_46, type: b1} # always 0
-      - {id: use_cubemap, type: b1} # if no map it uses one from the stage
-      - {id: unk_flag_48, type: b1} # always 0
-
-      - {id: unk_01, type: u2}
-      - {id: unk_02, type: u2}
-      - {id: unk_03, type: u2}
-      - {id: unk_04, type: u2}
-      - {id: unk_05, type: u2}
-      - {id: unk_06, type: u2}
-      - {id: unk_07, type: u2}
-      - {id: unk_08, type: u2}
-      - {id: unk_09, type: u2}
-      - {id: texture_slots, type: u4, repeat: expr, repeat-expr: 8}
-      - {id: unk_param_01, type: f4}
-      - {id: unk_param_02, type: f4}
-      - {id: unk_param_03, type: f4}
-      - {id: unk_param_04, type: f4}
-      - {id: unk_param_05, type: f4}
-      - {id: cubemap_roughness, type: f4}
-      - {id: unk_param_07, type: f4}
-      - {id: unk_param_08, type: f4}
-      - {id: unk_param_09, type: f4}
-      - {id: unk_param_10, type: f4}
-      - {id: detail_normal_power, type: f4}
-      - {id: detail_normal_multiplier, type: f4}
-      - {id: unk_param_13, type: f4}
-      - {id: unk_param_14, type: f4}
-      - {id: unk_param_15, type: f4}
-      - {id: unk_param_16, type: f4}
-      - {id: unk_param_17, type: f4}
-      - {id: unk_param_18, type: f4}
-      - {id: unk_param_19, type: f4}
-      - {id: unk_param_20, type: f4}
-      - {id: normal_scale, type: f4}
-      - {id: unk_param_22, type: f4}
-      - {id: unk_param_23, type: f4}
-      - {id: unk_param_24, type: f4}
-      - {id: unk_param_25, type: f4}
-      - {id: unk_param_26, type: f4}
+      - {id: fresnel_factor, type: type: f4, repeat: expr, repeat-expr: 4}
+      - {id: lightmap_factor, type: type: f4, repeat: expr, repeat-expr: 4}
+      - {id: detail_factor, type: type: f4, repeat: expr, repeat-expr: 4}
+      - {id: reserved1, type: u4}
+      - {id: reserved2, type: u4}
+      - {id: lightblendmap, type: u4}
+      - {id: shadowblendmap, type: u4}
+      - {id: parallax_factor, type:  type: f4, repeat: expr, repeat-expr: 2}
+      - {id: flip_binormal, type: f4}
+      - {id: heightmap_occ, type: f4}
+      - {id: blend_state, type: u4}
+      - {id: alpha_ref, type: u4}
+      - {id: heightmap, type: u4}
+      - {id: glossmap, type: u4}
     instances:
       size_:
         value: 160
@@ -353,6 +313,11 @@ types:
     instances:
       size_:
         value: 144
+
+  vec2:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
 
   vec3:
     seq:
