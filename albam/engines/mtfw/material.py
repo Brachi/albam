@@ -262,20 +262,25 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
-        if src_mod.bones_data is not None:
-            bl_mat.albam_custom_properties.use_8_bones = 0
-            mat.use_8_bones = 0  # limited before export
+        #if src_mod.bones_data is not None:
+        #    bl_mat.albam_custom_properties.use_8_bones = 0
+        #    mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
-        mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
-        mat.texture_slots[TextureType.DIFFUSE.value - 1] = tex_types.get(TextureType.DIFFUSE, -1) + 1
-        mat.texture_slots[TextureType.NORMAL.value - 1] = tex_types.get(TextureType.NORMAL, -1) + 1
-        mat.texture_slots[TextureType.SPECULAR.value - 1] = tex_types.get(TextureType.SPECULAR, -1) + 1
-        mat.texture_slots[TextureType.LIGHTMAP.value - 1] = tex_types.get(TextureType.LIGHTMAP, -1) + 1
-        mat.texture_slots[TextureType.ALPHAMAP.value - 1] = tex_types.get(TextureType.ALPHAMAP, -1) + 1
-        mat.texture_slots[TextureType.ENVMAP.value - 1] = tex_types.get(TextureType.ENVMAP, -1) + 1
-        mat.texture_slots[TextureType.NORMAL_DETAIL.value - 1] = (
-            tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
+        #mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
+        mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
+        mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
+        mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
+        mat.lightmap = tex_types.get(TextureType.LIGHTMAP, -1) + 1
+        mat.shadowmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
+        mat.envmap = tex_types.get(TextureType.ENVMAP, -1) + 1
+        mat.detailmap = (tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
+        mat.additionalmap = 0
+        mat.occlusionmap = 0
+        mat.lightblendmap = 0
+        mat.shadowblendmap = 0
+        mat.heightmap = 0
+        mat.glossmap = 0
         dst_mod.materials_data.materials.append(mat)
         exported_materials_map[bl_mat.name] = mat_idx
 
@@ -1012,8 +1017,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     fog_enable: bpy.props.BoolProperty(default=0)
     zwrite: bpy.props.BoolProperty(default=0)
     attr: bpy.props.EnumProperty(
-        name="Material Info Attribute",
-        description="select surface",
+        name="Attribute",
+        description="Select surface attribute",
         items=[
             ("0x1", "ATTR_BRIDGE", "", 1),
             ("0x8", "ATTR_NUKI", "", 2),
@@ -1027,8 +1032,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     num: bpy.props.IntProperty(default=0)
     envmap_bias: bpy.props.IntProperty(default=0)
     vtype: bpy.props.EnumProperty(
-        name="Material Info VTYPE",
-        description="select surface",
+        name="VTYPE",
+        description="Select vertex type",
         items=[
             ("0x0", "VTYPE_SKIN", "", 1),
             ("0x1", "VTYPE_SKINEX", "A", 2),
@@ -1044,7 +1049,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     ztest: bpy.props.BoolProperty(default=0) # type: ignore
 
     func_skin: bpy.props.EnumProperty(
-        name="Material VSKIN",
+        name="VSKIN",
         description="Select max bone influences",
         items=[
             ("0x0", "SKIN_NONE", "Static mesh", 1),
@@ -1107,7 +1112,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     ) # type: ignore
     func_lightmap: bpy.props.EnumProperty(
-        name="func light map",
+        name="func lightmap",
         description="Select light map type",
         items=[
             ("0x0", "LIGHTMAP_NONE", "", 1),
@@ -1139,7 +1144,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         default="0x0",
         options=set()
     ) # type: ignore
-    func_reserved: bpy.props.IntProperty(default=0)
+    func_reserved: bpy.props.IntProperty(default=0, options={"HIDDEN"})
 
     htechnique: bpy.props.StringProperty(default="")
     pipeline: bpy.props.IntProperty(default=0)
@@ -1153,8 +1158,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         name="LightmapFactor", size= 4, default=(1, 0, 0, 0), options=set())
     detail_factor: bpy.props.FloatVectorProperty(
         name="DetailFactor", size= 4, default=(1, 0, 0, 0), options=set())
-    reserved1: bpy.props.FloatProperty(default=0.0)
-    reserved2: bpy.props.FloatProperty(default=0.0)
+    reserved1: bpy.props.IntProperty(default=0, options={"HIDDEN"})
+    reserved2: bpy.props.IntProperty(default=0, options={"HIDDEN"})
     parallax_factor: bpy.props.FloatVectorProperty(
         name="ParalaxFactor", size=2, default=(1, 1), options=set()) 
     flip_binormal: bpy.props.FloatProperty(default=0.0)
@@ -1167,10 +1172,10 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
-            try:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
                 setattr(dst_obj, attr_name, getattr(self, attr_name))
-            except:
-                setattr(dst_obj, attr_name, hex(getattr(self, attr_name)))
 
     # FIXME: dedupe
     def copy_custom_properties_from(self, src_obj):

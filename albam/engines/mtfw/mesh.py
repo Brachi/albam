@@ -318,7 +318,7 @@ def build_blender_model(file_list_item, context):
             if mod_version == 156 and (not skeleton and materials.get(material_hash)):
                 albam_custom_props = materials[material_hash].albam_custom_properties
                 mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
-                use_156rgba = mod_156_material_props.use_8_bones
+                use_156rgba = mod_156_material_props.vtype == "0x3"
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
@@ -893,9 +893,9 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.num_vtx8_unk_faces = 0
         dst_mod.num_vtx8_unk_uv = 0
         dst_mod.num_vtx8_unk_normals = 0
-        dst_mod.vtx8_unk_faces = []
-        dst_mod.vtx8_unk_uv = []
-        dst_mod.vtx8_unk_normals = []
+        dst_mod.rcn_table = []
+        dst_mod.rcn_vertex = []
+        dst_mod.rcn_trianlge = []
 
     if src_mod.header.version == 210:
         dst_mod.num_weight_bounds = 0
@@ -1242,7 +1242,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-        use_special_vf = mod_156_material_props.use_8_bones
+        use_special_vf = mod_156_material_props.vtype == "0x3"
 
     elif dst_mod.header.version in (210, 211):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
