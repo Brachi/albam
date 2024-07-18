@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_156
-  ks-version: 0.10
+  ks-version: 0.11
   title: MTFramework model format 156
 
 seq:
@@ -20,14 +20,14 @@ seq:
   - {id: unk_05, type: u4}
   - {id: unk_06, type: u4}
   - {id: unk_07, type: u4}
-  - {id: num_vtx8_unk_faces, type: u4}
-  - {id: num_vtx8_unk_uv, type: u4}
-  - {id: num_vtx8_unk_normals, type: u4}
+  - {id: num_tri, type: u4}
+  - {id: num_vtx, type: u4}
+  - {id: num_tbl, type: u4}
   - {id: unk_08, type: u4}
   - {id: reserved_03, type: u4}
-  - {id: rcn_table, type: unk_vtx8_block_00, repeat: expr, repeat-expr: num_vtx8_unk_faces}
-  - {id: rcn_vertex, type: unk_vtx8_block_01, repeat: expr, repeat-expr: num_vtx8_unk_uv}
-  - {id: rcn_trianlge, type: unk_vtx8_block_02, repeat: expr, repeat-expr: num_vtx8_unk_normals}
+  - {id: rcn_tables, type: rcn_table, repeat: expr, repeat-expr: num_tbl}
+  - {id: rcn_vertices, type: rcn_vertex, repeat: expr, repeat-expr: num_vtx}
+  - {id: rcn_trianlges, type: rcn_triangle, repeat: expr, repeat-expr: num_tri}
 
 instances:
   bones_data:
@@ -96,27 +96,33 @@ types:
           _root.header.num_bone_palettes * bone_palettes[0].size_
           : 0
 
-  unk_vtx8_block_00:
+  rcn_table:
     seq:
-      - {id: idx, type: u2}
-      - {id: unk_00, type: u2}
+      - {id: vindex, type: b21}
+      - {id: noffset, type: b10}
+      - {id: edge, type: b1}
 
-  unk_vtx8_block_01:
+  rcn_vertex:
     seq:
-      - {id: unk_01, type: u2}
-      - {id: unk_02, type: u2}
-      - {id: unk_03, type: u4}
-      - {id: unk_05, type: u2}
-      - {id: unk_06, type: u2}
-      - {id: unk_07, type: u2}
-      - {id: unk_08, type: u2}
+      - {id: x, type: u2}
+      - {id: y, type: u2}
+      - {id: z, type: u2}
+      - {id: w, type: u2}
+      - {id: w0, type: u1}
+      - {id: w1, type: u1}
+      - {id: w2, type: u1}
+      - {id: w3, type: u1}
+      - {id: j0, type: u1}
+      - {id: j1, type: u1}
+      - {id: j2, type: u1}
+      - {id: j3, type: u1}
 
-  unk_vtx8_block_02:
+  rcn_triangle:
     seq:
-      - {id: unk_00, type: u2}
-      - {id: unk_01, type: u2}
-      - {id: unk_02, type: u2}
-      - {id: unk_03, type: u2}
+      - {id: v0, type: b21}
+      - {id: v1, type: b21}
+      - {id: v2, type: b21}
+      - {id: reserved, type: b1}
 
   bone:
     seq:
@@ -196,14 +202,14 @@ types:
       - {id: occlusionmap, type: u4}
       - {id: transparency, type: f4}
 
-      - {id: fresnel_factor, type: type: f4, repeat: expr, repeat-expr: 4}
-      - {id: lightmap_factor, type: type: f4, repeat: expr, repeat-expr: 4}
-      - {id: detail_factor, type: type: f4, repeat: expr, repeat-expr: 4}
+      - {id: fresnel_factor, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: lightmap_factor, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: detail_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: reserved1, type: u4}
       - {id: reserved2, type: u4}
       - {id: lightblendmap, type: u4}
       - {id: shadowblendmap, type: u4}
-      - {id: parallax_factor, type:  type: f4, repeat: expr, repeat-expr: 2}
+      - {id: parallax_factor, type: f4, repeat: expr, repeat-expr: 2}
       - {id: flip_binormal, type: f4}
       - {id: heightmap_occ, type: f4}
       - {id: blend_state, type: u4}
@@ -230,38 +236,35 @@ types:
     seq:
       - {id: idx_group, type: u2}
       - {id: idx_material, type: u2}
-      - {id: constant, type: u1}
+      - {id: disp, type: u1}
       - {id: level_of_detail, type: u1}
-      - {id: z_buffer_order, type: u1}
-      - {id: vertex_format, type: u1}
+      - {id: alpha_priority, type: u1} # alphapri
+      - {id: vertex_format, type: u1} # weight_num
       - {id: vertex_stride, type: u1}
       - {id: vertex_stride_2, type: u1}
-      - {id: unk_03, type: u1}
-      - {id: unk_flag_01, type: b1}
-      - {id: unk_flag_02, type: b1}
-      - {id: unk_flag_03, type: b1}
-      - {id: unk_flag_04, type: b1}
-      - {id: unk_flag_05, type: b1}
-      - {id: use_cast_shadows, type: b1}
-      - {id: use_receive_shadows, type: b1}
-      - {id: unk_flag_08, type: b1}
+      - {id: connective, type: u1}
+      - {id: shape, type: b1}
+      - {id: env, type: b1}
+      - {id: refrect, type: b1}
+      - {id: reserved2, type: b2}
+      - {id: shadow_cast, type: b1}
+      - {id: shadow_recive, type: b1} # shadow_recv
+      - {id: sort, type: b1}
       - {id: num_vertices, type: u2}
       - {id: vertex_position_end, type: u2}
       - {id: vertex_position_2, type: u4}
       - {id: vertex_offset, type: u4}
       - {id: vertex_offset_2, type: u4} # second vertex buffer offset
-      - {id: face_position, type: u4}
+      - {id: face_position, type: u4} # index_ofs
       - {id: num_indices, type: u4}
-      - {id: face_offset, type: u4}
-      - {id: unk_06, type: u1}
-      - {id: unk_07, type: u1}
-      - {id: vertex_position, type: u2}
-      - {id: num_unique_bone_ids, type: u1}
-      - {id: idx_bone_palette, type: u1}
-      - {id: unk_08, type: u1}
-      - {id: unk_09, type: u1}
-      - {id: unk_10, type: u2}
-      - {id: unk_11, type: u2}
+      - {id: face_offset, type: u4} # index_base
+      - {id: vdeclbase, type: u1}
+      - {id: vdecl, type: u1}
+      - {id: vertex_position, type: u2} # min)ubdex
+      - {id: num_boundary, type: u1} # probably num of OABB boundng volumes
+      - {id: idx_bone_palette, type: u1} # 
+      - {id: rcn_base, type: u2} 
+      - {id: boundary, type: u4}
     instances:
       size_:
         value: 52

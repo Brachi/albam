@@ -267,7 +267,6 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         #    mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
-        #mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
         mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
@@ -1035,10 +1034,10 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         name="VTYPE",
         description="Select vertex type",
         items=[
-            ("0x0", "VTYPE_SKIN", "", 1),
-            ("0x1", "VTYPE_SKINEX", "A", 2),
-            ("0x2", "VTYPE_NONSKIN", "", 3),
-            ("0x3", "VTYPE_NONSKIN_COL", "", 4),
+            ("0x0", "VTYPE_SKIN", "Skinned mesh with up to 4wt", 1),
+            ("0x1", "VTYPE_SKINEX", "Skinned mesh extended", 2),
+            ("0x2", "VTYPE_NONSKIN", "Static mesh", 3),
+            ("0x3", "VTYPE_NONSKIN_COL", "Static mesh with vertex colors", 4),
             ("0x4", "VTYPE_SHAPE", "", 5),
             ("0x5", "VTYPE_SKIN_COL", "", 6),
         ],
@@ -1128,7 +1127,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         default="0x0",
         options=set()
     ) # type: ignore
-    func_multitexture:  bpy.props.EnumProperty(
+    func_multitexture: bpy.props.EnumProperty(
         name="func multitexture",
         description="Select multitexture type",
         items=[
