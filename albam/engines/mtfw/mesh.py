@@ -877,22 +877,27 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.bbox_max.z = -bl_bbox.min_y * SCALE
     dst_mod.bbox_max.w = 0  # TODO: research
 
-    dst_mod.unk_01 = src_mod.unk_01
-    dst_mod.unk_02 = src_mod.unk_02
-    dst_mod.unk_03 = src_mod.unk_03
-    dst_mod.unk_04 = src_mod.unk_04
+    dst_mod.reserved_01 = src_mod.reserved_01
+    dst_mod.reserved_02 = src_mod.reserved_02
+
+    dst_mod.model_info = dst_mod.ModelInfo(_parent=dst_mod, _root=dst_mod._root)
+    dst_mod.model_info.middist = src_mod.model_info.middist
+    dst_mod.model_info.lowdist = src_mod.model_info.lowdist
+    dst_mod.model_info.light_group = src_mod.model_info.light_group
+    dst_mod.model_info.strip_type = src_mod.model_info.strip_type
+    dst_mod.model_info.memory = src_mod.model_info.memory
+    dst_mod.model_info.reserved = src_mod.model_info.reserved
 
     if src_mod.header.version == 156:
-        dst_mod.unk_05 = src_mod.unk_05
-        dst_mod.unk_06 = src_mod.unk_06
-        dst_mod.unk_07 = src_mod.unk_07
-        dst_mod.unk_08 = src_mod.unk_08
-        dst_mod.reserved_01 = 0
-        dst_mod.reserved_02 = 0
-        dst_mod.reserved_03 = 0
-        dst_mod.num_tri = 0
-        dst_mod.num_vtx = 0
-        dst_mod.num_tbl = 0
+        dst_mod.rcn_header = dst_mod.RcnHeader(_parent=dst_mod, _root=dst_mod._root)
+        dst_mod.rcn_header.ptri = src_mod.rcn_header.ptri
+        dst_mod.rcn_header.pvtx = src_mod.rcn_header.pvtx
+        dst_mod.rcn_header.ptb = src_mod.rcn_header.ptb
+        dst_mod.rcn_header.num_tri = 0
+        dst_mod.rcn_header.num_vtx = 0
+        dst_mod.rcn_header.num_tbl = 0
+        dst_mod.rcn_header.parts = 0
+        dst_mod.rcn_header.reserved = 0
         dst_mod.rcn_tables = []
         dst_mod.rcn_vertices = []
         dst_mod.rcn_trianlges = []
@@ -1093,13 +1098,12 @@ def _serialize_groups(src_mod, dst_mod):
         src_group = src_mod.groups[i]
         g = dst_mod.Group(_parent=dst_mod, _root=dst_mod._root)
         g.group_index = src_group.group_index
-        g.unk_02 = src_group.unk_02
-        g.unk_03 = src_group.unk_03
-        g.unk_04 = src_group.unk_04
-        g.unk_05 = src_group.unk_05
-        g.unk_06 = src_group.unk_06
-        g.unk_07 = src_group.unk_07
-        g.unk_08 = src_group.unk_08
+        g.reserved = [0, 0, 0]
+        g.pos = dst_mod.Vec3(_parent=g, _root=g._root)
+        g.pos.x = src_group.pos.x
+        g.pos.y = src_group.pos.y
+        g.pos.z = src_group.pos.z
+        g.radius = src_group.radius
 
         groups.append(g)
     return groups
@@ -1191,7 +1195,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
         # TODO: rename to num_weight_bounds
-        mesh.num_boundary = 1
+        mesh.num_weight_bounds= 1
 
         if dst_mod.header.version in (156,):
             mesh.disp = 0
@@ -1205,7 +1209,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
             bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
         # TODO: rename to num_weight_bounds
-        mesh.num_unique_bone_ids = len(mesh_weight_bounds)
+        mesh.num_weight_bounds = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
@@ -1793,7 +1797,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     sort: bpy.props.BoolProperty(default=0)
     vdeclbase: vdecl_enum
     vdecl: vdecl_enum
-    num_boundary: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    num_weight_bounds: bpy.props.IntProperty(default=0)  # TODO: restrictions
     rcn_base: bpy.props.IntProperty(default=0)  # TODO: restrictions
     boundary: bpy.props.IntProperty(default=0)  # TODO: restrictions
 

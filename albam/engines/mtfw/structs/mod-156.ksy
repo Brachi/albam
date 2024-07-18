@@ -13,21 +13,11 @@ seq:
   - {id: bsphere, type: vec4}
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
-  - {id: unk_01, type: u4}
-  - {id: unk_02, type: u4}
-  - {id: unk_03, type: u4}
-  - {id: unk_04, type: u4}
-  - {id: unk_05, type: u4}
-  - {id: unk_06, type: u4}
-  - {id: unk_07, type: u4}
-  - {id: num_tri, type: u4}
-  - {id: num_vtx, type: u4}
-  - {id: num_tbl, type: u4}
-  - {id: unk_08, type: u4}
-  - {id: reserved_03, type: u4}
-  - {id: rcn_tables, type: rcn_table, repeat: expr, repeat-expr: num_tbl}
-  - {id: rcn_vertices, type: rcn_vertex, repeat: expr, repeat-expr: num_vtx}
-  - {id: rcn_trianlges, type: rcn_triangle, repeat: expr, repeat-expr: num_tri}
+  - {id: model_info, type: model_info}
+  - {id: rcn_header, type: rcn_header}
+  - {id: rcn_tables, type: rcn_table, repeat: expr, repeat-expr: rcn_header.num_tbl}
+  - {id: rcn_vertices, type: rcn_vertex, repeat: expr, repeat-expr: rcn_header.num_vtx}
+  - {id: rcn_trianlges, type: rcn_triangle, repeat: expr, repeat-expr: rcn_header.num_tri}
 
 instances:
   bones_data:
@@ -78,6 +68,33 @@ types:
     instances:
       size_:
         value: 72
+
+  model_info:
+    seq:
+      - {id: middist, type: s4}
+      - {id: lowdist, type: s4}
+      - {id: light_group, type: u4}
+      - {id: strip_type, type: u1}
+      - {id: memory, type: u1}
+      - {id: reserved, type: u2}
+    instances:
+      size_:
+        value: 16
+        
+  rcn_header:
+    seq:
+      - {id: ptri, type: u4}
+      - {id: pvtx, type: u4}
+      - {id: ptb, type: u4}
+      - {id: num_tri, type: u4}
+      - {id: num_vtx, type: u4}
+      - {id: num_tbl, type: u4}
+      - {id: parts, type: u4}
+      - {id: reserved, type: u4}
+    instances:
+      size_:
+        value: 32
+      
   bones_data:
     seq:
       - {id: bones_hierarchy, type: bone, repeat: expr, repeat-expr: _root.header.num_bones}
@@ -145,16 +162,12 @@ types:
       size_:
         value: 36
 
-  group:
+  group: # parts_info
     seq:
       - {id: group_index, type: u4}
-      - {id: unk_02, type: f4}
-      - {id: unk_03, type: f4}
-      - {id: unk_04, type: f4}
-      - {id: unk_05, type: f4}
-      - {id: unk_06, type: f4}
-      - {id: unk_07, type: f4}
-      - {id: unk_08, type: f4}
+      - {id: reserved, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: pos, type: vec3} # sphere
+      - {id: radius, type: f4}
     instances:
       size_:
         value: 32
@@ -248,7 +261,7 @@ types:
       - {id: refrect, type: b1}
       - {id: reserved2, type: b2}
       - {id: shadow_cast, type: b1}
-      - {id: shadow_recive, type: b1} # shadow_recv
+      - {id: shadow_receive, type: b1}
       - {id: sort, type: b1}
       - {id: num_vertices, type: u2}
       - {id: vertex_position_end, type: u2}
@@ -260,11 +273,11 @@ types:
       - {id: face_offset, type: u4} # index_base
       - {id: vdeclbase, type: u1}
       - {id: vdecl, type: u1}
-      - {id: vertex_position, type: u2} # min)ubdex
-      - {id: num_boundary, type: u1} # probably num of OABB boundng volumes
-      - {id: idx_bone_palette, type: u1} # 
+      - {id: vertex_position, type: u2} # min_index
+      - {id: num_weight_bounds, type: u1} # probably num of OABB boundng volumes
+      - {id: idx_bone_palette, type: u1} # envelope
       - {id: rcn_base, type: u2} 
-      - {id: boundary, type: u4}
+      - {id: boundary, type: u4} # pointer in theory to the related weight_bounds
     instances:
       size_:
         value: 52
