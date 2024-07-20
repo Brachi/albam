@@ -262,7 +262,7 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
-        #if src_mod.bones_data is not None:
+        #  if src_mod.bones_data is not None:
         #    bl_mat.albam_custom_properties.use_8_bones = 0
         #    mat.use_8_bones = 0  # limited before export
 
@@ -1160,13 +1160,13 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 
     transparency: bpy.props.FloatProperty(default=1.0)
     fresnel_factor: bpy.props.FloatVectorProperty(
-        name="FresnelFactor", size= 4, default=(0.0, 0.5, 7.0, 0.6), options=set())
+        name="FresnelFactor", size=4, default=(0.0, 0.5, 7.0, 0.6), options=set())  # noqa: F821
     lightmap_factor: bpy.props.FloatVectorProperty(
-        name="LightmapFactor", size= 4, default=(1.0, 1.0, 1.0, 0), options=set())
+        name="LightmapFactor", size=4, default=(1.0, 1.0, 1.0, 0), options=set())  # noqa: F821
     detail_factor: bpy.props.FloatVectorProperty(
-        name="DetailFactor", size= 4, default=(0.5, 10, 0.0, 0.5), options=set())
+        name="DetailFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
     parallax_factor: bpy.props.FloatVectorProperty(
-        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set()) 
+        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set())  # noqa: F821
     flip_binormal: bpy.props.FloatProperty(default=1.0)
     heightmap_occ: bpy.props.FloatProperty(default=0.2)
     blend_state: bpy.props.IntProperty(default=44172837)
