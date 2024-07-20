@@ -281,7 +281,7 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
         except IndexError:
             print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
             continue

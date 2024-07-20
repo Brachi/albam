@@ -877,9 +877,6 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.bbox_max.z = -bl_bbox.min_y * SCALE
     dst_mod.bbox_max.w = 0  # TODO: research
 
-    dst_mod.reserved_01 = src_mod.reserved_01
-    dst_mod.reserved_02 = src_mod.reserved_02
-
     dst_mod.model_info = dst_mod.ModelInfo(_parent=dst_mod, _root=dst_mod._root)
     dst_mod.model_info.middist = src_mod.model_info.middist
     dst_mod.model_info.lowdist = src_mod.model_info.lowdist
@@ -890,6 +887,8 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
 
     if src_mod.header.version == 156:
         dst_mod.rcn_header = dst_mod.RcnHeader(_parent=dst_mod, _root=dst_mod._root)
+        dst_mod.reserved_01 = src_mod.reserved_01
+        dst_mod.reserved_02 = src_mod.reserved_02
         dst_mod.rcn_header.ptri = src_mod.rcn_header.ptri
         dst_mod.rcn_header.pvtx = src_mod.rcn_header.pvtx
         dst_mod.rcn_header.ptb = src_mod.rcn_header.ptb
@@ -1195,7 +1194,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
         # TODO: rename to num_weight_bounds
-        mesh.num_weight_bounds= 1
+        mesh.num_weight_bounds = 1
 
         if dst_mod.header.version in (156,):
             mesh.disp = 0
@@ -1787,8 +1786,6 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
     alpha_priority: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    # we set this always to zero
-    # connective: bpy.props.IntProperty(default=0)  # TODO: restrictions
     shape: bpy.props.BoolProperty(default=0)  # TODO: restrictions
     env: bpy.props.BoolProperty(default=0)
     refrect: bpy.props.BoolProperty(default=0)
@@ -1797,7 +1794,6 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     sort: bpy.props.BoolProperty(default=0)
     vdeclbase: vdecl_enum
     vdecl: vdecl_enum
-    num_weight_bounds: bpy.props.IntProperty(default=0)  # TODO: restrictions
     rcn_base: bpy.props.IntProperty(default=0)  # TODO: restrictions
     boundary: bpy.props.IntProperty(default=0)  # TODO: restrictions
 
@@ -1814,7 +1810,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
         for attr_name in self.__annotations__:
             try:
                 setattr(self, attr_name, getattr(src_obj, attr_name))
-            except:
+            except ValueError:
                 setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 

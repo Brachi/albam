@@ -280,6 +280,10 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat.shadowblendmap = 0
         mat.heightmap = 0
         mat.glossmap = 0
+        mat.func_reserved = 0
+        mat.func_reserved2 = 0
+        mat.reserved1 = 0
+        mat.reserved2 = 0
         dst_mod.materials_data.materials.append(mat)
         exported_materials_map[bl_mat.name] = mat_idx
 
@@ -1013,9 +1017,7 @@ def _has_mtfw_shader_group(bl_mat):
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
-    fog_enable: bpy.props.BoolProperty(default=0)
-    zwrite: bpy.props.BoolProperty(default=0)
-    attr: bpy.props.EnumProperty(
+    attr_enum = bpy.props.EnumProperty(
         name="Attribute",
         description="Select surface attribute",
         items=[
@@ -1028,9 +1030,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         default="0x10",
         options=set()
     )
-    num: bpy.props.IntProperty(default=0)
-    envmap_bias: bpy.props.IntProperty(default=0)
-    vtype: bpy.props.EnumProperty(
+    vtype_enum = bpy.props.EnumProperty(
         name="VTYPE",
         description="Select vertex type",
         items=[
@@ -1044,10 +1044,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         default="0x0",
         options=set()
     )
-    uvscroll_enable: bpy.props.BoolProperty(default=0) # type: ignore
-    ztest: bpy.props.BoolProperty(default=0) # type: ignore
-
-    func_skin: bpy.props.EnumProperty(
+    func_skin_enum = bpy.props.EnumProperty(
         name="VSKIN",
         description="Select max bone influences",
         items=[
@@ -1063,9 +1060,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x3",
         options=set()
-    ) # type: ignore
-    func_reserved2: bpy.props.IntProperty(default=0)
-    func_lighting: bpy.props.EnumProperty(
+    )
+    func_lighting_enum = bpy.props.EnumProperty(
         name="func ligting",
         description="select lighting type",
         items=[
@@ -1082,8 +1078,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x1",
         options=set()
-    )# type: ignore
-    func_normalmap: bpy.props.EnumProperty(
+    )
+    func_normalmap_enum = bpy.props.EnumProperty(
         name="func normal map",
         description="Select normal map type",
         items=[
@@ -1095,8 +1091,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x1",
         options=set()
-    ) # type: ignore
-    func_specular: bpy.props.EnumProperty(
+    )
+    func_specular_enum = bpy.props.EnumProperty(
         name="func specular map",
         description="Select normal map type",
         items=[
@@ -1109,8 +1105,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x1",
         options=set()
-    ) # type: ignore
-    func_lightmap: bpy.props.EnumProperty(
+    )
+    func_lightmap_enum = bpy.props.EnumProperty(
         name="func lightmap",
         description="Select light map type",
         items=[
@@ -1126,8 +1122,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x0",
         options=set()
-    ) # type: ignore
-    func_multitexture: bpy.props.EnumProperty(
+    )
+    func_multitexture_enum = bpy.props.EnumProperty(
         name="func multitexture",
         description="Select multitexture type",
         items=[
@@ -1142,31 +1138,39 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         default="0x0",
         options=set()
-    ) # type: ignore
-    func_reserved: bpy.props.IntProperty(default=0, options={"HIDDEN"})
-
-    htechnique: bpy.props.StringProperty(default="")
-    pipeline: bpy.props.IntProperty(default=0)
+    )
+    fog_enable: bpy.props.BoolProperty(default=True)
+    zwrite: bpy.props.BoolProperty(default=True)
+    attr: attr_enum
+    num: bpy.props.IntProperty(default=0)
+    envmap_bias: bpy.props.IntProperty(default=4)
+    vtype: vtype_enum
+    uvscroll_enable: bpy.props.BoolProperty(default=False)
+    ztest: bpy.props.BoolProperty(default=True)
+    func_skin: func_skin_enum
+    func_lighting: func_lighting_enum
+    func_normalmap: func_normalmap_enum
+    func_specular: func_specular_enum
+    func_lightmap: func_lighting_enum
+    func_multitexture: func_multitexture_enum
+    htechnique: bpy.props.StringProperty(default="0x8727e606")
+    pipeline: bpy.props.IntProperty(default=379)
     pvdeclbase: bpy.props.IntProperty(default=0)
-    pvdecl: bpy.props.StringProperty(default="")
+    pvdecl: bpy.props.StringProperty(default="0x0")
 
-    transparency: bpy.props.FloatProperty(default=0.0)
+    transparency: bpy.props.FloatProperty(default=1.0)
     fresnel_factor: bpy.props.FloatVectorProperty(
-        name="FresnelFactor", size= 4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+        name="FresnelFactor", size= 4, default=(0.0, 0.5, 7.0, 0.6), options=set())
     lightmap_factor: bpy.props.FloatVectorProperty(
-        name="LightmapFactor", size= 4, default=(1, 0, 0, 0), options=set())
+        name="LightmapFactor", size= 4, default=(1.0, 1.0, 1.0, 0), options=set())
     detail_factor: bpy.props.FloatVectorProperty(
-        name="DetailFactor", size= 4, default=(1, 0, 0, 0), options=set())
-    reserved1: bpy.props.IntProperty(default=0, options={"HIDDEN"})
-    reserved2: bpy.props.IntProperty(default=0, options={"HIDDEN"})
+        name="DetailFactor", size= 4, default=(0.5, 10, 0.0, 0.5), options=set())
     parallax_factor: bpy.props.FloatVectorProperty(
-        name="ParalaxFactor", size=2, default=(1, 1), options=set()) 
-    flip_binormal: bpy.props.FloatProperty(default=0.0)
-    heightmap_occ: bpy.props.FloatProperty(default=0.0)
-    blend_state: bpy.props.IntProperty(default=0)
-    alpha_ref: bpy.props.IntProperty(default=0)
-
-    # vtype: attr_enum
+        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set()) 
+    flip_binormal: bpy.props.FloatProperty(default=1.0)
+    heightmap_occ: bpy.props.FloatProperty(default=0.2)
+    blend_state: bpy.props.IntProperty(default=44172837)
+    alpha_ref: bpy.props.IntProperty(default=8)
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1181,9 +1185,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         for attr_name in self.__annotations__:
             try:
                 setattr(self, attr_name, getattr(src_obj, attr_name))
-            except:
-               setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
-
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
 @blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2"))
