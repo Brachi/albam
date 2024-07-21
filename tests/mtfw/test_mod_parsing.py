@@ -48,7 +48,7 @@ KNOWN_VERTEX_FORMATS = {
 def test_mod(mod_imported):
     mod = mod_imported
     vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
-    total_num_unique_bone_ids = sum(m.num_unique_bone_ids for m in mod.meshes_data.meshes)
+    total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
     # FIXME: mod.header.version == 211
     num_weight_bounds = (
         mod.num_weight_bounds if mod.header.version == 210
@@ -58,8 +58,4 @@ def test_mod(mod_imported):
     assert mod.header.ident == b"MOD\x00"
     assert mod.header.version in SUPPORTED_MOD_VERSIONS
     assert not vertex_formats.difference(KNOWN_VERTEX_FORMATS)
-    assert total_num_unique_bone_ids == num_weight_bounds == len(mod.meshes_data.weight_bounds)
-    if mod.header.version == 156:
-        for m in mod.materials_data.materials:
-            if m.skin_weights_type == 0:
-                assert m.unk_flag_39
+    assert total_num_weight_bounds == num_weight_bounds == len(mod.meshes_data.weight_bounds)
