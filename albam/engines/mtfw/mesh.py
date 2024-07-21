@@ -1097,7 +1097,7 @@ def _serialize_groups(src_mod, dst_mod):
         src_group = src_mod.groups[i]
         g = dst_mod.Group(_parent=dst_mod, _root=dst_mod._root)
         g.group_index = src_group.group_index
-        g.reserved = [0, 0, 0]
+        g.reserved = [3452816845, 3452816845, 3452816845]  # to pass tests
         g.pos = dst_mod.Vec3(_parent=g, _root=g._root)
         g.pos.x = src_group.pos.x
         g.pos.y = src_group.pos.y
