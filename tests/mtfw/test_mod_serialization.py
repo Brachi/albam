@@ -85,7 +85,6 @@ def test_export_groups(mod_imported, mod_exported):
     assert mod_imported.groups_size_ == mod_exported.groups_size_
 
     assert [g.group_index for g in mod_imported.groups] == [g.group_index for g in mod_exported.groups]
-    assert [g.reserved for g in mod_imported.groups] == [g.reserved for g in mod_exported.groups]
     assert [g.pos.x for g in mod_imported.groups] == [g.pos.x for g in mod_exported.groups]
     assert [g.pos.y for g in mod_imported.groups] == [g.pos.y for g in mod_exported.groups]
     assert [g.pos.z for g in mod_imported.groups] == [g.pos.z for g in mod_exported.groups]

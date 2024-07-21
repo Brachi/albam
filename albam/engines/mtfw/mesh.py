@@ -1810,7 +1810,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
         for attr_name in self.__annotations__:
             try:
                 setattr(self, attr_name, getattr(src_obj, attr_name))
-            except ValueError:
+            except TypeError:
                 setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
