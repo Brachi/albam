@@ -31,6 +31,8 @@ def pytest_generate_tests(metafunc):
             argvalues.append((app_id, mod_path, mrl_path))
         metafunc.parametrize(argnames, argvalues, scope="session")
 
+    elif "parsed_mod_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("mod", metafunc, "parsed_mod_from_arc")
     elif "parsed_mrl_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("mrl", metafunc, "parsed_mrl_from_arc")
     elif "parsed_lmt_from_arc" in metafunc.fixturenames:
