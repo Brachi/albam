@@ -274,6 +274,7 @@ def _files_per_arc(file_extension, arc_paths, app_id):
     from albam.engines.mtfw.archive import ArcWrapper
     final = []
     ids = []
+    failed_arcs = []
     for arc_path in arc_paths:
         arc_name = os.path.basename(arc_path)
         try:
@@ -281,6 +282,10 @@ def _files_per_arc(file_extension, arc_paths, app_id):
         except OSError as err:  # TODO: skip/xfail
             if err.errno == 24:
                 raise RuntimeError("Exceeded open file limits. Try running `ulimit -S -n 4096`")
+        except Exception:
+            failed_arcs.append(arc_path)
+            continue
+
         file_entries = arc.get_file_entries_by_extension(file_extension)
         if not file_entries:
             del arc
@@ -288,4 +293,7 @@ def _files_per_arc(file_extension, arc_paths, app_id):
         for fe in file_entries:
             final.append((arc, fe, app_id))
             ids.append("::".join((arc_name, f"{fe.file_path}.{file_extension}")))
+    if failed_arcs:
+        print(f"failed to load the following arc files: {failed_arcs}")
+
     return final, ids
