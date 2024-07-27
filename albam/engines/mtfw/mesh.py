@@ -318,7 +318,7 @@ def build_blender_model(file_list_item, context):
             if mod_version == 156 and (not skeleton and materials.get(material_hash)):
                 albam_custom_props = materials[material_hash].albam_custom_properties
                 mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
-                use_156rgba = mod_156_material_props.use_8_bones
+                use_156rgba = mod_156_material_props.vtype == "0x3"
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
@@ -877,25 +877,29 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.bbox_max.z = -bl_bbox.min_y * SCALE
     dst_mod.bbox_max.w = 0  # TODO: research
 
-    dst_mod.unk_01 = src_mod.unk_01
-    dst_mod.unk_02 = src_mod.unk_02
-    dst_mod.unk_03 = src_mod.unk_03
-    dst_mod.unk_04 = src_mod.unk_04
+    dst_mod.model_info = dst_mod.ModelInfo(_parent=dst_mod, _root=dst_mod._root)
+    dst_mod.model_info.middist = src_mod.model_info.middist
+    dst_mod.model_info.lowdist = src_mod.model_info.lowdist
+    dst_mod.model_info.light_group = src_mod.model_info.light_group
+    dst_mod.model_info.strip_type = src_mod.model_info.strip_type
+    dst_mod.model_info.memory = src_mod.model_info.memory
+    dst_mod.model_info.reserved = src_mod.model_info.reserved
 
     if src_mod.header.version == 156:
-        dst_mod.unk_05 = src_mod.unk_05
-        dst_mod.unk_06 = src_mod.unk_06
-        dst_mod.unk_07 = src_mod.unk_07
-        dst_mod.unk_08 = src_mod.unk_08
-        dst_mod.reserved_01 = 0
-        dst_mod.reserved_02 = 0
-        dst_mod.reserved_03 = 0
-        dst_mod.num_vtx8_unk_faces = 0
-        dst_mod.num_vtx8_unk_uv = 0
-        dst_mod.num_vtx8_unk_normals = 0
-        dst_mod.vtx8_unk_faces = []
-        dst_mod.vtx8_unk_uv = []
-        dst_mod.vtx8_unk_normals = []
+        dst_mod.rcn_header = dst_mod.RcnHeader(_parent=dst_mod, _root=dst_mod._root)
+        dst_mod.reserved_01 = src_mod.reserved_01
+        dst_mod.reserved_02 = src_mod.reserved_02
+        dst_mod.rcn_header.ptri = src_mod.rcn_header.ptri
+        dst_mod.rcn_header.pvtx = src_mod.rcn_header.pvtx
+        dst_mod.rcn_header.ptb = src_mod.rcn_header.ptb
+        dst_mod.rcn_header.num_tri = 0
+        dst_mod.rcn_header.num_vtx = 0
+        dst_mod.rcn_header.num_tbl = 0
+        dst_mod.rcn_header.parts = 0
+        dst_mod.rcn_header.reserved = 0
+        dst_mod.rcn_tables = []
+        dst_mod.rcn_vertices = []
+        dst_mod.rcn_trianlges = []
 
     if src_mod.header.version == 210:
         dst_mod.num_weight_bounds = 0
@@ -1093,13 +1097,12 @@ def _serialize_groups(src_mod, dst_mod):
         src_group = src_mod.groups[i]
         g = dst_mod.Group(_parent=dst_mod, _root=dst_mod._root)
         g.group_index = src_group.group_index
-        g.unk_02 = src_group.unk_02
-        g.unk_03 = src_group.unk_03
-        g.unk_04 = src_group.unk_04
-        g.unk_05 = src_group.unk_05
-        g.unk_06 = src_group.unk_06
-        g.unk_07 = src_group.unk_07
-        g.unk_08 = src_group.unk_08
+        g.reserved = [0, 0, 0]
+        g.pos = dst_mod.Vec3(_parent=g, _root=g._root)
+        g.pos.x = src_group.pos.x
+        g.pos.y = src_group.pos.y
+        g.pos.z = src_group.pos.z
+        g.radius = src_group.radius
 
         groups.append(g)
     return groups
@@ -1191,10 +1194,13 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
         # TODO: rename to num_weight_bounds
-        mesh.num_unique_bone_ids = 1
+        mesh.num_weight_bounds = 1
 
         if dst_mod.header.version in (156,):
-            mesh.unk_03 = 0
+            mesh.disp = 1
+            mesh.reserved2 = 0
+            mesh.connective = 0
+            mesh.vertex_offset_2 = 0
 
         mesh._check()
         meshes_data.meshes.append(mesh)
@@ -1202,7 +1208,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
             bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
         # TODO: rename to num_weight_bounds
-        mesh.num_unique_bone_ids = len(mesh_weight_bounds)
+        mesh.num_weight_bounds = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
@@ -1242,7 +1248,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
         vertex_size = 32
         vertex_format = max_bones_per_vertex
-        use_special_vf = mod_156_material_props.use_8_bones
+        use_special_vf = mod_156_material_props.vtype == "0x3"
 
     elif dst_mod.header.version in (210, 211):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -1752,36 +1758,60 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
 @blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
+    vdecl_enum = bpy.props.EnumProperty(
+        name="",
+        description="",
+        items=[
+            ("0x0", "VDECL_SKIN", "", 1),
+            ("0x1", "VDECL_NONSKIN", "", 2),
+            ("0x2", "VDECL_SKINEX", "", 3),
+            ("0x3", "VDECL_FILTER", "", 4),
+            ("0x4", "VDECL_FILTER2", "", 5),
+            ("0x5", "VDECL_SKIN_BASE", "", 6),
+            ("0x6", "VDECL_NONSKIN_BASE", "", 7),
+            ("0x7", "VDECL_SKINEX_BASE", "", 8),
+            ("0x8", "VDECL_NONSKIN_COL", "", 9),
+            ("0x9", "VDECL_NONSKIN_COLEX", "", 10),
+            ("0xa", "VDECL_SHAPE_BASE", "", 11),
+            ("0xb", "VDECL_SHAPE", "", 12),
+            ("0xc", "VDECL_SKIN_COL", "", 13),
+            ("0xd", "VDECL_MATERIAL", "", 14),
+            ("0xe", "VDECL_SKINSO", "", 15),
+            ("0xf", "VDECL_I2GLINE", "", 16),
+            ("0x10", "VDECL_NUM", "", 17),
+        ],
+        default="0x0",
+        options=set()
+    )
     level_of_detail: bpy.props.IntProperty(default=255)
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    z_buffer_order: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    # we set this always to zero
-    # unk_03: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_flag_01: bpy.props.BoolProperty(default=0)  # TODO: restrictions
-    unk_flag_02: bpy.props.BoolProperty(default=0)
-    unk_flag_03: bpy.props.BoolProperty(default=0)
-    unk_flag_04: bpy.props.BoolProperty(default=0)
-    unk_flag_05: bpy.props.BoolProperty(default=0)
-    use_cast_shadows: bpy.props.BoolProperty(default=0)
-    use_receive_shadows: bpy.props.BoolProperty(default=0)
-    unk_flag_08: bpy.props.BoolProperty(default=0)
-    vertex_offset_2: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_06: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_07: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_08: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_09: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_10: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    unk_11: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    alpha_priority: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    shape: bpy.props.BoolProperty(default=0)  # TODO: restrictions
+    env: bpy.props.BoolProperty(default=0)
+    refrect: bpy.props.BoolProperty(default=0)
+    shadow_cast: bpy.props.BoolProperty(default=0)
+    shadow_receive: bpy.props.BoolProperty(default=0)
+    sort: bpy.props.BoolProperty(default=0)
+    vdeclbase: vdecl_enum
+    vdecl: vdecl_enum
+    rcn_base: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    boundary: bpy.props.IntProperty(default=0)  # TODO: restrictions
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
-            setattr(dst_obj, attr_name, getattr(self, attr_name))
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
 
     # FIXME: dedupe
     def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
-            setattr(self, attr_name, getattr(src_obj, attr_name))
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
 @blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))

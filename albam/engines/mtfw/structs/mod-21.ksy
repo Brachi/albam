@@ -10,10 +10,7 @@ seq:
   - {id: bsphere, type: vec4}
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
-  - {id: unk_01, type: u4}
-  - {id: unk_02, type: u4}
-  - {id: unk_03, type: u4}
-  - {id: unk_04, type: u4}
+  - {id: model_info, type: model_info}
   - {id: num_weight_bounds, type: u4, if: _root.header.version == 210}
   # TODO: padding
 
@@ -63,6 +60,18 @@ types:
       size_:
         value: 64
 
+  model_info:
+    seq:
+      - {id: middist, type: s4}
+      - {id: lowdist, type: s4}
+      - {id: light_group, type: u4}
+      - {id: strip_type, type: u1}
+      - {id: memory, type: u1}
+      - {id: reserved, type: u2}
+    instances:
+      size_:
+        value: 16
+
   bones_data:
     seq:
       - {id: bones_hierarchy, type: bone, repeat: expr, repeat-expr: _root.header.num_bones}
@@ -94,13 +103,9 @@ types:
   group:
     seq:
       - {id: group_index, type: u4}
-      - {id: unk_02, type: f4}
-      - {id: unk_03, type: f4}
-      - {id: unk_04, type: f4}
-      - {id: unk_05, type: f4}
-      - {id: unk_06, type: f4}
-      - {id: unk_07, type: f4}
-      - {id: unk_08, type: f4}
+      - {id: reserved, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: pos, type: vec3} # sphere
+      - {id: radius, type: f4}
     instances:
       size_:
         value: 32
@@ -142,7 +147,7 @@ types:
       - {id: num_indices, type: u4}
       - {id: face_offset, type: u4}
       - {id: bone_id_start, type: u1}
-      - {id: num_unique_bone_ids, type: u1}
+      - {id: num_weight_bounds, type: u1}
       - {id: mesh_index, type: u2}
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
