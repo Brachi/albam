@@ -190,6 +190,7 @@ TEX_TYPE_MAPPER = {
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
 
+
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     textures = []
 
