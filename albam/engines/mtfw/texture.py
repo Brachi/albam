@@ -188,6 +188,8 @@ TEX_TYPE_MAPPER = {
     # 0x52e1:  TextureType.UNK_01, # not in re6 mxt
 }
 
+NON_SRGB_IMAGE_TYPE = [2, 8]
+
 
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     textures = []
@@ -306,6 +308,8 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             if texture_target is not None:
                 texture_node.image = texture_target
             texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
+            if tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
+                texture_node.image.colorspace_settings.name = "Non-Color"
         except IndexError:
             print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
             continue
@@ -333,7 +337,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
         texture_node.image = texture_target
         texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
         # change color settings for normal and detail maps
-        if texture_type.value == 2 or texture_type.value == 8:
+        if texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
 
 
@@ -457,7 +461,6 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
 
     else:
         print("texture_code not supported", texture_code)
-        # TODO: 7 CM cubemap
 
 
 def serialize_textures(app_id, bl_materials):
