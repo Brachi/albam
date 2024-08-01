@@ -50,7 +50,7 @@ class AlbamApps(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
 class AlbamImportSettings(bpy.types.PropertyGroup):
-    import_lods: bpy.props.IntProperty(default = 1)
+    import_lods: bpy.props.IntProperty(default=1)
 
 
 @blender_registry.register_blender_type
@@ -354,7 +354,7 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
     bl_label = "Import Options"
     bl_idname = "wm.import_options"
 
-    import_lods: bpy.props.EnumProperty(
+    import_lods_enum = bpy.props.EnumProperty(
         name="Import LODs",
         description="Select what LODs do you want to import",
         items=[
@@ -365,6 +365,7 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
         default="1",
         options=set()
     )
+    import_lods: import_lods_enum
 
     def execute(self, context):
         import_settings = context.scene.albam.import_settings
