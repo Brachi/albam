@@ -50,7 +50,7 @@ class AlbamApps(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
 class AlbamImportSettings(bpy.types.PropertyGroup):
-    import_only_main_lods : bpy.props.BoolProperty(default=True)
+    import_lods: bpy.props.IntProperty(default = 1)
 
 
 @blender_registry.register_blender_type
@@ -344,4 +344,32 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
         self.layout.separator()
         row = self.layout.row()
         row.operator("albam.import_vfile", text="Import")
+        row.operator("wm.import_options", icon="OPTIONS", text="")
         self.layout.row()
+
+
+@blender_registry.register_blender_type
+class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
+    """Set settings for importing"""
+    bl_label = "Import Options"
+    bl_idname = "wm.import_options"
+
+    import_lods: bpy.props.EnumProperty(
+        name="Import LODs",
+        description="Select what LODs do you want to import",
+        items=[
+            ("0", "All", "Import all LODs", 1),
+            ("1", "Essential", "Only LODs 1 and 255", 2),
+            ("2", "Extended", "LODs 1, 3 and 255", 3),
+        ],
+        default="1",
+        options=set()
+    )
+
+    def execute(self, context):
+        import_settings = context.scene.albam.import_settings
+        import_settings.import_lods = int(self.import_lods)
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
