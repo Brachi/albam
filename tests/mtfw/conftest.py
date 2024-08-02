@@ -69,7 +69,7 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
     from kaitaistruct import KaitaiStream
 
     bpy.context.scene.albam.apps.app_selected = app_id
-    bpy.context.scene.albam.import_settings.import_only_main_lod = False
+    bpy.context.scene.albam.import_settings.import_only_main_lods = False
 
     vfile_mod = bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
     vfile_mrl = bpy.context.scene.albam.vfs.get_vfile(app_id, mrl_path) if mrl_path else None
