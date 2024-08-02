@@ -281,9 +281,12 @@ VERSIONS_USE_BONE_PALETTES = {156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
 VERSIONS_USE_TRISTRIPS = {156}
 MAIN_LODS = {
-    0: [],
-    1: [1, 255],
-    2: [1, 3, 255],
+    "re0": [1, 255],
+    "re1": [1, 255],
+    "re5": [1, 255],
+    "re6": [1, 3, 255],
+    "rev1": [1, 255],
+    "rev2": [1, 255],
 }
 
 
@@ -311,10 +314,10 @@ def build_blender_model(file_list_item, context):
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     materials = build_blender_materials(
         file_list_item, context, mod, bl_object_name)
-    imported_lods = MAIN_LODS.get(import_settings.import_lods, 0)
+    imported_lods = MAIN_LODS.get(app_id)
 
     for i, mesh in enumerate(mod.meshes_data.meshes):
-        if imported_lods and mesh.level_of_detail not in imported_lods:
+        if import_settings.import_only_main_lods and mesh.level_of_detail not in imported_lods:
             continue
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
