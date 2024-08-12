@@ -709,6 +709,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
+        relative_path_no_ext = relative_path_no_ext.replace(".rtex", "")
         if not mrl:
             try:
                 real_tex_idx = textures_list.index(relative_path_no_ext)
@@ -721,7 +722,10 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             except ValueError:
 
                 tex = mrl.TextureSlot(_parent=mrl, _root=mrl._root)
-                tex.type_hash = mrl.TextureType.type_r_texture
+                if im_node.image.albam_asset.render_target is True:
+                    tex.type_hash = 2013850128  # TYPE_rRenderTargetTexture
+                else:
+                    tex.type_hash = mrl.TextureType.type_r_texture
                 tex.unk_02 = 0  # TODO: research
                 tex.unk_03 = 0  # TODO: research
                 tex.texture_path = relative_path_no_ext
@@ -1269,6 +1273,9 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FVertexDisplacementCurveUV", "FVertexDisplacementCurveUV", "", 2),  # noqa: F821
             ("FVertexDisplacementCurveU", "FVertexDisplacementCurveU", "", 3),  # noqa: F821
             ("FVertexDisplacementCurveV", "FVertexDisplacementCurveV", "", 4),  # noqa: F821
+            ("FVertexDisplacementDirUV", "FVertexDisplacementDirUV", "", 5),  # noqa: F821
+            ("FVertexDisplacementDirU", "FVertexDisplacementDirU", "", 6),  # noqa: F821
+            ("FVertexDisplacementDirV", "FVertexDisplacementDirV", "", 7),  # noqa: F821
         ],
         options=set(),
     )
@@ -1302,6 +1309,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FUVTransformPrimary", "Default", "", 1),  # noqa: F821
             ("FUVTransformOffset", "FUVTransformOffset", "", 2),  # noqa: F821
+            ("FUVTransformOffset2", "FUVTransformOffset2", "", 3),  # noqa: F821
         ],
         options=set()
     )
@@ -1329,6 +1337,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
+            ("FUVIndirect", "FUVIndirect", "", 3),  # noqa: F821
         ],
         options=set()
     )
@@ -1344,6 +1353,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBumpNormalMap", "FBumpNormalMap", "", 7),  # noqa: F821
             ("FBumpNormalMapBlendTransparencyMap", "FBumpNormalMapBlendTransparencyMap", "", 8),  # noqa: F821
             ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 9),  # noqa: F821
+            ("FBumpDetailMaskNormalMap", "FBumpDetailMaskNormalMap", "", 10),  # noqa: F821
+            ("FBlendBumpDetailNormalMap", "FBlendBumpDetailNormalMap", "", 11),  # noqa: F821
         ],
         options=set()
     )
@@ -1352,6 +1363,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FUVNormalMap", "Default", "", 1),  # noqa: F821
             ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 3),  # noqa: F821
         ],
         options=set()
     )
@@ -1361,14 +1373,16 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
             ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
+            ("FUVIndirect", "FUVIndirect", "", 4),  # noqa: F821
         ],
         options=set()
     )
     f_uv_detail_normal_map_2_param : bpy.props.EnumProperty(  # noqa: F82
         name="FUVDetailNormalMap2",  # noqa: F821
         items=[
-            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
-            ("FUVExtend", "FUVExtend", "", 2),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 3),  # noqa: F821
         ],
         options=set()
     )
@@ -1386,6 +1400,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FAlbedoMapModulate", "FAlbedoMapModulate", "", 9),  # noqa: F821
             ("FBlendAlbedoMap", "FBlendAlbedoMap", "", 10),  # noqa: F821
             ("FColorMaskAlbedoMapModulate", "FColorMaskAlbedoMapModulate", "", 11),  # noqa: F821
+            ("FColorMaskAlbedoMap", "FColorMaskAlbedoMap", "", 12),  # noqa: F821
         ],
         options=set()
     )
@@ -1396,6 +1411,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
             ("FUVScreen", "FUVScreen", "", 4),  # noqa: F821
+            ("FUVIndirect", "FUVIndirect", "", 5),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 6),  # noqa: F821
         ],
         options=set()
     )
@@ -1426,6 +1443,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyAlpha", "FTransparencyAlpha", "", 2),  # noqa: F821
             ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
             ("FTransparencyAlphaClip", "FTransparencyAlphaClip", "", 4),  # noqa: F821
+            ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
         ],
         options=set()
     )
@@ -1435,6 +1453,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
             ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
             ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 4),  # noqa: F821
         ],
         options=set()
     )
@@ -1468,8 +1487,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseLightMapOcclusion", "FDiffuseLightMapOcclusion", "", 4),  # noqa: F821
             ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
             ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
-            ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 7),  # noqa: F821
-            ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 8),  # noqa: F821
+            ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
         ],
         options=set()
     )
@@ -1497,6 +1515,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         items=[
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
         ],
         options=set()
     )
