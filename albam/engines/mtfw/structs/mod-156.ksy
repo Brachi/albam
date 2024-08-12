@@ -295,17 +295,14 @@ types:
           #repeat-expr: num_vertices # TODO: special case
         repeat-expr: "vertex_position > vertex_position_2 ? vertex_position_end - vertex_position + 1 : num_vertices"
         type:
-          switch-on: vertex_format
+          switch-on: _root.materials_data.materials[idx_material].vtype
           cases:
-            0: vertex_0
-            1: vertex
-            2: vertex
-            3: vertex
-            4: vertex
-            5: vertex_5
-            6: vertex_5
-            7: vertex_5
-            8: vertex_5
+            0: vf_skin
+            1: vf_skin_ex
+            2: vf_non_skin
+            3: vf_non_skin_col
+            4: vf_skin # shape
+            5: vf_skin # skin color?
       vertices2:
         pos: _root.header.offset_vertex_buffer_2 + (vertex_position_2 * vertex_stride_2) + vertex_offset_2
         repeat: expr
@@ -316,7 +313,7 @@ types:
             4: vertex2_4
             8: vertex2_8
         if: vertex_stride_2>0
-  
+
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
@@ -374,7 +371,7 @@ types:
       - {id: row_3, type: vec4}
       - {id: row_4, type: vec4}
 
-  vertex_0:
+  vf_non_skin:
     seq:
       - {id: position, type: vec3}
       - {id: normal, type: vec4_u1}
@@ -383,7 +380,16 @@ types:
       - {id: uv2, type: vec2_half_float}
       - {id: uv3, type: vec2_half_float}
 
-  vertex:
+  vf_non_skin_col:
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+      - {id: rgba, type: vec4_u1}
+
+  vf_skin:
     seq:
       - {id: position, type: vec4_s2}
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
@@ -393,7 +399,7 @@ types:
       - {id: uv, type: vec2_half_float}
       - {id: uv2, type: vec2_half_float}
 
-  vertex_5:
+  vf_skin_ex:
     seq:
       - {id: position, type: vec4_s2}
       - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 8}

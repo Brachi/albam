@@ -56,15 +56,12 @@ DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
 DEFAULT_VERTEX_FORMAT_NONSKIN = 0xa7d7d036
 
 VERTEX_FORMATS_MAPPER = {
-    0: Mod156.Vertex0,
-    1: Mod156.Vertex,
-    2: Mod156.Vertex,
-    3: Mod156.Vertex,
-    4: Mod156.Vertex,
-    5: Mod156.Vertex5,
-    6: Mod156.Vertex5,
-    7: Mod156.Vertex5,
-    8: Mod156.Vertex5,
+    0x0: Mod156.VfSkin,
+    0x1: Mod156.VfSkinEx,
+    0x2: Mod156.VfNonSkin,
+    0x3: Mod156.VfNonSkinCol,
+    0x4: Mod156.VfSkin,  # placeholder shape
+    0x5: Mod156.VfSkin,  # placeholder skin_col
     # 0x4325a03e: Mod21.Vertex4325,  # IANonSkinTBN_4M shape keys not implemented yet
     # 0x2f55c03d: Mod21.Vertex2f55,  # IASkinOTB_4WT_4M shape keys not implemented yet
     0xa14e003c: Mod21.VertexA14e,  # IANonSkinBCA
@@ -108,6 +105,7 @@ VERTEX_FORMATS_MAPPER = {
 }
 
 VERTEX_FORMATS_RGBA = (
+    0x3,
     0xa14e003c,
     0x207d6037,
     0xb6681034,
@@ -126,11 +124,11 @@ VERTEX_FORMATS_VERTEX_ALPHA = (
 )
 
 VERTEX_FORMATS_TANGENT = (
-    0,
-    1,
-    2,
-    3,
-    4,
+    0x0,
+    0x2,
+    0x3,
+    0x4,
+    0x5,
     0x4325a03e,
     0x2f55c03d,
     0x37a4e035,
@@ -164,15 +162,12 @@ VERTEX_FORMATS_TANGENT = (
 )
 
 VERTEX_FORMATS_UV2 = (
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
+    0x0,
+    0x1,
+    0x2,
+    0x3,
+    0x4,
+    0x5,
     0x4325a03e,
     0xa14e003c,
     0x2082f03b,
@@ -198,7 +193,7 @@ VERTEX_FORMATS_UV2 = (
 )
 
 VERTEX_FORMATS_UV3 = (
-    0,
+    0x2,
     0x2082f03b,
     0x37a4e035,
     0xb6681034,
@@ -367,12 +362,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False,
     weights_per_bone = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
-        _process_locations(mod.header.version, mesh,
-                           vertex, locations, bbox_data)
+        _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3, uvs_4)
-        _process_vertex_colors(mod.header.version, vertex,
-                               vertex_colors, use_156rgba)
+        _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
 
     indices = strip_triangles_to_triangles_list(
@@ -460,18 +453,12 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
     uvs_4_out.extend((u, 1 - v))
 
 
-def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
-    if mod_version in (210, 211) and hasattr(vertex, "rgba"):
+def _process_vertex_colors(mod_version, vertex, rgba_out):
+    if hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
         r = vertex.rgba.z / 255
         a = vertex.rgba.w / 255
-        rgba_out.append((r, g, b, a))
-    elif use_156rgba:
-        b = (unpack("H", vertex.uv3.u)[0] & 0xFF) / 255
-        g = (unpack("H", vertex.uv3.u)[0] >> 8 & 0xFF) / 255
-        r = (unpack("H", vertex.uv3.v)[0] & 0xFF) / 255
-        a = (unpack("H", vertex.uv3.v)[0] >> 8 & 0xFF) / 255
         rgba_out.append((r, g, b, a))
     else:
         return
@@ -536,9 +523,9 @@ def _get_weights(mod, mesh, vertex):
         return (1.0,)
     # 2w
     elif mesh.vertex_format in (
-            0xC31F201C,
-            0xDB7DA014,
-            0xb392101f,
+        0xC31F201C,
+        0xDB7DA014,
+        0xb392101f,
     ):
         w1 = vertex.position.w / 32767
         w2 = 1.0 - w1
@@ -558,10 +545,10 @@ def _get_weights(mod, mesh, vertex):
         return (w1, w2, w3, w4)
     # 8w
     elif mesh.vertex_format in (
-            0x75C3E025,
-            0xCBCF7027,
-            0xBB424024,
-            0xD84E3026,
+        0x75C3E025,
+        0xCBCF7027,
+        0xBB424024,
+        0xD84E3026,
     ):
         w1 = vertex.position.w / 32767
         w2 = vertex.weight_values[0] / 255
@@ -1236,7 +1223,6 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     normals = get_normals_per_vertex(bl_mesh.data)
     tangents = get_tangents_per_vertex(bl_mesh.data)
     has_bones = bool(dst_mod.header.num_bones)
-    use_special_vf = False
 
     albam_custom_props = bl_mesh.material_slots[0].material.albam_custom_properties
     mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
@@ -1245,10 +1231,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     if dst_mod.header.version == 156:
         if max_bones_per_vertex > 4:
             max_bones_per_vertex = 4
-        VertexCls = VERTEX_FORMATS_MAPPER[max_bones_per_vertex]
+        vertex_format = int(mod_156_material_props.vtype, 16)
+        VertexCls = VERTEX_FORMATS_MAPPER[vertex_format]
         vertex_size = 32
-        vertex_format = max_bones_per_vertex
-        use_special_vf = mod_156_material_props.vtype == "0x3"
+        # vertex_format = max_bones_per_vertex
 
     elif dst_mod.header.version in (210, 211):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -1331,13 +1317,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV3:
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if use_special_vf:  # wacky way in RE5 to store vertex colors in UV3
-                color = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
-                _uv3_u = (color[1] << 8) | color[0]
-                _uv3_v = (color[3] << 8) | color[2]
-                vertex_struct.uv3.u = pack('H', _uv3_u)
-                vertex_struct.uv3.v = pack('H', _uv3_v)
-            elif uvs_per_vertex_3:
+            if uvs_per_vertex_3:
                 uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv3.u = pack('e', uv_x)
@@ -1444,6 +1424,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 
         vertex_struct._check()
         vertex_struct._write(vertices_stream)
+    # hack to not change the parser, this number isn't a real vertex format
+    if dst_mod.header.version == 156:
+        vertex_format = max_bones_per_vertex
 
     return vertices_stream, vertex_format, vertex_size
 
