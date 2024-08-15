@@ -252,7 +252,7 @@ types:
       - {id: disp, type: u1}
       - {id: level_of_detail, type: u1}
       - {id: alpha_priority, type: u1} # alphapri
-      - {id: vertex_format, type: u1} # weight_num
+      - {id: max_bones_per_vertex, type: u1} # weight_num
       - {id: vertex_stride, type: u1}
       - {id: vertex_stride_2, type: u1}
       - {id: connective, type: u1}
