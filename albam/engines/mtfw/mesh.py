@@ -163,7 +163,6 @@ VERTEX_FORMATS_TANGENT = (
 
 VERTEX_FORMATS_UV2 = (
     0x0,
-    0x1,
     0x2,
     0x3,
     0x4,
@@ -321,14 +320,9 @@ def build_blender_model(file_list_item, context):
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
             material_hash = _get_material_hash(mod, mesh)
-            use_156rgba = False
-            if mod_version == 156 and (not skeleton and materials.get(material_hash)):
-                albam_custom_props = materials[material_hash].albam_custom_properties
-                mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
-                use_156rgba = mod_156_material_props.vtype == "0x3"
 
             bl_mesh_ob = build_blender_mesh(
-                app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS, use_156rgba
+                app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS
             )
             bl_mesh_ob.parent = bl_object
             if skeleton:
@@ -360,7 +354,7 @@ def build_blender_model(file_list_item, context):
     return bl_object
 
 
-def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False, use_156rgba=False):
+def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False):
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
@@ -812,7 +806,7 @@ def export_mod(bl_obj):
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_mod._check()
 
-    #dst_mod.vertex_buffer_2__to_write = False
+    # dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
     mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
@@ -1101,7 +1095,10 @@ def _serialize_groups(src_mod, dst_mod):
         src_group = src_mod.groups[i]
         g = dst_mod.Group(_parent=dst_mod, _root=dst_mod._root)
         g.group_index = src_group.group_index
-        g.reserved = [0, 0, 0]
+        g.reserved = [src_group.reserved[0],
+                      src_group.reserved[1],
+                      src_group.reserved[2],
+                      ]
         g.pos = dst_mod.Vec3(_parent=g, _root=g._root)
         g.pos.x = src_group.pos.x
         g.pos.y = src_group.pos.y
@@ -1827,6 +1824,8 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
     alpha_priority: bpy.props.IntProperty(default=0)  # TODO: restrictions
     shape: bpy.props.BoolProperty(default=0)  # TODO: restrictions
+    reserved2_flag_1: bpy.props.BoolProperty(default=0)
+    reserved2_flag_2: bpy.props.BoolProperty(default=0)
     env: bpy.props.BoolProperty(default=0)
     refrect: bpy.props.BoolProperty(default=0)
     shadow_cast: bpy.props.BoolProperty(default=0)

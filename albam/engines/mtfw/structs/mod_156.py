@@ -884,7 +884,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self.shape = self._io.read_bits_int_le(1) != 0
             self.env = self._io.read_bits_int_le(1) != 0
             self.refrect = self._io.read_bits_int_le(1) != 0
-            self.reserved2 = self._io.read_bits_int_le(2)
+            self.reserved2_flag_1 = self._io.read_bits_int_le(1) != 0
+            self.reserved2_flag_2 = self._io.read_bits_int_le(1) != 0
             self.shadow_cast = self._io.read_bits_int_le(1) != 0
             self.shadow_receive = self._io.read_bits_int_le(1) != 0
             self.sort = self._io.read_bits_int_le(1) != 0
@@ -967,7 +968,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(1, int(self.shape))
             self._io.write_bits_int_le(1, int(self.env))
             self._io.write_bits_int_le(1, int(self.refrect))
-            self._io.write_bits_int_le(2, self.reserved2)
+            self._io.write_bits_int_le(1, int(self.reserved2_flag_1))
+            self._io.write_bits_int_le(1, int(self.reserved2_flag_2))
             self._io.write_bits_int_le(1, int(self.shadow_cast))
             self._io.write_bits_int_le(1, int(self.shadow_receive))
             self._io.write_bits_int_le(1, int(self.sort))

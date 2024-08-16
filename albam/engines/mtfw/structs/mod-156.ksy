@@ -259,7 +259,8 @@ types:
       - {id: shape, type: b1}
       - {id: env, type: b1}
       - {id: refrect, type: b1}
-      - {id: reserved2, type: b2}
+      - {id: reserved2_flag_1, type: b1} # probably unused b2 value but need to check
+      - {id: reserved2_flag_2, type: b1} # probably unused b2 value but need to check
       - {id: shadow_cast, type: b1}
       - {id: shadow_receive, type: b1}
       - {id: sort, type: b1}
