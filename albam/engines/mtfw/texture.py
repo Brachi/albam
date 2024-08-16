@@ -320,7 +320,7 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
             if tex_index and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 texture_node.image.colorspace_settings.name = "Non-Color"
         except IndexError:
