@@ -275,12 +275,19 @@ class ALBAM_OT_Pack(bpy.types.Operator):
     def poll(cls, context):
         vfs_e = context.scene.albam.exported
         vfs_i = context.scene.albam.vfs
+        # TODO: simplify this mess
         if len(vfs_e.file_list) == 0 or len(vfs_i.file_list) == 0:
             return False
         index_e = vfs_e.file_list_selected_index
         index_i = vfs_i.file_list_selected_index
-        exported_item = vfs_e.file_list[index_e]
-        imported_item = vfs_i.file_list[index_i]
+        if index_e < (len(vfs_e.file_list)):
+            exported_item = vfs_e.file_list[index_e]
+        else:
+            return False
+        if index_i < (len(vfs_i.file_list)):
+            imported_item = vfs_i.file_list[index_i]
+        else:
+            return False
         if not exported_item or not imported_item:
             return False
         return imported_item.is_archive and exported_item.is_root
