@@ -2260,7 +2260,7 @@ class Mod156(ReadWriteKaitaiStruct):
         if (self.header.offset_vertex_buffer_2 > 0):
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_vertex_buffer)
+            self._io.seek(self.header.offset_vertex_buffer_2)
             self._m_vertex_buffer_2 = self._io.read_bytes(self.header.size_vertex_buffer_2)
             self._io.seek(_pos)
 
@@ -2275,7 +2275,7 @@ class Mod156(ReadWriteKaitaiStruct):
         if (self.header.offset_vertex_buffer_2 > 0):
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_vertex_buffer)
+            self._io.seek(self.header.offset_vertex_buffer_2)
             self._io.write_bytes(self.vertex_buffer_2)
             self._io.seek(_pos)
 

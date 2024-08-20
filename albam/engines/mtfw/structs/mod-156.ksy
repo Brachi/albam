@@ -35,7 +35,7 @@ instances:
   vertex_buffer:
     {pos: header.offset_vertex_buffer, size: header.size_vertex_buffer, if: header.offset_vertex_buffer > 0}
   vertex_buffer_2:
-    {pos: header.offset_vertex_buffer, size: header.size_vertex_buffer_2, if: header.offset_vertex_buffer_2 > 0}
+    {pos: header.offset_vertex_buffer_2, size: header.size_vertex_buffer_2, if: header.offset_vertex_buffer_2 > 0}
   index_buffer:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2) - 2, if: header.offset_index_buffer > 0}
   size_top_level_:
@@ -275,7 +275,7 @@ types:
       - {id: vdeclbase, type: u1}
       - {id: vdecl, type: u1}
       - {id: vertex_position, type: u2} # min_index
-      - {id: num_weight_bounds, type: u1} # probably num of OABB boundng volumes
+      - {id: num_weight_bounds, type: u1}
       - {id: idx_bone_palette, type: u1} # envelope
       - {id: rcn_base, type: u2} 
       - {id: boundary, type: u4} # pointer in theory to the related weight_bounds

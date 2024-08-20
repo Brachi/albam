@@ -805,8 +805,6 @@ def export_mod(bl_obj):
     dst_mod.header.size_file = final_size
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_mod._check()
-
-    # dst_mod.vertex_buffer_2__to_write = False
     dst_mod._write(stream)
 
     mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())

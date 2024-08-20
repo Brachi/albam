@@ -57,20 +57,16 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     SPECULAR_BLEND = 22
 
 
-SYMBOL_TEX_TYPES = {
-    1: "basemap",
-    2: "normalmap",
-    3: "maskmap",
-    4: "lightmap",
-    5: "shadowmap",
-    6: "additionalmap",
-    7: "envmap",
-    8: "detailmap",
-    9: "occlusionmap",
-}
-
-
 TEX_TYPE_MAP_2 = {
+    "basemap": TextureType.DIFFUSE,
+    "normalmap": TextureType.NORMAL,
+    "maskmap": TextureType.SPECULAR,
+    "lightmap": TextureType.LIGHTMAP,
+    "shadowmap": TextureType.UNK_01,
+    "additionalmap": TextureType.ALPHAMAP,
+    "envmap": TextureType.ENVMAP,
+    "detailmap": TextureType.NORMAL_DETAIL,
+    "occlusionmap": TextureType.ALBEDO_BLEND,
     "talbedomap": TextureType.DIFFUSE,
     "talbedoblendmap": TextureType.ALBEDO_BLEND,
     "talbedoblend2map": TextureType.ALBEDO_BLEND_2,
@@ -343,9 +339,6 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
         if texture_target is None:
             # This means the conversion failed before
             continue
-        if texture_type.value == 6:
-            print("texture_type not supported", texture_type)
-            continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
         texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
@@ -356,7 +349,12 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
 
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
-    tex_index = getattr(mtfw_material, SYMBOL_TEX_TYPES[texture_type.value])
+    tex_slot = ""
+    for tex_type, tex_value in TEX_TYPE_MAP_2.items():
+        if tex_value == texture_type:
+            tex_slot = tex_type
+            break
+    tex_index = getattr(mtfw_material, tex_slot)
     return tex_index
 
 
@@ -436,7 +434,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
             var1.name = "detail_multiplier"
             var1.targets[0].id_type = "MATERIAL"
             var1.targets[0].id = blender_material
-            var1.targets[0].data_path = '["unk_detail_factor"]'
+            var1.targets[0].data_path = 'albam_custom_properties.re5__mod_156_material.detail_factor[1]'
             d.driver.expression = var1.name
 
     elif texture_code == 9:

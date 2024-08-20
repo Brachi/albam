@@ -262,9 +262,6 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
-        #  if src_mod.bones_data is not None:
-        #    bl_mat.albam_custom_properties.use_8_bones = 0
-        #    mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
         mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
