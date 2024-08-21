@@ -42,6 +42,7 @@ MOD_CLASS_MAPPER = {
     156: Mod156,
     210: Mod21,
     211: Mod21,
+    212: Mod21,
 }
 APPID_CLASS_MAPPER = {
     "re0": Mod21,
@@ -50,6 +51,7 @@ APPID_CLASS_MAPPER = {
     "re6": Mod21,
     "rev1": Mod21,
     "rev2": Mod21,
+    "dd": Mod21,
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -278,8 +280,8 @@ BBOX_AFFECTED = [
 ]
 
 VERSIONS_USE_BONE_PALETTES = {156}
-VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
-VERSIONS_USE_TRISTRIPS = {156}
+VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
+VERSIONS_USE_TRISTRIPS = {156, 212}
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -287,6 +289,7 @@ MAIN_LODS = {
     "re6": [1, 3, 255],
     "rev1": [1, 255],
     "rev2": [1, 255],
+    "dd": [1, 255],
 }
 
 
@@ -296,6 +299,7 @@ MAIN_LODS = {
 @blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
@@ -421,8 +425,8 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
 
-    elif (w is not None and mod_version in (210, 211)) or (
-            mod_version in (210, 211) and mesh.vertex_format in BBOX_AFFECTED):
+    elif (w is not None and mod_version in (210, 211, 212)) or (
+            mod_version in (210, 211, 212) and mesh.vertex_format in BBOX_AFFECTED):
         x = x / 32767 * bbox_data.dimension + bbox_data.min_x
         y = y / 32767 * bbox_data.dimension + bbox_data.min_y
         z = z / 32767 * bbox_data.dimension + bbox_data.min_z
@@ -743,7 +747,7 @@ def _get_material_hash(mod, mesh):
     material_hash = None
     if mod.header.version == 156:
         material_hash = mesh.idx_material
-    elif mod.header.version == 210:
+    elif mod.header.version == 210 or 212:
         material_name = mod.materials_data.material_names[mesh.idx_material // 16]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
     elif mod.header.version == 211:
@@ -1792,7 +1796,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
             setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)

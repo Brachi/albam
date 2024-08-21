@@ -139,6 +139,7 @@ APPID_SERIALIZE_MAPPER = {
     "re6": lambda: _serialize_texture_21,
     "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
+    "dd": lambda: _serialize_texture_21,
 }
 
 APPID_TEXCLS_MAP = {
@@ -148,6 +149,7 @@ APPID_TEXCLS_MAP = {
     "re6": Tex157,
     "rev1": Tex157,
     "rev2": Tex157,
+    "dd": Tex157,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -157,7 +159,9 @@ APPID_RTEXCLS_MAP = {
     "re6": Rtex157,
     "rev1": Rtex157,
     "rev2": Rtex157,
+    "dd": Rtex157,
 }
+
 TEX_TYPE_MAPPER = {
     0xcd06f: TextureType.DIFFUSE,
     0x22660: TextureType.NORMAL,
@@ -309,7 +313,10 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
                 texture_node.image = texture_target
             texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
             if tex_index and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
-                texture_node.image.colorspace_settings.name = "Non-Color"
+                try:
+                    texture_node.image.colorspace_settings.name = "Non-Color"
+                except AttributeError:
+                    print("Missing texture")
         except IndexError:
             print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
             continue
@@ -704,7 +711,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         setattr(dst, name, src_value)
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2"))
+@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
@@ -715,6 +722,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("0x9a", "0x9a", "", 2),
             ("0xa09d", "0xa09d", "", 3),
             ("0x9e", "0x9e", "", 4),
+            ("0x99", "0x99", "", 5),
         ],
         options=set()
     )

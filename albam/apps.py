@@ -8,6 +8,7 @@ APPS = [
     ("re6", "Resident Evil 6", "", 3),
     ("rev1", "Resident Evil: Revelations 1", "", 4),
     ("rev2", "Resident Evil: Revelations 2", "", 5),
+    ("dd", "Dragon's Dogma", "", 11),
 ]
 
 REENGINE_APPS = [

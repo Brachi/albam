@@ -6,8 +6,8 @@ from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 from enum import IntEnum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mrl(ReadWriteKaitaiStruct):
 
@@ -33,6 +33,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fmrtnormalcombinear = 4069
         fuvextendmapsecondary = 5061
         fgpuparticletonemapdefault = 5927
+        fappoutline = 5987
         cbprimitiveparticletess = 6540
         fheightfogmodelvtf = 6720
         calcfog = 6726
@@ -70,6 +71,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbprimitivemetadatafresnel = 18433
         fencodersmparameter = 19835
         bsadd = 20370
+        cboutlineex = 20690
         vs_infparticle = 20872
         dsprimzwritestenciltestneq = 21054
         ffilteroutlinethick = 21193
@@ -269,6 +271,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_deferredlighting_gbufferpassest = 80907
         bsblendfactoralpha = 80963
         fprimitivelevelcorrectionlinear = 81095
+        fddmaterialalbedo = 81695
         fprocedural3e = 81744
         tpointlighttexture1 = 81868
         system_mrt3 = 81973
@@ -594,6 +597,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fquaterniontomatrix = 185493
         tsoftbodysrctex1 = 185583
         fperpixellightingps = 185835
+        fdamagesimplealbedomap = 185878
         fdiffusevertexcolor = 185954
         fgrassuv = 186007
         ffiltercolorfog = 186288
@@ -725,6 +729,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ianonskintbnla = 227918
         fgrasschainnormal = 228041
         fprimitivecalcposvolumeblenddepthvolumedefault = 228164
+        fintegratedoutlinecolor = 229134
         bsshadowrecvmultisolidgroup1 = 229368
         ps_imageplanefiltercube = 230207
         fprimitivecalcfresnel = 230557
@@ -1007,6 +1012,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fswingoriginfromworld = 333797
         cbvertexdisplacement2 = 333844
         foutlineblendadd = 334327
+        appclip = 334970
         ffresnelschlickrgb = 336182
         bsnowrite = 337176
         fimageblendscreen = 337365
@@ -1091,6 +1097,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sbplaneconstraint = 366718
         cbinfparticletexture = 366873
         ps_bloomfinalout = 367404
+        freflectcubemapshadowlight = 367507
         ffilteroutlinesamplecomposite = 368288
         bsguiaddinvcolor = 368533
         fshadowreceivecascadevssmrt = 368669
@@ -1322,6 +1329,7 @@ class Mrl(ReadWriteKaitaiStruct):
         iabuilder = 447957
         rsmeshbias4 = 448132
         ps_tangentfilter_blur4 = 448288
+        cbburncommon = 448552
         sbisccalcbk = 449158
         falphatestnotequal = 449894
         fworldcoordinateswing = 450015
@@ -1366,6 +1374,7 @@ class Mrl(ReadWriteKaitaiStruct):
         finfinitelights = 468284
         falbedomapblenduv = 468389
         tfogbackdepth = 468669
+        cbappclipplane = 468830
         tprimalphamap = 468888
         fgrassadjustnormaldisable = 469045
         fpervertexlightingtoonvs = 469350
@@ -1393,6 +1402,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tfogtablevtf = 476305
         shadowreceiveparam = 476452
         fprimitivescenesamplerrefractznotex = 476882
+        fddmaterialcalcborderblendalphamap = 477117
         ianonskintbna = 477137
         sampleweight = 477211
         colorlerp = 477328
@@ -1435,6 +1445,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffiltermotionblur4 = 490783
         iaskintbc4wt = 490887
         fgrasschaintangent = 491010
+        fddmaterialspecular = 491011
         ttextureblend = 491784
         fuvtransformprimary = 492037
         ssthinmap = 492049
@@ -2289,6 +2300,7 @@ class Mrl(ReadWriteKaitaiStruct):
         iawaterripple = 804412
         fgrassuseposition = 804545
         cbdistortionrefract = 805111
+        fddmaterialbump = 805148
         tlightmaskmap = 805230
         fdoffilterdownscale = 805867
         sbcreatedepthnormvs = 806627
@@ -2311,6 +2323,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fuvindirectmap = 813460
         fshadowreceiveattndistance = 814071
         fblendfogdiffuse = 814110
+        fddmaterialfinalcombiner = 814579
         ftrianglevertex1 = 814987
         femissionmap = 815520
         fblurmaskfilter = 815787
@@ -2373,6 +2386,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowfilterpointvsm = 836625
         flocalwindloopslot1 = 836952
         convrot = 837001
+        cbddmaterialparam = 837259
         cbguifontfilter = 837486
         fwatershadowdisable = 837904
         ia_nonskin_tbnc = 837955
@@ -2448,6 +2462,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fcubemapvariancefilterdir = 860318
         fshadowisoutofrangeenable = 860537
         fgrasspervertexshading = 860795
+        fddmaterialcalcborderblendrate = 861141
         tprimitive2d = 861785
         tspotlighttexture4 = 861949
         vs_watershadowmap = 862328
@@ -2524,6 +2539,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprojectiontexture = 887674
         gs_infparticle = 887954
         tshadowmapcombine = 888251
+        feditsimplealbedomapalphamap = 888275
         fssaofilterlineardepthdownscale = 888365
         bsgwrite = 888510
         fpervertexlightingtoonps = 888544
@@ -2564,6 +2580,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fblendfogprimblend = 901853
         ps_materialsss = 901921
         fbuildersamplebasemap = 902127
+        falbedomapblendmaxalpha = 902319
         fgrassperpixellightmask = 903010
         fsamplecount4 = 903729
         cbskyastralbody = 905546
@@ -3143,6 +3160,9 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == u"re0":
                 pass
                 self.app_specific._fetch_instances()
+            elif _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
             elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
@@ -3181,6 +3201,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
+                self._m_app_specific._read()
             elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbMaterial1(self._io, self, self._root)
@@ -3210,6 +3234,9 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == u"re0":
                 pass
                 self.app_specific._write__seq(self._io)
+            elif _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
             elif _on == u"rev2":
                 pass
                 self.app_specific._write__seq(self._io)
@@ -3235,6 +3262,12 @@ class Mrl(ReadWriteKaitaiStruct):
                 if self.app_specific._parent != self:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
             elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"dd":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
@@ -3846,6 +3879,9 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == u"re0":
                 pass
                 self.app_specific._fetch_instances()
+            elif _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
             elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
@@ -3888,6 +3924,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
             elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
@@ -3918,6 +3958,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"dd":
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"rev2":
@@ -3951,6 +3994,12 @@ class Mrl(ReadWriteKaitaiStruct):
                 if self.app_specific._parent != self:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
             elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"dd":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
@@ -4257,6 +4306,9 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == u"re0":
                 pass
                 self.app_specific._fetch_instances()
+            elif _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
             elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
@@ -4299,6 +4351,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbGlobals4(self._io, self, self._root)
+                self._m_app_specific._read()
             elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbGlobals2(self._io, self, self._root)
@@ -4329,6 +4385,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"dd":
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"rev2":
@@ -4362,6 +4421,12 @@ class Mrl(ReadWriteKaitaiStruct):
                 if self.app_specific._parent != self:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
             elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"dd":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
@@ -4532,6 +4597,337 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
 
 
+
+    class CbGlobals4(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.padding_1 = self._io.read_f4le()
+            self.f_albedo_blend_color = []
+            for i in range(4):
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = self._io.read_f4le()
+            self.padding_2 = []
+            for i in range(2):
+                self.padding_2.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(3):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.padding_3 = self._io.read_f4le()
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(3):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(3):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.padding_4 = self._io.read_f4le()
+            self.f_secondary_color = []
+            for i in range(3):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+            self.padding_5 = self._io.read_f4le()
+            self.xyzw_sepalate = []
+            for i in range(16):
+                self.xyzw_sepalate.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            for i in range(len(self.padding_2)):
+                pass
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            for i in range(len(self.xyzw_sepalate)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbGlobals4, self)._write__seq(io)
+            for i in range(len(self.f_albedo_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_color[i])
+
+            self._io.write_f4le(self.padding_1)
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_blend_color[i])
+
+            self._io.write_f4le(self.f_detail_normal_power)
+            self._io.write_f4le(self.f_detail_normal_uv_scale)
+            self._io.write_f4le(self.f_detail_normal2_power)
+            self._io.write_f4le(self.f_detail_normal2_uv_scale)
+            self._io.write_f4le(self.f_primary_shift)
+            self._io.write_f4le(self.f_secondary_shift)
+            self._io.write_f4le(self.f_parallax_factor)
+            self._io.write_f4le(self.f_parallax_self_occlusion)
+            self._io.write_f4le(self.f_parallax_min_sample)
+            self._io.write_f4le(self.f_parallax_max_sample)
+            for i in range(len(self.padding_2)):
+                pass
+                self._io.write_f4le(self.padding_2[i])
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+                self._io.write_f4le(self.f_light_map_color[i])
+
+            self._io.write_f4le(self.padding_3)
+            for i in range(len(self.f_thin_map_color)):
+                pass
+                self._io.write_f4le(self.f_thin_map_color[i])
+
+            self._io.write_f4le(self.f_thin_scattering)
+            for i in range(len(self.f_indirect_offset)):
+                pass
+                self._io.write_f4le(self.f_indirect_offset[i])
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+                self._io.write_f4le(self.f_indirect_scale[i])
+
+            self._io.write_f4le(self.f_fresnel_schlick)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+                self._io.write_f4le(self.f_fresnel_schlick_rgb[i])
+
+            for i in range(len(self.f_specular_color)):
+                pass
+                self._io.write_f4le(self.f_specular_color[i])
+
+            self._io.write_f4le(self.f_shininess)
+            for i in range(len(self.f_emission_color)):
+                pass
+                self._io.write_f4le(self.f_emission_color[i])
+
+            self._io.write_f4le(self.f_alpha_clip_threshold)
+            self._io.write_f4le(self.f_roughness)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+                self._io.write_f4le(self.f_roughness_rgb[i])
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+                self._io.write_f4le(self.f_anisotoropic_direction[i])
+
+            self._io.write_f4le(self.f_smoothness)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+                self._io.write_f4le(self.f_anistropic_uv[i])
+
+            self._io.write_f4le(self.f_primary_expo)
+            self._io.write_f4le(self.f_secondary_expo)
+            for i in range(len(self.f_primary_color)):
+                pass
+                self._io.write_f4le(self.f_primary_color[i])
+
+            self._io.write_f4le(self.padding_4)
+            for i in range(len(self.f_secondary_color)):
+                pass
+                self._io.write_f4le(self.f_secondary_color[i])
+
+            self._io.write_f4le(self.padding_5)
+            for i in range(len(self.xyzw_sepalate)):
+                pass
+                self._io.write_f4le(self.xyzw_sepalate[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_albedo_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_color", len(self.f_albedo_color), 3)
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            if (len(self.f_albedo_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_albedo_blend_color", len(self.f_albedo_blend_color), 4)
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            if (len(self.padding_2) != 2):
+                raise kaitaistruct.ConsistencyError(u"padding_2", len(self.padding_2), 2)
+            for i in range(len(self.padding_2)):
+                pass
+
+            if (len(self.f_light_map_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_light_map_color", len(self.f_light_map_color), 3)
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            if (len(self.f_thin_map_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_thin_map_color", len(self.f_thin_map_color), 3)
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            if (len(self.f_indirect_offset) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_offset", len(self.f_indirect_offset), 2)
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            if (len(self.f_indirect_scale) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_indirect_scale", len(self.f_indirect_scale), 2)
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            if (len(self.f_fresnel_schlick_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_fresnel_schlick_rgb", len(self.f_fresnel_schlick_rgb), 3)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            if (len(self.f_specular_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_specular_color", len(self.f_specular_color), 3)
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            if (len(self.f_emission_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_emission_color", len(self.f_emission_color), 3)
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            if (len(self.f_roughness_rgb) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_roughness_rgb", len(self.f_roughness_rgb), 3)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            if (len(self.f_anisotoropic_direction) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_anisotoropic_direction", len(self.f_anisotoropic_direction), 3)
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            if (len(self.f_anistropic_uv) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_anistropic_uv", len(self.f_anistropic_uv), 2)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            if (len(self.f_primary_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_primary_color", len(self.f_primary_color), 3)
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            if (len(self.f_secondary_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_secondary_color", len(self.f_secondary_color), 3)
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            if (len(self.xyzw_sepalate) != 16):
+                raise kaitaistruct.ConsistencyError(u"xyzw_sepalate", len(self.xyzw_sepalate), 16)
+            for i in range(len(self.xyzw_sepalate)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 320
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class AnimOfs(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -6969,6 +7365,9 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == u"re0":
                 pass
                 self.app_specific._fetch_instances()
+            elif _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
             elif _on == u"rev2":
                 pass
                 self.app_specific._fetch_instances()
@@ -7011,6 +7410,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
             elif _on == u"rev2":
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
@@ -7041,6 +7444,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"re0":
+                pass
+                self.app_specific._write__seq(self._io)
+            elif _on == u"dd":
                 pass
                 self.app_specific._write__seq(self._io)
             elif _on == u"rev2":
@@ -7074,6 +7480,12 @@ class Mrl(ReadWriteKaitaiStruct):
                 if self.app_specific._parent != self:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
             elif _on == u"re0":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            elif _on == u"dd":
                 pass
                 if self.app_specific._root != self._root:
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)

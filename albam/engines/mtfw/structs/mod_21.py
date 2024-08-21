@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod21(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -35,11 +35,9 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_min._read()
         self.bbox_max = Mod21.Vec4(self._io, self, self._root)
         self.bbox_max._read()
-        self.unk_01 = self._io.read_u4le()
-        self.unk_02 = self._io.read_u4le()
-        self.unk_03 = self._io.read_u4le()
-        self.unk_04 = self._io.read_u4le()
-        if (self._root.header.version == 210):
+        self.model_info = Mod21.ModelInfo(self._io, self, self._root)
+        self.model_info._read()
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
             self.num_weight_bounds = self._io.read_u4le()
 
@@ -51,7 +49,8 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bsphere._fetch_instances()
         self.bbox_min._fetch_instances()
         self.bbox_max._fetch_instances()
-        if (self._root.header.version == 210):
+        self.model_info._fetch_instances()
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
 
         _ = self.vertex_buffer
@@ -90,11 +89,8 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bsphere._write__seq(self._io)
         self.bbox_min._write__seq(self._io)
         self.bbox_max._write__seq(self._io)
-        self._io.write_u4le(self.unk_01)
-        self._io.write_u4le(self.unk_02)
-        self._io.write_u4le(self.unk_03)
-        self._io.write_u4le(self.unk_04)
-        if (self._root.header.version == 210):
+        self.model_info._write__seq(self._io)
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
             self._io.write_u4le(self.num_weight_bounds)
 
@@ -118,7 +114,11 @@ class Mod21(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._root, self._root)
         if self.bbox_max._parent != self:
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._parent, self)
-        if (self._root.header.version == 210):
+        if self.model_info._root != self._root:
+            raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._root, self._root)
+        if self.model_info._parent != self:
+            raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._parent, self)
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
 
 
@@ -2232,6 +2232,49 @@ class Mod21(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    class ModelInfo(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.middist = self._io.read_s4le()
+            self.lowdist = self._io.read_s4le()
+            self.light_group = self._io.read_u4le()
+            self.strip_type = self._io.read_u1()
+            self.memory = self._io.read_u1()
+            self.reserved = self._io.read_u2le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mod21.ModelInfo, self)._write__seq(io)
+            self._io.write_s4le(self.middist)
+            self._io.write_s4le(self.lowdist)
+            self._io.write_u4le(self.light_group)
+            self._io.write_u1(self.strip_type)
+            self._io.write_u1(self.memory)
+            self._io.write_u2le(self.reserved)
+
+
+        def _check(self):
+            pass
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class Vertex75c3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -2491,7 +2534,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 self.num_weight_bounds = self._io.read_u4le()
 
             self.weight_bounds = []
-            for i in range((self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds)):
+            for i in range((self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
                 _t_weight_bounds = Mod21.WeightBound(self._io, self, self._root)
                 _t_weight_bounds._read()
                 self.weight_bounds.append(_t_weight_bounds)
@@ -2543,8 +2586,8 @@ class Mod21(ReadWriteKaitaiStruct):
             if (self._root.header.version == 211):
                 pass
 
-            if (len(self.weight_bounds) != (self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds)):
-                raise kaitaistruct.ConsistencyError(u"weight_bounds", len(self.weight_bounds), (self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds))
+            if (len(self.weight_bounds) != (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
+                raise kaitaistruct.ConsistencyError(u"weight_bounds", len(self.weight_bounds), (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds))
             for i in range(len(self.weight_bounds)):
                 pass
                 if self.weight_bounds[i]._root != self._root:
@@ -2558,7 +2601,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if (self._root.header.version == 210) else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
+            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -2781,7 +2824,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self.num_indices = self._io.read_u4le()
             self.face_offset = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
-            self.num_unique_bone_ids = self._io.read_u1()
+            self.num_weight_bounds = self._io.read_u1()
             self.mesh_index = self._io.read_u2le()
             self.min_index = self._io.read_u2le()
             self.max_index = self._io.read_u2le()
@@ -2941,7 +2984,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.num_indices)
             self._io.write_u4le(self.face_offset)
             self._io.write_u1(self.bone_id_start)
-            self._io.write_u1(self.num_unique_bone_ids)
+            self._io.write_u1(self.num_weight_bounds)
             self._io.write_u2le(self.mesh_index)
             self._io.write_u2le(self.min_index)
             self._io.write_u2le(self.max_index)
@@ -4489,7 +4532,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 self.material_names = []
                 for i in range(self._root.header.num_materials):
@@ -4507,7 +4550,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
@@ -4523,7 +4566,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mod21.MaterialsData, self)._write__seq(io)
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
@@ -4541,7 +4584,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 if (len(self.material_names) != self._root.header.num_materials):
                     raise kaitaistruct.ConsistencyError(u"material_names", len(self.material_names), self._root.header.num_materials)
@@ -4567,7 +4610,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = ((128 * self._root.header.num_materials) if (self._root.header.version == 210) else (4 * self._root.header.num_materials))
+            self._m_size_ = ((128 * self._root.header.num_materials) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (4 * self._root.header.num_materials))
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -5011,33 +5054,45 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.group_index = self._io.read_u4le()
-            self.unk_02 = self._io.read_f4le()
-            self.unk_03 = self._io.read_f4le()
-            self.unk_04 = self._io.read_f4le()
-            self.unk_05 = self._io.read_f4le()
-            self.unk_06 = self._io.read_f4le()
-            self.unk_07 = self._io.read_f4le()
-            self.unk_08 = self._io.read_f4le()
+            self.reserved = []
+            for i in range(3):
+                self.reserved.append(self._io.read_u4le())
+
+            self.pos = Mod21.Vec3(self._io, self, self._root)
+            self.pos._read()
+            self.radius = self._io.read_f4le()
 
 
         def _fetch_instances(self):
             pass
+            for i in range(len(self.reserved)):
+                pass
+
+            self.pos._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mod21.Group, self)._write__seq(io)
             self._io.write_u4le(self.group_index)
-            self._io.write_f4le(self.unk_02)
-            self._io.write_f4le(self.unk_03)
-            self._io.write_f4le(self.unk_04)
-            self._io.write_f4le(self.unk_05)
-            self._io.write_f4le(self.unk_06)
-            self._io.write_f4le(self.unk_07)
-            self._io.write_f4le(self.unk_08)
+            for i in range(len(self.reserved)):
+                pass
+                self._io.write_u4le(self.reserved[i])
+
+            self.pos._write__seq(self._io)
+            self._io.write_f4le(self.radius)
 
 
         def _check(self):
             pass
+            if (len(self.reserved) != 3):
+                raise kaitaistruct.ConsistencyError(u"reserved", len(self.reserved), 3)
+            for i in range(len(self.reserved)):
+                pass
+
+            if self.pos._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"pos", self.pos._root, self._root)
+            if self.pos._parent != self:
+                raise kaitaistruct.ConsistencyError(u"pos", self.pos._parent, self)
 
         @property
         def size_(self):
@@ -5549,7 +5604,7 @@ class Mod21(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = ((self._root.header.size_ + 68) if (self._root.header.version == 210) else (self._root.header.size_ + 64))
+        self._m_size_top_level_ = ((self._root.header.size_ + 68) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (self._root.header.size_ + 64))
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):

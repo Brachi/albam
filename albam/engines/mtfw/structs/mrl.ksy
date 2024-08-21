@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mrl
   id: mrl
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework material format
 
 params:
@@ -269,6 +269,7 @@ types:
               '"re1"': cb_material_1
               '"rev1"': cb_material_1
               '"rev2"': cb_material_1
+              '"dd"': cb_material_1
               _ : cb_material_1
 
   cb_globals:
@@ -283,6 +284,7 @@ types:
               '"re6"': cb_globals_3
               '"rev1"': cb_globals_1
               '"rev2"': cb_globals_2
+              '"dd"': cb_globals_4
               _ : cb_globals_1
 
   cb_color_mask:
@@ -308,6 +310,7 @@ types:
               '"re6"': cb_vertex_displacement_1
               '"rev1"': cb_vertex_displacement_1
               '"rev2"': cb_vertex_displacement_1
+              '"dd"': cb_vertex_displacement_1
               _ : cb_vertex_displacement_1
 
 
@@ -323,7 +326,9 @@ types:
               '"re6"': cb_vertex_displacement2_1
               '"rev1"': cb_vertex_displacement2_1
               '"rev2"': cb_vertex_displacement2_1
+              '"dd"': cb_vertex_displacement2_1
               _ : cb_vertex_displacement2_1
+  
   cb_globals_1:
     instances:
       size_:
@@ -423,7 +428,6 @@ types:
       - {id: f_texture_blend_rate, type: f4, repeat: expr, repeat-expr: 4} #112
       - {id: f_texture_blend_color, type: f4, repeat: expr, repeat-expr: 4} #116
 
-
   cb_globals_3:
     instances:
       size_:
@@ -476,6 +480,50 @@ types:
       - {id: f_detail_normalu_vscale, type: f4, repeat: expr, repeat-expr: 2}  # 80
       - {id: padding_10, type: f4, repeat: expr, repeat-expr: 2}  # 82
 
+  cb_globals_4:
+    instances:
+      size_:
+        value: 320
+    seq:
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} #0 3
+      - {id: padding_1, type: f4}
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} #4
+      - {id: f_detail_normal_power, type: f4} #8
+      - {id: f_detail_normal_uv_scale, type: f4} #9
+      - {id: f_detail_normal2_power, type: f4} #10
+      - {id: f_detail_normal2_uv_scale, type: f4} #11
+      - {id: f_primary_shift, type: f4} #12
+      - {id: f_secondary_shift, type: f4} #13
+      - {id: f_parallax_factor, type: f4} #14
+      - {id: f_parallax_self_occlusion, type: f4} #15
+      - {id: f_parallax_min_sample, type: f4} #16
+      - {id: f_parallax_max_sample, type: f4} #17
+      - {id: padding_2, type: f4, repeat: expr, repeat-expr: 2}
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 3} #20
+      - {id: padding_3, type: f4}
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} #24
+      - {id: f_thin_scattering, type: f4} #27
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} #28
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} #30
+      - {id: f_fresnel_schlick, type: f4} #32
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} #33
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} #36
+      - {id: f_shininess, type: f4} #39
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 3} #40
+      - {id: f_alpha_clip_threshold, type: f4} # 43
+      - {id: f_roughness, type: f4} #44
+      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} #45
+      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} #48
+      - {id: f_smoothness, type: f4} #51
+      - {id: f_anistropic_uv, type: f4,repeat: expr, repeat-expr: 2} #52
+      - {id: f_primary_expo, type: f4} #54
+      - {id: f_secondary_expo, type: f4} #55
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 3} #56
+      - {id: padding_4, type: f4}
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 3} #60
+      - {id: padding_5, type: f4}
+      - {id: xyzw_sepalate, type: f4, repeat: expr, repeat-expr: 16} # 64
+  
   cb_material_1: #all games 32 floats
     instances:
       size_:
@@ -3553,3 +3601,20 @@ enums:
     0x4ed89: tmaterialstdlite
     0x3eef1: tmaterialconstantlite
     0x1059f: tmaterialtoonsm
+    0xd23d5: fddmaterialcalcborderblendrate
+    0x747bd: fddmaterialcalcborderblendalphamap
+    0xc491c: fddmaterialbump
+    0x13f1f: fddmaterialalbedo
+    0x77e03: fddmaterialspecular
+    0x51c7a: appclip
+    0x1763: fappoutline
+    0x37f0e: fintegratedoutlinecolor
+    0xc6df3: fddmaterialfinalcombiner
+    0xcc68b: cbddmaterialparam
+    0xd8dd3: feditsimplealbedomapalphamap
+    0x6d828: cbburncommon
+    0x7275e: cbappclipplane
+    0x50d2: cboutlineex
+    0x2d616: fdamagesimplealbedomap
+    0x59b93: freflectcubemapshadowlight
+    0xdc4af : falbedomapblendmaxalpha

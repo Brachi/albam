@@ -2,7 +2,7 @@ meta:
   endian: le
   file-extension: mod
   id: mod_21
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework model format 210 and 211
 
 seq:
@@ -10,11 +10,8 @@ seq:
   - {id: bsphere, type: vec4}
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
-  - {id: unk_01, type: u4}
-  - {id: unk_02, type: u4}
-  - {id: unk_03, type: u4}
-  - {id: unk_04, type: u4}
-  - {id: num_weight_bounds, type: u4, if: _root.header.version == 210}
+  - {id: model_info, type: model_info}
+  - {id: num_weight_bounds, type: u4, if: _root.header.version == 210 or _root.header.version == 212}
   # TODO: padding
 
 instances:
@@ -35,7 +32,7 @@ instances:
   index_buffer:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
   size_top_level_:
-    value: "_root.header.version == 210 ? _root.header.size_ + 68 : _root.header.size_ + 64"
+    value: "_root.header.version == 210 or _root.header.version == 212 ? _root.header.size_ + 68 : _root.header.size_ + 64"
 
 types:
   mod_header:
@@ -62,6 +59,18 @@ types:
     instances:
       size_:
         value: 64
+
+  model_info:
+    seq:
+      - {id: middist, type: s4}
+      - {id: lowdist, type: s4}
+      - {id: light_group, type: u4}
+      - {id: strip_type, type: u1}
+      - {id: memory, type: u1}
+      - {id: reserved, type: u2}
+    instances:
+      size_:
+        value: 16
 
   bones_data:
     seq:
@@ -94,34 +103,30 @@ types:
   group:
     seq:
       - {id: group_index, type: u4}
-      - {id: unk_02, type: f4}
-      - {id: unk_03, type: f4}
-      - {id: unk_04, type: f4}
-      - {id: unk_05, type: f4}
-      - {id: unk_06, type: f4}
-      - {id: unk_07, type: f4}
-      - {id: unk_08, type: f4}
+      - {id: reserved, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: pos, type: vec3} # sphere
+      - {id: radius, type: f4}
     instances:
       size_:
         value: 32
 
   materials_data:
     seq:
-      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 210}
+      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 210 or _root.header.version == 212}
       - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 211}
     instances:
       size_:
-        value: "_root.header.version == 210 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
+        value: "_root.header.version == 210 or _root.header.version == 212 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
 
   meshes_data:
     seq:
       - {id: meshes, type: mesh, repeat: expr, repeat-expr: _root.header.num_meshes}
       - {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
-      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 ? _root.num_weight_bounds : num_weight_bounds"}
+      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 ? _root.num_weight_bounds : num_weight_bounds"}
     instances:
       size_:
         value: |
-          _root.header.version == 210 ?
+          _root.header.version == 210 or _root.header.version == 212 ?
           _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
           _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
@@ -142,7 +147,7 @@ types:
       - {id: num_indices, type: u4}
       - {id: face_offset, type: u4}
       - {id: bone_id_start, type: u1}
-      - {id: num_unique_bone_ids, type: u1}
+      - {id: num_weight_bounds, type: u1}
       - {id: mesh_index, type: u2}
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
