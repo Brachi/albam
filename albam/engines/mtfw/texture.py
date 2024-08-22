@@ -296,6 +296,11 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
     for ri, (resource, i) in enumerate(set_texture_resources):
         tex_index = resource.value_cmd.tex_idx
         real_tex_index = tex_index - 1
+        try:
+            resource.shader_object_hash.name
+        except AttributeError:
+            print(resource.shader_object_hash)
+            continue
         tex_type_mtfw = resource.shader_object_hash.name
         try:
             tex_type_blender = TEX_TYPE_MAP_2.get(tex_type_mtfw)

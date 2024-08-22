@@ -28,6 +28,7 @@ MAPPER_SERIALIZE_FUNCS = {
     156: lambda: _serialize_materials_data_156,
     210: lambda: _serialize_materials_data_21,
     211: lambda: _serialize_materials_data_21,
+    212: lambda: _serialize_materials_data_21,
 }
 
 VERSION_USES_MRL = {210, 211, 212}
@@ -58,7 +59,7 @@ MRL_CBGLOBALS_MAP = {
     "re6": Mrl.CbGlobals3,
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
-    "dd": Mrl.CbGlobals1,
+    "dd": Mrl.CbGlobals4,
 }
 
 
@@ -182,10 +183,13 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
         resource = [r for r in material.resources
                     if r.shader_object_hash == getattr(Mrl.ShaderObjectHash, shader_object_enum, None)]
         if resource:
-            print(resource[0].value_cmd.name_hash)
-            param = resource[0].value_cmd.name_hash.name
-            param = [k for k, v in shader_objects.items() if v["friendly_name"] == param][0]
-            setattr(features, custom_prop_name, param)
+            try:
+                resource[0].value_cmd.name_hash.name
+                param = resource[0].value_cmd.name_hash.name
+                param = [k for k, v in shader_objects.items() if v["friendly_name"] == param][0]
+                setattr(features, custom_prop_name, param)
+            except AttributeError:
+                print(resource[0].value_cmd.name_hash)
         if enabler and not resource:
             setattr(features, enabler, False)
         elif enabler and resource:
@@ -1278,6 +1282,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBumpParallaxOcclusion", "FBumpParallaxOcclusion", "", 9),  # noqa: F821
             ("FBumpDetailMaskNormalMap", "FBumpDetailMaskNormalMap", "", 10),  # noqa: F821
             ("FBlendBumpDetailNormalMap", "FBlendBumpDetailNormalMap", "", 11),  # noqa: F821
+            ("FDamageBumpDetailNormalMap", "FDamageBumpDetailNormalMap", "", 12),  # noqa: F821
         ],
         options=set()
     )
@@ -1327,6 +1332,10 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FEditSimpleAlbedoMapAlphaMap", "FEditSimpleAlbedoMapAlphaMap", "", 13),  # noqa: F821
             ("FDamageSimpleAlbedoMap", "FDamageSimpleAlbedoMap", "", 14),  # noqa: F821
             ("FAlbedoMapBlendMaxAlpha", "FAlbedoMapBlendMaxAlpha", "", 15),  # noqa: F821
+            ("FDamageSimpleAlbedoMapAlphaMap", "FDamageSimpleAlbedoMapAlphaMap", "", 16),  # noqa: F821
+            ("FBurnSimpleAlbedoMapBurnMap", "FBurnSimpleAlbedoMapBurnMap", "", 17),  # noqa: F821
+            ("FDamageSimpleAlbedoMapBurnMap", "FDamageSimpleAlbedoMapBurnMap", "", 18),  # noqa: F821
+            ("FBurnAlbedoMapBurnMap", "FBurnAlbedoMapBurnMap", "", 19),  # noqa: F821
         ],
         options=set()
     )
@@ -1414,6 +1423,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
             ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
             ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
+            ("FDiffuseThin", "FDiffuseThin", "", 8)  # noqa: F821
         ],
         options=set()
     )
@@ -1433,6 +1443,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FSpecular2Map", "FSpecular2Map", "", 3),  # noqa: F821
             ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
             ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
+            ("FDamageSpecularMap", "FDamageSpecularMap", "", 6),  # noqa: F821
         ],
         options=set(),
     )
@@ -1477,6 +1488,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FEmission", "Default", "", 1),  # noqa: F821
             ("FEmissionMap", "FEmissionMap", "", 2),  # noqa: F821
             ("FEmissionConstant", "FEmissionConstant", "", 3),  # noqa: F821
+            ("FBurnEmissionMapBlend", "FBurnEmissionMapBlend", "", 4),  # noqa: F821
         ],
         options=set()
     )

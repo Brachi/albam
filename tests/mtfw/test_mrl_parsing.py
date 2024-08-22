@@ -46,7 +46,12 @@ KNOWN_CONSTANT_BUFFERS = {
         Mrl.ShaderObjectHash.cbvertexdisplacement3,
         Mrl.ShaderObjectHash.cbvertexdispmaskuv,
         Mrl.ShaderObjectHash.globals,
-    }
+    },
+    "dd": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.globals,
+    },
+
 }
 
 

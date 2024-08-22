@@ -3617,4 +3617,15 @@ enums:
     0x50d2: cboutlineex
     0x2d616: fdamagesimplealbedomap
     0x59b93: freflectcubemapshadowlight
-    0xdc4af : falbedomapblendmaxalpha
+    0xdc4af: falbedomapblendmaxalpha
+    0xf2161: fdamagesimplealbedomapalphamap
+    0x5f2a0: fdamagesimplealbedomapburnmap
+    0xf6ec9: fburnemissionmapblend
+    0xe5d83: fburnsimplealbedomapburnmap
+    0x7af47: talbedoburnmap
+    0x752d4: fdamagespecularmap
+    0xf32b9: fburnalbedomapburnmap
+    0xf04df: fdamagebumpdetailnormalmap
+    0x6E11: tnormalburnmap
+    0xa463e: tspecularburnmap
+    0x17009: tburnemissionmap

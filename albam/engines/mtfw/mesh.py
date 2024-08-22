@@ -473,7 +473,7 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out, use_156rgba):
-    if mod_version in (210, 211) and hasattr(vertex, "rgba"):
+    if mod_version in (210, 211, 212) and hasattr(vertex, "rgba"):
         b = vertex.rgba.x / 225
         g = vertex.rgba.y / 225
         r = vertex.rgba.z / 255
@@ -761,6 +761,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="re6", extension="mod")
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
+@blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
 def export_mod(bl_obj):
@@ -858,7 +859,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
         dst_mod_header.size_vertex_buffer_2 = 0
         dst_mod_header.num_textures = 0
         dst_mod_header.offset_vertex_buffer_2 = 0
-    if dst_mod_header.version in (210, 211):
+    if dst_mod_header.version in (210, 211, 212):
         dst_mod_header.revision = 0
         dst_mod_header.reserved_01 = 0
 
@@ -889,10 +890,13 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.bbox_max.z = -bl_bbox.min_y * SCALE
     dst_mod.bbox_max.w = 0  # TODO: research
 
-    dst_mod.unk_01 = src_mod.unk_01
-    dst_mod.unk_02 = src_mod.unk_02
-    dst_mod.unk_03 = src_mod.unk_03
-    dst_mod.unk_04 = src_mod.unk_04
+    dst_mod.model_info = dst_mod.ModelInfo(_parent=dst_mod, _root=dst_mod._root)
+    dst_mod.model_info.middist = src_mod.model_info.middist
+    dst_mod.model_info.lowdist = src_mod.model_info.lowdist
+    dst_mod.model_info.light_group = src_mod.model_info.light_group
+    dst_mod.model_info.strip_type = src_mod.model_info.strip_type
+    dst_mod.model_info.memory = src_mod.model_info.memory
+    dst_mod.model_info.reserved = src_mod.model_info.reserved
 
     if src_mod.header.version == 156:
         dst_mod.unk_05 = src_mod.unk_05
@@ -909,7 +913,7 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.vtx8_unk_uv = []
         dst_mod.vtx8_unk_normals = []
 
-    if src_mod.header.version == 210:
+    if src_mod.header.version in (210, 212):
         dst_mod.num_weight_bounds = 0
 
 
@@ -1105,13 +1109,15 @@ def _serialize_groups(src_mod, dst_mod):
         src_group = src_mod.groups[i]
         g = dst_mod.Group(_parent=dst_mod, _root=dst_mod._root)
         g.group_index = src_group.group_index
-        g.unk_02 = src_group.unk_02
-        g.unk_03 = src_group.unk_03
-        g.unk_04 = src_group.unk_04
-        g.unk_05 = src_group.unk_05
-        g.unk_06 = src_group.unk_06
-        g.unk_07 = src_group.unk_07
-        g.unk_08 = src_group.unk_08
+        g.reserved = [src_group.reserved[0],
+                      src_group.reserved[1],
+                      src_group.reserved[2],
+                      ]
+        g.pos = dst_mod.Vec3(_parent=g, _root=g._root)
+        g.pos.x = src_group.pos.x
+        g.pos.y = src_group.pos.y
+        g.pos.z = src_group.pos.z
+        g.radius = src_group.radius
 
         groups.append(g)
     return groups
@@ -1128,7 +1134,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     vertex_buffer = bytearray()
     index_buffer = bytearray()
     bbox_data = _create_bbox_data(dst_mod)
-    use_strips = dst_mod.header.version == 156
+    use_strips = dst_mod.header.version in VERSIONS_USE_TRISTRIPS
 
     current_vertex_position = 0
     current_vertex_offset = 0
@@ -1202,8 +1208,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.face_offset = face_offset
         mesh.vertex_position = current_vertex_position
         mesh.idx_bone_palette = mesh_bone_palette_index
-        # TODO: rename to num_weight_bounds
-        mesh.num_unique_bone_ids = 1
+        mesh.num_weight_bounds = 1
 
         if dst_mod.header.version in (156,):
             mesh.unk_03 = 0
@@ -1213,8 +1218,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh_weight_bounds = _calculate_weight_bounds(
             bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
-        # TODO: rename to num_weight_bounds
-        mesh.num_unique_bone_ids = len(mesh_weight_bounds)
+        mesh.num_weight_bounds = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
@@ -1256,7 +1260,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_format = max_bones_per_vertex
         use_special_vf = mod_156_material_props.use_8_bones
 
-    elif dst_mod.header.version in (210, 211):
+    elif dst_mod.header.version in (210, 211, 212):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
@@ -1270,7 +1274,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_size = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
-    weight_half_float = dst_mod.header.version in (210, 211) and vertex_format not in VERTEX_FORMATS_BRIDGE
+    weight_half_float = dst_mod.header.version in (210, 211, 212) and vertex_format not in VERTEX_FORMATS_BRIDGE
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vertices_stream = KaitaiStream(
@@ -1471,7 +1475,7 @@ def _apply_bbox_transforms(xyz_tuple, dst_mod, bbox_data):
         z /= (dst_mod.bbox_max.z - dst_mod.bbox_min.z) or 1
         z *= 32767
 
-    elif dst_mod.header.version in (210, 211):
+    elif dst_mod.header.version in (210, 211, 212):
         x -= bbox_data.min_x
         x /= bbox_data.dimension
         x *= 32767

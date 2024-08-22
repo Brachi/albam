@@ -98,6 +98,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_nonskin_b = 27824
         fprimitivescenesamplerrefractzblur = 27973
         sky_out = 27979
+        tnormalburnmap = 28177
         bsrevsubblendalpha = 28695
         fdeferredlightingencodeparametermrt = 29330
         fprimitive2dcalctexcoordtexel = 30154
@@ -310,6 +311,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffogdistance = 93186
         fwaterrippledisable = 93424
         cbwaterwave = 93743
+        tburnemissionmap = 94217
         tsoftbodysrctex7 = 94682
         ftransparency = 94685
         tgrassshadowdummy = 94963
@@ -1156,6 +1158,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivemaskmap = 388718
         fldlatticedeformer = 389008
         fdevelopdecode_rgbi = 389300
+        fdamagesimplealbedomapburnmap = 389792
         ffilteroutlineblur2h = 390111
         tgpuparticle = 390176
         ps_materialdebug = 390420
@@ -1407,6 +1410,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sampleweight = 477211
         colorlerp = 477328
         fcollisionsimplevs = 478953
+        fdamagespecularmap = 479956
         fvariancemakemiplevel = 480173
         cbdeferredlightingdiscontinuitysensitivefiltering = 480591
         fbrdfhair = 481402
@@ -1493,6 +1497,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fclampsceneuv = 502801
         bsblendblendcolorrgb = 502938
         fgrasslightmask = 502949
+        talbedoburnmap = 503623
         fsamplecount19 = 504253
         globals = 504514
         tsoftbodytexellipsoid = 504580
@@ -1947,6 +1952,7 @@ class Mrl(ReadWriteKaitaiStruct):
         foutlinecompositeadd = 671888
         fprimitivemodelsmoothalphainverse = 672397
         cbgpuparticleex = 672658
+        tspecularburnmap = 673342
         ffogvtfnone = 673511
         tmaterialsss = 673957
         ssao_normal_out = 674795
@@ -2665,6 +2671,7 @@ class Mrl(ReadWriteKaitaiStruct):
         getscaleoffset = 940373
         ia_filter2 = 940778
         fnvmodelvignetteblend = 941319
+        fburnsimplealbedomapburnmap = 941443
         fvertexdisplacementmapdir = 942102
         triangle_input = 942643
         fdebugviewpixelmaskmap = 942995
@@ -2801,6 +2808,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tdsfbuffer = 983137
         ffoglightscattering = 983201
         tcollision = 984072
+        fdamagebumpdetailnormalmap = 984287
         fskinning8weight = 984426
         frotationnormalfromquaternion = 984623
         ffilteredgeantialiasing = 984992
@@ -2826,12 +2834,14 @@ class Mrl(ReadWriteKaitaiStruct):
         tglobalenvmap = 990590
         cbmiragerefract = 991001
         fmaterialstdspecularcolortypedefault = 991303
+        fdamagesimplealbedomapalphamap = 991585
         flocalwindlooppoint = 992016
         getastralscattering = 993516
         tlogaverage = 993751
         fshadowreceivepoint = 994192
         fshadowfilterpointpcf3x3 = 994993
         getrayleighscatter = 995510
+        fburnalbedomapburnmap = 996025
         water_output = 996120
         bsmrtwrite0010 = 996531
         ttvnoisefilter = 996583
@@ -2874,6 +2884,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_systemdownsample4 = 1009811
         fpointlightd = 1010533
         fdistancefogexp2 = 1011335
+        fburnemissionmapblend = 1011401
         fguicalcuvwrap = 1011426
         fskinning4weight = 1011486
         fdistancefogexp = 1012578
