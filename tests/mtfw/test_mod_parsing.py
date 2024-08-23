@@ -1,7 +1,15 @@
 SUPPORTED_MOD_VERSIONS = (156, 210, 211)
 
+KNOWN_CONNECT = {
+    0xff, 254, 253, 252, 249, 248, 247, 246, 245, 244, 241, 240, 237, 236, 232, 233,
+    225, 224, 223, 220, 216, 212, 208, 204, 200, 192, 189, 188, 185, 184, 173, 172,
+    169, 168, 127, 125, 124, 121, 120, 119, 117, 109, 108, 105, 104, 101, 100, 96,
+    92, 76, 72, 64, 41, 40,
+    0x00,  # doesn't exist in vanilla models
+}
+
 KNOWN_VERTEX_FORMATS = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8,
+    0, 1, 2, 3, 4, 5,
     0x14d40020,
     0x2f55c03d,
     0xa320c016,
@@ -44,11 +52,79 @@ KNOWN_VERTEX_FORMATS = {
     0x75c3e025,
 }
 
+KNOWN_VTYPE = {
+    0x0,    # skin
+    0x1,    # skin_ex
+    0x2,    # non_skin
+    0x3,    # non_skin_col
+    0x4,    # shape
+    0x5,    # skin_col - extremey rare, in effectes mainly
+}
 
-def test_mod(mod_imported):
-    mod = mod_imported
-    vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
-    total_num_unique_bone_ids = sum(m.num_unique_bone_ids for m in mod.meshes_data.meshes)
+KNOWN_VDEC = {
+    0x0,    # skin
+    0x1,    # non skin
+    0x2,    # skinex
+    0x5,    # skin base
+    0x6,    # non skin base
+    0x7,    # skin ex base
+    0x8,    # non skin color
+    0x9,    # non skin color extended
+    0xa,    # shape base
+    0xb,    # shape
+    0xc,    # skin color
+}
+
+KNOWN_FUNC_SKIN = {
+    0x0,    # skin none
+    0x1,    # skin 1wt
+    0x2,    # skin 2wt
+    0x3,    # skin 4wt
+    0x4,    # skin 8wt
+    0x5,    # skin 4wt shape
+}
+
+
+def test_mod(parsed_mod_from_arc):
+    mod = parsed_mod_from_arc
+    if mod.header.version == 156:
+        materials = [m for m in mod.materials_data.materials]
+        for m in mod.meshes_data.meshes:
+            if m.vertex_stride_2 == 4:  # stride_2 = 4 only in non skin, shape base
+                assert m.vdeclbase in [0x6, 0xa]
+                assert m.vdecl in [0x1, 0x6, 0x9, 0xa, 0xb]
+                assert materials[m.idx_material].vtype in [0x2, 0x3, 0x4]
+                assert materials[m.idx_material].func_skin in [0x0, 0x5]
+            if m.vertex_stride_2 == 8:
+                assert m.vdeclbase in [0x2, 0x7]
+                assert m.vdecl in [0x2, 0x7]
+                assert materials[m.idx_material].vtype in [0x1]
+                assert materials[m.idx_material].func_skin in [0x4]
+            # connect
+            connect = {m.connective for m in mod.meshes_data.meshes}
+            for c in connect:
+                assert c in KNOWN_CONNECT
+            # vtype actual vertex format
+            vtype_types = {m.vtype for m in mod.materials_data.materials}
+            for vtype in vtype_types:
+                assert vtype in KNOWN_VTYPE
+            # vdeclbase
+            vdeclbase_types = {m.vdeclbase for m in mod.meshes_data.meshes}
+            for vbase in vdeclbase_types:
+                assert vbase in KNOWN_VDEC
+            # vdecl
+            vdecl_types = {m.vdecl for m in mod.meshes_data.meshes}
+            for vdec in vdecl_types:
+                assert vdec in KNOWN_VDEC
+            # skin func
+            skin_func = {m.func_skin for m in mod.materials_data.materials}
+            for vf in skin_func:
+                assert vf in KNOWN_FUNC_SKIN
+        total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
+        vertex_formats = vtype_types
+    else:
+        vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
+    total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
     # FIXME: mod.header.version == 211
     num_weight_bounds = (
         mod.num_weight_bounds if mod.header.version == 210
@@ -58,8 +134,4 @@ def test_mod(mod_imported):
     assert mod.header.ident == b"MOD\x00"
     assert mod.header.version in SUPPORTED_MOD_VERSIONS
     assert not vertex_formats.difference(KNOWN_VERTEX_FORMATS)
-    assert total_num_unique_bone_ids == num_weight_bounds == len(mod.meshes_data.weight_bounds)
-    if mod.header.version == 156:
-        for m in mod.materials_data.materials:
-            if m.skin_weights_type == 0:
-                assert m.unk_flag_39
+    assert total_num_weight_bounds == num_weight_bounds == len(mod.meshes_data.weight_bounds)

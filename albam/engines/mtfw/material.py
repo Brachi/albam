@@ -262,20 +262,25 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat = dst_mod.Material(_parent=dst_mod.materials_data, _root=dst_mod.materials_data._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
-        if src_mod.bones_data is not None:
-            bl_mat.albam_custom_properties.use_8_bones = 0
-            mat.use_8_bones = 0  # limited before export
 
         tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
-        mat.texture_slots = [0] * 8  # texture indices are 1-based. 0 means tex slot is not used
-        mat.texture_slots[TextureType.DIFFUSE.value - 1] = tex_types.get(TextureType.DIFFUSE, -1) + 1
-        mat.texture_slots[TextureType.NORMAL.value - 1] = tex_types.get(TextureType.NORMAL, -1) + 1
-        mat.texture_slots[TextureType.SPECULAR.value - 1] = tex_types.get(TextureType.SPECULAR, -1) + 1
-        mat.texture_slots[TextureType.LIGHTMAP.value - 1] = tex_types.get(TextureType.LIGHTMAP, -1) + 1
-        mat.texture_slots[TextureType.ALPHAMAP.value - 1] = tex_types.get(TextureType.ALPHAMAP, -1) + 1
-        mat.texture_slots[TextureType.ENVMAP.value - 1] = tex_types.get(TextureType.ENVMAP, -1) + 1
-        mat.texture_slots[TextureType.NORMAL_DETAIL.value - 1] = (
-            tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
+        mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
+        mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
+        mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
+        mat.lightmap = tex_types.get(TextureType.LIGHTMAP, -1) + 1
+        mat.shadowmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
+        mat.envmap = tex_types.get(TextureType.ENVMAP, -1) + 1
+        mat.detailmap = (tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
+        mat.additionalmap = 0
+        mat.occlusionmap = 0
+        mat.lightblendmap = 0
+        mat.shadowblendmap = 0
+        mat.heightmap = 0
+        mat.glossmap = 0
+        mat.func_reserved = 0
+        mat.func_reserved2 = 0
+        mat.reserved1 = 0
+        mat.reserved2 = 0
         dst_mod.materials_data.materials.append(mat)
         exported_materials_map[bl_mat.name] = mat_idx
 
@@ -1013,103 +1018,176 @@ def _has_mtfw_shader_group(bl_mat):
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
-    surface_unk: bpy.props.BoolProperty(default=0)
-    surface_opaque: bpy.props.BoolProperty(default=0)
-    use_bridge_lines: bpy.props.BoolProperty(default=0)
-    unk_flag_04: bpy.props.BoolProperty(default=0)
-    unk_flag_05: bpy.props.BoolProperty(default=0)
-    use_alpha_clip: bpy.props.BoolProperty(default=0)
-    use_opaque: bpy.props.BoolProperty(default=0)
-    use_translusent: bpy.props.BoolProperty(default=0)
+    attr_enum = bpy.props.EnumProperty(
+        name="Attribute",
+        description="Select surface attribute",
+        items=[
+            ("0x1", "ATTR_BRIDGE", "", 1),
+            ("0x8", "ATTR_NUKI", "", 2),
+            ("0x10", "ATTR_SOLID", "", 3),
+            ("0x20", "ATTR_OVERLAP", "", 4),
+            ("0x40", "ATTR_TRANSPARENT", "", 5),
+        ],
+        default="0x10",
+        options=set()
+    )
+    vtype_enum = bpy.props.EnumProperty(
+        name="VTYPE",
+        description="Select vertex type",
+        items=[
+            ("0x0", "VTYPE_SKIN", "Skinned mesh with up to 4wt", 1),
+            ("0x1", "VTYPE_SKINEX", "Skinned mesh extended", 2),
+            ("0x2", "VTYPE_NONSKIN", "Static mesh", 3),
+            ("0x3", "VTYPE_NONSKIN_COL", "Static mesh with vertex colors", 4),
+            ("0x4", "VTYPE_SHAPE", "", 5),
+            ("0x5", "VTYPE_SKIN_COL", "", 6),
+        ],
+        default="0x0",
+        options=set()
+    )
+    func_skin_enum = bpy.props.EnumProperty(
+        name="VSKIN",
+        description="Select max bone influences",
+        items=[
+            ("0x0", "SKIN_NONE", "Static mesh", 1),
+            ("0x1", "SKIN_1WT", "1 bone per vertex", 2),
+            ("0x2", "SKIN_2WT", "2 bones per vertex", 3),
+            ("0x3", "SKIN_4WT", "4 bones per vertex", 4),
+            ("0x4", "SKIN_8WT", "8 bones per vertex", 5),
+            ("0x5", "SKIN_4WT_SHAPE", "", 6),
+            ("0x6", "SKIN_STREAM_OUT", "", 7),
+            ("0x7", "SKIN_RESERVE", "", 8),
+            ("0x8", "MAX_SKIN", "", 9),
+        ],
+        default="0x3",
+        options=set()
+    )
+    func_lighting_enum = bpy.props.EnumProperty(
+        name="func ligting",
+        description="select lighting type",
+        items=[
+            ("0x0", "LIGHTING_NONE", "", 1),
+            ("0x1", "LIGHTING_4SPOT", "", 2),
+            ("0x2", "LIGHTING_SH4SPOT", "", 3),
+            ("0x3", "LIGHTING_EMITSH4SPOT", "", 4),
+            ("0x4", "LIGHTING_THINSH4SPOT", "", 5),
+            ("0x5", "LIGHTING_RESERVE0", "", 6),
+            ("0x6", "LIGHTING_RESERVE1", "", 7),
+            ("0x7", "LIGHTING_RESERVE2", "", 8),
+            ("0x8", "LIGHTING_TEX4SPOT", "", 9),
+            ("0x9", "MAX_LIGHTING", "", 9),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_normalmap_enum = bpy.props.EnumProperty(
+        name="func normal map",
+        description="Select normal map type",
+        items=[
+            ("0x0", "NORMALMAP_NONE", "", 1),
+            ("0x1", "NORMALMAP_STANDARD", "", 2),
+            ("0x2", "NORMALMAP_DETAIL", "", 3),
+            ("0x3", "NORMALMAP_PARALLAX", "", 4),
+            ("0x4", "MAX_NORMALMAP", "", 5),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_specular_enum = bpy.props.EnumProperty(
+        name="func specular map",
+        description="Select normal map type",
+        items=[
+            ("0x0", "SPECULAR_NONE", "", 1),
+            ("0x1", "SPECULAR_STANDARD", "", 2),
+            ("0x2", "SPECULAR_MIRROR", "", 3),
+            ("0x3", "SPECULAR_POWMAP", "", 4),
+            ("0x4", "SPECULAR_RIM", "", 5),
+            ("0x5", "MAX_SPECULAR", "", 6),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_lightmap_enum = bpy.props.EnumProperty(
+        name="func lightmap",
+        description="Select light map type",
+        items=[
+            ("0x0", "LIGHTMAP_NONE", "", 1),
+            ("0x1", "LIGHTMAP_STANDARD", "", 2),
+            ("0x2", "LIGHTMAP_SHADOW", "", 3),
+            ("0x3", "LIGHTMAP_BLEND", "", 4),
+            ("0x4", "LIGHTMAP_BLENDSHADOW", "", 5),
+            ("0x5", "LIGHTMAP_VCOLOR", "", 6),
+            ("0x6", "LIGHTMAP_HDRVCOLOR", "", 7),
+            ("0x7", "LIGHTMAP_TEXCOLOR", "", 8),
+            ("0x8", "MAX_LIGHTMAP", "", 9),
+        ],
+        default="0x0",
+        options=set()
+    )
+    func_multitexture_enum = bpy.props.EnumProperty(
+        name="func multitexture",
+        description="Select multitexture type",
+        items=[
+            ("0x0", "MULTITEXTURE_NONE", "", 1),
+            ("0x1", "MULTITEXTURE_ALPHA", "", 2),
+            ("0x2", "MULTITEXTURE_BASE", "", 3),
+            ("0x3", "MULTITEXTURE_FREEZE", "", 4),
+            ("0x4", "MULTITEXTURE_VOLUME", "", 5),
+            ("0x5", "MULTITEXTURE_SPEC", "", 6),
+            ("0x6", "MULTITEXTURE_BLUR", "", 7),
+            ("0x7", "MAX_MULTITEXTURE", "", 8),
+        ],
+        default="0x0",
+        options=set()
+    )
+    fog_enable: bpy.props.BoolProperty(default=True)
+    zwrite: bpy.props.BoolProperty(default=True)
+    attr: attr_enum
+    num: bpy.props.IntProperty(default=0)
+    envmap_bias: bpy.props.IntProperty(default=4)
+    vtype: vtype_enum
+    uvscroll_enable: bpy.props.BoolProperty(default=False)
+    ztest: bpy.props.BoolProperty(default=True)
+    func_skin: func_skin_enum
+    func_lighting: func_lighting_enum
+    func_normalmap: func_normalmap_enum
+    func_specular: func_specular_enum
+    func_lightmap: func_lighting_enum
+    func_multitexture: func_multitexture_enum
+    htechnique: bpy.props.StringProperty(default="0x8727e606")
+    pipeline: bpy.props.IntProperty(default=379)
+    pvdeclbase: bpy.props.IntProperty(default=0)
+    pvdecl: bpy.props.StringProperty(default="0x0")
 
-    use_alpha_transparency: bpy.props.BoolProperty(default=0)
-    unk_flag_10: bpy.props.BoolProperty(default=0)
-    unk_flag_11: bpy.props.BoolProperty(default=0)
-    unk_flag_12: bpy.props.BoolProperty(default=0)
-    unk_flag_13: bpy.props.BoolProperty(default=0)
-    unk_flag_14: bpy.props.BoolProperty(default=0)
-    unk_flag_15: bpy.props.BoolProperty(default=0)
-    unk_flag_16: bpy.props.BoolProperty(default=0)
-
-    unk_flag_17: bpy.props.BoolProperty(default=0)
-    unk_flag_18: bpy.props.BoolProperty(default=0)
-    unk_flag_19: bpy.props.BoolProperty(default=0)
-    unk_flag_20: bpy.props.BoolProperty(default=0)
-    unk_flag_21: bpy.props.BoolProperty(default=0)
-    unk_flag_22: bpy.props.BoolProperty(default=0)
-    unk_flag_23: bpy.props.BoolProperty(default=0)
-    unk_flag_24: bpy.props.BoolProperty(default=0)
-
-    unk_flag_25: bpy.props.BoolProperty(default=0)
-    unk_flag_26: bpy.props.BoolProperty(default=0)
-    unk_flag_27: bpy.props.BoolProperty(default=0)
-    use_8_bones: bpy.props.BoolProperty(default=0)
-    unk_flag_29: bpy.props.BoolProperty(default=0)
-    unk_flag_30: bpy.props.BoolProperty(default=0)
-    unk_flag_31: bpy.props.BoolProperty(default=0)
-    unk_flag_32: bpy.props.BoolProperty(default=0)
-
-    skin_weights_type: bpy.props.IntProperty(default=0)
-    unk_flag_36: bpy.props.BoolProperty(default=0)
-    unk_flag_37: bpy.props.BoolProperty(default=0)
-    unk_flag_38: bpy.props.BoolProperty(default=0)
-    unk_flag_39: bpy.props.BoolProperty(default=0)
-
-    unk_flag_40: bpy.props.BoolProperty(default=0)
-    use_emmisive_map: bpy.props.BoolProperty(default=0)
-    unk_flag_42: bpy.props.BoolProperty(default=0)
-    unk_flag_43: bpy.props.BoolProperty(default=0)
-    use_detail_map: bpy.props.BoolProperty(default=0)
-    unk_flag_45: bpy.props.BoolProperty(default=0)
-    unk_flag_46: bpy.props.BoolProperty(default=0)
-    use_cubemap: bpy.props.BoolProperty(default=0)
-    unk_flag_48: bpy.props.BoolProperty(default=0)
-
-    unk_01: bpy.props.IntProperty(default=0)
-    unk_02: bpy.props.IntProperty(default=0)
-    unk_03: bpy.props.IntProperty(default=0)
-    unk_04: bpy.props.IntProperty(default=0)
-    unk_05: bpy.props.IntProperty(default=0)
-    unk_06: bpy.props.IntProperty(default=0)
-    unk_07: bpy.props.IntProperty(default=0)
-    unk_08: bpy.props.IntProperty(default=0)
-    unk_09: bpy.props.IntProperty(default=0)
-    unk_param_01: bpy.props.FloatProperty(default=0.0)
-    unk_param_02: bpy.props.FloatProperty(default=0.0)
-    unk_param_03: bpy.props.FloatProperty(default=0.0)
-    unk_param_04: bpy.props.FloatProperty(default=0.0)
-    unk_param_05: bpy.props.FloatProperty(default=0.0)
-    cubemap_roughness: bpy.props.FloatProperty(default=0.0)
-    unk_param_07: bpy.props.FloatProperty(default=0.0)
-    unk_param_08: bpy.props.FloatProperty(default=0.0)
-    unk_param_09: bpy.props.FloatProperty(default=0.0)
-    unk_param_10: bpy.props.FloatProperty(default=0.0)
-    detail_normal_power: bpy.props.FloatProperty(default=0.0)
-    detail_normal_multiplier: bpy.props.FloatProperty(default=0.0)
-    unk_param_13: bpy.props.FloatProperty(default=0.0)
-    unk_param_14: bpy.props.FloatProperty(default=0.0)
-    unk_param_15: bpy.props.FloatProperty(default=0.0)
-    unk_param_16: bpy.props.FloatProperty(default=0.0)
-    unk_param_17: bpy.props.FloatProperty(default=0.0)
-    unk_param_18: bpy.props.FloatProperty(default=0.0)
-    unk_param_19: bpy.props.FloatProperty(default=0.0)
-    unk_param_20: bpy.props.FloatProperty(default=0.0)
-    normal_scale: bpy.props.FloatProperty(default=0.0)
-    unk_param_22: bpy.props.FloatProperty(default=0.0)
-    unk_param_23: bpy.props.FloatProperty(default=0.0)
-    unk_param_24: bpy.props.FloatProperty(default=0.0)
-    unk_param_25: bpy.props.FloatProperty(default=0.0)
-    unk_param_26: bpy.props.FloatProperty(default=0.0)
+    transparency: bpy.props.FloatProperty(default=1.0)
+    fresnel_factor: bpy.props.FloatVectorProperty(
+        name="FresnelFactor", size=4, default=(0.0, 0.5, 7.0, 0.6), options=set())  # noqa: F821
+    lightmap_factor: bpy.props.FloatVectorProperty(
+        name="LightmapFactor", size=4, default=(1.0, 1.0, 1.0, 0), options=set())  # noqa: F821
+    detail_factor: bpy.props.FloatVectorProperty(
+        name="DetailFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
+    parallax_factor: bpy.props.FloatVectorProperty(
+        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set())  # noqa: F821
+    flip_binormal: bpy.props.FloatProperty(default=1.0)
+    heightmap_occ: bpy.props.FloatProperty(default=0.2)
+    blend_state: bpy.props.IntProperty(default=44172837)
+    alpha_ref: bpy.props.IntProperty(default=8)
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
-            setattr(dst_obj, attr_name, getattr(self, attr_name))
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
 
     # FIXME: dedupe
     def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
-            setattr(self, attr_name, getattr(src_obj, attr_name))
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
 @blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2"))

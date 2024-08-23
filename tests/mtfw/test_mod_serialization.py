@@ -44,11 +44,6 @@ def test_export_top_level(mod_imported, mod_exported):
     assert mod_imported.bbox_max.z == pytest.approx(mod_exported.bbox_max.z, rel=0.001)
     assert mod_imported.bbox_max.w == pytest.approx(mod_exported.bbox_max.w, rel=0.001)
 
-    assert mod_imported.unk_01 == mod_exported.unk_01
-    assert mod_imported.unk_02 == mod_exported.unk_02
-    assert mod_imported.unk_03 == mod_exported.unk_03
-    assert mod_imported.unk_04 == mod_exported.unk_04
-
 
 def test_export_bones_data(mod_imported, mod_exported):
     # TODO: matrices
@@ -90,13 +85,10 @@ def test_export_groups(mod_imported, mod_exported):
     assert mod_imported.groups_size_ == mod_exported.groups_size_
 
     assert [g.group_index for g in mod_imported.groups] == [g.group_index for g in mod_exported.groups]
-    assert [g.unk_02 for g in mod_imported.groups] == [g.unk_02 for g in mod_exported.groups]
-    assert [g.unk_03 for g in mod_imported.groups] == [g.unk_03 for g in mod_exported.groups]
-    assert [g.unk_04 for g in mod_imported.groups] == [g.unk_04 for g in mod_exported.groups]
-    assert [g.unk_05 for g in mod_imported.groups] == [g.unk_05 for g in mod_exported.groups]
-    assert [g.unk_06 for g in mod_imported.groups] == [g.unk_06 for g in mod_exported.groups]
-    assert [g.unk_07 for g in mod_imported.groups] == [g.unk_07 for g in mod_exported.groups]
-    assert [g.unk_08 for g in mod_imported.groups] == [g.unk_08 for g in mod_exported.groups]
+    assert [g.pos.x for g in mod_imported.groups] == [g.pos.x for g in mod_exported.groups]
+    assert [g.pos.y for g in mod_imported.groups] == [g.pos.y for g in mod_exported.groups]
+    assert [g.pos.z for g in mod_imported.groups] == [g.pos.z for g in mod_exported.groups]
+    assert [g.radius for g in mod_imported.groups] == [g.radius for g in mod_exported.groups]
 
 
 def test_materials_data(mod_imported, mod_exported):
@@ -126,7 +118,7 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             assert src_mesh.unk_render_mode == dst_mesh.unk_render_mode
             # assert src_mesh.vertex_format == dst_mesh.vertex_format
             assert src_mesh.bone_id_start == dst_mesh.bone_id_start
-            assert src_mesh.num_unique_bone_ids == dst_mesh.num_unique_bone_ids
+            assert src_mesh.num_weight_bounds == dst_mesh.num_weight_bounds
             assert src_mesh.mesh_index == dst_mesh.mesh_index
             assert src_mesh.min_index == dst_mesh.min_index
             assert src_mesh.max_index == dst_mesh.max_index
