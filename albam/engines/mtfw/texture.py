@@ -317,7 +317,7 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             if texture_target is not None:
                 texture_node.image = texture_target
             texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
-            if tex_index and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
+            if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 texture_node.image.colorspace_settings.name = "Non-Color"
         except IndexError:
             print(f"tex_index {tex_index} not found. Texture len(): {len(textures)}")
@@ -343,7 +343,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
         texture_node.image = texture_target
         texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
         # change color settings for normal and detail maps
-        if texture_type.value in NON_SRGB_IMAGE_TYPE:
+        if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
 
 

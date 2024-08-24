@@ -344,20 +344,32 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "re1": (24, 20, 19, 31),
         "rev1": (23, 19, 25, 31),
         "rev2": (24, 20, 25, 31),
+        "re6": (24, 20, 25, 31),
     }
+
+    UNKNOWN_TYPE = {
+        "re0": "0x209d",
+        "re1": "0x209d",
+        "rev1": "0xa09d",
+        "rev2": "0x209d",
+        "re6": "0x9a",
+    }
+
     if not blender_material or not blender_material.node_tree:
         return
-
     for tn in blender_material.node_tree.nodes:
         if not tn.type == "TEX_IMAGE":
             continue
         type = blender_texture_to_texture_code(tn)
-        name = ntpath.splitext(tn.image.name)[0]
+        if tn.image:
+            name = ntpath.splitext(tn.image.name)[0]
+        else:
+            continue
         if not tn.image.albam_asset.relative_path:
             tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
         tex_157_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if app_id in ["re0", "re1", "rev1", "rev2"]:
+        if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)
             if type == 0:
                 tex_157_props.compression_format = tex_compr_preset[1]
@@ -367,6 +379,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
                 tex_157_props.compression_format = tex_compr_preset[2]
             if type == 7:
                 tex_157_props.compression_format = tex_compr_preset[3]
+        if app_id in UNKNOWN_TYPE:
+            tex_157_props.unk_type = UNKNOWN_TYPE.get(app_id)
 
 
 def rename_bones(armature_ob, names_preset):
