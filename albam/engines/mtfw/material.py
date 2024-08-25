@@ -49,7 +49,7 @@ MRL_UNK_01 = {
     "re6": 0x6a5489b8,
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
-    "dd": 0x244bbc26,
+    "dd": 0xb46006d5,
 }
 
 
@@ -61,6 +61,18 @@ MRL_CBGLOBALS_MAP = {
     "rev2": Mrl.CbGlobals2,
     "dd": Mrl.CbGlobals4,
 }
+MRL_MATERIAL_TYPE_STR = {
+    # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
+    0x854D484: "TYPE_nDraw__MaterialNull",
+    0x5FB0EBE4: "TYPE_nDraw__MaterialStd",  # 1605430244
+    0x7D2B31B3: "TYPE_nDraw__MaterialStdEst",  # 2099982771
+    0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
+    0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",
+    0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
+}
+
+
+MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
 
 
 MRL_BLEND_STATE_STR = {
@@ -129,9 +141,11 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         albam_custom_props = blender_material.albam_custom_properties
         custom_props_top_level = albam_custom_props.get_custom_properties_for_appid(app_id)
         if parsed_mod.header.version in VERSION_USES_MRL:
+            material_type = MRL_MATERIAL_TYPE_STR[material.type_hash]
             blend_state_type = MRL_BLEND_STATE_STR[material.blend_state_hash >> 12]
             depth_stencil_state_type = MRL_DEPTH_STENCIL_STATE_STR[(material.depth_stencil_state_hash >> 12)]
             rasterizer_state_type = MRL_RASTERIZER_STATE_STR[(material.rasterizer_state_hash >> 12)]
+            custom_props_top_level.material_type = material_type
             custom_props_top_level.blend_state_type = blend_state_type
             custom_props_top_level.depth_stencil_state_type = depth_stencil_state_type
             custom_props_top_level.rasterizer_state_type = rasterizer_state_type
@@ -330,7 +344,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         rasterizer_state_index = shader_objects[mrl_params.rasterizer_state_type]["apps"][app_id]["shader_object_index"]  # noqa
 
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
-        mat.type_hash = mrl.MaterialType.type_n_draw__material_std
+        mat.type_hash = MRL_MATERIAL_TYPE_STR_TO_ID[mrl_params.material_type]
         mat.name_hash_crcjam32 = material_hash
         mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
         mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
@@ -1123,6 +1137,19 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2", "dd"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
+    material_type_enum = bpy.props.EnumProperty(
+        name="Material Type",
+        items=[
+            ("TYPE_nDraw__MaterialNull", "MaterialNull", "", 1),
+            ("TYPE_nDraw__MaterialStd", "MaterialStd", "", 2),
+            ("TYPE_nDraw__MaterialStdEst", "MaterialStdEst", "", 3),
+            ("TYPE_nDraw__DDMaterialStd", "DDMaterialStd", "", 4),
+            ("TYPE_nDraw__DDMaterialInner", "DDMaterialInne", "", 5),
+            ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
+        ],
+        default="TYPE_nDraw__MaterialStd",
+        options=set()
+    )
     blend_state_enum = bpy.props.EnumProperty(
         name="Blend State",
         description="select surface",
@@ -1168,7 +1195,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         ],
         options=set()
     )
-
+    material_type: material_type_enum
     blend_state_type: blend_state_enum
     depth_stencil_state_type: depth_stencil_enum
     rasterizer_state_type: rasterizer_state_enum
@@ -1555,7 +1582,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6"),
     is_secondary=True, display_name="CB Vertex Displacement")
 @blender_registry.register_blender_prop
 class CBVtxDisp(bpy.types.PropertyGroup):
@@ -1586,7 +1613,7 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
     is_secondary=True, display_name="CB Vertex Displacement 2")
 @blender_registry.register_blender_prop
 class CBVtxDisp2(bpy.types.PropertyGroup):
@@ -1611,7 +1638,7 @@ class CBVtxDisp2(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6"),
     is_secondary=True, display_name="CB Color Mask")
 @blender_registry.register_blender_prop
 class CBColorMaskCustomProperties(bpy.types.PropertyGroup):

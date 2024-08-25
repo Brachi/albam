@@ -12,10 +12,16 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
 class Mrl(ReadWriteKaitaiStruct):
 
     class MaterialType(IntEnum):
+        type_n_draw__material_null = 139777156
+        type_n_draw__dd_material_std = 480978014
+        type_n_draw__dd_material_inner = 651803228
+        type_n_draw__dd_material_water = 819701071
         type_n_draw__material_std = 1605430244
+        type_n_draw__material_std_est = 2099982771
 
     class TextureType(IntEnum):
         type_r_texture = 606035435
+        type_r_render_target_texture = 2013850128
 
     class CmdType(IntEnum):
         set_flag = 0
@@ -7700,7 +7706,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self.anims__to_write = True
 
         def _read(self):
-            self.type_hash = KaitaiStream.resolve_enum(Mrl.MaterialType, self._io.read_u4le())
+            self.type_hash = self._io.read_u4le()
             self.name_hash_crcjam32 = self._io.read_u4le()
             self.cmd_buffer_size = self._io.read_u4le()
             self.blend_state_hash = self._io.read_u4le()
@@ -7745,7 +7751,7 @@ class Mrl(ReadWriteKaitaiStruct):
             super(Mrl.Material, self)._write__seq(io)
             self._should_write_resources = self.resources__to_write
             self._should_write_anims = self.anims__to_write
-            self._io.write_u4le(int(self.type_hash))
+            self._io.write_u4le(self.type_hash)
             self._io.write_u4le(self.name_hash_crcjam32)
             self._io.write_u4le(self.cmd_buffer_size)
             self._io.write_u4le(self.blend_state_hash)

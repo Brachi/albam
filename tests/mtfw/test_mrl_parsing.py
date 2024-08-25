@@ -3,6 +3,7 @@ from albam.engines.mtfw.material import (
     MRL_BLEND_STATE_STR,
     MRL_DEPTH_STENCIL_STATE_STR,
     MRL_RASTERIZER_STATE_STR,
+    MRL_MATERIAL_TYPE_STR,
 )
 
 
@@ -49,7 +50,6 @@ KNOWN_CONSTANT_BUFFERS = {
     },
     "dd": {
         Mrl.ShaderObjectHash.cbmaterial,
-        Mrl.ShaderObjectHash.globals,
         Mrl.ShaderObjectHash.cbdistortion,
         Mrl.ShaderObjectHash.cbdistortionrefract,
         Mrl.ShaderObjectHash.cbddmaterialparam,
@@ -62,6 +62,7 @@ KNOWN_CONSTANT_BUFFERS = {
         Mrl.ShaderObjectHash.cbddmaterialparaminnercorrect,
         Mrl.ShaderObjectHash.cbspecularblend,
         Mrl.ShaderObjectHash.cbuvrotationoffset,
+        Mrl.ShaderObjectHash.globals,
     },
 
 }
@@ -74,6 +75,7 @@ def test_materials(parsed_mrl_from_arc, subtests):
             assert material.blend_state_hash >> 12 in MRL_BLEND_STATE_STR
             assert material.depth_stencil_state_hash >> 12 in MRL_DEPTH_STENCIL_STATE_STR
             assert material.rasterizer_state_hash >> 12 in MRL_RASTERIZER_STATE_STR
+            assert material.type_hash in MRL_MATERIAL_TYPE_STR
 
 
 def test_global_resources_mandatory(parsed_mrl_from_arc):

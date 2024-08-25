@@ -53,7 +53,8 @@ types:
 
   material:
     seq:
-      - {id: type_hash, type: u4, enum: material_type} # TYPE_nDraw_MaterialStd not in mfx
+      #- {id: type_hash, type: u4, enum: material_type} # TYPE_nDraw_MaterialStd not in mfx
+      - {id: type_hash, type: u4}
       - {id: name_hash_crcjam32, type: u4}
       - {id: cmd_buffer_size, type: u4}
       - {id: blend_state_hash, type: u4}
@@ -773,10 +774,16 @@ types:
       - {id: data, type: f4, repeat: expr, repeat-expr: 16}
 enums:
   material_type:
-    0x5FB0EBE4: type_n_draw__material_std
+    0x854d484: type_n_draw__material_null
+    0x5fb0ebe4: type_n_draw__material_std
+    0x7d2b31b3: type_n_draw__material_std_est
+    0x1cab245e: type_n_draw__dd_material_std
+    0x26d9ba5c: type_n_draw__dd_material_inner
+    0x30dba54f: type_n_draw__dd_material_water
 
   texture_type:
-    0x241F5DEB: type_r_texture
+    0x241f5deb: type_r_texture
+    0x7808ea10: type_r_render_target_texture
 
   cmd_type:
     0: set_flag
