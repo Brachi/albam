@@ -106,6 +106,16 @@ types:
             "shader_object_hash::cbcolormask" : cb_color_mask
             "shader_object_hash::cbvertexdisplacement": cb_vertex_displacement
             "shader_object_hash::cbvertexdisplacement2": cb_vertex_displacement2
+            "shader_object_hash::cbappclipplane": cb_app_clip_plane
+            "shader_object_hash::cboutlineex": cb_outline_ex
+            "shader_object_hash::cbddmaterialparam": cb_dd_material_param
+            "shader_object_hash::cbappreflect": cb_app_reflect
+            "shader_object_hash::cbappreflectshadowlight": cb_app_reflect_shadow_light
+            "shader_object_hash::cbddmaterialparaminnercorrect": cb_dd_material_param_inner_correct
+            "shader_object_hash::cbburncommon": cb_burn_common
+            "shader_object_hash::cbburnemission": cb_burn_emission
+            "shader_object_hash::cbspecularblend": cb_specular_blend
+            "shader_object_hash::cbuvrotationoffset": cb_uv_rotation_offset
         if: cmd_type == cmd_type::set_constant_buffer
 
   anim_data:
@@ -572,6 +582,127 @@ types:
       - {id: f_vtx_disp_inv_area2, type: f4}
       - {id: f_vtx_disp_rcn2, type: f4}
 
+  cb_app_clip_plane: # 4 floats 0xaee37319 CBAppClipPlane
+    instances:
+      size_:
+        value: 48
+    seq:
+      - {id: f_plane_normal, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler, type: f4}
+      - {id: f_plane_point, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler_1, type: f4}
+      - {id: f_app_clip_mask, type: f4}
+      - {id: filler_2, type: f4}
+
+  cb_outline_ex:
+    instances:
+      size_:
+        value: 64
+    seq:
+      - {id: f_outline_outer_color, type: f4, repeat: expr, repeat-expr: 4}  # 0
+      - {id: f_outline_inner_color, type: f4, repeat: expr, repeat-expr: 4}  # 4
+      - {id: f_outline_balance_offset, type: f4}  # 8
+      - {id: f_outline_balance_scale, type: f4}  # 9
+      - {id: f_outline_balance, type: f4}  # 10
+      - {id: filler, type: f4}
+      - {id: f_outline_blend_mask, type: f4, repeat: expr, repeat-expr: 4}  # 12
+
+  cb_dd_material_param:
+    instances:
+      size_:
+        value: 160
+    seq:
+      - {id: f_dd_material_blend_color, type: f4, repeat: expr, repeat-expr: 4}  # 0
+      - {id: f_dd_material_color_blend_rate, type: f4, repeat: expr, repeat-expr: 2}  # 4
+      - {id: f_dd_material_area_mask, type: f4, repeat: expr, repeat-expr: 2}  # 6
+      - {id: f_dd_material_border_blend_mask, type: f4, repeat: expr, repeat-expr: 4}  # 8
+      - {id: f_dd_material_border_shade_band, type: f4}  # 12
+      - {id: f_dd_material_base_power, type: f4}  # 13
+      - {id: f_dd_material_normal_blend_rate, type: f4}  # 14
+      - {id: f_dd_material_reflect_blend_color, type: f4}  #15
+      - {id: f_dd_material_specular_factor, type: f4}  #16
+      - {id: f_dd_material_specular_map_factor, type: f4}  #17
+      - {id: f_dd_material_env_map_blend_color, type: f4}  # 18
+      - {id: f_dd_material_area_alpha, type: f4}  # 19
+      - {id: f_dd_material_area_pos, type: f4, repeat: expr, repeat-expr: 4}  # 20
+      - {id: f_dd_material_albedo_uv_scale, type: f4}  # 24
+      - {id: f_dd_material_normal_uv_scale, type: f4}  #25
+      - {id: f_dd_material_normal_power, type: f4}  # 26
+      - {id: f_dd_material_base_env_map_power, type: f4}  # 27
+      - {id: f_dd_material_lantern_color, type: f4, repeat: expr, repeat-expr: 3}  # 28
+      - {id: filler, type: f4}
+      - {id: f_dd_material_lantern_pos, type: f4, repeat: expr, repeat-expr: 3}  # 32
+      - {id: filler_1, type: f4}
+      - {id: f_dd_material_lantern_param, type: f4, repeat: expr, repeat-expr: 3}  # 36
+      - {id: filler_2, type: f4}
+
+  cb_burn_common:
+    instances:
+      size_:
+        value: 48
+    seq:
+    - {id: f_b_blend_map_color, type: f4, repeat: expr, repeat-expr: 3}  # 0
+    - {id: f_b_alpha_clip_threshold, type: f4}  # 3
+    - {id: f_b_blend_alpha_threshold, type: f4}  # 4
+    - {id: f_b_blend_alpha_band, type: f4}  # 5
+    - {id: f_b_specular_blend_rate, type: f4}  # 6
+    - {id: f_b_albedo_blend_rate, type: f4}  # 7
+    - {id: f_b_albedo_blend_rate2, type: f4}  # 8
+    - {id: filler_1, type: f4, repeat: expr, repeat-expr: 3}
+
+  cb_burn_emission:
+    instances:
+      size_:
+        value: 32
+    seq:
+    - {id: f_b_emission_factor, type: f4}  # 0
+    - {id: f_b_emission_alpha_band, type: f4}  # 1
+    - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
+    - {id: f_burn_emission_color, type: f4, repeat: expr, repeat-expr: 3}  # 4
+    - {id: filler_1, type: f4}
+
+  cb_specular_blend:
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_specular_blend_color, type: f4, repeat: expr, repeat-expr: 4}
+
+  cb_uv_rotation_offset:
+    instances:
+      size_:
+        value: 32
+    seq:
+    - {id: f_uv_rotation_center, type: f4, repeat: expr, repeat-expr: 2}  # 0
+    - {id: f_uv_rotation_angle, type: f4}  # 2
+    - {id: filler, type: f4}
+    - {id: f_uv_rotation_offset, type: f4, repeat: expr, repeat-expr: 2}  # 4
+    - {id: f_uv_rotation_scale, type: f4, repeat: expr, repeat-expr: 2}  # 6
+
+  cb_app_reflect:
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_app_water_reflect_scale, type: f4}  # 0
+    - {id: f_app_shadow_light_scale, type: f4}  # 1
+    - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
+
+  cb_app_reflect_shadow_light:
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_app_reflect_shadow_dir, type: f4, repeat: expr, repeat-expr: 3}  # 0
+    - {id: filler, type: f4}
+
+  cb_dd_material_param_inner_correct:
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_dd_material_inner_correct_offset, type: f4}  # 0
+    - {id: filler, type: f4, repeat: expr, repeat-expr: 3}
 
   str_cb_ba_alpha_clip: # 4 floats 0xaee37319
     seq:
@@ -3629,3 +3760,11 @@ enums:
     0x6E11: tnormalburnmap
     0xa463e: tspecularburnmap
     0x17009: tburnemissionmap
+    0xdeace: cbappreflect
+    0xd7d4e: cbappreflectshadowlight
+    0xe6d24: cbddmaterialparaminnercorrect
+    0xB4974: cbburnemission
+    0x1F0C6: cbspecularblend
+    0x247ee: cbuvrotationoffset
+    0xce407: uvalbedoburnmap
+    0x49B33: treflectwatermap

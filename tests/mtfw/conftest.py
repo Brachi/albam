@@ -120,7 +120,7 @@ def mod_exported(mod_export):
 
 
 @pytest.fixture(scope="session")
-def mrl_imported(mod_export):
+def parsed_mrl_from_arc(mod_export):
     mrl = mod_export[2]
     if not mrl:
         pytest.skip("No mrl available")
