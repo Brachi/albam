@@ -583,19 +583,68 @@ types:
       - {id: f_vtx_disp_inv_area2, type: f4}
       - {id: f_vtx_disp_rcn2, type: f4}
 
-  cb_app_clip_plane: # 4 floats 0xaee37319 CBAppClipPlane
+  cb_burn_common:  # 768
     instances:
       size_:
         value: 48
     seq:
-      - {id: f_plane_normal, type: f4, repeat: expr, repeat-expr: 3}
-      - {id: filler, type: f4}
-      - {id: f_plane_point, type: f4, repeat: expr, repeat-expr: 3}
-      - {id: filler_1, type: f4}
-      - {id: f_app_clip_mask, type: f4}
-      - {id: filler_2, type: f4}
+    - {id: f_b_blend_map_color, type: f4, repeat: expr, repeat-expr: 3}  # 0
+    - {id: f_b_alpha_clip_threshold, type: f4}  # 3
+    - {id: f_b_blend_alpha_threshold, type: f4}  # 4
+    - {id: f_b_blend_alpha_band, type: f4}  # 5
+    - {id: f_b_specular_blend_rate, type: f4}  # 6
+    - {id: f_b_albedo_blend_rate, type: f4}  # 7
+    - {id: f_b_albedo_blend_rate2, type: f4}  # 8
+    - {id: padding, type: f4, repeat: expr, repeat-expr: 3}
 
-  cb_outline_ex:
+  cb_burn_emission:  # 769
+    instances:
+      size_:
+        value: 32
+    seq:
+    - {id: f_b_emission_factor, type: f4}  # 0
+    - {id: f_b_emission_alpha_band, type: f4}  # 1
+    - {id: padding_1, type: f4, repeat: expr, repeat-expr: 2}
+    - {id: f_burn_emission_color, type: f4, repeat: expr, repeat-expr: 3}  # 4
+    - {id: padding_2, type: f4}
+  
+  cb_app_clip_plane: # 770
+    instances:
+      size_:
+        value: 48
+    seq:
+      - {id: f_plane_normal, type: f4, repeat: expr, repeat-expr: 3}  # 0
+      - {id: padding_1, type: f4}
+      - {id: f_plane_point, type: f4, repeat: expr, repeat-expr: 3}  # 4
+      - {id: padding_2, type: f4}
+      - {id: f_app_clip_mask, type: f4}  # 8
+      - {id: padding_3, type: f4}
+      
+  cb_specular_blend:  # 772
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_specular_blend_color, type: f4, repeat: expr, repeat-expr: 4}
+
+  cb_app_reflect:  # 773
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_app_water_reflect_scale, type: f4}  # 0
+    - {id: f_app_shadow_light_scale, type: f4}  # 1
+    - {id: padding, type: f4, repeat: expr, repeat-expr: 2}
+
+  cb_app_reflect_shadow_light:  # 774
+    instances:
+      size_:
+        value: 16
+    seq:
+    - {id: f_app_reflect_shadow_dir, type: f4, repeat: expr, repeat-expr: 3}  # 0
+    - {id: padding, type: f4}
+
+  cb_outline_ex:  # 775
     instances:
       size_:
         value: 64
@@ -605,10 +654,10 @@ types:
       - {id: f_outline_balance_offset, type: f4}  # 8
       - {id: f_outline_balance_scale, type: f4}  # 9
       - {id: f_outline_balance, type: f4}  # 10
-      - {id: filler, type: f4}
+      - {id: padding, type: f4}
       - {id: f_outline_blend_mask, type: f4, repeat: expr, repeat-expr: 4}  # 12
 
-  cb_dd_material_param:
+  cb_dd_material_param:  # 779
     instances:
       size_:
         value: 160
@@ -631,91 +680,42 @@ types:
       - {id: f_dd_material_normal_power, type: f4}  # 26
       - {id: f_dd_material_base_env_map_power, type: f4}  # 27
       - {id: f_dd_material_lantern_color, type: f4, repeat: expr, repeat-expr: 3}  # 28
-      - {id: filler, type: f4}
+      - {id: padding_1, type: f4}
       - {id: f_dd_material_lantern_pos, type: f4, repeat: expr, repeat-expr: 3}  # 32
-      - {id: filler_1, type: f4}
+      - {id: padding_2, type: f4}
       - {id: f_dd_material_lantern_param, type: f4, repeat: expr, repeat-expr: 3}  # 36
-      - {id: filler_2, type: f4}
+      - {id: padding_3, type: f4}
 
-  cb_burn_common:
-    instances:
-      size_:
-        value: 48
-    seq:
-    - {id: f_b_blend_map_color, type: f4, repeat: expr, repeat-expr: 3}  # 0
-    - {id: f_b_alpha_clip_threshold, type: f4}  # 3
-    - {id: f_b_blend_alpha_threshold, type: f4}  # 4
-    - {id: f_b_blend_alpha_band, type: f4}  # 5
-    - {id: f_b_specular_blend_rate, type: f4}  # 6
-    - {id: f_b_albedo_blend_rate, type: f4}  # 7
-    - {id: f_b_albedo_blend_rate2, type: f4}  # 8
-    - {id: filler_1, type: f4, repeat: expr, repeat-expr: 3}
-
-  cb_burn_emission:
-    instances:
-      size_:
-        value: 32
-    seq:
-    - {id: f_b_emission_factor, type: f4}  # 0
-    - {id: f_b_emission_alpha_band, type: f4}  # 1
-    - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
-    - {id: f_burn_emission_color, type: f4, repeat: expr, repeat-expr: 3}  # 4
-    - {id: filler_1, type: f4}
-
-  cb_specular_blend:
-    instances:
-      size_:
-        value: 16
-    seq:
-    - {id: f_specular_blend_color, type: f4, repeat: expr, repeat-expr: 4}
-
-  cb_uv_rotation_offset:
+  cb_uv_rotation_offset:  # 777
     instances:
       size_:
         value: 32
     seq:
     - {id: f_uv_rotation_center, type: f4, repeat: expr, repeat-expr: 2}  # 0
     - {id: f_uv_rotation_angle, type: f4}  # 2
-    - {id: filler, type: f4}
+    - {id: padding, type: f4}
     - {id: f_uv_rotation_offset, type: f4, repeat: expr, repeat-expr: 2}  # 4
     - {id: f_uv_rotation_scale, type: f4, repeat: expr, repeat-expr: 2}  # 6
 
-  cb_app_reflect:
-    instances:
-      size_:
-        value: 16
-    seq:
-    - {id: f_app_water_reflect_scale, type: f4}  # 0
-    - {id: f_app_shadow_light_scale, type: f4}  # 1
-    - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
-
-  cb_app_reflect_shadow_light:
-    instances:
-      size_:
-        value: 16
-    seq:
-    - {id: f_app_reflect_shadow_dir, type: f4, repeat: expr, repeat-expr: 3}  # 0
-    - {id: filler, type: f4}
-
-  cb_dd_material_param_inner_correct:
+  cb_dd_material_param_inner_correct:  #782
     instances:
       size_:
         value: 16
     seq:
     - {id: f_dd_material_inner_correct_offset, type: f4}  # 0
-    - {id: filler, type: f4, repeat: expr, repeat-expr: 3}
+    - {id: padding, type: f4, repeat: expr, repeat-expr: 3}
 
   str_cb_ba_alpha_clip: # 4 floats 0xaee37319
     seq:
       - {id: f_b_alpha_clip_threshold, type: f4}
       - {id: f_b_blend_rate, type: f4}
       - {id: f_b_blend_band, type: f4}
-      - {id: filler, type: f4}
+      - {id: padding, type: f4}
 
   str_cb_vtx_displacement3: # CBVertexDisplacement3 0x22882238 rev2 4 floats
     seq:
       - {id: f_vtx_disp_direction, type: f4, repeat: expr, repeat-expr: 3}
-      - {id: filler, type: f4}
+      - {id: padding, type: f4}
 
 
   str_cb_vtx_disp_mask_uv: #CBVertexDispMaskUV 0x61c6e23d 8 floats
@@ -752,26 +752,6 @@ types:
       - {id: f_vtx_disp_ex_rot_origin_z, type: f4}
       - {id: filler, type: f4}
 
-  #$Globals re6
-  cb_s_globals:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 84}
-
-  cb_unk_01:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 4}
-
-  cb_unk_02:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 24}
-
-  cb_unk_03:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 8}
-
-  cb_unk_04:
-    seq:
-      - {id: data, type: f4, repeat: expr, repeat-expr: 16}
 enums:
   material_type:
     0x854d484: type_n_draw__material_null

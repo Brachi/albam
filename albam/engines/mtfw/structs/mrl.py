@@ -3677,7 +3677,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self.f_b_alpha_clip_threshold = self._io.read_f4le()
             self.f_b_blend_rate = self._io.read_f4le()
             self.f_b_blend_band = self._io.read_f4le()
-            self.filler = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -3689,7 +3689,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.f_b_alpha_clip_threshold)
             self._io.write_f4le(self.f_b_blend_rate)
             self._io.write_f4le(self.f_b_blend_band)
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding)
 
 
         def _check(self):
@@ -4218,7 +4218,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self.f_outline_balance_offset = self._io.read_f4le()
             self.f_outline_balance_scale = self._io.read_f4le()
             self.f_outline_balance = self._io.read_f4le()
-            self.filler = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
             self.f_outline_blend_mask = []
             for i in range(4):
                 self.f_outline_blend_mask.append(self._io.read_f4le())
@@ -4251,7 +4251,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.f_outline_balance_offset)
             self._io.write_f4le(self.f_outline_balance_scale)
             self._io.write_f4le(self.f_outline_balance)
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding)
             for i in range(len(self.f_outline_blend_mask)):
                 pass
                 self._io.write_f4le(self.f_outline_blend_mask[i])
@@ -4298,7 +4298,7 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(3):
                 self.f_vtx_disp_direction.append(self._io.read_f4le())
 
-            self.filler = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -4314,7 +4314,7 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.f_vtx_disp_direction[i])
 
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding)
 
 
         def _check(self):
@@ -4673,43 +4673,6 @@ class Mrl(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class CbUnk01(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.data = []
-            for i in range(4):
-                self.data.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.data)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.CbUnk01, self)._write__seq(io)
-            for i in range(len(self.data)):
-                pass
-                self._io.write_f4le(self.data[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.data) != 4):
-                raise kaitaistruct.ConsistencyError(u"data", len(self.data), 4)
-            for i in range(len(self.data)):
-                pass
-
-
-
     class CbAppReflect(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4719,15 +4682,15 @@ class Mrl(ReadWriteKaitaiStruct):
         def _read(self):
             self.f_app_water_reflect_scale = self._io.read_f4le()
             self.f_app_shadow_light_scale = self._io.read_f4le()
-            self.filler = []
+            self.padding = []
             for i in range(2):
-                self.filler.append(self._io.read_f4le())
+                self.padding.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -4736,17 +4699,17 @@ class Mrl(ReadWriteKaitaiStruct):
             super(Mrl.CbAppReflect, self)._write__seq(io)
             self._io.write_f4le(self.f_app_water_reflect_scale)
             self._io.write_f4le(self.f_app_shadow_light_scale)
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding)):
                 pass
-                self._io.write_f4le(self.filler[i])
+                self._io.write_f4le(self.padding[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.filler) != 2):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
-            for i in range(len(self.filler)):
+            if (len(self.padding) != 2):
+                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 2)
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -5221,15 +5184,15 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.f_dd_material_inner_correct_offset = self._io.read_f4le()
-            self.filler = []
+            self.padding = []
             for i in range(3):
-                self.filler.append(self._io.read_f4le())
+                self.padding.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -5237,17 +5200,17 @@ class Mrl(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mrl.CbDdMaterialParamInnerCorrect, self)._write__seq(io)
             self._io.write_f4le(self.f_dd_material_inner_correct_offset)
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding)):
                 pass
-                self._io.write_f4le(self.filler[i])
+                self._io.write_f4le(self.padding[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.filler) != 3):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 3)
-            for i in range(len(self.filler)):
+            if (len(self.padding) != 3):
+                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -5271,20 +5234,20 @@ class Mrl(ReadWriteKaitaiStruct):
         def _read(self):
             self.f_b_emission_factor = self._io.read_f4le()
             self.f_b_emission_alpha_band = self._io.read_f4le()
-            self.filler = []
+            self.padding_1 = []
             for i in range(2):
-                self.filler.append(self._io.read_f4le())
+                self.padding_1.append(self._io.read_f4le())
 
             self.f_burn_emission_color = []
             for i in range(3):
                 self.f_burn_emission_color.append(self._io.read_f4le())
 
-            self.filler_1 = self._io.read_f4le()
+            self.padding_2 = self._io.read_f4le()
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding_1)):
                 pass
 
             for i in range(len(self.f_burn_emission_color)):
@@ -5296,22 +5259,22 @@ class Mrl(ReadWriteKaitaiStruct):
             super(Mrl.CbBurnEmission, self)._write__seq(io)
             self._io.write_f4le(self.f_b_emission_factor)
             self._io.write_f4le(self.f_b_emission_alpha_band)
-            for i in range(len(self.filler)):
+            for i in range(len(self.padding_1)):
                 pass
-                self._io.write_f4le(self.filler[i])
+                self._io.write_f4le(self.padding_1[i])
 
             for i in range(len(self.f_burn_emission_color)):
                 pass
                 self._io.write_f4le(self.f_burn_emission_color[i])
 
-            self._io.write_f4le(self.filler_1)
+            self._io.write_f4le(self.padding_2)
 
 
         def _check(self):
             pass
-            if (len(self.filler) != 2):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 2)
-            for i in range(len(self.filler)):
+            if (len(self.padding_1) != 2):
+                raise kaitaistruct.ConsistencyError(u"padding_1", len(self.padding_1), 2)
+            for i in range(len(self.padding_1)):
                 pass
 
             if (len(self.f_burn_emission_color) != 3):
@@ -5343,7 +5306,7 @@ class Mrl(ReadWriteKaitaiStruct):
                 self.f_uv_rotation_center.append(self._io.read_f4le())
 
             self.f_uv_rotation_angle = self._io.read_f4le()
-            self.filler = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
             self.f_uv_rotation_offset = []
             for i in range(2):
                 self.f_uv_rotation_offset.append(self._io.read_f4le())
@@ -5374,7 +5337,7 @@ class Mrl(ReadWriteKaitaiStruct):
                 self._io.write_f4le(self.f_uv_rotation_center[i])
 
             self._io.write_f4le(self.f_uv_rotation_angle)
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding)
             for i in range(len(self.f_uv_rotation_offset)):
                 pass
                 self._io.write_f4le(self.f_uv_rotation_offset[i])
@@ -5413,43 +5376,6 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
-
-    class CbUnk02(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.data = []
-            for i in range(24):
-                self.data.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.data)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.CbUnk02, self)._write__seq(io)
-            for i in range(len(self.data)):
-                pass
-                self._io.write_f4le(self.data[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.data) != 24):
-                raise kaitaistruct.ConsistencyError(u"data", len(self.data), 24)
-            for i in range(len(self.data)):
-                pass
-
-
 
     class CbVertexDisplacement1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -5628,9 +5554,9 @@ class Mrl(ReadWriteKaitaiStruct):
             self.f_b_specular_blend_rate = self._io.read_f4le()
             self.f_b_albedo_blend_rate = self._io.read_f4le()
             self.f_b_albedo_blend_rate2 = self._io.read_f4le()
-            self.filler_1 = []
+            self.padding = []
             for i in range(3):
-                self.filler_1.append(self._io.read_f4le())
+                self.padding.append(self._io.read_f4le())
 
 
 
@@ -5639,7 +5565,7 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(len(self.f_b_blend_map_color)):
                 pass
 
-            for i in range(len(self.filler_1)):
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -5656,9 +5582,9 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.f_b_specular_blend_rate)
             self._io.write_f4le(self.f_b_albedo_blend_rate)
             self._io.write_f4le(self.f_b_albedo_blend_rate2)
-            for i in range(len(self.filler_1)):
+            for i in range(len(self.padding)):
                 pass
-                self._io.write_f4le(self.filler_1[i])
+                self._io.write_f4le(self.padding[i])
 
 
 
@@ -5669,9 +5595,9 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(len(self.f_b_blend_map_color)):
                 pass
 
-            if (len(self.filler_1) != 3):
-                raise kaitaistruct.ConsistencyError(u"filler_1", len(self.filler_1), 3)
-            for i in range(len(self.filler_1)):
+            if (len(self.padding) != 3):
+                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -6334,7 +6260,7 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(3):
                 self.f_app_reflect_shadow_dir.append(self._io.read_f4le())
 
-            self.filler = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -6350,7 +6276,7 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.f_app_reflect_shadow_dir[i])
 
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding)
 
 
         def _check(self):
@@ -6577,43 +6503,6 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-
-
-    class CbUnk04(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.data = []
-            for i in range(16):
-                self.data.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.data)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.CbUnk04, self)._write__seq(io)
-            for i in range(len(self.data)):
-                pass
-                self._io.write_f4le(self.data[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.data) != 16):
-                raise kaitaistruct.ConsistencyError(u"data", len(self.data), 16)
-            for i in range(len(self.data)):
-                pass
-
 
 
     class AnimSubEntry(ReadWriteKaitaiStruct):
@@ -6855,43 +6744,6 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
-    class CbUnk03(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.data = []
-            for i in range(8):
-                self.data.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.data)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.CbUnk03, self)._write__seq(io)
-            for i in range(len(self.data)):
-                pass
-                self._io.write_f4le(self.data[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.data) != 8):
-                raise kaitaistruct.ConsistencyError(u"data", len(self.data), 8)
-            for i in range(len(self.data)):
-                pass
-
-
-
     class CbSpecularBlend(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -6982,17 +6834,17 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(3):
                 self.f_dd_material_lantern_color.append(self._io.read_f4le())
 
-            self.filler = self._io.read_f4le()
+            self.padding_1 = self._io.read_f4le()
             self.f_dd_material_lantern_pos = []
             for i in range(3):
                 self.f_dd_material_lantern_pos.append(self._io.read_f4le())
 
-            self.filler_1 = self._io.read_f4le()
+            self.padding_2 = self._io.read_f4le()
             self.f_dd_material_lantern_param = []
             for i in range(3):
                 self.f_dd_material_lantern_param.append(self._io.read_f4le())
 
-            self.filler_2 = self._io.read_f4le()
+            self.padding_3 = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -7061,17 +6913,17 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.f_dd_material_lantern_color[i])
 
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding_1)
             for i in range(len(self.f_dd_material_lantern_pos)):
                 pass
                 self._io.write_f4le(self.f_dd_material_lantern_pos[i])
 
-            self._io.write_f4le(self.filler_1)
+            self._io.write_f4le(self.padding_2)
             for i in range(len(self.f_dd_material_lantern_param)):
                 pass
                 self._io.write_f4le(self.f_dd_material_lantern_param[i])
 
-            self._io.write_f4le(self.filler_2)
+            self._io.write_f4le(self.padding_3)
 
 
         def _check(self):
@@ -8229,43 +8081,6 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
-    class CbSGlobals(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.data = []
-            for i in range(84):
-                self.data.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.data)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.CbSGlobals, self)._write__seq(io)
-            for i in range(len(self.data)):
-                pass
-                self._io.write_f4le(self.data[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.data) != 84):
-                raise kaitaistruct.ConsistencyError(u"data", len(self.data), 84)
-            for i in range(len(self.data)):
-                pass
-
-
-
     class TexOffset(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -8862,14 +8677,14 @@ class Mrl(ReadWriteKaitaiStruct):
             for i in range(3):
                 self.f_plane_normal.append(self._io.read_f4le())
 
-            self.filler = self._io.read_f4le()
+            self.padding_1 = self._io.read_f4le()
             self.f_plane_point = []
             for i in range(3):
                 self.f_plane_point.append(self._io.read_f4le())
 
-            self.filler_1 = self._io.read_f4le()
+            self.padding_2 = self._io.read_f4le()
             self.f_app_clip_mask = self._io.read_f4le()
-            self.filler_2 = self._io.read_f4le()
+            self.padding_3 = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -8888,14 +8703,14 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.f_plane_normal[i])
 
-            self._io.write_f4le(self.filler)
+            self._io.write_f4le(self.padding_1)
             for i in range(len(self.f_plane_point)):
                 pass
                 self._io.write_f4le(self.f_plane_point[i])
 
-            self._io.write_f4le(self.filler_1)
+            self._io.write_f4le(self.padding_2)
             self._io.write_f4le(self.f_app_clip_mask)
-            self._io.write_f4le(self.filler_2)
+            self._io.write_f4le(self.padding_3)
 
 
         def _check(self):
