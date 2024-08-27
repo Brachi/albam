@@ -254,7 +254,16 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("fdistortion", "f_distortion_param")
     copy_float_buffer("globals", "globals")
     copy_float_buffer("cbmaterial", "cb_material")
+    copy_float_buffer("cbburncommon", "cb_burn_common")
+    copy_float_buffer("cbburnemission", "cb_burn_emission")
+    copy_float_buffer("cbappclipplane", "cb_app_clip_plane")
+    copy_float_buffer("cbspecularblend", "cb_specular_blend")
+    copy_float_buffer("cbappreflect", "cb_app_reflect")
+    copy_float_buffer("cbappreflectshadowlight", "cb_app_refl_sh_lt")
+    copy_float_buffer("cboutlineex", "cb_outline_ex")
     copy_float_buffer("cbddmaterialparam", "cb_dd_mat_param")
+    copy_float_buffer("cbuvrotationoffset", "cb_uv_rot_offset")
+    copy_float_buffer("cbddmaterialparaminnercorrect", "cb_dd_m_p_inn_cor")
     copy_float_buffer("cbcolormask", "cb_color_mask")
     copy_float_buffer("cbvertexdisplacement", "cb_vertex_disp")
     copy_float_buffer("cbvertexdisplacement2", "cb_vertex_disp2")
@@ -346,9 +355,10 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         blend_state_index = shader_objects[mrl_params.blend_state_type]["apps"][app_id]["shader_object_index"]
         depth_stencil_state_index = shader_objects[mrl_params.depth_stencil_state_type]["apps"][app_id]["shader_object_index"]  # noqa
         rasterizer_state_index = shader_objects[mrl_params.rasterizer_state_type]["apps"][app_id]["shader_object_index"]  # noqa
+        mat_type = mrl_params.material_type
 
         mat = mrl.Material(_parent=mrl, _root=mrl._root)
-        mat.type_hash = MRL_MATERIAL_TYPE_STR_TO_ID[mrl_params.material_type]
+        mat.type_hash = MRL_MATERIAL_TYPE_STR_TO_ID[mat_type]
         mat.name_hash_crcjam32 = material_hash
         mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
         mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
@@ -446,6 +456,10 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
         "fcolormaskalbedomapmodulate"
     }
 
+    cb_app_refl_sh_lt_users = {
+        "cbappreflectshadowlight"
+    }
+
     # calculate insertion index (1 after the first user)
     # and adjust based on position relative to other constant buffers to be inserted
     current_position = 0
@@ -466,6 +480,10 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["CBColorMask"] = [ri + 1, pos]
+        elif (resource.value_cmd.name_hash.name in cb_app_refl_sh_lt_users and not cb_used.get("CBAppReflectShadowLight")):
+            pos = current_position
+            current_position += 1
+            cb_used["CBAppReflectShadowLight"] = [ri + 1, pos]
 
     for cb_name, (idx, pos) in sorted(cb_used.items(), key=lambda item: item[1][1]):
         resources.insert(idx + pos, set_constant_buffer(cb_name))
@@ -501,10 +519,18 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVTransformUnique"),  # always same param
         set_flag("FUVTransformExtend"),  # always same param
 
+        set_constant_buffer("CBDDMaterialParam", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialCalcBorderBlendRate", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialCalcBorderBlendAlphaMap", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FUVAlbedoMap", "FUVPrimary", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_sampler_state("SSAlbedoMap", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+
         set_flag("FOcclusion", features.f_occlusion_param),
         set_texture("tOcclusionMap", onlyif=TT.OCCLUSION in tt),
         set_flag("FUVOcclusionMap", features.f_uv_occlusion_map_param, onlyif=TT.OCCLUSION in tt),
         set_flag("FChannelOcclusionMap", onlyif=TT.OCCLUSION in tt),
+
+        set_flag("FDDMaterialBump", onlyif=mrl_mat.type_hash == 0x1CAB245E),
 
         set_flag("FBump", features.f_bump_param),
         set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and USES_PARALLAX),
@@ -518,6 +544,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVDetailNormalMap", features.f_uv_detail_normal_map_param, onlyif=TT.NORMAL_DETAIL in tt),
         set_texture("tDetailNormalMap2", onlyif=TT.NORMAL_DETAIL_2 in tt),
         set_flag("FUVDetailNormalMap2", features.f_uv_detail_normal_map_2_param, onlyif=TT.NORMAL_DETAIL_2 in tt),  # noqa: E501
+
+        set_flag("FDDMaterialAlbedo", onlyif=mrl_mat.type_hash == 0x1CAB245E),
 
         set_flag("FAlbedo", features.f_albedo_param),
         set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
@@ -546,6 +574,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVLightMap", "FUVUnique", onlyif=TT.LIGHTMAP in tt),  # same param always
 
         set_flag("FAmbient", features.f_ambient_param),
+        set_flag("FDDMaterialSpecular", onlyif=mrl_mat.type_hash == 0x1CAB245E),
         set_flag("FSpecular", features.f_specular_param),
 
         set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
@@ -647,6 +676,10 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     known_names = {
         "$Globals", "CBMaterial", "CBColorMask",
         "CBVertexDisplacement", "CBVertexDisplacement2",
+        "CBBurnCommon", "CBBurnEmission", "CBAppClipPlane", "CBSpecularBlend",
+        "CBAppReflect", "CBAppReflectShadowLight", "CBOutlineEx", "CBDDMaterialParam",
+        "CBUVRotationOffset", "CBDDMaterialParamInnerCorrect",
+
     }
     assert cb_name in known_names, cb_name
 
@@ -702,6 +735,20 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer = Mrl.CbVertexDisplacement21(_parent=float_buffer_parent, _root=float_buffer_parent._root)  # noqa: E501
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_vertex_disp2"]
+
+    elif cb_name == "CBDDMaterialParam":
+        float_buffer_parent = Mrl.CbDdMaterialParam(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbDdMaterialParam1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_dd_mat_param"]
+
+    elif cb_name == "CBAppReflectShadowLight":
+        float_buffer_parent = Mrl.CbAppReflectShadowLight(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbAppReflectShadowLight1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_app_refl_sh_lt"]
 
     float_buffer_custom_props.copy_custom_properties_to(float_buffer)
     float_buffer_parent._check()
@@ -1841,6 +1888,7 @@ class CBAppReflectShadowLight(bpy.types.PropertyGroup):
             except AttributeError:
                 print(f"{attr_name} not found on source object {src_obj}")
 
+
 @blender_registry.register_custom_properties_material(
     "cb_outline_ex", ("dd",),
     is_secondary=True, display_name="CB Outline Ex")
@@ -1881,7 +1929,7 @@ class CBOutlineEx(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class CBDDMaterialParam(bpy.types.PropertyGroup):
     f_dd_material_blend_color: bpy.props.FloatVectorProperty(
-        name="fDDMaterialBlendColor", size=4, options=set())  # noqa: F821
+        name="fDDMaterialBlendColor", size=4, subtype="COLOR", options=set())  # noqa: F821
     f_dd_material_color_blend_rate: bpy.props.FloatVectorProperty(
         name="fDDMaterialColorBlendRate", size=2, options=set())  # noqa: F821
     f_dd_material_area_mask: bpy.props.FloatVectorProperty(
@@ -1915,7 +1963,7 @@ class CBDDMaterialParam(bpy.types.PropertyGroup):
     f_dd_material_base_env_map_power: bpy.props.FloatProperty(
         name="fDDMaterialBaseEnvMapPower", options=set())  # noqa: F821
     f_dd_material_lantern_color: bpy.props.FloatVectorProperty(
-        name="fDDMaterialLanternColor", size=3, options=set())  # noqa: F821
+        name="fDDMaterialLanternColor", size=3, subtype="COLOR", options=set())  # noqa: F821
     padding_1: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
     f_dd_material_lantern_pos: bpy.props.FloatVectorProperty(
         name="fDDMaterialLanternPos", size=3, options=set())  # noqa: F821
@@ -1941,18 +1989,18 @@ class CBDDMaterialParam(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "cb_uv_rot_offset", ("dd",),  # cb_uv_rotation_offset
-    is_secondary=True, display_name="CB UV Rotation offset")
+    is_secondary=True, display_name="CB UV Rotation Offset")
 @blender_registry.register_blender_prop
 class CBUVRotationOffset(bpy.types.PropertyGroup):
     f_uv_rotation_center: bpy.props.FloatVectorProperty(
-        name="fUVRotationCenter", size=2, options=set())
+        name="fUVRotationCenter", size=2, options=set())  # noqa: F821
     f_uv_rotation_angle: bpy.props.FloatVectorProperty(
-        name="fUVRotationAngle", size=2, options=set())
-    padding: bpy.props.FloatProperty(default=0, options={"HIDDEN"})
+        name="fUVRotationAngle", size=2, options=set())  # noqa: F821
+    padding: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
     f_uv_rotation_offset: bpy.props.FloatVectorProperty(
-        name="fUVRotationOffset", size=2, options=set())
+        name="fUVRotationOffset", size=2, options=set())   # noqa: F821
     f_uv_rotation_scale: bpy.props.FloatVectorProperty(
-        name="fUVRotationScale", size=2, options=set())
+        name="fUVRotationScale", size=2, options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1972,7 +2020,7 @@ class CBUVRotationOffset(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_material(
     "cb_dd_m_p_inn_cor",  # cb_dd_material_param_inner_correct
     ("dd",),
-    is_secondary=True, display_name="CB DD Material param inner correct")
+    is_secondary=True, display_name="CB DD Material Param Inner Correct")
 @blender_registry.register_blender_prop
 class CBDDMaterialParamInnerCorrect(bpy.types.PropertyGroup):
     f_dd_material_inner_correct_offset: bpy.props.FloatVectorProperty(

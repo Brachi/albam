@@ -1023,7 +1023,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fswingoriginfromworld = 333797
         cbvertexdisplacement2 = 333844
         foutlineblendadd = 334327
-        appclip = 334970
+        fappclip = 334970
         ffresnelschlickrgb = 336182
         bsnowrite = 337176
         fimageblendscreen = 337365
@@ -2423,7 +2423,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sbintegrateps = 842940
         fshadowfilter1 = 844267
         vs_develop2d = 844545
-        uvalbedoburnmap = 844807
+        fuvalbedoburnmap = 844807
         fmaterialstdreflectiontypeprocrim = 845003
         sbiscconstraint = 845053
         fuvtransformoffset2lite = 845275
@@ -3667,35 +3667,6 @@ class Mrl(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class StrCbBaAlphaClip(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_b_alpha_clip_threshold = self._io.read_f4le()
-            self.f_b_blend_rate = self._io.read_f4le()
-            self.f_b_blend_band = self._io.read_f4le()
-            self.padding = self._io.read_f4le()
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbBaAlphaClip, self)._write__seq(io)
-            self._io.write_f4le(self.f_b_alpha_clip_threshold)
-            self._io.write_f4le(self.f_b_blend_rate)
-            self._io.write_f4le(self.f_b_blend_band)
-            self._io.write_f4le(self.padding)
-
-
-        def _check(self):
-            pass
-
-
     class AnimSubEntry5(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4044,59 +4015,6 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
-    class StrCbVtxDispEx(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_vtx_disp_ex_scale0 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale1 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale2 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale3 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale4 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale5 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale6 = self._io.read_f4le()
-            self.f_vtx_disp_ex_scale7 = self._io.read_f4le()
-            self.f_vtx_disp_ex_radius = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_x = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_y = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_z = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_origin_x = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_origin_y = self._io.read_f4le()
-            self.f_vtx_disp_ex_rot_origin_z = self._io.read_f4le()
-            self.filler = self._io.read_f4le()
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDispEx, self)._write__seq(io)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale0)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale1)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale2)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale3)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale4)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale5)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale6)
-            self._io.write_f4le(self.f_vtx_disp_ex_scale7)
-            self._io.write_f4le(self.f_vtx_disp_ex_radius)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_x)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_y)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_z)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_origin_x)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_origin_y)
-            self._io.write_f4le(self.f_vtx_disp_ex_rot_origin_z)
-            self._io.write_f4le(self.filler)
-
-
-        def _check(self):
-            pass
-
-
     class AnimInfo(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4122,43 +4040,6 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-
-
-    class StrCbVtxDispMaskUv(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_vertex_disp_mask_uv = []
-            for i in range(8):
-                self.f_vertex_disp_mask_uv.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.f_vertex_disp_mask_uv)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDispMaskUv, self)._write__seq(io)
-            for i in range(len(self.f_vertex_disp_mask_uv)):
-                pass
-                self._io.write_f4le(self.f_vertex_disp_mask_uv[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.f_vertex_disp_mask_uv) != 8):
-                raise kaitaistruct.ConsistencyError(u"f_vertex_disp_mask_uv", len(self.f_vertex_disp_mask_uv), 8)
-            for i in range(len(self.f_vertex_disp_mask_uv)):
-                pass
-
 
 
     class AnimType4(ReadWriteKaitaiStruct):
@@ -4205,125 +4086,87 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_outline_outer_color = []
-            for i in range(4):
-                self.f_outline_outer_color.append(self._io.read_f4le())
-
-            self.f_outline_inner_color = []
-            for i in range(4):
-                self.f_outline_inner_color.append(self._io.read_f4le())
-
-            self.f_outline_balance_offset = self._io.read_f4le()
-            self.f_outline_balance_scale = self._io.read_f4le()
-            self.f_outline_balance = self._io.read_f4le()
-            self.padding = self._io.read_f4le()
-            self.f_outline_blend_mask = []
-            for i in range(4):
-                self.f_outline_blend_mask.append(self._io.read_f4le())
-
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_outline_outer_color)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-            for i in range(len(self.f_outline_inner_color)):
+                self.app_specific._fetch_instances()
+            else:
                 pass
-
-            for i in range(len(self.f_outline_blend_mask)):
-                pass
-
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbOutlineEx, self)._write__seq(io)
-            for i in range(len(self.f_outline_outer_color)):
-                pass
-                self._io.write_f4le(self.f_outline_outer_color[i])
-
-            for i in range(len(self.f_outline_inner_color)):
-                pass
-                self._io.write_f4le(self.f_outline_inner_color[i])
-
-            self._io.write_f4le(self.f_outline_balance_offset)
-            self._io.write_f4le(self.f_outline_balance_scale)
-            self._io.write_f4le(self.f_outline_balance)
-            self._io.write_f4le(self.padding)
-            for i in range(len(self.f_outline_blend_mask)):
-                pass
-                self._io.write_f4le(self.f_outline_blend_mask[i])
-
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.f_outline_outer_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_outline_outer_color", len(self.f_outline_outer_color), 4)
-            for i in range(len(self.f_outline_outer_color)):
-                pass
-
-            if (len(self.f_outline_inner_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_outline_inner_color", len(self.f_outline_inner_color), 4)
-            for i in range(len(self.f_outline_inner_color)):
-                pass
-
-            if (len(self.f_outline_blend_mask) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_outline_blend_mask", len(self.f_outline_blend_mask), 4)
-            for i in range(len(self.f_outline_blend_mask)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 64
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbOutlineEx1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbOutlineEx1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
 
-    class StrCbVtxDisplacement3(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
 
-        def _read(self):
-            self.f_vtx_disp_direction = []
-            for i in range(3):
-                self.f_vtx_disp_direction.append(self._io.read_f4le())
 
-            self.padding = self._io.read_f4le()
-
-
-        def _fetch_instances(self):
+        def _check_app_specific(self):
             pass
-            for i in range(len(self.f_vtx_disp_direction)):
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDisplacement3, self)._write__seq(io)
-            for i in range(len(self.f_vtx_disp_direction)):
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
                 pass
-                self._io.write_f4le(self.f_vtx_disp_direction[i])
-
-            self._io.write_f4le(self.padding)
-
-
-        def _check(self):
-            pass
-            if (len(self.f_vtx_disp_direction) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_vtx_disp_direction", len(self.f_vtx_disp_direction), 3)
-            for i in range(len(self.f_vtx_disp_direction)):
-                pass
-
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
     class ShaderObject(ReadWriteKaitaiStruct):
@@ -4558,6 +4401,53 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
 
 
+    class CbSpecularBlend1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_specular_blend_color = []
+            for i in range(4):
+                self.f_specular_blend_color.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_specular_blend_color)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbSpecularBlend1, self)._write__seq(io)
+            for i in range(len(self.f_specular_blend_color)):
+                pass
+                self._io.write_f4le(self.f_specular_blend_color[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_specular_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_specular_blend_color", len(self.f_specular_blend_color), 4)
+            for i in range(len(self.f_specular_blend_color)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class CbMaterial1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -4673,7 +4563,7 @@ class Mrl(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class CbAppReflect(ReadWriteKaitaiStruct):
+    class CbAppReflect1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -4696,7 +4586,7 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mrl.CbAppReflect, self)._write__seq(io)
+            super(Mrl.CbAppReflect1, self)._write__seq(io)
             self._io.write_f4le(self.f_app_water_reflect_scale)
             self._io.write_f4le(self.f_app_shadow_light_scale)
             for i in range(len(self.padding)):
@@ -4723,6 +4613,94 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
+
+    class CbAppReflect(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbAppReflect, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbAppReflect1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbAppReflect1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class CbGlobals4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -5055,6 +5033,81 @@ class Mrl(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    class CbBurnCommon1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_b_blend_map_color = []
+            for i in range(3):
+                self.f_b_blend_map_color.append(self._io.read_f4le())
+
+            self.f_b_alpha_clip_threshold = self._io.read_f4le()
+            self.f_b_blend_alpha_threshold = self._io.read_f4le()
+            self.f_b_blend_alpha_band = self._io.read_f4le()
+            self.f_b_specular_blend_rate = self._io.read_f4le()
+            self.f_b_albedo_blend_rate = self._io.read_f4le()
+            self.f_b_albedo_blend_rate2 = self._io.read_f4le()
+            self.padding = []
+            for i in range(3):
+                self.padding.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_b_blend_map_color)):
+                pass
+
+            for i in range(len(self.padding)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbBurnCommon1, self)._write__seq(io)
+            for i in range(len(self.f_b_blend_map_color)):
+                pass
+                self._io.write_f4le(self.f_b_blend_map_color[i])
+
+            self._io.write_f4le(self.f_b_alpha_clip_threshold)
+            self._io.write_f4le(self.f_b_blend_alpha_threshold)
+            self._io.write_f4le(self.f_b_blend_alpha_band)
+            self._io.write_f4le(self.f_b_specular_blend_rate)
+            self._io.write_f4le(self.f_b_albedo_blend_rate)
+            self._io.write_f4le(self.f_b_albedo_blend_rate2)
+            for i in range(len(self.padding)):
+                pass
+                self._io.write_f4le(self.padding[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_b_blend_map_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_b_blend_map_color", len(self.f_b_blend_map_color), 3)
+            for i in range(len(self.f_b_blend_map_color)):
+                pass
+
+            if (len(self.padding) != 3):
+                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
+            for i in range(len(self.padding)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 48
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class AnimOfs(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -5181,120 +5234,178 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_dd_material_inner_correct_offset = self._io.read_f4le()
-            self.padding = []
-            for i in range(3):
-                self.padding.append(self._io.read_f4le())
-
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.padding)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbDdMaterialParamInnerCorrect, self)._write__seq(io)
-            self._io.write_f4le(self.f_dd_material_inner_correct_offset)
-            for i in range(len(self.padding)):
-                pass
-                self._io.write_f4le(self.padding[i])
-
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.padding) != 3):
-                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
-            for i in range(len(self.padding)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 16
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbDdMaterialParamInnerCorrect1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbDdMaterialParamInnerCorrect1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class CbBurnEmission(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_b_emission_factor = self._io.read_f4le()
-            self.f_b_emission_alpha_band = self._io.read_f4le()
-            self.padding_1 = []
-            for i in range(2):
-                self.padding_1.append(self._io.read_f4le())
-
-            self.f_burn_emission_color = []
-            for i in range(3):
-                self.f_burn_emission_color.append(self._io.read_f4le())
-
-            self.padding_2 = self._io.read_f4le()
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.padding_1)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-            for i in range(len(self.f_burn_emission_color)):
+                self.app_specific._fetch_instances()
+            else:
                 pass
-
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbBurnEmission, self)._write__seq(io)
-            self._io.write_f4le(self.f_b_emission_factor)
-            self._io.write_f4le(self.f_b_emission_alpha_band)
-            for i in range(len(self.padding_1)):
-                pass
-                self._io.write_f4le(self.padding_1[i])
-
-            for i in range(len(self.f_burn_emission_color)):
-                pass
-                self._io.write_f4le(self.f_burn_emission_color[i])
-
-            self._io.write_f4le(self.padding_2)
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.padding_1) != 2):
-                raise kaitaistruct.ConsistencyError(u"padding_1", len(self.padding_1), 2)
-            for i in range(len(self.padding_1)):
-                pass
-
-            if (len(self.f_burn_emission_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_burn_emission_color", len(self.f_burn_emission_color), 3)
-            for i in range(len(self.f_burn_emission_color)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 32
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbBurnEmission1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbBurnEmission1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
 
-    class CbUvRotationOffset(ReadWriteKaitaiStruct):
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
+
+    class CbUvRotationOffset1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -5331,7 +5442,7 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mrl.CbUvRotationOffset, self)._write__seq(io)
+            super(Mrl.CbUvRotationOffset1, self)._write__seq(io)
             for i in range(len(self.f_uv_rotation_center)):
                 pass
                 self._io.write_f4le(self.f_uv_rotation_center[i])
@@ -5376,6 +5487,94 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
+
+    class CbUvRotationOffset(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbUvRotationOffset, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbUvRotationOffset1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbUvRotationOffset1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class CbVertexDisplacement1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -5542,75 +5741,88 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_b_blend_map_color = []
-            for i in range(3):
-                self.f_b_blend_map_color.append(self._io.read_f4le())
-
-            self.f_b_alpha_clip_threshold = self._io.read_f4le()
-            self.f_b_blend_alpha_threshold = self._io.read_f4le()
-            self.f_b_blend_alpha_band = self._io.read_f4le()
-            self.f_b_specular_blend_rate = self._io.read_f4le()
-            self.f_b_albedo_blend_rate = self._io.read_f4le()
-            self.f_b_albedo_blend_rate2 = self._io.read_f4le()
-            self.padding = []
-            for i in range(3):
-                self.padding.append(self._io.read_f4le())
-
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_b_blend_map_color)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-            for i in range(len(self.padding)):
+                self.app_specific._fetch_instances()
+            else:
                 pass
-
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbBurnCommon, self)._write__seq(io)
-            for i in range(len(self.f_b_blend_map_color)):
-                pass
-                self._io.write_f4le(self.f_b_blend_map_color[i])
-
-            self._io.write_f4le(self.f_b_alpha_clip_threshold)
-            self._io.write_f4le(self.f_b_blend_alpha_threshold)
-            self._io.write_f4le(self.f_b_blend_alpha_band)
-            self._io.write_f4le(self.f_b_specular_blend_rate)
-            self._io.write_f4le(self.f_b_albedo_blend_rate)
-            self._io.write_f4le(self.f_b_albedo_blend_rate2)
-            for i in range(len(self.padding)):
-                pass
-                self._io.write_f4le(self.padding[i])
-
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.f_b_blend_map_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_b_blend_map_color", len(self.f_b_blend_map_color), 3)
-            for i in range(len(self.f_b_blend_map_color)):
-                pass
-
-            if (len(self.padding) != 3):
-                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
-            for i in range(len(self.padding)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 48
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbBurnCommon1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbBurnCommon1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class TextureSlot(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -6169,45 +6381,6 @@ class Mrl(ReadWriteKaitaiStruct):
             pass
 
 
-    class StrCbVtxDistortionRefract(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.f_distortion_refract = self._io.read_f4le()
-            self.filler = []
-            for i in range(3):
-                self.filler.append(self._io.read_f4le())
-
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.filler)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.StrCbVtxDistortionRefract, self)._write__seq(io)
-            self._io.write_f4le(self.f_distortion_refract)
-            for i in range(len(self.filler)):
-                pass
-                self._io.write_f4le(self.filler[i])
-
-
-
-        def _check(self):
-            pass
-            if (len(self.filler) != 3):
-                raise kaitaistruct.ConsistencyError(u"filler", len(self.filler), 3)
-            for i in range(len(self.filler)):
-                pass
-
-
-
     class CbDistortion(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -6254,49 +6427,88 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_app_reflect_shadow_dir = []
-            for i in range(3):
-                self.f_app_reflect_shadow_dir.append(self._io.read_f4le())
-
-            self.padding = self._io.read_f4le()
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_app_reflect_shadow_dir)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbAppReflectShadowLight, self)._write__seq(io)
-            for i in range(len(self.f_app_reflect_shadow_dir)):
-                pass
-                self._io.write_f4le(self.f_app_reflect_shadow_dir[i])
-
-            self._io.write_f4le(self.padding)
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.f_app_reflect_shadow_dir) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_app_reflect_shadow_dir", len(self.f_app_reflect_shadow_dir), 3)
-            for i in range(len(self.f_app_reflect_shadow_dir)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 16
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbAppReflectShadowLight1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbAppReflectShadowLight1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class CbColorMask1(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -6749,34 +6961,124 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_specular_blend_color = []
-            for i in range(4):
-                self.f_specular_blend_color.append(self._io.read_f4le())
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._fetch_instances()
+            else:
+                pass
+                self.app_specific._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbSpecularBlend, self)._write__seq(io)
+            self._should_write_app_specific = self.app_specific__to_write
+
+
+        def _check(self):
+            pass
+
+        @property
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
+
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbSpecularBlend1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbSpecularBlend1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
+
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
+
+    class CbDdMaterialParamInnerCorrect1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_dd_material_inner_correct_offset = self._io.read_f4le()
+            self.padding = []
+            for i in range(3):
+                self.padding.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_specular_blend_color)):
+            for i in range(len(self.padding)):
                 pass
 
 
 
         def _write__seq(self, io=None):
-            super(Mrl.CbSpecularBlend, self)._write__seq(io)
-            for i in range(len(self.f_specular_blend_color)):
+            super(Mrl.CbDdMaterialParamInnerCorrect1, self)._write__seq(io)
+            self._io.write_f4le(self.f_dd_material_inner_correct_offset)
+            for i in range(len(self.padding)):
                 pass
-                self._io.write_f4le(self.f_specular_blend_color[i])
+                self._io.write_f4le(self.padding[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.f_specular_blend_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_specular_blend_color", len(self.f_specular_blend_color), 4)
-            for i in range(len(self.f_specular_blend_color)):
+            if (len(self.padding) != 3):
+                raise kaitaistruct.ConsistencyError(u"padding", len(self.padding), 3)
+            for i in range(len(self.padding)):
                 pass
 
 
@@ -6796,189 +7098,88 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_dd_material_blend_color = []
-            for i in range(4):
-                self.f_dd_material_blend_color.append(self._io.read_f4le())
-
-            self.f_dd_material_color_blend_rate = []
-            for i in range(2):
-                self.f_dd_material_color_blend_rate.append(self._io.read_f4le())
-
-            self.f_dd_material_area_mask = []
-            for i in range(2):
-                self.f_dd_material_area_mask.append(self._io.read_f4le())
-
-            self.f_dd_material_border_blend_mask = []
-            for i in range(4):
-                self.f_dd_material_border_blend_mask.append(self._io.read_f4le())
-
-            self.f_dd_material_border_shade_band = self._io.read_f4le()
-            self.f_dd_material_base_power = self._io.read_f4le()
-            self.f_dd_material_normal_blend_rate = self._io.read_f4le()
-            self.f_dd_material_reflect_blend_color = self._io.read_f4le()
-            self.f_dd_material_specular_factor = self._io.read_f4le()
-            self.f_dd_material_specular_map_factor = self._io.read_f4le()
-            self.f_dd_material_env_map_blend_color = self._io.read_f4le()
-            self.f_dd_material_area_alpha = self._io.read_f4le()
-            self.f_dd_material_area_pos = []
-            for i in range(4):
-                self.f_dd_material_area_pos.append(self._io.read_f4le())
-
-            self.f_dd_material_albedo_uv_scale = self._io.read_f4le()
-            self.f_dd_material_normal_uv_scale = self._io.read_f4le()
-            self.f_dd_material_normal_power = self._io.read_f4le()
-            self.f_dd_material_base_env_map_power = self._io.read_f4le()
-            self.f_dd_material_lantern_color = []
-            for i in range(3):
-                self.f_dd_material_lantern_color.append(self._io.read_f4le())
-
-            self.padding_1 = self._io.read_f4le()
-            self.f_dd_material_lantern_pos = []
-            for i in range(3):
-                self.f_dd_material_lantern_pos.append(self._io.read_f4le())
-
-            self.padding_2 = self._io.read_f4le()
-            self.f_dd_material_lantern_param = []
-            for i in range(3):
-                self.f_dd_material_lantern_param.append(self._io.read_f4le())
-
-            self.padding_3 = self._io.read_f4le()
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_dd_material_blend_color)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-            for i in range(len(self.f_dd_material_color_blend_rate)):
+                self.app_specific._fetch_instances()
+            else:
                 pass
-
-            for i in range(len(self.f_dd_material_area_mask)):
-                pass
-
-            for i in range(len(self.f_dd_material_border_blend_mask)):
-                pass
-
-            for i in range(len(self.f_dd_material_area_pos)):
-                pass
-
-            for i in range(len(self.f_dd_material_lantern_color)):
-                pass
-
-            for i in range(len(self.f_dd_material_lantern_pos)):
-                pass
-
-            for i in range(len(self.f_dd_material_lantern_param)):
-                pass
-
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbDdMaterialParam, self)._write__seq(io)
-            for i in range(len(self.f_dd_material_blend_color)):
-                pass
-                self._io.write_f4le(self.f_dd_material_blend_color[i])
-
-            for i in range(len(self.f_dd_material_color_blend_rate)):
-                pass
-                self._io.write_f4le(self.f_dd_material_color_blend_rate[i])
-
-            for i in range(len(self.f_dd_material_area_mask)):
-                pass
-                self._io.write_f4le(self.f_dd_material_area_mask[i])
-
-            for i in range(len(self.f_dd_material_border_blend_mask)):
-                pass
-                self._io.write_f4le(self.f_dd_material_border_blend_mask[i])
-
-            self._io.write_f4le(self.f_dd_material_border_shade_band)
-            self._io.write_f4le(self.f_dd_material_base_power)
-            self._io.write_f4le(self.f_dd_material_normal_blend_rate)
-            self._io.write_f4le(self.f_dd_material_reflect_blend_color)
-            self._io.write_f4le(self.f_dd_material_specular_factor)
-            self._io.write_f4le(self.f_dd_material_specular_map_factor)
-            self._io.write_f4le(self.f_dd_material_env_map_blend_color)
-            self._io.write_f4le(self.f_dd_material_area_alpha)
-            for i in range(len(self.f_dd_material_area_pos)):
-                pass
-                self._io.write_f4le(self.f_dd_material_area_pos[i])
-
-            self._io.write_f4le(self.f_dd_material_albedo_uv_scale)
-            self._io.write_f4le(self.f_dd_material_normal_uv_scale)
-            self._io.write_f4le(self.f_dd_material_normal_power)
-            self._io.write_f4le(self.f_dd_material_base_env_map_power)
-            for i in range(len(self.f_dd_material_lantern_color)):
-                pass
-                self._io.write_f4le(self.f_dd_material_lantern_color[i])
-
-            self._io.write_f4le(self.padding_1)
-            for i in range(len(self.f_dd_material_lantern_pos)):
-                pass
-                self._io.write_f4le(self.f_dd_material_lantern_pos[i])
-
-            self._io.write_f4le(self.padding_2)
-            for i in range(len(self.f_dd_material_lantern_param)):
-                pass
-                self._io.write_f4le(self.f_dd_material_lantern_param[i])
-
-            self._io.write_f4le(self.padding_3)
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.f_dd_material_blend_color) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_blend_color", len(self.f_dd_material_blend_color), 4)
-            for i in range(len(self.f_dd_material_blend_color)):
-                pass
-
-            if (len(self.f_dd_material_color_blend_rate) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_color_blend_rate", len(self.f_dd_material_color_blend_rate), 2)
-            for i in range(len(self.f_dd_material_color_blend_rate)):
-                pass
-
-            if (len(self.f_dd_material_area_mask) != 2):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_area_mask", len(self.f_dd_material_area_mask), 2)
-            for i in range(len(self.f_dd_material_area_mask)):
-                pass
-
-            if (len(self.f_dd_material_border_blend_mask) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_border_blend_mask", len(self.f_dd_material_border_blend_mask), 4)
-            for i in range(len(self.f_dd_material_border_blend_mask)):
-                pass
-
-            if (len(self.f_dd_material_area_pos) != 4):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_area_pos", len(self.f_dd_material_area_pos), 4)
-            for i in range(len(self.f_dd_material_area_pos)):
-                pass
-
-            if (len(self.f_dd_material_lantern_color) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_color", len(self.f_dd_material_lantern_color), 3)
-            for i in range(len(self.f_dd_material_lantern_color)):
-                pass
-
-            if (len(self.f_dd_material_lantern_pos) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_pos", len(self.f_dd_material_lantern_pos), 3)
-            for i in range(len(self.f_dd_material_lantern_pos)):
-                pass
-
-            if (len(self.f_dd_material_lantern_param) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_param", len(self.f_dd_material_lantern_param), 3)
-            for i in range(len(self.f_dd_material_lantern_param)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 160
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbDdMaterialParam1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbDdMaterialParam1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class CbGlobals2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -7774,6 +7975,77 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
+    class CbAppClipPlane1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_plane_normal = []
+            for i in range(3):
+                self.f_plane_normal.append(self._io.read_f4le())
+
+            self.padding_1 = self._io.read_f4le()
+            self.f_plane_point = []
+            for i in range(3):
+                self.f_plane_point.append(self._io.read_f4le())
+
+            self.padding_2 = self._io.read_f4le()
+            self.f_app_clip_mask = self._io.read_f4le()
+            self.padding_3 = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_plane_normal)):
+                pass
+
+            for i in range(len(self.f_plane_point)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbAppClipPlane1, self)._write__seq(io)
+            for i in range(len(self.f_plane_normal)):
+                pass
+                self._io.write_f4le(self.f_plane_normal[i])
+
+            self._io.write_f4le(self.padding_1)
+            for i in range(len(self.f_plane_point)):
+                pass
+                self._io.write_f4le(self.f_plane_point[i])
+
+            self._io.write_f4le(self.padding_2)
+            self._io.write_f4le(self.f_app_clip_mask)
+            self._io.write_f4le(self.padding_3)
+
+
+        def _check(self):
+            pass
+            if (len(self.f_plane_normal) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_plane_normal", len(self.f_plane_normal), 3)
+            for i in range(len(self.f_plane_normal)):
+                pass
+
+            if (len(self.f_plane_point) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_plane_point", len(self.f_plane_point), 3)
+            for i in range(len(self.f_plane_point)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 48
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class AnimSubEntry6(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -7833,6 +8105,162 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"values", self.values[i]._parent, self)
 
 
+
+    class CbOutlineEx1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_outline_outer_color = []
+            for i in range(4):
+                self.f_outline_outer_color.append(self._io.read_f4le())
+
+            self.f_outline_inner_color = []
+            for i in range(4):
+                self.f_outline_inner_color.append(self._io.read_f4le())
+
+            self.f_outline_balance_offset = self._io.read_f4le()
+            self.f_outline_balance_scale = self._io.read_f4le()
+            self.f_outline_balance = self._io.read_f4le()
+            self.padding = self._io.read_f4le()
+            self.f_outline_blend_mask = []
+            for i in range(4):
+                self.f_outline_blend_mask.append(self._io.read_f4le())
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_outline_outer_color)):
+                pass
+
+            for i in range(len(self.f_outline_inner_color)):
+                pass
+
+            for i in range(len(self.f_outline_blend_mask)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbOutlineEx1, self)._write__seq(io)
+            for i in range(len(self.f_outline_outer_color)):
+                pass
+                self._io.write_f4le(self.f_outline_outer_color[i])
+
+            for i in range(len(self.f_outline_inner_color)):
+                pass
+                self._io.write_f4le(self.f_outline_inner_color[i])
+
+            self._io.write_f4le(self.f_outline_balance_offset)
+            self._io.write_f4le(self.f_outline_balance_scale)
+            self._io.write_f4le(self.f_outline_balance)
+            self._io.write_f4le(self.padding)
+            for i in range(len(self.f_outline_blend_mask)):
+                pass
+                self._io.write_f4le(self.f_outline_blend_mask[i])
+
+
+
+        def _check(self):
+            pass
+            if (len(self.f_outline_outer_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_outline_outer_color", len(self.f_outline_outer_color), 4)
+            for i in range(len(self.f_outline_outer_color)):
+                pass
+
+            if (len(self.f_outline_inner_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_outline_inner_color", len(self.f_outline_inner_color), 4)
+            for i in range(len(self.f_outline_inner_color)):
+                pass
+
+            if (len(self.f_outline_blend_mask) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_outline_blend_mask", len(self.f_outline_blend_mask), 4)
+            for i in range(len(self.f_outline_blend_mask)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 64
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class CbBurnEmission1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_b_emission_factor = self._io.read_f4le()
+            self.f_b_emission_alpha_band = self._io.read_f4le()
+            self.padding_1 = []
+            for i in range(2):
+                self.padding_1.append(self._io.read_f4le())
+
+            self.f_burn_emission_color = []
+            for i in range(3):
+                self.f_burn_emission_color.append(self._io.read_f4le())
+
+            self.padding_2 = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.padding_1)):
+                pass
+
+            for i in range(len(self.f_burn_emission_color)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbBurnEmission1, self)._write__seq(io)
+            self._io.write_f4le(self.f_b_emission_factor)
+            self._io.write_f4le(self.f_b_emission_alpha_band)
+            for i in range(len(self.padding_1)):
+                pass
+                self._io.write_f4le(self.padding_1[i])
+
+            for i in range(len(self.f_burn_emission_color)):
+                pass
+                self._io.write_f4le(self.f_burn_emission_color[i])
+
+            self._io.write_f4le(self.padding_2)
+
+
+        def _check(self):
+            pass
+            if (len(self.padding_1) != 2):
+                raise kaitaistruct.ConsistencyError(u"padding_1", len(self.padding_1), 2)
+            for i in range(len(self.padding_1)):
+                pass
+
+            if (len(self.f_burn_emission_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_burn_emission_color", len(self.f_burn_emission_color), 3)
+            for i in range(len(self.f_burn_emission_color)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class AnimData(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -8103,6 +8531,195 @@ class Mrl(ReadWriteKaitaiStruct):
         def _check(self):
             pass
 
+
+    class CbDdMaterialParam1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_dd_material_blend_color = []
+            for i in range(4):
+                self.f_dd_material_blend_color.append(self._io.read_f4le())
+
+            self.f_dd_material_color_blend_rate = []
+            for i in range(2):
+                self.f_dd_material_color_blend_rate.append(self._io.read_f4le())
+
+            self.f_dd_material_area_mask = []
+            for i in range(2):
+                self.f_dd_material_area_mask.append(self._io.read_f4le())
+
+            self.f_dd_material_border_blend_mask = []
+            for i in range(4):
+                self.f_dd_material_border_blend_mask.append(self._io.read_f4le())
+
+            self.f_dd_material_border_shade_band = self._io.read_f4le()
+            self.f_dd_material_base_power = self._io.read_f4le()
+            self.f_dd_material_normal_blend_rate = self._io.read_f4le()
+            self.f_dd_material_reflect_blend_color = self._io.read_f4le()
+            self.f_dd_material_specular_factor = self._io.read_f4le()
+            self.f_dd_material_specular_map_factor = self._io.read_f4le()
+            self.f_dd_material_env_map_blend_color = self._io.read_f4le()
+            self.f_dd_material_area_alpha = self._io.read_f4le()
+            self.f_dd_material_area_pos = []
+            for i in range(4):
+                self.f_dd_material_area_pos.append(self._io.read_f4le())
+
+            self.f_dd_material_albedo_uv_scale = self._io.read_f4le()
+            self.f_dd_material_normal_uv_scale = self._io.read_f4le()
+            self.f_dd_material_normal_power = self._io.read_f4le()
+            self.f_dd_material_base_env_map_power = self._io.read_f4le()
+            self.f_dd_material_lantern_color = []
+            for i in range(3):
+                self.f_dd_material_lantern_color.append(self._io.read_f4le())
+
+            self.padding_1 = self._io.read_f4le()
+            self.f_dd_material_lantern_pos = []
+            for i in range(3):
+                self.f_dd_material_lantern_pos.append(self._io.read_f4le())
+
+            self.padding_2 = self._io.read_f4le()
+            self.f_dd_material_lantern_param = []
+            for i in range(3):
+                self.f_dd_material_lantern_param.append(self._io.read_f4le())
+
+            self.padding_3 = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_dd_material_blend_color)):
+                pass
+
+            for i in range(len(self.f_dd_material_color_blend_rate)):
+                pass
+
+            for i in range(len(self.f_dd_material_area_mask)):
+                pass
+
+            for i in range(len(self.f_dd_material_border_blend_mask)):
+                pass
+
+            for i in range(len(self.f_dd_material_area_pos)):
+                pass
+
+            for i in range(len(self.f_dd_material_lantern_color)):
+                pass
+
+            for i in range(len(self.f_dd_material_lantern_pos)):
+                pass
+
+            for i in range(len(self.f_dd_material_lantern_param)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbDdMaterialParam1, self)._write__seq(io)
+            for i in range(len(self.f_dd_material_blend_color)):
+                pass
+                self._io.write_f4le(self.f_dd_material_blend_color[i])
+
+            for i in range(len(self.f_dd_material_color_blend_rate)):
+                pass
+                self._io.write_f4le(self.f_dd_material_color_blend_rate[i])
+
+            for i in range(len(self.f_dd_material_area_mask)):
+                pass
+                self._io.write_f4le(self.f_dd_material_area_mask[i])
+
+            for i in range(len(self.f_dd_material_border_blend_mask)):
+                pass
+                self._io.write_f4le(self.f_dd_material_border_blend_mask[i])
+
+            self._io.write_f4le(self.f_dd_material_border_shade_band)
+            self._io.write_f4le(self.f_dd_material_base_power)
+            self._io.write_f4le(self.f_dd_material_normal_blend_rate)
+            self._io.write_f4le(self.f_dd_material_reflect_blend_color)
+            self._io.write_f4le(self.f_dd_material_specular_factor)
+            self._io.write_f4le(self.f_dd_material_specular_map_factor)
+            self._io.write_f4le(self.f_dd_material_env_map_blend_color)
+            self._io.write_f4le(self.f_dd_material_area_alpha)
+            for i in range(len(self.f_dd_material_area_pos)):
+                pass
+                self._io.write_f4le(self.f_dd_material_area_pos[i])
+
+            self._io.write_f4le(self.f_dd_material_albedo_uv_scale)
+            self._io.write_f4le(self.f_dd_material_normal_uv_scale)
+            self._io.write_f4le(self.f_dd_material_normal_power)
+            self._io.write_f4le(self.f_dd_material_base_env_map_power)
+            for i in range(len(self.f_dd_material_lantern_color)):
+                pass
+                self._io.write_f4le(self.f_dd_material_lantern_color[i])
+
+            self._io.write_f4le(self.padding_1)
+            for i in range(len(self.f_dd_material_lantern_pos)):
+                pass
+                self._io.write_f4le(self.f_dd_material_lantern_pos[i])
+
+            self._io.write_f4le(self.padding_2)
+            for i in range(len(self.f_dd_material_lantern_param)):
+                pass
+                self._io.write_f4le(self.f_dd_material_lantern_param[i])
+
+            self._io.write_f4le(self.padding_3)
+
+
+        def _check(self):
+            pass
+            if (len(self.f_dd_material_blend_color) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_blend_color", len(self.f_dd_material_blend_color), 4)
+            for i in range(len(self.f_dd_material_blend_color)):
+                pass
+
+            if (len(self.f_dd_material_color_blend_rate) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_color_blend_rate", len(self.f_dd_material_color_blend_rate), 2)
+            for i in range(len(self.f_dd_material_color_blend_rate)):
+                pass
+
+            if (len(self.f_dd_material_area_mask) != 2):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_area_mask", len(self.f_dd_material_area_mask), 2)
+            for i in range(len(self.f_dd_material_area_mask)):
+                pass
+
+            if (len(self.f_dd_material_border_blend_mask) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_border_blend_mask", len(self.f_dd_material_border_blend_mask), 4)
+            for i in range(len(self.f_dd_material_border_blend_mask)):
+                pass
+
+            if (len(self.f_dd_material_area_pos) != 4):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_area_pos", len(self.f_dd_material_area_pos), 4)
+            for i in range(len(self.f_dd_material_area_pos)):
+                pass
+
+            if (len(self.f_dd_material_lantern_color) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_color", len(self.f_dd_material_lantern_color), 3)
+            for i in range(len(self.f_dd_material_lantern_color)):
+                pass
+
+            if (len(self.f_dd_material_lantern_pos) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_pos", len(self.f_dd_material_lantern_pos), 3)
+            for i in range(len(self.f_dd_material_lantern_pos)):
+                pass
+
+            if (len(self.f_dd_material_lantern_param) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_dd_material_lantern_param", len(self.f_dd_material_lantern_param), 3)
+            for i in range(len(self.f_dd_material_lantern_param)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 160
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class AnimEntry(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -8613,6 +9230,55 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
 
+    class CbAppReflectShadowLight1(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_app_reflect_shadow_dir = []
+            for i in range(3):
+                self.f_app_reflect_shadow_dir.append(self._io.read_f4le())
+
+            self.padding = self._io.read_f4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_app_reflect_shadow_dir)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbAppReflectShadowLight1, self)._write__seq(io)
+            for i in range(len(self.f_app_reflect_shadow_dir)):
+                pass
+                self._io.write_f4le(self.f_app_reflect_shadow_dir[i])
+
+            self._io.write_f4le(self.padding)
+
+
+        def _check(self):
+            pass
+            if (len(self.f_app_reflect_shadow_dir) != 3):
+                raise kaitaistruct.ConsistencyError(u"f_app_reflect_shadow_dir", len(self.f_app_reflect_shadow_dir), 3)
+            for i in range(len(self.f_app_reflect_shadow_dir)):
+                pass
+
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class AnimSubEntry3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -8671,71 +9337,88 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root
+            self._should_write_app_specific = False
+            self.app_specific__to_write = True
 
         def _read(self):
-            self.f_plane_normal = []
-            for i in range(3):
-                self.f_plane_normal.append(self._io.read_f4le())
-
-            self.padding_1 = self._io.read_f4le()
-            self.f_plane_point = []
-            for i in range(3):
-                self.f_plane_point.append(self._io.read_f4le())
-
-            self.padding_2 = self._io.read_f4le()
-            self.f_app_clip_mask = self._io.read_f4le()
-            self.padding_3 = self._io.read_f4le()
+            pass
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.f_plane_normal)):
+            _ = self.app_specific
+            _on = self._root.app_id
+            if _on == u"dd":
                 pass
-
-            for i in range(len(self.f_plane_point)):
+                self.app_specific._fetch_instances()
+            else:
                 pass
-
+                self.app_specific._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mrl.CbAppClipPlane, self)._write__seq(io)
-            for i in range(len(self.f_plane_normal)):
-                pass
-                self._io.write_f4le(self.f_plane_normal[i])
-
-            self._io.write_f4le(self.padding_1)
-            for i in range(len(self.f_plane_point)):
-                pass
-                self._io.write_f4le(self.f_plane_point[i])
-
-            self._io.write_f4le(self.padding_2)
-            self._io.write_f4le(self.f_app_clip_mask)
-            self._io.write_f4le(self.padding_3)
+            self._should_write_app_specific = self.app_specific__to_write
 
 
         def _check(self):
             pass
-            if (len(self.f_plane_normal) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_plane_normal", len(self.f_plane_normal), 3)
-            for i in range(len(self.f_plane_normal)):
-                pass
-
-            if (len(self.f_plane_point) != 3):
-                raise kaitaistruct.ConsistencyError(u"f_plane_point", len(self.f_plane_point), 3)
-            for i in range(len(self.f_plane_point)):
-                pass
-
 
         @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
+        def app_specific(self):
+            if self._should_write_app_specific:
+                self._write_app_specific()
+            if hasattr(self, '_m_app_specific'):
+                return self._m_app_specific
 
-            self._m_size_ = 48
-            return getattr(self, '_m_size_', None)
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self._m_app_specific = Mrl.CbAppClipPlane1(self._io, self, self._root)
+                self._m_app_specific._read()
+            else:
+                pass
+                self._m_app_specific = Mrl.CbAppClipPlane1(self._io, self, self._root)
+                self._m_app_specific._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_app_specific', None)
 
-        def _invalidate_size_(self):
-            del self._m_size_
+        @app_specific.setter
+        def app_specific(self, v):
+            self._m_app_specific = v
+
+        def _write_app_specific(self):
+            self._should_write_app_specific = False
+            _pos = self._io.pos()
+            self._io.seek((self._parent._parent.ofs_cmd + self._parent.value_cmd.ofs_float_buff))
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                self.app_specific._write__seq(self._io)
+            else:
+                pass
+                self.app_specific._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_app_specific(self):
+            pass
+            _on = self._root.app_id
+            if _on == u"dd":
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+            else:
+                pass
+                if self.app_specific._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._root, self._root)
+                if self.app_specific._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"app_specific", self.app_specific._parent, self)
+
 
     class AnimSubEntry2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):

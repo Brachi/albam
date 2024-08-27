@@ -340,6 +340,106 @@ types:
               '"dd"': cb_vertex_displacement2_1
               _ : cb_vertex_displacement2_1
   
+  cb_burn_common:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_burn_common_1
+              _ :  cb_burn_common_1
+
+  cb_burn_emission:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_burn_emission_1
+              _ : cb_burn_emission_1
+  
+  cb_app_clip_plane:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_app_clip_plane_1
+              _ : cb_app_clip_plane_1
+ 
+  cb_specular_blend:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_specular_blend_1
+              _ : cb_specular_blend_1
+ 
+  cb_app_reflect:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_app_reflect_1
+              _ : cb_app_reflect_1
+  
+  cb_app_reflect_shadow_light:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_app_reflect_shadow_light_1
+              _ : cb_app_reflect_shadow_light_1
+ 
+  cb_outline_ex:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_outline_ex_1
+              _ : cb_outline_ex_1
+  
+  cb_dd_material_param:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_dd_material_param_1
+              _ : cb_dd_material_param_1
+  
+  cb_uv_rotation_offset:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_uv_rotation_offset_1
+              _ : cb_uv_rotation_offset_1
+
+  cb_dd_material_param_inner_correct:
+      instances:
+        app_specific:
+          pos: _parent._parent.ofs_cmd + _parent.value_cmd.as<cmd_ofs_buffer>.ofs_float_buff
+          type:
+            switch-on: "_root.app_id"
+            cases:
+              '"dd"': cb_dd_material_param_inner_correct_1
+              _ : cb_dd_material_param_inner_correct_1
+  
   cb_globals_1:
     instances:
       size_:
@@ -583,7 +683,7 @@ types:
       - {id: f_vtx_disp_inv_area2, type: f4}
       - {id: f_vtx_disp_rcn2, type: f4}
 
-  cb_burn_common:  # 768
+  cb_burn_common_1:  # 768
     instances:
       size_:
         value: 48
@@ -597,7 +697,7 @@ types:
     - {id: f_b_albedo_blend_rate2, type: f4}  # 8
     - {id: padding, type: f4, repeat: expr, repeat-expr: 3}
 
-  cb_burn_emission:  # 769
+  cb_burn_emission_1:  # 769
     instances:
       size_:
         value: 32
@@ -608,7 +708,7 @@ types:
     - {id: f_burn_emission_color, type: f4, repeat: expr, repeat-expr: 3}  # 4
     - {id: padding_2, type: f4}
   
-  cb_app_clip_plane: # 770
+  cb_app_clip_plane_1: # 770
     instances:
       size_:
         value: 48
@@ -620,14 +720,14 @@ types:
       - {id: f_app_clip_mask, type: f4}  # 8
       - {id: padding_3, type: f4}
       
-  cb_specular_blend:  # 772
+  cb_specular_blend_1:  # 772
     instances:
       size_:
         value: 16
     seq:
     - {id: f_specular_blend_color, type: f4, repeat: expr, repeat-expr: 4}
 
-  cb_app_reflect:  # 773
+  cb_app_reflect_1:  # 773
     instances:
       size_:
         value: 16
@@ -636,7 +736,7 @@ types:
     - {id: f_app_shadow_light_scale, type: f4}  # 1
     - {id: padding, type: f4, repeat: expr, repeat-expr: 2}
 
-  cb_app_reflect_shadow_light:  # 774
+  cb_app_reflect_shadow_light_1:  # 774
     instances:
       size_:
         value: 16
@@ -644,7 +744,7 @@ types:
     - {id: f_app_reflect_shadow_dir, type: f4, repeat: expr, repeat-expr: 3}  # 0
     - {id: padding, type: f4}
 
-  cb_outline_ex:  # 775
+  cb_outline_ex_1:  # 775
     instances:
       size_:
         value: 64
@@ -657,7 +757,7 @@ types:
       - {id: padding, type: f4}
       - {id: f_outline_blend_mask, type: f4, repeat: expr, repeat-expr: 4}  # 12
 
-  cb_dd_material_param:  # 779
+  cb_dd_material_param_1:  # 779
     instances:
       size_:
         value: 160
@@ -686,7 +786,7 @@ types:
       - {id: f_dd_material_lantern_param, type: f4, repeat: expr, repeat-expr: 3}  # 36
       - {id: padding_3, type: f4}
 
-  cb_uv_rotation_offset:  # 777
+  cb_uv_rotation_offset_1:  # 777
     instances:
       size_:
         value: 32
@@ -697,7 +797,7 @@ types:
     - {id: f_uv_rotation_offset, type: f4, repeat: expr, repeat-expr: 2}  # 4
     - {id: f_uv_rotation_scale, type: f4, repeat: expr, repeat-expr: 2}  # 6
 
-  cb_dd_material_param_inner_correct:  #782
+  cb_dd_material_param_inner_correct_1:  #782
     instances:
       size_:
         value: 16
@@ -705,53 +805,11 @@ types:
     - {id: f_dd_material_inner_correct_offset, type: f4}  # 0
     - {id: padding, type: f4, repeat: expr, repeat-expr: 3}
 
-  str_cb_ba_alpha_clip: # 4 floats 0xaee37319
-    seq:
-      - {id: f_b_alpha_clip_threshold, type: f4}
-      - {id: f_b_blend_rate, type: f4}
-      - {id: f_b_blend_band, type: f4}
-      - {id: padding, type: f4}
-
-  str_cb_vtx_displacement3: # CBVertexDisplacement3 0x22882238 rev2 4 floats
-    seq:
-      - {id: f_vtx_disp_direction, type: f4, repeat: expr, repeat-expr: 3}
-      - {id: padding, type: f4}
-
-
-  str_cb_vtx_disp_mask_uv: #CBVertexDispMaskUV 0x61c6e23d 8 floats
-    seq:
-      - {id: f_vertex_disp_mask_uv, type: f4, repeat: expr, repeat-expr: 8}
-
   cb_distortion: #CBDistortion 0xefca3227 4 floats
     seq:
       - {id: f_distortion_factor, type: f4}
       - {id: f_distortion_blend, type: f4}
       - {id: filler, type: f4, repeat: expr, repeat-expr: 2}
-
-  str_cb_vtx_distortion_refract:   #CBDistortionRefract 0xc48f7228
-    seq:
-      - {id: f_distortion_refract, type: f4}
-      - {id: filler, type: f4, repeat: expr, repeat-expr: 3}
-
-  str_cb_vtx_disp_ex: # re6 CBVertexDisplacementExplosion  0x61E43233 16 floats
-    seq:
-      - {id: f_vtx_disp_ex_scale0, type: f4}
-      - {id: f_vtx_disp_ex_scale1, type: f4}
-      - {id: f_vtx_disp_ex_scale2, type: f4}
-      - {id: f_vtx_disp_ex_scale3, type: f4}
-      - {id: f_vtx_disp_ex_scale4, type: f4}
-      - {id: f_vtx_disp_ex_scale5, type: f4}
-      - {id: f_vtx_disp_ex_scale6, type: f4}
-      - {id: f_vtx_disp_ex_scale7, type: f4}
-      - {id: f_vtx_disp_ex_radius, type: f4}
-      - {id: f_vtx_disp_ex_rot_x, type: f4}
-      - {id: f_vtx_disp_ex_rot_y, type: f4}
-      - {id: f_vtx_disp_ex_rot_z, type: f4}
-      - {id: f_vtx_disp_ex_rot_origin_x, type: f4}
-      - {id: f_vtx_disp_ex_rot_origin_y, type: f4}
-      - {id: f_vtx_disp_ex_rot_origin_z, type: f4}
-      - {id: filler, type: f4}
-
 enums:
   material_type:
     0x854d484: type_n_draw__material_null
@@ -3724,15 +3782,11 @@ enums:
     0xc491c: fddmaterialbump
     0x13f1f: fddmaterialalbedo
     0x77e03: fddmaterialspecular
-    0x51c7a: appclip
+    0x51c7a: fappclip
     0x1763: fappoutline
     0x37f0e: fintegratedoutlinecolor
     0xc6df3: fddmaterialfinalcombiner
-    0xcc68b: cbddmaterialparam
     0xd8dd3: feditsimplealbedomapalphamap
-    0x6d828: cbburncommon
-    0x7275e: cbappclipplane
-    0x50d2: cboutlineex
     0x2d616: fdamagesimplealbedomap
     0x59b93: freflectcubemapshadowlight
     0xdc4af: falbedomapblendmaxalpha
@@ -3740,18 +3794,22 @@ enums:
     0x5f2a0: fdamagesimplealbedomapburnmap
     0xf6ec9: fburnemissionmapblend
     0xe5d83: fburnsimplealbedomapburnmap
-    0x7af47: talbedoburnmap
     0x752d4: fdamagespecularmap
     0xf32b9: fburnalbedomapburnmap
     0xf04df: fdamagebumpdetailnormalmap
+    0x7af47: talbedoburnmap
     0x6E11: tnormalburnmap
     0xa463e: tspecularburnmap
     0x17009: tburnemissionmap
+    0xce407: fuvalbedoburnmap
+    0x49B33: treflectwatermap
+    0xcc68b: cbddmaterialparam
+    0x6d828: cbburncommon
+    0x7275e: cbappclipplane
+    0x50d2: cboutlineex
     0xdeace: cbappreflect
     0xd7d4e: cbappreflectshadowlight
     0xe6d24: cbddmaterialparaminnercorrect
     0xB4974: cbburnemission
     0x1F0C6: cbspecularblend
     0x247ee: cbuvrotationoffset
-    0xce407: uvalbedoburnmap
-    0x49B33: treflectwatermap
