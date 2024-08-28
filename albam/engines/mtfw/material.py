@@ -457,7 +457,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
     }
 
     cb_app_refl_sh_lt_users = {
-        "cbappreflectshadowlight"
+        "freflectcubemapshadowlight"
     }
 
     # calculate insertion index (1 after the first user)
@@ -480,7 +480,10 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["CBColorMask"] = [ri + 1, pos]
-        elif (resource.value_cmd.name_hash.name in cb_app_refl_sh_lt_users and not cb_used.get("CBAppReflectShadowLight")):
+        elif (
+            resource.value_cmd.name_hash.name in cb_app_refl_sh_lt_users and
+            not cb_used.get("CBAppReflectShadowLight")
+        ):
             pos = current_position
             current_position += 1
             cb_used["CBAppReflectShadowLight"] = [ri + 1, pos]
@@ -505,7 +508,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
 
     r = [
-        set_flag("FVertexDisplacement", features.f_vertex_displacement_param),
+        set_flag("FVertexDisplacement", features.f_vertex_displacement_param, onlyif=mrl_mat.type_hash != 0x1CAB245E),
         set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
@@ -549,8 +552,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
 
         set_flag("FAlbedo", features.f_albedo_param),
         set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
-        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt),
-        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt),
+        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt and mrl_mat.type_hash != 0x1CAB245E),
+        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt and mrl_mat.type_hash != 0x1CAB245E),
         set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
         set_flag("FUVAlbedoBlendMap", features.f_uv_albedo_blend_map_param, onlyif=TT.ALBEDO_BLEND in tt),
         set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
@@ -580,6 +583,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
 
         set_flag("FReflect", features.f_reflect_param, onlyif=features.f_reflect_enabled),
+        set_constant_buffer("CBAppReflect", onlyif=mrl_mat.type_hash == 0x1CAB245E),
 
         set_texture("tEnvMap", onlyif=TT.ENVMAP in tt),
         set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enabled),
@@ -597,6 +601,13 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FChannelEmissionMap", onlyif=TT.EMISSION in tt),  # same param always
 
         set_flag("FDistortion"),
+
+        set_flag("FAppClip", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_constant_buffer("CBAppClipPlane", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FAppOutline", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_constant_buffer("CBOutlineEx", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FIntegratedOutlineColor", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialFinalCombiner", onlyif=mrl_mat.type_hash == 0x1CAB245E),
     ]
 
     r = [item for item in r if item is not None]
@@ -749,6 +760,27 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer = Mrl.CbAppReflectShadowLight1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_app_refl_sh_lt"]
+
+    elif cb_name == "CBAppReflect":
+        float_buffer_parent = Mrl.CbAppReflect(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbAppReflect1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_app_reflect"]
+
+    elif cb_name == "CBAppClipPlane":
+        float_buffer_parent = Mrl.CbAppClipPlane(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbAppClipPlane1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_app_clip_plane"]
+
+    elif cb_name == "CBOutlineEx":
+        float_buffer_parent = Mrl.CbOutlineEx(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbOutlineEx1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_outline_ex"]
 
     float_buffer_custom_props.copy_custom_properties_to(float_buffer)
     float_buffer_parent._check()
