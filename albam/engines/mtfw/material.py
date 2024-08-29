@@ -63,16 +63,55 @@ MRL_CBGLOBALS_MAP = {
 }
 MRL_MATERIAL_TYPE_STR = {
     # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
-    0x854D484: "TYPE_nDraw__MaterialNull",
-    0x5FB0EBE4: "TYPE_nDraw__MaterialStd",  # 1605430244
-    0x7D2B31B3: "TYPE_nDraw__MaterialStdEst",  # 2099982771
+    0x854D484: "TYPE_nDraw__MaterialNull",  # nDraw::MaterialNull
+    0x5FB0EBE4: "TYPE_nDraw__MaterialStd",  # ̾nDraw::MaterialStd 1605430244
+    0x7D2B31B3: "TYPE_nDraw__MaterialStdEst",  # nDraw::MaterialStdEst 2099982771
     0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
-    0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",
+    0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",  # nDraw::DDMaterialInner
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
 }
 
-
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
+
+MRL_PER_MATERIAL_FEATURES = {
+    0x5FB0EBE4: ["FVertexDisplacement"],
+    0x7D2B31B3: ["FVertexDisplacement"],
+    0x1CAB245E: ["CBDDMaterialParam",
+                 "FDDMaterialCalcBorderBlendRate",
+                 "FDDMaterialCalcBorderBlendAlphaMap",
+                 "FUVAlbedoMap",
+                 "SSAlbedoMap",
+                 "FDDMaterialBump",
+                 "FDDMaterialAlbedo",
+                 "FDDMaterialSpecular",
+                 "FDDMaterialSpecular",
+                 "CBAppReflect",
+                 "FAppClip",
+                 "CBAppClipPlane",
+                 "FAppOutline",
+                 "CBOutlineEx",
+                 "FIntegratedOutlineColor",
+                 "FDDMaterialFinalCombiner",
+                 ],
+    0x26D9BA5C: ["CBDDMaterialParamInnerCorrect",
+                 "CBDDMaterialParam",
+                 "FDDMaterialCalcBorderBlendRate",
+                 "FDDMaterialCalcBorderBlendAlphaMap",
+                 "FUVAlbedoMap",
+                 "SSAlbedoMap",
+                 "FDDMaterialBump",
+                 "FDDMaterialAlbedo",
+                 "FDDMaterialSpecular",
+                 "FDDMaterialSpecular",
+                 "CBAppReflect",
+                 "FAppClip",
+                 "CBAppClipPlane",
+                 "FAppOutline",
+                 "CBOutlineEx",
+                 "FIntegratedOutlineColor",
+                 "FDDMaterialFinalCombiner",
+                 ],
+}
 
 
 MRL_BLEND_STATE_STR = {
@@ -506,9 +545,11 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
+    MF = MRL_PER_MATERIAL_FEATURES[mrl_mat.type_hash]
 
     r = [
-        set_flag("FVertexDisplacement", features.f_vertex_displacement_param, onlyif=mrl_mat.type_hash != 0x1CAB245E),
+        set_constant_buffer("CBDDMaterialParamInnerCorrect", onlyif="CBDDMaterialParamInnerCorrect" in MF),
+        set_flag("FVertexDisplacement", features.f_vertex_displacement_param, onlyif="FVertexDisplacement" in MF),
         set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
@@ -522,18 +563,18 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVTransformUnique"),  # always same param
         set_flag("FUVTransformExtend"),  # always same param
 
-        set_constant_buffer("CBDDMaterialParam", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FDDMaterialCalcBorderBlendRate", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FDDMaterialCalcBorderBlendAlphaMap", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FUVAlbedoMap", "FUVPrimary", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_sampler_state("SSAlbedoMap", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_constant_buffer("CBDDMaterialParam", onlyif="CBDDMaterialParam" in MF),
+        set_flag("FDDMaterialCalcBorderBlendRate", onlyif="FDDMaterialCalcBorderBlendRate" in MF),
+        set_flag("FDDMaterialCalcBorderBlendAlphaMap", onlyif="FDDMaterialCalcBorderBlendAlphaMap" in MF),
+        set_flag("FUVAlbedoMap", "FUVPrimary", onlyif="FUVAlbedoMap" in MF),
+        set_sampler_state("SSAlbedoMap", onlyif="SSAlbedoMap" in MF),
 
         set_flag("FOcclusion", features.f_occlusion_param),
         set_texture("tOcclusionMap", onlyif=TT.OCCLUSION in tt),
         set_flag("FUVOcclusionMap", features.f_uv_occlusion_map_param, onlyif=TT.OCCLUSION in tt),
         set_flag("FChannelOcclusionMap", onlyif=TT.OCCLUSION in tt),
 
-        set_flag("FDDMaterialBump", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialBump", onlyif="FDDMaterialBump" in MF),
 
         set_flag("FBump", features.f_bump_param),
         set_flag("FUVNormalMap", features.f_uv_normal_map_param, onlyif=HAS_NORMAL_MAPS and USES_PARALLAX),
@@ -548,12 +589,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_texture("tDetailNormalMap2", onlyif=TT.NORMAL_DETAIL_2 in tt),
         set_flag("FUVDetailNormalMap2", features.f_uv_detail_normal_map_2_param, onlyif=TT.NORMAL_DETAIL_2 in tt),  # noqa: E501
 
-        set_flag("FDDMaterialAlbedo", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialAlbedo", onlyif="FDDMaterialAlbedo" in MF),
 
         set_flag("FAlbedo", features.f_albedo_param),
         set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
-        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt and mrl_mat.type_hash != 0x1CAB245E),
-        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt and mrl_mat.type_hash != 0x1CAB245E),
+        set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt and "SSAlbedoMap" not in MF),
+        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt and "FUVAlbedoMap" not in MF),
         set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
         set_flag("FUVAlbedoBlendMap", features.f_uv_albedo_blend_map_param, onlyif=TT.ALBEDO_BLEND in tt),
         set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
@@ -577,13 +618,13 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVLightMap", "FUVUnique", onlyif=TT.LIGHTMAP in tt),  # same param always
 
         set_flag("FAmbient", features.f_ambient_param),
-        set_flag("FDDMaterialSpecular", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FDDMaterialSpecular", onlyif="FDDMaterialSpecular" in MF),
         set_flag("FSpecular", features.f_specular_param),
 
         set_texture("tSphereMap", onlyif=TT.SPHERE in tt),
 
         set_flag("FReflect", features.f_reflect_param, onlyif=features.f_reflect_enabled),
-        set_constant_buffer("CBAppReflect", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_constant_buffer("CBAppReflect", onlyif="CBAppReflect" in MF),
 
         set_texture("tEnvMap", onlyif=TT.ENVMAP in tt),
         set_sampler_state("SSEnvMap", onlyif=features.ssenvmap_enabled),
@@ -602,12 +643,12 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
 
         set_flag("FDistortion"),
 
-        set_flag("FAppClip", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_constant_buffer("CBAppClipPlane", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FAppOutline", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_constant_buffer("CBOutlineEx", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FIntegratedOutlineColor", onlyif=mrl_mat.type_hash == 0x1CAB245E),
-        set_flag("FDDMaterialFinalCombiner", onlyif=mrl_mat.type_hash == 0x1CAB245E),
+        set_flag("FAppClip", onlyif="FAppClip" in MF),
+        set_constant_buffer("CBAppClipPlane", onlyif="CBAppClipPlane" in MF),
+        set_flag("FAppOutline", onlyif="FAppOutline" in MF),
+        set_constant_buffer("CBOutlineEx", onlyif="CBOutlineEx" in MF),
+        set_flag("FIntegratedOutlineColor", onlyif="FIntegratedOutlineColor" in MF),
+        set_flag("FDDMaterialFinalCombiner", onlyif="FDDMaterialFinalCombiner" in MF),
     ]
 
     r = [item for item in r if item is not None]
@@ -781,6 +822,13 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer = Mrl.CbOutlineEx1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_outline_ex"]
+
+    elif cb_name == "CBDDMaterialParamInnerCorrect":
+        float_buffer_parent = Mrl.CbDdMaterialParamInnerCorrect(_parent=resource, _root=resource._root)
+        # Always the same for all apps, no need for map
+        float_buffer = Mrl.CbDdMaterialParamInnerCorrect1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer_parent.app_specific = float_buffer
+        float_buffer_custom_props = custom_props["cb_dd_m_p_inn_cor"]
 
     float_buffer_custom_props.copy_custom_properties_to(float_buffer)
     float_buffer_parent._check()
@@ -2055,9 +2103,9 @@ class CBUVRotationOffset(bpy.types.PropertyGroup):
     is_secondary=True, display_name="CB DD Material Param Inner Correct")
 @blender_registry.register_blender_prop
 class CBDDMaterialParamInnerCorrect(bpy.types.PropertyGroup):
-    f_dd_material_inner_correct_offset: bpy.props.FloatVectorProperty(
-        name="fDDMaterialInnerCorrectOffset", size=4, options=set())  # noqa: F821
-    padding: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_dd_material_inner_correct_offset: bpy.props.FloatProperty(
+        name="fDDMaterialInnerCorrectOffset", default=0, options=set())  # noqa: F821
+    padding: bpy.props.FloatVectorProperty(size=3, default=(0, 0, 0), options={"HIDDEN"})  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
