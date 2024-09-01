@@ -1472,6 +1472,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFHair", "FBRDFHair", "", 2),  # noqa: F821
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
+            ("FBRDFFur", "FBRDFFur", "", 5),  # noqa: F821
         ],
         options=set()
     )
