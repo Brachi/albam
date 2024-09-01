@@ -6,8 +6,8 @@ from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 from enum import IntEnum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mrl(ReadWriteKaitaiStruct):
 
@@ -1105,6 +1105,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fgrassglobalwind = 372683
         fshadowfilter2 = 372817
         cbmorph = 373517
+        fbrdffur = 373737
         sbpsskinningaddposps = 374148
         fswing1weight = 375707
         ia_primitive_polygon = 375751

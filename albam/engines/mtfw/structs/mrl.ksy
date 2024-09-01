@@ -3553,3 +3553,4 @@ enums:
     0x4ed89: tmaterialstdlite
     0x3eef1: tmaterialconstantlite
     0x1059f: tmaterialtoonsm
+    0x5B3E9: fbrdffur
