@@ -1167,7 +1167,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                              mesh_bone_palette, dst_mod, bbox_data)
         )
         vertex_buffer.extend(vertices.to_byte_array())
-        if vertex_format != current_vertex_format:
+        if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_position = 0
             current_vertex_format = vertex_format
@@ -1386,7 +1386,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.x = xyz[0]
         vertex_struct.position.y = xyz[1]
         vertex_struct.position.z = xyz[2]
-        vertex_struct.position.w = 32767  # might be changed later
+        vertex_struct.position.w = 0  #32767  # might be changed later
         # Set Normals
         norms = normals.get(vertex_index, (0, 0, 0))
         try:
