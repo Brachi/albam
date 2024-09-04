@@ -805,7 +805,7 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    index_buffer.extend((0, 0))
+    #  index_buffer.extend((0, 0))
 
     final_size = sum((
         offset,
@@ -1146,6 +1146,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     face_offset = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
+        face_padding = 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
         mesh.indices__to_write = False
         mesh.vertices__to_write = False
@@ -1167,6 +1168,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                              mesh_bone_palette, dst_mod, bbox_data)
         )
         vertex_buffer.extend(vertices.to_byte_array())
+        # DD armors and weapons don't use grouping
         if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_position = 0
@@ -1179,10 +1181,17 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                 p.vertices for p in bl_mesh.data.polygons))
 
         triangles = [e + current_vertex_position for e in triangles]
+        num_indices = len(triangles)
+        # calculate padding for indices
+        if ((num_indices * 2) % 4):
+            triangles.append(triangles[-1])
+            face_padding += 1
+        triangles.append(triangles[-1])
+        triangles.append(0)
+
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
         num_vertices = len(bl_mesh.data.vertices)
-        num_indices = len(triangles)
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1200,13 +1209,16 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # assert num_vertices == len(vertices_array) // 32
         mesh.num_vertices = num_vertices
         mesh.vertex_position_end = current_vertex_position + \
-            mesh.num_vertices - 1  # XXX only a short!
+            mesh.num_vertices - 1  # XXX only a short! max_index
         mesh.vertex_position_2 = current_vertex_position
         mesh.vertex_offset = current_vertex_offset
         mesh.face_position = face_position
         mesh.num_indices = num_indices
         mesh.face_offset = face_offset
-        mesh.vertex_position = current_vertex_position
+        mesh.vertex_position = current_vertex_position  # min_index
+        mesh.min_index = current_vertex_position
+        mesh.max_index = current_vertex_position + \
+            mesh.num_vertices - 1  # XXX only a short!
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
 
@@ -1222,7 +1234,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
-        face_position += num_indices
+        face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
     if dst_mod.header.version in (156, 211):
@@ -1386,7 +1398,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.x = xyz[0]
         vertex_struct.position.y = xyz[1]
         vertex_struct.position.z = xyz[2]
-        vertex_struct.position.w = 0  #32767  # might be changed later
+        vertex_struct.position.w = 0  # 32767 dd test # might be changed later
         # Set Normals
         norms = normals.get(vertex_index, (0, 0, 0))
         try:
@@ -1805,15 +1817,24 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    type_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_class_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_render_mode: bpy.props.IntProperty(default=0)  # TODO u1
+    parts_no: bpy.props.IntProperty(default=0)  # TODO: b12
+    #  type_mesh: bpy.props.IntProperty(default=0)  # TODO u1
+    disp: bpy.props.BoolProperty(default=0)
+    shape: bpy.props.BoolProperty(default=0)
+    sort: bpy.props.BoolProperty(default=0)
+    weight_num: bpy.props.IntProperty(default=0)  # TODO b5
+    alpha_pri: bpy.props.IntProperty(default=0)  # TODO b8
+    topology: bpy.props.IntProperty(default=0)  # TODO b6
+    binormal_flip: bpy.props.BoolProperty(default=0)
+    bridge: bpy.props.BoolProperty(default=0)
+    #  unk_class_mesh: bpy.props.IntProperty(default=0)  # TODO u1
+    #  unk_render_mode: bpy.props.IntProperty(default=0)  # TODO u1
     bone_id_start: bpy.props.IntProperty(default=0)  # TODO u1
     mesh_index: bpy.props.IntProperty(default=0)  # TODO u2
-    min_index: bpy.props.IntProperty(default=0)  # TODO u2
-    max_index: bpy.props.IntProperty(default=0)  # TODO u2
+    #  min_index: bpy.props.IntProperty(default=0)  # TODO u2
+    #  max_index: bpy.props.IntProperty(default=0)  # TODO u2
     hash: bpy.props.IntProperty(default=0)  # TODO u4
-    unk_01: bpy.props.IntProperty(default=0)  # TODO u1
+    #  unk_01: bpy.props.IntProperty(default=0)  # TODO u1
     vertex_format: bpy.props.StringProperty()
 
     # FIXME: dedupe

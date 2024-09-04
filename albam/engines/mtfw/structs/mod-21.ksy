@@ -1,5 +1,6 @@
 meta:
   endian: le
+  bit-endian: le
   file-extension: mod
   id: mod_21
   ks-version: 0.10
@@ -131,15 +132,23 @@ types:
           _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
     seq:
-      - {id: idx_group, type: u2}
+      - {id: idx_group, type: u2}  # draw mode
       - {id: num_vertices, type: u2}
-      - {id: unk_01, type: u1}
-      - {id: idx_material, type: u2}
-      - {id: level_of_detail, type: u1}
-      - {id: type_mesh, type: u1}
-      - {id: unk_class_mesh, type: u1}
+      - {id: parts_no, type: b12}
+      - {id: idx_material, type: b12}
+      - {id: level_of_detail, type: b8}
+      #- {id: type_mesh, type: u1}
+      #- {id: unk_class_mesh, type: u1}
+      - {id: disp, type: b1}
+      - {id: shape, type: b1}
+      - {id: sort, type: b1}
+      - {id: weight_num, type: b5}
+      - {id: alpha_pri, type: b8}
       - {id: vertex_stride, type: u1}
-      - {id: unk_render_mode, type: u1}
+      #- {id: unk_render_mode, type: u1}
+      - {id: topology, type: b6}
+      - {id: binormal_flip, type: b1}
+      - {id: bridge, type: b1}      
       - {id: vertex_position, type: u4}
       - {id: vertex_offset, type: u4}
       - {id: vertex_format, type: u4}
@@ -148,10 +157,10 @@ types:
       - {id: face_offset, type: u4}
       - {id: bone_id_start, type: u1}
       - {id: num_weight_bounds, type: u1}
-      - {id: mesh_index, type: u2}
+      - {id: mesh_index, type: u2} # connect_id
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
-      - {id: hash, type: u4}
+      - {id: hash, type: u4} # po
     instances:
       size_:
         value: 48
