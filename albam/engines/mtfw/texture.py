@@ -58,6 +58,15 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
 
 
 TEX_TYPE_MAP_2 = {
+    "basemap": TextureType.DIFFUSE,
+    "normalmap": TextureType.NORMAL,
+    "maskmap": TextureType.SPECULAR,
+    "lightmap": TextureType.LIGHTMAP,
+    "shadowmap": TextureType.UNK_01,
+    "additionalmap": TextureType.ALPHAMAP,
+    "envmap": TextureType.ENVMAP,
+    "detailmap": TextureType.NORMAL_DETAIL,
+    "occlusionmap": TextureType.ALBEDO_BLEND,
     "talbedomap": TextureType.DIFFUSE,
     "talbedoblendmap": TextureType.ALBEDO_BLEND,
     "talbedoblend2map": TextureType.ALBEDO_BLEND_2,
@@ -316,8 +325,8 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material, None)
-            if tex_index and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
+            if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
                 except AttributeError:
@@ -331,7 +340,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
     for texture_type in TextureType:
         if texture_type.value > 8:
             break
-        tex_index , tex_unk_type = _find_texture_index(mtfw_material, texture_type, from_mrl)
+        tex_index = _find_texture_index(mtfw_material, texture_type, from_mrl)
         if tex_index == 0:
             continue
         try:
@@ -342,25 +351,26 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
         if texture_target is None:
             # This means the conversion failed before
             continue
-        if texture_type.value == 6:
-            print("texture_type not supported", texture_type)
-            continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, tex_unk_type)
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
         # change color settings for normal and detail maps
-        if texture_type.value in NON_SRGB_IMAGE_TYPE:
+        if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
 
 
 def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     tex_index = 0
-    tex_unk_type = None
-    tex_index = mtfw_material.texture_slots[texture_type.value - 1]
-    return tex_index, tex_unk_type
+    tex_slot = ""
+    for tex_type, tex_value in TEX_TYPE_MAP_2.items():
+        if tex_value == texture_type:
+            tex_slot = tex_type
+            break
+    tex_index = getattr(mtfw_material, tex_slot)
+    return tex_index
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material, tex_unk_type):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
@@ -436,7 +446,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
             var1.name = "detail_multiplier"
             var1.targets[0].id_type = "MATERIAL"
             var1.targets[0].id = blender_material
-            var1.targets[0].data_path = '["unk_detail_factor"]'
+            var1.targets[0].data_path = 'albam_custom_properties.re5__mod_156_material.detail_factor[1]'
             d.driver.expression = var1.name
 
     elif texture_code == 9:

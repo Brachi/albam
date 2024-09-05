@@ -1123,6 +1123,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fgrassglobalwind = 372683
         fshadowfilter2 = 372817
         cbmorph = 373517
+        fbrdffur = 373737
         sbpsskinningaddposps = 374148
         fswing1weight = 375707
         ia_primitive_polygon = 375751

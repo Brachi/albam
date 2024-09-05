@@ -39,35 +39,27 @@ class Mod156(ReadWriteKaitaiStruct):
         self.bbox_min._read()
         self.bbox_max = Mod156.Vec4(self._io, self, self._root)
         self.bbox_max._read()
-        self.unk_01 = self._io.read_u4le()
-        self.unk_02 = self._io.read_u4le()
-        self.unk_03 = self._io.read_u4le()
-        self.unk_04 = self._io.read_u4le()
-        self.unk_05 = self._io.read_u4le()
-        self.unk_06 = self._io.read_u4le()
-        self.unk_07 = self._io.read_u4le()
-        self.num_vtx8_unk_faces = self._io.read_u4le()
-        self.num_vtx8_unk_uv = self._io.read_u4le()
-        self.num_vtx8_unk_normals = self._io.read_u4le()
-        self.unk_08 = self._io.read_u4le()
-        self.reserved_03 = self._io.read_u4le()
-        self.vtx8_unk_faces = []
-        for i in range(self.num_vtx8_unk_faces):
-            _t_vtx8_unk_faces = Mod156.UnkVtx8Block00(self._io, self, self._root)
-            _t_vtx8_unk_faces._read()
-            self.vtx8_unk_faces.append(_t_vtx8_unk_faces)
+        self.model_info = Mod156.ModelInfo(self._io, self, self._root)
+        self.model_info._read()
+        self.rcn_header = Mod156.RcnHeader(self._io, self, self._root)
+        self.rcn_header._read()
+        self.rcn_tables = []
+        for i in range(self.rcn_header.num_tbl):
+            _t_rcn_tables = Mod156.RcnTable(self._io, self, self._root)
+            _t_rcn_tables._read()
+            self.rcn_tables.append(_t_rcn_tables)
 
-        self.vtx8_unk_uv = []
-        for i in range(self.num_vtx8_unk_uv):
-            _t_vtx8_unk_uv = Mod156.UnkVtx8Block01(self._io, self, self._root)
-            _t_vtx8_unk_uv._read()
-            self.vtx8_unk_uv.append(_t_vtx8_unk_uv)
+        self.rcn_vertices = []
+        for i in range(self.rcn_header.num_vtx):
+            _t_rcn_vertices = Mod156.RcnVertex(self._io, self, self._root)
+            _t_rcn_vertices._read()
+            self.rcn_vertices.append(_t_rcn_vertices)
 
-        self.vtx8_unk_normals = []
-        for i in range(self.num_vtx8_unk_normals):
-            _t_vtx8_unk_normals = Mod156.UnkVtx8Block02(self._io, self, self._root)
-            _t_vtx8_unk_normals._read()
-            self.vtx8_unk_normals.append(_t_vtx8_unk_normals)
+        self.rcn_trianlges = []
+        for i in range(self.rcn_header.num_tri):
+            _t_rcn_trianlges = Mod156.RcnTriangle(self._io, self, self._root)
+            _t_rcn_trianlges._read()
+            self.rcn_trianlges.append(_t_rcn_trianlges)
 
 
 
@@ -77,17 +69,19 @@ class Mod156(ReadWriteKaitaiStruct):
         self.bsphere._fetch_instances()
         self.bbox_min._fetch_instances()
         self.bbox_max._fetch_instances()
-        for i in range(len(self.vtx8_unk_faces)):
+        self.model_info._fetch_instances()
+        self.rcn_header._fetch_instances()
+        for i in range(len(self.rcn_tables)):
             pass
-            self.vtx8_unk_faces[i]._fetch_instances()
+            self.rcn_tables[i]._fetch_instances()
 
-        for i in range(len(self.vtx8_unk_uv)):
+        for i in range(len(self.rcn_vertices)):
             pass
-            self.vtx8_unk_uv[i]._fetch_instances()
+            self.rcn_vertices[i]._fetch_instances()
 
-        for i in range(len(self.vtx8_unk_normals)):
+        for i in range(len(self.rcn_trianlges)):
             pass
-            self.vtx8_unk_normals[i]._fetch_instances()
+            self.rcn_trianlges[i]._fetch_instances()
 
         if (self.header.offset_vertex_buffer > 0):
             pass
@@ -138,29 +132,19 @@ class Mod156(ReadWriteKaitaiStruct):
         self.bsphere._write__seq(self._io)
         self.bbox_min._write__seq(self._io)
         self.bbox_max._write__seq(self._io)
-        self._io.write_u4le(self.unk_01)
-        self._io.write_u4le(self.unk_02)
-        self._io.write_u4le(self.unk_03)
-        self._io.write_u4le(self.unk_04)
-        self._io.write_u4le(self.unk_05)
-        self._io.write_u4le(self.unk_06)
-        self._io.write_u4le(self.unk_07)
-        self._io.write_u4le(self.num_vtx8_unk_faces)
-        self._io.write_u4le(self.num_vtx8_unk_uv)
-        self._io.write_u4le(self.num_vtx8_unk_normals)
-        self._io.write_u4le(self.unk_08)
-        self._io.write_u4le(self.reserved_03)
-        for i in range(len(self.vtx8_unk_faces)):
+        self.model_info._write__seq(self._io)
+        self.rcn_header._write__seq(self._io)
+        for i in range(len(self.rcn_tables)):
             pass
-            self.vtx8_unk_faces[i]._write__seq(self._io)
+            self.rcn_tables[i]._write__seq(self._io)
 
-        for i in range(len(self.vtx8_unk_uv)):
+        for i in range(len(self.rcn_vertices)):
             pass
-            self.vtx8_unk_uv[i]._write__seq(self._io)
+            self.rcn_vertices[i]._write__seq(self._io)
 
-        for i in range(len(self.vtx8_unk_normals)):
+        for i in range(len(self.rcn_trianlges)):
             pass
-            self.vtx8_unk_normals[i]._write__seq(self._io)
+            self.rcn_trianlges[i]._write__seq(self._io)
 
 
 
@@ -182,32 +166,40 @@ class Mod156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._root, self._root)
         if self.bbox_max._parent != self:
             raise kaitaistruct.ConsistencyError(u"bbox_max", self.bbox_max._parent, self)
-        if (len(self.vtx8_unk_faces) != self.num_vtx8_unk_faces):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", len(self.vtx8_unk_faces), self.num_vtx8_unk_faces)
-        for i in range(len(self.vtx8_unk_faces)):
+        if self.model_info._root != self._root:
+            raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._root, self._root)
+        if self.model_info._parent != self:
+            raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._parent, self)
+        if self.rcn_header._root != self._root:
+            raise kaitaistruct.ConsistencyError(u"rcn_header", self.rcn_header._root, self._root)
+        if self.rcn_header._parent != self:
+            raise kaitaistruct.ConsistencyError(u"rcn_header", self.rcn_header._parent, self)
+        if (len(self.rcn_tables) != self.rcn_header.num_tbl):
+            raise kaitaistruct.ConsistencyError(u"rcn_tables", len(self.rcn_tables), self.rcn_header.num_tbl)
+        for i in range(len(self.rcn_tables)):
             pass
-            if self.vtx8_unk_faces[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", self.vtx8_unk_faces[i]._root, self._root)
-            if self.vtx8_unk_faces[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_faces", self.vtx8_unk_faces[i]._parent, self)
+            if self.rcn_tables[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_tables", self.rcn_tables[i]._root, self._root)
+            if self.rcn_tables[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_tables", self.rcn_tables[i]._parent, self)
 
-        if (len(self.vtx8_unk_uv) != self.num_vtx8_unk_uv):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", len(self.vtx8_unk_uv), self.num_vtx8_unk_uv)
-        for i in range(len(self.vtx8_unk_uv)):
+        if (len(self.rcn_vertices) != self.rcn_header.num_vtx):
+            raise kaitaistruct.ConsistencyError(u"rcn_vertices", len(self.rcn_vertices), self.rcn_header.num_vtx)
+        for i in range(len(self.rcn_vertices)):
             pass
-            if self.vtx8_unk_uv[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", self.vtx8_unk_uv[i]._root, self._root)
-            if self.vtx8_unk_uv[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_uv", self.vtx8_unk_uv[i]._parent, self)
+            if self.rcn_vertices[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_vertices", self.rcn_vertices[i]._root, self._root)
+            if self.rcn_vertices[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_vertices", self.rcn_vertices[i]._parent, self)
 
-        if (len(self.vtx8_unk_normals) != self.num_vtx8_unk_normals):
-            raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", len(self.vtx8_unk_normals), self.num_vtx8_unk_normals)
-        for i in range(len(self.vtx8_unk_normals)):
+        if (len(self.rcn_trianlges) != self.rcn_header.num_tri):
+            raise kaitaistruct.ConsistencyError(u"rcn_trianlges", len(self.rcn_trianlges), self.rcn_header.num_tri)
+        for i in range(len(self.rcn_trianlges)):
             pass
-            if self.vtx8_unk_normals[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", self.vtx8_unk_normals[i]._root, self._root)
-            if self.vtx8_unk_normals[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vtx8_unk_normals", self.vtx8_unk_normals[i]._parent, self)
+            if self.rcn_trianlges[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rcn_trianlges", self.rcn_trianlges[i]._root, self._root)
+            if self.rcn_trianlges[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rcn_trianlges", self.rcn_trianlges[i]._parent, self)
 
 
     class Vec4(ReadWriteKaitaiStruct):
@@ -288,35 +280,6 @@ class Mod156(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class UnkVtx8Block02(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.unk_00 = self._io.read_u2le()
-            self.unk_01 = self._io.read_u2le()
-            self.unk_02 = self._io.read_u2le()
-            self.unk_03 = self._io.read_u2le()
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Mod156.UnkVtx8Block02, self)._write__seq(io)
-            self._io.write_u2le(self.unk_00)
-            self._io.write_u2le(self.unk_01)
-            self._io.write_u2le(self.unk_02)
-            self._io.write_u2le(self.unk_03)
-
-
-        def _check(self):
-            pass
-
-
     class ModHeader(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -396,7 +359,36 @@ class Mod156(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class Vertex(ReadWriteKaitaiStruct):
+    class Vec2HalfFloat(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.u = self._io.read_bytes(2)
+            self.v = self._io.read_bytes(2)
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.Vec2HalfFloat, self)._write__seq(io)
+            self._io.write_bytes(self.u)
+            self._io.write_bytes(self.v)
+
+
+        def _check(self):
+            pass
+            if (len(self.u) != 2):
+                raise kaitaistruct.ConsistencyError(u"u", len(self.u), 2)
+            if (len(self.v) != 2):
+                raise kaitaistruct.ConsistencyError(u"v", len(self.v), 2)
+
+
+    class VfSkin(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -439,7 +431,7 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mod156.Vertex, self)._write__seq(io)
+            super(Mod156.VfSkin, self)._write__seq(io)
             self.position._write__seq(self._io)
             for i in range(len(self.bone_indices)):
                 pass
@@ -489,15 +481,17 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
 
 
-    class Vec2HalfFloat(ReadWriteKaitaiStruct):
+    class RcnTriangle(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.u = self._io.read_bytes(2)
-            self.v = self._io.read_bytes(2)
+            self.v0 = self._io.read_bits_int_le(21)
+            self.v1 = self._io.read_bits_int_le(21)
+            self.v2 = self._io.read_bits_int_le(21)
+            self.reserved = self._io.read_bits_int_le(1) != 0
 
 
         def _fetch_instances(self):
@@ -505,17 +499,15 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mod156.Vec2HalfFloat, self)._write__seq(io)
-            self._io.write_bytes(self.u)
-            self._io.write_bytes(self.v)
+            super(Mod156.RcnTriangle, self)._write__seq(io)
+            self._io.write_bits_int_le(21, self.v0)
+            self._io.write_bits_int_le(21, self.v1)
+            self._io.write_bits_int_le(21, self.v2)
+            self._io.write_bits_int_le(1, int(self.reserved))
 
 
         def _check(self):
             pass
-            if (len(self.u) != 2):
-                raise kaitaistruct.ConsistencyError(u"u", len(self.u), 2)
-            if (len(self.v) != 2):
-                raise kaitaistruct.ConsistencyError(u"v", len(self.v), 2)
 
 
     class Matrix4x4(ReadWriteKaitaiStruct):
@@ -571,6 +563,75 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"row_4", self.row_4._parent, self)
 
 
+    class VfNonSkinCol(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.position = Mod156.Vec3(self._io, self, self._root)
+            self.position._read()
+            self.normal = Mod156.Vec4U1(self._io, self, self._root)
+            self.normal._read()
+            self.tangent = Mod156.Vec4U1(self._io, self, self._root)
+            self.tangent._read()
+            self.uv = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv._read()
+            self.uv2 = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2._read()
+            self.rgba = Mod156.Vec4U1(self._io, self, self._root)
+            self.rgba._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.position._fetch_instances()
+            self.normal._fetch_instances()
+            self.tangent._fetch_instances()
+            self.uv._fetch_instances()
+            self.uv2._fetch_instances()
+            self.rgba._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.VfNonSkinCol, self)._write__seq(io)
+            self.position._write__seq(self._io)
+            self.normal._write__seq(self._io)
+            self.tangent._write__seq(self._io)
+            self.uv._write__seq(self._io)
+            self.uv2._write__seq(self._io)
+            self.rgba._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.position._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._root, self._root)
+            if self.position._parent != self:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._parent, self)
+            if self.normal._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._root, self._root)
+            if self.normal._parent != self:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
+            if self.tangent._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._root, self._root)
+            if self.tangent._parent != self:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
+            if self.uv._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._root, self._root)
+            if self.uv._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
+            if self.uv2._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._root, self._root)
+            if self.uv2._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
+            if self.rgba._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._root, self._root)
+            if self.rgba._parent != self:
+                raise kaitaistruct.ConsistencyError(u"rgba", self.rgba._parent, self)
+
+
     class Bone(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -622,15 +683,19 @@ class Mod156(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    class UnkVtx8Block00(ReadWriteKaitaiStruct):
+    class ModelInfo(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.idx = self._io.read_u2le()
-            self.unk_00 = self._io.read_u2le()
+            self.middist = self._io.read_s4le()
+            self.lowdist = self._io.read_s4le()
+            self.light_group = self._io.read_u4le()
+            self.strip_type = self._io.read_u1()
+            self.memory = self._io.read_u1()
+            self.reserved = self._io.read_u2le()
 
 
         def _fetch_instances(self):
@@ -638,82 +703,52 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mod156.UnkVtx8Block00, self)._write__seq(io)
-            self._io.write_u2le(self.idx)
-            self._io.write_u2le(self.unk_00)
+            super(Mod156.ModelInfo, self)._write__seq(io)
+            self._io.write_s4le(self.middist)
+            self._io.write_s4le(self.lowdist)
+            self._io.write_u4le(self.light_group)
+            self._io.write_u1(self.strip_type)
+            self._io.write_u1(self.memory)
+            self._io.write_u2le(self.reserved)
 
 
         def _check(self):
             pass
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
 
-    class Vertex0(ReadWriteKaitaiStruct):
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class Vec2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.position = Mod156.Vec3(self._io, self, self._root)
-            self.position._read()
-            self.normal = Mod156.Vec4U1(self._io, self, self._root)
-            self.normal._read()
-            self.tangent = Mod156.Vec4U1(self._io, self, self._root)
-            self.tangent._read()
-            self.uv = Mod156.Vec2HalfFloat(self._io, self, self._root)
-            self.uv._read()
-            self.uv2 = Mod156.Vec2HalfFloat(self._io, self, self._root)
-            self.uv2._read()
-            self.uv3 = Mod156.Vec2HalfFloat(self._io, self, self._root)
-            self.uv3._read()
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
 
 
         def _fetch_instances(self):
             pass
-            self.position._fetch_instances()
-            self.normal._fetch_instances()
-            self.tangent._fetch_instances()
-            self.uv._fetch_instances()
-            self.uv2._fetch_instances()
-            self.uv3._fetch_instances()
 
 
         def _write__seq(self, io=None):
-            super(Mod156.Vertex0, self)._write__seq(io)
-            self.position._write__seq(self._io)
-            self.normal._write__seq(self._io)
-            self.tangent._write__seq(self._io)
-            self.uv._write__seq(self._io)
-            self.uv2._write__seq(self._io)
-            self.uv3._write__seq(self._io)
+            super(Mod156.Vec2, self)._write__seq(io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
 
 
         def _check(self):
             pass
-            if self.position._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"position", self.position._root, self._root)
-            if self.position._parent != self:
-                raise kaitaistruct.ConsistencyError(u"position", self.position._parent, self)
-            if self.normal._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"normal", self.normal._root, self._root)
-            if self.normal._parent != self:
-                raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
-            if self.tangent._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._root, self._root)
-            if self.tangent._parent != self:
-                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
-            if self.uv._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"uv", self.uv._root, self._root)
-            if self.uv._parent != self:
-                raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
-            if self.uv2._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._root, self._root)
-            if self.uv2._parent != self:
-                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
-            if self.uv3._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._root, self._root)
-            if self.uv3._parent != self:
-                raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
 
 
     class Vec4U1(ReadWriteKaitaiStruct):
@@ -839,21 +874,21 @@ class Mod156(ReadWriteKaitaiStruct):
         def _read(self):
             self.idx_group = self._io.read_u2le()
             self.idx_material = self._io.read_u2le()
-            self.constant = self._io.read_u1()
+            self.disp = self._io.read_u1()
             self.level_of_detail = self._io.read_u1()
-            self.z_buffer_order = self._io.read_u1()
-            self.vertex_format = self._io.read_u1()
+            self.alpha_priority = self._io.read_u1()
+            self.max_bones_per_vertex = self._io.read_u1()
             self.vertex_stride = self._io.read_u1()
             self.vertex_stride_2 = self._io.read_u1()
-            self.unk_03 = self._io.read_u1()
-            self.unk_flag_01 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_02 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_03 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_04 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_05 = self._io.read_bits_int_le(1) != 0
-            self.use_cast_shadows = self._io.read_bits_int_le(1) != 0
-            self.use_receive_shadows = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_08 = self._io.read_bits_int_le(1) != 0
+            self.connective = self._io.read_u1()
+            self.shape = self._io.read_bits_int_le(1) != 0
+            self.env = self._io.read_bits_int_le(1) != 0
+            self.refrect = self._io.read_bits_int_le(1) != 0
+            self.reserved2_flag_1 = self._io.read_bits_int_le(1) != 0
+            self.reserved2_flag_2 = self._io.read_bits_int_le(1) != 0
+            self.shadow_cast = self._io.read_bits_int_le(1) != 0
+            self.shadow_receive = self._io.read_bits_int_le(1) != 0
+            self.sort = self._io.read_bits_int_le(1) != 0
             self.num_vertices = self._io.read_u2le()
             self.vertex_position_end = self._io.read_u2le()
             self.vertex_position_2 = self._io.read_u4le()
@@ -862,15 +897,13 @@ class Mod156(ReadWriteKaitaiStruct):
             self.face_position = self._io.read_u4le()
             self.num_indices = self._io.read_u4le()
             self.face_offset = self._io.read_u4le()
-            self.unk_06 = self._io.read_u1()
-            self.unk_07 = self._io.read_u1()
+            self.vdeclbase = self._io.read_u1()
+            self.vdecl = self._io.read_u1()
             self.vertex_position = self._io.read_u2le()
-            self.num_unique_bone_ids = self._io.read_u1()
+            self.num_weight_bounds = self._io.read_u1()
             self.idx_bone_palette = self._io.read_u1()
-            self.unk_08 = self._io.read_u1()
-            self.unk_09 = self._io.read_u1()
-            self.unk_10 = self._io.read_u2le()
-            self.unk_11 = self._io.read_u2le()
+            self.rcn_base = self._io.read_u2le()
+            self.boundary = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -882,17 +915,11 @@ class Mod156(ReadWriteKaitaiStruct):
             _ = self.vertices
             for i in range(len(self._m_vertices)):
                 pass
-                _on = self.vertex_format
+                _on = self._root.materials_data.materials[self.idx_material].vtype
                 if _on == 0:
                     pass
                     self.vertices[i]._fetch_instances()
                 elif _on == 4:
-                    pass
-                    self.vertices[i]._fetch_instances()
-                elif _on == 6:
-                    pass
-                    self.vertices[i]._fetch_instances()
-                elif _on == 7:
                     pass
                     self.vertices[i]._fetch_instances()
                 elif _on == 1:
@@ -902,9 +929,6 @@ class Mod156(ReadWriteKaitaiStruct):
                     pass
                     self.vertices[i]._fetch_instances()
                 elif _on == 5:
-                    pass
-                    self.vertices[i]._fetch_instances()
-                elif _on == 8:
                     pass
                     self.vertices[i]._fetch_instances()
                 elif _on == 2:
@@ -934,21 +958,21 @@ class Mod156(ReadWriteKaitaiStruct):
             self._should_write_vertices2 = self.vertices2__to_write
             self._io.write_u2le(self.idx_group)
             self._io.write_u2le(self.idx_material)
-            self._io.write_u1(self.constant)
+            self._io.write_u1(self.disp)
             self._io.write_u1(self.level_of_detail)
-            self._io.write_u1(self.z_buffer_order)
-            self._io.write_u1(self.vertex_format)
+            self._io.write_u1(self.alpha_priority)
+            self._io.write_u1(self.max_bones_per_vertex)
             self._io.write_u1(self.vertex_stride)
             self._io.write_u1(self.vertex_stride_2)
-            self._io.write_u1(self.unk_03)
-            self._io.write_bits_int_le(1, int(self.unk_flag_01))
-            self._io.write_bits_int_le(1, int(self.unk_flag_02))
-            self._io.write_bits_int_le(1, int(self.unk_flag_03))
-            self._io.write_bits_int_le(1, int(self.unk_flag_04))
-            self._io.write_bits_int_le(1, int(self.unk_flag_05))
-            self._io.write_bits_int_le(1, int(self.use_cast_shadows))
-            self._io.write_bits_int_le(1, int(self.use_receive_shadows))
-            self._io.write_bits_int_le(1, int(self.unk_flag_08))
+            self._io.write_u1(self.connective)
+            self._io.write_bits_int_le(1, int(self.shape))
+            self._io.write_bits_int_le(1, int(self.env))
+            self._io.write_bits_int_le(1, int(self.refrect))
+            self._io.write_bits_int_le(1, int(self.reserved2_flag_1))
+            self._io.write_bits_int_le(1, int(self.reserved2_flag_2))
+            self._io.write_bits_int_le(1, int(self.shadow_cast))
+            self._io.write_bits_int_le(1, int(self.shadow_receive))
+            self._io.write_bits_int_le(1, int(self.sort))
             self._io.write_u2le(self.num_vertices)
             self._io.write_u2le(self.vertex_position_end)
             self._io.write_u4le(self.vertex_position_2)
@@ -957,15 +981,13 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.face_position)
             self._io.write_u4le(self.num_indices)
             self._io.write_u4le(self.face_offset)
-            self._io.write_u1(self.unk_06)
-            self._io.write_u1(self.unk_07)
+            self._io.write_u1(self.vdeclbase)
+            self._io.write_u1(self.vdecl)
             self._io.write_u2le(self.vertex_position)
-            self._io.write_u1(self.num_unique_bone_ids)
+            self._io.write_u1(self.num_weight_bounds)
             self._io.write_u1(self.idx_bone_palette)
-            self._io.write_u1(self.unk_08)
-            self._io.write_u1(self.unk_09)
-            self._io.write_u2le(self.unk_10)
-            self._io.write_u2le(self.unk_11)
+            self._io.write_u2le(self.rcn_base)
+            self._io.write_u4le(self.boundary)
 
 
         def _check(self):
@@ -1031,50 +1053,35 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.seek((((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset) if (self.vertex_position > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset)))
             self._m_vertices = []
             for i in range((((self.vertex_position_end - self.vertex_position) + 1) if (self.vertex_position > self.vertex_position_2) else self.num_vertices)):
-                _on = self.vertex_format
+                _on = self._root.materials_data.materials[self.idx_material].vtype
                 if _on == 0:
                     pass
-                    _t__m_vertices = Mod156.Vertex0(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfSkin(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
                 elif _on == 4:
                     pass
-                    _t__m_vertices = Mod156.Vertex(self._io, self, self._root)
-                    _t__m_vertices._read()
-                    self._m_vertices.append(_t__m_vertices)
-                elif _on == 6:
-                    pass
-                    _t__m_vertices = Mod156.Vertex5(self._io, self, self._root)
-                    _t__m_vertices._read()
-                    self._m_vertices.append(_t__m_vertices)
-                elif _on == 7:
-                    pass
-                    _t__m_vertices = Mod156.Vertex5(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfSkin(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
                 elif _on == 1:
                     pass
-                    _t__m_vertices = Mod156.Vertex(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfSkinEx(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
                 elif _on == 3:
                     pass
-                    _t__m_vertices = Mod156.Vertex(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfNonSkinCol(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
                 elif _on == 5:
                     pass
-                    _t__m_vertices = Mod156.Vertex5(self._io, self, self._root)
-                    _t__m_vertices._read()
-                    self._m_vertices.append(_t__m_vertices)
-                elif _on == 8:
-                    pass
-                    _t__m_vertices = Mod156.Vertex5(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfSkin(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
                 elif _on == 2:
                     pass
-                    _t__m_vertices = Mod156.Vertex(self._io, self, self._root)
+                    _t__m_vertices = Mod156.VfNonSkin(self._io, self, self._root)
                     _t__m_vertices._read()
                     self._m_vertices.append(_t__m_vertices)
 
@@ -1091,17 +1098,11 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.seek((((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset) if (self.vertex_position > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset)))
             for i in range(len(self._m_vertices)):
                 pass
-                _on = self.vertex_format
+                _on = self._root.materials_data.materials[self.idx_material].vtype
                 if _on == 0:
                     pass
                     self.vertices[i]._write__seq(self._io)
                 elif _on == 4:
-                    pass
-                    self.vertices[i]._write__seq(self._io)
-                elif _on == 6:
-                    pass
-                    self.vertices[i]._write__seq(self._io)
-                elif _on == 7:
                     pass
                     self.vertices[i]._write__seq(self._io)
                 elif _on == 1:
@@ -1111,9 +1112,6 @@ class Mod156(ReadWriteKaitaiStruct):
                     pass
                     self.vertices[i]._write__seq(self._io)
                 elif _on == 5:
-                    pass
-                    self.vertices[i]._write__seq(self._io)
-                elif _on == 8:
                     pass
                     self.vertices[i]._write__seq(self._io)
                 elif _on == 2:
@@ -1129,7 +1127,7 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"vertices", len(self.vertices), (((self.vertex_position_end - self.vertex_position) + 1) if (self.vertex_position > self.vertex_position_2) else self.num_vertices))
             for i in range(len(self._m_vertices)):
                 pass
-                _on = self.vertex_format
+                _on = self._root.materials_data.materials[self.idx_material].vtype
                 if _on == 0:
                     pass
                     if self.vertices[i]._root != self._root:
@@ -1137,18 +1135,6 @@ class Mod156(ReadWriteKaitaiStruct):
                     if self.vertices[i]._parent != self:
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
                 elif _on == 4:
-                    pass
-                    if self.vertices[i]._root != self._root:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
-                    if self.vertices[i]._parent != self:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
-                elif _on == 6:
-                    pass
-                    if self.vertices[i]._root != self._root:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
-                    if self.vertices[i]._parent != self:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
-                elif _on == 7:
                     pass
                     if self.vertices[i]._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
@@ -1167,12 +1153,6 @@ class Mod156(ReadWriteKaitaiStruct):
                     if self.vertices[i]._parent != self:
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
                 elif _on == 5:
-                    pass
-                    if self.vertices[i]._root != self._root:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
-                    if self.vertices[i]._parent != self:
-                        raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
-                elif _on == 8:
                     pass
                     if self.vertices[i]._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._root, self._root)
@@ -1264,20 +1244,16 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
 
-    class UnkVtx8Block01(ReadWriteKaitaiStruct):
+    class RcnTable(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.unk_01 = self._io.read_u2le()
-            self.unk_02 = self._io.read_u2le()
-            self.unk_03 = self._io.read_u4le()
-            self.unk_05 = self._io.read_u2le()
-            self.unk_06 = self._io.read_u2le()
-            self.unk_07 = self._io.read_u2le()
-            self.unk_08 = self._io.read_u2le()
+            self.vindex = self._io.read_bits_int_le(21)
+            self.noffset = self._io.read_bits_int_le(10)
+            self.edge = self._io.read_bits_int_le(1) != 0
 
 
         def _fetch_instances(self):
@@ -1285,14 +1261,10 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Mod156.UnkVtx8Block01, self)._write__seq(io)
-            self._io.write_u2le(self.unk_01)
-            self._io.write_u2le(self.unk_02)
-            self._io.write_u4le(self.unk_03)
-            self._io.write_u2le(self.unk_05)
-            self._io.write_u2le(self.unk_06)
-            self._io.write_u2le(self.unk_07)
-            self._io.write_u2le(self.unk_08)
+            super(Mod156.RcnTable, self)._write__seq(io)
+            self._io.write_bits_int_le(21, self.vindex)
+            self._io.write_bits_int_le(10, self.noffset)
+            self._io.write_bits_int_le(1, int(self.edge))
 
 
         def _check(self):
@@ -1306,194 +1278,160 @@ class Mod156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.surface_unk = self._io.read_bits_int_le(1) != 0
-            self.surface_opaque = self._io.read_bits_int_le(1) != 0
-            self.use_bridge_lines = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_04 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_05 = self._io.read_bits_int_le(1) != 0
-            self.use_alpha_clip = self._io.read_bits_int_le(1) != 0
-            self.use_opaque = self._io.read_bits_int_le(1) != 0
-            self.use_translusent = self._io.read_bits_int_le(1) != 0
-            self.use_alpha_transparency = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_10 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_11 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_12 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_13 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_14 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_15 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_16 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_17 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_18 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_19 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_20 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_21 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_22 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_23 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_24 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_25 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_26 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_27 = self._io.read_bits_int_le(1) != 0
-            self.use_8_bones = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_29 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_30 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_31 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_32 = self._io.read_bits_int_le(1) != 0
-            self.skin_weights_type = self._io.read_bits_int_le(3)
-            self.unk_flag_36 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_37 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_38 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_39 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_40 = self._io.read_bits_int_le(1) != 0
-            self.use_emmisive_map = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_42 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_43 = self._io.read_bits_int_le(1) != 0
-            self.use_detail_map = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_45 = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_46 = self._io.read_bits_int_le(1) != 0
-            self.use_cubemap = self._io.read_bits_int_le(1) != 0
-            self.unk_flag_48 = self._io.read_bits_int_le(1) != 0
-            self.unk_01 = self._io.read_u2le()
-            self.unk_02 = self._io.read_u2le()
-            self.unk_03 = self._io.read_u2le()
-            self.unk_04 = self._io.read_u2le()
-            self.unk_05 = self._io.read_u2le()
-            self.unk_06 = self._io.read_u2le()
-            self.unk_07 = self._io.read_u2le()
-            self.unk_08 = self._io.read_u2le()
-            self.unk_09 = self._io.read_u2le()
-            self.texture_slots = []
-            for i in range(8):
-                self.texture_slots.append(self._io.read_u4le())
+            self.fog_enable = self._io.read_bits_int_le(1) != 0
+            self.zwrite = self._io.read_bits_int_le(1) != 0
+            self.attr = self._io.read_bits_int_le(12)
+            self.num = self._io.read_bits_int_le(8)
+            self.envmap_bias = self._io.read_bits_int_le(5)
+            self.vtype = self._io.read_bits_int_le(3)
+            self.uvscroll_enable = self._io.read_bits_int_le(1) != 0
+            self.ztest = self._io.read_bits_int_le(1) != 0
+            self.func_skin = self._io.read_bits_int_le(4)
+            self.func_reserved2 = self._io.read_bits_int_le(2)
+            self.func_lighting = self._io.read_bits_int_le(4)
+            self.func_normalmap = self._io.read_bits_int_le(4)
+            self.func_specular = self._io.read_bits_int_le(4)
+            self.func_lightmap = self._io.read_bits_int_le(4)
+            self.func_multitexture = self._io.read_bits_int_le(4)
+            self.func_reserved = self._io.read_bits_int_le(6)
+            self.htechnique = self._io.read_u4le()
+            self.pipeline = self._io.read_u4le()
+            self.pvdeclbase = self._io.read_u4le()
+            self.pvdecl = self._io.read_u4le()
+            self.basemap = self._io.read_u4le()
+            self.normalmap = self._io.read_u4le()
+            self.maskmap = self._io.read_u4le()
+            self.lightmap = self._io.read_u4le()
+            self.shadowmap = self._io.read_u4le()
+            self.additionalmap = self._io.read_u4le()
+            self.envmap = self._io.read_u4le()
+            self.detailmap = self._io.read_u4le()
+            self.occlusionmap = self._io.read_u4le()
+            self.transparency = self._io.read_f4le()
+            self.fresnel_factor = []
+            for i in range(4):
+                self.fresnel_factor.append(self._io.read_f4le())
 
-            self.unk_param_01 = self._io.read_f4le()
-            self.unk_param_02 = self._io.read_f4le()
-            self.unk_param_03 = self._io.read_f4le()
-            self.unk_param_04 = self._io.read_f4le()
-            self.unk_param_05 = self._io.read_f4le()
-            self.cubemap_roughness = self._io.read_f4le()
-            self.unk_param_07 = self._io.read_f4le()
-            self.unk_param_08 = self._io.read_f4le()
-            self.unk_param_09 = self._io.read_f4le()
-            self.unk_param_10 = self._io.read_f4le()
-            self.detail_normal_power = self._io.read_f4le()
-            self.detail_normal_multiplier = self._io.read_f4le()
-            self.unk_param_13 = self._io.read_f4le()
-            self.unk_param_14 = self._io.read_f4le()
-            self.unk_param_15 = self._io.read_f4le()
-            self.unk_param_16 = self._io.read_f4le()
-            self.unk_param_17 = self._io.read_f4le()
-            self.unk_param_18 = self._io.read_f4le()
-            self.unk_param_19 = self._io.read_f4le()
-            self.unk_param_20 = self._io.read_f4le()
-            self.normal_scale = self._io.read_f4le()
-            self.unk_param_22 = self._io.read_f4le()
-            self.unk_param_23 = self._io.read_f4le()
-            self.unk_param_24 = self._io.read_f4le()
-            self.unk_param_25 = self._io.read_f4le()
-            self.unk_param_26 = self._io.read_f4le()
+            self.lightmap_factor = []
+            for i in range(4):
+                self.lightmap_factor.append(self._io.read_f4le())
+
+            self.detail_factor = []
+            for i in range(4):
+                self.detail_factor.append(self._io.read_f4le())
+
+            self.reserved1 = self._io.read_u4le()
+            self.reserved2 = self._io.read_u4le()
+            self.lightblendmap = self._io.read_u4le()
+            self.shadowblendmap = self._io.read_u4le()
+            self.parallax_factor = []
+            for i in range(2):
+                self.parallax_factor.append(self._io.read_f4le())
+
+            self.flip_binormal = self._io.read_f4le()
+            self.heightmap_occ = self._io.read_f4le()
+            self.blend_state = self._io.read_u4le()
+            self.alpha_ref = self._io.read_u4le()
+            self.heightmap = self._io.read_u4le()
+            self.glossmap = self._io.read_u4le()
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.texture_slots)):
+            for i in range(len(self.fresnel_factor)):
+                pass
+
+            for i in range(len(self.lightmap_factor)):
+                pass
+
+            for i in range(len(self.detail_factor)):
+                pass
+
+            for i in range(len(self.parallax_factor)):
                 pass
 
 
 
         def _write__seq(self, io=None):
             super(Mod156.Material, self)._write__seq(io)
-            self._io.write_bits_int_le(1, int(self.surface_unk))
-            self._io.write_bits_int_le(1, int(self.surface_opaque))
-            self._io.write_bits_int_le(1, int(self.use_bridge_lines))
-            self._io.write_bits_int_le(1, int(self.unk_flag_04))
-            self._io.write_bits_int_le(1, int(self.unk_flag_05))
-            self._io.write_bits_int_le(1, int(self.use_alpha_clip))
-            self._io.write_bits_int_le(1, int(self.use_opaque))
-            self._io.write_bits_int_le(1, int(self.use_translusent))
-            self._io.write_bits_int_le(1, int(self.use_alpha_transparency))
-            self._io.write_bits_int_le(1, int(self.unk_flag_10))
-            self._io.write_bits_int_le(1, int(self.unk_flag_11))
-            self._io.write_bits_int_le(1, int(self.unk_flag_12))
-            self._io.write_bits_int_le(1, int(self.unk_flag_13))
-            self._io.write_bits_int_le(1, int(self.unk_flag_14))
-            self._io.write_bits_int_le(1, int(self.unk_flag_15))
-            self._io.write_bits_int_le(1, int(self.unk_flag_16))
-            self._io.write_bits_int_le(1, int(self.unk_flag_17))
-            self._io.write_bits_int_le(1, int(self.unk_flag_18))
-            self._io.write_bits_int_le(1, int(self.unk_flag_19))
-            self._io.write_bits_int_le(1, int(self.unk_flag_20))
-            self._io.write_bits_int_le(1, int(self.unk_flag_21))
-            self._io.write_bits_int_le(1, int(self.unk_flag_22))
-            self._io.write_bits_int_le(1, int(self.unk_flag_23))
-            self._io.write_bits_int_le(1, int(self.unk_flag_24))
-            self._io.write_bits_int_le(1, int(self.unk_flag_25))
-            self._io.write_bits_int_le(1, int(self.unk_flag_26))
-            self._io.write_bits_int_le(1, int(self.unk_flag_27))
-            self._io.write_bits_int_le(1, int(self.use_8_bones))
-            self._io.write_bits_int_le(1, int(self.unk_flag_29))
-            self._io.write_bits_int_le(1, int(self.unk_flag_30))
-            self._io.write_bits_int_le(1, int(self.unk_flag_31))
-            self._io.write_bits_int_le(1, int(self.unk_flag_32))
-            self._io.write_bits_int_le(3, self.skin_weights_type)
-            self._io.write_bits_int_le(1, int(self.unk_flag_36))
-            self._io.write_bits_int_le(1, int(self.unk_flag_37))
-            self._io.write_bits_int_le(1, int(self.unk_flag_38))
-            self._io.write_bits_int_le(1, int(self.unk_flag_39))
-            self._io.write_bits_int_le(1, int(self.unk_flag_40))
-            self._io.write_bits_int_le(1, int(self.use_emmisive_map))
-            self._io.write_bits_int_le(1, int(self.unk_flag_42))
-            self._io.write_bits_int_le(1, int(self.unk_flag_43))
-            self._io.write_bits_int_le(1, int(self.use_detail_map))
-            self._io.write_bits_int_le(1, int(self.unk_flag_45))
-            self._io.write_bits_int_le(1, int(self.unk_flag_46))
-            self._io.write_bits_int_le(1, int(self.use_cubemap))
-            self._io.write_bits_int_le(1, int(self.unk_flag_48))
-            self._io.write_u2le(self.unk_01)
-            self._io.write_u2le(self.unk_02)
-            self._io.write_u2le(self.unk_03)
-            self._io.write_u2le(self.unk_04)
-            self._io.write_u2le(self.unk_05)
-            self._io.write_u2le(self.unk_06)
-            self._io.write_u2le(self.unk_07)
-            self._io.write_u2le(self.unk_08)
-            self._io.write_u2le(self.unk_09)
-            for i in range(len(self.texture_slots)):
+            self._io.write_bits_int_le(1, int(self.fog_enable))
+            self._io.write_bits_int_le(1, int(self.zwrite))
+            self._io.write_bits_int_le(12, self.attr)
+            self._io.write_bits_int_le(8, self.num)
+            self._io.write_bits_int_le(5, self.envmap_bias)
+            self._io.write_bits_int_le(3, self.vtype)
+            self._io.write_bits_int_le(1, int(self.uvscroll_enable))
+            self._io.write_bits_int_le(1, int(self.ztest))
+            self._io.write_bits_int_le(4, self.func_skin)
+            self._io.write_bits_int_le(2, self.func_reserved2)
+            self._io.write_bits_int_le(4, self.func_lighting)
+            self._io.write_bits_int_le(4, self.func_normalmap)
+            self._io.write_bits_int_le(4, self.func_specular)
+            self._io.write_bits_int_le(4, self.func_lightmap)
+            self._io.write_bits_int_le(4, self.func_multitexture)
+            self._io.write_bits_int_le(6, self.func_reserved)
+            self._io.write_u4le(self.htechnique)
+            self._io.write_u4le(self.pipeline)
+            self._io.write_u4le(self.pvdeclbase)
+            self._io.write_u4le(self.pvdecl)
+            self._io.write_u4le(self.basemap)
+            self._io.write_u4le(self.normalmap)
+            self._io.write_u4le(self.maskmap)
+            self._io.write_u4le(self.lightmap)
+            self._io.write_u4le(self.shadowmap)
+            self._io.write_u4le(self.additionalmap)
+            self._io.write_u4le(self.envmap)
+            self._io.write_u4le(self.detailmap)
+            self._io.write_u4le(self.occlusionmap)
+            self._io.write_f4le(self.transparency)
+            for i in range(len(self.fresnel_factor)):
                 pass
-                self._io.write_u4le(self.texture_slots[i])
+                self._io.write_f4le(self.fresnel_factor[i])
 
-            self._io.write_f4le(self.unk_param_01)
-            self._io.write_f4le(self.unk_param_02)
-            self._io.write_f4le(self.unk_param_03)
-            self._io.write_f4le(self.unk_param_04)
-            self._io.write_f4le(self.unk_param_05)
-            self._io.write_f4le(self.cubemap_roughness)
-            self._io.write_f4le(self.unk_param_07)
-            self._io.write_f4le(self.unk_param_08)
-            self._io.write_f4le(self.unk_param_09)
-            self._io.write_f4le(self.unk_param_10)
-            self._io.write_f4le(self.detail_normal_power)
-            self._io.write_f4le(self.detail_normal_multiplier)
-            self._io.write_f4le(self.unk_param_13)
-            self._io.write_f4le(self.unk_param_14)
-            self._io.write_f4le(self.unk_param_15)
-            self._io.write_f4le(self.unk_param_16)
-            self._io.write_f4le(self.unk_param_17)
-            self._io.write_f4le(self.unk_param_18)
-            self._io.write_f4le(self.unk_param_19)
-            self._io.write_f4le(self.unk_param_20)
-            self._io.write_f4le(self.normal_scale)
-            self._io.write_f4le(self.unk_param_22)
-            self._io.write_f4le(self.unk_param_23)
-            self._io.write_f4le(self.unk_param_24)
-            self._io.write_f4le(self.unk_param_25)
-            self._io.write_f4le(self.unk_param_26)
+            for i in range(len(self.lightmap_factor)):
+                pass
+                self._io.write_f4le(self.lightmap_factor[i])
+
+            for i in range(len(self.detail_factor)):
+                pass
+                self._io.write_f4le(self.detail_factor[i])
+
+            self._io.write_u4le(self.reserved1)
+            self._io.write_u4le(self.reserved2)
+            self._io.write_u4le(self.lightblendmap)
+            self._io.write_u4le(self.shadowblendmap)
+            for i in range(len(self.parallax_factor)):
+                pass
+                self._io.write_f4le(self.parallax_factor[i])
+
+            self._io.write_f4le(self.flip_binormal)
+            self._io.write_f4le(self.heightmap_occ)
+            self._io.write_u4le(self.blend_state)
+            self._io.write_u4le(self.alpha_ref)
+            self._io.write_u4le(self.heightmap)
+            self._io.write_u4le(self.glossmap)
 
 
         def _check(self):
             pass
-            if (len(self.texture_slots) != 8):
-                raise kaitaistruct.ConsistencyError(u"texture_slots", len(self.texture_slots), 8)
-            for i in range(len(self.texture_slots)):
+            if (len(self.fresnel_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"fresnel_factor", len(self.fresnel_factor), 4)
+            for i in range(len(self.fresnel_factor)):
+                pass
+
+            if (len(self.lightmap_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"lightmap_factor", len(self.lightmap_factor), 4)
+            for i in range(len(self.lightmap_factor)):
+                pass
+
+            if (len(self.detail_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"detail_factor", len(self.detail_factor), 4)
+            for i in range(len(self.detail_factor)):
+                pass
+
+            if (len(self.parallax_factor) != 2):
+                raise kaitaistruct.ConsistencyError(u"parallax_factor", len(self.parallax_factor), 2)
+            for i in range(len(self.parallax_factor)):
                 pass
 
 
@@ -1616,6 +1554,120 @@ class Mod156(ReadWriteKaitaiStruct):
             pass
 
 
+    class VfNonSkin(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.position = Mod156.Vec3(self._io, self, self._root)
+            self.position._read()
+            self.normal = Mod156.Vec4U1(self._io, self, self._root)
+            self.normal._read()
+            self.tangent = Mod156.Vec4U1(self._io, self, self._root)
+            self.tangent._read()
+            self.uv = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv._read()
+            self.uv2 = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2._read()
+            self.uv3 = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv3._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.position._fetch_instances()
+            self.normal._fetch_instances()
+            self.tangent._fetch_instances()
+            self.uv._fetch_instances()
+            self.uv2._fetch_instances()
+            self.uv3._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.VfNonSkin, self)._write__seq(io)
+            self.position._write__seq(self._io)
+            self.normal._write__seq(self._io)
+            self.tangent._write__seq(self._io)
+            self.uv._write__seq(self._io)
+            self.uv2._write__seq(self._io)
+            self.uv3._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.position._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._root, self._root)
+            if self.position._parent != self:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._parent, self)
+            if self.normal._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._root, self._root)
+            if self.normal._parent != self:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
+            if self.tangent._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._root, self._root)
+            if self.tangent._parent != self:
+                raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
+            if self.uv._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._root, self._root)
+            if self.uv._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
+            if self.uv2._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._root, self._root)
+            if self.uv2._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv2", self.uv2._parent, self)
+            if self.uv3._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._root, self._root)
+            if self.uv3._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv3", self.uv3._parent, self)
+
+
+    class RcnVertex(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_u2le()
+            self.y = self._io.read_u2le()
+            self.z = self._io.read_u2le()
+            self.w = self._io.read_u2le()
+            self.w0 = self._io.read_u1()
+            self.w1 = self._io.read_u1()
+            self.w2 = self._io.read_u1()
+            self.w3 = self._io.read_u1()
+            self.j0 = self._io.read_u1()
+            self.j1 = self._io.read_u1()
+            self.j2 = self._io.read_u1()
+            self.j3 = self._io.read_u1()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.RcnVertex, self)._write__seq(io)
+            self._io.write_u2le(self.x)
+            self._io.write_u2le(self.y)
+            self._io.write_u2le(self.z)
+            self._io.write_u2le(self.w)
+            self._io.write_u1(self.w0)
+            self._io.write_u1(self.w1)
+            self._io.write_u1(self.w2)
+            self._io.write_u1(self.w3)
+            self._io.write_u1(self.j0)
+            self._io.write_u1(self.j1)
+            self._io.write_u1(self.j2)
+            self._io.write_u1(self.j3)
+
+
+        def _check(self):
+            pass
+
+
     class MaterialsData(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -1717,6 +1769,83 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._root, self._root)
             if self.occlusion._parent != self:
                 raise kaitaistruct.ConsistencyError(u"occlusion", self.occlusion._parent, self)
+
+
+    class VfSkinEx(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.position = Mod156.Vec4S2(self._io, self, self._root)
+            self.position._read()
+            self.bone_indices = []
+            for i in range(8):
+                self.bone_indices.append(self._io.read_u1())
+
+            self.weight_values = []
+            for i in range(8):
+                self.weight_values.append(self._io.read_u1())
+
+            self.normal = Mod156.Vec4U1(self._io, self, self._root)
+            self.normal._read()
+            self.uv = Mod156.Vec2HalfFloat(self._io, self, self._root)
+            self.uv._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.position._fetch_instances()
+            for i in range(len(self.bone_indices)):
+                pass
+
+            for i in range(len(self.weight_values)):
+                pass
+
+            self.normal._fetch_instances()
+            self.uv._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.VfSkinEx, self)._write__seq(io)
+            self.position._write__seq(self._io)
+            for i in range(len(self.bone_indices)):
+                pass
+                self._io.write_u1(self.bone_indices[i])
+
+            for i in range(len(self.weight_values)):
+                pass
+                self._io.write_u1(self.weight_values[i])
+
+            self.normal._write__seq(self._io)
+            self.uv._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.position._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._root, self._root)
+            if self.position._parent != self:
+                raise kaitaistruct.ConsistencyError(u"position", self.position._parent, self)
+            if (len(self.bone_indices) != 8):
+                raise kaitaistruct.ConsistencyError(u"bone_indices", len(self.bone_indices), 8)
+            for i in range(len(self.bone_indices)):
+                pass
+
+            if (len(self.weight_values) != 8):
+                raise kaitaistruct.ConsistencyError(u"weight_values", len(self.weight_values), 8)
+            for i in range(len(self.weight_values)):
+                pass
+
+            if self.normal._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._root, self._root)
+            if self.normal._parent != self:
+                raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
+            if self.uv._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._root, self._root)
+            if self.uv._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
 
 
     class BonesData(ReadWriteKaitaiStruct):
@@ -1895,6 +2024,53 @@ class Mod156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"tangent", self.tangent._parent, self)
 
 
+    class RcnHeader(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.ptri = self._io.read_u4le()
+            self.pvtx = self._io.read_u4le()
+            self.ptb = self._io.read_u4le()
+            self.num_tri = self._io.read_u4le()
+            self.num_vtx = self._io.read_u4le()
+            self.num_tbl = self._io.read_u4le()
+            self.parts = self._io.read_u4le()
+            self.reserved = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Mod156.RcnHeader, self)._write__seq(io)
+            self._io.write_u4le(self.ptri)
+            self._io.write_u4le(self.pvtx)
+            self._io.write_u4le(self.ptb)
+            self._io.write_u4le(self.num_tri)
+            self._io.write_u4le(self.num_vtx)
+            self._io.write_u4le(self.num_tbl)
+            self._io.write_u4le(self.parts)
+            self._io.write_u4le(self.reserved)
+
+
+        def _check(self):
+            pass
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 32
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class Vec4S2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -1932,33 +2108,45 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.group_index = self._io.read_u4le()
-            self.unk_02 = self._io.read_f4le()
-            self.unk_03 = self._io.read_f4le()
-            self.unk_04 = self._io.read_f4le()
-            self.unk_05 = self._io.read_f4le()
-            self.unk_06 = self._io.read_f4le()
-            self.unk_07 = self._io.read_f4le()
-            self.unk_08 = self._io.read_f4le()
+            self.reserved = []
+            for i in range(3):
+                self.reserved.append(self._io.read_u4le())
+
+            self.pos = Mod156.Vec3(self._io, self, self._root)
+            self.pos._read()
+            self.radius = self._io.read_f4le()
 
 
         def _fetch_instances(self):
             pass
+            for i in range(len(self.reserved)):
+                pass
+
+            self.pos._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Mod156.Group, self)._write__seq(io)
             self._io.write_u4le(self.group_index)
-            self._io.write_f4le(self.unk_02)
-            self._io.write_f4le(self.unk_03)
-            self._io.write_f4le(self.unk_04)
-            self._io.write_f4le(self.unk_05)
-            self._io.write_f4le(self.unk_06)
-            self._io.write_f4le(self.unk_07)
-            self._io.write_f4le(self.unk_08)
+            for i in range(len(self.reserved)):
+                pass
+                self._io.write_u4le(self.reserved[i])
+
+            self.pos._write__seq(self._io)
+            self._io.write_f4le(self.radius)
 
 
         def _check(self):
             pass
+            if (len(self.reserved) != 3):
+                raise kaitaistruct.ConsistencyError(u"reserved", len(self.reserved), 3)
+            for i in range(len(self.reserved)):
+                pass
+
+            if self.pos._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"pos", self.pos._root, self._root)
+            if self.pos._parent != self:
+                raise kaitaistruct.ConsistencyError(u"pos", self.pos._parent, self)
 
         @property
         def size_(self):
@@ -1970,83 +2158,6 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
-
-    class Vertex5(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.position = Mod156.Vec4S2(self._io, self, self._root)
-            self.position._read()
-            self.bone_indices = []
-            for i in range(8):
-                self.bone_indices.append(self._io.read_u1())
-
-            self.weight_values = []
-            for i in range(8):
-                self.weight_values.append(self._io.read_u1())
-
-            self.normal = Mod156.Vec4U1(self._io, self, self._root)
-            self.normal._read()
-            self.uv = Mod156.Vec2HalfFloat(self._io, self, self._root)
-            self.uv._read()
-
-
-        def _fetch_instances(self):
-            pass
-            self.position._fetch_instances()
-            for i in range(len(self.bone_indices)):
-                pass
-
-            for i in range(len(self.weight_values)):
-                pass
-
-            self.normal._fetch_instances()
-            self.uv._fetch_instances()
-
-
-        def _write__seq(self, io=None):
-            super(Mod156.Vertex5, self)._write__seq(io)
-            self.position._write__seq(self._io)
-            for i in range(len(self.bone_indices)):
-                pass
-                self._io.write_u1(self.bone_indices[i])
-
-            for i in range(len(self.weight_values)):
-                pass
-                self._io.write_u1(self.weight_values[i])
-
-            self.normal._write__seq(self._io)
-            self.uv._write__seq(self._io)
-
-
-        def _check(self):
-            pass
-            if self.position._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"position", self.position._root, self._root)
-            if self.position._parent != self:
-                raise kaitaistruct.ConsistencyError(u"position", self.position._parent, self)
-            if (len(self.bone_indices) != 8):
-                raise kaitaistruct.ConsistencyError(u"bone_indices", len(self.bone_indices), 8)
-            for i in range(len(self.bone_indices)):
-                pass
-
-            if (len(self.weight_values) != 8):
-                raise kaitaistruct.ConsistencyError(u"weight_values", len(self.weight_values), 8)
-            for i in range(len(self.weight_values)):
-                pass
-
-            if self.normal._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"normal", self.normal._root, self._root)
-            if self.normal._parent != self:
-                raise kaitaistruct.ConsistencyError(u"normal", self.normal._parent, self)
-            if self.uv._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"uv", self.uv._root, self._root)
-            if self.uv._parent != self:
-                raise kaitaistruct.ConsistencyError(u"uv", self.uv._parent, self)
-
 
     @property
     def vertex_buffer(self):
@@ -2149,7 +2260,7 @@ class Mod156(ReadWriteKaitaiStruct):
         if (self.header.offset_vertex_buffer_2 > 0):
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_vertex_buffer)
+            self._io.seek(self.header.offset_vertex_buffer_2)
             self._m_vertex_buffer_2 = self._io.read_bytes(self.header.size_vertex_buffer_2)
             self._io.seek(_pos)
 
@@ -2164,7 +2275,7 @@ class Mod156(ReadWriteKaitaiStruct):
         if (self.header.offset_vertex_buffer_2 > 0):
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_vertex_buffer)
+            self._io.seek(self.header.offset_vertex_buffer_2)
             self._io.write_bytes(self.vertex_buffer_2)
             self._io.seek(_pos)
 

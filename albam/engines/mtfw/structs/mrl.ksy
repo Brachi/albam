@@ -2189,6 +2189,7 @@ enums:
     0x19696: fcuboidlightd
     0x21351: fcuboidlights
     0x1a1c7: fbrdf
+    0x5B3E9: fbrdffur
     0x7a331: fbrdfhalflambert
     0x23990: flighting
     0x71bac: flightingvs
