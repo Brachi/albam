@@ -47,9 +47,9 @@ jobs:
         exit "$exitcode"
     - name: "Upload coverage data"
       uses: actions/upload-artifact@v4
-      include-hidden-files: true
       with:
         name: covdata
+        include-hidden-files: true
         path: .coverage*
   coverage:
     # thanks: https://nedbatchelder.com/blog/202209/making_a_coverage_badge.html
