@@ -19,10 +19,16 @@ ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
 
 
+@blender_registry.register_import_function(app_id="re0", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="re1", extension='lmt', file_category="ANIMATION")
 @blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="re6", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="rev1", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="rev2", extension='lmt', file_category="ANIMATION")
 def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
+    lmt_version = lmt.version
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)
 
@@ -41,7 +47,8 @@ def load_lmt(file_item, context):
 
         for track_index, track in enumerate(block.block_header.tracks):
             bone_index = mapping.get(str(track.bone_index))
-
+            if track.len_data == 0:
+                continue
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
                 bone_index = _get_or_create_root_motion_bone(armature)
 
@@ -56,21 +63,51 @@ def load_lmt(file_item, context):
             if track.bone_index in HACKY_BONE_INDICES_IK_FOOT:
                 bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index)
 
-            if track.buffer_type == 6:
-                TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
-                decoded_frames = decode_type_6(track.data)
-            elif track.buffer_type == 2:
+            if track.buffer_type == 1:  # LMTVec3
+                TRACK_MODE = "location"
+                decoded_frames = decode_type_1(track.data)
+                decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
+            elif track.buffer_type == 2:  # LMTVec3Frame
                 TRACK_MODE = "location"
                 decoded_frames = decode_type_2(track.data)
                 decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
+            elif track.buffer_type == 3:  # LMTVec3Frame
+                TRACK_MODE = "location"
+            elif track.buffer_type == 4:  # 51 uses LMTQuat3Frame, 67 LMTQuatized16Vec3
+                continue
+                TRACK_MODE = "rotation"
+                decoded_frames = decode_type_4(track.data, lmt_version)
+            elif track.buffer_type == 5:  # LMTQuadraticVector3
+                TRACK_MODE = "rotation"
+                decoded_frames = decode_type_5(track.data)
+            elif track.buffer_type == 6:
+                TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
+                decoded_frames = decode_type_6(track.data)
+            elif track.buffer_type == 7:  # LMTQuatized32Quat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_7(track.data)
             elif track.buffer_type == 9:
                 TRACK_MODE = "location"
                 decoded_frames = decode_type_9(track.data)
                 decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
-
+            elif track.buffer_type == 11:  # LMTXWQuat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_11(track.data)
+            elif track.buffer_type == 12:  # LMTXWQuat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_12(track.data)
+            elif track.buffer_type == 13:  # LMTXWQuat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_13(track.data)
+            elif track.buffer_type == 14:  # LMTQuatized11Quat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_14(track.data)
+            elif track.buffer_type == 16:  # LMTQuatized11Quat
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_15(track.data)
             else:
                 # TODO: print statistics of missing tracks
-                # print("Unknown buffer_type, skipping", track.buffer_type)
+                print("Unknown buffer_type, skipping", track.buffer_type)
                 continue
 
             group_name = str(bone_index)
@@ -140,7 +177,134 @@ class FrameQuat4_14(Structure):
         return self._clip_and_divide(self._z)
 
 
-def decode_type_9(data):
+'''
+struct LMTVec3
+(
+	frame = LMTUniKey(),
+	relframe = 1,
+	size=12,
+	BEndian,
+	fl,
+	on create do if fl !=undefined then (
+		if bendian then frame.value = ReadBEVector3 fl
+		else frame.value = ReadVector3 fl
+	)
+)
+'''
+
+
+def decode_type_1(data): #  LMTVec3 - one frame
+    decoded_frame = []
+    u = struct.unpack("fff", data)
+    decoded_frame = (u[0] / 100, u[1] / 100, u[2] / 100)
+    return decoded_frame
+
+
+'''
+struct LMTVec3Frame
+(
+	frame = LMTUniKey(),
+	relframe,
+	size=12,
+	BEndian,
+	fl,
+	cmpinp,
+	on create do if fl !=undefined then (
+		if bendian then (
+			frame.Value= ReadBEVector3 fl
+			if cmpinp then relframe = readbelong fl
+		)
+		else (
+			frame.Value= ReadVector3 fl
+			if cmpinp then relframe = readlong fl
+		)
+		if cmpinp then size+=4 else relframe = 0
+	)
+)
+'''
+
+
+def decode_type_2(data):  # LMTVec3Frame
+    decoded_frames = []
+    CHUNK_SIZE = 12
+
+    for start in range(0, len(data), CHUNK_SIZE):
+        chunk = data[start: start + CHUNK_SIZE]
+        u = struct.unpack("fff", chunk)
+        floats = (u[0] / 100, u[1] / 100, u[2] / 100)
+        decoded_frames.append(floats)
+    return decoded_frames
+
+
+def decode_type_3(data):  # LMTVec3Frame
+    decoded_frames = []
+    CHUNK_SIZE = 16
+    for start in range(0, len(data), CHUNK_SIZE):
+        chunk = data[start: start + CHUNK_SIZE]
+        u = struct.unpack("fffi", chunk)
+        floats = (u[0] / 100, u[1] / 100, u[2] / 100)
+        decoded_frames.append(floats)
+
+    return decoded_frames
+
+'''
+struct LMTQuat3Frame
+(
+	frame = LMTUniKey(),
+	relframe,
+	size=12,
+	BEndian,
+	fl,
+	cmpinp,
+	on create do if fl !=undefined then (
+		if bendian then (
+			frame.Value= quat (ReadBEFloat fl) (ReadBEFloat fl) (ReadBEFloat fl) 0
+			if cmpinp then relframe = readbelong fl
+		)
+		else (
+			frame.Value= quat (ReadFloat fl) (ReadFloat fl) (ReadFloat fl) 0
+			if cmpinp then relframe = readlong fl
+		)
+		frame.Value.w = sqrt(1.0 - frame.Value.x*frame.Value.x - frame.Value.Y*frame.Value.y - frame.Value.z*frame.Value.z)
+		if cmpinp then size+=4 else relframe = 0
+	)
+)
+'''
+def decode_type_4(data, version):  # LMTQuatized16Vec3 or LMTQuat3Frame
+    decoded_frames = []
+    if version == 51:
+        CHUNK_SIZE = 12
+    else:
+        CHUNK_SIZE = 8
+    return decoded_frames
+
+
+def decode_type_5(data):  # LMTQuatized8Vec3
+    decoded_frames = []
+    CHUNK_SIZE = 12  #
+    return decoded_frames
+
+def decode_type_6(data):  # LMTQuatFramev14 
+    decoded_frames = []
+
+    for idx, start in enumerate(range(0, len(data), 8)):
+        chunk = data[start: start + 8]
+        frame = FrameQuat4_14()
+        io.BytesIO(chunk).readinto(frame)
+
+        decoded_frames.append((frame.w, frame.x, frame.y, frame.z))
+        decoded_frames.extend([None] * (frame.duration - 1))
+
+    return decoded_frames
+
+
+def decode_type_7(data):  # LMTQuatized32Quat
+    decoded_frames = []
+    CHUNK_SIZE = 12  #
+    return decoded_frames
+
+
+def decode_type_9(data):  # LMTVec3Frame
     decoded_frames = []
     CHUNK_SIZE = 16
 
@@ -157,29 +321,33 @@ def decode_type_9(data):
     return decoded_frames
 
 
-def decode_type_2(data):
+def decode_type_11(data):
     decoded_frames = []
-    CHUNK_SIZE = 12
-
-    for start in range(0, len(data), CHUNK_SIZE):
-        chunk = data[start: start + CHUNK_SIZE]
-        u = struct.unpack("fff", chunk)
-        floats = (u[0] / 100, u[1] / 100, u[2] / 100)
-        decoded_frames.append(floats)
+    CHUNK_SIZE = 12  #
     return decoded_frames
 
 
-def decode_type_6(data):
+def decode_type_12(data):
     decoded_frames = []
+    CHUNK_SIZE = 12  #
+    return decoded_frames
 
-    for idx, start in enumerate(range(0, len(data), 8)):
-        chunk = data[start: start + 8]
-        frame = FrameQuat4_14()
-        io.BytesIO(chunk).readinto(frame)
 
-        decoded_frames.append((frame.w, frame.x, frame.y, frame.z))
-        decoded_frames.extend([None] * (frame.duration - 1))
+def decode_type_13(data):
+    decoded_frames = []
+    CHUNK_SIZE = 12  #
+    return decoded_frames
 
+
+def decode_type_14(data):
+    decoded_frames = []
+    CHUNK_SIZE = 12  #
+    return decoded_frames
+
+
+def decode_type_15(data):
+    decoded_frames = []
+    CHUNK_SIZE = 12  #
     return decoded_frames
 
 
