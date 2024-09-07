@@ -49,7 +49,7 @@ jobs:
     - name: "Upload coverage data"
       uses: actions/upload-artifact@v4
       with:
-          # name: .coverage.${{ matrix.bpy.bpy-version }}
+        name: .coverage.${{ matrix.bpy.bpy-version }}
         path: .coverage.${{ matrix.bpy.bpy-version }}
         include-hidden-files: true
         if-no-files-found: error
@@ -72,8 +72,9 @@ jobs:
       - name: "Download coverage data"
         uses: actions/download-artifact@v4.1.7
         with:
-          marge-multiple: true
           path: .covdata
+          pattern: .coverage.*
+          marge-multiple: true
       - name: "Combine"
         run: |
           ls -lha
