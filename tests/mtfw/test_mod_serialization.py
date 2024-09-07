@@ -6,14 +6,14 @@ def test_export_header(mod_imported, mod_exported):
     dheader = mod_exported.header
 
     bones_data_error = abs(mod_imported.bones_data.size_ - mod_exported.bones_data.size_)
-    assert (sheader.version in (210, 211) and not bones_data_error) or sheader.version == 156
+    assert (sheader.version in (210, 211, 212) and not bones_data_error) or sheader.version == 156
 
     assert sheader.ident == dheader.ident == b"MOD\x00"
     assert sheader.version == dheader.version
     assert sheader.revision == dheader.revision
     assert sheader.num_bones == dheader.num_bones
     assert sheader.num_materials == dheader.num_materials
-    assert (sheader.version in (210, 211) and sheader.reserved_01 == dheader.reserved_01 or
+    assert (sheader.version in (210, 211, 212) and sheader.reserved_01 == dheader.reserved_01 or
             sheader.version == 156 and not getattr(dheader, "reserved_01", None))
     assert sheader.num_groups == dheader.num_groups
     assert sheader.num_meshes == dheader.num_meshes
@@ -94,7 +94,7 @@ def test_export_groups(mod_imported, mod_exported):
 def test_materials_data(mod_imported, mod_exported):
 
     assert mod_imported.materials_data.size_ == mod_exported.materials_data.size_
-    assert ((mod_imported.header.version in (210, 211) and
+    assert ((mod_imported.header.version in (210, 211, 212) and
             mod_imported.materials_data.material_names == mod_exported.materials_data.material_names) or
             mod_imported.header.version == 156)
 
@@ -109,13 +109,22 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
         with subtests.test(mesh_index=i):
             assert src_mesh.idx_group == dst_mesh.idx_group
             assert src_mesh.num_vertices == dst_mesh.num_vertices
-            assert src_mesh.unk_01 == dst_mesh.unk_01
+            assert src_mesh.parts_no == dst_mesh.parts_no
             assert src_mesh.idx_material == dst_mesh.idx_material
             assert src_mesh.level_of_detail == dst_mesh.level_of_detail
-            assert src_mesh.type_mesh == dst_mesh.type_mesh
-            assert src_mesh.unk_class_mesh == dst_mesh.unk_class_mesh
+            # assert src_mesh.type_mesh == dst_mesh.type_mesh
+            # assert src_mesh.unk_class_mesh == dst_mesh.unk_class_mesh
+            assert src_mesh.disp == dst_mesh.disp
+            assert src_mesh.shape == dst_mesh.shape
+            assert src_mesh.sort == dst_mesh.sort
+            assert src_mesh.weight_num == dst_mesh.weight_num
+            assert src_mesh.alpha_pri == dst_mesh.alpha_pri
             # assert src_mesh.vertex_stride == dst_mesh.vertex_stride
-            assert src_mesh.unk_render_mode == dst_mesh.unk_render_mode
+            # assert src_mesh.unk_render_mode == dst_mesh.unk_render_mode
+            assert src_mesh.alpha_pri == dst_mesh.alpha_pri
+            assert src_mesh.topology == dst_mesh.topology
+            assert src_mesh.binormal_flip == dst_mesh.binormal_flip
+            assert src_mesh.bridge == dst_mesh.bridge
             # assert src_mesh.vertex_format == dst_mesh.vertex_format
             assert src_mesh.bone_id_start == dst_mesh.bone_id_start
             assert src_mesh.num_weight_bounds == dst_mesh.num_weight_bounds
