@@ -1,5 +1,6 @@
 from platform import platform
 import traceback
+from pathlib import Path
 import sys
 
 import bpy
@@ -82,12 +83,13 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         type_err, err, tb = sys.exc_info()
         stack_summary = traceback.extract_tb(tb)
         traceback_str = "".join(stack_summary.format())
+        traceback_str_home_redacted = traceback_str.replace(str(Path.home()), "******")
         error = ERROR_TEMPLATE.format(
             blender_version=".".join(map(str, bpy.app.version)),
             albam_version=albam_version,
             operating_system=platform(),
             error=f"{type_err.__name__}: {str(err)}",
-            traceback_str=traceback_str,
+            traceback_str=traceback_str_home_redacted,
         )
 
         return error
