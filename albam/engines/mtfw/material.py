@@ -439,8 +439,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
 
         current_commands_offset += total_resource_size
 
-        exported_materials_map[bl_mat.name] = bl_mat_idx * 16
-        exported_materials_map[material_hash] = bl_mat_idx * 16
+        exported_materials_map[bl_mat.name] = bl_mat_idx
+        exported_materials_map[material_hash] = bl_mat_idx
         mrl.materials.append(mat)
 
     mrl.num_textures = len(mrl.textures)

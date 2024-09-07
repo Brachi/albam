@@ -733,11 +733,11 @@ def _get_material_hash(mod, mesh):
     material_hash = None
     if mod.header.version == 156:
         material_hash = mesh.idx_material
-    elif mod.header.version == 210 or 212:
-        material_name = mod.materials_data.material_names[mesh.idx_material // 16]
+    elif mod.header.version == 210 or mod.header.version == 212:
+        material_name = mod.materials_data.material_names[mesh.idx_material]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
     elif mod.header.version == 211:
-        material_hash = mod.materials_data.material_hashes[mesh.idx_material // 16]
+        material_hash = mod.materials_data.material_hashes[mesh.idx_material]
     return material_hash
 
 
