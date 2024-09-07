@@ -17,7 +17,7 @@ def test_export_header(mod_imported, mod_exported):
             sheader.version == 156 and not getattr(dheader, "reserved_01", None))
     assert sheader.num_groups == dheader.num_groups
     assert sheader.num_meshes == dheader.num_meshes
-    assert ((sheader.version in (210, 211) and sheader.num_vertices == dheader.num_vertices) or
+    assert ((sheader.version in (210, 211, 212) and sheader.num_vertices == dheader.num_vertices) or
             sheader.version == 156)  # given 2nd vertex buffer unknowns
 
     assert sheader.offset_bones_data == dheader.offset_bones_data
@@ -50,7 +50,7 @@ def test_export_bones_data(mod_imported, mod_exported):
     sbd = mod_imported.bones_data
     dbd = mod_exported.bones_data
     bones_data_error = abs(mod_imported.bones_data.size_ - mod_exported.bones_data.size_)
-    assert ((mod_exported.header.version in (210, 211) and not bones_data_error) or
+    assert ((mod_exported.header.version in (210, 211, 212) and not bones_data_error) or
             mod_exported.header.version == 156)
 
     assert mod_imported.bones_data_size_ == mod_exported.bones_data_size_ - bones_data_error
@@ -135,6 +135,24 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
 
     assert mod_imported.header.version == 210 and (
         mod_imported.num_weight_bounds == mod_exported.num_weight_bounds)
+
+
+def test_vertices(mod_imported, mod_exported, subtests):
+
+    assert len(mod_imported.meshes_data.meshes) == len(mod_exported.meshes_data.meshes)
+    for mi, mesh in enumerate(mod_imported.meshes_data.meshes):
+        src_mesh = mesh
+        dst_mesh = mod_exported.meshes_data.meshes[mi]
+        with subtests.test(mesh_index=mi):
+            assert src_mesh.num_vertices == dst_mesh.num_vertices
+            for vi, dst_vertex in enumerate(dst_mesh.vertices):
+                src_vertex = src_mesh.vertices[vi]
+                with subtests.test(mesh_index=mi, vertex_index=vi):
+                    assert src_vertex.normal.x == (dst_vertex.normal.x + 1) or \
+                        src_vertex.normal.x == (dst_vertex.normal.x - 1) or \
+                        src_vertex.normal.x == (dst_vertex.normal.x + 2) or \
+                        src_vertex.normal.x == (dst_vertex.normal.x - 2) or \
+                        src_vertex.normal.x == dst_vertex.normal.x
 
 
 @pytest.mark.xfail(reason="WIP")
