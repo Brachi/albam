@@ -1,5 +1,6 @@
 from platform import platform
 import traceback
+from pathlib import Path
 import sys
 
 import bpy
@@ -31,6 +32,7 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
     DISCORD_INVITE_URL = "https://discord.gg/QC2FhGhxCh"
     ERROR_UNEXPECTED_HEADER = "An unexpected error happened"
     ERROR_UNEXPECTED_SOLUTION_MSG = "Please provide the error shown in the console for help"
+    ERROR_UNEXPECTED_SOLUTION_MSG_2 = "Go to Window -> Toggle System Console"
     ERROR_CHECK_FAILURE_HEADER = "A check failed"
     MIN_POPUP_WIDTH = 300
     PIXELS_PER_CHAR = 7  # should be dynamic based on resolution/dpi
@@ -47,11 +49,13 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
             self.error_message = err.message
             self.error_details = err.details
             self.error_solution = err.solution
+            self.error_solution_2 = ""
         else:
             self.error_header = self.ERROR_UNEXPECTED_HEADER
             self.error_message = ""
             self.error_details = ""
             self.error_solution = self.ERROR_UNEXPECTED_SOLUTION_MSG
+            self.error_solution_2 = self.ERROR_UNEXPECTED_SOLUTION_MSG_2
             error = self._generate_error_report(type_err, err, tb)
             print(error)
         return context.window_manager.invoke_props_dialog(self, width=self._calculate_popup_width())
@@ -66,6 +70,8 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         layout.label(text=self.error_message)
         layout.label(text=self.error_details)
         layout.label(text=self.error_solution)
+        if self.error_solution_2:
+            layout.label(text=self.error_solution_2)
 
         layout.separator()
         layout.separator()
@@ -82,12 +88,13 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         type_err, err, tb = sys.exc_info()
         stack_summary = traceback.extract_tb(tb)
         traceback_str = "".join(stack_summary.format())
+        traceback_str_home_redacted = traceback_str.replace(str(Path.home()), "******")
         error = ERROR_TEMPLATE.format(
             blender_version=".".join(map(str, bpy.app.version)),
             albam_version=albam_version,
             operating_system=platform(),
             error=f"{type_err.__name__}: {str(err)}",
-            traceback_str=traceback_str,
+            traceback_str=traceback_str_home_redacted,
         )
 
         return error
