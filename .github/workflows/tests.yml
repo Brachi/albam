@@ -71,11 +71,13 @@ jobs:
         uses: actions/download-artifact@v4.1.7
         with:
           marge-multiple: true
+          path: .covdata
           pattern: .coverage-*
       - name: "Combine"
         run: |
           ls -lha
-          coverage combine
+          ls -lha .covdata
+          coverage combine .covdata/
           ls -lha
           coverage json -o .coverage.json
           export TOTAL=$(python -c "import json;print(json.load(open('.coverage.json'))['totals']['percent_covered_display'])")
