@@ -43,11 +43,13 @@ jobs:
         # Ignore segfault in bpy==4.1.0; there's no way around it yet.
         if  [ $exitcode == 139 ];then exitcode=0;
         fi
+        ls -lha
+        ls .coverage.${{ matrix.bpy.bpy-version }}
         exit "$exitcode"
     - name: "Upload coverage data"
       uses: actions/upload-artifact@v4
       with:
-        name: .coverage.${{ matrix.bpy.bpy-version }}
+          # name: .coverage.${{ matrix.bpy.bpy-version }}
         path: .coverage.${{ matrix.bpy.bpy-version }}
         include-hidden-files: true
         if-no-files-found: error
