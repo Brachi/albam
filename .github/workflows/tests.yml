@@ -74,7 +74,7 @@ jobs:
         with:
           path: .covdata
           pattern: .coverage.*
-          marge-multiple: true
+          merge-multiple: true
       - name: "Combine"
         run: |
           ls -lha
