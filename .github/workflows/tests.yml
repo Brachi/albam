@@ -43,8 +43,6 @@ jobs:
         # Ignore segfault in bpy==4.1.0; there's no way around it yet.
         if  [ $exitcode == 139 ];then exitcode=0;
         fi
-        ls -lha
-        ls .coverage.${{ matrix.bpy.bpy-version }}
         exit "$exitcode"
     - name: "Upload coverage data"
       uses: actions/upload-artifact@v4
@@ -77,10 +75,7 @@ jobs:
           merge-multiple: true
       - name: "Combine"
         run: |
-          ls -lha
-          ls -lha .covdata
           coverage combine .covdata/
-          ls -lha
           coverage json -o .coverage.json
           export TOTAL=$(python -c "import json;print(json.load(open('.coverage.json'))['totals']['percent_covered_display'])")
           echo "total=$TOTAL" >> $GITHUB_ENV
