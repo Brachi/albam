@@ -1197,7 +1197,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
-        mesh.constant = 1
+        # mesh.constant = 1
         mesh.vertex_format = vertex_format
         mesh.vertex_stride = vertex_stride
         mesh.vertex_stride_2 = vertex_stride_2
@@ -1217,10 +1217,10 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
+        mesh.max_bones_per_vertex = max_bones_per_vertex
 
         if dst_mod.header.version in (156,):
             mesh.disp = 1
-            mesh.max_bones_per_vertex = max_bones_per_vertex
             mesh.reserved2 = 0
             mesh.connective = 0
 
@@ -1869,14 +1869,14 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
+    draw_mode: bpy.props.IntProperty(default=0)  # TODO: b12
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    parts_no: bpy.props.IntProperty(default=0)  # TODO: b12
     #  type_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    disp: bpy.props.BoolProperty(default=0)
+    disp: bpy.props.BoolProperty(default=1)
     shape: bpy.props.BoolProperty(default=0)
     sort: bpy.props.BoolProperty(default=0)
-    weight_num: bpy.props.IntProperty(default=0)  # TODO b5
-    alpha_pri: bpy.props.IntProperty(default=0)  # TODO b8
+    #  weight_num: bpy.props.IntProperty(default=0)  # TODO b5
+    alpha_priority: bpy.props.IntProperty(default=0)  # TODO b8
     topology: bpy.props.IntProperty(default=0)  # TODO b6
     binormal_flip: bpy.props.BoolProperty(default=0)
     bridge: bpy.props.BoolProperty(default=0)

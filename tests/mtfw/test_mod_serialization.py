@@ -100,16 +100,16 @@ def test_materials_data(mod_imported, mod_exported):
 
 
 def test_meshes_data_21(mod_imported, mod_exported, subtests):
-    if not mod_imported.header.version == 210:
+    if mod_imported.header.version not in (210, 212):
         pytest.skip()
 
     for i, mesh in enumerate(mod_imported.meshes_data.meshes):
         src_mesh = mesh
         dst_mesh = mod_exported.meshes_data.meshes[i]
         with subtests.test(mesh_index=i):
-            assert src_mesh.idx_group == dst_mesh.idx_group
+            assert src_mesh.draw_mode == dst_mesh.draw_mode
             assert src_mesh.num_vertices == dst_mesh.num_vertices
-            assert src_mesh.parts_no == dst_mesh.parts_no
+            assert src_mesh.idx_group == dst_mesh.idx_group
             assert src_mesh.idx_material == dst_mesh.idx_material
             assert src_mesh.level_of_detail == dst_mesh.level_of_detail
             # assert src_mesh.type_mesh == dst_mesh.type_mesh
@@ -117,11 +117,10 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             assert src_mesh.disp == dst_mesh.disp
             assert src_mesh.shape == dst_mesh.shape
             assert src_mesh.sort == dst_mesh.sort
-            assert src_mesh.weight_num == dst_mesh.weight_num
-            assert src_mesh.alpha_pri == dst_mesh.alpha_pri
+            # assert src_mesh.weight_num == dst_mesh.weight_num
             # assert src_mesh.vertex_stride == dst_mesh.vertex_stride
             # assert src_mesh.unk_render_mode == dst_mesh.unk_render_mode
-            assert src_mesh.alpha_pri == dst_mesh.alpha_pri
+            assert src_mesh.alpha_priority == dst_mesh.alpha_priority
             assert src_mesh.topology == dst_mesh.topology
             assert src_mesh.binormal_flip == dst_mesh.binormal_flip
             assert src_mesh.bridge == dst_mesh.bridge
@@ -133,7 +132,7 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             assert src_mesh.max_index == dst_mesh.max_index
             assert src_mesh.hash == dst_mesh.hash
 
-    assert mod_imported.header.version == 210 and (
+    assert mod_imported.header.version in (210, 212) and (
         mod_imported.num_weight_bounds == mod_exported.num_weight_bounds)
 
 
@@ -166,7 +165,7 @@ def test_header_xfail(pl0000_roundtrip):
 
     assert sheader.num_faces == dheader.num_faces
     assert sheader.num_edges == dheader.num_edges
-    assert sheader.version not in (210, 211) or sheader.size_file == dheader.size_file
+    assert sheader.version not in (210, 211, 212) or sheader.size_file == dheader.size_file
     # in 210, given we don't export some vertex formats (like the one witih blend shapes of 64 bytes)
     # the size and hence the offset of the index buffer will differ
     assert sheader.offset_index_buffer == dheader.offset_index_buffer

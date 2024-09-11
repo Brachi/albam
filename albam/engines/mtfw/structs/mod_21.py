@@ -2808,16 +2808,16 @@ class Mod21(ReadWriteKaitaiStruct):
             self.vertices__to_write = True
 
         def _read(self):
-            self.idx_group = self._io.read_u2le()
+            self.draw_mode = self._io.read_u2le()
             self.num_vertices = self._io.read_u2le()
-            self.parts_no = self._io.read_bits_int_le(12)
+            self.idx_group = self._io.read_bits_int_le(12)
             self.idx_material = self._io.read_bits_int_le(12)
             self.level_of_detail = self._io.read_bits_int_le(8)
             self.disp = self._io.read_bits_int_le(1) != 0
             self.shape = self._io.read_bits_int_le(1) != 0
             self.sort = self._io.read_bits_int_le(1) != 0
-            self.weight_num = self._io.read_bits_int_le(5)
-            self.alpha_pri = self._io.read_bits_int_le(8)
+            self.max_bones_per_vertex = self._io.read_bits_int_le(5)
+            self.alpha_priority = self._io.read_bits_int_le(8)
             self.vertex_stride = self._io.read_u1()
             self.topology = self._io.read_bits_int_le(6)
             self.binormal_flip = self._io.read_bits_int_le(1) != 0
@@ -2973,16 +2973,16 @@ class Mod21(ReadWriteKaitaiStruct):
             super(Mod21.Mesh, self)._write__seq(io)
             self._should_write_indices = self.indices__to_write
             self._should_write_vertices = self.vertices__to_write
-            self._io.write_u2le(self.idx_group)
+            self._io.write_u2le(self.draw_mode)
             self._io.write_u2le(self.num_vertices)
-            self._io.write_bits_int_le(12, self.parts_no)
+            self._io.write_bits_int_le(12, self.idx_group)
             self._io.write_bits_int_le(12, self.idx_material)
             self._io.write_bits_int_le(8, self.level_of_detail)
             self._io.write_bits_int_le(1, int(self.disp))
             self._io.write_bits_int_le(1, int(self.shape))
             self._io.write_bits_int_le(1, int(self.sort))
-            self._io.write_bits_int_le(5, self.weight_num)
-            self._io.write_bits_int_le(8, self.alpha_pri)
+            self._io.write_bits_int_le(5, self.max_bones_per_vertex)
+            self._io.write_bits_int_le(8, self.alpha_priority)
             self._io.write_u1(self.vertex_stride)
             self._io.write_bits_int_le(6, self.topology)
             self._io.write_bits_int_le(1, int(self.binormal_flip))
