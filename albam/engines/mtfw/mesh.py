@@ -1217,6 +1217,11 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
+        # DD original hack, weapon meshes invisible without it
+        if export_settings.force_max_num_weights:
+            bone_limit = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format)
+            if not bone_limit % 4 and max_bones_per_vertex < 4:
+                max_bones_per_vertex = 4
         mesh.max_bones_per_vertex = max_bones_per_vertex
 
         if dst_mod.header.version in (156,):

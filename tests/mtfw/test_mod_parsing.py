@@ -1,4 +1,6 @@
-SUPPORTED_MOD_VERSIONS = (156, 210, 211)
+from albam.engines.mtfw.mesh import VERTEX_FORMATS_BONE_LIMIT
+
+SUPPORTED_MOD_VERSIONS = (156, 210, 211, 212)
 
 KNOWN_CONNECT = {
     0xff, 254, 253, 252, 249, 248, 247, 246, 245, 244, 241, 240, 237, 236, 232, 233,
@@ -127,7 +129,7 @@ def test_mod(parsed_mod_from_arc):
     total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
     # FIXME: mod.header.version == 211
     num_weight_bounds = (
-        mod.num_weight_bounds if mod.header.version == 210
+        mod.num_weight_bounds if mod.header.version == 210 or mod.header.version == 212
         else mod.meshes_data.num_weight_bounds
     )
 
