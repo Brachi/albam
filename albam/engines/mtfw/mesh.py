@@ -1296,8 +1296,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stride = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
-    weight_half_float = (dst_mod.header.version in (210, 211, 212)
-                         and vertex_format not in VERTEX_FORMATS_BRIDGE)
+    weight_half_float = (dst_mod.header.version in (210, 211, 212) and
+                         vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vtx_stream = KaitaiStream(
