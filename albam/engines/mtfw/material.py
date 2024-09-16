@@ -2587,7 +2587,9 @@ class GlobalsCustomProperties4(bpy.types.PropertyGroup):
     f_roughness_rgb: bpy.props.FloatVectorProperty(
         name="fRoughnessRGB", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
     f_anisotoropic_direction: bpy.props.FloatVectorProperty(
-        name="fAnisotoropicDirection", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+        name="fAnisotoropicDirection",  # noqa: F821
+        size=3, default=(1, 1, 1),
+        subtype="COLOR", options=set())  # noqa: F821
     f_smoothness: bpy.props.FloatProperty(
         name="fSmoothness", default=1, options=set())  # noqa: F821
     f_anistropic_uv: bpy.props.FloatVectorProperty(
