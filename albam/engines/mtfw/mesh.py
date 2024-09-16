@@ -1296,7 +1296,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stride = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
-    weight_half_float = dst_mod.header.version in (210, 211, 212) and vertex_format not in VERTEX_FORMATS_BRIDGE
+    weight_half_float = (dst_mod.header.version in (210, 211, 212)
+                         and vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vtx_stream = KaitaiStream(
@@ -1876,23 +1877,16 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(default=255)
     draw_mode: bpy.props.IntProperty(default=0)  # TODO: b12
     idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    #  type_mesh: bpy.props.IntProperty(default=0)  # TODO u1
     disp: bpy.props.BoolProperty(default=1)
     shape: bpy.props.BoolProperty(default=0)
     sort: bpy.props.BoolProperty(default=0)
-    #  weight_num: bpy.props.IntProperty(default=0)  # TODO b5
     alpha_priority: bpy.props.IntProperty(default=0)  # TODO b8
     topology: bpy.props.IntProperty(default=0)  # TODO b6
     binormal_flip: bpy.props.BoolProperty(default=0)
     bridge: bpy.props.BoolProperty(default=0)
-    #  unk_class_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    #  unk_render_mode: bpy.props.IntProperty(default=0)  # TODO u1
     bone_id_start: bpy.props.IntProperty(default=0)  # TODO u1
     mesh_index: bpy.props.IntProperty(default=0)  # TODO u2
-    #  min_index: bpy.props.IntProperty(default=0)  # TODO u2
-    #  max_index: bpy.props.IntProperty(default=0)  # TODO u2
     hash: bpy.props.IntProperty(default=0)  # TODO u4
-    #  unk_01: bpy.props.IntProperty(default=0)  # TODO u1
     vertex_format: bpy.props.StringProperty()
 
     # FIXME: dedupe

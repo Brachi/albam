@@ -120,15 +120,6 @@ def mod_exported(mod_export):
 
 
 @pytest.fixture(scope="session")
-def parsed_mrl_from_arc(mod_export):
-    mrl = mod_export[2]
-    if not mrl:
-        pytest.skip("No mrl available")
-    else:
-        return mrl
-
-
-@pytest.fixture(scope="session")
 def mrl_exported(mod_export):
     mrl = mod_export[3]
     if not mrl:
@@ -158,6 +149,30 @@ def parsed_mod_from_arc(request):
     parsed._file_path = file_entry.file_path
 
     return parsed
+
+
+@pytest.fixture
+def parsed_mrl_from_arc(request, scope="session"):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+
+    # TODO: cache, avoid duplicating mrls for each test
+    from albam.engines.mtfw.structs.mrl import Mrl
+    from kaitaistruct import KaitaiStream
+    arc = request.param[0]
+    mrl_file_entry = request.param[1]
+    app_id = request.param[2]
+
+    mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
+    parsed_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
+    parsed_mrl.app_id = app_id
+    parsed_mrl._read()
+    parsed_mrl._arc_name = os.path.basename(arc.file_path)
+    parsed_mrl._mrl_path = mrl_file_entry.file_path
+    parsed_mrl._num_bytes = len(mrl_bytes)
+
+    return parsed_mrl
 
 
 @pytest.fixture

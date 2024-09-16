@@ -1,5 +1,3 @@
-from albam.engines.mtfw.mesh import VERTEX_FORMATS_BONE_LIMIT
-
 SUPPORTED_MOD_VERSIONS = (156, 210, 211, 212)
 
 KNOWN_CONNECT = {

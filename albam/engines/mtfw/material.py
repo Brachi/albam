@@ -85,7 +85,6 @@ MRL_PER_MATERIAL_FEATURES = {
                  "FDDMaterialAlbedo",
                  "FDDMaterialSpecular",
                  "FDDMaterialSpecular",
-                 "CBAppReflect",
                  "FAppClip",
                  "CBAppClipPlane",
                  "FAppOutline",
@@ -103,7 +102,6 @@ MRL_PER_MATERIAL_FEATURES = {
                  "FDDMaterialAlbedo",
                  "FDDMaterialSpecular",
                  "FDDMaterialSpecular",
-                 "CBAppReflect",
                  "FAppClip",
                  "CBAppClipPlane",
                  "FAppOutline",
@@ -531,6 +529,9 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["CBAppReflectShadowLight"] = [ri + 1, pos]
+            pos = current_position
+            current_position += 1
+            cb_used["CBAppReflect"] = [ri + 1, pos]
 
     for cb_name, (idx, pos) in sorted(cb_used.items(), key=lambda item: item[1][1]):
         resources.insert(idx + pos, set_constant_buffer(cb_name))
@@ -554,7 +555,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
 
     r = [
         set_constant_buffer("CBDDMaterialParamInnerCorrect", onlyif="CBDDMaterialParamInnerCorrect" in MF),
-        set_flag("FVertexDisplacement", features.f_vertex_displacement_param, onlyif="FVertexDisplacement" in MF),
+        set_flag("FVertexDisplacement",
+                 features.f_vertex_displacement_param,
+                 onlyif="FVertexDisplacement" in MF),
         set_constant_buffer("CBVertexDisplacement", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_constant_buffer("CBVertexDisplacement2", onlyif=TT.VERTEX_DISPLACEMENT in tt),
         set_flag("FUVVertexDisplacement", features.f_uv_vertex_displacement_param, onlyif=TT.VERTEX_DISPLACEMENT in tt),  # noqa: E501
@@ -599,7 +602,9 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FAlbedo", features.f_albedo_param),
         set_texture("tAlbedoMap", onlyif=TT.DIFFUSE in tt),
         set_sampler_state("SSAlbedoMap", onlyif=TT.DIFFUSE in tt and "SSAlbedoMap" not in MF),
-        set_flag("FUVAlbedoMap", features.f_uv_albedo_map_param, onlyif=TT.DIFFUSE in tt and "FUVAlbedoMap" not in MF),
+        set_flag("FUVAlbedoMap",
+                 features.f_uv_albedo_map_param,
+                 onlyif=TT.DIFFUSE in tt and "FUVAlbedoMap" not in MF),
         set_texture("tAlbedoBlendMap", onlyif=TT.ALBEDO_BLEND in tt),
         set_flag("FUVAlbedoBlendMap", features.f_uv_albedo_blend_map_param, onlyif=TT.ALBEDO_BLEND in tt),
         set_texture("tAlbedoBlend2Map", onlyif=TT.ALBEDO_BLEND_2 in tt),
@@ -803,7 +808,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     elif cb_name == "CBAppReflectShadowLight":
         float_buffer_parent = Mrl.CbAppReflectShadowLight(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
-        float_buffer = Mrl.CbAppReflectShadowLight1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer = Mrl.CbAppReflectShadowLight1(_parent=float_buffer_parent,
+                                                    _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_app_refl_sh_lt"]
 
@@ -831,7 +837,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     elif cb_name == "CBDDMaterialParamInnerCorrect":
         float_buffer_parent = Mrl.CbDdMaterialParamInnerCorrect(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
-        float_buffer = Mrl.CbDdMaterialParamInnerCorrect1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
+        float_buffer = Mrl.CbDdMaterialParamInnerCorrect1(_parent=float_buffer_parent,
+                                                          _root=float_buffer_parent._root)
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["cb_dd_m_p_inn_cor"]
 
@@ -1343,7 +1350,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
                 setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
-@blender_registry.register_custom_properties_material("mrl_params", ("re0", "re1", "re6", "rev1", "rev2", "dd"))
+@blender_registry.register_custom_properties_material("mrl_params",
+                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     material_type_enum = bpy.props.EnumProperty(
@@ -2031,7 +2039,7 @@ class CBAppReflect(bpy.types.PropertyGroup):
 class CBAppReflectShadowLight(bpy.types.PropertyGroup):
     f_app_reflect_shadow_dir: bpy.props.FloatVectorProperty(
         name="fAppReflectShadowDir", size=3, subtype="COLOR", options=set())  # noqa: F821
-    padding: bpy.props.FloatProperty(default=0, options={"HIDDEN"})
+    padding: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
