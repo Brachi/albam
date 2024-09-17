@@ -4,8 +4,8 @@ from albam.engines.mtfw.structs.mrl import Mrl
 from albam.engines.mtfw.material import MRL_BLEND_STATE_STR
 
 
-def test_top_level(parsed_mrl_from_arc, mrl_exported):
-    src_mrl = parsed_mrl_from_arc
+def test_top_level(mrl_imported, mrl_exported):
+    src_mrl = mrl_imported
     dst_mrl = mrl_exported
 
     error, num_missing_materials, num_missing_textures = _get_error(src_mrl, dst_mrl)
@@ -24,9 +24,9 @@ def test_top_level(parsed_mrl_from_arc, mrl_exported):
     assert len(src_mrl.materials) == len(dst_mrl.materials) + num_missing_materials
 
 
-def test_textures(parsed_mrl_from_arc, mrl_exported, subtests):
+def test_textures(mrl_imported, mrl_exported, subtests):
     # Some textures are not exported
-    src_mrl = parsed_mrl_from_arc
+    src_mrl = mrl_imported
     dst_mrl = mrl_exported
     for i, dst_texture in enumerate(dst_mrl.textures):
         src_texture = [t for t in src_mrl.textures if t.texture_path == dst_texture.texture_path][0]
@@ -38,10 +38,10 @@ def test_textures(parsed_mrl_from_arc, mrl_exported, subtests):
             assert dst_texture.filler == src_texture.filler
 
 
-def test_materials(parsed_mrl_from_arc, mrl_exported, subtests):
+def test_materials(mrl_imported, mrl_exported, subtests):
     # TODO: test anim_data offsets/size when added
     # For now it's not being exported
-    src_mrl = parsed_mrl_from_arc
+    src_mrl = mrl_imported
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
     dst_mrl = mrl_exported
 
@@ -78,8 +78,8 @@ def test_materials(parsed_mrl_from_arc, mrl_exported, subtests):
         current_resources_offset += dst_material.cmd_buffer_size
 
 
-def test_resources(parsed_mrl_from_arc, mrl_exported, subtests):
-    src_mrl = parsed_mrl_from_arc
+def test_resources(mrl_imported, mrl_exported, subtests):
+    src_mrl = mrl_imported
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
     dst_mrl = mrl_exported
 
@@ -133,11 +133,11 @@ def test_resources(parsed_mrl_from_arc, mrl_exported, subtests):
     "cbvertexdisplacement",
     "cbvertexdisplacement2",
 ])
-def test_resource_float_buffer(parsed_mrl_from_arc, mrl_exported, subtests, float_buffer_name):
-    src_mrl = parsed_mrl_from_arc
+def test_resource_float_buffer(mrl_imported, mrl_exported, subtests, float_buffer_name):
+    src_mrl = mrl_imported
     src_hashes = [m.name_hash_crcjam32 for m in src_mrl.materials]
     dst_mrl = mrl_exported
-    Mrl = parsed_mrl_from_arc.__class__
+    Mrl = mrl_imported.__class__
 
     for mi, dst_material in enumerate(dst_mrl.materials):
         src_material = src_mrl.materials[src_hashes.index(dst_material.name_hash_crcjam32)]

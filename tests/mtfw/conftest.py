@@ -120,35 +120,21 @@ def mod_exported(mod_export):
 
 
 @pytest.fixture(scope="session")
-def mrl_exported(mod_export):
-    mrl = mod_export[3]
+def mrl_imported(mod_export):
+    mrl = mod_export[2]
     if not mrl:
         pytest.skip("No mrl available")
     else:
         return mrl
 
 
-@pytest.fixture
-def parsed_mod_from_arc(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-    mod_version = src_bytes[4]
-    ModCls = MOD_CLASS_MAPPER[mod_version]
-
-    parsed = ModCls.from_bytes(src_bytes)
-    parsed._read()
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._src_bytes = src_bytes
-    parsed._file_path = file_entry.file_path
-
-    return parsed
+@pytest.fixture(scope="session")
+def mrl_exported(mod_export):
+    mrl = mod_export[3]
+    if not mrl:
+        pytest.skip("No mrl available")
+    else:
+        return mrl
 
 
 @pytest.fixture
@@ -173,6 +159,29 @@ def parsed_mrl_from_arc(request, scope="session"):
     parsed_mrl._num_bytes = len(mrl_bytes)
 
     return parsed_mrl
+
+
+@pytest.fixture
+def parsed_mod_from_arc(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+
+    arc = request.param[0]
+    file_entry = request.param[1]
+
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
+    mod_version = src_bytes[4]
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+
+    parsed = ModCls.from_bytes(src_bytes)
+    parsed._read()
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._src_bytes = src_bytes
+    parsed._file_path = file_entry.file_path
+
+    return parsed
 
 
 @pytest.fixture
