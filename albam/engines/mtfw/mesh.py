@@ -1220,8 +1220,10 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # DD original hack, weapon meshes invisible without it
         if export_settings.force_max_num_weights:
             bone_limit = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format)
-            if not bone_limit % 4 and max_bones_per_vertex < 4:
+            if bone_limit == 4 and max_bones_per_vertex < 4:
                 max_bones_per_vertex = 4
+            elif bone_limit == 8 and max_bones_per_vertex < 5:
+                max_bones_per_vertex = 5
         mesh.max_bones_per_vertex = max_bones_per_vertex
 
         if dst_mod.header.version in (156,):
@@ -1884,6 +1886,7 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     topology: bpy.props.IntProperty(default=0)  # TODO b6
     binormal_flip: bpy.props.BoolProperty(default=0)
     bridge: bpy.props.BoolProperty(default=0)
+    #  max_bones_per_vertex: bpy.props.IntProperty(default=4)
     bone_id_start: bpy.props.IntProperty(default=0)  # TODO u1
     mesh_index: bpy.props.IntProperty(default=0)  # TODO u2
     hash: bpy.props.IntProperty(default=0)  # TODO u4
