@@ -8,7 +8,7 @@ ACCEPTABLE_SIZES.add(360)
 ACCEPTABLE_SIZES.add(640)
 ACCEPTABLE_SIZES.add(720)
 ACCEPTABLE_SIZES.add(1280)
-TEX_TYPES_157 = {0x209d, 0x9a, 0xa09d}
+TEX_TYPES_157 = {0x209d, 0x9a, 0xa09d, 0x99}
 
 
 def test_parse_tex(parsed_tex_from_arc):
