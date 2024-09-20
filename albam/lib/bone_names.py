@@ -336,3 +336,64 @@ BONES_HEAD = {
     200: "pl_cheek_lower_r",
     201: "pl_cheek_lower_l"
 }
+
+BODY_NAMES_FIX_RE1 = {
+    6: "clavicle_twist_r",
+    7: "upperarm_r",
+    8: "lowerarm_r",
+    11: "clavicle_twist_l",
+    12: "upperarm_l",
+    13: "lowerarm_l",
+    24: "knee_r",
+    25: "knee_l",
+    29: "thumb_01_r",
+    30: "thumb_02_r",
+    31: "thumb_03_r",
+    32: "index_01_r",
+    33: "index_02_r",
+    34: "index_03_r",
+    35: "middle_01_r",
+    36: "middle_02_r",
+    37: "middle_03_r",
+    38: "ring_01_r",
+    39: "ring_02_r",
+    40: "ring_03_r",
+    41: "pinky_01_r",
+    42: "pinky_02_r",
+    43: "pinky_03_r",
+    44: "thumb_01_l",
+    45: "thumb_02_l",
+    46: "thumb_03_l",
+    47: "index_01_l",
+    48: "index_02_l",
+    49: "index_03_l",
+    50: "middle_01_l",
+    51: "middle_02_l",
+    52: "middle_03_l",
+    53: "ring_01_l",
+    54: "ring_02_l",
+    55: "ring_03_l",
+    56: "pinky_01_l",
+    57: "pinky_02_l",
+    58: "pinky_03_l",
+}
+
+BODY_NAMES_FIX_RE0 = {
+    70: "upperarm_clavicle_twist_r",
+    72: "upperarm_clavicle_twist_l",
+}
+
+
+BODY_NAMES_FIX_REV2 = {
+    70: "upperarm_clavicle_twist_r",
+    72: "upperarm_clavicle_twist_l",
+}
+
+
+NAME_FIXES = {
+    "re0": BODY_NAMES_FIX_RE0,
+    "re1": BODY_NAMES_FIX_RE1,
+    "rev1": BODY_NAMES_FIX_RE0,
+    "rev2": BODY_NAMES_FIX_RE0,
+    "re6": BODY_NAMES_FIX_RE0,
+}
