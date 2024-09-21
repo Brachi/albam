@@ -346,6 +346,7 @@ BODY_NAMES_FIX_RE1 = {
     13: "lowerarm_l",
     24: "knee_r",
     25: "knee_l",
+    26: "unk_01"
     29: "thumb_01_r",
     30: "thumb_02_r",
     31: "thumb_03_r",
@@ -376,11 +377,22 @@ BODY_NAMES_FIX_RE1 = {
     56: "pinky_01_l",
     57: "pinky_02_l",
     58: "pinky_03_l",
+    125: "jaw",
 }
 
 BODY_NAMES_FIX_RE0 = {
+    8: "hand_r",
+    9: "ctr_hand_r",
+    13: "hand_l",
+    14: "ctr_hand_l",
+    71: "lowerarm_hand_twist_r",
     70: "upperarm_clavicle_twist_r",
     72: "upperarm_clavicle_twist_l",
+    73: "lowerarm_hand_twist_l",
+}
+
+BODY_NAMES_FIX_REV1 = {
+    186: "nostrils",
 }
 
 
@@ -393,7 +405,7 @@ BODY_NAMES_FIX_REV2 = {
 NAME_FIXES = {
     "re0": BODY_NAMES_FIX_RE0,
     "re1": BODY_NAMES_FIX_RE1,
-    "rev1": BODY_NAMES_FIX_RE0,
+    "rev1": BODY_NAMES_FIX_REV1,
     "rev2": BODY_NAMES_FIX_RE0,
     "re6": BODY_NAMES_FIX_RE0,
 }
