@@ -1838,7 +1838,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821
     idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
     alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",
-                                          default=0,options=set())  # noqa: F821
+                                          default=0, options=set())  # noqa: F821
     disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
     shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())   # noqa: F821
     reserved2_flag_1: bpy.props.BoolProperty(name="Reserved 1", default=0, options=set())  # noqa: F821
@@ -1873,21 +1873,21 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
-    level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())
-    draw_mode: bpy.props.IntProperty(name="Draw Mode", default=0, options=set())  # TODO: b12
-    idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # TODO: restrictions
-    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())
-    shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())
-    sort: bpy.props.BoolProperty(name="Sorting", default=0, options=set())
-    alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",
+    level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821
+    draw_mode: bpy.props.IntProperty(name="Draw Mode", default=0, options=set())  # noqa: F821  TODO: b12
+    idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
+    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
+    shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())  # noqa: F821
+    sort: bpy.props.BoolProperty(name="Sorting", default=0, options=set())  # noqa: F821
+    alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",  # noqa: F821
                                           default=0, options=set())  # TODO b8
-    topology: bpy.props.IntProperty(name="Topology", default=0, options=set())  # TODO b6
-    binormal_flip: bpy.props.BoolProperty(name="Binormal Flip", default=0, options=set())
-    bridge: bpy.props.BoolProperty(name="Bridge Geometry", default=0, options=set())
-    bone_id_start: bpy.props.IntProperty(name="Bone ID Start", default=0, options=set())  # TODO u1
-    connect_id: bpy.props.IntProperty(name="Connect ID", default=0, options=set())  # TODO u2
-    boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # TODO u4
-    vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())
+    topology: bpy.props.IntProperty(name="Topology", default=0, options=set())  # noqa: F821  TODO b6
+    binormal_flip: bpy.props.BoolProperty(name="Binormal Flip", default=0, options=set())  # noqa: F821
+    bridge: bpy.props.BoolProperty(name="Bridge Geometry", default=0, options=set())  # noqa: F821
+    bone_id_start: bpy.props.IntProperty(name="Bone ID Start", default=0, options=set())  # noqa: F821
+    connect_id: bpy.props.IntProperty(name="Connect ID", default=0, options=set())  # noqa: F821
+    boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # noqa: F821
+    vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
