@@ -42,6 +42,7 @@ MOD_CLASS_MAPPER = {
     156: Mod156,
     210: Mod21,
     211: Mod21,
+    212: Mod21,
 }
 APPID_CLASS_MAPPER = {
     "re0": Mod21,
@@ -50,6 +51,7 @@ APPID_CLASS_MAPPER = {
     "re6": Mod21,
     "rev1": Mod21,
     "rev2": Mod21,
+    "dd": Mod21,
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -276,8 +278,8 @@ BBOX_AFFECTED = [
 ]
 
 VERSIONS_USE_BONE_PALETTES = {156}
-VERSIONS_BONES_BBOX_AFFECTED = {210, 211}
-VERSIONS_USE_TRISTRIPS = {156}
+VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
+VERSIONS_USE_TRISTRIPS = {156, 212}
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -285,6 +287,7 @@ MAIN_LODS = {
     "re6": [1, 3, 255],
     "rev1": [1, 255],
     "rev2": [1, 255],
+    "dd": [1, 255],
 }
 
 
@@ -294,6 +297,7 @@ MAIN_LODS = {
 @blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
@@ -377,7 +381,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
     # convert indices for this mesh only, so they start at zero
-    indices = [tri_idx - mesh.vertex_position for tri_idx in indices]
+    indices = [tri_idx - mesh.min_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -413,8 +417,8 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
 
-    elif (w is not None and mod_version in (210, 211)) or (
-            mod_version in (210, 211) and mesh.vertex_format in BBOX_AFFECTED):
+    elif (w is not None and mod_version in (210, 211, 212)) or (
+            mod_version in (210, 211, 212) and mesh.vertex_format in BBOX_AFFECTED):
         x = x / 32767 * bbox_data.dimension + bbox_data.min_x
         y = y / 32767 * bbox_data.dimension + bbox_data.min_y
         z = z / 32767 * bbox_data.dimension + bbox_data.min_z
@@ -461,14 +465,13 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 
 
 def _process_vertex_colors(mod_version, vertex, rgba_out):
-    if hasattr(vertex, "rgba"):
-        b = vertex.rgba.x / 225
-        g = vertex.rgba.y / 225
-        r = vertex.rgba.z / 255
-        a = vertex.rgba.w / 255
-        rgba_out.append((r, g, b, a))
-    else:
+    if not hasattr(vertex, "rgba"):
         return
+    b = vertex.rgba.x / 225
+    g = vertex.rgba.y / 225
+    r = vertex.rgba.z / 255
+    a = vertex.rgba.w / 255
+    rgba_out.append((r, g, b, a))
 
 
 def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
@@ -729,11 +732,11 @@ def _get_material_hash(mod, mesh):
     material_hash = None
     if mod.header.version == 156:
         material_hash = mesh.idx_material
-    elif mod.header.version == 210:
-        material_name = mod.materials_data.material_names[mesh.idx_material // 16]
+    elif mod.header.version == 210 or mod.header.version == 212:
+        material_name = mod.materials_data.material_names[mesh.idx_material]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
     elif mod.header.version == 211:
-        material_hash = mod.materials_data.material_hashes[mesh.idx_material // 16]
+        material_hash = mod.materials_data.material_hashes[mesh.idx_material]
     return material_hash
 
 
@@ -743,6 +746,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="re6", extension="mod")
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
+@blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
 def export_mod(bl_obj):
@@ -789,7 +793,6 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    index_buffer.extend((0, 0))
 
     final_size = sum((
         offset,
@@ -842,7 +845,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
         dst_mod_header.size_vertex_buffer_2 = 0
         dst_mod_header.num_textures = 0
         dst_mod_header.offset_vertex_buffer_2 = 0
-    if dst_mod_header.version in (210, 211):
+    if dst_mod_header.version in (210, 211, 212):
         dst_mod_header.revision = 0
         dst_mod_header.reserved_01 = 0
 
@@ -897,7 +900,7 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.rcn_vertices = []
         dst_mod.rcn_trianlges = []
 
-    if src_mod.header.version == 210:
+    if src_mod.header.version in (210, 212):
         dst_mod.num_weight_bounds = 0
 
 
@@ -1119,7 +1122,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     vertex_buffer_2 = bytearray()
     index_buffer = bytearray()
     bbox_data = _create_bbox_data(dst_mod)
-    use_strips = dst_mod.header.version == 156
+    use_strips = dst_mod.header.version in VERSIONS_USE_TRISTRIPS
 
     current_vertex_position = 0
     current_vertex_offset = 0
@@ -1133,6 +1136,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     face_offset = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
+        face_padding = 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
         mesh.indices__to_write = False
         mesh.vertices__to_write = False
@@ -1157,7 +1161,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
             vertex_buffer_2.extend(vertices2.to_byte_array())
-        if vertex_format != current_vertex_format:
+        if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_offset_2 = vertex_offset_2_accumulated
             current_vertex_position = 0
@@ -1170,10 +1174,17 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                 p.vertices for p in bl_mesh.data.polygons))
 
         triangles = [e + current_vertex_position for e in triangles]
+        num_indices = len(triangles)
+        # calculate padding for indices
+        if ((num_indices * 2) % 4):
+            triangles.append(triangles[-1])
+            face_padding += 1
+        triangles.append(triangles[-1])
+        triangles.append(0)
+
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
         num_vertices = len(bl_mesh.data.vertices)
-        num_indices = len(triangles)
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1184,28 +1195,33 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
-        mesh.constant = 1
         mesh.vertex_format = vertex_format
         mesh.vertex_stride = vertex_stride
         mesh.vertex_stride_2 = vertex_stride_2
         # assert num_vertices == len(vertices_array) // 32
         mesh.num_vertices = num_vertices
-        mesh.vertex_position_end = current_vertex_position + \
-            mesh.num_vertices - 1  # XXX only a short!
         mesh.vertex_position_2 = current_vertex_position
         mesh.vertex_offset = current_vertex_offset
         mesh.face_position = face_position
         mesh.num_indices = num_indices
         mesh.face_offset = face_offset
         mesh.vertex_position = current_vertex_position
+        mesh.min_index = current_vertex_position
+        mesh.max_index = current_vertex_position + \
+            mesh.num_vertices - 1  # XXX only a short!
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
-        # TODO: rename to num_weight_bounds
         mesh.num_weight_bounds = 1
+        # DD original hack, weapon meshes invisible without it
+        if export_settings.force_max_num_weights:
+            bone_limit = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format)
+            if bone_limit == 4 and max_bones_per_vertex < 4:
+                max_bones_per_vertex = 4
+            elif bone_limit == 8 and max_bones_per_vertex < 5:
+                max_bones_per_vertex = 5
+        mesh.max_bones_per_vertex = max_bones_per_vertex
 
         if dst_mod.header.version in (156,):
-            mesh.disp = 1
-            mesh.max_bones_per_vertex = max_bones_per_vertex
             mesh.reserved2 = 0
             mesh.connective = 0
 
@@ -1214,13 +1230,12 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh_weight_bounds = _calculate_weight_bounds(
             bl_obj, bl_mesh, dst_mod, meshes_data)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
-        # TODO: rename to num_weight_bounds
         mesh.num_weight_bounds = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
         vertex_offset_2_accumulated += (num_vertices * vertex_stride_2)
-        face_position += num_indices
+        face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
     if dst_mod.header.version in (156, 211):
@@ -1263,7 +1278,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stride = 32
         # vertex_format = max_bones_per_vertex
 
-    elif dst_mod.header.version in (210, 211):
+    elif dst_mod.header.version in (210, 211, 212):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
             stored_vertex_format = int(custom_properties.get("vertex_format"))
@@ -1277,7 +1292,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stride = VertexCls().size_
 
     MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
-    weight_half_float = dst_mod.header.version in (210, 211) and vertex_format not in VERTEX_FORMATS_BRIDGE
+    weight_half_float = (dst_mod.header.version in (210, 211, 212) and
+                         vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vtx_stream = KaitaiStream(
@@ -1500,7 +1516,7 @@ def _apply_bbox_transforms(xyz_tuple, dst_mod, bbox_data):
         z /= (dst_mod.bbox_max.z - dst_mod.bbox_min.z) or 1
         z *= 32767
 
-    elif dst_mod.header.version in (210, 211):
+    elif dst_mod.header.version in (210, 211, 212):
         x -= bbox_data.min_x
         x /= bbox_data.dimension
         x *= 32767
@@ -1818,21 +1834,23 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
         default="0x0",
         options=set()
     )
-    level_of_detail: bpy.props.IntProperty(default=255)
-    idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    alpha_priority: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    shape: bpy.props.BoolProperty(default=0)  # TODO: restrictions
-    reserved2_flag_1: bpy.props.BoolProperty(default=0)
-    reserved2_flag_2: bpy.props.BoolProperty(default=0)
-    env: bpy.props.BoolProperty(default=0)
-    refrect: bpy.props.BoolProperty(default=0)
-    shadow_cast: bpy.props.BoolProperty(default=0)
-    shadow_receive: bpy.props.BoolProperty(default=0)
-    sort: bpy.props.BoolProperty(default=0)
+    level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821
+    idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
+    alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",
+                                          default=0, options=set())  # noqa: F821
+    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
+    shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())   # noqa: F821
+    reserved2_flag_1: bpy.props.BoolProperty(name="Reserved 1", default=0, options=set())  # noqa: F821
+    reserved2_flag_2: bpy.props.BoolProperty(name="Reserved 2", default=0, options=set())  # noqa: F821
+    env: bpy.props.BoolProperty(name="Environment", default=1, options=set())  # noqa: F821
+    refrect: bpy.props.BoolProperty(name="Reflect", default=1, options=set())  # noqa: F821
+    shadow_cast: bpy.props.BoolProperty(name="Cast Shadow", default=1, options=set())  # noqa: F821
+    shadow_receive: bpy.props.BoolProperty(name="Receive Shadow", default=1, options=set())  # noqa: F821
+    sort: bpy.props.BoolProperty(name="Sorting", default=0, options=set())  # noqa: F821
     vdeclbase: vdecl_enum
     vdecl: vdecl_enum
-    rcn_base: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    boundary: bpy.props.IntProperty(default=0)  # TODO: restrictions
+    rcn_base: bpy.props.IntProperty(name="RCN Base", default=0, options=set())  # noqa: F821
+    boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1851,21 +1869,24 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
                 setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
-    level_of_detail: bpy.props.IntProperty(default=255)
-    idx_group: bpy.props.IntProperty(default=0)  # TODO: restrictions
-    type_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_class_mesh: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_render_mode: bpy.props.IntProperty(default=0)  # TODO u1
-    bone_id_start: bpy.props.IntProperty(default=0)  # TODO u1
-    mesh_index: bpy.props.IntProperty(default=0)  # TODO u2
-    min_index: bpy.props.IntProperty(default=0)  # TODO u2
-    max_index: bpy.props.IntProperty(default=0)  # TODO u2
-    hash: bpy.props.IntProperty(default=0)  # TODO u4
-    unk_01: bpy.props.IntProperty(default=0)  # TODO u1
-    vertex_format: bpy.props.StringProperty()
+    level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821
+    draw_mode: bpy.props.IntProperty(name="Draw Mode", default=0, options=set())  # noqa: F821  TODO: b12
+    idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
+    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
+    shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())  # noqa: F821
+    sort: bpy.props.BoolProperty(name="Sorting", default=0, options=set())  # noqa: F821
+    alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",  # noqa: F821
+                                          default=0, options=set())  # TODO b8
+    topology: bpy.props.IntProperty(name="Topology", default=0, options=set())  # noqa: F821  TODO b6
+    binormal_flip: bpy.props.BoolProperty(name="Binormal Flip", default=0, options=set())  # noqa: F821
+    bridge: bpy.props.BoolProperty(name="Bridge Geometry", default=0, options=set())  # noqa: F821
+    bone_id_start: bpy.props.IntProperty(name="Bone ID Start", default=0, options=set())  # noqa: F821
+    connect_id: bpy.props.IntProperty(name="Connect ID", default=0, options=set())  # noqa: F821
+    boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # noqa: F821
+    vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

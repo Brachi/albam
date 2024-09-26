@@ -3,6 +3,7 @@ from albam.engines.mtfw.material import (
     MRL_BLEND_STATE_STR,
     MRL_DEPTH_STENCIL_STATE_STR,
     MRL_RASTERIZER_STATE_STR,
+    MRL_MATERIAL_TYPE_STR,
 )
 
 
@@ -46,7 +47,24 @@ KNOWN_CONSTANT_BUFFERS = {
         Mrl.ShaderObjectHash.cbvertexdisplacement3,
         Mrl.ShaderObjectHash.cbvertexdispmaskuv,
         Mrl.ShaderObjectHash.globals,
-    }
+    },
+    "dd": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbdistortion,
+        Mrl.ShaderObjectHash.cbdistortionrefract,
+        Mrl.ShaderObjectHash.cbddmaterialparam,
+        Mrl.ShaderObjectHash.cboutlineex,
+        Mrl.ShaderObjectHash.cbappclipplane,
+        Mrl.ShaderObjectHash.cbappreflect,
+        Mrl.ShaderObjectHash.cbappreflectshadowlight,
+        Mrl.ShaderObjectHash.cbburncommon,
+        Mrl.ShaderObjectHash.cbburnemission,
+        Mrl.ShaderObjectHash.cbddmaterialparaminnercorrect,
+        Mrl.ShaderObjectHash.cbspecularblend,
+        Mrl.ShaderObjectHash.cbuvrotationoffset,
+        Mrl.ShaderObjectHash.globals,
+    },
+
 }
 
 
@@ -57,6 +75,7 @@ def test_materials(parsed_mrl_from_arc, subtests):
             assert material.blend_state_hash >> 12 in MRL_BLEND_STATE_STR
             assert material.depth_stencil_state_hash >> 12 in MRL_DEPTH_STENCIL_STATE_STR
             assert material.rasterizer_state_hash >> 12 in MRL_RASTERIZER_STATE_STR
+            assert material.type_hash in MRL_MATERIAL_TYPE_STR
 
 
 def test_global_resources_mandatory(mrl_imported):
@@ -65,6 +84,11 @@ def test_global_resources_mandatory(mrl_imported):
     if it contains resources
     """
     for m in mrl_imported.materials:
+        raw_hashes = {r.shader_object_hash for r in m.resources}
+        for h in raw_hashes:
+            if not getattr(h, "value", None):
+                print(h)
+                assert False
         hashes = {r.shader_object_hash.value for r in m.resources}
         assert not hashes or Mrl.ShaderObjectHash.globals.value in hashes
         assert not hashes or Mrl.ShaderObjectHash.cbmaterial.value in hashes

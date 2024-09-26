@@ -265,7 +265,7 @@ types:
       - {id: shadow_receive, type: b1}
       - {id: sort, type: b1}
       - {id: num_vertices, type: u2}
-      - {id: vertex_position_end, type: u2}
+      - {id: max_index, type: u2}
       - {id: vertex_position_2, type: u4}
       - {id: vertex_offset, type: u4}
       - {id: vertex_offset_2, type: u4} # second vertex buffer offset
@@ -274,7 +274,7 @@ types:
       - {id: face_offset, type: u4} # index_base
       - {id: vdeclbase, type: u1}
       - {id: vdecl, type: u1}
-      - {id: vertex_position, type: u2} # min_index
+      - {id: min_index, type: u2}
       - {id: num_weight_bounds, type: u1}
       - {id: idx_bone_palette, type: u1} # envelope
       - {id: rcn_base, type: u2} 
@@ -288,13 +288,13 @@ types:
         repeat-expr: num_indices
         type: u2
       vertices:
-        # XXX vertex_position and vertex_position_2 are equal most of the time
+        # XXX min_index and vertex_position_2 are equal most of the time
         # But if using vertex_position_2 when they are not, vertices import wrongly
         # needs investigation
-        pos: "vertex_position > vertex_position_2 ?  _root.header.offset_vertex_buffer + (vertex_position * vertex_stride) + vertex_offset : _root.header.offset_vertex_buffer + (vertex_position * vertex_stride) + vertex_offset"
+        pos: "min_index > vertex_position_2 ?  _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset : _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset"
         repeat: expr
           #repeat-expr: num_vertices # TODO: special case
-        repeat-expr: "vertex_position > vertex_position_2 ? vertex_position_end - vertex_position + 1 : num_vertices"
+        repeat-expr: "min_index > vertex_position_2 ? max_index - min_index + 1 : num_vertices"
         type:
           switch-on: _root.materials_data.materials[idx_material].vtype
           cases:

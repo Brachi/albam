@@ -37,7 +37,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_max._read()
         self.model_info = Mod21.ModelInfo(self._io, self, self._root)
         self.model_info._read()
-        if (self._root.header.version == 210):
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
             self.num_weight_bounds = self._io.read_u4le()
 
@@ -50,7 +50,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_min._fetch_instances()
         self.bbox_max._fetch_instances()
         self.model_info._fetch_instances()
-        if (self._root.header.version == 210):
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
 
         _ = self.vertex_buffer
@@ -90,7 +90,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_min._write__seq(self._io)
         self.bbox_max._write__seq(self._io)
         self.model_info._write__seq(self._io)
-        if (self._root.header.version == 210):
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
             self._io.write_u4le(self.num_weight_bounds)
 
@@ -118,7 +118,7 @@ class Mod21(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._root, self._root)
         if self.model_info._parent != self:
             raise kaitaistruct.ConsistencyError(u"model_info", self.model_info._parent, self)
-        if (self._root.header.version == 210):
+        if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
             pass
 
 
@@ -2534,7 +2534,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 self.num_weight_bounds = self._io.read_u4le()
 
             self.weight_bounds = []
-            for i in range((self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds)):
+            for i in range((self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
                 _t_weight_bounds = Mod21.WeightBound(self._io, self, self._root)
                 _t_weight_bounds._read()
                 self.weight_bounds.append(_t_weight_bounds)
@@ -2586,8 +2586,8 @@ class Mod21(ReadWriteKaitaiStruct):
             if (self._root.header.version == 211):
                 pass
 
-            if (len(self.weight_bounds) != (self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds)):
-                raise kaitaistruct.ConsistencyError(u"weight_bounds", len(self.weight_bounds), (self._root.num_weight_bounds if (self._root.header.version == 210) else self.num_weight_bounds))
+            if (len(self.weight_bounds) != (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
+                raise kaitaistruct.ConsistencyError(u"weight_bounds", len(self.weight_bounds), (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds))
             for i in range(len(self.weight_bounds)):
                 pass
                 if self.weight_bounds[i]._root != self._root:
@@ -2601,7 +2601,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if (self._root.header.version == 210) else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
+            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -2808,15 +2808,20 @@ class Mod21(ReadWriteKaitaiStruct):
             self.vertices__to_write = True
 
         def _read(self):
-            self.idx_group = self._io.read_u2le()
+            self.draw_mode = self._io.read_u2le()
             self.num_vertices = self._io.read_u2le()
-            self.unk_01 = self._io.read_u1()
-            self.idx_material = self._io.read_u2le()
-            self.level_of_detail = self._io.read_u1()
-            self.type_mesh = self._io.read_u1()
-            self.unk_class_mesh = self._io.read_u1()
+            self.idx_group = self._io.read_bits_int_le(12)
+            self.idx_material = self._io.read_bits_int_le(12)
+            self.level_of_detail = self._io.read_bits_int_le(8)
+            self.disp = self._io.read_bits_int_le(1) != 0
+            self.shape = self._io.read_bits_int_le(1) != 0
+            self.sort = self._io.read_bits_int_le(1) != 0
+            self.max_bones_per_vertex = self._io.read_bits_int_le(5)
+            self.alpha_priority = self._io.read_bits_int_le(8)
             self.vertex_stride = self._io.read_u1()
-            self.unk_render_mode = self._io.read_u1()
+            self.topology = self._io.read_bits_int_le(6)
+            self.binormal_flip = self._io.read_bits_int_le(1) != 0
+            self.bridge = self._io.read_bits_int_le(1) != 0
             self.vertex_position = self._io.read_u4le()
             self.vertex_offset = self._io.read_u4le()
             self.vertex_format = self._io.read_u4le()
@@ -2825,10 +2830,10 @@ class Mod21(ReadWriteKaitaiStruct):
             self.face_offset = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
             self.num_weight_bounds = self._io.read_u1()
-            self.mesh_index = self._io.read_u2le()
+            self.connect_id = self._io.read_u2le()
             self.min_index = self._io.read_u2le()
             self.max_index = self._io.read_u2le()
-            self.hash = self._io.read_u4le()
+            self.boundary = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -2968,15 +2973,20 @@ class Mod21(ReadWriteKaitaiStruct):
             super(Mod21.Mesh, self)._write__seq(io)
             self._should_write_indices = self.indices__to_write
             self._should_write_vertices = self.vertices__to_write
-            self._io.write_u2le(self.idx_group)
+            self._io.write_u2le(self.draw_mode)
             self._io.write_u2le(self.num_vertices)
-            self._io.write_u1(self.unk_01)
-            self._io.write_u2le(self.idx_material)
-            self._io.write_u1(self.level_of_detail)
-            self._io.write_u1(self.type_mesh)
-            self._io.write_u1(self.unk_class_mesh)
+            self._io.write_bits_int_le(12, self.idx_group)
+            self._io.write_bits_int_le(12, self.idx_material)
+            self._io.write_bits_int_le(8, self.level_of_detail)
+            self._io.write_bits_int_le(1, int(self.disp))
+            self._io.write_bits_int_le(1, int(self.shape))
+            self._io.write_bits_int_le(1, int(self.sort))
+            self._io.write_bits_int_le(5, self.max_bones_per_vertex)
+            self._io.write_bits_int_le(8, self.alpha_priority)
             self._io.write_u1(self.vertex_stride)
-            self._io.write_u1(self.unk_render_mode)
+            self._io.write_bits_int_le(6, self.topology)
+            self._io.write_bits_int_le(1, int(self.binormal_flip))
+            self._io.write_bits_int_le(1, int(self.bridge))
             self._io.write_u4le(self.vertex_position)
             self._io.write_u4le(self.vertex_offset)
             self._io.write_u4le(self.vertex_format)
@@ -2985,10 +2995,10 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.face_offset)
             self._io.write_u1(self.bone_id_start)
             self._io.write_u1(self.num_weight_bounds)
-            self._io.write_u2le(self.mesh_index)
+            self._io.write_u2le(self.connect_id)
             self._io.write_u2le(self.min_index)
             self._io.write_u2le(self.max_index)
-            self._io.write_u4le(self.hash)
+            self._io.write_u4le(self.boundary)
 
 
         def _check(self):
@@ -4532,7 +4542,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 self.material_names = []
                 for i in range(self._root.header.num_materials):
@@ -4550,7 +4560,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
@@ -4566,7 +4576,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mod21.MaterialsData, self)._write__seq(io)
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
@@ -4584,7 +4594,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if (self._root.header.version == 210):
+            if  (((self._root.header.version == 210)) or ((self._root.header.version == 212))) :
                 pass
                 if (len(self.material_names) != self._root.header.num_materials):
                     raise kaitaistruct.ConsistencyError(u"material_names", len(self.material_names), self._root.header.num_materials)
@@ -4610,7 +4620,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = ((128 * self._root.header.num_materials) if (self._root.header.version == 210) else (4 * self._root.header.num_materials))
+            self._m_size_ = ((128 * self._root.header.num_materials) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (4 * self._root.header.num_materials))
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -5604,7 +5614,7 @@ class Mod21(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = ((self._root.header.size_ + 68) if (self._root.header.version == 210) else (self._root.header.size_ + 64))
+        self._m_size_top_level_ = ((self._root.header.size_ + 68) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (self._root.header.size_ + 64))
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):

@@ -890,7 +890,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self.shadow_receive = self._io.read_bits_int_le(1) != 0
             self.sort = self._io.read_bits_int_le(1) != 0
             self.num_vertices = self._io.read_u2le()
-            self.vertex_position_end = self._io.read_u2le()
+            self.max_index = self._io.read_u2le()
             self.vertex_position_2 = self._io.read_u4le()
             self.vertex_offset = self._io.read_u4le()
             self.vertex_offset_2 = self._io.read_u4le()
@@ -899,7 +899,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self.face_offset = self._io.read_u4le()
             self.vdeclbase = self._io.read_u1()
             self.vdecl = self._io.read_u1()
-            self.vertex_position = self._io.read_u2le()
+            self.min_index = self._io.read_u2le()
             self.num_weight_bounds = self._io.read_u1()
             self.idx_bone_palette = self._io.read_u1()
             self.rcn_base = self._io.read_u2le()
@@ -974,7 +974,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(1, int(self.shadow_receive))
             self._io.write_bits_int_le(1, int(self.sort))
             self._io.write_u2le(self.num_vertices)
-            self._io.write_u2le(self.vertex_position_end)
+            self._io.write_u2le(self.max_index)
             self._io.write_u4le(self.vertex_position_2)
             self._io.write_u4le(self.vertex_offset)
             self._io.write_u4le(self.vertex_offset_2)
@@ -983,7 +983,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.face_offset)
             self._io.write_u1(self.vdeclbase)
             self._io.write_u1(self.vdecl)
-            self._io.write_u2le(self.vertex_position)
+            self._io.write_u2le(self.min_index)
             self._io.write_u1(self.num_weight_bounds)
             self._io.write_u1(self.idx_bone_palette)
             self._io.write_u2le(self.rcn_base)
@@ -1050,9 +1050,9 @@ class Mod156(ReadWriteKaitaiStruct):
                 return self._m_vertices
 
             _pos = self._io.pos()
-            self._io.seek((((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset) if (self.vertex_position > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset)))
+            self._io.seek((((self._root.header.offset_vertex_buffer + (self.min_index * self.vertex_stride)) + self.vertex_offset) if (self.min_index > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.min_index * self.vertex_stride)) + self.vertex_offset)))
             self._m_vertices = []
-            for i in range((((self.vertex_position_end - self.vertex_position) + 1) if (self.vertex_position > self.vertex_position_2) else self.num_vertices)):
+            for i in range((((self.max_index - self.min_index) + 1) if (self.min_index > self.vertex_position_2) else self.num_vertices)):
                 _on = self._root.materials_data.materials[self.idx_material].vtype
                 if _on == 0:
                     pass
@@ -1095,7 +1095,7 @@ class Mod156(ReadWriteKaitaiStruct):
         def _write_vertices(self):
             self._should_write_vertices = False
             _pos = self._io.pos()
-            self._io.seek((((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset) if (self.vertex_position > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.vertex_position * self.vertex_stride)) + self.vertex_offset)))
+            self._io.seek((((self._root.header.offset_vertex_buffer + (self.min_index * self.vertex_stride)) + self.vertex_offset) if (self.min_index > self.vertex_position_2) else ((self._root.header.offset_vertex_buffer + (self.min_index * self.vertex_stride)) + self.vertex_offset)))
             for i in range(len(self._m_vertices)):
                 pass
                 _on = self._root.materials_data.materials[self.idx_material].vtype
@@ -1123,8 +1123,8 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _check_vertices(self):
             pass
-            if (len(self.vertices) != (((self.vertex_position_end - self.vertex_position) + 1) if (self.vertex_position > self.vertex_position_2) else self.num_vertices)):
-                raise kaitaistruct.ConsistencyError(u"vertices", len(self.vertices), (((self.vertex_position_end - self.vertex_position) + 1) if (self.vertex_position > self.vertex_position_2) else self.num_vertices))
+            if (len(self.vertices) != (((self.max_index - self.min_index) + 1) if (self.min_index > self.vertex_position_2) else self.num_vertices)):
+                raise kaitaistruct.ConsistencyError(u"vertices", len(self.vertices), (((self.max_index - self.min_index) + 1) if (self.min_index > self.vertex_position_2) else self.num_vertices))
             for i in range(len(self._m_vertices)):
                 pass
                 _on = self._root.materials_data.materials[self.idx_material].vtype

@@ -20,9 +20,11 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     # Mostly useful for import-export tests to be able to compare exported vs original,
     # since many models can share a name and the blender database
     # is not cleaned in each test.
-    remove_duplicate_materials_suffix : bpy.props.BoolProperty(default=True)
-    export_visible : bpy.props.BoolProperty(default=False)
-    force_lod255 : bpy.props.BoolProperty(default=False)
+    remove_duplicate_materials_suffix: bpy.props.BoolProperty(default=True)
+    export_visible: bpy.props.BoolProperty(default=False)
+    force_lod255: bpy.props.BoolProperty(default=False)
+    no_vf_grouping: bpy.props.BoolProperty(default=False)  # dd weapons and armor requires it
+    force_max_num_weights: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -87,14 +89,19 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
     bl_label = "Export Options"
     bl_idname = "wm.export_options"
 
-    export_visible: bpy.props.BoolProperty(name="Export only visible meshes", default=False)
-    force_lod255: bpy.props.BoolProperty(name="Set LOD=255 for exported meshes", default=False)
-
     def execute(self, context):
-        export_settings = context.scene.albam.export_settings
-        export_settings.export_visible = self.export_visible
-        export_settings.force_lod255 = self.force_lod255
         return {'FINISHED'}
+
+    def draw(self, context):
+        export_settings = context.scene.albam.export_settings
+        layout = self.layout
+        layout.prop(export_settings, "export_visible", text="Export only visible meshes")
+        layout.prop(export_settings,
+                    "force_lod255",
+                    text="Set LOD ID = 255 (always visible) for exported meshes")
+        layout.label(text="Dragon's Dogma export hacks")
+        layout.prop(export_settings, "no_vf_grouping", text="Don't group meshes by vertex format")
+        layout.prop(export_settings, "force_max_num_weights", text="Set max weigth always more that 4")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
