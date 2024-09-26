@@ -793,7 +793,6 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    #  index_buffer.extend((0, 0))
 
     final_size = sum((
         offset,
@@ -1196,7 +1195,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
-        # mesh.constant = 1
         mesh.vertex_format = vertex_format
         mesh.vertex_stride = vertex_stride
         mesh.vertex_stride_2 = vertex_stride_2
@@ -1427,7 +1425,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.x = xyz[0]
         vertex_struct.position.y = xyz[1]
         vertex_struct.position.z = xyz[2]
-        vertex_struct.position.w = 0  # 32767 dd test # might be changed later
+        vertex_struct.position.w = 32767  # might be changed later
         # Set Normals
         norms = normals.get(vertex_index, (0, 0, 0))
         try:
