@@ -1207,6 +1207,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.face_position = face_position
         mesh.num_indices = num_indices
         mesh.face_offset = face_offset
+        mesh.vertex_position = current_vertex_position
         mesh.min_index = current_vertex_position
         mesh.max_index = current_vertex_position + \
             mesh.num_vertices - 1  # XXX only a short!

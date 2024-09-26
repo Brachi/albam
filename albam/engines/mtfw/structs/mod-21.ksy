@@ -146,12 +146,12 @@ types:
       - {id: topology, type: b6}
       - {id: binormal_flip, type: b1}
       - {id: bridge, type: b1}
-      - {id: vertex_position, type: u4}
-      - {id: vertex_offset, type: u4}
+      - {id: vertex_position, type: u4} #vertex_ofs
+      - {id: vertex_offset, type: u4} #vertex_base
       - {id: vertex_format, type: u4}
-      - {id: face_position, type: u4}
-      - {id: num_indices, type: u4}
-      - {id: face_offset, type: u4}
+      - {id: face_position, type: u4} #index_ofs
+      - {id: num_indices, type: u4} #index_num
+      - {id: face_offset, type: u4} #index_base
       - {id: bone_id_start, type: u1}
       - {id: num_weight_bounds, type: u1}
       - {id: connect_id, type: u2}
