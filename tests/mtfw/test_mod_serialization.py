@@ -124,10 +124,10 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             # assert src_mesh.vertex_format == dst_mesh.vertex_format
             assert src_mesh.bone_id_start == dst_mesh.bone_id_start
             assert src_mesh.num_weight_bounds == dst_mesh.num_weight_bounds
-            assert src_mesh.mesh_index == dst_mesh.mesh_index
+            assert src_mesh.connect_id == dst_mesh.connect_id
             assert src_mesh.min_index == dst_mesh.min_index
             assert src_mesh.max_index == dst_mesh.max_index
-            assert src_mesh.hash == dst_mesh.hash
+            assert src_mesh.boundary == dst_mesh.boundary
 
     assert mod_imported.header.version in (210, 212) and (
         mod_imported.num_weight_bounds == mod_exported.num_weight_bounds)
