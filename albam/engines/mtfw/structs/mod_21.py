@@ -2830,10 +2830,10 @@ class Mod21(ReadWriteKaitaiStruct):
             self.face_offset = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
             self.num_weight_bounds = self._io.read_u1()
-            self.mesh_index = self._io.read_u2le()
+            self.connect_id = self._io.read_u2le()
             self.min_index = self._io.read_u2le()
             self.max_index = self._io.read_u2le()
-            self.hash = self._io.read_u4le()
+            self.boundary = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -2995,10 +2995,10 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.face_offset)
             self._io.write_u1(self.bone_id_start)
             self._io.write_u1(self.num_weight_bounds)
-            self._io.write_u2le(self.mesh_index)
+            self._io.write_u2le(self.connect_id)
             self._io.write_u2le(self.min_index)
             self._io.write_u2le(self.max_index)
-            self._io.write_u4le(self.hash)
+            self._io.write_u4le(self.boundary)
 
 
         def _check(self):

@@ -1300,38 +1300,43 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         default="0x0",
         options=set()
     )
-    fog_enable: bpy.props.BoolProperty(default=True)
-    zwrite: bpy.props.BoolProperty(default=True)
+    fog_enable: bpy.props.BoolProperty(name="Fog Enable", default=True, options=set())  # noqa: F821
+    zwrite: bpy.props.BoolProperty(name="Z-write", default=True, options=set())  # noqa: F821
     attr: attr_enum
-    num: bpy.props.IntProperty(default=0)
-    envmap_bias: bpy.props.IntProperty(default=4)
+    num: bpy.props.IntProperty(name="Material Number", default=0, options=set())  # noqa: F821
+    envmap_bias: bpy.props.IntProperty(name="Environmental Bias",
+                                       default=4, options=set())  # noqa: F821
     vtype: vtype_enum
-    uvscroll_enable: bpy.props.BoolProperty(default=False)
-    ztest: bpy.props.BoolProperty(default=True)
+    uvscroll_enable: bpy.props.BoolProperty(name="UV scroll enable",
+                                            default=False, options=set())  # noqa: F821
+    ztest: bpy.props.BoolProperty(name="Z-test", default=True, options=set())  # noqa: F821
     func_skin: func_skin_enum
     func_lighting: func_lighting_enum
     func_normalmap: func_normalmap_enum
     func_specular: func_specular_enum
     func_lightmap: func_lighting_enum
     func_multitexture: func_multitexture_enum
-    htechnique: bpy.props.StringProperty(default="0x8727e606")
-    pipeline: bpy.props.IntProperty(default=379)
-    pvdeclbase: bpy.props.IntProperty(default=0)
-    pvdecl: bpy.props.StringProperty(default="0x0")
+    htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
+                                         default="0x8727e606", options=set())  # noqa: F821
+    pipeline: bpy.props.IntProperty(name="Pipline", default=379, options=set())  # noqa: F821
+    pvdeclbase: bpy.props.IntProperty(name="PV declaration base", default=0, options=set())  # noqa: F821
+    pvdecl: bpy.props.StringProperty(name="PV declaration", default="0x0", options=set())  # noqa: F821
 
-    transparency: bpy.props.FloatProperty(default=1.0)
+    transparency: bpy.props.FloatProperty(name="Transparency", default=1.0, options=set())  # noqa: F821
     fresnel_factor: bpy.props.FloatVectorProperty(
         name="FresnelFactor", size=4, default=(0.0, 0.5, 7.0, 0.6), options=set())  # noqa: F821
     lightmap_factor: bpy.props.FloatVectorProperty(
-        name="LightmapFactor", size=4, default=(1.0, 1.0, 1.0, 0), options=set())  # noqa: F821
+        name="LightmapFactor",  # noqa: F821
+        size=4, default=(1.0, 1.0, 1.0, 0), options=set(), subtype="COLOR")  # noqa: F821
     detail_factor: bpy.props.FloatVectorProperty(
         name="DetailFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
     parallax_factor: bpy.props.FloatVectorProperty(
         name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set())  # noqa: F821
-    flip_binormal: bpy.props.FloatProperty(default=1.0)
-    heightmap_occ: bpy.props.FloatProperty(default=0.2)
-    blend_state: bpy.props.IntProperty(default=44172837)
-    alpha_ref: bpy.props.IntProperty(default=8)
+    flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
+    heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
+                                           default=0.2, options=set())  # noqa: F821
+    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())
+    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

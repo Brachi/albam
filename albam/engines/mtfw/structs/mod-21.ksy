@@ -132,23 +132,20 @@ types:
           _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
     seq:
-      - {id: draw_mode, type: u2}  # draw mode
+      - {id: draw_mode, type: u2}
       - {id: num_vertices, type: u2}
       - {id: idx_group, type: b12} # parts_no
       - {id: idx_material, type: b12}
       - {id: level_of_detail, type: b8}
-      #- {id: type_mesh, type: u1}
-      #- {id: unk_class_mesh, type: u1}
       - {id: disp, type: b1}
       - {id: shape, type: b1}
       - {id: sort, type: b1}
       - {id: max_bones_per_vertex, type: b5} # weight_num
       - {id: alpha_priority, type: b8}
       - {id: vertex_stride, type: u1}
-      #- {id: unk_render_mode, type: u1}
       - {id: topology, type: b6}
       - {id: binormal_flip, type: b1}
-      - {id: bridge, type: b1}      
+      - {id: bridge, type: b1}
       - {id: vertex_position, type: u4}
       - {id: vertex_offset, type: u4}
       - {id: vertex_format, type: u4}
@@ -157,10 +154,10 @@ types:
       - {id: face_offset, type: u4}
       - {id: bone_id_start, type: u1}
       - {id: num_weight_bounds, type: u1}
-      - {id: mesh_index, type: u2} # connect_id
+      - {id: connect_id, type: u2}
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
-      - {id: hash, type: u4} # po
+      - {id: boundary, type: u4}
     instances:
       size_:
         value: 48
