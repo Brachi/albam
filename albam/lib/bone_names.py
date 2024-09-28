@@ -501,11 +501,17 @@ BODY_NAMES_FIX_REV2 = {
 
 BODY_NAMES_FIX_REV6 = {
     8: "hand_r",
+    9: "ctr_hand_r",
     13: "hand_l",
+    14: "ctr_hand_l",
     71: "lowerarm_hand_twist_r",
     70: "upperarm_clavicle_twist_r",
     72: "upperarm_clavicle_twist_l",
     73: "lowerarm_hand_twist_l",
+    77: "acc_00",
+    79: "acc_01",
+    80: "acc_02",
+    81: "acc_03",
     100: "jaw",
     101: "lip_lower_r",
     102: "lip_lower",
@@ -531,10 +537,23 @@ BODY_NAMES_FIX_REV6 = {
     122: "eyelid_upper_l",
 }
 
-NAME_FIXES = {
+HEAD_NAMES_FIX_RE6 = {
+    0: "test",
+}
+
+NAME_FIXES_HEAD = {
+    "re6": HEAD_NAMES_FIX_RE6,
+}
+
+NAME_FIXES_BODY = {
     "re0": BODY_NAMES_FIX_RE0,
     "re1": BODY_NAMES_FIX_RE1,
     "rev1": BODY_NAMES_FIX_REV1,
     "rev2": BODY_NAMES_FIX_RE0,
     "re6": BODY_NAMES_FIX_REV6,
+}
+
+NAME_FIXES = {
+    "Body": NAME_FIXES_BODY,
+    "Head": NAME_FIXES_HEAD,
 }
