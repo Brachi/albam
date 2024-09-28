@@ -537,12 +537,8 @@ BODY_NAMES_FIX_REV6 = {
     122: "eyelid_upper_l",
 }
 
-HEAD_NAMES_FIX_RE6 = {
-    0: "test",
-}
-
+# Currently just a workaround, more research is needed
 NAME_FIXES_HEAD = {
-    "re6": HEAD_NAMES_FIX_RE6,
 }
 
 NAME_FIXES_BODY = {

@@ -387,7 +387,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
 
 def rename_bones(armature_ob, app_id, body_type):
     names_preset = BONE_NAMES.get(body_type)
-    fixed_name = NAME_FIXES.get(app_id, None)
+    fixes_preset = NAME_FIXES.get(body_type)
+    fixed_name = fixes_preset.get(app_id, None)
     if fixed_name:
         for k, v in fixed_name.items():
             names_preset[k] = v
