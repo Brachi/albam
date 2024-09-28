@@ -1,5 +1,5 @@
 import pytest
-
+from struct import pack, unpack
 
 def test_export_header(mod_imported, mod_exported):
     sheader = mod_imported.header
@@ -142,6 +142,44 @@ def test_vertices(mod_imported, mod_exported, subtests):
         dst_mesh = mod_exported.meshes_data.meshes[mi]
         with subtests.test(mesh_index=mi):
             assert src_mesh.num_vertices == dst_mesh.num_vertices
+            if src_mesh.vertex_format == 0xbb424024:
+                for vi, dst_vertex in enumerate(dst_mesh.vertices):
+                    src_vertex = src_mesh.vertices[vi]
+                    with subtests.test(mesh_index=mi, vertex_index=vi):
+                        src_weights = {}
+                        dst_weights = {}
+                        w1 = src_vertex.position.w/32767
+                        w2 = src_vertex.weight_values[0] / 255
+                        w3 = src_vertex.weight_values[1] / 255
+                        w4 = src_vertex.weight_values[2] / 255
+                        w5 = src_vertex.weight_values[3] / 255
+                        w6 = unpack("e", bytes(src_vertex.weight_values2[0]))[0]
+                        w7 = unpack("e", bytes(src_vertex.weight_values2[1]))[0]
+                        w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
+                        src_raw_weights = [w1, w2, w3, w4, w5, w6, w7, w8]
+                        w1 = dst_vertex.position.w/32767
+                        w2 = dst_vertex.weight_values[0] / 255
+                        w3 = dst_vertex.weight_values[1] / 255
+                        w4 = dst_vertex.weight_values[2] / 255
+                        w5 = dst_vertex.weight_values[3] / 255
+                        w6 = unpack("e", bytes(dst_vertex.weight_values2[0]))[0]
+                        w7 = unpack("e", bytes(dst_vertex.weight_values2[1]))[0]
+                        w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
+                        dst_raw_weights = [w1, w2, w3, w4, w5, w6, w7, w8]
+                        for i, v in enumerate(src_vertex.bone_indices):
+                            if not src_weights.get(v, None):
+                                src_weights[v] = src_raw_weights[i]
+                        for i, v in enumerate(dst_vertex.bone_indices):
+                            if not dst_weights.get(v, None):
+                                dst_weights[v] = dst_raw_weights[i]
+                        
+                        # assert (abs(src_vertex.position.w - dst_vertex.position.w) < 100)
+                        assert src_weights
+                        assert dst_weights
+                        # assert len(src_weights) == len(dst_weights)
+                        for key, v in src_weights.items():
+                            # assert dst_weights.get(key)
+                            assert (abs(v - dst_weights.get(key, 0))) < 0.001
             # disable for now, some normals don't match
             '''for vi, dst_vertex in enumerate(dst_mesh.vertices):
                 src_vertex = src_mesh.vertices[vi]

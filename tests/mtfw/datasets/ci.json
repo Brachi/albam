@@ -8,5 +8,10 @@
         "app_id": "re5",
         "mod_path": "pawn/pl/pl00/model/pl0000.mod",
         "mrl_path": null
+    },
+    {
+        "app_id": "dd",
+        "mod_path": "model/pl/m/m_body_b/m_body_b000_a/m_body_b000_a.mod",
+        "mrl_path": "model/pl/m/m_body_b/m_body_b000_a/m_body_b000_a.mrl"
     }
 ]
