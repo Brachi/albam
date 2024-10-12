@@ -85,6 +85,46 @@ KNOWN_FUNC_SKIN = {
 }
 
 
+KNOWN_DRAW_MODE = {
+    0,
+    32,
+    4128,
+    58560,
+    58561,
+    58577,
+    58579,
+    58821,
+    58853,
+    59080,
+    59340,
+    59112,
+    59341,
+    60901,
+    61439,
+    62689,
+    62691,
+    62949,
+    62965,
+    63469,
+    63485,
+    64755,
+    64997,
+    64999,
+    65013,
+    65015,
+    65517,
+    65519,
+    65533,
+    65534,
+    65535,
+}
+
+KNOWN_TOPOLOGY = {
+    3,
+    4,  # probably strips
+}
+
+
 def test_mod(parsed_mod_from_arc):
     mod = parsed_mod_from_arc
     if mod.header.version == 156:
@@ -124,6 +164,10 @@ def test_mod(parsed_mod_from_arc):
         vertex_formats = vtype_types
     else:
         vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
+        draw_modes = {m.draw_mode for m in mod.meshes_data.meshes}
+        topology = {m.topology for m in mod.meshes_data.meshes}
+        assert not draw_modes.difference(KNOWN_DRAW_MODE)
+        assert not topology.difference(KNOWN_TOPOLOGY)
     total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
     # FIXME: mod.header.version == 211
     num_weight_bounds = (

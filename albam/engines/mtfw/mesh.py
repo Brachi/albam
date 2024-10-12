@@ -1110,6 +1110,40 @@ def _serialize_groups(src_mod, dst_mod):
     return groups
 
 
+def _check_weights(weights):
+    w1 = round(
+        unpack('e', weights[0])[0] * 32767)
+    w1 = w1/32767
+    w2 = round(
+        unpack('e', weights[1])[0] * 255) if weights[1] else 0
+    w2 = w2/255
+    w3 = round(
+        unpack('e', weights[2])[0] * 255) if weights[2] else 0
+    w3 = w3/255
+    w4 = round(
+        unpack('e', weights[3])[0] * 255) if weights[3] else 0
+    w4 = w4/255
+    w5 = round(
+        unpack('e', weights[4])[0] * 255) if weights[4] else 0
+    w5 = w5/255
+    w6 = unpack('e', weights[5])[0] if weights[5] else 0
+    w7 = unpack('e', weights[6])[0] if weights[6] else 0
+    w8 = unpack('e', weights[7])[0] if weights[7] else 0
+
+    weight_sum = w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8
+
+    #print("og value is {}".format(w1))
+    if weight_sum != 1.0:
+        error = 1.0 - weight_sum
+        print("error is {}".format(error))
+        if w6 != 0:
+            w6 = w6 + error
+            print("wt6 is {}".format(w6))
+            w6t = pack('e', w6)
+            w6t = unpack('e', w6t)[0]
+            print("wn6 is {}".format(w6t))
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1450,12 +1484,14 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]
+
             weight_values.extend([0] * (MAX_BONES - len(weight_values)))  # add nulls if less than bone limit
             if mesh_bone_palette:
                 bone_indices = [mesh_bone_palette.index(
                     bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
+            bone_indices.extend([bone_indices[0]] * (max_bones_per_vertex - len(bone_indices)))
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
             if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)
@@ -1474,6 +1510,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
                     vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
                 elif MAX_BONES == 8:
+                    _check_weights(weight_values)
                     vertex_struct.position.w = round(
                         unpack('e', weight_values[0])[0] * 32767)
                     vertex_struct.weight_values = [0, 0, 0, 0]
