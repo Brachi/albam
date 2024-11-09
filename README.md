@@ -43,9 +43,8 @@ For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
 * [Noesis](https://richwhitehouse.com/index.php?content=inc_projects.php&showproject=91) (native support for RE5)
 * [Mod3-MHW-Importer](https://github.com/AsteriskAmpersand/Mod3-MHW-Importer)
 * [RevilMax](https://github.com/PredatorCZ/RevilMax])
-* [umvc3-tools](https://github.com/tge-was-taken/umvc3-tools]
-* 3ds script by Maliwei777, Aman, Mariokart64n and others (not sure if there's a repo)
-
+* [umvc3-tools](https://github.com/tge-was-taken/umvc3-tools)
+* 3ds script by Maliwei777, Aman, Mariokart64n and others
 
 ## Special Thanks
 
