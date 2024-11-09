@@ -18,8 +18,7 @@ For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
 ## Supported Engines
 
 * [MT Framework](https://en.wikipedia.org/wiki/MT_Framework)
-* [Hexane](https://en.wikipedia.org/wiki/Slant_Six_Games)
-* [RE Engine](https://en.wikipedia.org/wiki/RE_Engine)
+
 
 ## Supported Apps
 ...
@@ -41,11 +40,11 @@ For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
 
 ## Similar Tools
 
-Rich Whitehouse support in Noesis for RE5
-Noesis scripts by Chroxx
-Asterisk Ampersand's Monster Hunter World
-PredatorCz/Lukas Cone
-UMVC3 tools by <something>was taken
+* [Noesis](https://richwhitehouse.com/index.php?content=inc_projects.php&showproject=91) (native support for RE5)
+* [Mod3-MHW-Importer](https://github.com/AsteriskAmpersand/Mod3-MHW-Importer)
+* [RevilMax](https://github.com/PredatorCZ/RevilMax])
+* [umvc3-tools](https://github.com/tge-was-taken/umvc3-tools]
+* 3ds script by Maliwei777, Aman, Mariokart64n and others (not sure if there's a repo)
 
 
 ## Special Thanks
