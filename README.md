@@ -1,4 +1,9 @@
 # Albam
+
+⚠️  
+Albam is currently in heavy development and may be unstable. 
+Additionally, documentation is completely lacking except some quick videos and chat histories in discord.  
+For now, only use it if you really enjoy tinkering or can't wait.
 <p align="left">
 <a href="https://github.com/Brachi/albam/actions"><img alt="Actions Status" src="https://github.com/Brachi/albam/workflows/Test/badge.svg"></a>
 <img alt="Code coverage" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Brachi/879e4f106f38b080ff10d3f46e3336e6/raw/covbadge.json">
@@ -6,8 +11,6 @@
 
 This is the source of _Albam_, a [Blender](https://blender.org) [addon](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html) for importing and exporting 3d models and other game engine formats.  
 Its main purpose is modding, but also education and appreciation of game art.  
-
-<img>gif showcase</img>
 
 For user-facing documentation and modding tutorials, refer to the [User Docs]()  
 For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
