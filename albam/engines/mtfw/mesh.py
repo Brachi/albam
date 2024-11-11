@@ -1133,6 +1133,7 @@ def _check_weights(weights):
     weight_sum = w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8
 
     #print("og value is {}".format(w1))
+    w6t = None
     if weight_sum != 1.0:
         error = 1.0 - weight_sum
         print("error is {}".format(error))
@@ -1140,8 +1141,9 @@ def _check_weights(weights):
             w6 = w6 + error
             print("wt6 is {}".format(w6))
             w6t = pack('e', w6)
-            w6t = unpack('e', w6t)[0]
-            print("wn6 is {}".format(w6t))
+            w6n = unpack('e', w6t)[0]
+            print("wn6 is {}".format(w6n))
+    return error
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
@@ -1348,8 +1350,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct_2.occlusion.y = 255
             vertex_struct_2.occlusion.z = 255
             vertex_struct_2.occlusion.w = 255
-            # Tangents
 
+            # Tangents
             t = tangents.get(vertex_index, (0, 0, 0))
             try:
                 vertex_struct_2.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
@@ -1491,6 +1493,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
+            # fill empty bone indices with the first bone id
             bone_indices.extend([bone_indices[0]] * (max_bones_per_vertex - len(bone_indices)))
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
             if vertex_format == 0xdb7da014:  # very strange bridge format
@@ -1590,8 +1593,12 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
                 influence_list, key=lambda t: t[1])[-limit:]
 
         # normalize
-        weights = [t[1] for t in influence_list]
-        bone_indices = [t[0] for t in influence_list]
+        #weights = [t[1] for t in influence_list]
+        #bone_indices = [t[0] for t in influence_list]
+        weight_data = {t[0]: t[1] for t in influence_list}
+        wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+        bone_indices = [bi for bi in wd_sorted.keys()]
+        weights = [w for w in wd_sorted.values()]
         total_weight = sum(weights)
         if total_weight:
             weights = [(w / total_weight) for w in weights]
