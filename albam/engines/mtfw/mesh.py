@@ -1133,6 +1133,7 @@ def _check_weights(weights):
     weight_sum = w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8
 
     #print("og value is {}".format(w1))
+    error = 0
     w6t = None
     if weight_sum != 1.0:
         error = 1.0 - weight_sum
@@ -1513,7 +1514,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
                     vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
                 elif MAX_BONES == 8:
-                    _check_weights(weight_values)
+                    # _check_weights(weight_values)
                     vertex_struct.position.w = round(
                         unpack('e', weight_values[0])[0] * 32767)
                     vertex_struct.weight_values = [0, 0, 0, 0]
@@ -1592,13 +1593,11 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
             influence_list = sorted(
                 influence_list, key=lambda t: t[1])[-limit:]
 
-        # normalize
-        #weights = [t[1] for t in influence_list]
-        #bone_indices = [t[0] for t in influence_list]
         weight_data = {t[0]: t[1] for t in influence_list}
         wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
         bone_indices = [bi for bi in wd_sorted.keys()]
-        weights = [w for w in wd_sorted.values()]
+        weights = [round(w, 6) for w in wd_sorted.values()]
+        # normalize
         total_weight = sum(weights)
         if total_weight:
             weights = [(w / total_weight) for w in weights]
