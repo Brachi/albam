@@ -185,7 +185,7 @@ def test_vertices(mod_imported, mod_exported, capsys, subtests):
                                 dst_weights[v] = dst_raw_weights[i]#{(i, v, dst_raw_weights[i])}
                         
                         # assert (abs(src_vertex.position.w - dst_vertex.position.w) < 100)
-                        # assert len(src_weights) == len(dst_weights)
+                        assert len(src_weights) == len(dst_weights)
                         for bone_id, dst_bweight in dst_weights.items():
                             #if not src_weights.get(key):
                             #    assert v is None
