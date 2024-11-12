@@ -1110,41 +1110,31 @@ def _serialize_groups(src_mod, dst_mod):
     return groups
 
 
-def _check_weights(weights):
-    w1 = round(
-        unpack('e', weights[0])[0] * 32767)
-    w1 = w1/32767
-    w2 = round(
-        unpack('e', weights[1])[0] * 255) if weights[1] else 0
-    w2 = w2/255
-    w3 = round(
-        unpack('e', weights[2])[0] * 255) if weights[2] else 0
-    w3 = w3/255
-    w4 = round(
-        unpack('e', weights[3])[0] * 255) if weights[3] else 0
-    w4 = w4/255
-    w5 = round(
-        unpack('e', weights[4])[0] * 255) if weights[4] else 0
-    w5 = w5/255
-    w6 = unpack('e', weights[5])[0] if weights[5] else 0
-    w7 = unpack('e', weights[6])[0] if weights[6] else 0
-    w8 = unpack('e', weights[7])[0] if weights[7] else 0
-
-    weight_sum = w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8
-
-    #print("og value is {}".format(w1))
-    error = 0
-    w6t = None
-    if weight_sum != 1.0:
-        error = 1.0 - weight_sum
-        print("error is {}".format(error))
-        if w6 != 0:
-            w6 = w6 + error
-            print("wt6 is {}".format(w6))
-            w6t = pack('e', w6)
-            w6n = unpack('e', w6t)[0]
-            print("wn6 is {}".format(w6n))
-    return error
+def _check_weights(weights, max_weights):
+    _weights = []
+    i = max_weights - 4
+    weights.extend([0] * (max_weights - len(weights)))
+    _weights.append(round(weights[0] * 32767) / 32767)
+    if max_weights == 2:
+        return _weights
+    if max_weights == 8:
+        _weights.append(round(weights[1] * 255) / 255)
+        _weights.append(round(weights[2] * 255) / 255)
+        _weights.append(round(weights[3] * 255) / 255)
+        _weights.append(round(weights[4] * 255) / 255)
+    _weights.append(round(unpack("e", pack("e", weights[i+1]))[0], 4))
+    _weights.append(round(unpack("e", pack("e", weights[i+2]))[0], 4))
+    _weights.append(weights[i+3])
+    excess = 1.0 - sum(_weights)
+    if excess < 0:
+        print(excess)
+        print("1/255 is {}".format(abs(excess)//0.003922))
+        print("1/32767 is {}".format(abs(excess)//0.000031))
+        print("half float is {}".format(abs(excess)//0.000001))
+        print("wt6 is {}".format(_weights[5]))
+        if _weights[i+2] > abs(excess):
+            _weights[i+2] = _weights[i+2] + excess
+    return _weights
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
@@ -1505,30 +1495,22 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 if MAX_BONES == 2:
                     vertex_struct.bone_indices = [
                         pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
+                    vertex_struct.position.w = round(weight_values[0] * 32767)
                 elif MAX_BONES == 4:
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
+                    vertex_struct.position.w = round(weight_values[0] * 32767)
                     vertex_struct.weight_values = [0, 0]
-                    vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
-                    vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
+                    vertex_struct.weight_values[0] = pack("e", weight_values[1]) if weight_values[1] else bytes_empty
+                    vertex_struct.weight_values[1] = pack("e", weight_values[2]) if weight_values[2] else bytes_empty
                 elif MAX_BONES == 8:
-                    # _check_weights(weight_values)
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
+                    vertex_struct.position.w = round(weight_values[0] * 32767)
                     vertex_struct.weight_values = [0, 0, 0, 0]
-                    vertex_struct.weight_values[0] = round(
-                        unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
-                    vertex_struct.weight_values[1] = round(
-                        unpack('e', weight_values[2])[0] * 255) if weight_values[2] else 0
-                    vertex_struct.weight_values[2] = round(
-                        unpack('e', weight_values[3])[0] * 255) if weight_values[3] else 0
-                    vertex_struct.weight_values[3] = round(
-                        unpack('e', weight_values[4])[0] * 255) if weight_values[4] else 0
+                    vertex_struct.weight_values[0] = round(weight_values[1] * 255)
+                    vertex_struct.weight_values[1] = round(weight_values[2] * 255)
+                    vertex_struct.weight_values[2] = round(weight_values[3] * 255)
+                    vertex_struct.weight_values[3] = round(weight_values[4] * 255)
                     vertex_struct.weight_values2 = [0, 0]
-                    vertex_struct.weight_values2[0] = weight_values[5] if weight_values[5] else bytes_empty
-                    vertex_struct.weight_values2[1] = weight_values[6] if weight_values[6] else bytes_empty
+                    vertex_struct.weight_values2[0] = pack("e", weight_values[5]) if weight_values[5] else bytes_empty
+                    vertex_struct.weight_values2[1] = pack("e", weight_values[6]) if weight_values[6] else bytes_empty
             else:
                 vertex_struct.weight_values = weight_values
         if has_vertex_buffer_2:
@@ -1596,27 +1578,24 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
         weight_data = {t[0]: t[1] for t in influence_list}
         wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
         bone_indices = [bi for bi in wd_sorted.keys()]
-        weights = [round(w, 6) for w in wd_sorted.values()]
+        weights = [w for w in wd_sorted.values()]
         # normalize
         total_weight = sum(weights)
         if total_weight:
-            weights = [(w / total_weight) for w in weights]
-
-        # float to byte
-        # can't have zero values
-        weights = [round(w * 255) or 1 for w in weights]
-        # correct precision
-        if not weights:
-            # XXX vertex_position_2 research, beware
-            continue
-        excess = sum(weights) - 255
-        if excess:
-            max_index, _ = max(enumerate(weights), key=lambda p: p[1])
-            weights[max_index] -= excess
-
+            weights = [round((w / total_weight), 6) for w in weights]
         if half_float:
-            # TODO: do before losing precision
-            weights = [pack('e', w / 255) for w in weights]
+            weights = _check_weights(weights, limit)
+        else:
+            # can't have zero values
+            weights = [round(w * 255) or 1 for w in weights]
+            # correct precision
+            if not weights:
+                # XXX vertex_position_2 research, beware
+                continue
+            excess = sum(weights) - 255
+            if excess:
+                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+                weights[max_index] -= excess
 
         new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
 
