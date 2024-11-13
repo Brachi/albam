@@ -1122,16 +1122,16 @@ def _check_weights(weights, max_weights):
         _weights.append(round(weights[2] * 255) / 255)
         _weights.append(round(weights[3] * 255) / 255)
         _weights.append(round(weights[4] * 255) / 255)
-    _weights.append(round(unpack("e", pack("e", weights[i+1]))[0], 4))
-    _weights.append(round(unpack("e", pack("e", weights[i+2]))[0], 4))
+    _weights.append(unpack("e", pack("e", weights[i+1]))[0])
+    _weights.append(unpack("e", pack("e", weights[i+2]))[0])
     _weights.append(weights[i+3])
     excess = 1.0 - sum(_weights)
     if excess < 0:
-        print(excess)
-        print("1/255 is {}".format(abs(excess)//0.003922))
-        print("1/32767 is {}".format(abs(excess)//0.000031))
-        print("half float is {}".format(abs(excess)//0.000001))
-        print("wt6 is {}".format(_weights[5]))
+        # print(excess)
+        # print("1/255 is {}".format(abs(excess)//0.003922))
+        # print("1/32767 is {}".format(abs(excess)//0.000031))
+        # print("half float is {}".format(abs(excess)//0.000001))
+        # print("wt6 is {}".format(_weights[5]))
         if _weights[i+2] > abs(excess):
             _weights[i+2] = _weights[i+2] + excess
     return _weights
@@ -1582,7 +1582,7 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
         # normalize
         total_weight = sum(weights)
         if total_weight:
-            weights = [round((w / total_weight), 6) for w in weights]
+            weights = [round((w / total_weight), 4) for w in weights]
         if half_float:
             weights = _check_weights(weights, limit)
         else:
