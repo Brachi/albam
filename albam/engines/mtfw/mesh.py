@@ -1114,9 +1114,9 @@ def _check_weights(weights, max_weights):
     _weights = []
     i = max_weights - 4
     weights.extend([0] * (max_weights - len(weights)))
+    if max_weights in [1, 2]:
+        return weights
     _weights.append(round(weights[0] * 32767) / 32767)
-    if max_weights == 2:
-        return _weights
     if max_weights == 8:
         _weights.append(round(weights[1] * 255) / 255)
         _weights.append(round(weights[2] * 255) / 255)
