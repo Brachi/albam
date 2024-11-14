@@ -1,5 +1,5 @@
 import pytest
-from struct import pack, unpack
+
 
 def test_export_header(mod_imported, mod_exported):
     sheader = mod_imported.header
@@ -115,7 +115,6 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             assert src_mesh.disp == dst_mesh.disp
             assert src_mesh.shape == dst_mesh.shape
             assert src_mesh.sort == dst_mesh.sort
-            # max_bones_per_vertex is not always correct in original meshes
             # assert src_mesh.max_bones_per_vertex == dst_mesh.max_bones_per_vertex
             # assert src_mesh.vertex_stride == dst_mesh.vertex_stride
             assert src_mesh.alpha_priority == dst_mesh.alpha_priority
@@ -134,7 +133,7 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
         mod_imported.num_weight_bounds == mod_exported.num_weight_bounds)
 
 
-def test_vertices(mod_imported, mod_exported, capsys, subtests):
+def test_vertices(mod_imported, mod_exported, subtests):
     if mod_imported.header.version not in (210, 212):  # RE5 has some mess with in hands files
         pytest.skip()
     assert len(mod_imported.meshes_data.meshes) == len(mod_exported.meshes_data.meshes)
@@ -143,58 +142,6 @@ def test_vertices(mod_imported, mod_exported, capsys, subtests):
         dst_mesh = mod_exported.meshes_data.meshes[mi]
         with subtests.test(mesh_index=mi):
             assert src_mesh.num_vertices == dst_mesh.num_vertices
-            if src_mesh.vertex_format == 0xbb424024:
-                for vi, dst_vertex in enumerate(dst_mesh.vertices):
-                    src_vertex = src_mesh.vertices[vi]
-                    with subtests.test(mesh_index=mi, vertex_index=vi):
-                        src_weights = {}
-                        dst_weights = {}
-                        w1 = src_vertex.position.w/32767
-                        w2 = src_vertex.weight_values[0] / 255
-                        w3 = src_vertex.weight_values[1] / 255
-                        w4 = src_vertex.weight_values[2] / 255
-                        w5 = src_vertex.weight_values[3] / 255
-                        w6 = unpack("e", bytes(src_vertex.weight_values2[0]))[0]
-                        w7 = unpack("e", bytes(src_vertex.weight_values2[1]))[0]
-                        w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
-                        #assert w8 < 0
-                        assert w1+w2+w3+w4+w5+w6+w7 <= 1.0
-                        src_raw_weights = [w1, w2, w3, w4, w5, w6, w7, w8]
-                        w1 = dst_vertex.position.w/32767
-                        w2 = dst_vertex.weight_values[0] / 255
-                        w3 = dst_vertex.weight_values[1] / 255
-                        w4 = dst_vertex.weight_values[2] / 255
-                        w5 = dst_vertex.weight_values[3] / 255
-                        w6 = unpack("e", bytes(dst_vertex.weight_values2[0]))[0]
-                        w7 = unpack("e", bytes(dst_vertex.weight_values2[1]))[0]
-                        w8 = 1.0 - w1 - w2 - w3 - w4 - w5 - w6 - w7
-                        #assert w8 < 0
-                        #weights_sum = w1+w2+w3+w4+w5+w6+w7+w8
-                        #assert weights_sum <= 1.0
-                        assert w8 > 0
-                        dst_raw_weights = [w1, w2, w3, w4, w5, w6, w7, w8]
-                        for i, v in enumerate(src_vertex.bone_indices):
-                            if v in src_weights:
-                                with capsys.disabled():
-                                    print("double source bone {} id {} with weight {}".format(v, i, src_raw_weights[i]))
-                                continue
-                            if src_raw_weights[i] > 0:
-                                src_weights[v] = src_raw_weights[i] #{(i, v, src_raw_weights[i])}
-                        for i, v in enumerate(dst_vertex.bone_indices):
-                            if dst_raw_weights[i] > 0:
-                                dst_weights[v] = dst_raw_weights[i]#{(i, v, dst_raw_weights[i])}
-                        
-                        # assert (abs(src_vertex.position.w - dst_vertex.position.w) < 100)
-                        assert len(src_weights) == len(dst_weights)
-                        for bone_id, dst_bweight in dst_weights.items():
-                            #if not src_weights.get(key):
-                            #    assert v is None
-                            src_bweight = src_weights.get(bone_id, -1)
-                            #if (abs(dst_bweight - src_weights.get(bone_id, 0))) > 0.00001:
-                            #    with capsys.disabled():
-                            #        print("bone is {} source is {} exported is {}".format(bone_id, src_bweight, dst_bweight))
-                                #assert key is None
-                            #assert v == src_weights.get(key)
             # disable for now, some normals don't match
             '''for vi, dst_vertex in enumerate(dst_mesh.vertices):
                 src_vertex = src_mesh.vertices[vi]
