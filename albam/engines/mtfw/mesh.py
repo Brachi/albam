@@ -1133,7 +1133,7 @@ def _check_weights(weights, max_weights):
         # print("half float is {}".format(abs(excess)//0.000001))
         # print("wt6 is {}".format(_weights[5]))
         if _weights[i + 2] > abs(excess):
-            _weights[i + 2] = _weights[i+2] + excess
+            _weights[i + 2] = _weights[i + 2] + excess
     return _weights
 
 
