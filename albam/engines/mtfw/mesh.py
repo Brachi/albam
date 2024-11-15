@@ -1122,9 +1122,9 @@ def _check_weights(weights, max_weights):
         _weights.append(round(weights[2] * 255) / 255)
         _weights.append(round(weights[3] * 255) / 255)
         _weights.append(round(weights[4] * 255) / 255)
-    _weights.append(unpack("e", pack("e", weights[i+1]))[0])
-    _weights.append(unpack("e", pack("e", weights[i+2]))[0])
-    _weights.append(weights[i+3])
+    _weights.append(unpack("e", pack("e", weights[i + 1]))[0])
+    _weights.append(unpack("e", pack("e", weights[i + 2]))[0])
+    _weights.append(weights[i + 3])
     excess = 1.0 - sum(_weights)
     if excess < 0:
         # print(excess)
@@ -1132,8 +1132,8 @@ def _check_weights(weights, max_weights):
         # print("1/32767 is {}".format(abs(excess)//0.000031))
         # print("half float is {}".format(abs(excess)//0.000001))
         # print("wt6 is {}".format(_weights[5]))
-        if _weights[i+2] > abs(excess):
-            _weights[i+2] = _weights[i+2] + excess
+        if _weights[i + 2] > abs(excess):
+            _weights[i + 2] = _weights[i+2] + excess
     return _weights
 
 
