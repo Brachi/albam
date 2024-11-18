@@ -1,45 +1,45 @@
 [project]
-name = "albam"
-version = "0.3.6"
-description = "Import 3d models into Blender"
+name = "Albam"
+version = "0.4.0"
+description = "Import and Export game engine formats in Blender"
 readme = "README.md"
-authors = [ {name = "Sebastian A. Brachi"} ]
-requires-python = ">=3.10,<3.12"
+authors = [ {name = "Sebastian A. Brachi"}, {name = "Henry of Carim"} ]
+requires-python = ">=3.10, <=3.12"
 license = {file = "LICENSE"}
-keywords = ["blender", "blender-addon", "import", "3d models", "3d formats"]
+keywords = ["modding", "game-modding", "blender-addon", "import", "export"]
 
 dependencies = [
   'bpy == 3.6.0; python_version == "3.10.*"',
-  'bpy == 4.1.0; python_version == "3.11.*"',
+  'bpy == 4.2.0; python_version == "3.11.*"',
 ]
 
 [project.optional-dependencies]
-test = [
+
+tests = [
+  "pytest",
+  "pytest-subtests",
   "coverage[toml]",
   "flake8-pyproject",
-  "pytest",
-  "pytest-xdist",
-  "pytest-subtests"
-#  "pybc7",
-#  "zstd"
 ]
 
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 110
 
-
 [tool.coverage.run]
-omit = [ "*/structs/*.py", "*/albam_vendor/*" ]
-
+omit = [ "*/albam_vendor/*" ]
 
 [tool.flake8]
 max-line-length = 110
-exclude = ["structs", "albam_vendor", ".venv"]
-# F722: needed for Blender props annotations
-# e.g.:
+exclude = ["albam_vendor", ".venv"]
+
+# F722: needed for Blender props annotations such as
+# ```
 # class MyPanel(bpy.types.Panel):
 #     my_prop : bpy.props.BoolProperty()
-
-# W503 and W504 seem to contradict each other:w
+# ```
+# W503 and W504 seem to contradict each other
 ignore = ["E203", "F722", "W504"]

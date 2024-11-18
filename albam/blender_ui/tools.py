@@ -3,7 +3,13 @@ import bpy
 import ntpath
 
 from albam.registry import blender_registry
-from albam.lib.bone_names import BONES_BODY, BONES_HEAD
+from albam.lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+
+
+BONE_NAMES = {
+    "Body": BONES_BODY,
+    "Head": BONES_HEAD
+}
 
 
 def show_message_box(message="", title="Message Box", icon='INFO'):
@@ -267,15 +273,11 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        bone_names = {
-            "Body": BONES_BODY,
-            "Head": BONES_HEAD,
-        }
+        app_id = context.scene.albam.apps.app_selected
         bone_names_preset = context.scene.albam.tools_settings.bone_names_preset
-        selected_bone_names = bone_names.get(bone_names_preset)
         selection = bpy.context.selected_objects
         armature_ob = [obj for obj in selection if obj.type == 'ARMATURE']
-        rename_bones(armature_ob[0], selected_bone_names)
+        rename_bones(armature_ob[0], app_id, bone_names_preset)
         return {'FINISHED'}
 
 
@@ -383,7 +385,13 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             tex_157_props.unk_type = UNKNOWN_TYPE.get(app_id)
 
 
-def rename_bones(armature_ob, names_preset):
+def rename_bones(armature_ob, app_id, body_type):
+    names_preset = BONE_NAMES.get(body_type)
+    fixes_preset = NAME_FIXES.get(body_type)
+    fixed_name = fixes_preset.get(app_id, None)
+    if fixed_name:
+        for k, v in fixed_name.items():
+            names_preset[k] = v
     armature = armature_ob.data
     bones = armature.bones
     for bone in bones:
