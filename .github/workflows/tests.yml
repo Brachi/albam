@@ -7,6 +7,7 @@ on:
 env:
   ALBAM_RE1_ARC_DIR: "tests/data/re1"
   ALBAM_RE5_ARC_DIR: "tests/data/re5"
+  ALBAM_DD_ARC_DIR: "tests/data/dd"
 
 jobs:
   tests:
@@ -32,9 +33,10 @@ jobs:
         flake8 . --count --show-source --statistics
     - name: Download test files
       run: |
-        mkdir -p $ALBAM_RE1_ARC_DIR $ALBAM_RE5_ARC_DIR
+        mkdir -p $ALBAM_RE1_ARC_DIR $ALBAM_RE5_ARC_DIR $ALBAM_DD_ARC_DIR
         curl -L -o sample-re1-1.arc --output-dir $ALBAM_RE1_ARC_DIR '${{ secrets.SAMPLE_LINK_RE1_1 }}'
         curl -L -o sample-re5-1.arc --output-dir $ALBAM_RE5_ARC_DIR '${{ secrets.SAMPLE_LINK_RE5_1 }}'
+        curl -L -o sample-dd-1.arc --output-dir $ALBAM_DD_ARC_DIR '${{ secrets.SAMPLE_LINK_DD_1 }}'
     - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
       run: |
         set +e
