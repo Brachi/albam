@@ -49,20 +49,24 @@ def getBlenderObjects(blenderType = None, key = None):
     return [obj for obj in bpy.context.scene.objects if all((c(obj) for c in checks))]
 
 
-def getMeshes(key = None):
-    return getBlenderObjects("MESH",key)
+def getMeshes(key=None):
+    return getBlenderObjects("MESH", key)
 
 
 def getEmpties(key=None):
-    return getBlenderObjects("EMPTY",key)
+    return getBlenderObjects("EMPTY", key)
 
 
 def cloneMesh(original):
     copy = original.copy()
-    bpy.context.scene.objects.link(copy)
-    bpy.context.scene.objects.active = copy
-    original.select = False
-    copy.select = True
+    # bpy.context.scene.objects.link(copy)
+    bpy.context.collection.objects.link(copy)
+    # bpy.context.scene.objects.active = copy
+    bpy.context.view_layer.objects.active = copy
+    # original.select = False
+    original.select_set(False)
+    # copy.select = True
+    copy.select_set(True)
     bpy.ops.object.make_single_user(type='SELECTED_OBJECTS', object=True, obdata=True)
     copy.data.transform(copy.matrix_world)
     # then reset matrix to identity
@@ -70,44 +74,44 @@ def cloneMesh(original):
     copy.matrix_world = Matrix()
     for mod in copy.modifiers:
         try:
-            bpy.ops.object.modifier_apply(modifier = mod.name)
+            bpy.ops.object.modifier_apply(modifier=mod.name)
         except:
             pass
     return copy
 
 
-def joinMesh( source, target, doUpdate = True, translate = [ 0.0, 0.0, 0.0 ], alignTo = None ):
-  bm = bmesh.new()
-  bm.from_mesh(source.data)
-  bm.from_mesh(target.data)
-  bm.to_mesh(target.data)
-  #target.data.update()
-  deleteObject(source)
-  return target
-  
-    
-  result = False
-  # Check that the passed objects exist and are mesh objects.
-  if target != None \
-    and target.type == 'MESH' \
-    and source != None \
-    and source.type == 'MESH':    
-    # Get the source and target mesh data, applying any modifiers to the source.
-    ### TODO: Should we get this in some other way?
-    scene = bpy.context.scene
-    sourceMesh = source.to_mesh( scene, True, 'PREVIEW' )
-    targetMesh = target.data    
-    ### VERTICES ###    
-    numVertices = copyVertices(sourceMesh, targetMesh, translate, alignTo)
-    ### MATERIALS ###
-    materialsMap = copyMaterials(sourceMesh, targetMesh)
-    ### FACES ###    
-    copyFaces(sourceMesh, targetMesh, numVertices, materialsMap)
-    if doUpdate == True:
-        targetMesh.update( calc_edges = True )        
-    result = True
+def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=None):
+    bm = bmesh.new()
+    bm.from_mesh(source.data)
+    bm.from_mesh(target.data)
+    bm.to_mesh(target.data)
+    #target.data.update()
     deleteObject(source)
-  return result
+    return target
+
+
+    result = False
+    # Check that the passed objects exist and are mesh objects.
+    if target != None \
+        and target.type == 'MESH' \
+        and source != None \
+        and source.type == 'MESH':    
+        # Get the source and target mesh data, applying any modifiers to the source.
+        ### TODO: Should we get this in some other way?
+        scene = bpy.context.scene
+        sourceMesh = source.to_mesh( scene, True, 'PREVIEW' )
+        targetMesh = target.data    
+        ### VERTICES ###    
+        numVertices = copyVertices(sourceMesh, targetMesh, translate, alignTo)
+        ### MATERIALS ###
+        materialsMap = copyMaterials(sourceMesh, targetMesh)
+        ### FACES ###    
+        copyFaces(sourceMesh, targetMesh, numVertices, materialsMap)
+        if doUpdate == True:
+            targetMesh.update( calc_edges = True )        
+        result = True
+        deleteObject(source)
+    return result
 
 def copyVertices(sourceMesh, targetMesh, translate, alignTo):
     numVertices = len( targetMesh.vertices )

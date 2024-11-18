@@ -2,12 +2,14 @@ import bpy
 import bmesh
 from kaitaistruct import KaitaiStream
 import colorsys
+import numpy as np
 
 from albam.registry import blender_registry
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
+from mathutils import Vector
 
-
+from albam.lib.primitiveGeometry import eps,Tri
 import albam.lib.primitiveGeometry as geo
 import albam.lib.bvhConstruction as bvh
 import albam.lib.CommonOperations as Common
@@ -16,6 +18,18 @@ SBC_CLASS_MAPPER = {
     49: Sbc156,
     255: Sbc21,
 }
+
+
+class TriangulationRequiredError(Exception):
+    pass
+
+
+class ExportingFailedError(Exception):
+    pass
+
+
+class MaterialMissingError(Exception):
+    pass
 
 
 class SBCObject():
@@ -53,12 +67,16 @@ palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 @blender_registry.register_import_function(app_id="rev2", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="dd", extension='sbc', file_category="COLLISION")
 def load_sbc(file_item, context):
+    app_id = file_item.app_id
     sbc_bytes = file_item.get_bytes()
     sbc_version = sbc_bytes[3]
     assert sbc_version in SBC_CLASS_MAPPER, f"Unsupported version: {sbc_version}"
     SbcCls = SBC_CLASS_MAPPER[sbc_version]
     sbc = SbcCls.from_bytes(sbc_bytes)
     sbc._read()
+
+    bl_object_name = file_item.display_name
+    bl_object = bpy.data.objects.new(bl_object_name, None)
 
     cBVH = [b for i, b in enumerate(sbc.sbc_bvhc)]
     faceCollection = [fc for i, fc in enumerate(sbc.faces)]
@@ -77,9 +95,22 @@ def load_sbc(file_item, context):
 
     print("num sbc objects {}".format(len(objects)))
     for obj in objects:
-        create_collision_mesh(obj)
+        mesh, ob = create_collision_mesh(obj)
+        ob.parent = bl_object
     for i, typing in enumerate(sbc.collision_types):
-        createLinkObject(typing)
+        empty = createLinkObject(typing)
+        empty.parent = bl_object
+
+    bl_object.albam_asset.original_bytes = sbc_bytes
+    bl_object.albam_asset.app_id = app_id
+    bl_object.albam_asset.relative_path = file_item.relative_path
+    bl_object.albam_asset.extension = file_item.extension
+
+    exportable = context.scene.albam.exportable.file_list.add()
+    exportable.bl_object = bl_object
+
+    context.scene.albam.exportable.file_list.update()
+    return bl_object
 
 
 def create_collision_mesh(sbcObject):
@@ -126,7 +157,7 @@ def createMesh(name, meshpart):
     bpy.context.collection.objects.link(blenderObject)
 
     bm = bmesh.new()
-    bm.from_mesh(blenderMesh) 
+    bm.from_mesh(blenderMesh)
     bm.faces.ensure_lookup_table()
     for ix, material in enumerate(meshpart["materials"]):
         mat = bpy.data.materials.new(name="Type %03d" % material)
@@ -139,5 +170,132 @@ def createMesh(name, meshpart):
         for face in meshpart["materials"][material]:
             bm.faces[face].material_index = ix
 
-    bm.to_mesh(blenderMesh) 
+    bm.to_mesh(blenderMesh)
     return blenderMesh, blenderObject
+
+
+def cycles(verts):
+    return [(verts[i % 3].index, verts[(i+1) % 3].index) for i in range(len(verts))]
+
+
+@blender_registry.register_export_function(app_id="re1", extension="sbc")
+def export_sbc(bl_obj):
+    meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    links = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    clones = [Common.cloneMesh(mesh) for mesh in meshes]
+    vertList = []
+    trisList = []
+    quadList = []
+    sbcsList = []
+    meshmetadata = []
+    options = {"clusteringFunction": bvh.HybridClustering,
+               "metric": bvh.Cluster.SAHMetric,
+               "partition": bvh.mortonPartition,
+               "mode": bvh.CAPCOM}
+    vfiles = []
+    print("Initiate export")
+    for mesh in clones:
+        vertices, tris = meshToTri(mesh)
+        print("Mesh processed")
+        quads, sbc = bvh.primitiveToSBC(tris, **options)
+        vertList.append(vertices)
+        trisList.append(tris)
+        quadList.append(quads)
+        sbcsList.append(sbc)
+        meshmetadata.append({"indexID": mesh["indexID"]})
+    return vfiles
+
+
+class semiTri():
+    def __init__(self, face, matType):
+        if not len(face.verts) == 3: raise TriangulationRequiredError()
+        self.vert = [int(v.index) for v in face.verts]
+        self.adjacent = self.getAdjacent(face)
+        self.normal = semiTri.calcNormal(face)
+        self.type = matType
+        # (0 = 90°, 1 = 0°, 2 > 180°, 3<180°)
+
+    def getAdjacent(self, face):
+        adjacents = []
+        for edge in face.edges:
+            bA = None
+            for lf in edge.link_faces:
+                if lf != face:
+                    bA = semiTri.byteAngle(face, lf)
+            if bA is None:
+                bA = 0
+            adjacents.append(bA)
+        return adjacents
+
+    def setIndex(self, value):
+        self._index = value
+        return self
+
+    def index(self):
+        return self._index
+
+    @staticmethod
+    def calcNormal(face1):
+        v = Vector(np.cross(face1.verts[1].co-face1.verts[0].co, face1.verts[2].co-face1.verts[0].co))
+        v.normalize()
+        return v
+
+    @staticmethod
+    def edges(face):
+        e1 = cycles(face.verts)
+        return e1
+
+    @staticmethod
+    def barycenter(face):
+        return sum([v.co for v in face.verts], Vector([0, 0, 0]))/len(face.verts)
+
+    @staticmethod
+    def byteAngle(face1, face2):
+        n1 = semiTri.calcNormal(face1)
+        n2 = semiTri.calcNormal(face2)
+        fv1 = [v.co for v in face1.verts]
+        e1 = semiTri.edges(face1)
+        e2 = semiTri.edges(face2)
+        facing = None
+        for ix, e in enumerate(e1):
+            if tuple(reversed(e)) in e2:
+                edgem = (fv1[ix]+fv1[(ix+1) % 3])/2
+                bary = (semiTri.barycenter(face1)+semiTri.barycenter(face2))/2
+                facing = bary - edgem
+                facing.normalize()
+        if facing is None:
+            return 0  # Not exactly correct but correct most of the time (1.5% fail rate)
+
+        if (n1-n2).magnitude < eps:
+            return 1
+        if (n1+n2).magnitude < eps:
+            return 4
+        n = (n1+n2)
+        n.normalize()
+        signum = (n1+n2).dot(facing) > 0
+        if not signum:
+            if n1.dot(n2) < eps:
+                return 0
+            return 2
+        else:
+            return 4
+
+    @staticmethod
+    def getMaterial(face, mesh):
+        try:
+            ix = face.material_index
+            slot = mesh.material_slots[ix]
+            mat = slot.material.name
+            return int(mat[len("Type "):len("Type 000")])
+        except:
+            raise MaterialMissingError
+
+
+def meshToTri(mesh):
+    bm = bmesh.new()
+    # bm.from_object(mesh, bpy.context.scene)
+    bm.from_mesh(mesh.data)
+    vertices = [Vector(v.co) for v in bm.verts]
+    faces = [Tri(semiTri(face, semiTri.getMaterial(face, mesh)), vertices) for face in bm.faces]
+    bm.free()
+    return vertices, faces
