@@ -15,16 +15,16 @@ class Sbc21(ReadWriteKaitaiStruct):
         self._root = _root if _root else self
 
     def _read(self):
-        self.sbc_header = Sbc21.Header(self._io, self, self._root)
-        self.sbc_header._read()
+        self.header = Sbc21.SbcHeader(self._io, self, self._root)
+        self.header._read()
         self.sbc_info = []
-        for i in range(self.sbc_header.object_count):
+        for i in range(self.header.object_count):
             _t_sbc_info = Sbc21.Info(self._io, self, self._root)
             _t_sbc_info._read()
             self.sbc_info.append(_t_sbc_info)
 
         self.sbc_bvhc = []
-        for i in range(self.sbc_header.object_count):
+        for i in range(self.header.object_count):
             _t_sbc_bvhc = Sbc21.BvhCollision(self._io, self, self._root)
             _t_sbc_bvhc._read()
             self.sbc_bvhc.append(_t_sbc_bvhc)
@@ -32,25 +32,25 @@ class Sbc21(ReadWriteKaitaiStruct):
         self.bvh = Sbc21.BvhCollision(self._io, self, self._root)
         self.bvh._read()
         self.faces = []
-        for i in range(self.sbc_header.face_count):
+        for i in range(self.header.face_count):
             _t_faces = Sbc21.Face(self._io, self, self._root)
             _t_faces._read()
             self.faces.append(_t_faces)
 
         self.vertices = []
-        for i in range(self.sbc_header.vertex_count):
+        for i in range(self.header.vertex_count):
             _t_vertices = Sbc21.Vertex(self._io, self, self._root)
             _t_vertices._read()
             self.vertices.append(_t_vertices)
 
         self.collision_types = []
-        for i in range(self.sbc_header.stage_count):
+        for i in range(self.header.stage_count):
             _t_collision_types = Sbc21.CollisionType(self._io, self, self._root)
             _t_collision_types._read()
             self.collision_types.append(_t_collision_types)
 
         self.pairs_collections = []
-        for i in range(self.sbc_header.pair_count):
+        for i in range(self.header.pair_count):
             _t_pairs_collections = Sbc21.SFacePair(self._io, self, self._root)
             _t_pairs_collections._read()
             self.pairs_collections.append(_t_pairs_collections)
@@ -59,7 +59,7 @@ class Sbc21(ReadWriteKaitaiStruct):
 
     def _fetch_instances(self):
         pass
-        self.sbc_header._fetch_instances()
+        self.header._fetch_instances()
         for i in range(len(self.sbc_info)):
             pass
             self.sbc_info[i]._fetch_instances()
@@ -89,7 +89,7 @@ class Sbc21(ReadWriteKaitaiStruct):
 
     def _write__seq(self, io=None):
         super(Sbc21, self)._write__seq(io)
-        self.sbc_header._write__seq(self._io)
+        self.header._write__seq(self._io)
         for i in range(len(self.sbc_info)):
             pass
             self.sbc_info[i]._write__seq(self._io)
@@ -119,12 +119,12 @@ class Sbc21(ReadWriteKaitaiStruct):
 
     def _check(self):
         pass
-        if self.sbc_header._root != self._root:
-            raise kaitaistruct.ConsistencyError(u"sbc_header", self.sbc_header._root, self._root)
-        if self.sbc_header._parent != self:
-            raise kaitaistruct.ConsistencyError(u"sbc_header", self.sbc_header._parent, self)
-        if (len(self.sbc_info) != self.sbc_header.object_count):
-            raise kaitaistruct.ConsistencyError(u"sbc_info", len(self.sbc_info), self.sbc_header.object_count)
+        if self.header._root != self._root:
+            raise kaitaistruct.ConsistencyError(u"header", self.header._root, self._root)
+        if self.header._parent != self:
+            raise kaitaistruct.ConsistencyError(u"header", self.header._parent, self)
+        if (len(self.sbc_info) != self.header.object_count):
+            raise kaitaistruct.ConsistencyError(u"sbc_info", len(self.sbc_info), self.header.object_count)
         for i in range(len(self.sbc_info)):
             pass
             if self.sbc_info[i]._root != self._root:
@@ -132,8 +132,8 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.sbc_info[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"sbc_info", self.sbc_info[i]._parent, self)
 
-        if (len(self.sbc_bvhc) != self.sbc_header.object_count):
-            raise kaitaistruct.ConsistencyError(u"sbc_bvhc", len(self.sbc_bvhc), self.sbc_header.object_count)
+        if (len(self.sbc_bvhc) != self.header.object_count):
+            raise kaitaistruct.ConsistencyError(u"sbc_bvhc", len(self.sbc_bvhc), self.header.object_count)
         for i in range(len(self.sbc_bvhc)):
             pass
             if self.sbc_bvhc[i]._root != self._root:
@@ -145,8 +145,8 @@ class Sbc21(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"bvh", self.bvh._root, self._root)
         if self.bvh._parent != self:
             raise kaitaistruct.ConsistencyError(u"bvh", self.bvh._parent, self)
-        if (len(self.faces) != self.sbc_header.face_count):
-            raise kaitaistruct.ConsistencyError(u"faces", len(self.faces), self.sbc_header.face_count)
+        if (len(self.faces) != self.header.face_count):
+            raise kaitaistruct.ConsistencyError(u"faces", len(self.faces), self.header.face_count)
         for i in range(len(self.faces)):
             pass
             if self.faces[i]._root != self._root:
@@ -154,8 +154,8 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.faces[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"faces", self.faces[i]._parent, self)
 
-        if (len(self.vertices) != self.sbc_header.vertex_count):
-            raise kaitaistruct.ConsistencyError(u"vertices", len(self.vertices), self.sbc_header.vertex_count)
+        if (len(self.vertices) != self.header.vertex_count):
+            raise kaitaistruct.ConsistencyError(u"vertices", len(self.vertices), self.header.vertex_count)
         for i in range(len(self.vertices)):
             pass
             if self.vertices[i]._root != self._root:
@@ -163,8 +163,8 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.vertices[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"vertices", self.vertices[i]._parent, self)
 
-        if (len(self.collision_types) != self.sbc_header.stage_count):
-            raise kaitaistruct.ConsistencyError(u"collision_types", len(self.collision_types), self.sbc_header.stage_count)
+        if (len(self.collision_types) != self.header.stage_count):
+            raise kaitaistruct.ConsistencyError(u"collision_types", len(self.collision_types), self.header.stage_count)
         for i in range(len(self.collision_types)):
             pass
             if self.collision_types[i]._root != self._root:
@@ -172,8 +172,8 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.collision_types[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"collision_types", self.collision_types[i]._parent, self)
 
-        if (len(self.pairs_collections) != self.sbc_header.pair_count):
-            raise kaitaistruct.ConsistencyError(u"pairs_collections", len(self.pairs_collections), self.sbc_header.pair_count)
+        if (len(self.pairs_collections) != self.header.pair_count):
+            raise kaitaistruct.ConsistencyError(u"pairs_collections", len(self.pairs_collections), self.header.pair_count)
         for i in range(len(self.pairs_collections)):
             pass
             if self.pairs_collections[i]._root != self._root:
@@ -589,120 +589,75 @@ class Sbc21(ReadWriteKaitaiStruct):
 
 
 
-    class BhvNode(ReadWriteKaitaiStruct):
+    class BvhNode(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.node_type = self._io.read_u4le()
-            self.unk_04 = self._io.read_u4le()
-            self.unk_05 = self._io.read_u4le()
-            self.unk_06 = self._io.read_u4le()
-            self.unk_07 = Sbc21.AabbBlock(self._io, self, self._root)
-            self.unk_07._read()
-            self.unk_08 = Sbc21.AabbBlock(self._io, self, self._root)
-            self.unk_08._read()
-
-
-        def _fetch_instances(self):
-            pass
-            self.unk_07._fetch_instances()
-            self.unk_08._fetch_instances()
-
-
-        def _write__seq(self, io=None):
-            super(Sbc21.BhvNode, self)._write__seq(io)
-            self._io.write_u4le(self.node_type)
-            self._io.write_u4le(self.unk_04)
-            self._io.write_u4le(self.unk_05)
-            self._io.write_u4le(self.unk_06)
-            self.unk_07._write__seq(self._io)
-            self.unk_08._write__seq(self._io)
-
-
-        def _check(self):
-            pass
-            if self.unk_07._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"unk_07", self.unk_07._root, self._root)
-            if self.unk_07._parent != self:
-                raise kaitaistruct.ConsistencyError(u"unk_07", self.unk_07._parent, self)
-            if self.unk_08._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"unk_08", self.unk_08._root, self._root)
-            if self.unk_08._parent != self:
-                raise kaitaistruct.ConsistencyError(u"unk_08", self.unk_08._parent, self)
-
-
-    class Header(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.magic = self._io.read_bytes(4)
-            if not (self.magic == b"\x53\x42\x43\xFF"):
-                raise kaitaistruct.ValidationNotEqualError(b"\x53\x42\x43\xFF", self.magic, self._io, u"/types/header/seq/0")
-            self.unk_00 = self._io.read_u4le()
-            self.unk_02 = self._io.read_u4le()
-            self.unk_03 = self._io.read_u4le()
-            self.object_count = self._io.read_u2le()
-            self.stage_count = self._io.read_u2le()
-            self.pair_count = self._io.read_u4le()
-            self.face_count = self._io.read_u4le()
-            self.vertex_count = self._io.read_u4le()
-            self.nulls = []
+            self.node_type = []
             for i in range(4):
-                self.nulls.append(self._io.read_u4le())
+                self.node_type.append(self._io.read_u1())
 
-            self.box = Sbc21.Bbox(self._io, self, self._root)
-            self.box._read()
-            self.bb_size = self._io.read_u4le()
+            self.node_id = []
+            for i in range(4):
+                self.node_id.append(self._io.read_u2le())
+
+            self.unk_05 = self._io.read_u4le()
+            self.min_aabb = Sbc21.AabbBlock(self._io, self, self._root)
+            self.min_aabb._read()
+            self.max_aabb = Sbc21.AabbBlock(self._io, self, self._root)
+            self.max_aabb._read()
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.nulls)):
+            for i in range(len(self.node_type)):
                 pass
 
-            self.box._fetch_instances()
+            for i in range(len(self.node_id)):
+                pass
+
+            self.min_aabb._fetch_instances()
+            self.max_aabb._fetch_instances()
 
 
         def _write__seq(self, io=None):
-            super(Sbc21.Header, self)._write__seq(io)
-            self._io.write_bytes(self.magic)
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.unk_02)
-            self._io.write_u4le(self.unk_03)
-            self._io.write_u2le(self.object_count)
-            self._io.write_u2le(self.stage_count)
-            self._io.write_u4le(self.pair_count)
-            self._io.write_u4le(self.face_count)
-            self._io.write_u4le(self.vertex_count)
-            for i in range(len(self.nulls)):
+            super(Sbc21.BvhNode, self)._write__seq(io)
+            for i in range(len(self.node_type)):
                 pass
-                self._io.write_u4le(self.nulls[i])
+                self._io.write_u1(self.node_type[i])
 
-            self.box._write__seq(self._io)
-            self._io.write_u4le(self.bb_size)
+            for i in range(len(self.node_id)):
+                pass
+                self._io.write_u2le(self.node_id[i])
+
+            self._io.write_u4le(self.unk_05)
+            self.min_aabb._write__seq(self._io)
+            self.max_aabb._write__seq(self._io)
 
 
         def _check(self):
             pass
-            if (len(self.magic) != 4):
-                raise kaitaistruct.ConsistencyError(u"magic", len(self.magic), 4)
-            if not (self.magic == b"\x53\x42\x43\xFF"):
-                raise kaitaistruct.ValidationNotEqualError(b"\x53\x42\x43\xFF", self.magic, None, u"/types/header/seq/0")
-            if (len(self.nulls) != 4):
-                raise kaitaistruct.ConsistencyError(u"nulls", len(self.nulls), 4)
-            for i in range(len(self.nulls)):
+            if (len(self.node_type) != 4):
+                raise kaitaistruct.ConsistencyError(u"node_type", len(self.node_type), 4)
+            for i in range(len(self.node_type)):
                 pass
 
-            if self.box._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"box", self.box._root, self._root)
-            if self.box._parent != self:
-                raise kaitaistruct.ConsistencyError(u"box", self.box._parent, self)
+            if (len(self.node_id) != 4):
+                raise kaitaistruct.ConsistencyError(u"node_id", len(self.node_id), 4)
+            for i in range(len(self.node_id)):
+                pass
+
+            if self.min_aabb._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"min_aabb", self.min_aabb._root, self._root)
+            if self.min_aabb._parent != self:
+                raise kaitaistruct.ConsistencyError(u"min_aabb", self.min_aabb._parent, self)
+            if self.max_aabb._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"max_aabb", self.max_aabb._root, self._root)
+            if self.max_aabb._parent != self:
+                raise kaitaistruct.ConsistencyError(u"max_aabb", self.max_aabb._parent, self)
 
 
     class BvhCollision(ReadWriteKaitaiStruct):
@@ -727,7 +682,7 @@ class Sbc21(ReadWriteKaitaiStruct):
 
             self.nodes = []
             for i in range(self.node_count):
-                _t_nodes = Sbc21.BhvNode(self._io, self, self._root)
+                _t_nodes = Sbc21.BvhNode(self._io, self, self._root)
                 _t_nodes._read()
                 self.nodes.append(_t_nodes)
 
@@ -794,5 +749,86 @@ class Sbc21(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"nodes", self.nodes[i]._parent, self)
 
 
+
+    class SbcHeader(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.magic = self._io.read_bytes(4)
+            if not (self.magic == b"\x53\x42\x43\xFF"):
+                raise kaitaistruct.ValidationNotEqualError(b"\x53\x42\x43\xFF", self.magic, self._io, u"/types/sbc_header/seq/0")
+            self.unk_00 = self._io.read_u4le()
+            self.unk_02 = self._io.read_u4le()
+            self.unk_03 = self._io.read_u4le()
+            self.object_count = self._io.read_u2le()
+            self.stage_count = self._io.read_u2le()
+            self.pair_count = self._io.read_u4le()
+            self.face_count = self._io.read_u4le()
+            self.vertex_count = self._io.read_u4le()
+            self.nulls = []
+            for i in range(4):
+                self.nulls.append(self._io.read_u4le())
+
+            self.box = Sbc21.Bbox(self._io, self, self._root)
+            self.box._read()
+            self.bb_size = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.nulls)):
+                pass
+
+            self.box._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Sbc21.SbcHeader, self)._write__seq(io)
+            self._io.write_bytes(self.magic)
+            self._io.write_u4le(self.unk_00)
+            self._io.write_u4le(self.unk_02)
+            self._io.write_u4le(self.unk_03)
+            self._io.write_u2le(self.object_count)
+            self._io.write_u2le(self.stage_count)
+            self._io.write_u4le(self.pair_count)
+            self._io.write_u4le(self.face_count)
+            self._io.write_u4le(self.vertex_count)
+            for i in range(len(self.nulls)):
+                pass
+                self._io.write_u4le(self.nulls[i])
+
+            self.box._write__seq(self._io)
+            self._io.write_u4le(self.bb_size)
+
+
+        def _check(self):
+            pass
+            if (len(self.magic) != 4):
+                raise kaitaistruct.ConsistencyError(u"magic", len(self.magic), 4)
+            if not (self.magic == b"\x53\x42\x43\xFF"):
+                raise kaitaistruct.ValidationNotEqualError(b"\x53\x42\x43\xFF", self.magic, None, u"/types/sbc_header/seq/0")
+            if (len(self.nulls) != 4):
+                raise kaitaistruct.ConsistencyError(u"nulls", len(self.nulls), 4)
+            for i in range(len(self.nulls)):
+                pass
+
+            if self.box._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"box", self.box._root, self._root)
+            if self.box._parent != self:
+                raise kaitaistruct.ConsistencyError(u"box", self.box._parent, self)
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 84
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
 
