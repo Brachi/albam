@@ -7,17 +7,17 @@ Created on Tue Dec 24 01:13:36 2019
 from mathutils import Vector
 
 
-def vectInt(vec):
+def vect_int(vec):
     return (int(i) for i in vec)
 
 
-def vecMult(vec1, vec2):
+def vec_mult(vec1, vec2):
     return Vector(x / y for x, y in zip(vec1, vec2))
 
 
-def vecDiv(vec1, vec2):
+def vec_div(vec1, vec2):
     return Vector(x / y for x, y in zip(vec1, vec2))
 
 
-def vecUnfold(vec):
-    return {"x": vec.x,"y": vec.y,"z": vec.z,"w": 0}
+def vec_unfold(vec):
+    return {"x": vec.x, "y": vec.y, "z": vec.z, "w": 0}

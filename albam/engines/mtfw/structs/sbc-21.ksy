@@ -2,21 +2,21 @@ meta:
   endian: le
   file-extension: sbc
   id: sbc_21
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework collision format version 211
   
 seq:
-  - {id: sbc_header, type: header}
-  - {id: sbc_info, type: info, repeat: expr, repeat-expr: sbc_header.object_count}
-  - {id: sbc_bvhc, type: bvh_collision, repeat: expr, repeat-expr: sbc_header.object_count}
+  - {id: header, type: sbc_header}
+  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.object_count}
+  - {id: sbc_bvhc, type: bvh_collision, repeat: expr, repeat-expr: header.object_count}
   - {id: bvh, type: bvh_collision}
-  - {id: faces, type: face, repeat: expr, repeat-expr: sbc_header.face_count}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: sbc_header.vertex_count}
-  - {id: collision_types, type: collision_type, repeat: expr, repeat-expr: sbc_header.stage_count}
-  - {id: pairs_collections, type: s_face_pair, repeat: expr, repeat-expr: sbc_header.pair_count}
+  - {id: faces, type: face, repeat: expr, repeat-expr: header.face_count}
+  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.vertex_count}
+  - {id: collision_types, type: collision_type, repeat: expr, repeat-expr: header.stage_count}
+  - {id: pairs_collections, type: s_face_pair, repeat: expr, repeat-expr: header.pair_count}
   
 types:
-  header:
+  sbc_header:
     seq:
      - {id: magic, contents: [0x53, 0x42, 0x43, 0xff]}
      - {id: unk_00, type: u4}
@@ -30,6 +30,9 @@ types:
      - {id: nulls, type: u4, repeat: expr, repeat-expr: 4}
      - {id: box, type: bbox}
      - {id: bb_size, type: u4}
+    instances:
+      size_:
+        value: 84
     
   info:
     seq:
@@ -53,16 +56,15 @@ types:
       - {id: bounding_box, type: bbox}
       - {id: node_count, type: u4}
       - {id: nulls, type: u4, repeat: expr, repeat-expr: 3}
-      - {id: nodes, type: bhv_node, repeat: expr, repeat-expr: node_count}
+      - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: node_count}
     
-  bhv_node:
+  bvh_node:
     seq:
-      - {id: node_type, type: u4}
-      - {id: unk_04, type: u4}
+      - {id: node_type, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: node_id, type: u2, repeat: expr, repeat-expr: 4}
       - {id: unk_05, type: u4}
-      - {id: unk_06, type: u4}
-      - {id: unk_07, type: aabb_block}
-      - {id: unk_08, type: aabb_block}
+      - {id: min_aabb, type: aabb_block}
+      - {id: max_aabb, type: aabb_block}
   
   face:
     seq:
