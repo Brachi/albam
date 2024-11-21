@@ -8,10 +8,10 @@ import numpy as np
 from functools import reduce
 try:
     from albam.lib.primitive_geometry import mortonLength, QuadPair, PrimitiveTree, BoundingBox
-    from albam.lib.low_level_op import radixSort
+    from albam.lib.low_level_op import radix_sort
 except:
     from .primitive_geometry import mortonLength, QuadPair, PrimitiveTree, BoundingBox
-    from .low_level_op import radixSort
+    from .low_level_op import radix_sort
 
 
 def setRemove(poset, val):
@@ -532,7 +532,7 @@ def mortonSort(primitives):
     primitiveBoxes = [BoundingBox(unpack(p.boundingBox())) for p in primitives]
     minima, maxima = unpack(reduce(mergeOp, primitiveBoxes, primitiveBoxes[0]))
     mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}
-    return [mapping[key] for key in radixSort(list(mapping.keys()), 8)]
+    return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)]
     # return sorted(primitives,key = lambda x: x.setBounds(minima,maxima).encode())
 
 

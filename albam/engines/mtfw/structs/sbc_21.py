@@ -271,12 +271,12 @@ class Sbc21(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unkn_01 = self._io.read_f4le()
-            self.unkn_02 = self._io.read_u2le()
-            self.unkn_03 = self._io.read_u2le()
-            self.unkn_04 = []
+            self.unk_01 = self._io.read_f4le()
+            self.unk_02 = self._io.read_u2le()
+            self.unk_03 = self._io.read_u2le()
+            self.unk_04 = []
             for i in range(3):
-                self.unkn_04.append(self._io.read_u4le())
+                self.unk_04.append(self._io.read_u4le())
 
             self.jp_path = []
             for i in range(12):
@@ -286,7 +286,7 @@ class Sbc21(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unkn_04)):
+            for i in range(len(self.unk_04)):
                 pass
 
             for i in range(len(self.jp_path)):
@@ -296,12 +296,12 @@ class Sbc21(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Sbc21.CollisionType, self)._write__seq(io)
-            self._io.write_f4le(self.unkn_01)
-            self._io.write_u2le(self.unkn_02)
-            self._io.write_u2le(self.unkn_03)
-            for i in range(len(self.unkn_04)):
+            self._io.write_f4le(self.unk_01)
+            self._io.write_u2le(self.unk_02)
+            self._io.write_u2le(self.unk_03)
+            for i in range(len(self.unk_04)):
                 pass
-                self._io.write_u4le(self.unkn_04[i])
+                self._io.write_u4le(self.unk_04[i])
 
             for i in range(len(self.jp_path)):
                 pass
@@ -311,9 +311,9 @@ class Sbc21(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if (len(self.unkn_04) != 3):
-                raise kaitaistruct.ConsistencyError(u"unkn_04", len(self.unkn_04), 3)
-            for i in range(len(self.unkn_04)):
+            if (len(self.unk_04) != 3):
+                raise kaitaistruct.ConsistencyError(u"unk_04", len(self.unk_04), 3)
+            for i in range(len(self.unk_04)):
                 pass
 
             if (len(self.jp_path) != 12):
