@@ -2,7 +2,7 @@ meta:
   endian: le
   file-extension: sbc
   id: sbc_21
-  ks-version: 0.10
+  ks-version: 0.11
   title: MTFramework collision format version 211
   
 seq:
@@ -91,10 +91,10 @@ types:
       
   collision_type:
     seq:
-      - {id: unkn_01, type: f4}
-      - {id: unkn_02, type: u2}
-      - {id: unkn_03, type: u2}
-      - {id: unkn_04, type: u4, repeat: expr, repeat-expr: 3}
+      - {id: unk_01, type: f4}
+      - {id: unk_02, type: u2}
+      - {id: unk_03, type: u2}
+      - {id: unk_04, type: u4, repeat: expr, repeat-expr: 3}
       - {id: jp_path, type: u1, repeat: expr, repeat-expr: 12}
       
   s_face_pair: #When a face bounding box contains another face

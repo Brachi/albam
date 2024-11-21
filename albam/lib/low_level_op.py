@@ -58,7 +58,7 @@ def counting_sort(A, digit, ix):
 # print countingSort(alist,0,10)
 
 
-def radixSort(A, ix):
+def radix_sort(A, ix):
     # radix is the base of the number system
     # k is the largest number in the list
     k = max(A)

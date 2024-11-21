@@ -35,7 +35,7 @@ def createRootNub(name):
     return ob
 
 
-def deleteObject(obj):
+def delete_ob(obj):
     objs = bpy.data.objects
     objs.remove(objs[obj.name], do_unlink=True)
 
@@ -87,7 +87,7 @@ def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=N
     bm.from_mesh(target.data)
     bm.to_mesh(target.data)
     # target.data.update()
-    deleteObject(source)
+    delete_ob(source)
     return target
 
     result = False
@@ -107,7 +107,7 @@ def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=N
         if doUpdate is True:
             targetMesh.update(calc_edges=True)
         result = True
-        deleteObject(source)
+        delete_ob(source)
     return result
 
 

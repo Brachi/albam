@@ -124,14 +124,14 @@ def create_collision_mesh(sbcObject):
     return mesh, obj
 
 
-def createLinkObject(linkObject):
+def createLinkObject(link_ob):
     sbcEmpty = Common.createRootNub("SBC Stage Link.000")
     sbcEmpty["Type"] = "SBC_Link"
-    sbcEmpty["{Unkn1}"] = linkObject.unkn_01
-    sbcEmpty["{Unkn3}"] = linkObject.unkn_02
-    sbcEmpty["{Unkn4}"] = linkObject.unkn_03
-    sbcEmpty["{Unkn5}"] = linkObject.unkn_04
-    sbcEmpty["jpPath"] = linkObject.jp_path
+    sbcEmpty["{Unkn1}"] = link_ob.unk_01
+    sbcEmpty["{Unkn3}"] = link_ob.unk_02
+    sbcEmpty["{Unkn4}"] = link_ob.unk_03
+    sbcEmpty["{Unkn5}"] = link_ob.unk_04
+    sbcEmpty["jpPath"] = link_ob.jp_path
     return sbcEmpty
 
 
@@ -221,6 +221,8 @@ def export_sbc(bl_obj):
                               links, parentTree, meshmetadata)
         # with open(self.properties.filepath,"wb") as outf:
         #     outf.write(serialized)
+    for clone in clones:
+        Common.delete_ob(clone)
     return vfiles
 
 
@@ -231,20 +233,28 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
     _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(tris), len(verts),
                      parentTree, tally(sbcs+[parentTree]))
     # header = buildHeader(headerData)
-    # dst_sbc.sbc_bvhc = _init_bvh_collision(dst_sbc, sbcs)
+    # cBVH = list(map(buildCollision,sbcs))
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
-    #cBVHCollision = buildCollision(parentTree)
-    dst_sbc.bvh = _serialize_bvhc(dst_sbc, parentTree)
-    #faceCollection = list(map(buildFaces, tris))
-    dst_sbc.face = [_serialize_faces(dst_sbc, face) for face in tris]
-    #vertexCollection = list(map(buildVertices, verts))
-    dst_sbc.vertices = [_serialize_vertices(dst_sbc, v) for v in verts]
-    #collisionTypes = list(map(buildTypes, links))
-    dst_sbc.collision_types = [_serialize_pairs(dst_sbc, p) for p in links]
-    #pairCollection = list(map(buildPairs, quads))
-    #infoCollection = buildInfo(
-    #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
 
+    # cBVHCollision = buildCollision(parentTree)
+    dst_sbc.bvh = _serialize_bvhc(dst_sbc, parentTree)
+
+    # faceCollection = list(map(buildFaces, tris))
+    dst_sbc.faces = [_serialize_faces(dst_sbc, face) for face in tris][0]
+
+    # vertexCollection = list(map(buildVertices, verts))
+    dst_sbc.vertices = [_serialize_vertices(dst_sbc, v) for v in verts][0]
+
+    # collisionTypes = list(map(buildTypes, links))
+    dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link) for link in links]
+
+    # pairCollection = list(map(buildPairs, quads))
+    dst_sbc.pair_collections = [_serialize_pairs(dst_sbc, p) for p in quads]
+
+    # infoCollection = buildInfo(
+    #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
+    dst_sbc.sbc_info = _serialize_infos(dst_sbc, tris, verts, dst_sbc.collision_types,
+                                         quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, meshmetadata)
     #def flatten(x): return b''.join(x)
     #return (header +
     #        flatten(infoCollection) +
@@ -254,6 +264,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
     #        flatten(vertexCollection) +
     #        flatten(collisionTypes) +
     #        flatten(pairCollection))
+    dst_sbc._check()
     return 0
 
 
@@ -272,7 +283,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, face_c
         object_count=object_count,
         stage_count=stage_count,
         face_count=face_count,
-        vertex_count=0,
+        vertex_count=vertex_count,
         nulls=[0, 0, 0, 0],
         box=bbox,
         bb_size=0x70*(aabb_count),
@@ -298,12 +309,12 @@ def formHeader(objCount, vertCount, triCount, pairCount, stageCount, aabbCount, 
             }
 
 
-def _serialize_bvhc(dst_sbc, bvhc):
+def _serialize_bvhc(dst_sbc, bvhc_data):
     bvh_col = dst_sbc.BvhCollision(_parent=dst_sbc, _root=dst_sbc._root)
     bbox = dst_sbc.Bbox(_parent=bvh_col, _root=dst_sbc._root)
     bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
     aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
-    bvhc_raw = bvhc.primitiveSerialize()
+    bvhc_raw = bvhc_data.primitiveSerialize()
 
     bvh_col.bvhc = [1128814146, 2008120100]  # Bound Volume Hierarchy Collision Identifier
     bvh_col.soh = bvhc_raw["SOH"]
@@ -388,15 +399,81 @@ def formTypes(typing):
     return {typingName: typing[typeNameMapping[typingName]] for typingName in typeNameMapping}
 
 
-def _serialize_col_types(dst_sbc, coltypes_data):
-    coltypes = []
-    return coltypes
+def _serialize_col_types(dst_sbc, col_types_data):
+    coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
+    coltype.unk_01 = col_types_data["{Unkn1}"]
+    coltype.unk_02 = col_types_data["{Unkn3}"]
+    coltype.unk_03 = col_types_data["{Unkn4}"]
+    coltype.unk_04 = [v for v in col_types_data["{Unkn5}"]]
+    coltype.jp_path = col_types_data["jpPath"]
+    coltype._check()
+    return coltype
 
 
 def _serialize_pairs(dst_sbc, pairs_data):
     pairs = []
+    pair = dst_sbc.SFacePair(_parent=dst_sbc, _root=dst_sbc._root)
+    for pd in pairs_data:
+        pair_raw = pd.primitiveSerialize()
+        pair.face_01 = pair_raw["face1"]
+        pair.face_02 = pair_raw["face2"]
+        pair.quad_order = pair_raw["quadOrder"]
+        pair.type = pair_raw["type"]
+        pair._check()
     return pairs
 
+
+def buildInfo(header, faces, vertices, stages, pairs, sbcs, sbcC, metadata):
+    f0, v0, p0 = 0, 0, 0,
+    infos = []
+    for f, v, p, s, m in zip(faces, vertices, pairs, sbcs, metadata):
+        info = {"boundingBox": getVertexBox(v).serialize(),
+                "null0": [0]*6,
+                "pairsStart": p0,
+                "pairsCount": len(p),
+                "facesStart": f0,
+                "facesCount": len(f),
+                "vertexStart": v0,
+                "vertexCount": len(v),
+                "indexID": m["indexID"],
+                "null1": [0]*3}
+        f0 += len(f)
+        v0 += len(v)
+        p0 += len(p)
+        infos.append(SbcInfo.build(info))
+    return infos
+
+
+def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metadata):
+    f0, v0, p0 = 0, 0, 0,
+    infos = []
+    info = dst_sbc.Info(_parent=dst_sbc, _root=dst_sbc._root)
+    bbox = dst_sbc.Bbox(_parent=info, _root=dst_sbc._root)
+    for f, v, p, s, m in zip(faces, vertices, pairs, sbcs, metadata):
+        bbox_data = getVertexBox(v).serialize()
+        bbox.min = [v for v in bbox_data["minPos"].values()]
+        bbox.max = [v for v in bbox_data["maxPos"].values()]
+        info.unk_01 = 0  # not really, looks like a hash
+        info.nulls_01 = [0, 0]
+        info.bounding_box = bbox
+        info.pairs_start = f0
+        info.pairs_count = len(p)
+        info.faces_start = f0
+        info.faces_count = len(f)
+        info.vertex_start = v0
+        info.vertex_count = len(v)
+        info.index_id = m["indexID"]
+        info.nulls_02 = [0, 0]
+        info._check()
+        f0 += len(f)
+        v0 += len(v)
+        p0 += len(p)
+        infos.append(info)
+    return infos
+
+
+def getVertexBox(v):
+    return geo.BoundingBox(v)
 '''
 # cBHVCollision (Bounding Box Tree)
 cBVHCollision = Struct(
