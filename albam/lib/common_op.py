@@ -24,7 +24,7 @@ def applyTransform():
     bpy.ops.object.select_all(action='DESELECT')
 
 
-def createRootNub(name):
+def create_root_nub(name):
     ob = bpy.data.objects.new(name, None)
     # bpy.context.scene.objects.link(o)
     bpy.context.collection.objects.link(ob)
@@ -57,7 +57,7 @@ def getEmpties(key=None):
     return getBlenderObjects("EMPTY", key)
 
 
-def cloneMesh(original):
+def clone_mesh(original):
     copy = original.copy()
     # bpy.context.scene.objects.link(copy)
     bpy.context.collection.objects.link(copy)

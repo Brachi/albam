@@ -38,16 +38,15 @@ class SBCObject():
     def __init__(self, info, BVHTree, faces, vertices, pairs):
         self.sbcinfo = info
         self.bvhtree = BVHTree
-        self.faces = bvh.indexize_ob(
-            [geo.Tri(face, vertices) for face in faces])
+        self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
         self.vertices = vertices
         self.pairs = bvh.indexize_ob([geo.QuadPair(self.faces[pair.face_01], self.faces[pair.face_02])
-                                         if pair.face_02 != 0xFFFF else
-                                         self.faces[pair.face_01]
-                                         for pair in pairs])
+                                     if pair.face_02 != 0xFFFF else
+                                     self.faces[pair.face_01]
+                                     for pair in pairs])
 
 
-# Very smartass way to dynamically create a list with 44 colors
+# Very smartass(?) way to dynamically create a list with 44 colors
 class counter():
     def __init__(self):
         self.i = 0
@@ -59,6 +58,8 @@ class counter():
 
 i = counter()
 def cycle(): return [0.4, 0.6, 0.8, 1.0][i.count() % 4]
+
+
 palette = [colorsys.hsv_to_rgb(c/55, 1.0, cycle()) for c in range(44)]
 palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
@@ -102,7 +103,7 @@ def load_sbc(file_item, context):
         mesh, ob = create_collision_mesh(obj)
         ob.parent = bl_object
     for i, typing in enumerate(sbc.collision_types):
-        empty = createLinkObject(typing)
+        empty = create_link_ob(typing)
         empty.parent = bl_object
 
     bl_object.albam_asset.original_bytes = sbc_bytes
@@ -118,14 +119,14 @@ def load_sbc(file_item, context):
 
 
 def create_collision_mesh(sbcObject):
-    mesh, obj = createMesh("CollisionMesh.000", decomposeSBCObject(sbcObject))
+    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbcObject))
     obj["Type"] = "SBC_Mesh"
     obj["indexID"] = str(sbcObject.sbcinfo.index_id)
     return mesh, obj
 
 
-def createLinkObject(link_ob):
-    sbcEmpty = common.createRootNub("SBC Stage Link.000")
+def create_link_ob(link_ob):
+    sbcEmpty = common.create_root_nub("SBC Stage Link.000")
     sbcEmpty["Type"] = "SBC_Link"
     sbcEmpty["unk_01"] = link_ob.unk_01
     sbcEmpty["unk_02"] = link_ob.unk_02
@@ -135,25 +136,25 @@ def createLinkObject(link_ob):
     return sbcEmpty
 
 
-def decomposeSBCObject(sbcObject):
-    sbcGeom = {}
-    sbcGeom["vertices"] = [(vert.x/100, vert.z/100, vert.y/100)
-                           for vert in sbcObject.vertices]
-    sbcGeom["faces"] = [face.dataFace.vert for face in sbcObject.faces]
-    sbcGeom["materials"] = materialsFromSBC(sbcObject)
-    return sbcGeom
+def decompose_sbc_ob(sbc_ob):
+    sbc_geom = {}
+    sbc_geom["vertices"] = [(vert.x/100, vert.z/100, vert.y/100)
+                            for vert in sbc_ob.vertices]
+    sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
+    sbc_geom["materials"] = materials_from_sbc(sbc_ob)
+    return sbc_geom
 
 
-def materialsFromSBC(sbcObject):
+def materials_from_sbc(sbc_ob):
     materials = {}
-    for ix, face in enumerate(sbcObject.faces):
+    for ix, face in enumerate(sbc_ob.faces):
         if face.type not in materials:
             materials[face.type] = []
         materials[face.type].append(ix)
     return materials
 
 
-def createMesh(name, meshpart):
+def create_sbc_mesh(name, meshpart):
     blenderMesh = bpy.data.meshes.new(name)
     blenderMesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
     blenderMesh.update()
@@ -195,7 +196,8 @@ def export_sbc(bl_obj):
 
     meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     links = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
-    clones = [common.cloneMesh(mesh) for mesh in meshes]
+    clones = [common.clone_mesh(mesh) for mesh in meshes]
+    clones = [mesh_rescale(clone) for clone in clones]
     vertList = []
     trisList = []
     quadList = []
@@ -214,7 +216,7 @@ def export_sbc(bl_obj):
         except TriangulationRequiredError:
             errors.append("%s requires triangulating." % mesh.name)
         print("Mesh processed")
-        quads, sbc = bvh.primitiveToSBC(tris, **options)
+        quads, sbc = bvh.primitive_to_sbc(tris, **options)
         vertList.append(vertices)
         trisList.append(tris)
         quadList.append(quads)
@@ -222,7 +224,7 @@ def export_sbc(bl_obj):
         meshmetadata.append({"indexID": mesh["indexID"]})
         parentTree = bvh.treesToSBCCol(sbcsList, **options)
         final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
-                              links, parentTree, meshmetadata)
+                                           links, parentTree, meshmetadata)
         stream = KaitaiStream(BytesIO(bytearray(final_size)))
         dst_sbc._check()
         dst_sbc._write(stream)
@@ -293,7 +295,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
 
 
 def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_count, face_count,
-                      vertex_count, parent_tree, aabb_count):
+                     vertex_count, parent_tree, aabb_count):
     dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = parent_tree.boundingBox().serialize()
     bbox = dst_sbc.Bbox(_parent=dst_sbc_header, _root=dst_sbc._root)
@@ -317,21 +319,6 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
     dst_sbc_header._check()
     dst_sbc.header = dst_sbc_header
     return dst_sbc_header
-
-
-def formHeader(objCount, vertCount, triCount, pairCount, stageCount, aabbCount, parentTree):
-    return {"type": 0xFF434253,  # TODO
-            "version": 0x781ACA20,
-            "null0": 0,
-            "objectCount": objCount,
-            "stageCount": stageCount,
-            "pairCount": pairCount,
-            "faceCount": triCount,
-            "vertexCount": vertCount,
-            "null1": [0]*2,
-            "boundingBox": parentTree.boundingBox().serialize(),
-            "boundingBoxSize": 0x70*(aabbCount)  # TODO
-            }
 
 
 def _serialize_bvhc(dst_sbc, bvhc_data):
@@ -372,14 +359,6 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
     return bvh_col
 
 
-def buildCollision(sbcTree):
-    return cBVHCollision.build(sbcTree.primitiveSerialize())
-
-
-def buildFaces(faces):
-    return b''.join([Face.build(f.triSerialize()) for f in faces])
-
-
 def _serialize_faces(dst_sbc, face_data):
     faces = []
     face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
@@ -398,10 +377,6 @@ def _serialize_faces(dst_sbc, face_data):
     return faces
 
 
-def buildVertices(vertices):
-    return b''.join([Vertex.build(geo.vec_unfold(v)) for v in vertices])
-
-
 def _serialize_vertices(dst_sbc, vertex_data):
     vertices = []
     dst_vertex = dst_sbc.Vertex(_parent=dst_sbc, _root=dst_sbc._root)
@@ -414,14 +389,6 @@ def _serialize_vertices(dst_sbc, vertex_data):
         dst_vertex._check()
         vertices.append(dst_vertex)
     return vertices
-
-
-def buildTypes(typing):
-    return CollisionType.build(formTypes(typing))
-
-
-def formTypes(typing):
-    return {typingName: typing[typeNameMapping[typingName]] for typingName in typeNameMapping}
 
 
 def _serialize_col_types(dst_sbc, col_types_data):
@@ -449,34 +416,13 @@ def _serialize_pairs(dst_sbc, pairs_data):
     return pairs
 
 
-def buildInfo(header, faces, vertices, stages, pairs, sbcs, sbcC, metadata):
-    f0, v0, p0 = 0, 0, 0,
-    infos = []
-    for f, v, p, s, m in zip(faces, vertices, pairs, sbcs, metadata):
-        info = {"boundingBox": getVertexBox(v).serialize(),
-                "null0": [0]*6,
-                "pairsStart": p0,
-                "pairsCount": len(p),
-                "facesStart": f0,
-                "facesCount": len(f),
-                "vertexStart": v0,
-                "vertexCount": len(v),
-                "indexID": m["indexID"],
-                "null1": [0]*3}
-        f0 += len(f)
-        v0 += len(v)
-        p0 += len(p)
-        infos.append(SbcInfo.build(info))
-    return infos
-
-
 def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metadata):
     f0, v0, p0 = 0, 0, 0,
     infos = []
     info = dst_sbc.Info(_parent=dst_sbc, _root=dst_sbc._root)
     bbox = dst_sbc.Bbox(_parent=info, _root=dst_sbc._root)
     for f, v, p, s, m in zip(faces, vertices, pairs, sbcs, metadata):
-        bbox_data = getVertexBox(v).serialize()
+        bbox_data = get_vertex_box(v).serialize()
         bbox.min = [v for v in bbox_data["minPos"].values()]
         bbox.max = [v for v in bbox_data["maxPos"].values()]
         info.unk_01 = 0  # not really, looks like a hash
@@ -498,28 +444,17 @@ def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metada
     return infos
 
 
-def getVertexBox(v):
+def get_vertex_box(v):
     return geo.BoundingBox(v)
-'''
-# cBHVCollision (Bounding Box Tree)
-cBVHCollision = Struct(
-    "BVHC" / Int64ul,  # Bound Volume Hierarchy Collision Identifier 0x77B17B2443485642
-    "SOH" / Int64ul,  # Start of Header 0x1
-    "boundingBox" / BoundingBox,  # BoundingBox of First Node
-    "nodeCount" / Int32ul,
-    "null" / Int32ul[3],
-    "AABBArray" / AABBArray[this.nodeCount]
-)
-'''
 
 
-class semiTri():
+class SemiTri():
     def __init__(self, face, matType):
         if not len(face.verts) == 3:
             raise TriangulationRequiredError()
         self.vert = [int(v.index) for v in face.verts]
         self.adjacent = self.getAdjacent(face)
-        self.normal = semiTri.calcNormal(face)
+        self.normal = SemiTri.calcNormal(face)
         self.type = matType
         # (0 = 90°, 1 = 0°, 2 > 180°, 3<180°)
 
@@ -529,7 +464,7 @@ class semiTri():
             bA = None
             for lf in edge.link_faces:
                 if lf != face:
-                    bA = semiTri.byteAngle(face, lf)
+                    bA = SemiTri.byteAngle(face, lf)
             if bA is None:
                 bA = 0
             adjacents.append(bA)
@@ -560,16 +495,16 @@ class semiTri():
 
     @staticmethod
     def byteAngle(face1, face2):
-        n1 = semiTri.calcNormal(face1)
-        n2 = semiTri.calcNormal(face2)
+        n1 = SemiTri.calcNormal(face1)
+        n2 = SemiTri.calcNormal(face2)
         fv1 = [v.co for v in face1.verts]
-        e1 = semiTri.edges(face1)
-        e2 = semiTri.edges(face2)
+        e1 = SemiTri.edges(face1)
+        e2 = SemiTri.edges(face2)
         facing = None
         for ix, e in enumerate(e1):
             if tuple(reversed(e)) in e2:
                 edgem = (fv1[ix]+fv1[(ix+1) % 3])/2
-                bary = (semiTri.barycenter(face1)+semiTri.barycenter(face2))/2
+                bary = (SemiTri.barycenter(face1)+SemiTri.barycenter(face2))/2
                 facing = bary - edgem
                 facing.normalize()
         if facing is None:
@@ -597,7 +532,7 @@ class semiTri():
             slot = mesh.material_slots[ix]
             mat = slot.material.name
             return int(mat[len("Type "):len("Type 000")])
-        except:
+        except IndexError:
             raise MaterialMissingError
 
 
@@ -606,8 +541,23 @@ def mesh_to_tri(mesh):
     # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
     vertices = [Vector(v.co) for v in bm.verts]
-    faces = [Tri(semiTri(face, semiTri.getMaterial(face, mesh)), vertices)
+    faces = [Tri(SemiTri(face, SemiTri.getMaterial(face, mesh)), vertices)
              for face in bm.faces]
     bm.free()
     return vertices, faces
 
+
+def mesh_rescale(ob):
+    '''Meshes should be transformed back to the game's up axis and scale'''
+    bpy.ops.object.mode_set(mode='OBJECT')
+    mesh = ob.data
+
+    # Swap Y and Z coordinates for each vertex and rescale
+    for vert in mesh.vertices:
+        x = vert.co.x * 100
+        y = vert.co.y * 100
+        z = vert.co.z * 100
+        vert.co.x = x
+        vert.co.y = z
+        vert.co.z = y
+    return ob
