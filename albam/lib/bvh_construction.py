@@ -599,7 +599,7 @@ def HybridClustering(primitives, *args, **kwargs):
 # =============================================================================
 # Final constructor functions
 # =============================================================================
-def indexizeObject(listing, key=None):
+def indexize_ob(listing, key=None):
     for ix, obj in enumerate(listing):
         if key is not None:
             key(obj).setIndex(ix)
@@ -633,20 +633,20 @@ def mergerReindex(primitives, qprimitives):
 
 
 def primitiveToSBC(primitives, clusteringFunction=spatialSplits, **kwargs):
-    indexizeObject(primitives, lambda x: x.dataFace)
-    indexizeObject(primitives)
+    indexize_ob(primitives, lambda x: x.dataFace)
+    indexize_ob(primitives)
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
     btree.mergeCompatible()
     qtree = btree.collapse()
-    indexizeObject(qtree.subnodes())
+    indexize_ob(qtree.subnodes())
     npairPrimitives = mergerReindex(primitives, qtree.subprimitives())
     nodes, pairPrimitives = qtree.separateTraverse()
-    indexizeObject(nodes)
+    indexize_ob(nodes)
     return npairPrimitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
 
 
 def treesToSBCCol(treeList, clusteringFunction=spatialSplits, **kwargs):
-    indexizeObject(treeList)
+    indexize_ob(treeList)
     qtree = next(iter(clusteringFunction(treeList, **kwargs))).collapse()
-    indexizeObject(qtree.subnodes())
+    indexize_ob(qtree.subnodes())
     return PrimitiveTree(qtree)

@@ -3,18 +3,18 @@ import bmesh
 from kaitaistruct import KaitaiStream
 import colorsys
 import numpy as np
+from mathutils import Vector
+from io import BytesIO
+
 
 from albam.registry import blender_registry
+from albam.vfs import VirtualFileData
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
-from mathutils import Vector
-
-
 from albam.lib.primitive_geometry import eps, Tri
-#from albam.lib import Sbc
 import albam.lib.primitive_geometry as geo
 import albam.lib.bvh_construction as bvh
-import albam.lib.common_op as Common
+import albam.lib.common_op as common
 
 SBC_CLASS_MAPPER = {
     49: Sbc156,
@@ -38,10 +38,10 @@ class SBCObject():
     def __init__(self, info, BVHTree, faces, vertices, pairs):
         self.sbcinfo = info
         self.bvhtree = BVHTree
-        self.faces = bvh.indexizeObject(
+        self.faces = bvh.indexize_ob(
             [geo.Tri(face, vertices) for face in faces])
         self.vertices = vertices
-        self.pairs = bvh.indexizeObject([geo.QuadPair(self.faces[pair.face_01], self.faces[pair.face_02])
+        self.pairs = bvh.indexize_ob([geo.QuadPair(self.faces[pair.face_01], self.faces[pair.face_02])
                                          if pair.face_02 != 0xFFFF else
                                          self.faces[pair.face_01]
                                          for pair in pairs])
@@ -125,13 +125,13 @@ def create_collision_mesh(sbcObject):
 
 
 def createLinkObject(link_ob):
-    sbcEmpty = Common.createRootNub("SBC Stage Link.000")
+    sbcEmpty = common.createRootNub("SBC Stage Link.000")
     sbcEmpty["Type"] = "SBC_Link"
-    sbcEmpty["{Unkn1}"] = link_ob.unk_01
-    sbcEmpty["{Unkn3}"] = link_ob.unk_02
-    sbcEmpty["{Unkn4}"] = link_ob.unk_03
-    sbcEmpty["{Unkn5}"] = link_ob.unk_04
-    sbcEmpty["jpPath"] = link_ob.jp_path
+    sbcEmpty["unk_01"] = link_ob.unk_01
+    sbcEmpty["unk_02"] = link_ob.unk_02
+    sbcEmpty["unk_03"] = link_ob.unk_03
+    sbcEmpty["unk_04"] = link_ob.unk_04
+    sbcEmpty["jp_path"] = link_ob.jp_path
     return sbcEmpty
 
 
@@ -195,12 +195,13 @@ def export_sbc(bl_obj):
 
     meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     links = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
-    clones = [Common.cloneMesh(mesh) for mesh in meshes]
+    clones = [common.cloneMesh(mesh) for mesh in meshes]
     vertList = []
     trisList = []
     quadList = []
     sbcsList = []
     meshmetadata = []
+    errors = []
     options = {"clusteringFunction": bvh.HybridClustering,
                "metric": bvh.Cluster.SAHMetric,
                "partition": bvh.mortonPartition,
@@ -208,7 +209,10 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate export")
     for mesh in clones:
-        vertices, tris = meshToTri(mesh)
+        try:
+            vertices, tris = mesh_to_tri(mesh)
+        except TriangulationRequiredError:
+            errors.append("%s requires triangulating." % mesh.name)
         print("Mesh processed")
         quads, sbc = bvh.primitiveToSBC(tris, **options)
         vertList.append(vertices)
@@ -217,12 +221,15 @@ def export_sbc(bl_obj):
         sbcsList.append(sbc)
         meshmetadata.append({"indexID": mesh["indexID"]})
         parentTree = bvh.treesToSBCCol(sbcsList, **options)
-        serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
+        final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
                               links, parentTree, meshmetadata)
-        # with open(self.properties.filepath,"wb") as outf:
-        #     outf.write(serialized)
+        stream = KaitaiStream(BytesIO(bytearray(final_size)))
+        dst_sbc._check()
+        dst_sbc._write(stream)
+        sbc_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
+        vfiles.append(sbc_vf)
     for clone in clones:
-        Common.delete_ob(clone)
+        common.delete_ob(clone)
     return vfiles
 
 
@@ -230,8 +237,8 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
     def tally(x): return sum(map(len, x))
     # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
     #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
-    _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(tris), len(verts),
-                     parentTree, tally(sbcs+[parentTree]))
+    _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(quads), tally(tris),
+                     tally(verts), parentTree, tally(sbcs+[parentTree]))
     # header = buildHeader(headerData)
     # cBVH = list(map(buildCollision,sbcs))
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
@@ -249,12 +256,30 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
     dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link) for link in links]
 
     # pairCollection = list(map(buildPairs, quads))
-    dst_sbc.pair_collections = [_serialize_pairs(dst_sbc, p) for p in quads]
+    dst_sbc.pairs_collections = [_serialize_pairs(dst_sbc, p) for p in quads][0]
 
     # infoCollection = buildInfo(
     #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
     dst_sbc.sbc_info = _serialize_infos(dst_sbc, tris, verts, dst_sbc.collision_types,
-                                         quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, meshmetadata)
+                                        quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, meshmetadata)
+
+    bvhc_size = 0
+    for i, bvhc in enumerate(dst_sbc.sbc_bvhc):
+        bvhc_size += 64 + bvhc.node_count * 112
+
+    bvh_size = 64 + dst_sbc.bvh.node_count * 112
+
+    final_size = sum((
+        84,
+        dst_sbc.header.object_count * 80,
+        bvhc_size,
+        bvh_size,
+        dst_sbc.header.face_count * 32,
+        dst_sbc.header.vertex_count * 16,
+        dst_sbc.header.stage_count * 32,
+        dst_sbc.header.pair_count * 10,
+    ))
+
     #def flatten(x): return b''.join(x)
     #return (header +
     #        flatten(infoCollection) +
@@ -264,12 +289,11 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentT
     #        flatten(vertexCollection) +
     #        flatten(collisionTypes) +
     #        flatten(pairCollection))
-    dst_sbc._check()
-    return 0
+    return final_size, dst_sbc
 
 
-def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, face_count, vertex_count,
-                     parent_tree, aabb_count):
+def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_count, face_count,
+                      vertex_count, parent_tree, aabb_count):
     dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = parent_tree.boundingBox().serialize()
     bbox = dst_sbc.Bbox(_parent=dst_sbc_header, _root=dst_sbc._root)
@@ -282,6 +306,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, face_c
         unk_03=0,
         object_count=object_count,
         stage_count=stage_count,
+        pair_count=pair_count,
         face_count=face_count,
         vertex_count=vertex_count,
         nulls=[0, 0, 0, 0],
@@ -339,7 +364,7 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
         aabb.x = max_aabb["xArray"]
         aabb.y = max_aabb["yArray"]
         aabb.z = max_aabb["zArray"]
-        bvh_node.man_aabb = aabb
+        bvh_node.max_aabb = aabb
         bvh_nodes.append(bvh_node)
     bvh_col.nodes = bvh_nodes
     bvh_col._check()
@@ -401,11 +426,11 @@ def formTypes(typing):
 
 def _serialize_col_types(dst_sbc, col_types_data):
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = col_types_data["{Unkn1}"]
-    coltype.unk_02 = col_types_data["{Unkn3}"]
-    coltype.unk_03 = col_types_data["{Unkn4}"]
-    coltype.unk_04 = [v for v in col_types_data["{Unkn5}"]]
-    coltype.jp_path = col_types_data["jpPath"]
+    coltype.unk_01 = col_types_data["unk_01"]
+    coltype.unk_02 = col_types_data["unk_02"]
+    coltype.unk_03 = col_types_data["unk_03"]
+    coltype.unk_04 = [v for v in col_types_data["unk_04"]]
+    coltype.jp_path = col_types_data["jp_path"]
     coltype._check()
     return coltype
 
@@ -420,6 +445,7 @@ def _serialize_pairs(dst_sbc, pairs_data):
         pair.quad_order = pair_raw["quadOrder"]
         pair.type = pair_raw["type"]
         pair._check()
+        pairs.append(pair)
     return pairs
 
 
@@ -459,10 +485,10 @@ def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metada
         info.pairs_start = f0
         info.pairs_count = len(p)
         info.faces_start = f0
-        info.faces_count = len(f)
+        info.face_count = len(f)
         info.vertex_start = v0
         info.vertex_count = len(v)
-        info.index_id = m["indexID"]
+        info.index_id = int(m["indexID"])  # something wrong
         info.nulls_02 = [0, 0]
         info._check()
         f0 += len(f)
@@ -575,7 +601,7 @@ class semiTri():
             raise MaterialMissingError
 
 
-def meshToTri(mesh):
+def mesh_to_tri(mesh):
     bm = bmesh.new()
     # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
