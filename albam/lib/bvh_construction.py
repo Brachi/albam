@@ -632,7 +632,7 @@ def mergerReindex(primitives, qprimitives):
     return pairPrimitiveList
 
 
-def primitiveToSBC(primitives, clusteringFunction=spatialSplits, **kwargs):
+def primitive_to_sbc(primitives, clusteringFunction=spatialSplits, **kwargs):
     indexize_ob(primitives, lambda x: x.dataFace)
     indexize_ob(primitives)
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
