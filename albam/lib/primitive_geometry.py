@@ -5,11 +5,11 @@ Created on Thu Nov 28 23:44:04 2019
 @author: AsteriskAmpersand
 """
 try:
-    from pymorton import interleave as mortonEncode
+    from pymorton import interleave as morton_encode
     from rays import Ray
     from albam.lib.vec_op import vect_int, vec_mult, vec_div, vec_unfold
 except:
-    from albam.lib.pymorton import interleave as mortonEncode
+    from albam.lib.pymorton import interleave as morton_encode
     from .rays import Ray
     from .vec_op import vect_int, vec_mult, vec_div, vec_unfold
 
@@ -114,7 +114,7 @@ class GeometryPrimitive():
             else:
                 normalized = vec_div(
                     (self.barycenter()-self.sceneStart), self.sceneSize)
-                self.mortonCode = mortonEncode(
+                self.mortonCode = morton_encode(
                     *(vect_int(mortonLimit*normalized)))
                 return self.mortonCode
         else:
@@ -373,7 +373,7 @@ if "__main__" in __name__:
             str(Path(r"E:\MapModding\AggloHierarchy").joinpath(sbcName.stem + '.pdf')))
 
     def algo(x): return bvc.spatialSplits(
-        x, partition=bvc.linearSplit, metric=bvc.Cluster.SAH_EPOMetric)
+        x, partition=bvc.linear_split, metric=bvc.Cluster.SAH_EPOMetric)
     testFile = Path(r"E:\MHW\Merged\stage\st101\st101_K\col\st101_K_col.sbc")
     # testFile = Path(r"C:\Users\aguevara\Downloads\st101_K_col.sbc")
     content = SBC(open(testFile, "rb").read())

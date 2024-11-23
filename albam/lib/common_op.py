@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import bpy
 import bmesh
 from mathutils import Matrix
@@ -16,7 +14,7 @@ def unselect():
     return
 
 
-def applyTransform():
+def apply_transform():
     unselect()
     for obj in bpy.context.scene.objects:
         obj.select = obj.type == "MESH"
@@ -40,7 +38,7 @@ def delete_ob(obj):
     objs.remove(objs[obj.name], do_unlink=True)
 
 
-def getBlenderObjects(blenderType=None, key=None):
+def get_blender_objects(blenderType=None, key=None):
     checks = []
     if blenderType is not None:
         checks.append(lambda x: x.type == blenderType)
@@ -49,12 +47,12 @@ def getBlenderObjects(blenderType=None, key=None):
     return [obj for obj in bpy.context.scene.objects if all((c(obj) for c in checks))]
 
 
-def getMeshes(key=None):
-    return getBlenderObjects("MESH", key)
+def get_meshes(key=None):
+    return get_blender_objects("MESH", key)
 
 
-def getEmpties(key=None):
-    return getBlenderObjects("EMPTY", key)
+def get_empties(key=None):
+    return get_blender_objects("EMPTY", key)
 
 
 def clone_mesh(original):
@@ -81,7 +79,7 @@ def clone_mesh(original):
     return copy
 
 
-def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=None):
+def join_mesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=None):
     bm = bmesh.new()
     bm.from_mesh(source.data)
     bm.from_mesh(target.data)
@@ -99,11 +97,11 @@ def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=N
         sourceMesh = source.to_mesh(scene, True, 'PREVIEW')
         targetMesh = target.data
         # VERTICES #
-        numVertices = copyVertices(sourceMesh, targetMesh, translate, alignTo)
+        numVertices = copy_vertices(sourceMesh, targetMesh, translate, alignTo)
         # MATERIALS #
-        materialsMap = copyMaterials(sourceMesh, targetMesh)
+        materialsMap = copy_materials(sourceMesh, targetMesh)
         # FACES #
-        copyFaces(sourceMesh, targetMesh, numVertices, materialsMap)
+        copy_faces(sourceMesh, targetMesh, numVertices, materialsMap)
         if doUpdate is True:
             targetMesh.update(calc_edges=True)
         result = True
@@ -111,7 +109,7 @@ def joinMesh(source, target, doUpdate=True, translate=[0.0, 0.0, 0.0], alignTo=N
     return result
 
 
-def copyVertices(sourceMesh, targetMesh, translate, alignTo):
+def copy_vertices(sourceMesh, targetMesh, translate, alignTo):
     numVertices = len(targetMesh.vertices)
     numAppendVertices = len(sourceMesh.vertices)
     targetMesh.vertices.add(numAppendVertices)
@@ -128,7 +126,7 @@ def copyVertices(sourceMesh, targetMesh, translate, alignTo):
     return numVertices
 
 
-def copyMaterials(sourceMesh, targetMesh):
+def copy_materials(sourceMesh, targetMesh):
     # We need maintain a map between our source and target materials as we'll be merging, not
     # simply appending like we do with the vertices and faces.
     materialsMap = {}
@@ -150,7 +148,7 @@ def copyMaterials(sourceMesh, targetMesh):
     return materialsMap
 
 
-def copyFaces(sourceMesh, targetMesh, numVertices, materialsMap):
+def copy_faces(sourceMesh, targetMesh, numVertices, materialsMap):
     numFaces = len(targetMesh.polygons)
     numAppendFaces = len(sourceMesh.polygons)
     targetMesh.polygons .add(numAppendFaces)
