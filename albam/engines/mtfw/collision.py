@@ -21,6 +21,15 @@ SBC_CLASS_MAPPER = {
     255: Sbc21,
 }
 
+APPID_SBC_CLASS_MAPPER = {
+    "re0": Sbc21,
+    "re1": Sbc21,
+    "re5": Sbc156,
+    "rev1": Sbc21,
+    "rev2": Sbc21,
+    "dd": Sbc21,
+}
+
 
 class TriangulationRequiredError(Exception):
     pass
@@ -138,7 +147,7 @@ def create_link_ob(link_ob):
 
 def decompose_sbc_ob(sbc_ob):
     sbc_geom = {}
-    sbc_geom["vertices"] = [(vert.x/100, vert.z/100, vert.y/100)
+    sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
                             for vert in sbc_ob.vertices]
     sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
     sbc_geom["materials"] = materials_from_sbc(sbc_ob)
@@ -184,7 +193,11 @@ def cycles(verts):
     return [(verts[i % 3].index, verts[(i+1) % 3].index) for i in range(len(verts))]
 
 
+@blender_registry.register_export_function(app_id="re0", extension="sbc")
 @blender_registry.register_export_function(app_id="re1", extension="sbc")
+@blender_registry.register_export_function(app_id="rev1", extension="sbc")
+@blender_registry.register_export_function(app_id="rev2", extension="sbc")
+@blender_registry.register_export_function(app_id="dd", extension="sbc")
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
@@ -206,7 +219,7 @@ def export_sbc(bl_obj):
     errors = []
     options = {"clusteringFunction": bvh.HybridClustering,
                "metric": bvh.Cluster.SAHMetric,
-               "partition": bvh.mortonPartition,
+               "partition": bvh.morton_partition,
                "mode": bvh.CAPCOM}
     vfiles = []
     print("Initiate export")
@@ -235,18 +248,18 @@ def export_sbc(bl_obj):
     return vfiles
 
 
-def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parentTree, meshmetadata):
+def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, meshmetadata):
     def tally(x): return sum(map(len, x))
     # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
     #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
     _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(quads), tally(tris),
-                     tally(verts), parentTree, tally(sbcs+[parentTree]))
+                     tally(verts), parent_tree, tally(sbcs+[parent_tree]))
     # header = buildHeader(headerData)
     # cBVH = list(map(buildCollision,sbcs))
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
 
     # cBVHCollision = buildCollision(parentTree)
-    dst_sbc.bvh = _serialize_bvhc(dst_sbc, parentTree)
+    dst_sbc.bvh = _serialize_bvhc(dst_sbc, parent_tree)
 
     # faceCollection = list(map(buildFaces, tris))
     dst_sbc.faces = [_serialize_faces(dst_sbc, face) for face in tris][0]
@@ -556,7 +569,7 @@ def mesh_rescale(ob):
     for vert in mesh.vertices:
         x = vert.co.x * 100
         y = vert.co.y * 100
-        z = vert.co.z * 100
+        z = vert.co.z * -100
         vert.co.x = x
         vert.co.y = z
         vert.co.z = y

@@ -386,12 +386,13 @@ def expRedFactory(c, alpha):
     return reductionFunction
 
 
-def aproximateAgglomerativeClustering(primitives, metric=Cluster.SAHMetric, reduction=expRedFactory(1, 0.5), threshold=1, **kwargs):
-    clusters = [BinaryCluster(p) for p in mortonSort(primitives)]
-    return combineClusters(buildTree(clusters, metric, reduction, threshold), 1, metric)
+def aproximate_agglomerative_clustering(primitives, metric=Cluster.SAHMetric, reduction=expRedFactory(1, 0.5),
+                                        threshold=1, **kwargs):
+    clusters = [BinaryCluster(p) for p in morton_sort(primitives)]
+    return combine_clusters(build_tree(clusters, metric, reduction, threshold), 1, metric)
 
 
-def combineClusters(clusters, n, metric):
+def combine_clusters(clusters, n, metric):
     c = set(clusters)
     if len(c) == 1:
         return c
@@ -413,15 +414,15 @@ def combineClusters(clusters, n, metric):
     return c
 
 
-def buildTree(primitives, metric, countReduction, threshold):
+def build_tree(primitives, metric, countReduction, threshold):
     if len(primitives) <= threshold:
-        return combineClusters(primitives, countReduction(threshold), metric)
-    l, r = mortonPartition(primitives)
-    def build(x): return buildTree(x, metric, countReduction, threshold)
-    return combineClusters(build(l).union(build(r)), countReduction(len(primitives)), metric)
+        return combine_clusters(primitives, countReduction(threshold), metric)
+    l, r = morton_partition(primitives)
+    def build(x): return build_tree(x, metric, countReduction, threshold)
+    return combine_clusters(build(l).union(build(r)), countReduction(len(primitives)), metric)
 
 
-def mortonPartition(encodableList, metric=None, mortonPoint=0):
+def morton_partition(encodableList, metric=None, mortonPoint=0):
     bit = mortonLength-1-mortonPoint
     if bit == -1 or len(encodableList) < 3:
         return encodableList[:(len(encodableList)+1)//2], encodableList[(len(encodableList)+1)//2:]
@@ -430,7 +431,7 @@ def mortonPartition(encodableList, metric=None, mortonPoint=0):
     left = 0
     right = len(encodableList)-1
     if key(left) == key(right):
-        return mortonPartition(encodableList, metric, mortonPoint+1)
+        return morton_partition(encodableList, metric, mortonPoint+1)
     while right-left > 1:
         middlePoint = (left+right+1)//2
         if key(left) == key(middlePoint):
@@ -526,7 +527,7 @@ def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
 # =============================================================================
 #  Naive Spatial Splits
 # =============================================================================
-def mortonSort(primitives):
+def morton_sort(primitives):
     def unpack(x): return [x.minPos, x.maxPos]
     def mergeOp(x, y): return x.merge(y)
     primitiveBoxes = [BoundingBox(unpack(p.boundingBox())) for p in primitives]
@@ -536,7 +537,7 @@ def mortonSort(primitives):
     # return sorted(primitives,key = lambda x: x.setBounds(minima,maxima).encode())
 
 
-def linearSplit(cluster, metric):
+def linear_split(cluster, metric):
     if len(cluster) == 1:
         return [c for c in cluster], []
     best = np.inf
@@ -566,11 +567,11 @@ def linearSplit(cluster, metric):
 
 def spatialSplits(primitives, *args, **kwargs):
 
-    clusters = [BinaryCluster(p) for p in mortonSort(primitives)]
+    clusters = [BinaryCluster(p) for p in morton_sort(primitives)]
     return [_spatialSplits(clusters, *args, **kwargs)]
 
 
-def _spatialSplits(clusters, metric=Cluster.SAH_EPOMetric, partition=linearSplit, **kwargs):
+def _spatialSplits(clusters, metric=Cluster.SAH_EPOMetric, partition=linear_split, **kwargs):
     if len(clusters) == 1:
         return clusters[0]
     l, r = partition(clusters, metric)
@@ -593,7 +594,7 @@ def _spatialSplits(clusters, metric=Cluster.SAH_EPOMetric, partition=linearSplit
 # =============================================================================
 def HybridClustering(primitives, *args, **kwargs):
     # TODO - pick method based on length etc...
-    return aproximateAgglomerativeClustering(primitives, *args, **kwargs)
+    return aproximate_agglomerative_clustering(primitives, *args, **kwargs)
 
 
 # =============================================================================
