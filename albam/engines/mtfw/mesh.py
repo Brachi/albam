@@ -1112,6 +1112,7 @@ def _serialize_groups(src_mod, dst_mod):
 
 def _check_weights(weights, max_weights):
     _weights = []
+    correction = False  # It doesn't look like it needed at all
     i = max_weights - 4
     weights.extend([0] * (max_weights - len(weights)))
     if max_weights in [1, 2]:
@@ -1126,12 +1127,17 @@ def _check_weights(weights, max_weights):
     _weights.append(unpack("e", pack("e", weights[i + 2]))[0])
     _weights.append(weights[i + 3])
     excess = 1.0 - sum(_weights)
-    if excess < 0:
-        # print(excess)
-        # print("1/255 is {}".format(abs(excess)//0.003922))
-        # print("1/32767 is {}".format(abs(excess)//0.000031))
-        # print("half float is {}".format(abs(excess)//0.000001))
-        # print("wt6 is {}".format(_weights[5]))
+    if excess < 0 and correction:
+        _excess = abs(excess)
+        if _excess >= 0.003922:
+            print("1/255 is {}".format(abs(excess) // 0.003922))
+            _excess = _excess - (_excess // 0.003922) * 0.003922
+        if _excess >= 0.000031:
+            print("1/32767 is {}".format(abs(excess)//0.000031))
+            _excess = _excess - (_excess // 0.000031) * 0.000031
+        if _excess >= 0.000001:
+            print("half float is {}".format(abs(excess)//0.000001))
+            _excess = _excess - (_excess // 0.000001) * 0.000001
         if _weights[i + 2] > abs(excess):
             _weights[i + 2] = _weights[i + 2] + excess
     return _weights
