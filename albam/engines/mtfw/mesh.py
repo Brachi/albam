@@ -380,8 +380,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
 
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
-    # convert indices for this mesh only, so they start at zero
-    indices = [tri_idx - mesh.min_index for tri_idx in indices]
+
+    if min(indices) >= mesh.min_index:  # backwards compability workaround
+        # convert indices for this mesh only, so they start at zero
+        indices = [tri_idx - mesh.min_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -793,6 +795,8 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+    if app_id not in ["re5", "dd"]:
+        index_buffer.extend((0, 0))
 
     final_size = sum((
         offset,
@@ -1133,10 +1137,10 @@ def _check_weights(weights, max_weights):
             print("1/255 is {}".format(abs(excess) // 0.003922))
             _excess = _excess - (_excess // 0.003922) * 0.003922
         if _excess >= 0.000031:
-            print("1/32767 is {}".format(abs(excess)//0.000031))
+            print("1/32767 is {}".format(abs(excess) // 0.000031))
             _excess = _excess - (_excess // 0.000031) * 0.000031
         if _excess >= 0.000001:
-            print("half float is {}".format(abs(excess)//0.000001))
+            print("half float is {}".format(abs(excess) // 0.000001))
             _excess = _excess - (_excess // 0.000001) * 0.000001
         if _weights[i + 2] > abs(excess):
             _weights[i + 2] = _weights[i + 2] + excess
@@ -1169,7 +1173,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     face_offset = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
-        face_padding = 2
+        face_padding = 0 if app_id not in ["re5", "dd"] else 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
         mesh.indices__to_write = False
         mesh.vertices__to_write = False
@@ -1208,12 +1212,13 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles = [e + current_vertex_position for e in triangles]
         num_indices = len(triangles)
-        # calculate padding for indices
-        if ((num_indices * 2) % 4):
+        if app_id in ["re5", "dd"]:
+            # calculate padding for indices
+            if ((num_indices * 2) % 4):
+                triangles.append(triangles[-1])
+                face_padding += 1
             triangles.append(triangles[-1])
-            face_padding += 1
-        triangles.append(triangles[-1])
-        triangles.append(0)
+            triangles.append(0)
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
