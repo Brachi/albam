@@ -24,7 +24,7 @@ source .venv/bin/activate
 pip install .[tests]
 pytest
 ```
-Note: you need application data to run mosts useful tests.
+Note: you need application data to run most useful tests.
 
 ## Supported Engines
 
@@ -33,15 +33,13 @@ Note: you need application data to run mosts useful tests.
 
 ## Similar Tools
 
-* [Noesis](https://richwhitehouse.com/index.php?content=inc_projects.php&showproject=91)
-* [Mod3-MHW-Importer](https://github.com/AsteriskAmpersand/Mod3-MHW-Importer)
 * [RevilMax](https://github.com/PredatorCZ/RevilMax])
+* [Mod3-MHW-Importer](https://github.com/AsteriskAmpersand/Mod3-MHW-Importer)
 * [umvc3-tools](https://github.com/tge-was-taken/umvc3-tools)
 * 3ds script by Maliwei777, Aman, Mariokart64n and others
 
 ## Special Thanks
 
-* Rich Whitehouse
 * Lukas Cone
 * Ekey
 * Knabsi
