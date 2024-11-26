@@ -74,6 +74,7 @@ MRL_MATERIAL_TYPE_STR = {
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
 
 MRL_PER_MATERIAL_FEATURES = {
+    0x854D484: [],
     0x5FB0EBE4: ["FVertexDisplacement"],
     0x7D2B31B3: ["FVertexDisplacement"],
     0x1CAB245E: ["CBDDMaterialParam",
