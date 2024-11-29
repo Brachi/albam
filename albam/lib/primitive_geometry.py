@@ -7,14 +7,13 @@ Created on Thu Nov 28 23:44:04 2019
 try:
     from pymorton import interleave as morton_encode
     from rays import Ray
-    from albam.lib.vec_op import vect_int, vec_mult, vec_div, vec_unfold
-except:
+    from vec_op import vect_int, vec_mult, vec_div, vec_unfold
+except ImportError:
     from albam.lib.pymorton import interleave as morton_encode
-    from .rays import Ray
-    from .vec_op import vect_int, vec_mult, vec_div, vec_unfold
+    from albam.lib.rays import Ray
+    from albam.lib.vec_op import vect_int, vec_mult, vec_div, vec_unfold
 
-
-from mathutils import Matrix, Vector
+from mathutils import Vector
 from functools import total_ordering
 import numpy as np
 
@@ -321,86 +320,3 @@ class PrimitiveTree(GeometryPrimitive):
                 "null": [0]*3,
                 "AABBArray": [n.serialize() for n in self.content.subnodes()]
                 }
-
-
-if "__main__" in __name__:
-    try:
-        import pygraphviz as pgv
-    except:
-        pass
-    from pathlib import Path
-    import os
-    import sys
-    sys.path.insert(1, '..')
-    from map3.Sbc import SBC, SBCToBVHTrees, ObjToBVHTree
-    from map3.TreeUtils import plotTree
-    import albam.lib.bvh_construction as bvc
-    os.environ["PATH"] += os.pathsep + \
-        r"C:\Program Files (x86)\Graphviz2.38\bin"
-    import time
-
-
-# =============================================================================
-# Tree Plotting
-# =============================================================================
-    cid = -1
-    typeMap = {(1, 0): "RoyalBlue", (0, 1): "Goldenrod",
-               (0, 0): "black"}
-
-    def genUniqueId():
-        global cid
-        cid += 1
-        return cid
-
-    def recursiveGraph(tree, graph, tid):
-        for children in tree.children():
-            cid = genUniqueId()
-            graph.add_node(cid, label=children.index(), shape='box',
-                           style='filled', color=typeMap[children.typePair()])
-            graph.add_edge(tid, cid, color='sienna', style='filled')
-            recursiveGraph(children, graph, cid)
-        return graph
-
-    def plotQTree(tree, sbcName=Path("test")):
-        g = pgv.AGraph(directed=True, strict=True)
-        tid = genUniqueId()
-        g.add_node(tid, label=tree.index(), shape='box',
-                   style='filled', color=typeMap[tree.typePair()])
-        graph = recursiveGraph(tree, g, tid)
-
-        graph.layout(prog='dot')
-        graph.draw(
-            str(Path(r"E:\MapModding\AggloHierarchy").joinpath(sbcName.stem + '.pdf')))
-
-    def algo(x): return bvc.spatialSplits(
-        x, partition=bvc.linear_split, metric=bvc.Cluster.SAH_EPOMetric)
-    testFile = Path(r"E:\MHW\Merged\stage\st101\st101_K\col\st101_K_col.sbc")
-    # testFile = Path(r"C:\Users\aguevara\Downloads\st101_K_col.sbc")
-    content = SBC(open(testFile, "rb").read())
-    trees = []
-    print(len(content.objects))
-    start = time.time()
-    last = start
-    for ix, obj in enumerate(content.objects):
-        tris = obj.faces
-        quads = [pair.setIndex(ix) for ix, pair in enumerate(obj.pairs)]
-        print("%3d:%5d:" % (ix, len(quads)), end="")
-        bTree = next(iter(algo(quads)))
-        qtree = bTree.collapse()
-        qtree.indexize()
-        # plotQTree(qtree)
-        trees.append(PrimitiveTree(qtree))
-        tree = ObjToBVHTree(obj)
-        current = time.time()
-        print("%0.2f" % (current-last))
-        print(qtree)
-        raise ValueError
-        last = current
-        # plotTree(tree,testFile)
-    print("Total: %0.2f" % (last-start))
-    superTree = next(iter(algo([tree.setIndex(ix)
-                     for ix, tree in enumerate(trees)]))).collapse()
-    superTree.indexize()
-
-    # print(superTree.serialize())
-    # print(superTree)

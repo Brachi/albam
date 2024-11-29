@@ -295,8 +295,8 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
         dst_sbc.header.pair_count * 10,
     ))
 
-    #def flatten(x): return b''.join(x)
-    #return (header +
+    # def flatten(x): return b''.join(x)
+    # return (header +
     #        flatten(infoCollection) +
     #        flatten(cBVH) +
     #        cBVHCollision +
@@ -374,9 +374,9 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
 
 def _serialize_faces(dst_sbc, face_data):
     faces = []
-    face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
     print("lenght of face data is {}".format(len(face_data)))
     for f in face_data:
+        face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
         face_raw = f.triSerialize()
         face.normal = face_raw["normal"]
         face.vert = face_raw["vert"]
@@ -392,8 +392,8 @@ def _serialize_faces(dst_sbc, face_data):
 
 def _serialize_vertices(dst_sbc, vertex_data):
     vertices = []
-    dst_vertex = dst_sbc.Vertex(_parent=dst_sbc, _root=dst_sbc._root)
     for v in vertex_data:
+        dst_vertex = dst_sbc.Vertex(_parent=dst_sbc, _root=dst_sbc._root)
         vertex_raw = geo.vec_unfold(v)
         dst_vertex.x = vertex_raw["x"]
         dst_vertex.y = vertex_raw["y"]
