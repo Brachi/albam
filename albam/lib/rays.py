@@ -11,9 +11,9 @@ import random
 import numpy as np
 
 try:
+    from vec_op import vec_mult
+except ImportError:
     from albam.lib.vec_op import vec_mult
-except:
-    from .vec_op import vec_mult
 
 
 class Ray():
