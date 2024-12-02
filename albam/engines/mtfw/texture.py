@@ -159,6 +159,7 @@ APPID_TEXCLS_MAP = {
     "rev1": Tex157,
     "rev2": Tex157,
     "dd": Tex157,
+    "dmc4": Tex112,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -169,6 +170,7 @@ APPID_RTEXCLS_MAP = {
     "rev1": Rtex157,
     "rev2": Rtex157,
     "dd": Rtex157,
+    "dmc4": Rtex112,
 }
 
 TEX_TYPE_MAPPER = {
@@ -366,7 +368,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         if tex_value == texture_type:
             tex_slot = tex_type
             break
-    tex_index = getattr(mtfw_material, tex_slot)
+    tex_index = getattr(mtfw_material, tex_slot, 0)
     return tex_index
 
 

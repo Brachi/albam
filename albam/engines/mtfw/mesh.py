@@ -35,10 +35,12 @@ from .material import (
 )
 from .texture import check_dds_textures
 from .structs.mod_156 import Mod156
+from .structs.mod_153 import Mod153
 from .structs.mod_21 import Mod21
 
 
 MOD_CLASS_MAPPER = {
+    153: Mod153,
     156: Mod156,
     210: Mod21,
     211: Mod21,
@@ -52,6 +54,7 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+    "dmc4": Mod153,
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -277,9 +280,10 @@ BBOX_AFFECTED = [
     0xD877801B,
 ]
 
-VERSIONS_USE_BONE_PALETTES = {156}
+VERSION_MTFW15 = {153, 156}
+VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
-VERSIONS_USE_TRISTRIPS = {156, 212}
+VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -288,6 +292,7 @@ MAIN_LODS = {
     "rev1": [1, 255],
     "rev2": [1, 255],
     "dd": [1, 255],
+    "dmc4": [1, 255],
 }
 
 
@@ -413,7 +418,7 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     z = vertex.position.z
 
     w = getattr(vertex.position, "w", None)
-    if w is not None and mod_version == 156:
+    if w is not None and mod_version in VERSION_MTFW15:
         x = x / 32767 * bbox_data.width + bbox_data.min_x
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
@@ -525,7 +530,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156 or mesh.vertex_format in (0xCB68015, 0xa320c016):
+    if mod.header.version in VERSION_MTFW15 or mesh.vertex_format in (0xCB68015, 0xa320c016):
         return tuple([w / 255 for w in vertex.weight_values])
 
     # Assuming all vertex formats share this pattern.

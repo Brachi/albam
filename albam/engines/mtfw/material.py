@@ -1179,7 +1179,7 @@ def _has_mtfw_shader_group(bl_mat):
     return bool(existing_mtfw_shader_groups)
 
 
-@blender_registry.register_custom_properties_material("mod_156_material", ("re5","dmc4"))
+@blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     attr_enum = bpy.props.EnumProperty(
@@ -1339,6 +1339,185 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
     heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
                                            default=0.2, options=set())  # noqa: F821
+    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())
+    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
+
+
+@blender_registry.register_custom_properties_material("mod_153_material", ("dmc4",))
+@blender_registry.register_blender_prop
+class Mod153MaterialCustomProperties(bpy.types.PropertyGroup):
+    attr_enum = bpy.props.EnumProperty(
+        name="Attribute",
+        description="Select surface attribute",
+        items=[
+            ("0x1", "ATTR_BRIDGE", "", 1),
+            ("0x8", "ATTR_NUKI", "", 2),
+            ("0x10", "ATTR_SOLID", "", 3),
+            ("0x20", "ATTR_OVERLAP", "", 4),
+            ("0x40", "ATTR_TRANSPARENT", "", 5),
+        ],
+        default="0x10",
+        options=set()
+    )
+    vtype_enum = bpy.props.EnumProperty(
+        name="VTYPE",
+        description="Select vertex type",
+        items=[
+            ("0x0", "VTYPE_SKIN", "Skinned mesh with up to 4wt", 1),
+            ("0x1", "VTYPE_SKINEX", "Skinned mesh extended", 2),
+            ("0x2", "VTYPE_NONSKIN", "Static mesh", 3),
+            ("0x3", "VTYPE_NONSKIN_COL", "Static mesh with vertex colors", 4),
+            ("0x4", "VTYPE_SHAPE", "", 5),
+            ("0x5", "VTYPE_SKIN_COL", "", 6),
+        ],
+        default="0x0",
+        options=set()
+    )
+    func_skin_enum = bpy.props.EnumProperty(
+        name="VSKIN",
+        description="Select max bone influences",
+        items=[
+            ("0x0", "SKIN_NONE", "Static mesh", 1),
+            ("0x1", "SKIN_1WT", "1 bone per vertex", 2),
+            ("0x2", "SKIN_2WT", "2 bones per vertex", 3),
+            ("0x3", "SKIN_4WT", "4 bones per vertex", 4),
+            ("0x4", "SKIN_8WT", "8 bones per vertex", 5),
+            ("0x5", "SKIN_4WT_SHAPE", "", 6),
+            ("0x6", "SKIN_STREAM_OUT", "", 7),
+            ("0x7", "SKIN_RESERVE", "", 8),
+            ("0x8", "MAX_SKIN", "", 9),
+        ],
+        default="0x3",
+        options=set()
+    )
+    func_lighting_enum = bpy.props.EnumProperty(
+        name="func ligting",
+        description="select lighting type",
+        items=[
+            ("0x0", "LIGHTING_NONE", "", 1),
+            ("0x1", "LIGHTING_4SPOT", "", 2),
+            ("0x2", "LIGHTING_SH4SPOT", "", 3),
+            ("0x3", "LIGHTING_EMITSH4SPOT", "", 4),
+            ("0x4", "LIGHTING_THINSH4SPOT", "", 5),
+            ("0x5", "LIGHTING_RESERVE0", "", 6),
+            ("0x6", "LIGHTING_RESERVE1", "", 7),
+            ("0x7", "LIGHTING_RESERVE2", "", 8),
+            ("0x8", "LIGHTING_TEX4SPOT", "", 9),
+            ("0x9", "MAX_LIGHTING", "", 9),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_normalmap_enum = bpy.props.EnumProperty(
+        name="func normal map",
+        description="Select normal map type",
+        items=[
+            ("0x0", "NORMALMAP_NONE", "", 1),
+            ("0x1", "NORMALMAP_STANDARD", "", 2),
+            ("0x2", "NORMALMAP_DETAIL", "", 3),
+            ("0x3", "NORMALMAP_PARALLAX", "", 4),
+            ("0x4", "MAX_NORMALMAP", "", 5),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_specular_enum = bpy.props.EnumProperty(
+        name="func specular map",
+        description="Select normal map type",
+        items=[
+            ("0x0", "SPECULAR_NONE", "", 1),
+            ("0x1", "SPECULAR_STANDARD", "", 2),
+            ("0x2", "SPECULAR_MIRROR", "", 3),
+            ("0x3", "SPECULAR_POWMAP", "", 4),
+            ("0x4", "SPECULAR_RIM", "", 5),
+            ("0x5", "MAX_SPECULAR", "", 6),
+        ],
+        default="0x1",
+        options=set()
+    )
+    func_lightmap_enum = bpy.props.EnumProperty(
+        name="func lightmap",
+        description="Select light map type",
+        items=[
+            ("0x0", "LIGHTMAP_NONE", "", 1),
+            ("0x1", "LIGHTMAP_STANDARD", "", 2),
+            ("0x2", "LIGHTMAP_SHADOW", "", 3),
+            ("0x3", "LIGHTMAP_BLEND", "", 4),
+            ("0x4", "LIGHTMAP_BLENDSHADOW", "", 5),
+            ("0x5", "LIGHTMAP_VCOLOR", "", 6),
+            ("0x6", "LIGHTMAP_HDRVCOLOR", "", 7),
+            ("0x7", "LIGHTMAP_TEXCOLOR", "", 8),
+            ("0x8", "MAX_LIGHTMAP", "", 9),
+        ],
+        default="0x0",
+        options=set()
+    )
+    func_multitexture_enum = bpy.props.EnumProperty(
+        name="func multitexture",
+        description="Select multitexture type",
+        items=[
+            ("0x0", "MULTITEXTURE_NONE", "", 1),
+            ("0x1", "MULTITEXTURE_ALPHA", "", 2),
+            ("0x2", "MULTITEXTURE_BASE", "", 3),
+            ("0x3", "MULTITEXTURE_FREEZE", "", 4),
+            ("0x4", "MULTITEXTURE_VOLUME", "", 5),
+            ("0x5", "MULTITEXTURE_SPEC", "", 6),
+            ("0x6", "MULTITEXTURE_BLUR", "", 7),
+            ("0x7", "MAX_MULTITEXTURE", "", 8),
+        ],
+        default="0x0",
+        options=set()
+    )
+    fog_enable: bpy.props.BoolProperty(name="Fog Enable", default=True, options=set())  # noqa: F821
+    zwrite: bpy.props.BoolProperty(name="Z-write", default=True, options=set())  # noqa: F821
+    attr: attr_enum
+    num: bpy.props.IntProperty(name="Material Number", default=0, options=set())  # noqa: F821
+    envmap_bias: bpy.props.IntProperty(name="Environmental Bias",
+                                       default=4, options=set())  # noqa: F821
+    vtype: vtype_enum
+    uvscroll_enable: bpy.props.BoolProperty(name="UV scroll enable",
+                                            default=False, options=set())  # noqa: F821
+    ztest: bpy.props.BoolProperty(name="Z-test", default=True, options=set())  # noqa: F821
+    func_skin: func_skin_enum
+    func_lighting: func_lighting_enum
+    func_normalmap: func_normalmap_enum
+    func_specular: func_specular_enum
+    func_lightmap: func_lighting_enum
+    func_multitexture: func_multitexture_enum
+    htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
+                                         default="0x8727e606", options=set())  # noqa: F821
+    pipeline: bpy.props.IntProperty(name="Pipline", default=379, options=set())  # noqa: F821
+    pvdeclbase: bpy.props.IntProperty(name="PV declaration base", default=0, options=set())  # noqa: F821
+    pvdecl: bpy.props.StringProperty(name="PV declaration", default="0x0", options=set())  # noqa: F821
+
+    transparency: bpy.props.FloatProperty(name="Transparency", default=1.0, options=set())  # noqa: F821
+    fresnel_factor: bpy.props.FloatVectorProperty(
+        name="FresnelFactor", size=4, default=(0.0, 0.5, 7.0, 0.6), options=set())  # noqa: F821
+    lightmap_factor: bpy.props.FloatVectorProperty(
+        name="LightmapFactor",  # noqa: F821
+        size=4, default=(1.0, 1.0, 1.0, 0), options=set(), subtype="COLOR")  # noqa: F821
+    detail_factor: bpy.props.FloatVectorProperty(
+        name="TransmitlFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
+    transmit_factor: bpy.props.FloatVectorProperty(
+        name="TransmitlFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
+    parallax_factor: bpy.props.FloatVectorProperty(
+        name="ParalaxFactor", size=4, default=(0.0, 0.0, 0.0, 0.0), options=set())  # noqa: F821
     blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())
     alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())
 
