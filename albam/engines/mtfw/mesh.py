@@ -736,7 +736,7 @@ def _create_bbox_data(mod):
 
 def _get_material_hash(mod, mesh):
     material_hash = None
-    if mod.header.version == 156:
+    if mod.header.version in [153, 156]:
         material_hash = mesh.idx_material
     elif mod.header.version == 210 or mod.header.version == 212:
         material_name = mod.materials_data.material_names[mesh.idx_material]
