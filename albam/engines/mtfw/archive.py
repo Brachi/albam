@@ -1,6 +1,7 @@
 import io
 import ntpath
 import zlib
+import glob
 
 from kaitaistruct import KaitaiStream
 
@@ -21,6 +22,10 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
     for file_entry in arc.get_file_entries():
         yield file_entry.file_path_with_ext
 
+@blender_registry.register_archive_loader(app_id="dmc4",extension=None)
+def dmc4_loader(vfile):
+    for file_path in glob.glob(vfile.absolute_path):
+        yield file_path
 
 @blender_registry.register_archive_accessor(app_id="re0", extension="arc")
 @blender_registry.register_archive_accessor(app_id="re1", extension="arc")
@@ -43,6 +48,14 @@ def arc_accessor(vfile, context):
         file_type = int(ext)
     file_bytes = arc.get_file(path_no_ext, file_type)
 
+    return file_bytes
+
+@blender_registry.register_archive_accessor(app_id="dmc4", extension=None)
+def dmc4_accessor(vfile, context=None):
+    if vfile.is_folder:
+        return None
+    with open(vfile.relative_path_windows, "rb") as f:
+        file_bytes = f.read()
     return file_bytes
 
 

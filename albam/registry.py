@@ -70,6 +70,18 @@ class BlenderRegistry:
             return f
         return decorator
 
+    def register_nonarchive_loader(self, app_id):
+        def decorator(f):
+            self.archive_loader_registry[(app_id, None)] = f
+            return f
+        return decorator
+
+    def register_nonarchive_accessor(self, app_id):
+        def decorator(f):
+            self.archive_accessor_registry[(app_id, None)] = f
+            return f
+        return decorator
+
     def register_archive_accessor(self, app_id, extension):
         def decorator(f):
             self.archive_accessor_registry[(app_id, extension)] = f

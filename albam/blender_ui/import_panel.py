@@ -5,6 +5,7 @@ import bpy
 from albam.apps import APPS
 from albam.registry import blender_registry
 from albam.vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
+from albam.rfs import ALBAM_OT_RealFileSystemCollapseToggle, RealFile
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
@@ -107,13 +108,29 @@ class ALBAM_OT_Import(bpy.types.Operator):
             return
         return item
 
+@blender_registry.register_blender_type
+class ImportReal(ALBAM_OT_Import):
+    bl_idname = "albam.import_real"
+    bl_label = "import real item"
+
+    @staticmethod
+    def get_selected_item(context):
+        if len(context.scene.albam.rfs.file_list) == 0:
+            return None
+        index = context.scene.albam.rfs.file_list_selected_index
+        try:
+            item = context.scene.albam.rfs.file_list[index]
+        except IndexError:
+            # list might have been cleared
+            return
+        return item
 
 class ALBAM_UL_VirtualFileSystemUIBase:
     EXPAND_ICONS = {
         False: "TRIA_RIGHT",
         True: "TRIA_DOWN",
     }
-    collapse_toggle_operator_cls = None
+    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemCollapseToggle
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         for _ in range(item.tree_node.depth):
@@ -135,7 +152,6 @@ class ALBAM_UL_VirtualFileSystemUIBase:
         col.enabled = item.is_expandable
         op = col.operator(self.collapse_toggle_operator_cls.bl_idname, text="", icon=icon)
         op.button_index = index
-
         layout.column().label(text=item.display_name)
 
     def filter_items(self, context, data, propname):
@@ -159,8 +175,58 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
 @blender_registry.register_blender_type
 class ALBAM_UL_VirtualFileSystemUI(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UIList):
-    collapse_toggle_operator_cls = ALBAM_OT_VirtualFileSystemCollapseToggle
+    pass
 
+class ALBAM_UL_RealFileSystemUIBase:
+    EXPAND_ICONS = {
+        False: "TRIA_RIGHT",
+        True: "TRIA_DOWN",
+    }
+    collapse_toggle_operator_cls = ALBAM_OT_RealFileSystemCollapseToggle
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        for _ in range(item.tree_node.depth):
+            layout.split(factor=0.01)
+
+        if item.is_expandable:
+            icon = self.EXPAND_ICONS[item.is_expanded]
+        elif item.category == "MESH":
+            icon = "OUTLINER_OB_MESH"
+        elif item.category == "ANIMATION":
+            icon = "ACTION"
+        elif item.category == "MATERIAL":
+            icon = "MATERIAL"
+        elif item.category == "TEXTURE":
+            icon = "TEXTURE"
+        else:
+            icon = "DOT"
+        col = layout.column()
+        col.enabled = item.is_expandable
+        op = col.operator(self.collapse_toggle_operator_cls.bl_idname, text="", icon=icon)
+        op.button_index = index
+        layout.column().label(text=item.display_name)
+
+    def filter_items(self, context, data, propname):
+        filtered_items = []
+        # TODO: self.filter_name
+        cache = self.collapse_toggle_operator_cls.NODES_CACHE
+
+        item_list = getattr(data, propname)
+        for item in item_list:
+            if item.is_archive:
+                filtered_items.append(self.bitflag_filter_item)
+
+            elif all(cache.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+                filtered_items.append(self.bitflag_filter_item)
+
+            else:
+                filtered_items.append(0)
+
+        return filtered_items, []
+
+@blender_registry.register_blender_type
+class ALBAM_UL_RealFileSystemUI(ALBAM_UL_RealFileSystemUIBase, bpy.types.UIList):
+    pass
 
 @blender_registry.register_blender_type
 class ALBAM_PT_ImportSection(bpy.types.Panel):
@@ -196,10 +262,12 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         col.operator("albam.add_files", icon="FILE_NEW", text="")
         col.operator("albam.save_file", icon="SORT_ASC", text="")
         col.operator("albam.remove_imported", icon="X", text="")
+        col.operator("albam.add_real_root_folder", icon="NEWFOLDER", text="")
+        col.operator("albam.remove_imported_real", icon="X", text="")
         col = split.column()
         col.template_list(
             "ALBAM_UL_VirtualFileSystemUI",
-            "",
+            "vfs",
             context.scene.albam.vfs,
             "file_list",
             context.scene.albam.vfs,
@@ -207,6 +275,17 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
             sort_lock=True,
             rows=8,
         )
+        col.template_list(
+            "ALBAM_UL_RealFileSystemUI",
+            "rfs",
+            context.scene.albam.rfs,
+            "file_list",
+            context.scene.albam.rfs,
+            "file_list_selected_index",
+            sort_lock=True,
+            rows=8,
+        )
+
         self.layout.row()
         self.layout.row()
 
@@ -345,6 +424,8 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
         row = self.layout.row()
         row.operator("albam.import_vfile", text="Import")
         row.operator("wm.import_options", icon="OPTIONS", text="")
+        row = self.layout.row()
+        row.operator("albam.import_real", text="Import Folder")
         self.layout.row()
 
 

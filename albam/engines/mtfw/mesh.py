@@ -298,6 +298,7 @@ MAIN_LODS = {
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="dmc4", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
@@ -1806,7 +1807,7 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5",))
+@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))
 @blender_registry.register_blender_prop
 class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     vdecl_enum = bpy.props.EnumProperty(

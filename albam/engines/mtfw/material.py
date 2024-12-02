@@ -9,7 +9,8 @@ from kaitaistruct import KaitaiStream
 from albam.exceptions import AlbamCheckFailure
 from albam.lib.blender import get_bl_materials, ShaderGroupCompat
 from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
+from albam.vfs import VirtualFileData, VirtualFile
+from albam.rfs import RealFile
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
 from .texture import (
@@ -1113,7 +1114,10 @@ def _infer_mrl(context, mod_vfile, app_id):
     Assuming mrl file is next to the .mod file with
     the same name. Or try with different suffixes
     """
-    vfs = context.scene.albam.vfs
+    if isinstance(mod_vfile, VirtualFile):
+        vfs = context.scene.albam.vfs
+    else:
+        vfs = context.scene.albam.rfs
     base = str(mod_vfile.relative_path_windows_no_ext)
     suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
     mrl = None
@@ -1175,7 +1179,7 @@ def _has_mtfw_shader_group(bl_mat):
     return bool(existing_mtfw_shader_groups)
 
 
-@blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
+@blender_registry.register_custom_properties_material("mod_156_material", ("re5","dmc4"))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     attr_enum = bpy.props.EnumProperty(
