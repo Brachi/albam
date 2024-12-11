@@ -380,8 +380,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
 
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
-    # convert indices for this mesh only, so they start at zero
-    indices = [tri_idx - mesh.min_index for tri_idx in indices]
+
+    if min(indices) >= mesh.min_index:  # backwards compability workaround
+        # convert indices for this mesh only, so they start at zero
+        indices = [tri_idx - mesh.min_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -793,6 +795,8 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+    if app_id not in ["re5", "dd"]:
+        index_buffer.extend((0, 0))
 
     final_size = sum((
         offset,
@@ -1110,6 +1114,24 @@ def _serialize_groups(src_mod, dst_mod):
     return groups
 
 
+def _check_weights(weights, max_weights):
+    _weights = []
+    i = max_weights - 4
+    weights.extend([0] * (max_weights - len(weights)))
+    if max_weights in [1, 2]:
+        return weights
+    _weights.append(round(weights[0] * 32767) / 32767)
+    if max_weights == 8:
+        _weights.append(round(weights[1] * 255) / 255)
+        _weights.append(round(weights[2] * 255) / 255)
+        _weights.append(round(weights[3] * 255) / 255)
+        _weights.append(round(weights[4] * 255) / 255)
+    _weights.append(unpack("e", pack("e", weights[i + 1]))[0])
+    _weights.append(unpack("e", pack("e", weights[i + 2]))[0])
+    _weights.append(weights[i + 3])
+    return _weights
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1136,7 +1158,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     face_offset = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
-        face_padding = 2
+        face_padding = 0 if app_id not in ["re5", "dd"] else 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
         mesh.indices__to_write = False
         mesh.vertices__to_write = False
@@ -1175,12 +1197,13 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles = [e + current_vertex_position for e in triangles]
         num_indices = len(triangles)
-        # calculate padding for indices
-        if ((num_indices * 2) % 4):
+        if app_id in ["re5", "dd"]:
+            # calculate padding for indices
+            if ((num_indices * 2) % 4):
+                triangles.append(triangles[-1])
+                face_padding += 1
             triangles.append(triangles[-1])
-            face_padding += 1
-        triangles.append(triangles[-1])
-        triangles.append(0)
+            triangles.append(0)
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
@@ -1314,8 +1337,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct_2.occlusion.y = 255
             vertex_struct_2.occlusion.z = 255
             vertex_struct_2.occlusion.w = 255
-            # Tangents
 
+            # Tangents
             t = tangents.get(vertex_index, (0, 0, 0))
             try:
                 vertex_struct_2.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
@@ -1450,44 +1473,41 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]
+
             weight_values.extend([0] * (MAX_BONES - len(weight_values)))  # add nulls if less than bone limit
             if mesh_bone_palette:
                 bone_indices = [mesh_bone_palette.index(
                     bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
+            # fill empty bone indices with the first bone id
+            bone_indices.extend([bone_indices[0]] * (max_bones_per_vertex - len(bone_indices)))
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
             if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
             if dst_mod.header.version != 156 and vertex_format not in VERTEX_FORMATS_BRIDGE:
-                if MAX_BONES == 2:
-                    vertex_struct.bone_indices = [
-                        pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
-                elif MAX_BONES == 4:
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
-                    vertex_struct.weight_values = [0, 0]
-                    vertex_struct.weight_values[0] = weight_values[1] if weight_values[1] else bytes_empty
-                    vertex_struct.weight_values[1] = weight_values[2] if weight_values[2] else bytes_empty
-                elif MAX_BONES == 8:
-                    vertex_struct.position.w = round(
-                        unpack('e', weight_values[0])[0] * 32767)
-                    vertex_struct.weight_values = [0, 0, 0, 0]
-                    vertex_struct.weight_values[0] = round(
-                        unpack('e', weight_values[1])[0] * 255) if weight_values[1] else 0
-                    vertex_struct.weight_values[1] = round(
-                        unpack('e', weight_values[2])[0] * 255) if weight_values[2] else 0
-                    vertex_struct.weight_values[2] = round(
-                        unpack('e', weight_values[3])[0] * 255) if weight_values[3] else 0
-                    vertex_struct.weight_values[3] = round(
-                        unpack('e', weight_values[4])[0] * 255) if weight_values[4] else 0
-                    vertex_struct.weight_values2 = [0, 0]
-                    vertex_struct.weight_values2[0] = weight_values[5] if weight_values[5] else bytes_empty
-                    vertex_struct.weight_values2[1] = weight_values[6] if weight_values[6] else bytes_empty
+                match MAX_BONES:
+                    case 2:
+                        vertex_struct.bone_indices = [
+                            pack('e', bone_indices[0]), pack('e', bone_indices[1])]
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                    case 4:
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                        vertex_struct.weight_values = [0, 0]
+                        vertex_struct.weight_values[0] = pack("e", weight_values[1])
+                        vertex_struct.weight_values[1] = pack("e", weight_values[2])
+                    case 8:
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                        vertex_struct.weight_values = [0, 0, 0, 0]
+                        vertex_struct.weight_values[0] = round(weight_values[1] * 255)
+                        vertex_struct.weight_values[1] = round(weight_values[2] * 255)
+                        vertex_struct.weight_values[2] = round(weight_values[3] * 255)
+                        vertex_struct.weight_values[3] = round(weight_values[4] * 255)
+                        vertex_struct.weight_values2 = [0, 0]
+                        vertex_struct.weight_values2[0] = pack("e", weight_values[5])
+                        vertex_struct.weight_values2[1] = pack("e", weight_values[6])
             else:
                 vertex_struct.weight_values = weight_values
         if has_vertex_buffer_2:
@@ -1552,28 +1572,27 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
             influence_list = sorted(
                 influence_list, key=lambda t: t[1])[-limit:]
 
+        weight_data = {t[0]: t[1] for t in influence_list}
+        wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+        bone_indices = [bi for bi in wd_sorted.keys()]
+        weights = [w for w in wd_sorted.values()]
         # normalize
-        weights = [t[1] for t in influence_list]
-        bone_indices = [t[0] for t in influence_list]
         total_weight = sum(weights)
         if total_weight:
-            weights = [(w / total_weight) for w in weights]
-
-        # float to byte
-        # can't have zero values
-        weights = [round(w * 255) or 1 for w in weights]
-        # correct precision
-        if not weights:
-            # XXX vertex_position_2 research, beware
-            continue
-        excess = sum(weights) - 255
-        if excess:
-            max_index, _ = max(enumerate(weights), key=lambda p: p[1])
-            weights[max_index] -= excess
-
+            weights = [round((w / total_weight), 4) for w in weights]
         if half_float:
-            # TODO: do before losing precision
-            weights = [pack('e', w / 255) for w in weights]
+            weights = _check_weights(weights, limit)
+        else:
+            # can't have zero values
+            weights = [round(w * 255) or 1 for w in weights]
+            # correct precision
+            if not weights:
+                # XXX vertex_position_2 research, beware
+                continue
+            excess = sum(weights) - 255
+            if excess:
+                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+                weights[max_index] -= excess
 
         new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
 

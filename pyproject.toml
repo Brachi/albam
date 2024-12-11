@@ -34,7 +34,7 @@ omit = [ "*/albam_vendor/*" ]
 
 [tool.flake8]
 max-line-length = 110
-exclude = ["albam_vendor", ".venv"]
+exclude = ["albam_vendor", ".venv", "structs"]
 
 # F722: needed for Blender props annotations such as
 # ```
