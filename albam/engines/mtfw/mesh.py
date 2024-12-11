@@ -1488,25 +1488,26 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
             if dst_mod.header.version != 156 and vertex_format not in VERTEX_FORMATS_BRIDGE:
-                if MAX_BONES == 2:
-                    vertex_struct.bone_indices = [
-                        pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                    vertex_struct.position.w = round(weight_values[0] * 32767)
-                elif MAX_BONES == 4:
-                    vertex_struct.position.w = round(weight_values[0] * 32767)
-                    vertex_struct.weight_values = [0, 0]
-                    vertex_struct.weight_values[0] = pack("e", weight_values[1])
-                    vertex_struct.weight_values[1] = pack("e", weight_values[2])
-                elif MAX_BONES == 8:
-                    vertex_struct.position.w = round(weight_values[0] * 32767)
-                    vertex_struct.weight_values = [0, 0, 0, 0]
-                    vertex_struct.weight_values[0] = round(weight_values[1] * 255)
-                    vertex_struct.weight_values[1] = round(weight_values[2] * 255)
-                    vertex_struct.weight_values[2] = round(weight_values[3] * 255)
-                    vertex_struct.weight_values[3] = round(weight_values[4] * 255)
-                    vertex_struct.weight_values2 = [0, 0]
-                    vertex_struct.weight_values2[0] = pack("e", weight_values[5])
-                    vertex_struct.weight_values2[1] = pack("e", weight_values[6])
+                match MAX_BONES:
+                    case 2:
+                        vertex_struct.bone_indices = [
+                            pack('e', bone_indices[0]), pack('e', bone_indices[1])]
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                    case 4:
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                        vertex_struct.weight_values = [0, 0]
+                        vertex_struct.weight_values[0] = pack("e", weight_values[1])
+                        vertex_struct.weight_values[1] = pack("e", weight_values[2])
+                    case 8:
+                        vertex_struct.position.w = round(weight_values[0] * 32767)
+                        vertex_struct.weight_values = [0, 0, 0, 0]
+                        vertex_struct.weight_values[0] = round(weight_values[1] * 255)
+                        vertex_struct.weight_values[1] = round(weight_values[2] * 255)
+                        vertex_struct.weight_values[2] = round(weight_values[3] * 255)
+                        vertex_struct.weight_values[3] = round(weight_values[4] * 255)
+                        vertex_struct.weight_values2 = [0, 0]
+                        vertex_struct.weight_values2[0] = pack("e", weight_values[5])
+                        vertex_struct.weight_values2[1] = pack("e", weight_values[6])
             else:
                 vertex_struct.weight_values = weight_values
         if has_vertex_buffer_2:
