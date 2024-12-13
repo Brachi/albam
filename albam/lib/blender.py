@@ -246,7 +246,11 @@ def get_tangents_per_vertex(blender_mesh):
         uv_name = blender_mesh.uv_layers[0].name
     except IndexError:
         return tangents
-    blender_mesh.calc_tangents(uvmap=uv_name)
+    try:
+        blender_mesh.calc_tangents(uvmap=uv_name)
+    except RuntimeError:
+        print("Mesh {} has no UV".format(blender_mesh.name))
+        return tangents
     for loop in blender_mesh.loops:
         tangents.setdefault(loop.vertex_index, loop.tangent)
     return tangents
