@@ -5,40 +5,42 @@ meta:
   ks-version: 0.11
   title: MTFramework collision format version 156
 seq:
-  - {id: id_magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
-  - {id: version, type: u2}
-  - {id: num_groups, type: u2}
-  - {id: num_groups_bb, type: u2} # ?
-  - {id: unk_num_03, type: u2}
-  - {id: num_boxes, type: u4}
-  - {id: num_faces, type: u4}
-  - {id: num_vertices, type: u4}
-  - {id: bbox, type: tbox}
-  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: num_boxes}
-  - {id: groups, type: sbcgroup, repeat: expr, repeat-expr: num_groups}
-  - {id: triangles, type : re5triangle, repeat: expr, repeat-expr: num_faces}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: num_vertices}
+  - {id: header, type: sbc_header}
+  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: header.num_boxes}
+  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_groups}
+  - {id: faces, type : face, repeat: expr, repeat-expr: header.num_faces}
+  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
   
 types:
 
-  sbcgroup: #96 bytes
+  sbc_header:
+    seq:
+      - {id: magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
+      - {id: version, type: u2}
+      - {id: num_groups, type: u2}
+      - {id: num_groups_bb, type: u2} # ?
+      - {id: bb_size, type: u2}
+      - {id: num_boxes, type: u4}
+      - {id: num_faces, type: u4}
+      - {id: num_vertices, type: u4}
+      - {id: bbox, type: tbox}
+
+  info: #96 bytes
     seq:
       - {id: base, type: u4}
       - {id: start_tris, type: u4}
       - {id: start_boxes, type: u4} # ?
       - {id: start_vertices, type: u4}
-      - {id: group_id, type: u4}
+      - {id: index_id, type: u4}
       - {id: boxa, type: tbox}
       - {id: boxb, type: tbox}
       - {id: boxc, type: tbox}
       - {id: ida, type: u2}
       - {id: idb, type: u2}
 
-  re5triangle: #28 bytes
+  face: #28 bytes
     seq:
-      - {id: a, type: u2}
-      - {id: b, type: u2}
-      - {id: c, type: u2}
+      - {id: vert, type: u2, repeat: expr, repeat-expr: 3}
       - {id: ida, type: u1}
       - {id: idb, type: u1}
       - {id: idc, type: u1}
@@ -50,7 +52,7 @@ types:
       - {id: idi, type: u2}
       - {id: idj, type: u2}
       - {id: idk, type: u2}
-      - {id: nulls, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: nulls, type: u4}
   
   re5boxes: # 80 bytes
     seq:
@@ -94,4 +96,10 @@ types:
       - {id: green, type: u1}
       - {id: blue, type: u1}
       - {id: alpha, type: u1}
-  
+       
+  aabb_block:
+    seq:
+      - {id: x, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: y, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: z, type: f4, repeat: expr, repeat-expr: 4}
+       

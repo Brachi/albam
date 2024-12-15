@@ -215,7 +215,7 @@ def export_sbc(bl_obj):
     trisList = []
     quadList = []
     sbcsList = []
-    meshmetadata = []
+    mesh_metadata = []
     errors = []
     options = {"clusteringFunction": bvh.HybridClustering,
                "metric": bvh.Cluster.SAHMetric,
@@ -234,10 +234,10 @@ def export_sbc(bl_obj):
         trisList.append(tris)
         quadList.append(quads)
         sbcsList.append(sbc)
-        meshmetadata.append({"indexID": mesh["indexID"]})
-        parentTree = bvh.treesToSBCCol(sbcsList, **options)
+        mesh_metadata.append({"indexID": mesh["indexID"]})
+        parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
         final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
-                                           links, parentTree, meshmetadata)
+                                           links, parent_tree, mesh_metadata)
         stream = KaitaiStream(BytesIO(bytearray(final_size)))
         dst_sbc._check()
         dst_sbc._write(stream)
@@ -248,7 +248,7 @@ def export_sbc(bl_obj):
     return vfiles
 
 
-def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, meshmetadata):
+def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata):
     def tally(x): return sum(map(len, x))
     # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
     #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
@@ -276,7 +276,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
     # infoCollection = buildInfo(
     #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
     dst_sbc.sbc_info = _serialize_infos(dst_sbc, tris, verts, dst_sbc.collision_types,
-                                        quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, meshmetadata)
+                                        quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, mesh_metadata)
 
     bvhc_size = 0
     for i, bvhc in enumerate(dst_sbc.sbc_bvhc):
