@@ -24,7 +24,9 @@ def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     armature = context.scene.albam.import_options_lmt.armature
-    mapping = _create_bone_mapping(armature)
+    # anim_index : bone_numeric_index
+    # mapping = _create_bone_mapping(armature)
+    mapping = _get_bone_names(armature)
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
@@ -102,6 +104,17 @@ def _create_bone_mapping(armature_obj):
             continue
         if reference_bone_id in bone_names:
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
+        bone_names[reference_bone_id] = mapped_bone.name
+    return bone_names
+
+
+def _get_bone_names(armature_obj):
+    bone_names = {}
+    for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
+        reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
+        if reference_bone_id is None:
+            print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
+            continue
         bone_names[reference_bone_id] = mapped_bone.name
     return bone_names
 
@@ -241,7 +254,11 @@ def _get_or_create_root_motion_bone(armature, mapping):
     blender_bone.tail[2] += 0.01
     bpy.ops.object.mode_set(mode='OBJECT')
 
+<<<<<<< HEAD
     # set constrain for the root bone->root_motion
+=======
+    # pose_bone = armature.pose.bones[ROOT_BONE_NAME]
+>>>>>>> 0d6ed99 (It imports something)
     pose_bone = armature.pose.bones[mapping.get(ROOT_BONE_NAME)]
     constraint = pose_bone.constraints.new('COPY_LOCATION')
     constraint.target = armature
