@@ -24,9 +24,7 @@ def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     armature = context.scene.albam.import_options_lmt.armature
-    # anim_index : bone_numeric_index
-    # mapping = _create_bone_mapping(armature)
-    mapping = _get_bone_names(armature)
+    mapping = _create_bone_mapping(armature)
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
