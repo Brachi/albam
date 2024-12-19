@@ -43,7 +43,7 @@ def load_lmt(file_item, context):
             bone_index = mapping.get(str(track.bone_index))
 
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
-                bone_index = _get_or_create_root_motion_bone(armature)
+                bone_index = _get_or_create_root_motion_bone(armature, mapping)
 
             elif bone_index is None and track.bone_index == ROOT_UNK_BONE_ID:
                 # Probably some kind of object tracker bone (weapon?)
@@ -54,7 +54,7 @@ def load_lmt(file_item, context):
                 print(f"bone_index not found!: [{track.bone_index}]")
                 continue
             if track.bone_index in HACKY_BONE_INDICES_IK_FOOT:
-                bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index)
+                bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
 
             if track.buffer_type == 6:
                 TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
@@ -94,16 +94,16 @@ def load_lmt(file_item, context):
 
 
 def _create_bone_mapping(armature_obj):
-    mapping = {}
+    bone_names = {}
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
         reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
         if reference_bone_id is None:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
-        if reference_bone_id in mapping:
+        if reference_bone_id in bone_names:
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
-        mapping[reference_bone_id] = b_idx
-    return mapping
+        bone_names[reference_bone_id] = mapped_bone.name
+    return bone_names
 
 
 class FrameQuat4_14(Structure):
@@ -183,7 +183,7 @@ def decode_type_6(data):
     return decoded_frames
 
 
-def _get_or_create_ik_bone(armature, track_bone_index, bone_index):
+def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
 
     if track_bone_index == HACKY_BONE_INDEX_IK_FOOT_RIGHT:
         postfix = "R"
@@ -207,14 +207,14 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index):
     blender_bone.tail = armature.data.edit_bones[bone_index].tail
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    pose_bone = armature.pose.bones[str(bone_index)]
+    pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
     constraint = pose_bone.constraints.new('IK')
     constraint.target = armature
     constraint.subtarget = bone_name
     constraint.chain_count = 3
     constraint.use_rotation = True
 
-    root_motion_bone = _get_or_create_root_motion_bone(armature)
+    root_motion_bone = _get_or_create_root_motion_bone(armature, mapping)
     pose_bone = armature.pose.bones[bone_name]
     constraint = pose_bone.constraints.new('COPY_LOCATION')
     constraint.target = armature
@@ -224,7 +224,7 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index):
     return bone_name
 
 
-def _get_or_create_root_motion_bone(armature):
+def _get_or_create_root_motion_bone(armature, mapping):
     bone_name = ROOT_MOTION_BONE_NAME
     if bone_name in armature.data.bones:
         return bone_name
@@ -241,7 +241,8 @@ def _get_or_create_root_motion_bone(armature):
     blender_bone.tail[2] += 0.01
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    pose_bone = armature.pose.bones[ROOT_BONE_NAME]
+    # set constrain for the root bone->root_motion
+    pose_bone = armature.pose.bones[mapping.get(ROOT_BONE_NAME)]
     constraint = pose_bone.constraints.new('COPY_LOCATION')
     constraint.target = armature
     constraint.subtarget = bone_name
