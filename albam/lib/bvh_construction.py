@@ -49,7 +49,7 @@ class Cluster():
             while True:
                 try:
                     self.aabb = self.aabb.merge(next(elements).boundingBox())
-                except:
+                except StopIteration:
                     break
             self.count = sum(
                 [i.count if hasattr(i, "count") else 1 for i in element])
@@ -73,7 +73,7 @@ class Cluster():
     def __iter__(self):
         try:
             return iter(self.content)
-        except:
+        except RuntimeError:
             return iter([self.content])
 
     def __hash__(self):
@@ -338,7 +338,9 @@ class QBVH():
         return self.tabbedString()
 
     def tabbedString(self, level=0):
-        return "\t"*level+Cluster.typeMap[self.type]+'\n'+''.join([child.tabbedString(level+1) for child in self.children()])
+        return ("\t"*level+Cluster.typeMap[self.type] +
+                '\n' +
+                ''.join([child.tabbedString(level+1) for child in self.children()]))
 
     def __len__(self):
         if not hasattr(self, "traversalBuffer"):
@@ -556,7 +558,7 @@ def linear_split(cluster, metric):
         m = metric(left, clusterList[-ix])
         try:
             left = Cluster((left, elementList[ix]))
-        except:
+        except RuntimeError:
             print("FAIL")
             raise
         if m < best:

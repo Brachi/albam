@@ -6,7 +6,7 @@ from mathutils import Matrix
 def unselect():
     try:
         bpy.ops.object.mode_set(mode='OBJECT')
-    except:
+    except RuntimeError:
         pass
     for ob in bpy.context.selected_objects:
         ob.select = False
@@ -74,7 +74,7 @@ def clone_mesh(original):
     for mod in copy.modifiers:
         try:
             bpy.ops.object.modifier_apply(modifier=mod.name)
-        except:
+        except RuntimeError:
             pass
     return copy
 
