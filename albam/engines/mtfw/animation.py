@@ -24,9 +24,7 @@ def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     armature = context.scene.albam.import_options_lmt.armature
-    # anim_index : bone_numeric_index
-    # mapping = _create_bone_mapping(armature)
-    mapping = _get_bone_names(armature)
+    mapping = _create_bone_mapping(armature)
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
@@ -96,19 +94,6 @@ def load_lmt(file_item, context):
 
 
 def _create_bone_mapping(armature_obj):
-    mapping = {}
-    for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
-        reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
-        if reference_bone_id is None:
-            print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
-            continue
-        if reference_bone_id in mapping:
-            print(f"WARNING: bone_id {b_idx} already mapped. TODO")
-        mapping[reference_bone_id] = b_idx
-    return mapping
-
-
-def _get_bone_names(armature_obj):
     bone_names = {}
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
         reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
