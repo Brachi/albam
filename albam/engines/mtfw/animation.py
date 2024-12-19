@@ -115,6 +115,8 @@ def _get_bone_names(armature_obj):
         if reference_bone_id is None:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
+        if reference_bone_id in bone_names:
+            print(f"WARNING: bone_id {b_idx} already mapped. TODO")
         bone_names[reference_bone_id] = mapped_bone.name
     return bone_names
 
@@ -254,7 +256,7 @@ def _get_or_create_root_motion_bone(armature, mapping):
     blender_bone.tail[2] += 0.01
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # pose_bone = armature.pose.bones[ROOT_BONE_NAME]
+    # set constrain for the root bone->root_motion
     pose_bone = armature.pose.bones[mapping.get(ROOT_BONE_NAME)]
     constraint = pose_bone.constraints.new('COPY_LOCATION')
     constraint.target = armature
