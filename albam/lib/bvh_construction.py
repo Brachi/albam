@@ -125,12 +125,12 @@ class BinaryCluster(Cluster):
         super().__init__(element)
         if self.type == Cluster.NODE:
             assert len(self.content) == 2
-            self.l = self.content[0]
-            self.r = self.content[1]
+            self.left = self.content[0]
+            self.right = self.content[1]
 
     def merge(self):
-        d1 = self.l.content
-        d2 = self.r.content
+        d1 = self.left.content
+        d2 = self.right.content
         if d1.mergeable(d2):
             newQuad = QuadPair(d1, d2)
             self.type = Cluster.PRIMITIVE
@@ -152,12 +152,12 @@ class BinaryCluster(Cluster):
     def mergeCompatible(self):
         # Merges compatible Tris into QuadPair
         if self.isNode():
-            if self.l:
-                self.l.mergeCompatible()
-            if self.r:
-                self.r.mergeCompatible()
-            if self.l and self.l.isPrimitive() and \
-                    self.r and self.r.isPrimitive():
+            if self.left:
+                self.left.mergeCompatible()
+            if self.right:
+                self.right.mergeCompatible()
+            if self.left and self.left.isPrimitive() and \
+                    self.right and self.right.isPrimitive():
                 self.merge()
         return
 
@@ -172,10 +172,10 @@ class BinaryCluster(Cluster):
                     children.append(QBVH(side))
                     children.append(QBVH(None))
                 else:
-                    children.append(side.l.collapse())
-                    children.append(side.r.collapse())
-        checkAddSide(self.l)
-        checkAddSide(self.r)
+                    children.append(side.left.collapse())
+                    children.append(side.right.collapse())
+        checkAddSide(self.left)
+        checkAddSide(self.right)
         children += [QBVH(None) for i in range(4 - len(children))]
         # print(children)
         qnode = QBVH(self, *children)
@@ -559,7 +559,7 @@ def linear_split(cluster, metric):
     best = np.inf
     currentBest = None
     elements = iter(cluster)
-    elementList = [l for l in elements]
+    elementList = [element for element in elements]
     if len(elementList) == 2:
         return elementList[:1], elementList[1:]
     left = elementList[0]

@@ -317,6 +317,6 @@ class PrimitiveTree(GeometryPrimitive):
                 "SOH": 0x1,
                 "boundingBox": self.content.boundingBox().serialize(),
                 "nodeCount": len(self.content),
-                "null": [0]*3,
+                "null": [0] * 3,
                 "AABBArray": [n.serialize() for n in self.content.subnodes()]
                 }
