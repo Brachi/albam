@@ -96,26 +96,28 @@ class Cluster():
         return self.tabbedString()
 
     def tabbedString(self, level=0):
-        selfstring = "\t"*level+Cluster.typeMap[self.type]+"\n"
-        children = "".join((i.tabbedString(level+1)
+        selfstring = "\t" * level + Cluster.typeMap[self.type] + "\n"
+        children = "".join((i.tabbedString(level + 1)
                            for i in self.content if i)) if self.isNode() else ""
-        return selfstring+children
+        return selfstring + children
 
     @staticmethod
     def SAHMetric(s1, s2):
         s = Cluster((s1, s2))
-        def ratio(x): return x.surfaceArea()/s.surfaceArea()*x.count
-        T = ratio(s1)+ratio(s2)
+
+        def ratio(x):
+            return x.surfaceArea() / s.surfaceArea() * x.count
+        T = ratio(s1) + ratio(s2)
         return T  # cluster1.aabb.merge(cluster2.aabb).sah()
 
     @staticmethod
     def EPOMetric(s1, s2):
         s = Cluster((s1, s2))
-        return s1.boundingBox().intersect(s2.boundingBox()).surfaceArea()/s.surfaceArea()
+        return s1.boundingBox().intersect(s2.boundingBox()).surfaceArea() / s.surfaceArea()
 
     @staticmethod
     def SAH_EPOMetric(s1, s2):
-        return Cluster.SAHMetric(s1, s2)+Cluster.EPOMetric(s1, s2)
+        return Cluster.SAHMetric(s1, s2) + Cluster.EPOMetric(s1, s2)
 
 
 class BinaryCluster(Cluster):
@@ -174,7 +176,7 @@ class BinaryCluster(Cluster):
                     children.append(side.r.collapse())
         checkAddSide(self.l)
         checkAddSide(self.r)
-        children += [QBVH(None) for i in range(4-len(children))]
+        children += [QBVH(None) for i in range(4 - len(children))]
         # print(children)
         qnode = QBVH(self, *children)
         return qnode
@@ -190,7 +192,8 @@ class QBVH():
             self.type = binaryCluster.type
             self.node = binaryCluster
             if not self.isPrimitive():
-                def check(x): return QBVH(None) if x is None else x
+                def check(x):
+                    return QBVH(None) if x is None else x
                 self.ll = check(ll)
                 self.lr = check(lr)
                 self.rl = check(rl)
@@ -236,8 +239,9 @@ class QBVH():
             primitive, node = list(map(list, map(reversed, zip(
                 *[subnode.typePair() for subnode in [self.ll, self.lr, self.rl, self.rr]]))))
 
-            def lshiftOr(x, y): return (x << 1) | y
-            return [reduce(lshiftOr, primitive+node)]*4
+            def lshiftOr(x, y):
+                return (x << 1) | y
+            return [reduce(lshiftOr, primitive + node)] * 4
 
     def nodeId(self):
         if not self.isNode():
@@ -247,7 +251,7 @@ class QBVH():
             return [self.ll.index(), self.lr.index(), self.rl.index(), self.rr.index()]
 
     def unkn5(self):
-        return [0]*4
+        return [0] * 4
 
     def AABB(self):
         return self.node.boundingBox()
@@ -255,15 +259,17 @@ class QBVH():
     def childBoxes(self):
         boxes = []
         default = self.parent.childBoxes() if self.parent else [
-            self.node.boundingBox()]*4
+            self.node.boundingBox()] * 4
         for ix, child in enumerate(self.children()):
-            boxes.append(child.AABB() if child.isNode()
-                         or child.isPrimitive() else default[ix])
+            boxes.append(child.AABB() if child.isNode() or
+                         child.isPrimitive() else default[ix])
         return boxes
 
     def extremaAABB(self, bbFunctor):
         boxes = self.childBoxes()
-        def intersped(w): return [bbFunctor(entry)[w] for entry in boxes]
+
+        def intersped(w):
+            return [bbFunctor(entry)[w] for entry in boxes]
         x, y, z = intersped(0), intersped(1), intersped(2)
         return {"xArray": x, "yArray": y, "zArray": z}
 
@@ -292,9 +298,9 @@ class QBVH():
         if self.isNode():
             for child in self.children():
                 if child.isNode():
-                    last, plast = child.indexize(last+1, plast, self)
+                    last, plast = child.indexize(last + 1, plast, self)
                 elif child.isPrimitive():
-                    child.setIndex(plast+1)
+                    child.setIndex(plast + 1)
                     child.setParent(self)
                     plast += 1
         return last, plast
@@ -318,7 +324,7 @@ class QBVH():
 
     def traverse(self):
         if self.isNode():
-            return [self]+sum([c.traverse() for c in self.children()], [])
+            return [self] + sum([c.traverse() for c in self.children()], [])
         else:
             return [self]
 
@@ -327,7 +333,7 @@ class QBVH():
             if self.isNode():
                 childElements = [c.separateTraverse() for c in self.children()]
                 self.traversalBuffer = (
-                    [self]+sum([c[0] for c in childElements], []), sum([c[1] for c in childElements], []))
+                    [self] + sum([c[0] for c in childElements], []), sum([c[1] for c in childElements], []))
             elif self.isPrimitive():
                 self.traversalBuffer = ([], [self])
             else:
@@ -338,9 +344,9 @@ class QBVH():
         return self.tabbedString()
 
     def tabbedString(self, level=0):
-        return ("\t"*level+Cluster.typeMap[self.type] +
+        return ("\t" * level + Cluster.typeMap[self.type] +
                 '\n' +
-                ''.join([child.tabbedString(level+1) for child in self.children()]))
+                ''.join([child.tabbedString(level + 1) for child in self.children()]))
 
     def __len__(self):
         if not hasattr(self, "traversalBuffer"):
@@ -384,7 +390,7 @@ def exactAgglomerativeClustering(primitives, metric=Cluster.SAHMetric, **kwargs)
 # =============================================================================
 def expRedFactory(c, alpha):
     def reductionFunction(x):
-        return max(c*x**alpha, 1)
+        return max(c * x**alpha, 1)
     return reductionFunction
 
 
@@ -420,22 +426,25 @@ def build_tree(primitives, metric, countReduction, threshold):
     if len(primitives) <= threshold:
         return combine_clusters(primitives, countReduction(threshold), metric)
     l, r = morton_partition(primitives)
-    def build(x): return build_tree(x, metric, countReduction, threshold)
+
+    def build(x):
+        return build_tree(x, metric, countReduction, threshold)
     return combine_clusters(build(l).union(build(r)), countReduction(len(primitives)), metric)
 
 
 def morton_partition(encodableList, metric=None, mortonPoint=0):
-    bit = mortonLength-1-mortonPoint
+    bit = mortonLength - 1 - mortonPoint
     if bit == -1 or len(encodableList) < 3:
-        return encodableList[:(len(encodableList)+1)//2], encodableList[(len(encodableList)+1)//2:]
+        return encodableList[:(len(encodableList) + 1) // 2], encodableList[(len(encodableList) + 1) // 2:]
 
-    def key(x): return ((2 << bit) & encodableList[x].encode())  # >>32
+    def key(x):
+        return ((2 << bit) & encodableList[x].encode())  # >>32
     left = 0
-    right = len(encodableList)-1
+    right = len(encodableList) - 1
     if key(left) == key(right):
-        return morton_partition(encodableList, metric, mortonPoint+1)
-    while right-left > 1:
-        middlePoint = (left+right+1)//2
+        return morton_partition(encodableList, metric, mortonPoint + 1)
+    while right - left > 1:
+        middlePoint = (left + right + 1) // 2
         if key(left) == key(middlePoint):
             left = middlePoint
         elif key(right) == key(middlePoint):
@@ -502,27 +511,29 @@ def _kdTreeSplit(indices, access, axis, mode):
     if len(indices[axis]) < 2:
         return BinaryCluster(access(indices[axis][0]))
     dimension = indices[axis]
-    median = (len(dimension)+1)//2 - 1
+    median = (len(dimension) + 1) // 2 - 1
     lindices, rindices = [], []
-    lset = set(dimension[:median+1])
+    lset = set(dimension[:median + 1])
     for ax, dim in enumerate(indices):
         if ax == axis:
-            lindices.append(dim[:median+1])
-            rindices.append(dim[median+1:])
+            lindices.append(dim[:median + 1])
+            rindices.append(dim[median + 1:])
         else:
             l, r = [ix for ix in dim if ix in lset], [
                 ix for ix in dim if ix not in lset]
             lindices.append(l)
             rindices.append(r)
-    return BinaryCluster((_kdTreeSplit(lindices, access, (axis+1) % len(mode), mode),
-                          _kdTreeSplit(rindices, access, (axis+1) % len(mode), mode)))
+    return BinaryCluster((_kdTreeSplit(lindices, access, (axis + 1) % len(mode), mode),
+                          _kdTreeSplit(rindices, access, (axis + 1) % len(mode), mode)))
 
 
 def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
     indices = deferredTripleSort(primitives, mode)
     coordinate = coordinateFunction(primitives)
     activatedModes = [partialPerm(perm, coordinate) for perm in mode]
-    def access(x): return primitives[x]
+
+    def access(x):
+        return primitives[x]
     return [_kdTreeSplit(indices, access, 0, activatedModes)]
 
 
@@ -530,8 +541,11 @@ def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
 #  Naive Spatial Splits
 # =============================================================================
 def morton_sort(primitives):
-    def unpack(x): return [x.minPos, x.maxPos]
-    def mergeOp(x, y): return x.merge(y)
+    def unpack(x):
+        return [x.minPos, x.maxPos]
+
+    def mergeOp(x, y):
+        return x.merge(y)
     primitiveBoxes = [BoundingBox(unpack(p.boundingBox())) for p in primitives]
     minima, maxima = unpack(reduce(mergeOp, primitiveBoxes, primitiveBoxes[0]))
     mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}

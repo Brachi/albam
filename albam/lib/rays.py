@@ -25,7 +25,7 @@ class Ray():
         self.inv_direction = self.invertDirection()
 
     def invertDirection(self):
-        return Vector([np.inf if var == 0 else 1/var for var in self.direction])
+        return Vector([np.inf if var == 0 else 1 / var for var in self.direction])
 
     def triIntersect(self, tri):
         orig, direction = self.origin, self.direction
@@ -60,8 +60,8 @@ class Ray():
         tmin = np.inf
         tmax = -np.inf
         for dim in range(3):
-            t1 = (bmin[dim] - x0[dim])*n_inv[dim]
-            t2 = (bmax[dim] - x0[dim])*n_inv[dim]
+            t1 = (bmin[dim] - x0[dim]) * n_inv[dim]
+            t2 = (bmax[dim] - x0[dim]) * n_inv[dim]
             tmin = max(tmin, min(t1, t2))
             tmax = min(tmax, max(t1, t2))
         if tmax < 0:
@@ -70,10 +70,10 @@ class Ray():
 
     @staticmethod
     def randomRay(sceneBounds=None):
-        theta, phi = random.random()*2*Pi, random.random()*2*Pi
-        direction = (sin(phi)*cos(theta), sin(phi)*sin(theta), cos(theta))
+        theta, phi = random.random() * 2 * Pi, random.random() * 2 * Pi
+        direction = (sin(phi) * cos(theta), sin(phi) * sin(theta), cos(theta))
         origin = Vector([random.random(), random.random(), random.random()])
         if sceneBounds:
             m, M = sceneBounds.minPos, sceneBounds.maxPos
-            origin = vec_mult(M-m, origin)
+            origin = vec_mult(M - m, origin)
         return Ray(origin, direction)

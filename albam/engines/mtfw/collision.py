@@ -66,10 +66,13 @@ class counter():
 
 
 i = counter()
-def cycle(): return [0.4, 0.6, 0.8, 1.0][i.count() % 4]
 
 
-palette = [colorsys.hsv_to_rgb(c/55, 1.0, cycle()) for c in range(44)]
+def cycle():
+    return [0.4, 0.6, 0.8, 1.0][i.count() % 4]
+
+
+palette = [colorsys.hsv_to_rgb(c / 55, 1.0, cycle()) for c in range(44)]
 palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 
@@ -103,8 +106,8 @@ def load_sbc(file_item, context):
         ps, pc = ob_info.pairs_start, ob_info.pairs_count
         fs, fc = ob_info.faces_start, ob_info.face_count
         vs, vc = ob_info.vertex_start, ob_info.vertex_count
-        obj = SBCObject(ob_info, cBVH[ix], faceCollection[fs:fs+fc],
-                        vertexCollection[vs:vs+vc], pairCollection[ps:ps+pc])
+        obj = SBCObject(ob_info, cBVH[ix], faceCollection[fs:fs + fc],
+                        vertexCollection[vs:vs + vc], pairCollection[ps:ps + pc])
         objects.append(obj)
 
     print("num sbc objects {}".format(len(objects)))
@@ -190,7 +193,7 @@ def create_sbc_mesh(name, meshpart):
 
 
 def cycles(verts):
-    return [(verts[i % 3].index, verts[(i+1) % 3].index) for i in range(len(verts))]
+    return [(verts[i % 3].index, verts[(i + 1) % 3].index) for i in range(len(verts))]
 
 
 @blender_registry.register_export_function(app_id="re0", extension="sbc")
@@ -249,11 +252,12 @@ def export_sbc(bl_obj):
 
 
 def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata):
-    def tally(x): return sum(map(len, x))
+    def tally(x):
+        return sum(map(len, x))
     # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
     #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
     _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(quads), tally(tris),
-                     tally(verts), parent_tree, tally(sbcs+[parent_tree]))
+                     tally(verts), parent_tree, tally(sbcs + [parent_tree]))
     # header = buildHeader(headerData)
     # cBVH = list(map(buildCollision,sbcs))
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
@@ -326,7 +330,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
         vertex_count=vertex_count,
         nulls=[0, 0, 0, 0],
         box=bbox,
-        bb_size=0x70*(aabb_count),
+        bb_size=0x70 * (aabb_count),
     ))
 
     dst_sbc_header._check()
@@ -493,7 +497,7 @@ class SemiTri():
     @staticmethod
     def calcNormal(face1):
         v = Vector(np.cross(
-            face1.verts[1].co-face1.verts[0].co, face1.verts[2].co-face1.verts[0].co))
+            face1.verts[1].co - face1.verts[0].co, face1.verts[2].co - face1.verts[0].co))
         v.normalize()
         return v
 
@@ -504,7 +508,7 @@ class SemiTri():
 
     @staticmethod
     def barycenter(face):
-        return sum([v.co for v in face.verts], Vector([0, 0, 0]))/len(face.verts)
+        return sum([v.co for v in face.verts], Vector([0, 0, 0])) / len(face.verts)
 
     @staticmethod
     def byteAngle(face1, face2):
@@ -516,21 +520,21 @@ class SemiTri():
         facing = None
         for ix, e in enumerate(e1):
             if tuple(reversed(e)) in e2:
-                edgem = (fv1[ix]+fv1[(ix+1) % 3])/2
-                bary = (SemiTri.barycenter(face1)+SemiTri.barycenter(face2))/2
+                edgem = (fv1[ix] + fv1[(ix + 1) % 3]) / 2
+                bary = (SemiTri.barycenter(face1) + SemiTri.barycenter(face2)) / 2
                 facing = bary - edgem
                 facing.normalize()
         if facing is None:
             # Not exactly correct but correct most of the time (1.5% fail rate)
             return 0
 
-        if (n1-n2).magnitude < eps:
+        if (n1 - n2).magnitude < eps:
             return 1
-        if (n1+n2).magnitude < eps:
+        if (n1 + n2).magnitude < eps:
             return 4
-        n = (n1+n2)
+        n = (n1 + n2)
         n.normalize()
-        signum = (n1+n2).dot(facing) > 0
+        signum = (n1 + n2).dot(facing) > 0
         if not signum:
             if n1.dot(n2) < eps:
                 return 0

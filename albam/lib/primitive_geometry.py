@@ -72,12 +72,12 @@ class BoundingBox():
 
     def surfaceArea(self):
         if not hasattr(self, "_surfaceArea"):
-            x, y, z = self.maxPos-self.minPos
-            self._surfaceArea = 2*(x*y+y*z+z*x)
+            x, y, z = self.maxPos - self.minPos
+            self._surfaceArea = 2 * (x * y + y * z + z * x)
         return self._surfaceArea
 
     def barycenter(self):
-        return (self.minPos + self.maxPos)/2
+        return (self.minPos + self.maxPos) / 2
 
     def serialize(self):
         return {"minPos": vec_unfold(self.minPos), "maxPos": vec_unfold(self.maxPos)}
@@ -101,7 +101,7 @@ class GeometryPrimitive():
         return True
 
     def setBounds(self, minPos, maxPos):
-        self.sceneSize = maxPos-minPos
+        self.sceneSize = maxPos - minPos
         self.sceneStart = minPos
         self.encodable = True
         return self
@@ -112,9 +112,9 @@ class GeometryPrimitive():
                 return self.mortonCode
             else:
                 normalized = vec_div(
-                    (self.barycenter()-self.sceneStart), self.sceneSize)
+                    (self.barycenter() - self.sceneStart), self.sceneSize)
                 self.mortonCode = morton_encode(
-                    *(vect_int(mortonLimit*normalized)))
+                    * (vect_int(mortonLimit * normalized)))
                 return self.mortonCode
         else:
             raise ValueError("No scene information to normalize the point")
@@ -150,7 +150,7 @@ class Tri(GeometryPrimitive):
     def barycenter(self):
         if not hasattr(self, "_barycenter"):
             self._barycenter = sum(
-                self.vertices[1:], self.vertices[0])/len(self.vertices)
+                self.vertices[1:], self.vertices[0]) / len(self.vertices)
         return self._barycenter
 
     def quad(self, tri2):
@@ -178,7 +178,7 @@ class Tri(GeometryPrimitive):
     def normal(self):
         if not hasattr(self, "normalVector"):
             self.normalVector = Vector(
-                np.cross(self.vertices[1]-self.vertices[0], self.vertices[2]-self.vertices[0]))
+                np.cross(self.vertices[1] - self.vertices[0], self.vertices[2] - self.vertices[0]))
             self.normalVector.normalize()
         return self.normalVector
 
@@ -192,7 +192,7 @@ class Tri(GeometryPrimitive):
 
     @staticmethod
     def cycles(face):
-        return [(face.vert[i % 3], face.vert[(i+1) % 3]) for i in range(3)]
+        return [(face.vert[i % 3], face.vert[(i + 1) % 3]) for i in range(3)]
 
     def compatibleType(self, tri2):
         f1 = self.dataFace
@@ -260,7 +260,7 @@ class QuadPair(Tri):
             cs = tuple(reversed(c))
             if cs in e2:
                 lix = e2.index(cs)
-        return [ix, (ix+1) % 3, (ix+2) % 3, (lix+2) % 3]
+        return [ix, (ix + 1) % 3, (ix + 2) % 3, (lix + 2) % 3]
 
     def type(self):
         return self.dataFaces[0].dataFace.type
@@ -301,7 +301,7 @@ class PrimitiveTree(GeometryPrimitive):
             "SOH": 0x1,
             "boundingBox": self.content.boundingBox().serialize(),
             "nodeCount": len(self.content),
-            "null": [0]*3,
+            "null": [0] * 3,
             "AABBArray": [sn.serialize() for sn in self.content.subnodes()]
         }
 
