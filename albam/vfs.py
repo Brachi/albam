@@ -272,7 +272,11 @@ class ALBAM_OT_VirtualFileSystemSaveFileBase:
 
     @classmethod
     def poll(cls, context):
-        return bool(cls.get_vfs(cls, context).selected_vfile)
+        selected = cls.get_vfs(cls, context).selected_vfile
+        is_root = False
+        if selected:
+            is_root = getattr(selected, "is_root")
+        return selected and not is_root
 
     @staticmethod
     def get_vfs(cls_or_self, context):
