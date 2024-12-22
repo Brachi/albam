@@ -389,6 +389,7 @@ def rename_bones(armature_ob, app_id, body_type):
     names_preset = BONE_NAMES.get(body_type)
     fixes_preset = NAME_FIXES.get(body_type)
     fixed_name = fixes_preset.get(app_id, None)
+    bone_name = None
     if fixed_name:
         for k, v in fixed_name.items():
             names_preset[k] = v
@@ -396,7 +397,10 @@ def rename_bones(armature_ob, app_id, body_type):
     bones = armature.bones
     for bone in bones:
         reference_bone_id = bone.get('mtfw.anim_retarget')
-        bone_name = names_preset.get(int(reference_bone_id), None)
+        if reference_bone_id:
+            bone_name = names_preset.get(int(reference_bone_id), None)
+        else:
+            continue
         if bone_name:
             bone.name = bone_name
 
