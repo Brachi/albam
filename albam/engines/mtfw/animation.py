@@ -106,19 +106,6 @@ def _create_bone_mapping(armature_obj):
     return bone_names
 
 
-def _get_bone_names(armature_obj):
-    bone_names = {}
-    for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
-        reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
-        if reference_bone_id is None:
-            print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
-            continue
-        if reference_bone_id in bone_names:
-            print(f"WARNING: bone_id {b_idx} already mapped. TODO")
-        bone_names[reference_bone_id] = mapped_bone.name
-    return bone_names
-
-
 class FrameQuat4_14(Structure):
     _fields_ = (
         ('_w', c_ulonglong, 14),
