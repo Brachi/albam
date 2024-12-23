@@ -199,3 +199,40 @@ def update_arc(filepath, vfiles):
     arc._write(stream)
     file_ = stream.to_byte_array()
     return file_
+
+
+def find_and_replace_in_arc(filepath, vfile, file_name):
+    print("Filepath is ", filepath)
+    print("File is ", vfile)
+    print("New name  is ", file_name)
+    with open(filepath, 'rb') as f:
+        parsed = Arc.from_bytes(f.read())
+        parsed._read()
+
+    parsed.header._check()
+    file_offset = parsed.header.num_files * 80 + -(parsed.header.num_files * 80) % 32768
+    for fe in parsed.file_entries:
+        path = fe.file_path
+        name = ntpath.basename(path)
+
+        try:
+            extension = FILE_ID_TO_EXTENSION[fe.file_type]
+        except KeyError:
+            extension = str(fe.file_type)
+        if name == file_name and vfile.extension == extension:
+            print("FILE FOUND")
+            vf_data = vfile.data_bytes
+            chunk = zlib.compress(vf_data)
+            fe.zsize = len(chunk)
+            fe.size = len(vf_data)
+            fe.raw_data = chunk
+            fe.offset = file_offset
+        file_offset += fe.zsize
+        print(fe.zsize)
+    parsed.padding = bytearray(32760 - (parsed.header.num_files * 80) % 32768)
+    parsed._check()
+
+    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
+    parsed._write(stream)
+    file_ = stream.to_byte_array()
+    return file_

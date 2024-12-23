@@ -1,5 +1,5 @@
 import time
-
+import os
 import bpy
 
 from albam.registry import blender_registry
@@ -25,6 +25,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     force_lod255: bpy.props.BoolProperty(default=False)
     no_vf_grouping: bpy.props.BoolProperty(default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
+    find_and_replace_name: bpy.props.StringProperty()
 
 
 @blender_registry.register_blender_prop
@@ -125,6 +126,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
         col.operator("albam.save_file_exported", icon="SORT_ASC", text="")
         col.operator("albam.pack", icon="PACKAGE", text="")
         col.operator("albam.patch", icon="FILE_REFRESH", text="")
+        col.operator("albam.find_and_replace", icon="ZOOM_ALL", text="")
         col.operator("albam.remove_exported", icon="X", text="")
         col = split.column()
         col.template_list(
@@ -352,6 +354,59 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         vfs = context.scene.albam.exported
         current_item = vfs.selected_vfile
         return current_item and current_item.is_root
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    bl_idname = "albam.find_and_replace"
+    bl_label = "Find and Replace"
+    VFS_ID = "exported"
+
+    file_name: bpy.props.StringProperty(name="New Name")
+
+    def draw(self, context):
+        row = self.layout.row()
+        row.prop(self, "file_name", text="",)
+
+    def execute(self, context):
+        # launch file selector
+        print(self.file_name)
+        export_settings = context.scene.albam.export_settings
+        export_settings.find_and_replace_name = self.file_name
+        bpy.ops.wm.findreplace_file_sel('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        vfs = self.get_vfs(self, context)
+        vfile = vfs.selected_vfile
+        self.file_name = os.path.splitext(vfile.display_name)[0]
+        return context.window_manager.invoke_props_dialog(self)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    bl_idname = "wm.findreplace_file_sel"
+    bl_label = "Select archive with the file"
+    VFS_ID = "exported"
+
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    filter_glob = bpy.props.StringProperty(default='*.arc', options={'HIDDEN'}, maxlen=255)
+
+    def execute(self, context):
+        # print("Selected file:", self.filepath)
+        export_settings = context.scene.albam.export_settings
+        file_name = export_settings.find_and_replace_name
+        vfs = self.get_vfs(self, context)
+        vfile = vfs.selected_vfile
+        from albam.engines.mtfw.archive import find_and_replace_in_arc
+        arc = find_and_replace_in_arc(self.filepath, vfile, file_name)
+        with open(self.filepath, "wb") as f:
+            f.write(arc)
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
 
 @blender_registry.register_blender_type
