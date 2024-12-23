@@ -33,6 +33,7 @@ def register():
     importlib.import_module("albam.blender_ui.import_panel")
     importlib.import_module("albam.blender_ui.export_panel")
     importlib.import_module("albam.engines.mtfw.animation")
+    importlib.import_module("albam.engines.mtfw.collision")
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
     if os.getenv("ALBAM_ENABLE_REEN"):
