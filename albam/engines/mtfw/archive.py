@@ -190,6 +190,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name):
             extension = str(fe.file_type)
         if name == file_name and vfile.extension == extension:
             print("FILE FOUND")
+            found = True
             vf_data = vfile.data_bytes
             chunk = zlib.compress(vf_data)
             fe.zsize = len(chunk)
