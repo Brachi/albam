@@ -4,7 +4,7 @@ import ntpath
 
 from albam.registry import blender_registry
 from albam.lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
-
+from albam.lib.handshaker import handshake, dump_frames
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -86,7 +86,7 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
 
 @blender_registry.register_blender_type
 class ALBAM_PT_VGMerger(bpy.types.Panel):
-    '''UI Tool subpanel in Mesh Object Data'''
+    '''UI Tool for merging vertex'''
     bl_label = "Vertex Groups Merger"
     bl_idname = "ALBAM_PT_VGMerger"
     bl_parent_id = "ALBAM_PT_ToolsPanel"
@@ -109,6 +109,33 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
     def poll(cls, context):
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selection:
+            if selected_meshes:
+                return True
+        else:
+            return False
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_Handshaker(bpy.types.Panel):
+    '''UI Tool for creating posed hands'''
+    bl_label = "Handshaker"
+    bl_idname = "ALBAM_PT_Handshaker"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.operator("albam.handshake")
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'ARMATURE']
         if selection:
             if selected_meshes:
                 return True
@@ -278,6 +305,61 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         selection = bpy.context.selected_objects
         armature_ob = [obj for obj in selection if obj.type == 'ARMATURE']
         rename_bones(armature_ob[0], app_id, bone_names_preset)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_DumpFrames(bpy.types.Operator):
+    '''Dump Animation frames to json'''
+    bl_idname = "albam.dump_anim_frames"
+    bl_label = "Dump animation frames"
+    filepath: bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath to dumped frames",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    def invoke(self, context, event):  # pragma: no cover
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        ob_armature = self.get_selected_armature(context)
+        print(self.filepath)
+        dump_frames(self.filepath, ob_armature, 10)
+        return {'FINISHED'}
+
+    def get_selected_armature(self, context):
+        selection = bpy.context.selected_objects
+        armatures = [obj for obj in selection if obj.type == 'ARMATURE']
+        try:
+            ob = armatures[0]
+        except KeyError:
+            ob = None
+        return ob
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_ApplyFrames(bpy.types.Operator):
+    '''Apply Animation frames to an armature'''
+    bl_idname = "albam.handshake"
+    bl_label = "Apply animation frames"
+
+    filepath: bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath to dumped frames",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    def invoke(self, context, event):  # pragma: no cover
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        handshake(self.filepath, source_obj)
         return {'FINISHED'}
 
 
