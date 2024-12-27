@@ -25,7 +25,8 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     force_lod255: bpy.props.BoolProperty(default=False)
     no_vf_grouping: bpy.props.BoolProperty(default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
-    find_and_replace_name: bpy.props.StringProperty()
+    far_file_name: bpy.props.StringProperty(name="New Name")
+    far_add_new: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -362,17 +363,18 @@ class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Ope
     bl_label = "Find and Replace"
     VFS_ID = "exported"
 
-    file_name: bpy.props.StringProperty(name="New Name")
+    file_name: bpy.props.StringProperty()
 
     def draw(self, context):
-        row = self.layout.row()
+        export_settings = context.scene.albam.export_settings
+        row = self.layout
         row.prop(self, "file_name", text="",)
+        row.prop(export_settings, "far_add_new", text="Add as a new file to the archive")
 
     def execute(self, context):
-        # launch file selector
-        print(self.file_name)
         export_settings = context.scene.albam.export_settings
-        export_settings.find_and_replace_name = self.file_name
+        # launch file selector
+        export_settings.far_file_name = self.file_name
         bpy.ops.wm.findreplace_file_sel('INVOKE_DEFAULT')
         return {'FINISHED'}
 
@@ -386,7 +388,7 @@ class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Ope
 @blender_registry.register_blender_type
 class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
     bl_idname = "wm.findreplace_file_sel"
-    bl_label = "Select archive with the file"
+    bl_label = "Select arc"
     VFS_ID = "exported"
 
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
@@ -395,11 +397,12 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
     def execute(self, context):
         # print("Selected file:", self.filepath)
         export_settings = context.scene.albam.export_settings
-        file_name = export_settings.find_and_replace_name
+        file_name = export_settings.far_file_name
+        add_new = export_settings.far_add_new
         vfs = self.get_vfs(self, context)
         vfile = vfs.selected_vfile
         from albam.engines.mtfw.archive import find_and_replace_in_arc
-        arc = find_and_replace_in_arc(self.filepath, vfile, file_name)
+        arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}
