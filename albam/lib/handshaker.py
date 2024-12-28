@@ -18,7 +18,7 @@ def dump_frames(filepath, armature, frame_interval):
     buffer = {}
     scene = bpy.context.scene
     scene.frame_current = 0
-    while scene.frame_current < scene.frame_end:
+    while scene.frame_current <= scene.frame_end:
         keyframe = {}
         scene.frame_set(scene.frame_current)
         for bone in armature.pose.bones:
@@ -28,6 +28,7 @@ def dump_frames(filepath, armature, frame_interval):
 
     with open(filepath, 'w') as file:
         json.dump(buffer, file, indent=4)
+
 
 KEYFRAMES = {}
 
@@ -69,13 +70,19 @@ def bake_pose(object, frame):
     # Link the duplicated object to the current collection
     bpy.context.collection.objects.link(ob_copy)
 
+    if "hand_l" in ob_copy.vertex_groups:
+        side = "hand_l"
+    else:
+        side = "hand_r"
+
     # Assign a custom name to the duplicated object
-    ob_copy.name = "pose_" + str(frame)
+    ob_copy.name = "pose_" + side + "_" + str(frame)
     with bpy.context.temp_override(object=ob_copy):
         bpy.ops.object.modifier_apply(modifier="armature")
+
     for vg in ob_copy.vertex_groups:
         if vg.name not in HAND_VG:
-            merge_vgroups(ob_copy, "hand_l", vg.name)
+            merge_vgroups(ob_copy, side, vg.name)
     ob_copy.parent = None
     ob_copy.matrix_parent_inverse.identity()
 
