@@ -25,14 +25,14 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     force_lod255: bpy.props.BoolProperty(default=False)
     no_vf_grouping: bpy.props.BoolProperty(default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
-    far_file_name: bpy.props.StringProperty(name="New Name")
+    far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
     far_add_new: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
 class ExportableItem(bpy.types.PropertyGroup):
     # FIXME: hook to remove from list when object is deleted
-    bl_object : bpy.props.PointerProperty(type=bpy.types.ID)
+    bl_object: bpy.props.PointerProperty(type=bpy.types.ID)
 
     @property
     def display_name(self):
@@ -147,6 +147,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemSaveFileExported(
         ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    """Save an exported resource as a file"""
     bl_idname = "albam.save_file_exported"
     bl_label = "Save files"
     VFS_ID = "exported"
@@ -218,6 +219,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    """Save resources as a new archive"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -305,6 +307,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Patch(bpy.types.Operator):
+    """Update an existing archive with selected resources"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -359,6 +362,7 @@ class ALBAM_OT_Patch(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    """Find and replace a selected resource in the target archive"""
     bl_idname = "albam.find_and_replace"
     bl_label = "Find and Replace"
     VFS_ID = "exported"
@@ -390,9 +394,15 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
     bl_idname = "wm.findreplace_file_sel"
     bl_label = "Select arc"
     VFS_ID = "exported"
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
 
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
-    filter_glob = bpy.props.StringProperty(default='*.arc', options={'HIDDEN'}, maxlen=255)
+    filepath: FILEPATH
+    filter_glob: bpy.props.StringProperty(default='*.arc', options={'HIDDEN'}, maxlen=255)  # noqa
 
     def execute(self, context):
         # print("Selected file:", self.filepath)
@@ -415,6 +425,7 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
         ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
+    """Remove exported resources"""
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
     VFS_ID = "exported"

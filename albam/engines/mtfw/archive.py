@@ -7,6 +7,7 @@ from kaitaistruct import KaitaiStream
 from albam.registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
+from albam.blender_ui.tools import show_message_box
 
 
 @blender_registry.register_archive_loader(app_id="re0", extension="arc")
@@ -103,16 +104,17 @@ class ArcWrapper:
         return file_
 
 
-def _sort_arc_entries(entries, raw=False):
+def _sort_arc_entries(entries, vfile=True):
     sorted = []
     mrl = []
     mod = []
     tail = []
     for entry in entries:
-        if raw:
-            extension = FILE_ID_TO_EXTENSION.get(entry.file_type, entry.file_type)
-        else:
+        if vfile:
             extension = getattr(entry, "extension")
+        else:
+            extension = FILE_ID_TO_EXTENSION.get(entry.file_type, entry.file_type)
+
         if extension == "tex":
             sorted.append(entry)
         elif extension == "mrl":
@@ -122,15 +124,6 @@ def _sort_arc_entries(entries, raw=False):
         else:
             tail.append(entry)
 
-    #for entry in entries:
-    #    if entry.extension == "tex":
-    #        sorted.append(entry)
-    #    elif entry.extension == "mrl":
-    #        mrl.append(entry)
-    #    elif entry.extension == "mod":
-    #        mod.append(entry)
-    #    else:
-    #        tail.append(entry)
     sorted.extend(mrl)
     sorted.extend(mod)
     sorted.extend(tail)
@@ -256,7 +249,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
     if add_new:
         file_entry = _get_file_entry(vfile)
         imported_entries.append(file_entry)
-        imported_entries = _sort_arc_entries(imported_entries, True)
+        imported_entries = _sort_arc_entries(imported_entries, False)
         for fe in imported_entries:
             file_entries[fe.file_path] = fe
     else:
@@ -270,7 +263,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 extension = str(fe.file_type)
 
             if (name == file_name and vfile.extension == extension) or add_new:
-                print("FILE FOUND")
+                show_message_box("File: {} found int the archive".format(file_name))
                 found = True
                 vf_data = vfile.data_bytes
                 chunk = zlib.compress(vf_data)
@@ -279,5 +272,5 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 fe.raw_data = chunk
             file_entries[fe.file_path] = fe
         if not found:
-            print("FILE NOT FOUND")
+            show_message_box("File: {} not found in the archive".format(file_name))
     return _serialize_arc(file_entries)
