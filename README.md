@@ -12,7 +12,11 @@ There's no documentation yet.
 This is the source of _Albam_, a [Blender](https://blender.org) [addon](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html) for importing and exporting 3d models and other game engine formats.   
 
 For user documentation and modding tutorials, refer to the ~User Docs~ (TODO)  
-For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
+For real time communication, join the chat
+
+[<img src="https://discord.com/api/guilds/1008767651578925076/widget.png?style=banner2" alt="Discord Banner 2"/>](https://discord.gg/69sphky9UX)
+
+If you are willing to help in development or get quick help you can visit our discord server
 
 ## Quickstart
 
