@@ -42,7 +42,6 @@ Note: you need application data to run most useful tests.
 
 * Lukas Cone
 * Ekey
-* Knabsi
 * Henry of Carim
 * AsteriskAmpersand
 * Che
