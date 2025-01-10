@@ -133,6 +133,7 @@ TEX_FORMAT_MAPPER = {
     43: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
+    '\x15\x00\x00\x00': b"",
 }
 
 # FIXME: take into account type of texture (BM/NM/MM, etc.)
@@ -534,8 +535,10 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
         tex.reserved = 0
-        tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
-
+        fmt = dds_header.pixelfmt_dwFourCC.decode()
+        if fmt == "":
+            fmt = b"\x15\x00\x00\x00".decode("ascii")
+        tex.compression_format = fmt
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
