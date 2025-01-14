@@ -652,25 +652,13 @@ def build_blender_armature(mod, armature_name, bbox_data):
     scale = 0.01
     # TODO: do it at blender level
     # non_deform_bone_indices = get_non_deform_bone_indices(mod)
-    import numpy as np
     for i, bone in enumerate(mod.bones_data.bones_hierarchy):
         blender_bone = armature.edit_bones.new(str(i))
         valid_parent = bone.idx_parent < 255
         blender_bone.parent = blender_bones[bone.idx_parent] if valid_parent else None
-        parent_bone = blender_bones[bone.idx_parent] if valid_parent else None
-        parent_offset = [0, 0, 0]
-        if parent_bone:
-            parent_offset = parent_bone.head
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
         m = mod.bones_data.inverse_bind_matrices[i]
-        mb = mod.bones_data.inverse_bind_matrices[i]
-        b = mod.bones_data.bones_hierarchy[i]
-        #head = [b.location.x, b.location.y, b.location.z]
         head = _transform_inverse_bind_matrix(mod, m, bbox_data)
-        # base_head = [head[0] * scale, -head[2] * scale, head[1] * scale]
-        # base_tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
-        # blender_bone.head = np.add(base_head, parent_offset)
-        # blender_bone.tail = np.add(base_tail, parent_offset)
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
         blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
@@ -926,7 +914,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
     if bl_obj.type != "ARMATURE":
         return
     export_bones = True
-    bone_magnitudes, bone_transfroms, parent_space_matrix = _get_bone_transform(bl_obj)
+    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj)
     dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
     bones_data.bone_map = src_mod.bones_data.bone_map
@@ -973,32 +961,57 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
 
         # TODO: be concise with struct (e.g. array of floats)
         m = dst_mod.Matrix4x4(_parent=bones_data, _root=bones_data._root)
-        src_m = src_mod.bones_data.parent_space_matrices[i]
-
-        m.row_1 = dst_mod.Vec4(_parent=m, _root=m._root)
-        m.row_1.x = src_m.row_1.x
-        m.row_1.y = src_m.row_1.y
-        m.row_1.z = src_m.row_1.z
-        m.row_1.w = src_m.row_1.w
-        m.row_2 = dst_mod.Vec4(_parent=m, _root=m._root)
-        m.row_2.x = src_m.row_2.x
-        m.row_2.y = src_m.row_2.y
-        m.row_2.z = src_m.row_2.z
-        m.row_2.w = src_m.row_2.w
-        m.row_3 = dst_mod.Vec4(_parent=m, _root=m._root)
-        m.row_3.x = src_m.row_3.x
-        m.row_3.y = src_m.row_3.y
-        m.row_3.z = src_m.row_3.z
-        m.row_3.w = src_m.row_3.w
-        m.row_4 = dst_mod.Vec4(_parent=m, _root=m._root)
-        m.row_4.x = src_m.row_4.x
-        m.row_4.y = src_m.row_4.y
-        m.row_4.z = src_m.row_4.z
-        m.row_4.w = src_m.row_4.w
+        if export_bones:
+            src_m = parent_space_matrix[i]
+            m.row_1 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_1.x = src_m[0][0]
+            m.row_1.y = src_m[0][1]
+            m.row_1.z = src_m[0][2]
+            m.row_1.w = src_m[0][3]
+            m.row_2 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_2.x = src_m[1][0]
+            m.row_2.y = src_m[1][1]
+            m.row_2.z = src_m[1][2]
+            m.row_2.w = src_m[1][3]
+            m.row_3 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_3.x = src_m[2][0]
+            m.row_3.y = src_m[2][1]
+            m.row_3.z = src_m[2][2]
+            m.row_3.w = src_m[2][3]
+            m.row_4 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_4.x = src_m[3][0]
+            m.row_4.y = src_m[3][1]
+            m.row_4.z = src_m[3][2]
+            m.row_4.w = src_m[3][3]
+        else:
+            src_m = src_mod.bones_data.parent_space_matrices[i]
+            m.row_1 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_1.x = src_m.row_1.x
+            m.row_1.y = src_m.row_1.y
+            m.row_1.z = src_m.row_1.z
+            m.row_1.w = src_m.row_1.w
+            m.row_2 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_2.x = src_m.row_2.x
+            m.row_2.y = src_m.row_2.y
+            m.row_2.z = src_m.row_2.z
+            m.row_2.w = src_m.row_2.w
+            m.row_3 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_3.x = src_m.row_3.x
+            m.row_3.y = src_m.row_3.y
+            m.row_3.z = src_m.row_3.z
+            m.row_3.w = src_m.row_3.w
+            m.row_4 = dst_mod.Vec4(_parent=m, _root=m._root)
+            m.row_4.x = src_m.row_4.x
+            m.row_4.y = src_m.row_4.y
+            m.row_4.z = src_m.row_4.z
+            m.row_4.w = src_m.row_4.w
 
         # TODO: be concise with struct (e.g. array of floats)
         m2 = dst_mod.Matrix4x4(_parent=bones_data, _root=bones_data._root)
-        src_m2 = src_mod.bones_data.inverse_bind_matrices[i]
+        if export_bones:
+            src_m2 = invert_bind_matix[i]
+        else:
+            src_m2 = src_mod.bones_data.inverse_bind_matrices[i]
         m2.row_1 = dst_mod.Vec4(_parent=m2, _root=m._root)
         m2.row_2 = dst_mod.Vec4(_parent=m2, _root=m._root)
         m2.row_3 = dst_mod.Vec4(_parent=m2, _root=m._root)
@@ -1023,26 +1036,47 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
             m2.row_4.y = r4y + dst_bbox_data.min_y
             m2.row_4.z = r4z + dst_bbox_data.min_z
         else:
-            m2.row_1.x = src_m2.row_1.x
-            m2.row_2.y = src_m2.row_2.y
-            m2.row_3.z = src_m2.row_3.z
-            m2.row_4.x = src_m2.row_4.x
-            m2.row_4.y = src_m2.row_4.y
-            m2.row_4.z = src_m2.row_4.z
+            if not export_bones:
+                m2.row_1.x = src_m2.row_1.x
+                m2.row_2.y = src_m2.row_2.y
+                m2.row_3.z = src_m2.row_3.z
+                m2.row_4.x = src_m2.row_4.x
+                m2.row_4.y = src_m2.row_4.y
+                m2.row_4.z = src_m2.row_4.z
+        if export_bones:
+            m2.row_1.x = src_m2[0][0]
+            m2.row_1.y = src_m2[0][1]
+            m2.row_1.z = src_m2[0][2]
+            m2.row_1.w = src_m2[0][3]
 
-        m2.row_1.y = src_m2.row_1.y
-        m2.row_1.z = src_m2.row_1.z
-        m2.row_1.w = src_m2.row_1.w
+            m2.row_2.x = src_m2[1][0]
+            m2.row_2.y = src_m2[1][1]
+            m2.row_2.z = src_m2[1][2]
+            m2.row_2.w = src_m2[1][3]
 
-        m2.row_2.x = src_m2.row_2.x
-        m2.row_2.z = src_m2.row_2.z
-        m2.row_2.w = src_m2.row_2.w
+            m2.row_3.x = src_m2[2][0]
+            m2.row_3.y = src_m2[2][1]
+            m2.row_3.z = src_m2[2][2]
+            m2.row_3.w = src_m2[2][3]
 
-        m2.row_3.x = src_m2.row_3.x
-        m2.row_3.y = src_m2.row_3.y
-        m2.row_3.w = src_m2.row_3.w
+            m2.row_4.w = src_m2[3][3]
+            m2.row_4.x = src_m2[3][0]
+            m2.row_4.y = src_m2[3][1]
+            m2.row_4.z = src_m2[3][2]
+        else:
+            m2.row_1.y = src_m2.row_1.y
+            m2.row_1.z = src_m2.row_1.z
+            m2.row_1.w = src_m2.row_1.w
 
-        m2.row_4.w = src_m2.row_4.w
+            m2.row_2.x = src_m2.row_2.x
+            m2.row_2.z = src_m2.row_2.z
+            m2.row_2.w = src_m2.row_2.w
+
+            m2.row_3.x = src_m2.row_3.x
+            m2.row_3.y = src_m2.row_3.y
+            m2.row_3.w = src_m2.row_3.w
+
+            m2.row_4.w = src_m2.row_4.w
 
         bones_data.bones_hierarchy.append(bone)
         bones_data.parent_space_matrices.append(m)
@@ -1069,8 +1103,10 @@ def _get_bone_transform(armature):
     magnitudes = []
     bone_locations = []
     bone_matrices_local = []
+    bone_matrices_inverse = []
     for bone in armature.data.bones:
         parent_bone = bone.parent
+        rotation_matrix = Matrix.Rotation(math.radians(-90), 4, 'X')
         if parent_bone:
             parent_space_matrix = parent_bone.matrix_local.inverted() @ bone.matrix_local
             relative_head_coords = bone.head - parent_bone.head
@@ -1078,29 +1114,33 @@ def _get_bone_transform(armature):
             parent_space_matrix = bone.matrix_local
             print("The bone has no parent.")
         print("Bone:", bone.name)
-        inerse_space_matrix = bone.matrix_local
+        inverse_space_matrix = bone.matrix_local
 
-        rotation_matrix = Matrix.Rotation(math.radians(-90), 4, 'X')
-        inerse_space_matrix = rotation_matrix @ inerse_space_matrix
-        translation = parent_space_matrix.to_translation() * 100
-        bone_locations.append(translation)
+        inverse_space_matrix = rotation_matrix @ inverse_space_matrix
+        inverse_translation = inverse_space_matrix.to_translation() * 100
+        inverse_space_copy = inverse_space_matrix.copy()
+        inverse_space_copy.translation = inverse_translation
+        bone_matrices_inverse.append(inverse_space_copy.inverted().transposed())
 
-        paretn_space_copy = parent_space_matrix.copy()
-        paretn_space_copy.translation = translation
-        #bone_matrices_local.append(parent_space_matrix.transposed())
-        bone_matrices_local.append(paretn_space_copy.transposed())
+        parent_translation = parent_space_matrix.to_translation() * 100
+        bone_locations.append(parent_translation)
 
-        magnitude = math.sqrt(translation[0]**2 + translation[1]**2 + translation[2]**2)
+        parent_space_copy = parent_space_matrix.copy()
+        parent_space_copy.translation = parent_translation
+        # bone_matrices_local.append(parent_space_matrix.transposed())
+        bone_matrices_local.append(parent_space_copy.transposed())
+
+        magnitude = math.sqrt(parent_translation[0]**2 + parent_translation[1]**2 + parent_translation[2]**2)
         magnitudes.append(magnitude)
         print("Parent space Matrix:")
         # print(parent_space_matrix.transposed())
-        print(paretn_space_copy.transposed())
-        print("Translation:", translation)
+        print(parent_space_copy.transposed())
+        print("Translation:", parent_translation)
         print("Magnitude:", magnitude)
         print("Inverse space Matrix:")
-        print(inerse_space_matrix.inverted().transposed())
+        print(inverse_space_copy.inverted().transposed())
 
-    return magnitudes, bone_locations, bone_matrices_local
+    return magnitudes, bone_locations, bone_matrices_local, bone_matrices_inverse
 
 
 def _normalize_uv(uv_x, uv_y):
