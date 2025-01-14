@@ -1110,7 +1110,7 @@ def _get_bone_transform(armature):
             parent_space_matrix = parent_bone.matrix_local.inverted() @ bone.matrix_local
             relative_head_coords = bone.head - parent_bone.head
         else:
-            parent_space_matrix = bone.matrix_local
+            parent_space_matrix = rotation_matrix @ bone.matrix_local
             print("The bone has no parent.")
         print("Bone:", bone.name)
         inverse_space_matrix = bone.matrix_local
