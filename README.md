@@ -11,11 +11,14 @@ There's no documentation yet.
 
 This is the source of _Albam_, a [Blender](https://blender.org) [addon](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html) for importing and exporting 3d models and other game engine formats.   
 
-For user documentation and modding tutorials, refer to the ~User Docs~ (TODO)  
+For understanding what's going on, start [here](https://github.com/Brachi/albam/blob/05a53c1b9ff12005243a12da9099a4ecf170c9e1/albam/blender_ui/import_panel.py#L73)  
 
 ## Quickstart
 
 Creating a virtualenv, installing dependencies and running tests (headless Blender)  
+
+[bpy](https://pypi.org/project/bpy/) needs a specific Python version, matching the one used by the official release of Blender.
+This might not be the case in certain Linux distros.
 
 ```
 python -m venv .venv
