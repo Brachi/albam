@@ -21,7 +21,7 @@ Creating a virtualenv, installing dependencies and running tests (headless Blend
 This might not be the case in certain Linux distros.
 
 ```
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install .[tests]
 pytest
