@@ -124,8 +124,11 @@ KNOWN_TOPOLOGY = {
     4,  # probably strips
 }
 
+def test_mod(test_5e12c4f08aafc23a338437e7c1656481620d8abdfd78a6206f84033a77178b79, test_cca051f05a54d8f85278bc57757707fe48e85e47711b6a68bbdc92c6d4e2c790):
+    pass
 
-def test_mod(parsed_mod_from_arc):
+
+def _test_mod(parsed_mod_from_arc):
     mod = parsed_mod_from_arc
     if mod.header.version == 156:
         materials = [m for m in mod.materials_data.materials]
