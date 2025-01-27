@@ -344,7 +344,7 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
         self.layout.separator()
         row = self.layout.row()
         row.operator("albam.import_vfile", text="Import")
-        row.operator("wm.import_options", icon="OPTIONS", text="")
+        row.operator("albam.import_options", icon="OPTIONS", text="")
         self.layout.row()
 
 
@@ -352,7 +352,7 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
 class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
     """Set settings for importing"""
     bl_label = "Import Options"
-    bl_idname = "wm.import_options"
+    bl_idname = "albam.import_options"
 
     def execute(self, context):
         return {'FINISHED'}
