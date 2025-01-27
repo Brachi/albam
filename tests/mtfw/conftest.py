@@ -10,6 +10,25 @@ MTFW_DATASET = []
 
 
 def pytest_generate_tests(metafunc):
+    """
+    If the are no parameters passed for root_folder, look into tests/data.
+    1. Get the sha256 hash of all files
+    2. If there are hints about the platform, use it to also get the hash of the paths and add it to the hash of the file
+       This will give the file a higher score, so it will be preferred with others with no path, or something (?)
+    3. Filter out the files that are not part of the tests full execution, unless the proper option to use them anyway is given
+       This is turned off by default
+    4. 
+    """
+    # TODO: parameter
+    # TODO: json schema
+    with open("tests/dataset-files.json") as f:
+        data_pls_rename =  json.load(f)
+        for k,v in data_pls_rename.items():
+            metafunc.parametrize((f"test_{k}",), ((v,),))
+        #for file_hash in data_pls_rename.items():
+
+
+def _pytest_generate_tests(metafunc):
     global MTFW_DATASET
     mtfw_dataset_path = metafunc.config.getoption("mtfw_dataset")
     if mtfw_dataset_path and not MTFW_DATASET:
