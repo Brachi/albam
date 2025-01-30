@@ -42,17 +42,17 @@ HAND_VG = [
 
 def set_poses(armature, keyframe, frame):
     ob = armature
-    ob.animation_data_clear()
-    #  bpy.context.scene.objects.active = ob
+    # ob.animation_data_clear()
+    # bpy.context.scene.objects.active = ob
     bpy.ops.object.mode_set(mode='POSE')
 
-    for k, v in keyframe.items():
-        pbone = ob.pose.bones[k]
+    for bone_name, qframe in keyframe.items():
+        pbone = ob.pose.bones[bone_name]
         pbone.rotation_mode = 'QUATERNION'
         # Why?
         pbone.rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
         pbone.keyframe_insert(data_path="rotation_quaternion", frame=0)
-        pbone.rotation_quaternion = Quaternion(v)
+        pbone.rotation_quaternion = Quaternion(qframe)
 
         bpy.ops.object.mode_set(mode='OBJECT')
         pbone.keyframe_insert(
@@ -75,10 +75,16 @@ def bake_pose(object, frame):
     else:
         side = "hand_r"
 
+    armature_modifier = None
+    for modifier in ob_copy.modifiers:
+        if modifier.type == 'ARMATURE':
+            armature_modifier = modifier
+            break
+
     # Assign a custom name to the duplicated object
     ob_copy.name = "pose_" + side + "_" + str(frame)
     with bpy.context.temp_override(object=ob_copy):
-        bpy.ops.object.modifier_apply(modifier="armature")
+        bpy.ops.object.modifier_apply(modifier=armature_modifier.name)
 
     for vg in ob_copy.vertex_groups:
         if vg.name not in HAND_VG:
@@ -148,8 +154,9 @@ def handshake(filepath, bl_obj):
         KEYFRAMES = json.load(file)
 
     armature = bpy.context.active_object
-    #mesh = bpy.data.objects['pl2202.mod_0001']
-    print("lenght is ", len(KEYFRAMES))
+    # mesh = bpy.data.objects['pl2202.mod_0001']
+    print("lenght is {} frames".format(len(KEYFRAMES)))
     for frame, key in KEYFRAMES.items():
         set_poses(armature, key, frame)
+        bpy.context.scene.frame_set(int(frame))
         bake_pose(bl_obj, frame)
