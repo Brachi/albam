@@ -313,12 +313,13 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
     '''Dump Animation frames to json'''
     bl_idname = "albam.dump_anim_frames"
     bl_label = "Dump animation frames"
-    filepath: bpy.props.StringProperty(
+    FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath to dumped frames",
         maxlen=1024,
         subtype='FILE_PATH',
     )
+    filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
         context.window_manager.fileselect_add(self)
@@ -345,13 +346,13 @@ class ALBAM_OT_ApplyFrames(bpy.types.Operator):
     '''Apply Animation frames to an armature'''
     bl_idname = "albam.handshake"
     bl_label = "Apply animation frames"
-
-    filepath: bpy.props.StringProperty(
+    FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath to dumped frames",
         maxlen=1024,
         subtype='FILE_PATH',
     )
+    filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
         context.window_manager.fileselect_add(self)
