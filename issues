@@ -1,0 +1,22 @@
+0. Hash-based tests, with the "parent archive" concept
+1. Persistent Global options
+  - Steam folder
+  - [STRETCH] Auto-discover app 
+2. Add import option to merge duplicate vertices
+  a. Move test data to R2, public for now
+  b. Re-adapt tests
+  c. Move button to the right
+  d. Add option, open MR
+3. Make mtfw.anim_retarget an albam custom property
+4. Import unpacked files
+5. Apply transforms automatically when exporting
+6. VFS: file explorers don't restore expanded file tree after opening .blend file
+7. traceback 1
+8. Deleted imported models are kept in the Exportable list
+9. Unexpected error with meshes with no materials
+10. Wrong app selection has no clear error message when importing
+11. Fix vertices export with multiple attributes
+
+
+## DEVI
+- LSP issues on nvim
