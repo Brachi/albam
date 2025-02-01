@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import sqlite3 as sql
 
 import bpy
 import pytest
@@ -13,19 +14,65 @@ def pytest_generate_tests(metafunc):
     """
     If the are no parameters passed for root_folder, look into tests/data.
     1. Get the sha256 hash of all files
-    2. If there are hints about the platform, use it to also get the hash of the paths and add it to the hash of the file
-       This will give the file a higher score, so it will be preferred with others with no path, or something (?)
-    3. Filter out the files that are not part of the tests full execution, unless the proper option to use them anyway is given
+    2. If there are hints about the platform,
+       use it to also get the hash of the paths and
+       add it to the hash of the file
+       This will give the file a higher score,
+       so it will be preferred with others with no path, or something (?)
+    3. Filter out the files that are not part of the tests full execution,
+       unless the proper option to use them anyway is given.
        This is turned off by default
-    4. 
     """
     # TODO: parameter
     # TODO: json schema
+    # TODO: filter by tags
+
     with open("tests/dataset-files.json") as f:
-        data_pls_rename =  json.load(f)
-        for k,v in data_pls_rename.items():
-            metafunc.parametrize((f"test_{k}",), ((v,),))
-        #for file_hash in data_pls_rename.items():
+        json_data = json.load(f)
+        load_db(json_data)
+
+
+def load_db(records):
+    cx = sql.connect(":memory:")
+    cu = cx.cursor()
+    cu.execute(
+        """
+        CREATE TABLE test_files(
+            pk,
+            file_path,
+            file_path_hash_type,
+            file_hash,
+            parent_file_path,
+            parent_file_path_hash_type,
+            parent_file_hash
+        )
+        """
+    )
+    for record in records:
+        hash_compose = record["file_hash"].split("-")
+        cu.execute(
+            """
+            INSERT INTO test_files VALUES (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                # FIXME: compose 3 parts at least
+                "XXX-" + record["file_path"] + "-deadbeef",
+                record["file_path"],
+                hash_compose[0],
+                hash_compose[1],
+                None,
+                None,
+                None,
+            )
+        )
 
 
 def _pytest_generate_tests(metafunc):

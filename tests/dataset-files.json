@@ -1,19 +1,11 @@
-{
-  "cca051f05a54d8f85278bc57757707fe48e85e47711b6a68bbdc92c6d4e2c790": {
+[
+  {
+    "file_path": "nativePC_MT/Image/Archive/uPl00ChrisNormal.arc",
+    "path_path_hash": "sha256-545fbf6b24af61b20030c41afc40573ec83078ee3473c04ab461e654df909d25",
     "file_hash": "sha256-cca051f05a54d8f85278bc57757707fe48e85e47711b6a68bbdc92c6d4e2c790",
-    "path_hash": "sha256-545fbf6b24af61b20030c41afc40573ec83078ee3473c04ab461e654df909d25",
-    "parent_archive_hash": null,
-    "tags": [
-      "app_id::re5",
-      "platform::steam",
-      "engine::mtframework",
-      "format-id::arc"
-    ]
-  },
-  "5e12c4f08aafc23a338437e7c1656481620d8abdfd78a6206f84033a77178b79": {
-    "file_hash": "sha256-5e12c4f08aafc23a338437e7c1656481620d8abdfd78a6206f84033a77178b79",
-    "path_hash": "sha256-",
-    "parent_archive_hash": null,
+    "parent_file_path": null,
+    "parent_file_path_hash": null,
+    "parent_file_hash": null,
     "tags": [
       "app_id::re5",
       "platform::steam",
@@ -21,4 +13,4 @@
       "format-id::arc"
     ]
   }
-}
+]
