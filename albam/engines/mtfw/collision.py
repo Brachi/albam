@@ -49,6 +49,17 @@ class SBCObject():
         self.bvhtree = BVHTree
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
         self.vertices = vertices
+        for pair in pairs:
+            try:
+                self.faces[pair.face_01]
+            except IndexError:
+                print("Index {} face01 doesn't exists in face list".format(pair.face_01))
+            if pair.face_02 != 0xFFFF:
+                try:
+                    self.faces[pair.face_02]
+                except IndexError:
+                    print("Index {} face02 doesn't exists in face list".format(pair.face_02))
+
         self.pairs = bvh.indexize_ob([geo.QuadPair(self.faces[pair.face_01], self.faces[pair.face_02])
                                      if pair.face_02 != 0xFFFF else
                                      self.faces[pair.face_01]
@@ -233,7 +244,7 @@ def export_sbc(bl_obj):
             errors.append("%s requires triangulating." % mesh.name)
         quads, sbc = bvh.primitive_to_sbc(tris, **options)
         vertList.append(vertices)
-        trisList.append(tris)  # tris objects
+        trisList.append(tris)  # tris objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
         mesh_metadata.append({"indexID": mesh["indexID"]})
@@ -373,7 +384,6 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
         bvh_nodes.append(bvh_node)
     bvh_col.nodes = bvh_nodes
     bvh_col._check()
-    print("SBC BVH started")
     return bvh_col
 
 
@@ -459,9 +469,9 @@ def _serialize_pairs(dst_sbc, pairs_data):
 def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metadata):
     f0, v0, p0 = 0, 0, 0,
     infos = []
-    info = dst_sbc.Info(_parent=dst_sbc, _root=dst_sbc._root)
-    bbox = dst_sbc.Bbox(_parent=info, _root=dst_sbc._root)
     for f, v, p, s, m in zip(faces, vertices, pairs, sbcs, metadata):
+        info = dst_sbc.Info(_parent=dst_sbc, _root=dst_sbc._root)
+        bbox = dst_sbc.Bbox(_parent=info, _root=dst_sbc._root)
         bbox_data = get_vertex_box(v).serialize()
         bbox.min = [v for v in bbox_data["minPos"].values()]
         bbox.max = [v for v in bbox_data["maxPos"].values()]
@@ -481,6 +491,7 @@ def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metada
         v0 += len(v)
         p0 += len(p)
         infos.append(info)
+        print("Vertex start {}".format(info.vertex_start))
     return infos
 
 
@@ -595,8 +606,8 @@ def mesh_rescale(ob):
     # Swap Y and Z coordinates for each vertex and rescale
     for vert in mesh.vertices:
         x = vert.co.x * 100
-        y = vert.co.y * 100
-        z = vert.co.z * -100
+        y = vert.co.y * -100
+        z = vert.co.z * 100
         vert.co.x = x
         vert.co.y = z
         vert.co.z = y
