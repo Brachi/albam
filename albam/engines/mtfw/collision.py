@@ -225,16 +225,36 @@ def export_sbc(bl_obj):
     links = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
     mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
     mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
+    export_settings = bpy.context.scene.albam.export_settings
+    clustering = {
+        "hybrid": bvh.HybridClustering,
+        "kdtree": bvh.kdTreeSplit,
+        "split": bvh.spatialSplits,
+        "aproxcluster": bvh.aproximate_agglomerative_clustering,
+        "exactcluster": bvh.exactAgglomerativeClustering
+        }
+    metric = {
+        "sah": bvh.Cluster.SAHMetric,
+        "epo": bvh.Cluster.EPOMetric
+    }
+    partition = {
+        "morton": bvh.morton_partition,
+        "metric": bvh.linear_split
+    }
+    mode = {
+        "capcom": bvh.CAPCOM,
+        "normal": bvh.TRADITIONAL
+    }
     vertList = []
     trisList = []
     quadList = []
     sbcsList = []
     mesh_metadata = []
     errors = []
-    options = {"clusteringFunction": bvh.HybridClustering,
-               "metric": bvh.Cluster.SAHMetric,
-               "partition": bvh.morton_partition,
-               "mode": bvh.CAPCOM}
+    options = {"clusteringFunction": clustering[export_settings.algorithm],
+               "metric": metric[export_settings.metric],
+               "partition": partition[export_settings.partition],
+               "mode": mode[export_settings.mode]}
     vfiles = []
     print("Initiate export")
     for mesh in mesh_clones:

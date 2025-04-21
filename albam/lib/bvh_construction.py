@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# bounding volume hierarchy
 """
 Created on Fri Dec 13 00:07:04 2019
 
@@ -650,10 +650,16 @@ def mergerReindex(primitives, qprimitives):
 
 
 def primitive_to_sbc(primitives, clusteringFunction=spatialSplits, **kwargs):
+    """primivtives: Tri(Primitive) class stores faces"""
+    # ? doesn't look like it does anything for lists
     indexize_ob(primitives, lambda x: x.dataFace)
     indexize_ob(primitives)
+
+    # BinaryCluster class
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
+    # Merges compatible Tris into QuadPair
     btree.mergeCompatible()
+    # QBVH ?
     qtree = btree.collapse()
     indexize_ob(qtree.subnodes())
     npairPrimitives = mergerReindex(primitives, qtree.subprimitives())
