@@ -54,7 +54,22 @@ class ExportedItems(VirtualFileSystemBase, bpy.types.PropertyGroup):
 class ALBAM_UL_ExportableObjects(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.label(text=item.display_name)
+        row = layout.row(align=True)
+        row.label(text=item.display_name)
+        row.operator("albam.remove_exportable_item", text="", icon='PANEL_CLOSE').index = index
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
+    "Remove exportable the item from the list"
+    bl_idname = "albam.remove_exportable_item"
+    bl_label = "Remove Exportable Item"
+    index: bpy.props.IntProperty()
+
+    def execute(self, context):
+        scene = context.scene
+        scene.albam.exportable.file_list.remove(self.index)
+        return {'FINISHED'}
 
 
 @blender_registry.register_blender_type
