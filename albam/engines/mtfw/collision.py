@@ -31,6 +31,28 @@ APPID_SBC_CLASS_MAPPER = {
 }
 
 
+CLUSTERING = {
+    "hybrid": bvh.HybridClustering,
+    "kdtree": bvh.kdTreeSplit,
+    "split": bvh.spatialSplits,
+    "aproxcluster": bvh.aproximate_agglomerative_clustering,
+    "exactcluster": bvh.exactAgglomerativeClustering
+    }
+# Surface Area Heuristic (SAH)
+METRIC = {
+    "sah": bvh.Cluster.SAHMetric,
+    "epo": bvh.Cluster.EPOMetric
+}
+PARTITION = {
+    "morton": bvh.morton_partition,
+    "metric": bvh.linear_split
+}
+MODE = {
+    "capcom": bvh.CAPCOM,
+    "normal": bvh.TRADITIONAL
+}
+
+
 class TriangulationRequiredError(Exception):
     pass
 
@@ -226,35 +248,16 @@ def export_sbc(bl_obj):
     mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
     mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
     export_settings = bpy.context.scene.albam.export_settings
-    clustering = {
-        "hybrid": bvh.HybridClustering,
-        "kdtree": bvh.kdTreeSplit,
-        "split": bvh.spatialSplits,
-        "aproxcluster": bvh.aproximate_agglomerative_clustering,
-        "exactcluster": bvh.exactAgglomerativeClustering
-        }
-    metric = {
-        "sah": bvh.Cluster.SAHMetric,
-        "epo": bvh.Cluster.EPOMetric
-    }
-    partition = {
-        "morton": bvh.morton_partition,
-        "metric": bvh.linear_split
-    }
-    mode = {
-        "capcom": bvh.CAPCOM,
-        "normal": bvh.TRADITIONAL
-    }
     vertList = []
     trisList = []
     quadList = []
     sbcsList = []
     mesh_metadata = []
     errors = []
-    options = {"clusteringFunction": clustering[export_settings.algorithm],
-               "metric": metric[export_settings.metric],
-               "partition": partition[export_settings.partition],
-               "mode": mode[export_settings.mode]}
+    options = {"clusteringFunction": CLUSTERING[export_settings.algorithm],
+               "metric": METRIC[export_settings.metric],
+               "partition": PARTITION[export_settings.partition],
+               "mode": MODE[export_settings.mode]}
     vfiles = []
     print("Initiate export")
     for mesh in mesh_clones:
@@ -308,6 +311,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
 
     # pairCollection = list(map(buildPairs, quads))
     dst_sbc.pairs_collections = build_pairs(dst_sbc, quads)
+    # dst_sbc.pairs_collections = _serialize_pairs(dst_sbc, quads)
 
     # infoCollection = buildInfo(
     #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
@@ -373,8 +377,8 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
 def _serialize_bvhc(dst_sbc, bvhc_data):
     bvh_col = dst_sbc.BvhCollision(_parent=dst_sbc, _root=dst_sbc._root)
     bbox = dst_sbc.Bbox(_parent=bvh_col, _root=dst_sbc._root)
-    bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
-    aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
+    # bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
+    # aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
     bvhc_raw = bvhc_data.primitiveSerialize()
 
     bvh_col.bvhc = [1128814146, 2008120100]  # Bound Volume Hierarchy Collision Identifier
@@ -388,9 +392,11 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
     bvh_col.nulls = [0, 0, 0]
     bvh_nodes = []
     for bvnode in bvhc_raw["AABBArray"]:
+        bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
+        aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
         bvh_node.node_type = bvnode["nodeType"]
         bvh_node.node_id = bvnode["nodeId"]
-        bvh_node.unk_05 = 0  # 0xCDCDCDCD
+        bvh_node.unk_05 = 3452816845  # 0xCDCDCDCD
         min_aabb = bvnode["minAABB"]
         aabb.x = min_aabb["xArray"]
         aabb.y = min_aabb["yArray"]
@@ -401,6 +407,7 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
         aabb.y = max_aabb["yArray"]
         aabb.z = max_aabb["zArray"]
         bvh_node.max_aabb = aabb
+        bvh_node._check()
         bvh_nodes.append(bvh_node)
     bvh_col.nodes = bvh_nodes
     bvh_col._check()
@@ -474,8 +481,8 @@ def _serialize_col_types(dst_sbc, col_types_data):
 
 def _serialize_pairs(dst_sbc, pairs_data):
     pairs = []
-    pair = dst_sbc.SFacePair(_parent=dst_sbc, _root=dst_sbc._root)
     for pd in pairs_data:
+        pair = dst_sbc.SFacePair(_parent=dst_sbc, _root=dst_sbc._root)
         pair_raw = pd.primitiveSerialize()
         pair.face_01 = pair_raw["face1"]
         pair.face_02 = pair_raw["face2"]
