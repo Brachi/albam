@@ -259,15 +259,16 @@ def export_sbc(bl_obj):
                "partition": PARTITION[export_settings.partition],
                "mode": MODE[export_settings.mode]}
     vfiles = []
-    print("Initiate export")
+    print("Initiate SBC export")
     for mesh in mesh_clones:
         try:
             vertices, tris = mesh_to_tri(mesh)
         except TriangulationRequiredError:
             errors.append("%s requires triangulating." % mesh.name)
+        # pairs, bvhc
         quads, sbc = bvh.primitive_to_sbc(tris, **options)
         vertList.append(vertices)
-        trisList.append(tris)  # tris objects not faces
+        trisList.append(tris)  # tris primitive objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
         mesh_metadata.append({"indexID": mesh["indexID"]})
@@ -393,16 +394,17 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
     bvh_nodes = []
     for bvnode in bvhc_raw["AABBArray"]:
         bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
-        aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
         bvh_node.node_type = bvnode["nodeType"]
         bvh_node.node_id = bvnode["nodeId"]
         bvh_node.unk_05 = 3452816845  # 0xCDCDCDCD
         min_aabb = bvnode["minAABB"]
+        aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
         aabb.x = min_aabb["xArray"]
         aabb.y = min_aabb["yArray"]
         aabb.z = min_aabb["zArray"]
         bvh_node.min_aabb = aabb
         max_aabb = bvnode["maxAABB"]
+        aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
         aabb.x = max_aabb["xArray"]
         aabb.y = max_aabb["yArray"]
         aabb.z = max_aabb["zArray"]
@@ -469,6 +471,7 @@ def build_pairs(dst_sbc, quads):
 
 
 def _serialize_col_types(dst_sbc, col_types_data):
+    # Gets custom attributes from empty objects
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
     coltype.unk_01 = col_types_data["unk_01"]
     coltype.unk_02 = col_types_data["unk_02"]
@@ -527,19 +530,21 @@ def get_vertex_box(v):
 
 
 class SemiTri():
-    def __init__(self, face, matType):
+    def __init__(self, face, mat_type):
         if not len(face.verts) == 3:
             raise TriangulationRequiredError()
         self.vert = [int(v.index) for v in face.verts]
         self.adjacent = self.getAdjacent(face)
         self.normal = SemiTri.calcNormal(face)
-        self.type = matType
+        # numeric id extracted form mat name
+        self.type = mat_type
         # (0 = 90°, 1 = 0°, 2 > 180°, 3<180°)
 
     def getAdjacent(self, face):
         adjacents = []
         for edge in face.edges:
             bA = None
+            # get faces linked edges of the give face
             for lf in edge.link_faces:
                 if lf != face:
                     bA = SemiTri.byteAngle(face, lf)
@@ -573,6 +578,7 @@ class SemiTri():
 
     @staticmethod
     def byteAngle(face1, face2):
+        # calculated angles between two faces
         n1 = SemiTri.calcNormal(face1)
         n2 = SemiTri.calcNormal(face2)
         fv1 = [v.co for v in face1.verts]
@@ -589,6 +595,7 @@ class SemiTri():
             # Not exactly correct but correct most of the time (1.5% fail rate)
             return 0
 
+        # eps = 0.0001
         if (n1 - n2).magnitude < eps:
             return 1
         if (n1 + n2).magnitude < eps:
@@ -609,6 +616,7 @@ class SemiTri():
             ix = face.material_index
             slot = mesh.material_slots[ix]
             mat = slot.material.name
+            # remove "Type " from material name and convert the index to number
             return int(mat[len("Type "):len("Type 000")])
         except IndexError:
             raise MaterialMissingError
@@ -619,6 +627,8 @@ def mesh_to_tri(mesh):
     # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
     vertices = [Vector(v.co) for v in bm.verts]
+    # SemiTri gets face and material
+    # Tri is child of geometry primitive class gets triface and vertList
     faces = [Tri(SemiTri(face, SemiTri.getMaterial(face, mesh)), vertices)
              for face in bm.faces]
     bm.free()
