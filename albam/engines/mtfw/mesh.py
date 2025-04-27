@@ -1314,7 +1314,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vtx_stride = VertexCls().size_
 
-    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
+    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)
+    if max_bones_per_vertex > MAX_BONES:
+        max_bones_per_vertex = MAX_BONES
     weight_half_float = (dst_mod.header.version in (210, 211, 212) and
                          vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
@@ -1481,7 +1483,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 bone_indices = [bi for bi, _ in weights_data]
             # fill empty bone indices with the first bone id
-            bone_indices.extend([bone_indices[0]] * (max_bones_per_vertex - len(bone_indices)))
+            bone_indices.extend([bone_indices[0]] * (MAX_BONES - len(bone_indices)))
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
             if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)
