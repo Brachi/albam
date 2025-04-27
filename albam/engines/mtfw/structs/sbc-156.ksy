@@ -2,12 +2,12 @@ meta:
   endian: le
   file-extension: sbc
   id: sbc_156
-  ks-version: 0.11
+  ks-version: 0.10
   title: MTFramework collision format version 156
 seq:
   - {id: header, type: sbc_header}
-  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: header.num_boxes}
-  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_groups}
+  - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: header.num_nodes}
+  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_infos}
   - {id: faces, type : face, repeat: expr, repeat-expr: header.num_faces}
   - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
   
@@ -17,50 +17,43 @@ types:
     seq:
       - {id: magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
       - {id: version, type: u2}
-      - {id: num_groups, type: u2}
-      - {id: num_groups_bb, type: u2} # ?
-      - {id: bb_size, type: u2}
-      - {id: num_boxes, type: u4}
-      - {id: num_faces, type: u4}
-      - {id: num_vertices, type: u4}
-      - {id: bbox, type: tbox}
+      - {id: num_infos, type: u2} # parts info num
+      - {id: num_parts, type: u2} # parts node num
+      - {id: num_parts_nest, type: u1} # max parts nest count
+      - {id: max_nest_count, type: u1} # max nest count
+      - {id: num_nodes, type: u4} # total node num
+      - {id: num_faces, type: u4} # total triangle num
+      - {id: num_vertices, type: u4} # total vertex num
+      - {id: box, type: tbox}
 
   info: #96 bytes
     seq:
-      - {id: base, type: u4}
+      - {id: flags, type: u4}
       - {id: start_tris, type: u4}
-      - {id: start_boxes, type: u4} # ?
+      - {id: start_nodes, type: u4} # ?
       - {id: start_vertices, type: u4}
       - {id: index_id, type: u4}
-      - {id: boxa, type: tbox}
-      - {id: boxb, type: tbox}
-      - {id: boxc, type: tbox}
-      - {id: ida, type: u2}
-      - {id: idb, type: u2}
+      - {id: min_this, type: vec3}
+      - {id: max_this, type: vec3}
+      - {id: min, type: vec3, repeat: expr, repeat-expr: 2}
+      - {id: max, type: vec3, repeat: expr, repeat-expr: 2}
+      - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
 
   face: #28 bytes
     seq:
       - {id: vert, type: u2, repeat: expr, repeat-expr: 3}
-      - {id: ida, type: u1}
-      - {id: idb, type: u1}
-      - {id: idc, type: u1}
-      - {id: idd, type: u1} # 1 in scr  16 64 128 in eff
-      - {id: ide, type: u2}
-      - {id: idf, type: u2} # 32 64 128
-      - {id: idg, type: u2}
-      - {id: idh, type: u2}
-      - {id: idi, type: u2}
-      - {id: idj, type: u2}
-      - {id: idk, type: u2}
-      - {id: nulls, type: u4}
+      - {id: unk_00, type: u1, repeat: expr, repeat-expr: 2}
+      - {id: attribute, type: u4}
+      - {id: attr, type: u4, repeat: expr, repeat-expr: 4}
+
   
-  re5boxes: # 80 bytes
+  bvh_node: # 80 bytes
     seq:
-      - {id: boxa, type: pbox}
-      - {id: boxb, type: pbox}
-      - {id: ida, type: u2} # always 0-255
-      - {id: idb, type: u2} # references to a box
-      - {id: idc, type: u2}
+      - {id: aabb_01, type: pbox}
+      - {id: aabb_02, type: pbox}
+      - {id: bit, type: u1} # always 0-255
+      - {id: unk, type: u1}
+      - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
       - {id: nulls, type: u1, repeat: expr, repeat-expr: 10}
       
   vertex:
@@ -99,7 +92,6 @@ types:
        
   aabb_block:
     seq:
-      - {id: x, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: y, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: z, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: min, type: vec4}
+      - {id: max, type: vec4}
        

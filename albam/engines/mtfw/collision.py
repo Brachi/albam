@@ -65,7 +65,7 @@ class MaterialMissingError(Exception):
     pass
 
 
-class SBCObject():
+class SBCObject21():
     def __init__(self, info, BVHTree, faces, vertices, pairs):
         self.sbcinfo = info
         self.bvhtree = BVHTree
@@ -86,6 +86,15 @@ class SBCObject():
                                      if pair.face_02 != 0xFFFF else
                                      self.faces[pair.face_01]
                                      for pair in pairs])
+
+
+class SBCObject156():
+    def __init__(self, info, nodes, faces, vertices, pairs):
+        self.sbcinfo = info
+        self.nodes = nodes
+        # self.bvhtree = BVHTree
+        self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
+        self.vertices = vertices
 
 
 # Very smartass(?) way to dynamically create a list with 44 colors
@@ -111,7 +120,7 @@ palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 @blender_registry.register_import_function(app_id="re0", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', file_category="COLLISION")
-# @blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
+@blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
 # @blender_registry.register_import_function(app_id="re6", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="rev1", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="rev2", extension='sbc', file_category="COLLISION")
@@ -128,23 +137,31 @@ def load_sbc(file_item, context):
     bl_object_name = file_item.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
 
-    cBVH = [b for i, b in enumerate(sbc.sbc_bvhc)]
-    faceCollection = [fc for i, fc in enumerate(sbc.faces)]
-    vertexCollection = [vc for i, vc in enumerate(sbc.vertices)]
-    pairCollection = [pc for i, pc in enumerate(sbc.pairs_collections)]
-    objects = []
+    if sbc_version == 255:
+        bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
+        face_collection = [fc for i, fc in enumerate(sbc.faces)]
+        vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
+        pair_collection = [pc for i, pc in enumerate(sbc.pairs_collections)]
+        sbc_objects = []
 
-    print("sbc type {}".format(sbc_version))
-    for ix, ob_info in enumerate(sbc.sbc_info):
-        ps, pc = ob_info.pairs_start, ob_info.pairs_count
-        fs, fc = ob_info.faces_start, ob_info.face_count
-        vs, vc = ob_info.vertex_start, ob_info.vertex_count
-        obj = SBCObject(ob_info, cBVH[ix], faceCollection[fs:fs + fc],
-                        vertexCollection[vs:vs + vc], pairCollection[ps:ps + pc])
-        objects.append(obj)
-
-    print("num sbc objects {}".format(len(objects)))
-    for obj in objects:
+        print("sbc type {}".format(sbc_version))
+        for ix, ob_info in enumerate(sbc.sbc_info):
+            ps, pc = ob_info.pairs_start, ob_info.pairs_count
+            fs, fc = ob_info.faces_start, ob_info.face_count
+            vs, vc = ob_info.vertex_start, ob_info.vertex_count
+            sbc_obj = SBCObject21(ob_info, bvh_collection[ix], face_collection[fs:fs + fc],
+                                  vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
+    else:
+        face_collection = [fc for i, fc in enumerate(sbc.faces)]
+        vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
+        for ix, ob_info in enumerate(sbc.sbc_info):
+            fs, fc = ob_info.faces_start, ob_info.face_count
+            vs, vc = ob_info.vertex_start, ob_info.vertex_count
+            sbc_obj = SBCObject156(ob_info, face_collection[fs:fs + fc],
+                                   vertex_collection[vs:vs + vc])
+    sbc_objects.append(sbc_obj)
+    print("num sbc objects {}".format(len(sbc_objects)))
+    for obj in sbc_objects:
         mesh, ob = create_collision_mesh(obj)
         ob.parent = bl_object
     for i, typing in enumerate(sbc.collision_types):
@@ -165,12 +182,14 @@ def load_sbc(file_item, context):
 
 def create_collision_mesh(sbcObject):
     mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbcObject))
+    # Add custom attributes to an object
     obj["Type"] = "SBC_Mesh"
     obj["indexID"] = str(sbcObject.sbcinfo.index_id)
     return mesh, obj
 
 
 def create_link_ob(link_ob):
+    # Add custom attributes to an empty object
     sbcEmpty = common.create_root_nub("SBC Stage Link.000")
     sbcEmpty["Type"] = "SBC_Link"
     sbcEmpty["unk_01"] = link_ob.unk_01
