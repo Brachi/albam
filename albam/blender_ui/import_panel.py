@@ -141,9 +141,16 @@ class ALBAM_UL_VirtualFileSystemUIBase:
     def filter_items(self, context, data, propname):
         filtered_items = []
         # TODO: self.filter_name
+        # After pressing expand toggle "node_name: is_expanded" item is added to the cache
         cache = self.collapse_toggle_operator_cls.NODES_CACHE
-
         item_list = getattr(data, propname)
+
+        # The cache invalidates after closing .blend file and needs to rebuild
+        if not cache:
+            for item in item_list:
+                #if item.is_expanded:
+                cache[item.name] = item.is_expanded
+
         for item in item_list:
             if item.is_archive:
                 filtered_items.append(self.bitflag_filter_item)
