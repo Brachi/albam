@@ -11,6 +11,7 @@ from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
+from .structs.sbc_211 import Sbc211
 from albam.lib.primitive_geometry import eps, Tri
 import albam.lib.primitive_geometry as geo
 import albam.lib.bvh_construction as bvh
@@ -25,6 +26,7 @@ APPID_SBC_CLASS_MAPPER = {
     "re0": Sbc21,
     "re1": Sbc21,
     "re5": Sbc156,
+    "re6": Sbc211,
     "rev1": Sbc21,
     "rev2": Sbc21,
     "dd": Sbc21,
@@ -121,7 +123,7 @@ palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 @blender_registry.register_import_function(app_id="re0", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
-# @blender_registry.register_import_function(app_id="re6", extension='sbc', file_category="COLLISION")
+@blender_registry.register_import_function(app_id="re6", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="rev1", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="rev2", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="dd", extension='sbc', file_category="COLLISION")
@@ -130,7 +132,7 @@ def load_sbc(file_item, context):
     sbc_bytes = file_item.get_bytes()
     sbc_version = sbc_bytes[3]
     assert sbc_version in SBC_CLASS_MAPPER, f"Unsupported version: {sbc_version}"
-    SbcCls = SBC_CLASS_MAPPER[sbc_version]
+    SbcCls = APPID_SBC_CLASS_MAPPER[app_id]
     sbc = SbcCls.from_bytes(sbc_bytes)
     sbc._read()
 
@@ -151,6 +153,7 @@ def load_sbc(file_item, context):
             vs, vc = ob_info.vertex_start, ob_info.vertex_count
             sbc_obj = SBCObject21(ob_info, bvh_collection[ix], face_collection[fs:fs + fc],
                                   vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
+            sbc_objects.append(sbc_obj)
     else:
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
@@ -159,7 +162,7 @@ def load_sbc(file_item, context):
             vs, vc = ob_info.vertex_start, ob_info.vertex_count
             sbc_obj = SBCObject156(ob_info, face_collection[fs:fs + fc],
                                    vertex_collection[vs:vs + vc])
-    sbc_objects.append(sbc_obj)
+            sbc_objects.append(sbc_obj)
     print("num sbc objects {}".format(len(sbc_objects)))
     for obj in sbc_objects:
         mesh, ob = create_collision_mesh(obj)
@@ -252,6 +255,7 @@ def cycles(verts):
 @blender_registry.register_export_function(app_id="re1", extension="sbc")
 @blender_registry.register_export_function(app_id="rev1", extension="sbc")
 @blender_registry.register_export_function(app_id="rev2", extension="sbc")
+@blender_registry.register_export_function(app_id="re6", extension="sbc")
 @blender_registry.register_export_function(app_id="dd", extension="sbc")
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
@@ -295,7 +299,7 @@ def export_sbc(bl_obj):
         raise ExportingFailedError
     parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
     final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
-                                       links, parent_tree, mesh_metadata)
+                                       links, parent_tree, mesh_metadata, app_id)
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_sbc._check()
     dst_sbc._write(stream)
@@ -306,7 +310,7 @@ def export_sbc(bl_obj):
     return vfiles
 
 
-def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata):
+def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata, app_id):
     def tally(x):
         return sum(map(len, x))
     # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
@@ -343,9 +347,14 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
         bvhc_size += 64 + bvhc.node_count * 112
 
     bvh_size = 64 + dst_sbc.bvh.node_count * 112
-
+    SBC_HEADER_SIZE = {
+        "rev1": 84,
+        "rev2": 84,
+        "dd": 84,
+        "re6": 80,
+    }
     final_size = sum((
-        84,
+        SBC_HEADER_SIZE[app_id],
         dst_sbc.header.object_count * 80,
         bvhc_size,
         bvh_size,
