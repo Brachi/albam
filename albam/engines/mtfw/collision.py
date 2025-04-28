@@ -260,7 +260,7 @@ def cycles(verts):
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    Sbc = Sbc21
+    Sbc = APPID_SBC_CLASS_MAPPER[app_id]
 
     src_sbc = Sbc.from_bytes(asset.original_bytes)
     src_sbc._read()
