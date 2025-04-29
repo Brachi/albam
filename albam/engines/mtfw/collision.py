@@ -183,27 +183,28 @@ def load_sbc(file_item, context):
     return bl_object
 
 
-def create_collision_mesh(sbcObject):
-    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbcObject))
+def create_collision_mesh(sbc_object):
+    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbc_object))
     # Add custom attributes to an object
     obj["Type"] = "SBC_Mesh"
-    obj["indexID"] = str(sbcObject.sbcinfo.index_id)
+    obj["indexID"] = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
 
 
 def create_link_ob(link_ob):
-    # Add custom attributes to an empty object
-    sbcEmpty = common.create_root_nub("SBC Stage Link.000")
-    sbcEmpty["Type"] = "SBC_Link"
-    sbcEmpty["unk_01"] = link_ob.unk_01
-    sbcEmpty["unk_02"] = link_ob.unk_02
-    sbcEmpty["unk_03"] = link_ob.unk_03
-    sbcEmpty["unk_04"] = link_ob.unk_04
-    sbcEmpty["jp_path"] = link_ob.jp_path
-    return sbcEmpty
+    # Add custom attributes from collision_types to an empty object
+    sbc_empty = common.create_root_nub("SBC Stage Link.000")
+    sbc_empty["Type"] = "SBC_Link"
+    sbc_empty["unk_01"] = link_ob.unk_01
+    sbc_empty["unk_02"] = link_ob.unk_02
+    sbc_empty["unk_03"] = link_ob.unk_03
+    sbc_empty["unk_04"] = link_ob.unk_04
+    sbc_empty["jp_path"] = link_ob.jp_path
+    return sbc_empty
 
 
 def decompose_sbc_ob(sbc_ob):
+    # Extract data needed for building meshes form SBCObject
     sbc_geom = {}
     sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
                             for vert in sbc_ob.vertices]
@@ -222,15 +223,15 @@ def materials_from_sbc(sbc_ob):
 
 
 def create_sbc_mesh(name, meshpart):
-    blenderMesh = bpy.data.meshes.new(name)
-    blenderMesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
-    blenderMesh.update()
-    blenderObject = bpy.data.objects.new(name, blenderMesh)
+    bl_mesh = bpy.data.meshes.new(name)
+    bl_mesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
+    bl_mesh.update()
+    bl_obj = bpy.data.objects.new(name, bl_mesh)
     # bpy.context.scene.objects.link(blenderObject)
-    bpy.context.collection.objects.link(blenderObject)
+    bpy.context.collection.objects.link(bl_obj)
 
     bm = bmesh.new()
-    bm.from_mesh(blenderMesh)
+    bm.from_mesh(bl_mesh)
     bm.faces.ensure_lookup_table()
     for ix, material in enumerate(meshpart["materials"]):
         mat = bpy.data.materials.new(name="Type %03d" % material)
@@ -239,12 +240,12 @@ def create_sbc_mesh(name, meshpart):
         except IndexError:
             colorsys.hsv_to_rgb(0, 0, 0)
             print("Unknown colision type: %d" % material)
-        blenderMesh.materials.append(mat)
+        bl_mesh.materials.append(mat)
         for face in meshpart["materials"][material]:
             bm.faces[face].material_index = ix
 
-    bm.to_mesh(blenderMesh)
-    return blenderMesh, blenderObject
+    bm.to_mesh(bl_mesh)
+    return bl_mesh, bl_obj
 
 
 def cycles(verts):
@@ -536,7 +537,7 @@ def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metada
         info.unk_01 = 0  # not really, looks like a hash
         info.nulls_01 = [0, 0]
         info.bounding_box = bbox
-        info.pairs_start = f0
+        info.pairs_start = p0
         info.pairs_count = len(p)
         info.faces_start = f0
         info.face_count = len(f)

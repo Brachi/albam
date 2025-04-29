@@ -541,6 +541,7 @@ def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
 #  Naive Spatial Splits
 # =============================================================================
 def morton_sort(primitives):
+    # primitives: SemiTri objects
     def unpack(x):
         return [x.minPos, x.maxPos]
 
