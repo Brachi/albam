@@ -9,7 +9,7 @@ seq:
   - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: header.num_nodes}
   - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_infos}
   - {id: faces, type : face, repeat: expr, repeat-expr: header.num_faces}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
+  - {id: vertices, type: vec4, repeat: expr, repeat-expr: header.num_vertices}
   
 types:
 
@@ -24,7 +24,7 @@ types:
       - {id: num_nodes, type: u4} # total node num
       - {id: num_faces, type: u4} # total triangle num
       - {id: num_vertices, type: u4} # total vertex num
-      - {id: box, type: tbox}
+      - {id: box, type: bbox}
 
   info: #96 bytes
     seq:
@@ -43,14 +43,14 @@ types:
     seq:
       - {id: vert, type: u2, repeat: expr, repeat-expr: 3}
       - {id: unk_00, type: u1, repeat: expr, repeat-expr: 2}
-      - {id: attribute, type: u4}
+      - {id: type, type: u4} # attribute
       - {id: attr, type: u4, repeat: expr, repeat-expr: 4}
 
   
   bvh_node: # 80 bytes
     seq:
-      - {id: aabb_01, type: pbox}
-      - {id: aabb_02, type: pbox}
+      - {id: aabb_01, type: aabb}
+      - {id: aabb_02, type: aabb}
       - {id: bit, type: u1} # always 0-255
       - {id: unk, type: u1}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
@@ -60,7 +60,7 @@ types:
     seq:
       - {id: vector, type: vec4}
   
-  tbox:
+  bbox:
     seq:
       - {id: min, type: vec3}
       - {id: max, type: vec3}
@@ -89,8 +89,7 @@ types:
       - {id: green, type: u1}
       - {id: blue, type: u1}
       - {id: alpha, type: u1}
-       
-  aabb_block:
+  aabb:
     seq:
       - {id: min, type: vec4}
       - {id: max, type: vec4}

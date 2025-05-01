@@ -37,7 +37,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
         self.vertices = []
         for i in range(self.header.num_vertices):
-            _t_vertices = Sbc156.Vertex(self._io, self, self._root)
+            _t_vertices = Sbc156.Vec4(self._io, self, self._root)
             _t_vertices._read()
             self.vertices.append(_t_vertices)
 
@@ -223,6 +223,43 @@ class Sbc156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"vector", self.vector._parent, self)
 
 
+    class Bbox(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.min = Sbc156.Vec3(self._io, self, self._root)
+            self.min._read()
+            self.max = Sbc156.Vec3(self._io, self, self._root)
+            self.max._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.min._fetch_instances()
+            self.max._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Sbc156.Bbox, self)._write__seq(io)
+            self.min._write__seq(self._io)
+            self.max._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.min._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"min", self.min._root, self._root)
+            if self.min._parent != self:
+                raise kaitaistruct.ConsistencyError(u"min", self.min._parent, self)
+            if self.max._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"max", self.max._root, self._root)
+            if self.max._parent != self:
+                raise kaitaistruct.ConsistencyError(u"max", self.max._parent, self)
+
+
     class Rgba(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -250,80 +287,6 @@ class Sbc156(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-
-
-    class AabbBlock(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.min = Sbc156.Vec4(self._io, self, self._root)
-            self.min._read()
-            self.max = Sbc156.Vec4(self._io, self, self._root)
-            self.max._read()
-
-
-        def _fetch_instances(self):
-            pass
-            self.min._fetch_instances()
-            self.max._fetch_instances()
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.AabbBlock, self)._write__seq(io)
-            self.min._write__seq(self._io)
-            self.max._write__seq(self._io)
-
-
-        def _check(self):
-            pass
-            if self.min._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"min", self.min._root, self._root)
-            if self.min._parent != self:
-                raise kaitaistruct.ConsistencyError(u"min", self.min._parent, self)
-            if self.max._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"max", self.max._root, self._root)
-            if self.max._parent != self:
-                raise kaitaistruct.ConsistencyError(u"max", self.max._parent, self)
-
-
-    class Tbox(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.min = Sbc156.Vec3(self._io, self, self._root)
-            self.min._read()
-            self.max = Sbc156.Vec3(self._io, self, self._root)
-            self.max._read()
-
-
-        def _fetch_instances(self):
-            pass
-            self.min._fetch_instances()
-            self.max._fetch_instances()
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.Tbox, self)._write__seq(io)
-            self.min._write__seq(self._io)
-            self.max._write__seq(self._io)
-
-
-        def _check(self):
-            pass
-            if self.min._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"min", self.min._root, self._root)
-            if self.min._parent != self:
-                raise kaitaistruct.ConsistencyError(u"min", self.min._parent, self)
-            if self.max._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"max", self.max._root, self._root)
-            if self.max._parent != self:
-                raise kaitaistruct.ConsistencyError(u"max", self.max._parent, self)
 
 
     class Info(ReadWriteKaitaiStruct):
@@ -435,6 +398,43 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
 
+    class Aabb(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.min = Sbc156.Vec4(self._io, self, self._root)
+            self.min._read()
+            self.max = Sbc156.Vec4(self._io, self, self._root)
+            self.max._read()
+
+
+        def _fetch_instances(self):
+            pass
+            self.min._fetch_instances()
+            self.max._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(Sbc156.Aabb, self)._write__seq(io)
+            self.min._write__seq(self._io)
+            self.max._write__seq(self._io)
+
+
+        def _check(self):
+            pass
+            if self.min._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"min", self.min._root, self._root)
+            if self.min._parent != self:
+                raise kaitaistruct.ConsistencyError(u"min", self.min._parent, self)
+            if self.max._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"max", self.max._root, self._root)
+            if self.max._parent != self:
+                raise kaitaistruct.ConsistencyError(u"max", self.max._parent, self)
+
+
     class Face(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -450,7 +450,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             for i in range(2):
                 self.unk_00.append(self._io.read_u1())
 
-            self.attribute = self._io.read_u4le()
+            self.type = self._io.read_u4le()
             self.attr = []
             for i in range(4):
                 self.attr.append(self._io.read_u4le())
@@ -480,7 +480,7 @@ class Sbc156(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_u1(self.unk_00[i])
 
-            self._io.write_u4le(self.attribute)
+            self._io.write_u4le(self.type)
             for i in range(len(self.attr)):
                 pass
                 self._io.write_u4le(self.attr[i])
@@ -513,9 +513,9 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.aabb_01 = Sbc156.Pbox(self._io, self, self._root)
+            self.aabb_01 = Sbc156.Aabb(self._io, self, self._root)
             self.aabb_01._read()
-            self.aabb_02 = Sbc156.Pbox(self._io, self, self._root)
+            self.aabb_02 = Sbc156.Aabb(self._io, self, self._root)
             self.aabb_02._read()
             self.bit = self._io.read_u1()
             self.unk = self._io.read_u1()
@@ -624,7 +624,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             self.num_nodes = self._io.read_u4le()
             self.num_faces = self._io.read_u4le()
             self.num_vertices = self._io.read_u4le()
-            self.box = Sbc156.Tbox(self._io, self, self._root)
+            self.box = Sbc156.Bbox(self._io, self, self._root)
             self.box._read()
 
 

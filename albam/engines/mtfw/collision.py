@@ -32,6 +32,11 @@ APPID_SBC_CLASS_MAPPER = {
     "dd": Sbc21,
 }
 
+KNOWN_TYPE_ID = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192, 11264, 11776, 16384,
+                 17408, 32768, 33280, 33792, 34304, 34816, 35840, 40960, 40448, 41984, 42496, 42752, 44032,
+                 44288, 49152, 65536, 131072, 1048576, 2097152, 262144, 524288, 134217728, 33554432, 67108864
+                 ]
+
 
 CLUSTERING = {
     "hybrid": bvh.HybridClustering,
@@ -91,9 +96,9 @@ class SBCObject21():
 
 
 class SBCObject156():
-    def __init__(self, info, nodes, faces, vertices, pairs):
+    def __init__(self, info, faces, vertices):
         self.sbcinfo = info
-        self.nodes = nodes
+        # self.nodes = nodes
         # self.bvhtree = BVHTree
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
         self.vertices = vertices
@@ -138,13 +143,13 @@ def load_sbc(file_item, context):
 
     bl_object_name = file_item.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
+    sbc_objects = []
 
     if sbc_version == 255:
         bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
         pair_collection = [pc for i, pc in enumerate(sbc.pairs_collections)]
-        sbc_objects = []
 
         print("sbc type {}".format(sbc_version))
         for ix, ob_info in enumerate(sbc.sbc_info):
@@ -157,19 +162,24 @@ def load_sbc(file_item, context):
     else:
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
+        num_faces = [ob_info.start_tris for ix, ob_info in enumerate(sbc.sbc_info)]
+        num_faces.append(sbc.header.num_faces)
+        num_vtx = [ob_info.start_vertices for ix, ob_info in enumerate(sbc.sbc_info)]
+        num_vtx.append(sbc.header.num_vertices)
         for ix, ob_info in enumerate(sbc.sbc_info):
-            fs, fc = ob_info.faces_start, ob_info.face_count
-            vs, vc = ob_info.vertex_start, ob_info.vertex_count
+            fs, fc = ob_info.start_tris, num_faces[ix + 1] - ob_info.start_tris
+            vs, vc = ob_info.start_vertices, num_vtx[ix + 1] - ob_info.start_vertices
             sbc_obj = SBCObject156(ob_info, face_collection[fs:fs + fc],
                                    vertex_collection[vs:vs + vc])
             sbc_objects.append(sbc_obj)
     print("num sbc objects {}".format(len(sbc_objects)))
     for obj in sbc_objects:
-        mesh, ob = create_collision_mesh(obj)
+        mesh, ob = create_collision_mesh(obj, app_id)
         ob.parent = bl_object
-    for i, typing in enumerate(sbc.collision_types):
-        empty = create_link_ob(typing)
-        empty.parent = bl_object
+    if app_id != "re5":
+        for i, typing in enumerate(sbc.collision_types):
+            empty = create_link_ob(typing)
+            empty.parent = bl_object
 
     bl_object.albam_asset.original_bytes = sbc_bytes
     bl_object.albam_asset.app_id = app_id
@@ -183,8 +193,8 @@ def load_sbc(file_item, context):
     return bl_object
 
 
-def create_collision_mesh(sbc_object):
-    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbc_object))
+def create_collision_mesh(sbc_object, app_id):
+    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
     obj["Type"] = "SBC_Mesh"
     obj["indexID"] = str(sbc_object.sbcinfo.index_id)
@@ -203,7 +213,7 @@ def create_link_ob(link_ob):
     return sbc_empty
 
 
-def decompose_sbc_ob(sbc_ob):
+def decompose_sbc_ob(sbc_ob, app_id):
     # Extract data needed for building meshes form SBCObject
     sbc_geom = {}
     sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
@@ -222,21 +232,24 @@ def materials_from_sbc(sbc_ob):
     return materials
 
 
-def create_sbc_mesh(name, meshpart):
+def create_sbc_mesh(name, meshpart, app_id):
     bl_mesh = bpy.data.meshes.new(name)
     bl_mesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
     bl_mesh.update()
     bl_obj = bpy.data.objects.new(name, bl_mesh)
-    # bpy.context.scene.objects.link(blenderObject)
     bpy.context.collection.objects.link(bl_obj)
-
     bm = bmesh.new()
     bm.from_mesh(bl_mesh)
     bm.faces.ensure_lookup_table()
     for ix, material in enumerate(meshpart["materials"]):
-        mat = bpy.data.materials.new(name="Type %03d" % material)
+        mat = bpy.data.materials.get("Type %03d" % material)
+        if not mat:
+            mat = bpy.data.materials.new(name="Type %03d" % material)
         try:
-            mat.diffuse_color = palette[material]
+            if app_id == "re5":
+                mat.diffuse_color = palette[KNOWN_TYPE_ID.index(material)]
+            else:
+                mat.diffuse_color = palette[material]
         except IndexError:
             colorsys.hsv_to_rgb(0, 0, 0)
             print("Unknown colision type: %d" % material)
@@ -257,6 +270,7 @@ def cycles(verts):
 @blender_registry.register_export_function(app_id="rev1", extension="sbc")
 @blender_registry.register_export_function(app_id="rev2", extension="sbc")
 @blender_registry.register_export_function(app_id="re6", extension="sbc")
+@blender_registry.register_export_function(app_id="re5", extension="sbc")
 @blender_registry.register_export_function(app_id="dd", extension="sbc")
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
