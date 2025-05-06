@@ -4,7 +4,7 @@ import ntpath
 
 from albam.registry import blender_registry
 from albam.lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
-from albam.lib.handshaker import handshake, dump_frames
+from albam.lib.handshaker import handshake, dump_frames, frames_path
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -129,7 +129,7 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.operator("albam.handshake")
+        row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
 
     @classmethod
@@ -355,6 +355,7 @@ class ALBAM_OT_ApplyFrames(bpy.types.Operator):
     filepath: FILEPATH
 
     def invoke(self, context, event):  # pragma: no cover
+        # self.filepath = self.FILEPATH # frames_dir
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 

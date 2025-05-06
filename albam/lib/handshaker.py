@@ -4,8 +4,8 @@ import os
 from mathutils import Quaternion
 
 
-relative_path = "stored_frames\\rev2_hand_l.json"
-frames_path = os.path.join(os.path.dirname(__file__), relative_path)
+frames_folder = "stored_frames\\"
+frames_path = os.path.join(os.path.dirname(__file__), frames_folder)
 
 
 def _get_bone_rotation(bone):
