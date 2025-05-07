@@ -28,6 +28,7 @@ from albam.lib.blender import (
 from albam.lib.misc import chunks
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
+from albam.exceptions import AlbamCheckFailure
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -1473,6 +1474,13 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]
+            if not weight_values:
+                raise AlbamCheckFailure(
+                    "The mesh object has one or more vertices with zero skin weights",
+                    details=f"Object: {bl_mesh.name}",
+                    solution="Please move a root bone in Pose mode to detect vertices that stand still"
+                    " and use weight paint brush to fix them"
+                )
 
             weight_values.extend([0] * (MAX_BONES - len(weight_values)))  # add nulls if less than bone limit
             if mesh_bone_palette:
