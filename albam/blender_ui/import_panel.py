@@ -145,17 +145,37 @@ class ALBAM_UL_VirtualFileSystemUIBase:
         cache = self.collapse_toggle_operator_cls.NODES_CACHE
         item_list = getattr(data, propname)
 
-        # The cache invalidates after closing .blend file and needs to rebuild
-        if not cache:
-            for item in item_list:
-                #if item.is_expanded:
-                cache[item.name] = item.is_expanded
+        root_nodes = [item for item in item_list if item.is_root]
+        # Invalidate cache, it stores during the secion even if file was chancges
+        if cache:
+            for root_node in root_nodes:
+                if root_node.name not in cache.keys():
+                    cache = {}
+        # The addon doesn't save a cache of toggle buttons states so it needs to rebuild
+        if not cache and len(item_list) > 0:
+            for root_node in root_nodes:
+                child_nodes = [item for item in item_list if item.tree_node.root_id == root_node.name]
+                child_nodes.append(root_node)
+                cache[root_node.name] = {
+                    item.name: item.is_expanded for item in child_nodes if item.is_expandable}
 
         for item in item_list:
-            if item.is_archive:
+            test_list = []
+            test_root_id = item.tree_node.root_id
+            test = cache.get(test_root_id, None)
+            if test:
+                test_list = [anc for anc in item.tree_node_ancestors]
+                test_is_visible = [anc.node_id for anc in test_list]
+
+            if item.is_archive or item.is_root:
                 filtered_items.append(self.bitflag_filter_item)
 
-            elif all(cache.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            #elif test:
+            #    if all(test.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            #        filtered_items.append(self.bitflag_filter_item)
+            #    else:
+            #        filtered_items.append(0)
+            elif all(cache[item.tree_node.root_id].get(anc.node_id, False) for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
 
             else:
