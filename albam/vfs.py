@@ -300,9 +300,7 @@ class ALBAM_OT_VirtualFileSystemCollapseToggleBase:
         vfs = getattr(context.scene.albam, self.VFS_ID)
         item_list = vfs.file_list
         item = item_list[item_index]
-        # flip flop
         item.is_expanded = not item.is_expanded
-        print("Item is expanded", item.is_expanded)
         if item.is_root:
             cache_key = item.name
         else:
@@ -310,7 +308,6 @@ class ALBAM_OT_VirtualFileSystemCollapseToggleBase:
         if cache_key not in self.NODES_CACHE.keys():
             self.NODES_CACHE[cache_key] = {}
         self.NODES_CACHE[cache_key][item.name] = item.is_expanded
-        print("Node Cache is", self.NODES_CACHE)
 
         vfs.file_list_selected_index = self.button_index
         item_list.update()

@@ -146,7 +146,7 @@ class ALBAM_UL_VirtualFileSystemUIBase:
         item_list = getattr(data, propname)
 
         root_nodes = [item for item in item_list if item.is_root]
-        # Invalidate cache, it stores during the secion even if file was chancges
+        # Invalidate cache, it stores during the session even if blend file was changed
         if cache:
             for root_node in root_nodes:
                 if root_node.name not in cache.keys():
@@ -160,22 +160,11 @@ class ALBAM_UL_VirtualFileSystemUIBase:
                     item.name: item.is_expanded for item in child_nodes if item.is_expandable}
 
         for item in item_list:
-            test_list = []
-            test_root_id = item.tree_node.root_id
-            test = cache.get(test_root_id, None)
-            if test:
-                test_list = [anc for anc in item.tree_node_ancestors]
-                test_is_visible = [anc.node_id for anc in test_list]
-
             if item.is_archive or item.is_root:
                 filtered_items.append(self.bitflag_filter_item)
 
-            #elif test:
-            #    if all(test.get(anc.node_id, False) for anc in item.tree_node_ancestors):
-            #        filtered_items.append(self.bitflag_filter_item)
-            #    else:
-            #        filtered_items.append(0)
-            elif all(cache[item.tree_node.root_id].get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            elif all(cache[item.tree_node.root_id].get(anc.node_id, False)
+                     for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
 
             else:
