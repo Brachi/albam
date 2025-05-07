@@ -141,14 +141,30 @@ class ALBAM_UL_VirtualFileSystemUIBase:
     def filter_items(self, context, data, propname):
         filtered_items = []
         # TODO: self.filter_name
+        # After pressing expand toggle "node_name: is_expanded" item is added to the cache
         cache = self.collapse_toggle_operator_cls.NODES_CACHE
-
         item_list = getattr(data, propname)
+
+        root_nodes = [item for item in item_list if item.is_root]
+        # Invalidate cache, it stores during the session even if blend file was changed
+        if cache:
+            for root_node in root_nodes:
+                if root_node.name not in cache.keys():
+                    cache = {}
+        # The addon doesn't save a cache of toggle buttons states so it needs to rebuild
+        if not cache and len(item_list) > 0:
+            for root_node in root_nodes:
+                child_nodes = [item for item in item_list if item.tree_node.root_id == root_node.name]
+                child_nodes.append(root_node)
+                cache[root_node.name] = {
+                    item.name: item.is_expanded for item in child_nodes if item.is_expandable}
+
         for item in item_list:
-            if item.is_archive:
+            if item.is_archive or item.is_root:
                 filtered_items.append(self.bitflag_filter_item)
 
-            elif all(cache.get(anc.node_id, False) for anc in item.tree_node_ancestors):
+            elif all(cache[item.tree_node.root_id].get(anc.node_id, False)
+                     for anc in item.tree_node_ancestors):
                 filtered_items.append(self.bitflag_filter_item)
 
             else:

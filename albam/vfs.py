@@ -301,7 +301,13 @@ class ALBAM_OT_VirtualFileSystemCollapseToggleBase:
         item_list = vfs.file_list
         item = item_list[item_index]
         item.is_expanded = not item.is_expanded
-        self.NODES_CACHE[item.name] = item.is_expanded
+        if item.is_root:
+            cache_key = item.name
+        else:
+            cache_key = item.tree_node.root_id
+        if cache_key not in self.NODES_CACHE.keys():
+            self.NODES_CACHE[cache_key] = {}
+        self.NODES_CACHE[cache_key][item.name] = item.is_expanded
 
         vfs.file_list_selected_index = self.button_index
         item_list.update()
