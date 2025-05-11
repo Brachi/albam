@@ -140,7 +140,6 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
     def filter_items(self, context, data, propname):
         filtered_items = []
-        # TODO: self.filter_name
         # After pressing expand toggle "node_name: is_expanded" item is added to the cache
         cache = self.collapse_toggle_operator_cls.NODES_CACHE
         item_list = getattr(data, propname)
