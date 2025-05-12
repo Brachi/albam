@@ -14,12 +14,12 @@ except ImportError:
     from albam.lib.low_level_op import radix_sort
 
 
-def setRemove(poset, val):
+def set_remove(poset, val):
     poset.remove(val)
     return poset
 
 
-def isIterable(obj):
+def is_iterable(obj):
     try:
         iter(obj)
         return True
@@ -38,7 +38,7 @@ class Cluster():
         self.id = Cluster.clusterID
         Cluster.clusterID += 1
         self.content = element
-        if not isIterable(element):
+        if not is_iterable(element):
             self.type = Cluster.PRIMITIVE
             self.aabb = element.boundingBox()
             self.count = 1
@@ -379,7 +379,7 @@ def exactAgglomerativeClustering(primitives, metric=Cluster.SAHMetric, **kwargs)
                         best = metric(ci, cj)
                         left = ci
                         right = cj
-        setRemove(setRemove(clusters, left), right).add(
+        set_remove(set_remove(clusters, left), right).add(
             BinaryCluster((left, right)))
     return clusters
 
@@ -414,7 +414,7 @@ def combine_clusters(clusters, n, metric):
                 left = ci
                 right = ci.closest
         cp = BinaryCluster((left, right))
-        setRemove(setRemove(c, left), right).add(cp)
+        set_remove(set_remove(c, left), right).add(cp)
         cp.closest = findBestMatch(c, cp, metric)
         for ci in c:
             if ci.closest in [left, right]:
@@ -652,11 +652,13 @@ def mergerReindex(primitives, qprimitives):
 
 def primitive_to_sbc(primitives, clusteringFunction=spatialSplits, **kwargs):
     """primivtives: Tri(Primitive) class stores faces"""
-    # ? doesn't look like it does anything for lists
+    # Adds _index attribute to primitive.dataFace and sets index
     indexize_ob(primitives, lambda x: x.dataFace)
+    # Adds _index attribute to primitive and sets index
     indexize_ob(primitives)
 
-    # BinaryCluster class
+    # Use morton codes to sort primitives by their bounding boxes
+    # Then cluster them (BinaryCluster) and merge close ones
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
     # Merges compatible Tris into QuadPair
     btree.mergeCompatible()

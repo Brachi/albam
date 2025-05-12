@@ -33,9 +33,8 @@ types:
       - {id: start_nodes, type: u4} # ?
       - {id: start_vertices, type: u4}
       - {id: index_id, type: u4}
-      - {id: min_this, type: vec3}
-      - {id: max_this, type: vec3}
-      - {id: min, type: vec3, repeat: expr, repeat-expr: 2}
+      - {id: bounding_box, type: bbox}
+      - {id: min, type: vec3, repeat: expr, repeat-expr: 2} # binary tree for bboxes?
       - {id: max, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
 

@@ -301,10 +301,8 @@ class Sbc156(ReadWriteKaitaiStruct):
             self.start_nodes = self._io.read_u4le()
             self.start_vertices = self._io.read_u4le()
             self.index_id = self._io.read_u4le()
-            self.min_this = Sbc156.Vec3(self._io, self, self._root)
-            self.min_this._read()
-            self.max_this = Sbc156.Vec3(self._io, self, self._root)
-            self.max_this._read()
+            self.bounding_box = Sbc156.Bbox(self._io, self, self._root)
+            self.bounding_box._read()
             self.min = []
             for i in range(2):
                 _t_min = Sbc156.Vec3(self._io, self, self._root)
@@ -325,8 +323,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            self.min_this._fetch_instances()
-            self.max_this._fetch_instances()
+            self.bounding_box._fetch_instances()
             for i in range(len(self.min)):
                 pass
                 self.min[i]._fetch_instances()
@@ -347,8 +344,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.start_nodes)
             self._io.write_u4le(self.start_vertices)
             self._io.write_u4le(self.index_id)
-            self.min_this._write__seq(self._io)
-            self.max_this._write__seq(self._io)
+            self.bounding_box._write__seq(self._io)
             for i in range(len(self.min)):
                 pass
                 self.min[i]._write__seq(self._io)
@@ -365,14 +361,10 @@ class Sbc156(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if self.min_this._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"min_this", self.min_this._root, self._root)
-            if self.min_this._parent != self:
-                raise kaitaistruct.ConsistencyError(u"min_this", self.min_this._parent, self)
-            if self.max_this._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"max_this", self.max_this._root, self._root)
-            if self.max_this._parent != self:
-                raise kaitaistruct.ConsistencyError(u"max_this", self.max_this._parent, self)
+            if self.bounding_box._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self.bounding_box._root, self._root)
+            if self.bounding_box._parent != self:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self.bounding_box._parent, self)
             if (len(self.min) != 2):
                 raise kaitaistruct.ConsistencyError(u"min", len(self.min), 2)
             for i in range(len(self.min)):

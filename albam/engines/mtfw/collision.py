@@ -125,6 +125,131 @@ palette = [colorsys.hsv_to_rgb(c / 55, 1.0, cycle()) for c in range(44)]
 palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 
+def _unpack_bbox(min, max):
+    min_x, min_y, min_z = min[0], min[1], min[2]
+    max_x, max_y, max_z = max[0], max[1], max[2]
+    unpack_bbox = [
+                    (max_x, max_y, max_z),
+                    (min_x, max_y, max_z),
+                    (min_x, min_y, max_z),
+                    (max_x, min_y, max_z),
+                    (max_x, min_y, min_z),
+                    (max_x, max_y, min_z),
+                    (min_x, max_y, min_z),
+                    (min_x, min_y, min_z),
+    ]
+    return unpack_bbox
+
+
+def _scale_bbox(box):
+    scaled = []
+    scaled = (box.x/100, box.z/-100, box.y/100)
+    return scaled
+
+
+def _transform_coordinates(verts):
+    transformed = []
+    for v in verts:
+        vert = (v.position_x/100, v.position_z/-100, v.position_y/100)
+        transformed.append(vert)
+    return transformed
+
+
+def debug_create_bbox(sbc):
+    collection = bpy.data.collections.get("DebugBoxes")
+    box_mats = ["m_sbc_main", "m_sbc_left", "m_sbc_right"]
+    colors = [(0.53, 0.3, 0.73, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
+    for i, m in enumerate(box_mats):
+        if not bpy.data.materials.get(m):
+            mat = bpy.data.materials.new(name=m)
+            mat.diffuse_color = colors[i]
+
+    if not collection:
+        collection = bpy.data.collections.new("DebugBoxes")
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+
+    bbox_min = sbc.sbcinfo.bounding_box.min
+    bbox_max = sbc.sbcinfo.bounding_box.max
+
+    a_min = sbc.sbcinfo.min[0]
+    b_min = sbc.sbcinfo.min[1]
+    a_max = sbc.sbcinfo.max[0]
+    b_max = sbc.sbcinfo.max[1]
+    boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
+    # boxes = [b for b in sbc.boxes]
+    box_indices = [(3, 2, 1, 0),
+                   (4, 5, 6, 7),
+                   (2, 3, 4, 7),
+                   (6, 5, 0, 1),
+                   (1, 2, 7, 6),
+                   (5, 4, 3, 0),
+                   ]
+
+    parent = None
+    for i, b in enumerate(boxes):
+        # name = _create_mesh_name(i, file_path)
+        name = "bbox_test.001"
+        ba_min = _scale_bbox(b[0])
+        ba_max = _scale_bbox(b[1])
+
+        box = _unpack_bbox(ba_min, ba_max)
+        b_mesh_data = bpy.data.meshes.new("sbs_nodes_test" + str(i))
+        b_mesh_data.from_pydata(box, [], box_indices)
+        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
+        b_mesh_obj.active_material = bpy.data.materials.get(box_mats[i])
+        if not parent:
+            parent = b_mesh_obj
+        else:
+            b_mesh_obj.parent = parent
+        # bpy.context.collection.objects.link(b_mesh_obj)
+        collection.objects.link(b_mesh_obj)
+
+
+def debug_create_nodes(node):
+    empty = bpy.data.objects.new(name="NodeRoot", object_data=None)
+    collection = bpy.data.collections.get("DebugNodes")
+    empty.empty_display_type = 'PLAIN_AXES'
+
+    if not collection:
+        collection = bpy.data.collections.new("DebugNodes")
+        bpy.context.scene.collection.children.link(collection)
+    collection.objects.link(empty)
+
+    mat_name = "m_node_debug"
+    mat_color = (0.4, 0.75, 0.36, 1)
+    if not bpy.data.materials.get(mat_name):
+        mat = bpy.data.materials.new(name=mat_name)
+        mat.diffuse_color = mat_color
+    boxa = node.aabb_01
+    boxb = node.aabb_02
+    a_min = boxa.min
+    b_min = boxb.min
+    a_max = boxa.max
+    b_max = boxb.max
+    boxes = [(a_min, a_max), (b_min, b_max)]
+    box_indices = [(3, 2, 1, 0),
+                   (4, 5, 6, 7),
+                   (2, 3, 4, 7),
+                   (6, 5, 0, 1),
+                   (1, 2, 7, 6),
+                   (5, 4, 3, 0),
+                   ]
+    for i, b in enumerate(boxes):
+        # name = _create_mesh_name(i, file_path)
+        name = "node_test.001"
+        ba_min = _scale_bbox(b[0])
+        ba_max = _scale_bbox(b[1])
+
+        box = _unpack_bbox(ba_min, ba_max)
+        b_mesh_data = bpy.data.meshes.new("sbs_boxes_test" + str(i))
+        b_mesh_data.from_pydata(box, [], box_indices)
+        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
+        b_mesh_obj.parent = empty
+        b_mesh_obj.active_material = bpy.data.materials.get(mat_name)
+        collection.objects.link(b_mesh_obj)
+
+
 @blender_registry.register_import_function(app_id="re0", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', file_category="COLLISION")
 @blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
@@ -160,6 +285,7 @@ def load_sbc(file_item, context):
                                   vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
             sbc_objects.append(sbc_obj)
     else:
+        bvh_collection = [b for i, b in enumerate(sbc.nodes)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
         num_faces = [ob_info.start_tris for ix, ob_info in enumerate(sbc.sbc_info)]
@@ -175,11 +301,20 @@ def load_sbc(file_item, context):
     print("num sbc objects {}".format(len(sbc_objects)))
     for obj in sbc_objects:
         mesh, ob = create_collision_mesh(obj, app_id)
+        # debug_create_bbox(obj)
         ob.parent = bl_object
     if app_id != "re5":
         for i, typing in enumerate(sbc.collision_types):
             empty = create_link_ob(typing)
+            empty.sbc21_collision_properties = obj.sbc21_collision_properties
+            # custom_properties = empty.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            # custom_properties.copy_custom_properties_from(typing)
             empty.parent = bl_object
+
+    # for i, node in enumerate(bvh_collection):
+    #    if i >= sbc.header.num_parts:
+    #        break
+    #    debug_create_nodes(node)
 
     bl_object.albam_asset.original_bytes = sbc_bytes
     bl_object.albam_asset.app_id = app_id
@@ -692,3 +827,26 @@ def mesh_rescale(ob):
         vert.co.y = z
         vert.co.z = y
     return ob
+
+
+@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_blender_prop
+class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
+    unk_01: bpy.props.StringProperty(name="Unknown 01", default="", options=set())  # noqa: F821
+    unk_02: bpy.props.StringProperty(name="Unknown 02", default="", options=set())  # noqa: F821
+    unk_03: bpy.props.StringProperty(name="Unknown 03", default="", options=set())  # noqa: F821
+    jp_path: bpy.props.StringProperty(name="Japanese Path", default="", options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                pass
+                # print(f"Type mismatch {attr_name}, {src_obj}")
