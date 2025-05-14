@@ -12,7 +12,7 @@ from albam.vfs import VirtualFileData
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
 from .structs.sbc_211 import Sbc211
-from albam.lib.primitive_geometry import eps, Tri
+from albam.lib.primitive_geometry import EPS, Tri
 import albam.lib.primitive_geometry as geo
 import albam.lib.bvh_construction as bvh
 import albam.lib.common_op as common
@@ -39,11 +39,11 @@ KNOWN_TYPE_ID = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216,
 
 
 CLUSTERING = {
-    "hybrid": bvh.HybridClustering,
-    "kdtree": bvh.kdTreeSplit,
-    "split": bvh.spatialSplits,
+    "hybrid": bvh.hybrid_clustering,
+    "kdtree": bvh.kd_tree_split,
+    "split": bvh.spatial_splits,
     "aproxcluster": bvh.aproximate_agglomerative_clustering,
-    "exactcluster": bvh.exactAgglomerativeClustering
+    "exactcluster": bvh.exact_agglomerative_clustering
     }
 # Surface Area Heuristic (SAH)
 METRIC = {
@@ -305,11 +305,11 @@ def load_sbc(file_item, context):
         ob.parent = bl_object
     if app_id != "re5":
         for i, typing in enumerate(sbc.collision_types):
-            empty = create_link_ob(typing)
-            empty.sbc21_collision_properties = obj.sbc21_collision_properties
+            empty_ob = create_link_ob(typing)
+            # empty.sbc21_collision_properties = obj.sbc21_collision_properties
             # custom_properties = empty.albam_custom_properties.get_custom_properties_for_appid(app_id)
             # custom_properties.copy_custom_properties_from(typing)
-            empty.parent = bl_object
+            empty_ob.parent = bl_object
 
     # for i, node in enumerate(bvh_collection):
     #    if i >= sbc.header.num_parts:
@@ -434,6 +434,7 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
+        # get list of Tri objects from faces of the mesh and vertices
         try:
             vertices, tris = mesh_to_tri(mesh)
         except TriangulationRequiredError:
@@ -774,15 +775,15 @@ class SemiTri():
             return 0
 
         # eps = 0.0001
-        if (n1 - n2).magnitude < eps:
+        if (n1 - n2).magnitude < EPS:
             return 1
-        if (n1 + n2).magnitude < eps:
+        if (n1 + n2).magnitude < EPS:
             return 4
         n = (n1 + n2)
         n.normalize()
         signum = (n1 + n2).dot(facing) > 0
         if not signum:
-            if n1.dot(n2) < eps:
+            if n1.dot(n2) < EPS:
                 return 0
             return 2
         else:
@@ -801,12 +802,14 @@ class SemiTri():
 
 
 def mesh_to_tri(mesh):
+    """ Get triangulated mesh, return list of Tri objects and vertices"""
     bm = bmesh.new()
     # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
     vertices = [Vector(v.co) for v in bm.verts]
-    # SemiTri gets face and material
-    # Tri is child of geometry primitive class gets triface and vertList
+    # classmethod .getMaterial of SemiTri gets material ID for each faces
+    # SemiTri class stores face indices, mat ID and calculates a normal and adjacent faces
+    # Tri is child of geometry primitive class stores SemiTri as dataFace and vertices
     faces = [Tri(SemiTri(face, SemiTri.getMaterial(face, mesh)), vertices)
              for face in bm.faces]
     bm.free()

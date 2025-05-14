@@ -7,10 +7,10 @@ Created on Fri Dec 13 00:07:04 2019
 import numpy as np
 from functools import reduce
 try:
-    from primitive_geometry import mortonLength, QuadPair, PrimitiveTree, BoundingBox
+    from primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
     from low_level_op import radix_sort
 except ImportError:
-    from albam.lib.primitive_geometry import mortonLength, QuadPair, PrimitiveTree, BoundingBox
+    from albam.lib.primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
     from albam.lib.low_level_op import radix_sort
 
 
@@ -27,6 +27,7 @@ def is_iterable(obj):
         return False
 
 
+# Parent class for BinaryCluster
 class Cluster():
     EMPTY = 0
     PRIMITIVE = 1
@@ -182,6 +183,11 @@ class BinaryCluster(Cluster):
         return qnode
 
 
+# The QBVH class represents a Quad Bounding Volume Hierarchy
+# The QBVH class distinguishes between three types of nodes:
+# Primitive: A leaf node containing a single primitive (e.g., a triangle or quad).
+# Node: An internal node with up to four children.
+# Empty: A placeholder node with no content.
 class QBVH():
     def __init__(self, binaryCluster, ll=None, lr=None, rl=None, rr=None):
         self.parent = None
@@ -367,7 +373,7 @@ class QBVH():
 # =============================================================================
 # Exact Agglomerative Clustering O(N^3)
 # =============================================================================
-def exactAgglomerativeClustering(primitives, metric=Cluster.SAHMetric, **kwargs):
+def exact_agglomerative_clustering(primitives, metric=Cluster.SAHMetric, **kwargs):
     clusters = set((BinaryCluster(p) for p in primitives))
     while len(clusters) > 1:
         best = np.inf
@@ -396,6 +402,8 @@ def expRedFactory(c, alpha):
 
 def aproximate_agglomerative_clustering(primitives, metric=Cluster.SAHMetric, reduction=expRedFactory(1, 0.5),
                                         threshold=1, **kwargs):
+    # BinaryCluster(Cluster) is a node that stores left and right children(?)
+    # Convert primitives to BinaryClusters after sorting them by their bounding boxes
     clusters = [BinaryCluster(p) for p in morton_sort(primitives)]
     return combine_clusters(build_tree(clusters, metric, reduction, threshold), 1, metric)
 
@@ -425,6 +433,9 @@ def combine_clusters(clusters, n, metric):
 def build_tree(primitives, metric, countReduction, threshold):
     if len(primitives) <= threshold:
         return combine_clusters(primitives, countReduction(threshold), metric)
+    # The morton_partition function splits the list of primitives into two groups (l and r)
+    # based on their Morton codes. This ensures spatial locality, as primitives close in space will
+    # be grouped together.
     l, r = morton_partition(primitives)
 
     def build(x):
@@ -432,26 +443,40 @@ def build_tree(primitives, metric, countReduction, threshold):
     return combine_clusters(build(l).union(build(r)), countReduction(len(primitives)), metric)
 
 
-def morton_partition(encodableList, metric=None, mortonPoint=0):
-    bit = mortonLength - 1 - mortonPoint
-    if bit == -1 or len(encodableList) < 3:
-        return encodableList[:(len(encodableList) + 1) // 2], encodableList[(len(encodableList) + 1) // 2:]
+def morton_partition(encodable_list, metric=None, morton_point=0):
+    """
+    encountable_list: Primitive
+    """
+    # mortonLenght hardcoded to 32(number of bits in the Morton code)
+    # bit determines which bit of the Morton code is currently being used to partition the list.
+    bit = MORTONLENGHT - 1 - morton_point
+    # if all bits processed or less than 3 primitives returns split list on two
+    if bit == -1 or len(encodable_list) < 3:
+        return encodable_list[:(len(encodable_list) + 1) // 2], encodable_list[(len(encodable_list) + 1) // 2:]
 
+    # The key function extracts the value of the current bit (bit) from the Morton code of the element at index x.
+    # encodable_list[x].encode() computes the Morton code for the element.
+    # The bitwise operation ((2 << bit) & ...) isolates the value of the current bit.
     def key(x):
-        return ((2 << bit) & encodableList[x].encode())  # >>32
+        return ((2 << bit) & encodable_list[x].encode())  # >>32
+    # If all elements in the list have the same value for the current bit
+    # the function moves to the next bit (mortonPoint + 1) and tries again.
     left = 0
-    right = len(encodableList) - 1
+    right = len(encodable_list) - 1
     if key(left) == key(right):
-        return morton_partition(encodableList, metric, mortonPoint + 1)
+        return morton_partition(encodable_list, metric, morton_point + 1)
+    # The function uses a binary search approach to find the partition point.
+    # it compares the Morton code values at left, right, and middlePoint to determine
+    # whether to move left or right closer to the middle.
     while right - left > 1:
-        middlePoint = (left + right + 1) // 2
-        if key(left) == key(middlePoint):
-            left = middlePoint
-        elif key(right) == key(middlePoint):
-            right = middlePoint
+        middle_point = (left + right + 1) // 2
+        if key(left) == key(middle_point):
+            left = middle_point
+        elif key(right) == key(middle_point):
+            right = middle_point
         else:
             raise ValueError("Mathematical Impossibility")
-    return encodableList[:right], encodableList[right:]
+    return encodable_list[:right], encodable_list[right:]
 
 
 def findBestMatch(clusterList, ci, metric):
@@ -527,7 +552,7 @@ def _kdTreeSplit(indices, access, axis, mode):
                           _kdTreeSplit(rindices, access, (axis + 1) % len(mode), mode)))
 
 
-def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
+def kd_tree_split(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
     indices = deferredTripleSort(primitives, mode)
     coordinate = coordinateFunction(primitives)
     activatedModes = [partialPerm(perm, coordinate) for perm in mode]
@@ -541,14 +566,23 @@ def kdTreeSplit(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs):
 #  Naive Spatial Splits
 # =============================================================================
 def morton_sort(primitives):
-    # primitives: SemiTri objects
+    """
+    Sorts primitives by their bounding boxes using morton codes
+    primitives: list of SemiTri objects that stores face incides or other objects
+    """
     def unpack(x):
         return [x.minPos, x.maxPos]
 
-    def mergeOp(x, y):
+    def merge_op(x, y):
         return x.merge(y)
+    # Create a list of bounding boxes unpacked from primitives(Tri)
     primitiveBoxes = [BoundingBox(unpack(p.boundingBox())) for p in primitives]
-    minima, maxima = unpack(reduce(mergeOp, primitiveBoxes, primitiveBoxes[0]))
+    # Run merge_op trough the list of bounding boxes starting with [0](why?)
+    # combine two bounding boxes into a single bounding box that encompasses both
+    # until all boxes are merged into one
+    minima, maxima = unpack(reduce(merge_op, primitiveBoxes, primitiveBoxes[0]))
+    # setBounds normalizes(?) bounding boxes towards minima and maxima and
+    # encodes them into a single number by morton code then sorts them and returns sorted
     mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}
     return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)]
     # return sorted(primitives,key = lambda x: x.setBounds(minima,maxima).encode())
@@ -582,7 +616,7 @@ def linear_split(cluster, metric):
     return elementList[:currentBest], elementList[currentBest:]
 
 
-def spatialSplits(primitives, *args, **kwargs):
+def spatial_splits(primitives, *args, **kwargs):
 
     clusters = [BinaryCluster(p) for p in morton_sort(primitives)]
     return [_spatialSplits(clusters, *args, **kwargs)]
@@ -609,7 +643,7 @@ def _spatialSplits(clusters, metric=Cluster.SAH_EPOMetric, partition=linear_spli
 # =============================================================================
 #  Hybrid method depending on length of primitives
 # =============================================================================
-def HybridClustering(primitives, *args, **kwargs):
+def hybrid_clustering(primitives, *args, **kwargs):
     # TODO - pick method based on length etc...
     return aproximate_agglomerative_clustering(primitives, *args, **kwargs)
 
@@ -650,8 +684,11 @@ def mergerReindex(primitives, qprimitives):
     return pairPrimitiveList
 
 
-def primitive_to_sbc(primitives, clusteringFunction=spatialSplits, **kwargs):
-    """primivtives: Tri(Primitive) class stores faces"""
+def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
+    """
+    Get a list of Tri objects and dictionary of options
+    primivtives: list of Tri(Primitive) objects stores a face indices in dataFace
+    """
     # Adds _index attribute to primitive.dataFace and sets index
     indexize_ob(primitives, lambda x: x.dataFace)
     # Adds _index attribute to primitive and sets index
@@ -671,7 +708,7 @@ def primitive_to_sbc(primitives, clusteringFunction=spatialSplits, **kwargs):
     return npairPrimitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
 
 
-def trees_to_sbc_col(tree_list, clusteringFunction=spatialSplits, **kwargs):
+def trees_to_sbc_col(tree_list, clusteringFunction=spatial_splits, **kwargs):
     indexize_ob(tree_list)
     qtree = next(iter(clusteringFunction(tree_list, **kwargs))).collapse()
     indexize_ob(qtree.subnodes())

@@ -17,9 +17,9 @@ from mathutils import Vector
 from functools import total_ordering
 import numpy as np
 
-mortonLimit = 0x3FF
-mortonLength = 32
-eps = 0.0001
+MORTONLIMIT = 0x3FF
+MORTONLENGHT = 32
+EPS = 0.0001
 
 
 class BoundingBox():
@@ -114,7 +114,7 @@ class GeometryPrimitive():
                 normalized = vec_div(
                     (self.barycenter() - self.sceneStart), self.sceneSize)
                 self.mortonCode = morton_encode(
-                    * (vect_int(mortonLimit * normalized)))
+                    * (vect_int(MORTONLIMIT * normalized)))
                 return self.mortonCode
         else:
             raise ValueError("No scene information to normalize the point")
@@ -185,7 +185,7 @@ class Tri(GeometryPrimitive):
     def parallel(self, tri2):
         n1 = self.normal()
         n2 = tri2.normal()
-        return np.dot(n1, n2) > 1 - eps
+        return np.dot(n1, n2) > 1 - EPS
 
     def __repr__(self):
         return str(self.vertices)
