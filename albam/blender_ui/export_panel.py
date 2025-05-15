@@ -30,7 +30,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class ExportableItem(bpy.types.PropertyGroup):
     # FIXME: hook to remove from list when object is deleted
-    bl_object : bpy.props.PointerProperty(type=bpy.types.ID)
+    bl_object: bpy.props.PointerProperty(type=bpy.types.ID)
 
     @property
     def display_name(self):
@@ -193,6 +193,7 @@ class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UILi
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Export(bpy.types.Operator):
+    """Export selected item"""
     bl_idname = "albam.export"
     bl_label = "Export item"
 
@@ -243,6 +244,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    """Create a new archive with exported files"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -330,6 +332,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Patch(bpy.types.Operator):
+    """Update archive with exported files"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -387,4 +390,5 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
         ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
+    bl_description = "Remove exported files"
     VFS_ID = "exported"

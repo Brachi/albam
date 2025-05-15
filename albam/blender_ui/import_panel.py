@@ -55,6 +55,7 @@ class AlbamImportSettings(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
+    """Import item from virtual file system"""
     bl_idname = "albam.import_vfile"
     bl_label = "import item"
 
