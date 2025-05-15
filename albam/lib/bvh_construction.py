@@ -27,7 +27,11 @@ def is_iterable(obj):
         return False
 
 
-# Parent class for BinaryCluster
+# Generic node for building hierarchical spatial structures
+# Represents either a single primitive (leaf) or a group of clusters/primitives (internal node).
+# Determines its type (PRIMITIVE or NODE) based on whether its content is iterable
+# Provides static methods for different clustering metrics (e.g., SAHMetric, EPOMetric)
+# used to evaluate the cost of combining clusters.
 class Cluster():
     EMPTY = 0
     PRIMITIVE = 1
@@ -163,12 +167,16 @@ class BinaryCluster(Cluster):
         return
 
     def collapse(self):
+        # Collapses the tree into a Quad Bounding Volume Hierarchy
+        # Checks is leaf(Primitive), method from Cluster
         if self.isPrimitive():
             return QBVH(self)
+        # children of a quad node
         children = []
 
         def checkAddSide(side):
             if side:
+                # if child is leaf(Prmitive)
                 if side.isPrimitive():
                     children.append(QBVH(side))
                     children.append(QBVH(None))
@@ -568,7 +576,7 @@ def kd_tree_split(primitives, ordering=deferredTripleSort, mode=CAPCOM, **kwargs
 def morton_sort(primitives):
     """
     Sorts primitives by their bounding boxes using morton codes
-    primitives: list of SemiTri objects that stores face incides or other objects
+    primitives: list of SemiTri objects that stores face indices or other objects
     """
     def unpack(x):
         return [x.minPos, x.maxPos]
@@ -696,18 +704,23 @@ def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
 
     # Use morton codes to sort primitives by their bounding boxes
     # Then cluster them (BinaryCluster) and merge close ones
+    # btree - binary tree
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
     # Merges compatible Tris into QuadPair
+    # qtree - quad tree
     btree.mergeCompatible()
-    # QBVH ?
+    # Converting btree to Quad Bounding Volume Hierarchy
     qtree = btree.collapse()
     indexize_ob(qtree.subnodes())
-    npairPrimitives = mergerReindex(primitives, qtree.subprimitives())
+    # The mergerReindex function is responsible for reindexing and merging primitives after the BVH
+    # has been collapsed into a QBVH and compatible triangles have been merged into quads
+    npair_primitives = mergerReindex(primitives, qtree.subprimitives())
     nodes, pairPrimitives = qtree.separateTraverse()
     indexize_ob(nodes)
-    return npairPrimitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
+    return npair_primitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
 
 
+# Spatial Bounding Cluster (SBC)
 def trees_to_sbc_col(tree_list, clusteringFunction=spatial_splits, **kwargs):
     indexize_ob(tree_list)
     qtree = next(iter(clusteringFunction(tree_list, **kwargs))).collapse()
