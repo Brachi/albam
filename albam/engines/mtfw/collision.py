@@ -155,6 +155,58 @@ def _transform_coordinates(verts):
     return transformed
 
 
+def _create_bbox(name, min, max):
+    box_indices = [(3, 2, 1, 0),
+                   (4, 5, 6, 7),
+                   (2, 3, 4, 7),
+                   (6, 5, 0, 1),
+                   (1, 2, 7, 6),
+                   (5, 4, 3, 0),
+                   ]
+    box_min = _scale_bbox(min)
+    box_max = _scale_bbox(max)
+
+    box = _unpack_bbox(box_min, box_max)
+    b_mesh_data = bpy.data.meshes.new(name)
+    b_mesh_data.from_pydata(box, [], box_indices)
+    return b_mesh_data
+
+
+def debug_create_unk_nodes(sbc):
+    colors = [(0.8, 0.65, 0, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
+    box_mats = ["m_node_main", "m_node_left", "m_node_right"]
+    for i, m in enumerate(box_mats):
+        if not bpy.data.materials.get(m):
+            mat = bpy.data.materials.new(name=m)
+            mat.diffuse_color = colors[i]
+    collection = bpy.data.collections.get("DebugUNKNodes")
+    if not collection:
+        collection = bpy.data.collections.new("DebugUNKNodes")
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+
+    for i, node in enumerate(sbc.nodes):
+        if i >= sbc.header.num_parts + 1:
+            break
+        empty_name = "NodeRoot" + str(i)
+        empty = bpy.data.objects.new(name=empty_name, object_data=None)
+        collection = bpy.data.collections.get("DebugUNKNodes")
+        empty.empty_display_type = 'PLAIN_AXES'
+        collection.objects.link(empty)
+        a_min = node.aabb_01.min
+        a_max = node.aabb_01.max
+        b_min = node.aabb_02.min
+        b_max = node.aabb_02.max
+        boxes = [(a_min, a_max), (b_min, b_max)]
+        for j, b in enumerate(boxes):
+            name = "bbox_test.001"
+            b_mesh_data = _create_bbox(("sbc_unk_nodes_tests"+str(j)), b[0], b[1])
+            b_mesh_obj = bpy.data.objects.new(name + "_" + str(j), b_mesh_data)
+            b_mesh_obj.active_material = bpy.data.materials.get(box_mats[j])
+            b_mesh_obj.parent = empty
+            collection.objects.link(b_mesh_obj)
+
+
 def debug_create_bbox(sbc):
     collection = bpy.data.collections.get("DebugBoxes")
     box_mats = ["m_sbc_main", "m_sbc_left", "m_sbc_right"]
@@ -177,36 +229,23 @@ def debug_create_bbox(sbc):
     a_max = sbc.sbcinfo.max[0]
     b_max = sbc.sbcinfo.max[1]
     boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
-    # boxes = [b for b in sbc.boxes]
-    box_indices = [(3, 2, 1, 0),
-                   (4, 5, 6, 7),
-                   (2, 3, 4, 7),
-                   (6, 5, 0, 1),
-                   (1, 2, 7, 6),
-                   (5, 4, 3, 0),
-                   ]
-
     parent = None
     for i, b in enumerate(boxes):
-        # name = _create_mesh_name(i, file_path)
-        name = "bbox_test.001"
-        ba_min = _scale_bbox(b[0])
-        ba_max = _scale_bbox(b[1])
-
-        box = _unpack_bbox(ba_min, ba_max)
-        b_mesh_data = bpy.data.meshes.new("sbs_nodes_test" + str(i))
-        b_mesh_data.from_pydata(box, [], box_indices)
+        if i <= 0:
+            name = "bounding_box.000"
+        else:
+            name = "bbox_test.001"
+        b_mesh_data = _create_bbox(("sbs_nodes_test" + str(i)), b[0], b[1])
         b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
         b_mesh_obj.active_material = bpy.data.materials.get(box_mats[i])
         if not parent:
             parent = b_mesh_obj
         else:
             b_mesh_obj.parent = parent
-        # bpy.context.collection.objects.link(b_mesh_obj)
         collection.objects.link(b_mesh_obj)
 
 
-def debug_create_nodes(node):
+def debug_create_sbcinfo_nodes(node):
     empty = bpy.data.objects.new(name="NodeRoot", object_data=None)
     collection = bpy.data.collections.get("DebugNodes")
     empty.empty_display_type = 'PLAIN_AXES'
@@ -266,6 +305,7 @@ def load_sbc(file_item, context):
     sbc = SbcCls.from_bytes(sbc_bytes)
     sbc._read()
 
+    # debug_create_unk_nodes(sbc)  # first nodes
     bl_object_name = file_item.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
     sbc_objects = []
@@ -301,7 +341,7 @@ def load_sbc(file_item, context):
     print("num sbc objects {}".format(len(sbc_objects)))
     for obj in sbc_objects:
         mesh, ob = create_collision_mesh(obj, app_id)
-        # debug_create_bbox(obj)
+        # debug_create_bbox(obj) # sbc_info
         ob.parent = bl_object
     if app_id != "re5":
         for i, typing in enumerate(sbc.collision_types):

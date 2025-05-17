@@ -33,10 +33,11 @@ def is_iterable(obj):
 # Provides static methods for different clustering metrics (e.g., SAHMetric, EPOMetric)
 # used to evaluate the cost of combining clusters.
 class Cluster():
+    # Constants for typization during clasterization
     EMPTY = 0
     PRIMITIVE = 1
     NODE = 2
-    typeMap = {EMPTY: "Empty", PRIMITIVE: "Primitive", NODE: "Node"}
+    TYPEMAP = {EMPTY: "Empty", PRIMITIVE: "Primitive", NODE: "Node"}
     clusterID = 0
 
     def __init__(self, element):
@@ -101,7 +102,7 @@ class Cluster():
         return self.tabbedString()
 
     def tabbedString(self, level=0):
-        selfstring = "\t" * level + Cluster.typeMap[self.type] + "\n"
+        selfstring = "\t" * level + Cluster.TYPEMAP[self.type] + "\n"
         children = "".join((i.tabbedString(level + 1)
                            for i in self.content if i)) if self.isNode() else ""
         return selfstring + children
@@ -354,11 +355,14 @@ class QBVH():
                 self.traversalBuffer = ([], [])
         return self.traversalBuffer
 
+    # returns tabbed string on print()
     def __repr__(self):
         return self.tabbedString()
 
+    # Creates a string representation of the cluster for visualization
+    # with indentation based on the level in the hierarchy
     def tabbedString(self, level=0):
-        return ("\t" * level + Cluster.typeMap[self.type] +
+        return ("\t" * level + Cluster.TYPEMAP[self.type] +
                 '\n' +
                 ''.join([child.tabbedString(level + 1) for child in self.children()]))
 
@@ -694,7 +698,8 @@ def mergerReindex(primitives, qprimitives):
 
 def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
     """
-    Get a list of Tri objects and dictionary of options
+    Get a list of Tri objects and dictionary of options, sort them by their bounding boxes
+    using morton codes, cluster them (BinaryCluster) and merge close ones
     primivtives: list of Tri(Primitive) objects stores a face indices in dataFace
     """
     # Adds _index attribute to primitive.dataFace and sets index
@@ -715,6 +720,8 @@ def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
     # The mergerReindex function is responsible for reindexing and merging primitives after the BVH
     # has been collapsed into a QBVH and compatible triangles have been merged into quads
     npair_primitives = mergerReindex(primitives, qtree.subprimitives())
+    # nodes - list of nodes in the quad tree
+    # pairPrimitives - list of primitives in the quad tree
     nodes, pairPrimitives = qtree.separateTraverse()
     indexize_ob(nodes)
     return npair_primitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
@@ -722,6 +729,9 @@ def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
 
 # Spatial Bounding Cluster (SBC)
 def trees_to_sbc_col(tree_list, clusteringFunction=spatial_splits, **kwargs):
+    """
+    tree_list: list of primitive geometry PrimitiveTree objects
+    """
     indexize_ob(tree_list)
     qtree = next(iter(clusteringFunction(tree_list, **kwargs))).collapse()
     indexize_ob(qtree.subnodes())

@@ -14,5 +14,27 @@ def test_parsed_sbc(parsed_sbc_from_arc):
             assert info.node_count > 0
         assert sbc.bvh.node_count > 0
     elif magic[3] == 49:
-        for face in sbc.faces:
-            assert face.type in KNOWN_TYPE_ID
+        sbc_info = [info for info in sbc.sbc_info]
+        assert sbc_info[0].start_nodes == sbc.header.num_parts
+        for i, node in enumerate(sbc.nodes):
+            if i >= sbc.header.num_parts:
+                break
+            # doesn't pass for s107h_sr1.sbc s109h_scr.sbc s205h_eff.sbc ...
+            assert node.aabb_01.min.x == sbc_info[i].min[0].x
+            assert node.aabb_01.min.y == sbc_info[i].min[0].y
+            assert node.aabb_01.min.z == sbc_info[i].min[0].z
+
+            assert node.aabb_02.min.x == sbc_info[i].min[1].x
+            assert node.aabb_02.min.y == sbc_info[i].min[1].y
+            assert node.aabb_02.min.z == sbc_info[i].min[1].z
+
+            assert node.aabb_01.max.x == sbc_info[i].max[0].x
+            assert node.aabb_01.max.y == sbc_info[i].max[0].y
+            assert node.aabb_01.max.z == sbc_info[i].max[0].z
+
+            assert node.aabb_02.max.x == sbc_info[i].max[1].x
+            assert node.aabb_02.max.y == sbc_info[i].max[1].y
+            assert node.aabb_02.max.z == sbc_info[i].max[1].z
+
+        # for face in sbc.faces:
+        #     assert face.type in KNOWN_TYPE_ID
