@@ -171,7 +171,10 @@ class BinaryCluster(Cluster):
         # Collapses the tree into a Quad Bounding Volume Hierarchy
         # Checks is leaf(Primitive), method from Cluster
         if self.isPrimitive():
-            return QBVH(self)
+            # return QBVH(self)
+            # collision for re6 didn't work with 0 nodes
+            children = [QBVH(self)] + [QBVH(None) for _ in range(3)]
+            return QBVH(Cluster((self,)), *children)
         # children of a quad node
         children = []
 
