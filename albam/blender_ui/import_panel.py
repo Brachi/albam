@@ -55,6 +55,7 @@ class AlbamImportSettings(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Import(bpy.types.Operator):
+    """Import item from virtual file system"""
     bl_idname = "albam.import_vfile"
     bl_label = "import item"
 
@@ -140,7 +141,6 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
     def filter_items(self, context, data, propname):
         filtered_items = []
-        # TODO: self.filter_name
         # After pressing expand toggle "node_name: is_expanded" item is added to the cache
         cache = self.collapse_toggle_operator_cls.NODES_CACHE
         item_list = getattr(data, propname)
@@ -149,7 +149,7 @@ class ALBAM_UL_VirtualFileSystemUIBase:
         # Invalidate cache, it stores during the session even if blend file was changed
         if cache:
             for root_node in root_nodes:
-                if root_node.name not in cache.keys():
+                if root_node.name not in cache.keys() or len(root_nodes) != len(cache.keys()):
                     cache = {}
         # The addon doesn't save a cache of toggle buttons states so it needs to rebuild
         if not cache and len(item_list) > 0:

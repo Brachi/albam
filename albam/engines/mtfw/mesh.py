@@ -1133,6 +1133,13 @@ def _check_weights(weights, max_weights):
     return _weights
 
 
+def _check_armature(bl_mesh):
+    for modifier in bl_mesh.modifiers:
+        if modifier.type == 'ARMATURE' and modifier.object:
+            return True
+    return False
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1474,6 +1481,12 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
+            if not _check_armature(bl_mesh):
+                raise AlbamCheckFailure(
+                    "The mesh object has no Armature modifier",
+                    details=f"Object: {bl_mesh.name}",
+                    solution="Please add Armature modifier and set imported skeleton as Object"
+                )
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]

@@ -30,7 +30,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class ExportableItem(bpy.types.PropertyGroup):
     # FIXME: hook to remove from list when object is deleted
-    bl_object : bpy.props.PointerProperty(type=bpy.types.ID)
+    bl_object: bpy.props.PointerProperty(type=bpy.types.ID)
 
     @property
     def display_name(self):
@@ -56,7 +56,6 @@ class ALBAM_UL_ExportableObjects(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         row.label(text=item.display_name)
-        row.operator("albam.remove_exportable_item", text="", icon='PANEL_CLOSE').index = index
 
 
 @blender_registry.register_blender_type
@@ -64,12 +63,21 @@ class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
     "Remove exportable the item from the list"
     bl_idname = "albam.remove_exportable_item"
     bl_label = "Remove Exportable Item"
-    index: bpy.props.IntProperty()
 
     def execute(self, context):
-        scene = context.scene
-        scene.albam.exportable.file_list.remove(self.index)
+        exportable = context.scene.albam.exportable
+        index = exportable.file_list_selected_index
+        exportable.file_list.remove(index)
         return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        exportable = context.scene.albam.exportable
+        file_list = exportable.file_list
+        index = exportable.file_list_selected_index
+        if len(file_list) > 0 and 0 <= index < len(file_list):
+            return True
+        return False
 
 
 @blender_registry.register_blender_type
@@ -81,8 +89,13 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
 
     def draw(self, context):
-        row = self.layout.row()
-        row.template_list(
+        self.layout.separator()
+        self.layout.separator()
+        split = self.layout.split(factor=0.1)
+        col = split.column()
+        col.operator("albam.remove_exportable_item", icon="X", text="")
+        col = split.column()
+        col.template_list(
             "ALBAM_UL_ExportableObjects",
             "",
             context.scene.albam.exportable,
@@ -180,6 +193,7 @@ class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UILi
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Export(bpy.types.Operator):
+    """Export selected item"""
     bl_idname = "albam.export"
     bl_label = "Export item"
 
@@ -230,6 +244,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    """Create a new archive with exported files"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -317,6 +332,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Patch(bpy.types.Operator):
+    """Update archive with exported files"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -374,4 +390,5 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
         ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
+    bl_description = "Remove exported files"
     VFS_ID = "exported"
