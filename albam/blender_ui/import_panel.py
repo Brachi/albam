@@ -149,7 +149,7 @@ class ALBAM_UL_VirtualFileSystemUIBase:
         # Invalidate cache, it stores during the session even if blend file was changed
         if cache:
             for root_node in root_nodes:
-                if root_node.name not in cache.keys():
+                if root_node.name not in cache.keys() or len(root_nodes) != len(cache.keys()):
                     cache = {}
         # The addon doesn't save a cache of toggle buttons states so it needs to rebuild
         if not cache and len(item_list) > 0:
