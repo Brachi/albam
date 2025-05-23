@@ -56,7 +56,30 @@ class ExportedItems(VirtualFileSystemBase, bpy.types.PropertyGroup):
 class ALBAM_UL_ExportableObjects(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.label(text=item.display_name)
+        row = layout.row(align=True)
+        row.label(text=item.display_name)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
+    "Remove exportable the item from the list"
+    bl_idname = "albam.remove_exportable_item"
+    bl_label = "Remove Exportable Item"
+
+    def execute(self, context):
+        exportable = context.scene.albam.exportable
+        index = exportable.file_list_selected_index
+        exportable.file_list.remove(index)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        exportable = context.scene.albam.exportable
+        file_list = exportable.file_list
+        index = exportable.file_list_selected_index
+        if len(file_list) > 0 and 0 <= index < len(file_list):
+            return True
+        return False
 
 
 @blender_registry.register_blender_type
@@ -68,8 +91,13 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
 
     def draw(self, context):
-        row = self.layout.row()
-        row.template_list(
+        self.layout.separator()
+        self.layout.separator()
+        split = self.layout.split(factor=0.1)
+        col = split.column()
+        col.operator("albam.remove_exportable_item", icon="X", text="")
+        col = split.column()
+        col.template_list(
             "ALBAM_UL_ExportableObjects",
             "",
             context.scene.albam.exportable,
@@ -169,6 +197,7 @@ class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UILi
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Export(bpy.types.Operator):
+    """Export selected item"""
     bl_idname = "albam.export"
     bl_label = "Export item"
 
@@ -428,4 +457,5 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
     """Remove exported resources"""
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
+    bl_description = "Remove exported files"
     VFS_ID = "exported"
