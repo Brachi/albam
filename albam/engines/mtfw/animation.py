@@ -20,22 +20,28 @@ ROOT_BONE_NAME = '0'
 
 
 @blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
-def load_lmt(file_item, context):
-    lmt_bytes = file_item.get_bytes()
+def load_lmt(file_list_item, context):
+    app_id = file_list_item.app_id
+    lmt_bytes = file_list_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
+    lmt._read()
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
+    bl_object_name = file_list_item.display_name
+    bl_object = bpy.data.objects.new(bl_object_name, None)
 
     for block_index, block in enumerate(lmt.block_offsets):
+        anim_object = bpy.data.objects.new("anim_" + str(block_index).zfill(4), None)
+        anim_object.parent = bl_object
         if block.offset == 0:
             continue
         if DEBUG_BLOCK is not None and DEBUG_BLOCK != block_index:
             continue
         armature.animation_data_create()
-        name = f"{armature.name}.{file_item.display_name}.{str(block_index).zfill(4)}"
+        name = f"{armature.name}.{file_list_item.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
@@ -91,6 +97,21 @@ def load_lmt(file_item, context):
                     curve.keyframe_points.add(1)
                     curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])
                     curve.keyframe_points[-1].interpolation = 'LINEAR'
+
+        custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        custom_properties.copy_custom_properties_from(block.block_header)
+
+    bl_object.albam_asset.original_bytes = lmt_bytes
+    bl_object.albam_asset.app_id = app_id
+    bl_object.albam_asset.relative_path = file_list_item.relative_path
+    bl_object.albam_asset.extension = file_list_item.extension
+
+    exportable = context.scene.albam.exportable.file_list.add()
+    exportable.bl_object = bl_object
+
+    context.scene.albam.exportable.file_list.update()
+    return bl_object
 
 
 def _create_bone_mapping(armature_obj):
@@ -295,3 +316,30 @@ def poll_lmt_options(panel_instance, context):
 @blender_registry.register_import_operator_poll_func(extension='lmt')
 def poll_import_operator_for_lmt(panel_class, context):
     return bool(context.scene.albam.import_options_lmt.armature)
+
+
+@blender_registry.register_custom_properties_animation("lmt_51_anim", ("re5",))
+@blender_registry.register_blender_prop
+class LMT51AnimationCustomProperties(bpy.types.PropertyGroup):
+    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())
+    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())
+    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())
+    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())
+    init_position: bpy.props.FloatVectorProperty(
+        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())
+    init_quaterion: bpy.props.FloatVectorProperty(
+        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                pass
+                # print(f"Type mismatch {attr_name}, {src_obj}")

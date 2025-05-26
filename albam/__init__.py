@@ -52,11 +52,13 @@ def register():
     AlbamCustomPropertiesMesh = AlbamCustomPropertiesFactory("mesh")
     AlbamCustomPropertiesImage = AlbamCustomPropertiesFactory("image")
     AlbamCustomPropertiesCollision = AlbamCustomPropertiesFactory("collision")
+    AlbamCustomPropertiesAnimation = AlbamCustomPropertiesFactory("animation")
     bpy.utils.register_class(AlbamData)
     bpy.utils.register_class(AlbamCustomPropertiesMaterial)
     bpy.utils.register_class(AlbamCustomPropertiesMesh)
     bpy.utils.register_class(AlbamCustomPropertiesImage)
     bpy.utils.register_class(AlbamCustomPropertiesCollision)
+    bpy.utils.register_class(AlbamCustomPropertiesAnimation)
 
     bpy.types.Scene.albam = bpy.props.PointerProperty(type=AlbamData)
 
@@ -67,6 +69,7 @@ def register():
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesCollision)
+    bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesAnimation)
 
 
 def unregister():
