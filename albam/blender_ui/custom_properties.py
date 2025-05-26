@@ -147,6 +147,17 @@ def AlbamCustomPropertiesFactory(kind: str):
                 break
         return albam_asset
 
+    def _get_parent_albam_asset_object(bl_obj):
+        albam_asset = None
+        for obj in bpy.data.objects:
+            if not obj.albam_asset.relative_path:
+                continue
+            children = {c for c in obj.children_recursive if c.type == "EMPTY"}
+            if bl_obj in children:
+                albam_asset = obj.albam_asset
+                break
+        return albam_asset
+
     def get_parent_albam_asset(self):
         custom_prop_context = self.id_data
         albam_asset = None
@@ -155,6 +166,8 @@ def AlbamCustomPropertiesFactory(kind: str):
             albam_asset = _get_parent_albam_asset_mesh(custom_prop_context)
         elif isinstance(custom_prop_context, bpy.types.Material):
             albam_asset = _get_parent_albam_asset_material(custom_prop_context)
+        elif isinstance(custom_prop_context, bpy.types.Object):
+            albam_asset = _get_parent_albam_asset_object(custom_prop_context)
 
         return albam_asset
 
@@ -199,7 +212,7 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image")
+    assert kind in ("mesh", "material", "image", "animation")
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -318,6 +331,15 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "data"
     CONTEXT_ITEM_NAME = "mesh"
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesAnimation(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesAnimation"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    CONTEXT_ITEM_NAME = "object"
 
 
 @blender_registry.register_blender_prop_albam(name="clipboard")
