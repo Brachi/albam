@@ -101,6 +101,7 @@ def load_lmt(file_list_item, context):
         custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
+        custom_properties.action = action
 
     bl_object.albam_asset.original_bytes = lmt_bytes
     bl_object.albam_asset.app_id = app_id
@@ -318,9 +319,28 @@ def poll_import_operator_for_lmt(panel_class, context):
     return bool(context.scene.albam.import_options_lmt.armature)
 
 
+@blender_registry.register_blender_type
+class BaseCustomProps(bpy.types.PropertyGroup):
+    """
+    Base class for custom properties that are used in animations.
+    This is used to ensure that the custom properties are registered
+    and can be accessed from the animation data.
+    """
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except AttributeError:
+                pass
+
+
 @blender_registry.register_custom_properties_animation("lmt_51_anim", ("re5",))
 @blender_registry.register_blender_prop
-class LMT51AnimationCustomProperties(bpy.types.PropertyGroup):
+class LMT51AnimationCustomProperties(BaseCustomProps):
     ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())
     num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())
     num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())
@@ -329,17 +349,19 @@ class LMT51AnimationCustomProperties(bpy.types.PropertyGroup):
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())
     init_quaterion: bpy.props.FloatVectorProperty(
         name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+    action: bpy.props.PointerProperty(
+        name="Stored Action",
+        type=bpy.types.Action
+    )
 
-    # FIXME: dedupe
-    def copy_custom_properties_to(self, dst_obj):
-        for attr_name in self.__annotations__:
-            setattr(dst_obj, attr_name, getattr(self, attr_name))
 
-    # FIXME: dedupe
-    def copy_custom_properties_from(self, src_obj):
-        for attr_name in self.__annotations__:
-            try:
-                setattr(self, attr_name, getattr(src_obj, attr_name))
-            except TypeError:
-                pass
-                # print(f"Type mismatch {attr_name}, {src_obj}")
+@blender_registry.register_custom_properties_animation(
+    "col_events",
+    ("re5",), is_secondary=True, display_name="Collision Events")
+@blender_registry.register_blender_prop
+class ColEventsCustomProperties(bpy.types.PropertyGroup):
+    group_id: bpy.props.IntVectorProperty(
+        name="Group ID",
+        size=32,
+        default=[0] * 32,
+        description="Collision group ID")

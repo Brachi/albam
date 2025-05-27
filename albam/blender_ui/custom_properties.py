@@ -377,6 +377,17 @@ class ALBAM_PT_CustomPropertiesCollisionSubPanelBase(ALBAM_PT_CustomPropertiesMa
                             layout.prop(active_item, child_k)
 
 
+class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(bpy.types.Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    bl_parent_id = "ALBAM_PT_CustomPropertiesAnimation"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Custom Properties for Animation", icon="PROPERTIES")
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_idname = "ALBAM_PT_CustomPropertiesMesh"
