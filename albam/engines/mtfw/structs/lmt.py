@@ -558,31 +558,6 @@ class Lmt(ReadWriteKaitaiStruct):
             pass
 
 
-    class Atk2(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.unk_00 = self._io.read_u4le()
-            self.unk_01 = self._io.read_u4le()
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Lmt.Atk2, self)._write__seq(io)
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.unk_01)
-
-
-        def _check(self):
-            pass
-
-
     class Vec3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -623,18 +598,18 @@ class Lmt(ReadWriteKaitaiStruct):
             self.usage = self._io.read_u1()
             self.joint_type = self._io.read_u1()
             self.bone_index = self._io.read_u1()
-            self.unk_01 = self._io.read_f4le()
+            self.weight = self._io.read_f4le()
             self.len_data = self._io.read_u4le()
             self.ofs_data = self._io.read_u4le()
-            self.unk_reference_data = []
+            self.reference_data = []
             for i in range(4):
-                self.unk_reference_data.append(self._io.read_f4le())
+                self.reference_data.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unk_reference_data)):
+            for i in range(len(self.reference_data)):
                 pass
 
             _ = self.data
@@ -647,20 +622,20 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_u1(self.usage)
             self._io.write_u1(self.joint_type)
             self._io.write_u1(self.bone_index)
-            self._io.write_f4le(self.unk_01)
+            self._io.write_f4le(self.weight)
             self._io.write_u4le(self.len_data)
             self._io.write_u4le(self.ofs_data)
-            for i in range(len(self.unk_reference_data)):
+            for i in range(len(self.reference_data)):
                 pass
-                self._io.write_f4le(self.unk_reference_data[i])
+                self._io.write_f4le(self.reference_data[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.unk_reference_data) != 4):
-                raise kaitaistruct.ConsistencyError(u"unk_reference_data", len(self.unk_reference_data), 4)
-            for i in range(len(self.unk_reference_data)):
+            if (len(self.reference_data) != 4):
+                raise kaitaistruct.ConsistencyError(u"reference_data", len(self.reference_data), 4)
+            for i in range(len(self.reference_data)):
                 pass
 
 
@@ -831,9 +806,9 @@ class Lmt(ReadWriteKaitaiStruct):
             self.weight = self._io.read_f4le()
             self.len_data = self._io.read_u4le()
             self.ofs_data = self._io.read_u4le()
-            self.unk_reference_data = []
+            self.reference_data = []
             for i in range(4):
-                self.unk_reference_data.append(self._io.read_f4le())
+                self.reference_data.append(self._io.read_f4le())
 
             self.ofs_floats = Lmt.OfsFloatBuff(self._io, self, self._root)
             self.ofs_floats._read()
@@ -841,7 +816,7 @@ class Lmt(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unk_reference_data)):
+            for i in range(len(self.reference_data)):
                 pass
 
             self.ofs_floats._fetch_instances()
@@ -858,18 +833,18 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.weight)
             self._io.write_u4le(self.len_data)
             self._io.write_u4le(self.ofs_data)
-            for i in range(len(self.unk_reference_data)):
+            for i in range(len(self.reference_data)):
                 pass
-                self._io.write_f4le(self.unk_reference_data[i])
+                self._io.write_f4le(self.reference_data[i])
 
             self.ofs_floats._write__seq(self._io)
 
 
         def _check(self):
             pass
-            if (len(self.unk_reference_data) != 4):
-                raise kaitaistruct.ConsistencyError(u"unk_reference_data", len(self.unk_reference_data), 4)
-            for i in range(len(self.unk_reference_data)):
+            if (len(self.reference_data) != 4):
+                raise kaitaistruct.ConsistencyError(u"reference_data", len(self.reference_data), 4)
+            for i in range(len(self.reference_data)):
                 pass
 
             if self.ofs_floats._root != self._root:
