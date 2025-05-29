@@ -1,6 +1,8 @@
 from ctypes import Structure, c_ulonglong
 import io
 import struct
+from io import BytesIO
+from albam.vfs import VirtualFileData
 
 import bpy
 from kaitaistruct import KaitaiStream
@@ -45,7 +47,18 @@ def load_lmt(file_list_item, context):
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
+        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)["tracks"]
         for track_index, track in enumerate(block.block_header.tracks):
+            # Custom attributes for a track
+            item = tracks.tracks.add()
+            item.buffer_type = track.buffer_type
+            item.usage = track.usage
+            item.joint_type = track.joint_type
+            item.bone_index = track.bone_index
+            item.weight = track.weight
+            item.reference_data = track.reference_data
+            item.raw_data = track.data
+
             bone_index = mapping.get(str(track.bone_index))
 
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
@@ -336,6 +349,80 @@ def poll_import_operator_for_lmt(panel_class, context):
     return bool(context.scene.albam.import_options_lmt.armature)
 
 
+@blender_registry.register_export_function(app_id="re5", extension="lmt")
+def export_lmt(bl_obj):
+    # export_settings = bpy.context.scene.albam.export_settings
+    asset = bl_obj.albam_asset
+    app_id = asset.app_id
+    vfiles = []
+    print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
+    bl_obj = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    dst_lmt = Lmt()
+    dst_lmt.id_magic = b"LMT\x00"
+    dst_lmt.version = 51
+    dst_lmt.num_block_offsets = len(bl_obj)
+    ofs = 8
+
+    block_offsets = []
+    for bl_obj in bl_obj:
+        block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        body_size = 0
+        if custom_props.ofs_frame != 0:
+            anim_header = dst_lmt.BlockHeader51(
+                _parent=block_offset, _root=dst_lmt)
+            anim_header.ofs_frame = 0
+            anim_header.num_tracks = 0
+            anim_header.num_frames = 0
+            anim_header.loop_frame = 0
+            anim_header.init_position = custom_props.init_position
+            anim_header.filler = 0
+            anim_header.init_quaterion = custom_props.init_quaterion
+            body_size += 56
+
+            collision_events = dst_lmt.EventCollision(_parent=anim_header, _root=dst_lmt)
+            collision_events.event_id = [0] * 32
+            collision_events.num_events = 0
+            collision_events.ofs_events = 0
+
+            col_attributes = []
+            col_attr = dst_lmt.Attr(_parent=collision_events, _root=dst_lmt)
+            col_attr.group = 0
+            col_attr.frame = 0
+            col_attributes.append(col_attr)
+
+            collision_events.attributes = []
+            anim_header.collision_events = collision_events
+            body_size += 72
+
+            motion_sound_effects = dst_lmt.MotionSe(_parent=anim_header, _root=dst_lmt)
+            motion_sound_effects.event_id = [0] * 32
+            motion_sound_effects.num_events = 0
+            motion_sound_effects.ofs_events = 0
+            motion_sound_effects.attributes = []
+            anim_header.motion_sound_effects = motion_sound_effects
+            body_size += 72
+
+            anim_header._check()
+
+        block_offset.offset = ofs
+        ofs += (4 + body_size)
+
+        # block_offset.check()
+        block_offsets.append(block_offset)
+
+    dst_lmt.block_offsets = block_offsets
+    final_size = 8 + len(block_offsets) * 4
+
+    stream = KaitaiStream(BytesIO(bytearray(final_size)))
+    dst_lmt._check()
+    dst_lmt._write(stream)
+
+    lmt_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
+    vfiles.append(lmt_vf)
+    return vfiles
+
+
 @blender_registry.register_blender_type
 class BaseCustomProps(bpy.types.PropertyGroup):
     """
@@ -447,10 +534,15 @@ class LMT51Track(bpy.types.PropertyGroup):
         options=set(),
         description="Reference data for the track, used for blending"
     )
+    raw_data: bpy.props.StringProperty(
+        name="Raw Data",
+        description="Raw binary data for this track",
+        subtype='BYTE_STRING'
+    )
 
 
 @blender_registry.register_custom_properties_animation(
-    "track",
+    "tracks",
     ("re5",), is_secondary=True, display_name="Animation Tracks")
 @blender_registry.register_blender_prop
 class AnimTrackCustomProperties(bpy.types.PropertyGroup):
