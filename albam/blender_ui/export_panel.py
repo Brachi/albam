@@ -391,8 +391,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
-    """Find and replace a selected resource in the target archive"""
     bl_idname = "albam.find_and_replace"
+    bl_description = "Find and replace exported resource in the archive"
     bl_label = "Find and Replace"
     VFS_ID = "exported"
 
@@ -434,7 +434,6 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
     filter_glob: bpy.props.StringProperty(default='*.arc', options={'HIDDEN'}, maxlen=255)  # noqa
 
     def execute(self, context):
-        # print("Selected file:", self.filepath)
         export_settings = context.scene.albam.export_settings
         file_name = export_settings.far_file_name
         add_new = export_settings.far_add_new
@@ -442,8 +441,9 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
         vfile = vfs.selected_vfile
         from albam.engines.mtfw.archive import find_and_replace_in_arc
         arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
-        with open(self.filepath, "wb") as f:
-            f.write(arc)
+        if arc:
+            with open(self.filepath, "wb") as f:
+                f.write(arc)
         return {'FINISHED'}
 
     def invoke(self, context, event):

@@ -184,6 +184,19 @@ def _serialize_arc(exported):
     return file_
 
 
+def _to_dict(file_entries):
+    imported = {}
+    for fe in file_entries:
+        path = fe.file_path
+        try:
+            extension = FILE_ID_TO_EXTENSION[fe.file_type]
+        except KeyError:
+            extension = str(fe.file_type)
+        relative_path = (path + "." + extension)
+        imported[relative_path] = fe
+    return imported
+
+
 def update_arc(filepath, vfiles):
     imported = {}
     exported = {}
@@ -250,19 +263,21 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
         file_entry = _get_file_entry(vfile)
         imported_entries.append(file_entry)
         imported_entries = _sort_arc_entries(imported_entries, False)
-        for fe in imported_entries:
-            file_entries[fe.file_path] = fe
+        file_entries = _to_dict(imported_entries)
+        #for fe in imported_entries:
+        #    if fe.file_path in test_paths:
+        #        print("Duplicate file path found: {}".format(fe.file_path))
+        #    file_entries[(fe.file_path + "." + str(fe.file_type))] = fe
+        #    test_paths.append(fe.file_path)
     else:
         for fe in imported_entries:
             path = fe.file_path
             name = ntpath.basename(path)
-
             try:
                 extension = FILE_ID_TO_EXTENSION[fe.file_type]
             except KeyError:
                 extension = str(fe.file_type)
-
-            if (name == file_name and vfile.extension == extension) or add_new:
+            if name == file_name and vfile.extension == extension:
                 show_message_box("File: {} found int the archive".format(file_name))
                 found = True
                 vf_data = vfile.data_bytes
@@ -270,7 +285,10 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)
                 fe.raw_data = chunk
-            file_entries[fe.file_path] = fe
+            file_entries[(fe.file_path + "." + extension)] = fe
+        assert len(file_entries) == len(parsed.file_entries), "File entries size mismatch"
         if not found:
             show_message_box("File: {} not found in the archive".format(file_name))
+            return None
+    assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
     return _serialize_arc(file_entries)
