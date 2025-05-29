@@ -383,9 +383,32 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(bpy.types.Panel):
     bl_context = "object"
     bl_parent_id = "ALBAM_PT_CustomPropertiesAnimation"
 
+    APP_ID = None
+    custom_props_to_draw = None
+    CONTEXT_ITEM_NAME = "object"
+
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Custom Properties for Animation", icon="PROPERTIES")
+        layout.use_property_split = True
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
+        if not custom_props_sec:
+            return
+        custom_props = custom_props_sec.get(self.custom_props_to_draw)
+        if not custom_props:
+            return
+        for k in custom_props.__annotations__:
+            # TODO: don't draw if marked as "HIDDEN"
+            layout.prop(custom_props, k)
+
+
+SUBPANEL_BASE = {
+    "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
+    "custom_properties_animation": ALBAM_PT_CustomPropertiesAnimationSubPanelBase,
+}
 
 
 @blender_registry.register_blender_type

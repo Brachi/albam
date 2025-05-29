@@ -98,6 +98,23 @@ def load_lmt(file_list_item, context):
                     curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])
                     curve.keyframe_points[-1].interpolation = 'LINEAR'
 
+        col_events = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)["col_events"]
+        motion_se = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)["motion_se"]
+        # col_events.group_id[1] = 225
+        for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
+            item = col_events.attributes.add()
+            item.group = attribute.group
+            item.frame = attribute.frame
+        for i, event_id in enumerate(block.block_header.collision_events.event_id):
+            col_events.event_id[i] = event_id
+
+        for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
+            item = motion_se.attributes.add()
+            item.group = attribute.group
+            item.frame = attribute.frame
+        for i, event_id in enumerate(block.block_header.motion_sound_effects.event_id):
+            motion_se.event_id[i] = event_id
+
         custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
@@ -355,13 +372,91 @@ class LMT51AnimationCustomProperties(BaseCustomProps):
     )
 
 
+@blender_registry.register_blender_prop
+class LMT51Attribute(bpy.types.PropertyGroup):
+    group: bpy.props.IntProperty(name="Group", default=0, options=set())
+    frame: bpy.props.IntProperty(name="Frame", default=0, options=set())
+
+
 @blender_registry.register_custom_properties_animation(
     "col_events",
     ("re5",), is_secondary=True, display_name="Collision Events")
 @blender_registry.register_blender_prop
 class ColEventsCustomProperties(bpy.types.PropertyGroup):
-    group_id: bpy.props.IntVectorProperty(
-        name="Group ID",
+    event_id: bpy.props.IntVectorProperty(
+        name="Event ID",
         size=32,
         default=[0] * 32,
         description="Collision group ID")
+    attributes: bpy.props.CollectionProperty(
+        type=LMT51Attribute,
+        name="Attributes",
+        description="Collision attributes for each group"
+    )
+    attributes_index: bpy.props.IntProperty(default=0)
+
+
+@blender_registry.register_custom_properties_animation(
+    "motion_se",
+    ("re5",), is_secondary=True, display_name="Motion Sound Events")
+@blender_registry.register_blender_prop
+class MotionSECustomProperties(bpy.types.PropertyGroup):
+    event_id: bpy.props.IntVectorProperty(
+        name="Event ID",
+        size=32,
+        default=[0] * 32,
+        description="Collision group ID")
+    attributes: bpy.props.CollectionProperty(
+        type=LMT51Attribute,
+        name="Attributes",
+        description="Collision attributes for each group"
+    )
+    attributes_index: bpy.props.IntProperty(default=0)
+
+
+@blender_registry.register_blender_prop
+class LMT51Track(bpy.types.PropertyGroup):
+    buffer_type: bpy.props.IntProperty(
+        name="Buffer Type",
+        default=0,
+        options=set(),
+        description="Type of buffer used for this track")
+    usage: bpy.props.IntProperty(
+        name="Usage",
+        default=0,
+        options=set(),
+        description="Track type")
+    joint_type: bpy.props.IntProperty(
+        name="Joint Type",
+        default=0,
+        options=set())
+    bone_index: bpy.props.IntProperty(
+        name="Bone Index",
+        default=0,
+        options=set(),
+        description="Animation index of the bone in the armature")
+    weight: bpy.props.FloatProperty(
+        name="Weight",
+        default=1.0,
+        options=set(),
+        description="Weight of the track, used for blending")
+    reference_data: bpy.props.FloatVectorProperty(
+        name="Reference Data",
+        size=4,
+        default=(0.0, 0.0, 0.0, 1.0),
+        options=set(),
+        description="Reference data for the track, used for blending"
+    )
+
+
+@blender_registry.register_custom_properties_animation(
+    "track",
+    ("re5",), is_secondary=True, display_name="Animation Tracks")
+@blender_registry.register_blender_prop
+class AnimTrackCustomProperties(bpy.types.PropertyGroup):
+    tracks: bpy.props.CollectionProperty(
+        type=LMT51Track,
+        name="Tracks",
+        description="Animation tracks for the LMT file"
+    )
+    tracks_index: bpy.props.IntProperty(default=0)
