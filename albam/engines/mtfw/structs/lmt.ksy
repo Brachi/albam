@@ -51,23 +51,18 @@ types:
       - {id: usage, type: u1}
       - {id: joint_type, type: u1}
       - {id: bone_index, type: u1}
-      - {id: unk_01, type: f4}
-      - {id: len_data, type: u4}
+      - {id: weight, type: f4}
+      - {id: size_data, type: u4}
       - {id: ofs_data, type: u4}
-      - {id: unk_reference_data, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
     instances:
       data:
-        {pos: ofs_data, size: len_data}
+        {pos: ofs_data, size: size_data}
         
   attr:
     seq:
       - {id: group, type: u4}
       - {id: frame, type: u4}
-      
-  atk2:
-    seq:
-      - {id: unk_00, type: u4}
-      - {id: unk_01, type: u4}
       
   block_header67:
     seq:
@@ -90,13 +85,13 @@ types:
       - {id: joint_type, type: u1}
       - {id: bone_index, type: u1}
       - {id: weight, type: f4}
-      - {id: len_data, type: u4}
+      - {id: size_data, type: u4}
       - {id: ofs_data, type: u4}
-      - {id: unk_reference_data, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
       - {id: ofs_floats, type:  ofs_float_buff}
     instances:
       data:
-        {pos: ofs_data, size: len_data}
+        {pos: ofs_data, size: size_data}
   
   ofs_float_buff:
     seq:
