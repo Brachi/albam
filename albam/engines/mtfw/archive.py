@@ -151,7 +151,6 @@ def _get_file_entry(vfile):
 
 
 def _serialize_arc(exported):
-    # set header
     arc = Arc()
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
@@ -184,18 +183,9 @@ def _serialize_arc(exported):
     return file_
 
 
-def update_arc(filepath, vfiles):
+def _to_dict(file_entries):
     imported = {}
-    exported = {}
-    # sort exported
-    vf_sorted = _sort_arc_entries(vfiles)
-
-    # build a dictionary for imported arc
-    with open(filepath, 'rb') as f:
-        parsed = Arc.from_bytes(f.read())
-        parsed._read()
-
-    for fe in parsed.file_entries:
+    for fe in file_entries:
         path = fe.file_path
         try:
             extension = FILE_ID_TO_EXTENSION[fe.file_type]
@@ -203,6 +193,19 @@ def update_arc(filepath, vfiles):
             extension = str(fe.file_type)
         relative_path = (path + "." + extension)
         imported[relative_path] = fe
+    return imported
+
+
+def update_arc(filepath, vfiles):
+    imported = {}
+    exported = {}
+    vf_sorted = _sort_arc_entries(vfiles)
+
+    with open(filepath, 'rb') as f:
+        parsed = Arc.from_bytes(f.read())
+        parsed._read()
+
+    imported = _to_dict(parsed.file_entries)
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -250,19 +253,16 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
         file_entry = _get_file_entry(vfile)
         imported_entries.append(file_entry)
         imported_entries = _sort_arc_entries(imported_entries, False)
-        for fe in imported_entries:
-            file_entries[fe.file_path] = fe
+        file_entries = _to_dict(imported_entries)
     else:
         for fe in imported_entries:
             path = fe.file_path
             name = ntpath.basename(path)
-
             try:
                 extension = FILE_ID_TO_EXTENSION[fe.file_type]
             except KeyError:
                 extension = str(fe.file_type)
-
-            if (name == file_name and vfile.extension == extension) or add_new:
+            if name == file_name and vfile.extension == extension:
                 show_message_box("File: {} found int the archive".format(file_name))
                 found = True
                 vf_data = vfile.data_bytes
@@ -270,7 +270,10 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)
                 fe.raw_data = chunk
-            file_entries[fe.file_path] = fe
+            file_entries[(fe.file_path + "." + extension)] = fe
+        assert len(file_entries) == len(parsed.file_entries), "File entries size mismatch"
         if not found:
             show_message_box("File: {} not found in the archive".format(file_name))
+            return None
+    assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
     return _serialize_arc(file_entries)
