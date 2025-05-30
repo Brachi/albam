@@ -877,7 +877,8 @@ def mesh_rescale(ob):
     return ob
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_link", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_custom_properties_collision("sbc_21_link", ("re0", "re1", "re6", "rev1",
+                                                                       "rev2", "dd",))
 @blender_registry.register_blender_prop
 class SBC21LinkCustomProperties(bpy.types.PropertyGroup):
     unk_01: bpy.props.StringProperty(name="Unknown 01", default="", options=set())  # noqa: F821
@@ -900,7 +901,8 @@ class SBC21LinkCustomProperties(bpy.types.PropertyGroup):
                 # print(f"Type mismatch {attr_name}, {src_obj}")
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1",
+                                                                       "rev2", "dd",))
 @blender_registry.register_blender_prop
 class SBC21MeshCustomProperties(bpy.types.PropertyGroup):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
