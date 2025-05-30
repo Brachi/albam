@@ -491,7 +491,10 @@ def export_sbc(bl_obj):
         quadList.append(quads)
         sbcsList.append(sbc)
         mesh_metadata.append({"indexID": custom_props.index_id})
+    for clone in mesh_clones:
+        common.delete_ob(clone)
     if errors:
+        print(errors)
         raise ExportingFailedError
     parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
     final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
@@ -501,8 +504,6 @@ def export_sbc(bl_obj):
     dst_sbc._write(stream)
     sbc_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(sbc_vf)
-    for clone in mesh_clones:
-        common.delete_ob(clone)
     return vfiles
 
 
