@@ -151,7 +151,6 @@ def _get_file_entry(vfile):
 
 
 def _serialize_arc(exported):
-    # set header
     arc = Arc()
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
@@ -200,22 +199,13 @@ def _to_dict(file_entries):
 def update_arc(filepath, vfiles):
     imported = {}
     exported = {}
-    # sort exported
     vf_sorted = _sort_arc_entries(vfiles)
 
-    # build a dictionary for imported arc
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
         parsed._read()
 
-    for fe in parsed.file_entries:
-        path = fe.file_path
-        try:
-            extension = FILE_ID_TO_EXTENSION[fe.file_type]
-        except KeyError:
-            extension = str(fe.file_type)
-        relative_path = (path + "." + extension)
-        imported[relative_path] = fe
+    imported = _to_dict(parsed.file_entries)
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -264,11 +254,6 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
         imported_entries.append(file_entry)
         imported_entries = _sort_arc_entries(imported_entries, False)
         file_entries = _to_dict(imported_entries)
-        #for fe in imported_entries:
-        #    if fe.file_path in test_paths:
-        #        print("Duplicate file path found: {}".format(fe.file_path))
-        #    file_entries[(fe.file_path + "." + str(fe.file_type))] = fe
-        #    test_paths.append(fe.file_path)
     else:
         for fe in imported_entries:
             path = fe.file_path
