@@ -371,6 +371,10 @@ def load_sbc(file_item, context):
 def create_collision_mesh(sbc_object, app_id):
     mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
+    custom_properties = obj.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+    custom_properties.index_id = str(sbc_object.sbcinfo.index_id)
+
     obj["Type"] = "SBC_Mesh"
     obj["indexID"] = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
@@ -474,6 +478,7 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
+        custom_props = mesh.albam_custom_properties.get_custom_properties_for_appid(app_id)
         # get list of Tri objects from faces of the mesh and vertices
         try:
             vertices, tris = mesh_to_tri(mesh)
@@ -485,7 +490,7 @@ def export_sbc(bl_obj):
         trisList.append(tris)  # tris primitive objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
-        mesh_metadata.append({"indexID": mesh["indexID"]})
+        mesh_metadata.append({"indexID": custom_props.index_id})
     if errors:
         raise ExportingFailedError
     parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
@@ -872,9 +877,9 @@ def mesh_rescale(ob):
     return ob
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_custom_properties_collision("sbc_21_link", ("re0", "re1", "re6", "rev1", "rev2",))
 @blender_registry.register_blender_prop
-class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
+class SBC21LinkCustomProperties(bpy.types.PropertyGroup):
     unk_01: bpy.props.StringProperty(name="Unknown 01", default="", options=set())  # noqa: F821
     unk_02: bpy.props.StringProperty(name="Unknown 02", default="", options=set())  # noqa: F821
     unk_03: bpy.props.StringProperty(name="Unknown 03", default="", options=set())  # noqa: F821
@@ -893,3 +898,9 @@ class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
             except TypeError:
                 pass
                 # print(f"Type mismatch {attr_name}, {src_obj}")
+
+
+@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1", "rev2",))
+@blender_registry.register_blender_prop
+class SBC21MeshCustomProperties(bpy.types.PropertyGroup):
+    index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
