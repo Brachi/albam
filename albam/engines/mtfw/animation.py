@@ -362,7 +362,6 @@ def export_lmt(bl_obj):
     dst_lmt.version = 51
     dst_lmt.num_block_offsets = len(bl_obj)
     ofs = 8
-
     block_offsets = []
     for bl_obj in bl_obj:
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
@@ -370,11 +369,12 @@ def export_lmt(bl_obj):
         body_size = 0
         if custom_props.ofs_frame != 0:
             anim_header = dst_lmt.BlockHeader51(
-                _parent=block_offset, _root=dst_lmt)
+                _parent=dst_lmt, _root=dst_lmt)
+            anim_header.tracks__to_write = False
             anim_header.ofs_frame = 0
             anim_header.num_tracks = 0
-            anim_header.num_frames = 0
-            anim_header.loop_frame = 0
+            anim_header.num_frames = custom_props.num_frames
+            anim_header.loop_frame = custom_props.loop_frame
             anim_header.init_position = custom_props.init_position
             anim_header.filler = 0
             anim_header.init_quaterion = custom_props.init_quaterion
@@ -384,14 +384,16 @@ def export_lmt(bl_obj):
             collision_events.event_id = [0] * 32
             collision_events.num_events = 0
             collision_events.ofs_events = 0
+            collision_events.attributes__to_write = False
 
+            """
             col_attributes = []
             col_attr = dst_lmt.Attr(_parent=collision_events, _root=dst_lmt)
             col_attr.group = 0
             col_attr.frame = 0
             col_attributes.append(col_attr)
+            """
 
-            collision_events.attributes = []
             anim_header.collision_events = collision_events
             body_size += 72
 
@@ -399,20 +401,22 @@ def export_lmt(bl_obj):
             motion_sound_effects.event_id = [0] * 32
             motion_sound_effects.num_events = 0
             motion_sound_effects.ofs_events = 0
-            motion_sound_effects.attributes = []
+            motion_sound_effects.attributes__to_write = False
             anim_header.motion_sound_effects = motion_sound_effects
             body_size += 72
 
             anim_header._check()
-
-        block_offset.offset = ofs
+            block_offset.block_header = anim_header
+            block_offset.offset = ofs
+        else:
+            block_offset.offset = 0
         ofs += (4 + body_size)
 
         # block_offset.check()
         block_offsets.append(block_offset)
 
     dst_lmt.block_offsets = block_offsets
-    final_size = 8 + len(block_offsets) * 4
+    final_size = ofs
 
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_lmt._check()
