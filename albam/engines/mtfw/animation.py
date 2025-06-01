@@ -36,7 +36,8 @@ def load_lmt(file_list_item, context):
     bl_object = bpy.data.objects.new(bl_object_name, None)
 
     for block_index, block in enumerate(lmt.block_offsets):
-        anim_object = bpy.data.objects.new("anim_" + str(block_index).zfill(4), None)
+        anim_object_name = f"{file_list_item.display_name}.{str(block_index).zfill(4)}"
+        anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
         if block.offset == 0:
             continue
