@@ -386,7 +386,6 @@ def _serialize_motion_headers(dst_lmt, app_id, block_offsets, bl_objects):
             dst_collision_events.num_events = len(col_events_attr)
             dst_collision_events.ofs_events = 0
 
-            print("col attr", len(col_events_attr))
             for attr in col_events_attr:
                 dst_col_attr = dst_lmt.Attr(_parent=dst_collision_events, _root=dst_lmt)
                 dst_col_attr.group = attr.group
@@ -427,46 +426,73 @@ def _calculate_offsets(bl_objects, app_id):
     attr_size = 8
     track_size = 32
     block_offsets_size = len(bl_objects) * block_offset_size
-    ofc_frame = header_size + block_offsets_size
-    motion_headers_size = 0
+
+    m_headers_size = 0
     motion_body_size = 0
     ofc_motion_body = []
-
     ofc_block_offsets = []
-    motion_headers_size = 0
+    ce_attr_size = []
+    mse_attr_size = []
+    tr_size = []
+    rw_size = []
+
     cur_ofc_bloc_offsets = header_size + block_offsets_size
     for i, bl_obj in enumerate(bl_objects):
         ofc_ = 0
-        motion_header_ = 0
+        # motion_header_ = 0
         motion_body_size = 0
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
             ofc_ = cur_ofc_bloc_offsets
             cur_ofc_bloc_offsets += motion_header_size
-            motion_headers_size += motion_header_size
+            m_headers_size += motion_header_size
 
             second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             tracks = getattr(second_props["tracks"], "tracks")
-            tracks_size = len(tracks) * track_size
+            t_size = len(tracks) * track_size
 
             raw_data_size = 0
-            tracks_size = 0
+            t_size = 0
             for track in tracks:
                 raw_data_size += len(track.raw_data)
-                tracks_size += track_size
+                t_size += track_size
+            tr_size.append(t_size)
+            rw_size.append(raw_data_size)
 
             col_events_attr = getattr(second_props["col_events"], "attributes")
             col_events_attr_size = len(col_events_attr) * attr_size
+            ce_attr_size.append(col_events_attr_size)
             motion_se_attr = getattr(second_props["motion_se"], "attributes")
             motion_se_attr_size = len(motion_se_attr) * attr_size
+            mse_attr_size.append(motion_se_attr_size)
             # frame_data_size = track_size + col_events_attr_size + motion_se_attr_size + raw_data_size
-            motion_body_size = track_size + col_events_attr_size + motion_se_attr_size + raw_data_size
-
+            motion_body_size = t_size + col_events_attr_size + motion_se_attr_size + raw_data_size
+        else:
+            ce_attr_size.append(0)
+            mse_attr_size.append(0)
+            tr_size.append(0)
+            rw_size.append(0)
         ofc_block_offsets.append(ofc_)
         ofc_motion_body.append(motion_body_size)
 
-    motion_headers_size = len([ofc for ofc in ofc_block_offsets if ofc != 0]) * motion_header_size
-    motion_body_start = header_size + block_offsets_size + motion_headers_size
+    motion_body_start = header_size + block_offsets_size + m_headers_size
+    cur_frame_offset = motion_body_start
+    ofc_frames = []
+    ofc_ce_attr = []
+    ofc_mse_attr = []
+    for i, bl_obj in enumerate(bl_objects):
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if custom_props.ofs_frame != 0:
+             ofc_frames.append(cur_frame_offset)
+             ofc_ce_attr.append(cur_frame_offset + tr_size[i] + rw_size[i])
+             ofc_mse_attr.append(cur_frame_offset + tr_size[i] + rw_size[i] + ce_attr_size[i])
+             cur_frame_offset += ofc_motion_body[i]
+        else:
+            ofc_frames.append(0)
+            ofc_ce_attr.append(0)
+            ofc_mse_attr.append(0)
+
+    # m_headers_size = len([ofc for ofc in ofc_block_offsets if ofc != 0]) * motion_header_size
     # ofc_frames = [(size + header_size + block_offsets_size + motion_headers_size) for size in ofc_frames if size != 0]
 
     return ofc_block_offsets
