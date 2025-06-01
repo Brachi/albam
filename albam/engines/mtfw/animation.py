@@ -349,6 +349,129 @@ def poll_import_operator_for_lmt(panel_class, context):
     return bool(context.scene.albam.import_options_lmt.armature)
 
 
+def _pre_serialize_offset(dst_lmt, num_anim_blocks):
+    block_offsets = []
+    for i in range(num_anim_blocks):
+        block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
+        block_offset.offset = 0
+    return block_offsets
+
+
+def _serialize_motion_headers(dst_lmt, app_id, block_offsets, bl_objects):
+    motion_headers = []
+    for i, bl_obj in enumerate(bl_objects):
+        block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+
+        if custom_props.ofs_frame != 0:
+            anim_header = dst_lmt.BlockHeader51(
+                _parent=block_offset, _root=dst_lmt)
+            anim_header.tracks__to_write = False
+            anim_header.ofs_frame = 0
+            anim_header.num_tracks = 0
+            anim_header.num_frames = custom_props.num_frames
+            anim_header.loop_frame = custom_props.loop_frame
+            anim_header.init_position = custom_props.init_position
+            anim_header.filler = 0
+            anim_header.init_quaterion = custom_props.init_quaterion
+
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+
+            col_events = second_props["col_events"]
+            col_attributes = []
+            dst_collision_events = dst_lmt.EventCollision(_parent=anim_header, _root=dst_lmt)
+            dst_collision_events.attributes__to_write = False
+            dst_collision_events.event_id = col_events.event_id
+            col_events_attr = getattr(col_events, "attributes")
+            dst_collision_events.num_events = len(col_events_attr)
+            dst_collision_events.ofs_events = 0
+
+            print("col attr", len(col_events_attr))
+            for attr in col_events_attr:
+                dst_col_attr = dst_lmt.Attr(_parent=dst_collision_events, _root=dst_lmt)
+                dst_col_attr.group = attr.group
+                dst_col_attr.frame = attr.frame
+                col_attributes.append(dst_col_attr)
+
+            motion_se = second_props["motion_se"]
+            motion_se_attributes = []
+            dst_motion_sound_effects = dst_lmt.MotionSe(_parent=anim_header, _root=dst_lmt)
+            motion_se_attr = getattr(motion_se, "attributes")
+            for attr in motion_se_attr:
+                dst_mot_attr = dst_lmt.Attr(_parent=dst_motion_sound_effects, _root=dst_lmt)
+                dst_mot_attr.group = attr.group
+                dst_mot_attr.frame = attr.frame
+                motion_se_attributes.append(dst_mot_attr)
+
+            tracks = getattr(second_props["tracks"], "tracks")
+            tracks_headers = []
+            tracks_data = []
+            for track in tracks:
+                dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
+                dst_track.buffer_type = track.buffer_type
+                dst_track.usage = track.usage
+                dst_track.joint_type = track.joint_type
+                dst_track.bone_index = track.bone_index
+                dst_track.weight = track.weight
+                dst_track.len_data = len(track.raw_data)
+                dst_track.ofs_data = 0
+                tracks_headers.append(dst_track)
+                tracks_data.append(track.raw_data)
+    return motion_headers
+
+
+def _calculate_offsets(bl_objects, app_id):
+    header_size = 8
+    block_offset_size = 4
+    motion_header_size = 192
+    attr_size = 8
+    track_size = 32
+    block_offsets_size = len(bl_objects) * block_offset_size
+    ofc_frame = header_size + block_offsets_size
+    motion_headers_size = 0
+    motion_body_size = 0
+    ofc_motion_body = []
+
+    ofc_block_offsets = []
+    motion_headers_size = 0
+    cur_ofc_bloc_offsets = header_size + block_offsets_size
+    for i, bl_obj in enumerate(bl_objects):
+        ofc_ = 0
+        motion_header_ = 0
+        motion_body_size = 0
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if custom_props.ofs_frame != 0:
+            ofc_ = cur_ofc_bloc_offsets
+            cur_ofc_bloc_offsets += motion_header_size
+            motion_headers_size += motion_header_size
+
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            tracks = getattr(second_props["tracks"], "tracks")
+            tracks_size = len(tracks) * track_size
+
+            raw_data_size = 0
+            tracks_size = 0
+            for track in tracks:
+                raw_data_size += len(track.raw_data)
+                tracks_size += track_size
+
+            col_events_attr = getattr(second_props["col_events"], "attributes")
+            col_events_attr_size = len(col_events_attr) * attr_size
+            motion_se_attr = getattr(second_props["motion_se"], "attributes")
+            motion_se_attr_size = len(motion_se_attr) * attr_size
+            # frame_data_size = track_size + col_events_attr_size + motion_se_attr_size + raw_data_size
+            motion_body_size = track_size + col_events_attr_size + motion_se_attr_size + raw_data_size
+
+        ofc_block_offsets.append(ofc_)
+        ofc_motion_body.append(motion_body_size)
+
+    motion_headers_size = len([ofc for ofc in ofc_block_offsets if ofc != 0]) * motion_header_size
+    motion_body_start = header_size + block_offsets_size + motion_headers_size
+    # ofc_frames = [(size + header_size + block_offsets_size + motion_headers_size) for size in ofc_frames if size != 0]
+
+    return ofc_block_offsets
+
+
 @blender_registry.register_export_function(app_id="re5", extension="lmt")
 def export_lmt(bl_obj):
     # export_settings = bpy.context.scene.albam.export_settings
@@ -356,20 +479,25 @@ def export_lmt(bl_obj):
     app_id = asset.app_id
     vfiles = []
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
-    bl_obj = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
     dst_lmt = Lmt()
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = 51
-    dst_lmt.num_block_offsets = len(bl_obj)
-    ofs = 8
-    block_offsets = []
-    for bl_obj in bl_obj:
+    dst_lmt.num_block_offsets = len(bl_objects)
+    block_offsets = _pre_serialize_offset(dst_lmt, len(bl_objects))
+    block_headers = []
+    ofs = 8 + len(bl_objects) * 4
+
+    test_serialization = _serialize_motion_headers(dst_lmt, app_id, block_offsets, bl_objects)
+    test_offsets = _calculate_offsets(bl_objects, app_id)
+    for bl_obj in bl_objects:
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
+        # block_offset.block_header__to_write = False
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         body_size = 0
         if custom_props.ofs_frame != 0:
             anim_header = dst_lmt.BlockHeader51(
-                _parent=dst_lmt, _root=dst_lmt)
+                _parent=block_offset, _root=dst_lmt)
             anim_header.tracks__to_write = False
             anim_header.ofs_frame = 0
             anim_header.num_tracks = 0
@@ -406,10 +534,10 @@ def export_lmt(bl_obj):
             body_size += 72
 
             anim_header._check()
-            block_offset.block_header = anim_header
-            block_offset.offset = ofs
-        else:
-            block_offset.offset = 0
+            #block_offset.block_header = anim_header
+            block_headers.append(anim_header)
+            # block_offset.offset = ofs
+        block_offset.offset = 0
         ofs += (4 + body_size)
 
         # block_offset.check()
