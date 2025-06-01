@@ -421,12 +421,12 @@ def _serialize_motion_headers(dst_lmt, app_id, block_offsets, bl_objects):
 
 
 def _calculate_offsets(bl_objects, app_id):
-    header_size = 8
-    block_offset_size = 4
-    motion_header_size = 192
-    attr_size = 8
-    track_size = 32
-    block_offsets_size = len(bl_objects) * block_offset_size
+    HEADER_SIZE = 8
+    BLOCK_OFFSET_SIZE = 4
+    MOTION_HEADER_SIZE = 192
+    ATTR_SIZE = 8
+    TRACK_SIZE = 32
+    block_offsets_table_size = len(bl_objects) * BLOCK_OFFSET_SIZE
 
     m_headers_size = 0
     motion_body_size = 0
@@ -436,35 +436,37 @@ def _calculate_offsets(bl_objects, app_id):
     mse_attr_size = []
     tr_size = []
     rw_size = []
+    ttraw_data = []
 
-    cur_ofc_bloc_offsets = header_size + block_offsets_size
+    cur_ofc_bloc_offsets = HEADER_SIZE + block_offsets_table_size
     for i, bl_obj in enumerate(bl_objects):
         ofc_ = 0
-        # motion_header_ = 0
+        traw_data = []
         motion_body_size = 0
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
             ofc_ = cur_ofc_bloc_offsets
-            cur_ofc_bloc_offsets += motion_header_size
-            m_headers_size += motion_header_size
+            cur_ofc_bloc_offsets += MOTION_HEADER_SIZE
+            m_headers_size += MOTION_HEADER_SIZE
 
             second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             tracks = getattr(second_props["tracks"], "tracks")
-            t_size = len(tracks) * track_size
+            t_size = len(tracks) * TRACK_SIZE
 
             raw_data_size = 0
             t_size = 0
             for track in tracks:
                 raw_data_size += len(track.raw_data)
-                t_size += track_size
+                traw_data.append(len(track.raw_data))
+                t_size += TRACK_SIZE
             tr_size.append(t_size)
             rw_size.append(raw_data_size)
 
             col_events_attr = getattr(second_props["col_events"], "attributes")
-            col_events_attr_size = len(col_events_attr) * attr_size
+            col_events_attr_size = len(col_events_attr) * ATTR_SIZE
             ce_attr_size.append(col_events_attr_size)
             motion_se_attr = getattr(second_props["motion_se"], "attributes")
-            motion_se_attr_size = len(motion_se_attr) * attr_size
+            motion_se_attr_size = len(motion_se_attr) * ATTR_SIZE
             mse_attr_size.append(motion_se_attr_size)
             # frame_data_size = track_size + col_events_attr_size + motion_se_attr_size + raw_data_size
             motion_body_size = t_size + col_events_attr_size + motion_se_attr_size + raw_data_size
@@ -473,30 +475,37 @@ def _calculate_offsets(bl_objects, app_id):
             mse_attr_size.append(0)
             tr_size.append(0)
             rw_size.append(0)
+        ttraw_data.append(traw_data)
         ofc_block_offsets.append(ofc_)
         ofc_motion_body.append(motion_body_size)
 
-    motion_body_start = header_size + block_offsets_size + m_headers_size
+    motion_body_start = HEADER_SIZE + block_offsets_table_size + m_headers_size
     cur_frame_offset = motion_body_start
     ofc_frames = []
     ofc_ce_attr = []
     ofc_mse_attr = []
+    ofc_data_data = []
     for i, bl_obj in enumerate(bl_objects):
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
-             ofc_frames.append(cur_frame_offset)
-             ofc_ce_attr.append(cur_frame_offset + tr_size[i] + rw_size[i])
-             ofc_mse_attr.append(cur_frame_offset + tr_size[i] + rw_size[i] + ce_attr_size[i])
-             cur_frame_offset += ofc_motion_body[i]
+            ofc_frames.append(cur_frame_offset)
+            ofc_ce_attr.append(cur_frame_offset + tr_size[i] + rw_size[i])
+            ofc_mse_attr.append(cur_frame_offset + tr_size[i] + rw_size[i] + ce_attr_size[i])
+            ofc_data = []
+            temp_size = 0
+            for t in ttraw_data[i]:
+                val = cur_frame_offset + tr_size[i] + temp_size
+                ofc_data.append(val)
+                temp_size += t
+            ofc_data_data.append(ofc_data)
+            cur_frame_offset += ofc_motion_body[i]
         else:
             ofc_frames.append(0)
             ofc_ce_attr.append(0)
             ofc_mse_attr.append(0)
+            ofc_data_data.append([])
 
-    # m_headers_size = len([ofc for ofc in ofc_block_offsets if ofc != 0]) * motion_header_size
-    # ofc_frames = [(size + header_size + block_offsets_size + motion_headers_size) for size in ofc_frames if size != 0]
-
-    return ofc_block_offsets
+    return ofc_block_offsets, ofc_frames, ofc_ce_attr, ofc_mse_attr, ofc_data_data
 
 
 @blender_registry.register_export_function(app_id="re5", extension="lmt")
@@ -516,7 +525,7 @@ def export_lmt(bl_obj):
     ofs = 8 + len(bl_objects) * 4
 
     test_serialization = _serialize_motion_headers(dst_lmt, app_id, block_offsets, bl_objects)
-    test_offsets = _calculate_offsets(bl_objects, app_id)
+    ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data = _calculate_offsets(bl_objects, app_id)
     for bl_obj in bl_objects:
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
         # block_offset.block_header__to_write = False
