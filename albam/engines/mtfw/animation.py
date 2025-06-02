@@ -693,7 +693,11 @@ class ColEventsCustomProperties(bpy.types.PropertyGroup):
         name="Attributes",
         description="Collision attributes for each group"
     )
-    attributes_index: bpy.props.IntProperty(default=0)
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
 
 
 @blender_registry.register_custom_properties_animation(
@@ -711,7 +715,11 @@ class MotionSECustomProperties(bpy.types.PropertyGroup):
         name="Attributes",
         description="Collision attributes for each group"
     )
-    attributes_index: bpy.props.IntProperty(default=0)
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
 
 
 @blender_registry.register_blender_prop
@@ -764,4 +772,8 @@ class AnimTrackCustomProperties(bpy.types.PropertyGroup):
         name="Tracks",
         description="Animation tracks for the LMT file"
     )
-    tracks_index: bpy.props.IntProperty(default=0)
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
