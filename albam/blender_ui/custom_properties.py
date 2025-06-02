@@ -325,7 +325,7 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         return True
 
 
-class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(bpy.types.Panel):
+class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMaterialSubPanelBase):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "object"
@@ -336,21 +336,29 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(bpy.types.Panel):
     CONTEXT_ITEM_NAME = "object"
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
-        layout.use_property_split = True
         context_item = getattr(context, self.CONTEXT_ITEM_NAME)
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
+
         custom_props_sec = (
-            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id))
-        if not custom_props_sec:
-            return
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
         custom_props = custom_props_sec.get(self.custom_props_to_draw)
-        if not custom_props:
-            return
         for k in custom_props.__annotations__:
-            # TODO: don't draw if marked as "HIDDEN"
-            layout.prop(custom_props, k)
+            collection = getattr(custom_props, k)
+            if not collection:
+                return
+            if isinstance(collection, bpy.types.bpy_prop_collection):
+                active_index = custom_props.item_index
+                if 0 <= active_index < len(collection):
+                    active_track = collection[active_index]
+                    name = k[:-1].capitalize()
+                    layout.label(text=f"{name}: {active_index}")
+                    for collection in active_track.__annotations__:
+                        layout.prop(active_track, collection)
 
 
 SUBPANEL_BASE = {
