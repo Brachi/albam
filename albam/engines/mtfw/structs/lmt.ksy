@@ -45,6 +45,24 @@ types:
       tracks:
         {pos: ofs_frame, type: track51, repeat: expr, repeat-expr: num_tracks}
 
+  block_header67:
+    seq:
+      - {id: ofs_frame, type: u4}
+      - {id: num_tracks, type: u4}
+      - {id: num_frames, type: u4}
+      - {id: loop_frame, type: s4}
+      - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler, type: u4}
+      - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: flags, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: ofs_attributes, type: u4}
+      - {id: ofs_buffer_2, type: u4} # padding after it
+    instances:
+      tracks:
+        {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
+      block_attributes:
+        {pos: ofs_attributes, type: attributes67}
+
   track51:
     seq:
       - {id: buffer_type, type: u1}
@@ -58,26 +76,7 @@ types:
     instances:
       data:
         {pos: ofs_data, size: len_data}
-        
-  attr:
-    seq:
-      - {id: group, type: u4}
-      - {id: frame, type: u4}
-      
-  block_header67:
-    seq:
-      - {id: ofs_frame, type: u4}
-      - {id: num_tracks, type: u4}
-      - {id: num_frames, type: u4}
-      - {id: loop_frame, type: u4}
-      - {id: unk_floats, type: f4, repeat: expr, repeat-expr: 8}
-      - {id: unk_00, type: u4}
-      - {id: ofs_buffer_1, type: u4}
-      - {id: ofs_buffer_2, type: u4}
-    instances:
-      tracks:
-        {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
-
+  
   track67:
     seq:
       - {id: buffer_type, type: u1}
@@ -88,12 +87,17 @@ types:
       - {id: len_data, type: u4}
       - {id: ofs_data, type: u4}
       - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: ofs_floats, type:  ofs_float_buff}
+      - {id: ofs_bounds, type: ofs_frame_bounds}
     instances:
       data:
         {pos: ofs_data, size: len_data}
-  
-  ofs_float_buff:
+       
+  attr:
+    seq:
+      - {id: group, type: u4}
+      - {id: frame, type: u4}
+      
+  ofs_frame_bounds:
     seq:
     - {id: ofs_buffer, type: u4}
     instances:
@@ -106,7 +110,32 @@ types:
   
   float_buffer:
     seq:
-      - {id: unk_00, type: f4, repeat: expr, repeat-expr: 8}
+      - {id: addin, type: f4, repeat: expr, repeat-expr: 4} # names were took from Crazy's template
+      - {id: offset, type: f4, repeat: expr, repeat-expr: 4}
+  
+  attributes67:
+    seq:
+      - {id: event_id_00, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: unk_num_00, type: u4}
+      - {id: unk_ofs_00, type: u4}
+      - {id: event_id_01, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: unk_num_01, type: u4}
+      - {id: unk_ofs_01, type: u4}
+      - {id: event_id_02, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: unk_num_02, type: u4}
+      - {id: unk_ofs_02, type: u4}
+      - {id: event_id_03, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: unk_num_03, type: u4}
+      - {id: unk_ofs_03, type: u4}
+    instances:
+      attr_00:
+        {pos: unk_ofs_00, type: attr, repeat: expr, repeat-expr: unk_num_00}
+      attr_01:
+        {pos: unk_ofs_01, type: attr, repeat: expr, repeat-expr: unk_num_01}
+      attr_02:
+        {pos: unk_ofs_02, type: attr, repeat: expr, repeat-expr: unk_num_02}
+      attr_03:
+        {pos: unk_ofs_03, type: attr, repeat: expr, repeat-expr: unk_num_03}
       
   event_collision:
     seq:
