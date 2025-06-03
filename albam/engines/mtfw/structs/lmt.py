@@ -63,6 +63,319 @@ class Lmt(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"block_offsets", self.block_offsets[i]._parent, self)
 
 
+    class Attributes67(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_attr_00 = False
+            self.attr_00__to_write = True
+            self._should_write_attr_01 = False
+            self.attr_01__to_write = True
+            self._should_write_attr_02 = False
+            self.attr_02__to_write = True
+            self._should_write_attr_03 = False
+            self.attr_03__to_write = True
+
+        def _read(self):
+            self.event_id_00 = []
+            for i in range(32):
+                self.event_id_00.append(self._io.read_u2le())
+
+            self.unk_num_00 = self._io.read_u4le()
+            self.unk_ofs_00 = self._io.read_u4le()
+            self.event_id_01 = []
+            for i in range(32):
+                self.event_id_01.append(self._io.read_u2le())
+
+            self.unk_num_01 = self._io.read_u4le()
+            self.unk_ofs_01 = self._io.read_u4le()
+            self.event_id_02 = []
+            for i in range(32):
+                self.event_id_02.append(self._io.read_u2le())
+
+            self.unk_num_02 = self._io.read_u4le()
+            self.unk_ofs_02 = self._io.read_u4le()
+            self.event_id_03 = []
+            for i in range(32):
+                self.event_id_03.append(self._io.read_u2le())
+
+            self.unk_num_03 = self._io.read_u4le()
+            self.unk_ofs_03 = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.event_id_00)):
+                pass
+
+            for i in range(len(self.event_id_01)):
+                pass
+
+            for i in range(len(self.event_id_02)):
+                pass
+
+            for i in range(len(self.event_id_03)):
+                pass
+
+            _ = self.attr_00
+            for i in range(len(self._m_attr_00)):
+                pass
+                self.attr_00[i]._fetch_instances()
+
+            _ = self.attr_01
+            for i in range(len(self._m_attr_01)):
+                pass
+                self.attr_01[i]._fetch_instances()
+
+            _ = self.attr_02
+            for i in range(len(self._m_attr_02)):
+                pass
+                self.attr_02[i]._fetch_instances()
+
+            _ = self.attr_03
+            for i in range(len(self._m_attr_03)):
+                pass
+                self.attr_03[i]._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(Lmt.Attributes67, self)._write__seq(io)
+            self._should_write_attr_00 = self.attr_00__to_write
+            self._should_write_attr_01 = self.attr_01__to_write
+            self._should_write_attr_02 = self.attr_02__to_write
+            self._should_write_attr_03 = self.attr_03__to_write
+            for i in range(len(self.event_id_00)):
+                pass
+                self._io.write_u2le(self.event_id_00[i])
+
+            self._io.write_u4le(self.unk_num_00)
+            self._io.write_u4le(self.unk_ofs_00)
+            for i in range(len(self.event_id_01)):
+                pass
+                self._io.write_u2le(self.event_id_01[i])
+
+            self._io.write_u4le(self.unk_num_01)
+            self._io.write_u4le(self.unk_ofs_01)
+            for i in range(len(self.event_id_02)):
+                pass
+                self._io.write_u2le(self.event_id_02[i])
+
+            self._io.write_u4le(self.unk_num_02)
+            self._io.write_u4le(self.unk_ofs_02)
+            for i in range(len(self.event_id_03)):
+                pass
+                self._io.write_u2le(self.event_id_03[i])
+
+            self._io.write_u4le(self.unk_num_03)
+            self._io.write_u4le(self.unk_ofs_03)
+
+
+        def _check(self):
+            pass
+            if (len(self.event_id_00) != 32):
+                raise kaitaistruct.ConsistencyError(u"event_id_00", len(self.event_id_00), 32)
+            for i in range(len(self.event_id_00)):
+                pass
+
+            if (len(self.event_id_01) != 32):
+                raise kaitaistruct.ConsistencyError(u"event_id_01", len(self.event_id_01), 32)
+            for i in range(len(self.event_id_01)):
+                pass
+
+            if (len(self.event_id_02) != 32):
+                raise kaitaistruct.ConsistencyError(u"event_id_02", len(self.event_id_02), 32)
+            for i in range(len(self.event_id_02)):
+                pass
+
+            if (len(self.event_id_03) != 32):
+                raise kaitaistruct.ConsistencyError(u"event_id_03", len(self.event_id_03), 32)
+            for i in range(len(self.event_id_03)):
+                pass
+
+
+        @property
+        def attr_00(self):
+            if self._should_write_attr_00:
+                self._write_attr_00()
+            if hasattr(self, '_m_attr_00'):
+                return self._m_attr_00
+
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_00)
+            self._m_attr_00 = []
+            for i in range(self.unk_num_00):
+                _t__m_attr_00 = Lmt.Attr(self._io, self, self._root)
+                _t__m_attr_00._read()
+                self._m_attr_00.append(_t__m_attr_00)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_attr_00', None)
+
+        @attr_00.setter
+        def attr_00(self, v):
+            self._m_attr_00 = v
+
+        def _write_attr_00(self):
+            self._should_write_attr_00 = False
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_00)
+            for i in range(len(self._m_attr_00)):
+                pass
+                self.attr_00[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+
+        def _check_attr_00(self):
+            pass
+            if (len(self.attr_00) != self.unk_num_00):
+                raise kaitaistruct.ConsistencyError(u"attr_00", len(self.attr_00), self.unk_num_00)
+            for i in range(len(self._m_attr_00)):
+                pass
+                if self.attr_00[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"attr_00", self.attr_00[i]._root, self._root)
+                if self.attr_00[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"attr_00", self.attr_00[i]._parent, self)
+
+
+        @property
+        def attr_01(self):
+            if self._should_write_attr_01:
+                self._write_attr_01()
+            if hasattr(self, '_m_attr_01'):
+                return self._m_attr_01
+
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_01)
+            self._m_attr_01 = []
+            for i in range(self.unk_num_01):
+                _t__m_attr_01 = Lmt.Attr(self._io, self, self._root)
+                _t__m_attr_01._read()
+                self._m_attr_01.append(_t__m_attr_01)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_attr_01', None)
+
+        @attr_01.setter
+        def attr_01(self, v):
+            self._m_attr_01 = v
+
+        def _write_attr_01(self):
+            self._should_write_attr_01 = False
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_01)
+            for i in range(len(self._m_attr_01)):
+                pass
+                self.attr_01[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+
+        def _check_attr_01(self):
+            pass
+            if (len(self.attr_01) != self.unk_num_01):
+                raise kaitaistruct.ConsistencyError(u"attr_01", len(self.attr_01), self.unk_num_01)
+            for i in range(len(self._m_attr_01)):
+                pass
+                if self.attr_01[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"attr_01", self.attr_01[i]._root, self._root)
+                if self.attr_01[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"attr_01", self.attr_01[i]._parent, self)
+
+
+        @property
+        def attr_02(self):
+            if self._should_write_attr_02:
+                self._write_attr_02()
+            if hasattr(self, '_m_attr_02'):
+                return self._m_attr_02
+
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_02)
+            self._m_attr_02 = []
+            for i in range(self.unk_num_02):
+                _t__m_attr_02 = Lmt.Attr(self._io, self, self._root)
+                _t__m_attr_02._read()
+                self._m_attr_02.append(_t__m_attr_02)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_attr_02', None)
+
+        @attr_02.setter
+        def attr_02(self, v):
+            self._m_attr_02 = v
+
+        def _write_attr_02(self):
+            self._should_write_attr_02 = False
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_02)
+            for i in range(len(self._m_attr_02)):
+                pass
+                self.attr_02[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+
+        def _check_attr_02(self):
+            pass
+            if (len(self.attr_02) != self.unk_num_02):
+                raise kaitaistruct.ConsistencyError(u"attr_02", len(self.attr_02), self.unk_num_02)
+            for i in range(len(self._m_attr_02)):
+                pass
+                if self.attr_02[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"attr_02", self.attr_02[i]._root, self._root)
+                if self.attr_02[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"attr_02", self.attr_02[i]._parent, self)
+
+
+        @property
+        def attr_03(self):
+            if self._should_write_attr_03:
+                self._write_attr_03()
+            if hasattr(self, '_m_attr_03'):
+                return self._m_attr_03
+
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_03)
+            self._m_attr_03 = []
+            for i in range(self.unk_num_03):
+                _t__m_attr_03 = Lmt.Attr(self._io, self, self._root)
+                _t__m_attr_03._read()
+                self._m_attr_03.append(_t__m_attr_03)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_attr_03', None)
+
+        @attr_03.setter
+        def attr_03(self, v):
+            self._m_attr_03 = v
+
+        def _write_attr_03(self):
+            self._should_write_attr_03 = False
+            _pos = self._io.pos()
+            self._io.seek(self.unk_ofs_03)
+            for i in range(len(self._m_attr_03)):
+                pass
+                self.attr_03[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+
+        def _check_attr_03(self):
+            pass
+            if (len(self.attr_03) != self.unk_num_03):
+                raise kaitaistruct.ConsistencyError(u"attr_03", len(self.attr_03), self.unk_num_03)
+            for i in range(len(self._m_attr_03)):
+                pass
+                if self.attr_03[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"attr_03", self.attr_03[i]._root, self._root)
+                if self.attr_03[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"attr_03", self.attr_03[i]._parent, self)
+
+
+
     class Vec4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -183,6 +496,89 @@ class Lmt(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"attributes", self.attributes[i]._root, self._root)
                 if self.attributes[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"attributes", self.attributes[i]._parent, self)
+
+
+
+    class OfsFrameBounds(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._should_write_body = False
+            self.body__to_write = True
+
+        def _read(self):
+            self.ofs_buffer = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+            if (self.is_exist != 0):
+                pass
+                _ = self.body
+                self.body._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(Lmt.OfsFrameBounds, self)._write__seq(io)
+            self._should_write_body = self.body__to_write
+            self._io.write_u4le(self.ofs_buffer)
+
+
+        def _check(self):
+            pass
+
+        @property
+        def is_exist(self):
+            if hasattr(self, '_m_is_exist'):
+                return self._m_is_exist
+
+            self._m_is_exist = self.ofs_buffer
+            return getattr(self, '_m_is_exist', None)
+
+        def _invalidate_is_exist(self):
+            del self._m_is_exist
+        @property
+        def body(self):
+            if self._should_write_body:
+                self._write_body()
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            if (self.is_exist != 0):
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_buffer)
+                self._m_body = Lmt.FloatBuffer(self._io, self, self._root)
+                self._m_body._read()
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_body', None)
+
+        @body.setter
+        def body(self, v):
+            self._m_body = v
+
+        def _write_body(self):
+            self._should_write_body = False
+            if (self.is_exist != 0):
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_buffer)
+                self.body._write__seq(self._io)
+                self._io.seek(_pos)
+
+
+
+        def _check_body(self):
+            pass
+            if (self.is_exist != 0):
+                pass
+                if self.body._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"body", self.body._root, self._root)
+                if self.body._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"body", self.body._parent, self)
 
 
 
@@ -677,116 +1073,49 @@ class Lmt(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unk_00 = []
-            for i in range(8):
-                self.unk_00.append(self._io.read_f4le())
+            self.addin = []
+            for i in range(4):
+                self.addin.append(self._io.read_f4le())
+
+            self.offset = []
+            for i in range(4):
+                self.offset.append(self._io.read_f4le())
 
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unk_00)):
+            for i in range(len(self.addin)):
+                pass
+
+            for i in range(len(self.offset)):
                 pass
 
 
 
         def _write__seq(self, io=None):
             super(Lmt.FloatBuffer, self)._write__seq(io)
-            for i in range(len(self.unk_00)):
+            for i in range(len(self.addin)):
                 pass
-                self._io.write_f4le(self.unk_00[i])
+                self._io.write_f4le(self.addin[i])
+
+            for i in range(len(self.offset)):
+                pass
+                self._io.write_f4le(self.offset[i])
 
 
 
         def _check(self):
             pass
-            if (len(self.unk_00) != 8):
-                raise kaitaistruct.ConsistencyError(u"unk_00", len(self.unk_00), 8)
-            for i in range(len(self.unk_00)):
+            if (len(self.addin) != 4):
+                raise kaitaistruct.ConsistencyError(u"addin", len(self.addin), 4)
+            for i in range(len(self.addin)):
                 pass
 
-
-
-    class OfsFloatBuff(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root
-            self._should_write_body = False
-            self.body__to_write = True
-
-        def _read(self):
-            self.ofs_buffer = self._io.read_u4le()
-
-
-        def _fetch_instances(self):
-            pass
-            if (self.is_exist != 0):
+            if (len(self.offset) != 4):
+                raise kaitaistruct.ConsistencyError(u"offset", len(self.offset), 4)
+            for i in range(len(self.offset)):
                 pass
-                _ = self.body
-                self.body._fetch_instances()
-
-
-
-        def _write__seq(self, io=None):
-            super(Lmt.OfsFloatBuff, self)._write__seq(io)
-            self._should_write_body = self.body__to_write
-            self._io.write_u4le(self.ofs_buffer)
-
-
-        def _check(self):
-            pass
-
-        @property
-        def is_exist(self):
-            if hasattr(self, '_m_is_exist'):
-                return self._m_is_exist
-
-            self._m_is_exist = self.ofs_buffer
-            return getattr(self, '_m_is_exist', None)
-
-        def _invalidate_is_exist(self):
-            del self._m_is_exist
-        @property
-        def body(self):
-            if self._should_write_body:
-                self._write_body()
-            if hasattr(self, '_m_body'):
-                return self._m_body
-
-            if (self.is_exist != 0):
-                pass
-                _pos = self._io.pos()
-                self._io.seek(self.ofs_buffer)
-                self._m_body = Lmt.FloatBuffer(self._io, self, self._root)
-                self._m_body._read()
-                self._io.seek(_pos)
-
-            return getattr(self, '_m_body', None)
-
-        @body.setter
-        def body(self, v):
-            self._m_body = v
-
-        def _write_body(self):
-            self._should_write_body = False
-            if (self.is_exist != 0):
-                pass
-                _pos = self._io.pos()
-                self._io.seek(self.ofs_buffer)
-                self.body._write__seq(self._io)
-                self._io.seek(_pos)
-
-
-
-        def _check_body(self):
-            pass
-            if (self.is_exist != 0):
-                pass
-                if self.body._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"body", self.body._root, self._root)
-                if self.body._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"body", self.body._parent, self)
 
 
 
@@ -810,8 +1139,8 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(4):
                 self.reference_data.append(self._io.read_f4le())
 
-            self.ofs_floats = Lmt.OfsFloatBuff(self._io, self, self._root)
-            self.ofs_floats._read()
+            self.ofs_bounds = Lmt.OfsFrameBounds(self._io, self, self._root)
+            self.ofs_bounds._read()
 
 
         def _fetch_instances(self):
@@ -819,7 +1148,7 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(len(self.reference_data)):
                 pass
 
-            self.ofs_floats._fetch_instances()
+            self.ofs_bounds._fetch_instances()
             _ = self.data
 
 
@@ -837,7 +1166,7 @@ class Lmt(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.reference_data[i])
 
-            self.ofs_floats._write__seq(self._io)
+            self.ofs_bounds._write__seq(self._io)
 
 
         def _check(self):
@@ -847,10 +1176,10 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(len(self.reference_data)):
                 pass
 
-            if self.ofs_floats._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"ofs_floats", self.ofs_floats._root, self._root)
-            if self.ofs_floats._parent != self:
-                raise kaitaistruct.ConsistencyError(u"ofs_floats", self.ofs_floats._parent, self)
+            if self.ofs_bounds._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"ofs_bounds", self.ofs_bounds._root, self._root)
+            if self.ofs_bounds._parent != self:
+                raise kaitaistruct.ConsistencyError(u"ofs_bounds", self.ofs_bounds._parent, self)
 
         @property
         def data(self):
@@ -890,24 +1219,40 @@ class Lmt(ReadWriteKaitaiStruct):
             self._root = _root
             self._should_write_tracks = False
             self.tracks__to_write = True
+            self._should_write_block_attributes = False
+            self.block_attributes__to_write = True
 
         def _read(self):
             self.ofs_frame = self._io.read_u4le()
             self.num_tracks = self._io.read_u4le()
             self.num_frames = self._io.read_u4le()
-            self.loop_frame = self._io.read_u4le()
-            self.unk_floats = []
-            for i in range(8):
-                self.unk_floats.append(self._io.read_f4le())
+            self.loop_frame = self._io.read_s4le()
+            self.init_position = []
+            for i in range(3):
+                self.init_position.append(self._io.read_f4le())
 
-            self.unk_00 = self._io.read_u4le()
-            self.ofs_buffer_1 = self._io.read_u4le()
+            self.filler = self._io.read_u4le()
+            self.init_quaterion = []
+            for i in range(4):
+                self.init_quaterion.append(self._io.read_f4le())
+
+            self.flags = []
+            for i in range(4):
+                self.flags.append(self._io.read_u1())
+
+            self.ofs_attributes = self._io.read_u4le()
             self.ofs_buffer_2 = self._io.read_u4le()
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unk_floats)):
+            for i in range(len(self.init_position)):
+                pass
+
+            for i in range(len(self.init_quaterion)):
+                pass
+
+            for i in range(len(self.flags)):
                 pass
 
             _ = self.tracks
@@ -915,29 +1260,50 @@ class Lmt(ReadWriteKaitaiStruct):
                 pass
                 self.tracks[i]._fetch_instances()
 
+            _ = self.block_attributes
+            self.block_attributes._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Lmt.BlockHeader67, self)._write__seq(io)
             self._should_write_tracks = self.tracks__to_write
+            self._should_write_block_attributes = self.block_attributes__to_write
             self._io.write_u4le(self.ofs_frame)
             self._io.write_u4le(self.num_tracks)
             self._io.write_u4le(self.num_frames)
-            self._io.write_u4le(self.loop_frame)
-            for i in range(len(self.unk_floats)):
+            self._io.write_s4le(self.loop_frame)
+            for i in range(len(self.init_position)):
                 pass
-                self._io.write_f4le(self.unk_floats[i])
+                self._io.write_f4le(self.init_position[i])
 
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.ofs_buffer_1)
+            self._io.write_u4le(self.filler)
+            for i in range(len(self.init_quaterion)):
+                pass
+                self._io.write_f4le(self.init_quaterion[i])
+
+            for i in range(len(self.flags)):
+                pass
+                self._io.write_u1(self.flags[i])
+
+            self._io.write_u4le(self.ofs_attributes)
             self._io.write_u4le(self.ofs_buffer_2)
 
 
         def _check(self):
             pass
-            if (len(self.unk_floats) != 8):
-                raise kaitaistruct.ConsistencyError(u"unk_floats", len(self.unk_floats), 8)
-            for i in range(len(self.unk_floats)):
+            if (len(self.init_position) != 3):
+                raise kaitaistruct.ConsistencyError(u"init_position", len(self.init_position), 3)
+            for i in range(len(self.init_position)):
+                pass
+
+            if (len(self.init_quaterion) != 4):
+                raise kaitaistruct.ConsistencyError(u"init_quaterion", len(self.init_quaterion), 4)
+            for i in range(len(self.init_quaterion)):
+                pass
+
+            if (len(self.flags) != 4):
+                raise kaitaistruct.ConsistencyError(u"flags", len(self.flags), 4)
+            for i in range(len(self.flags)):
                 pass
 
 
@@ -985,6 +1351,39 @@ class Lmt(ReadWriteKaitaiStruct):
                 if self.tracks[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"tracks", self.tracks[i]._parent, self)
 
+
+        @property
+        def block_attributes(self):
+            if self._should_write_block_attributes:
+                self._write_block_attributes()
+            if hasattr(self, '_m_block_attributes'):
+                return self._m_block_attributes
+
+            _pos = self._io.pos()
+            self._io.seek(self.ofs_attributes)
+            self._m_block_attributes = Lmt.Attributes67(self._io, self, self._root)
+            self._m_block_attributes._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_block_attributes', None)
+
+        @block_attributes.setter
+        def block_attributes(self, v):
+            self._m_block_attributes = v
+
+        def _write_block_attributes(self):
+            self._should_write_block_attributes = False
+            _pos = self._io.pos()
+            self._io.seek(self.ofs_attributes)
+            self.block_attributes._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+        def _check_block_attributes(self):
+            pass
+            if self.block_attributes._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"block_attributes", self.block_attributes._root, self._root)
+            if self.block_attributes._parent != self:
+                raise kaitaistruct.ConsistencyError(u"block_attributes", self.block_attributes._parent, self)
 
 
 
