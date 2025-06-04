@@ -19,6 +19,13 @@ ROOT_UNK_BONE_ID = 254
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
+# Usage
+# U_QUATERNION = 0x0, Local rotation
+# U_TRANSLATE = 0x1,  Local Position
+# U_SCALE = 0x2, Local Scale
+# U_NULL_QUATERNION = 0x3, Absolute Rotation
+# U_NULL_TRANSLATE = 0x4, Absolute Position
+# U_NULL_SCALE = 0x5, Unknown
 
 
 @blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
@@ -186,7 +193,15 @@ class FrameQuat4_14(Structure):
         return self._clip_and_divide(self._z)
 
 
-# LMTVec3Frame T_VECTOR3_CONST = 0x2,
+# LMTVec3 Single Vector
+def decode_type_1(data):
+    decoded_framers = []
+    u = struct.unpack("fff", data)
+    floats = (u[0] / 100, u[1] / 100, u[2] / 100)
+    return decoded_framers[floats]
+
+
+# LMTVec3Frame12 T_VECTOR3_CONST = 0x2,
 def decode_type_2(data):
     decoded_frames = []
     CHUNK_SIZE = 12
@@ -199,19 +214,53 @@ def decode_type_2(data):
     return decoded_frames
 
 
-# LMTQuatFramev14 T_POLAR3KEY = 0x6,
+# LMTVec3Frame16
+def decode_type_3(data):
+    decoded_frames = []
+    CHUNK_SIZE = 16
+    for start in range(0, len(data), CHUNK_SIZE):
+        chunk = data[start: start + CHUNK_SIZE]
+        u = struct.unpack("fffI", chunk)
+    print("Not implemented")
+
+
+# LMTQuat3Frame but LMTQuatized16Vec3 for ver55+
+def decode_type_4(data, lmt_ver):
+    if lmt_ver > 55:
+        #LMTQuatized16Vec3
+        CHUNK_SIZE = 8
+        u = struct.unpack("HHHH", data)
+    else:
+       # LMTQuat3Frame
+       CHUNK_SIZE = 12
+       u = struct.unpack("fff", data)
+    print("Non implemented")
+
+
+# LMTQuadraticVector3 but LMTQuatized8Vec3 for ver55+
+def decode_type_5(data, app_id):
+    print("Non implemented")
+
+
+# LMTQuatFramev14 T_POLAR3KEY = 0x6, Spherical Rotation
 def decode_type_6(data):
     decoded_frames = []
-
-    for idx, start in enumerate(range(0, len(data), 8)):
-        chunk = data[start: start + 8]
+    CHUNK_SIZE = 8
+    for idx, start in enumerate(range(0, len(data), CHUNK_SIZE)):
+        chunk = data[start: start + CHUNK_SIZE]
         frame = FrameQuat4_14()
         io.BytesIO(chunk).readinto(frame)
 
         decoded_frames.append((frame.w, frame.x, frame.y, frame.z))
+        # Add empty frames to fill gaps between keyframes
         decoded_frames.extend([None] * (frame.duration - 1))
 
     return decoded_frames
+
+
+# LMTQuatized32Quat
+def decode_type_7(data):
+    print("Not Implemented")
 
 
 # LMTVec3Frame_9 T_LINEARKEY = 0x9,
@@ -230,6 +279,31 @@ def decode_type_9(data):
         decoded_frames.extend([None] * (duration - 1))
 
     return decoded_frames
+
+
+# LMTXWQuat
+def decode_type_11(data):
+    print("Not Implemented")
+
+
+# LMTYWQuat
+def decode_type_12(data):
+    print("Not Implemented")
+
+
+# LMTZWQuat
+def decode_type_13(data):
+    print("Not Implemented")
+
+
+# LMTQuatized11Quat
+def decode_type_14(data):
+    print("Not Implemented")
+
+
+# LMTQuatized9Quat
+def decode_type_15(data):
+    print("Not Implemented")
 
 
 def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
