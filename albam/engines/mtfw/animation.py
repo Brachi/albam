@@ -1,6 +1,7 @@
 from ctypes import Structure, c_ulonglong
 import io
 import struct
+import math
 from io import BytesIO
 from albam.vfs import VirtualFileData
 
@@ -20,15 +21,24 @@ ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
 # Usage
-# U_QUATERNION = 0x0, Local rotation
+# U_QUATERNION = 0x0, Local Rotation
 # U_TRANSLATE = 0x1,  Local Position
 # U_SCALE = 0x2, Local Scale
 # U_NULL_QUATERNION = 0x3, Absolute Rotation
 # U_NULL_TRANSLATE = 0x4, Absolute Position
 # U_NULL_SCALE = 0x5, Unknown
+USAGE = {
+    0: "rotation",  # Local rotation
+    1: "position",  # Local Position
+    2: "scale",  # Local Scale
+    3: "rotation",  # Absolute Rotation
+    4: "position",  # Absolute Position
+    5: "scale",  # Unknown
+}
 
 
 @blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="rev1", extension='lmt', file_category="ANIMATION")
 def load_lmt(file_list_item, context):
     app_id = file_list_item.app_id
     lmt_bytes = file_list_item.get_bytes()
@@ -62,6 +72,7 @@ def load_lmt(file_list_item, context):
             item = tracks.tracks.add()
             item.copy_custom_properties_from(track)
             item.raw_data = track.data
+            # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
 
             bone_index = mapping.get(str(track.bone_index))
 
@@ -79,9 +90,13 @@ def load_lmt(file_list_item, context):
             if track.bone_index in HACKY_BONE_INDICES_IK_FOOT:
                 bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
 
+            TRACK_MODE = USAGE[track.usage]
             if track.buffer_type == 6:
                 TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
                 decoded_frames = decode_type_6(track.data)
+            elif track.buffer_type == 4:
+                TRACK_MODE = "rotation_quaternion"
+                decoded_frames = decode_type_4(track.data, app_id)
             elif track.buffer_type == 2:
                 TRACK_MODE = "location"
                 decoded_frames = decode_type_2(track.data)
@@ -93,7 +108,7 @@ def load_lmt(file_list_item, context):
 
             else:
                 # TODO: print statistics of missing tracks
-                # print("Unknown buffer_type, skipping", track.buffer_type)
+                print("Unknown buffer_type, skipping", track.buffer_type)
                 continue
 
             group_name = str(bone_index)
@@ -105,7 +120,7 @@ def load_lmt(file_list_item, context):
                 for c in curves:
                     c.group = group
             except RuntimeError as err:
-                print('unknown error:', err)
+                print('unknown error:', err, "Block index: {0}, Track index:{1}".format(block_index, track_index))
                 continue
             for frame_index, frame_data in enumerate(decoded_frames):
                 if frame_data is None:
@@ -225,16 +240,24 @@ def decode_type_3(data):
 
 
 # LMTQuat3Frame but LMTQuatized16Vec3 for ver55+
-def decode_type_4(data, lmt_ver):
+def decode_type_4(data, app_id):
+    lmt_ver = 51 if app_id == "re5" else 67
+    decoded_frames = []
     if lmt_ver > 55:
         #LMTQuatized16Vec3
         CHUNK_SIZE = 8
-        u = struct.unpack("HHHH", data)
+        for start in range(0, len(data), CHUNK_SIZE):
+            u = struct.unpack("", data)
+            print("Non implemented")
     else:
-       # LMTQuat3Frame
-       CHUNK_SIZE = 12
-       u = struct.unpack("fff", data)
-    print("Non implemented")
+        # LMTQuat3Frame
+        CHUNK_SIZE = 12
+        for start in range(0, len(data), CHUNK_SIZE):
+            chunk = data[start: start + CHUNK_SIZE]
+            u = struct.unpack("fff", chunk)
+            w = math.sqrt(1.0 - u[0]*u[0] - u[1]*u[1] - u[2]*u[2])
+        decoded_frames.append((w, u[0], u[1], u[2]))
+    return decoded_frames
 
 
 # LMTQuadraticVector3 but LMTQuatized8Vec3 for ver55+
