@@ -542,7 +542,6 @@ def _serialize_texture_156(app_id, dict_tex):
         if fmt == "":
             fmt = b"\x15\x00\x00\x00".decode("ascii")
         tex.compression_format = fmt
-
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
