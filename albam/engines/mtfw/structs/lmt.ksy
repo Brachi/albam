@@ -1,5 +1,6 @@
 meta:
   endian: le
+  bit-endian: le
   file-extension: lmt
   id: lmt
   ks-version: 0.10
@@ -54,14 +55,20 @@ types:
       - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
       - {id: filler, type: u4}
       - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: flags, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: attr, type: b16}
+      - {id: kf_num, type: b5}
+      - {id: seq_num, type: b3}
+      - {id: duplicate, type: b3}
+      - {id: reversed, type: b5}
       - {id: ofs_attributes, type: u4}
       - {id: ofs_buffer_2, type: u4} # padding after it
     instances:
       tracks:
         {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
-      block_attributes:
-        {pos: ofs_attributes, type: attributes67}
+      sequence_infos:
+        {pos: ofs_attributes, type: sequence_info, repeat: expr, repeat-expr: seq_num}
+      key_infos:
+        {pos: ofs_buffer_2, type: keyframe_info, repeat: expr, repeat-expr: kf_num}
 
   track51:
     seq:
@@ -113,29 +120,32 @@ types:
       - {id: addin, type: f4, repeat: expr, repeat-expr: 4} # names were took from Crazy's template
       - {id: offset, type: f4, repeat: expr, repeat-expr: 4}
   
-  attributes67:
+  sequence_info:
     seq:
-      - {id: event_id_00, type: u2, repeat: expr, repeat-expr: 32}
-      - {id: unk_num_00, type: u4}
-      - {id: unk_ofs_00, type: u4}
-      - {id: event_id_01, type: u2, repeat: expr, repeat-expr: 32}
-      - {id: unk_num_01, type: u4}
-      - {id: unk_ofs_01, type: u4}
-      - {id: event_id_02, type: u2, repeat: expr, repeat-expr: 32}
-      - {id: unk_num_02, type: u4}
-      - {id: unk_ofs_02, type: u4}
-      - {id: event_id_03, type: u2, repeat: expr, repeat-expr: 32}
-      - {id: unk_num_03, type: u4}
-      - {id: unk_ofs_03, type: u4}
+      - {id: work, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: num_seq, type: u4}
+      - {id: ofs_seq, type: u4}
     instances:
-      attr_00:
-        {pos: unk_ofs_00, type: attr, repeat: expr, repeat-expr: unk_num_00}
-      attr_01:
-        {pos: unk_ofs_01, type: attr, repeat: expr, repeat-expr: unk_num_01}
-      attr_02:
-        {pos: unk_ofs_02, type: attr, repeat: expr, repeat-expr: unk_num_02}
-      attr_03:
-        {pos: unk_ofs_03, type: attr, repeat: expr, repeat-expr: unk_num_03}
+      attributes:
+        {pos: ofs_seq, type: attr, repeat: expr, repeat-expr: num_seq}
+        
+  keyframe_block:
+    seq:
+      - {id: unk_00, type: u4}
+      - {id: unk_01, type: u4}
+      - {id: unk_02, type: u4}
+      - {id: unk_03, type: u4}
+        
+  keyframe_info:
+    seq:
+      - {id: type, type: b8}
+      - {id: work, type: b16}
+      - {id: attr, type: b8}
+      - {id: num_key, type: u4}
+      - {id: ofs_seq, type: u4}
+    instances:
+      keyframe_blocks:
+        {pos: ofs_seq, type: keyframe_block, repeat: expr, repeat-expr: num_key}
       
   event_collision:
     seq:
