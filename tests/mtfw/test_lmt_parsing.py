@@ -20,6 +20,10 @@ def test_lmt(parsed_lmt_from_arc):
     anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
 
     for ab in anim_blocks:
+        if lmt.version == 67:
+            assert ab.seq_num == 4  # as 3 bit value probably constant
+            if ab.kf_num > 0:
+                assert ab.kf_num == 4
         tracks = getattr(ab, "tracks")
         for tr in tracks:
             assert tr.buffer_type in SUPPORTED_BUFFER_TYPES
