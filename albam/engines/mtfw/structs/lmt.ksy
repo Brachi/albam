@@ -60,15 +60,15 @@ types:
       - {id: seq_num, type: b3}
       - {id: duplicate, type: b3}
       - {id: reversed, type: b5}
-      - {id: ofs_attributes, type: u4}
-      - {id: ofs_buffer_2, type: u4} # padding after it
+      - {id: ofs_sequence_infos, type: u4}
+      - {id: ofs_keyframe_infos, type: u4} # padding after it
     instances:
       tracks:
         {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
       sequence_infos:
-        {pos: ofs_attributes, type: sequence_info, repeat: expr, repeat-expr: seq_num}
+        {pos: ofs_sequence_infos, type: sequence_info, repeat: expr, repeat-expr: seq_num}
       key_infos:
-        {pos: ofs_buffer_2, type: keyframe_info, repeat: expr, repeat-expr: kf_num}
+        {pos: ofs_keyframe_infos, type: keyframe_info, repeat: expr, repeat-expr: kf_num}
 
   track51:
     seq:
@@ -103,7 +103,13 @@ types:
     seq:
       - {id: group, type: u4}
       - {id: frame, type: u4}
-      
+  
+  seq_info_attr:
+    seq:
+      - {id: unk_00, type: u2}
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: u4}
+ 
   ofs_frame_bounds:
     seq:
     - {id: ofs_buffer, type: u4}
@@ -127,7 +133,7 @@ types:
       - {id: ofs_seq, type: u4}
     instances:
       attributes:
-        {pos: ofs_seq, type: attr, repeat: expr, repeat-expr: num_seq}
+        {pos: ofs_seq, type: seq_info_attr, repeat: expr, repeat-expr: num_seq} # type is a placeholder for now
         
   keyframe_block:
     seq:

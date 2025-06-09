@@ -7,7 +7,7 @@ from albam.vfs import VirtualFileData
 
 import bpy
 from kaitaistruct import KaitaiStream
-from mathutils import Matrix
+from mathutils import Matrix, Quaternion
 
 from albam.registry import blender_registry
 from .structs.lmt import Lmt
@@ -37,13 +37,39 @@ USAGE = {
 }
 
 
+class LMTKeyframeBounds:
+    def __init__(self, bound):
+        self.addin = bound.addin
+        self.offset = bound.offset
+
+    def lerp3(self, fraction):
+        """fraction: list/tuple/array of 4 floats"""
+        # Returns only x, y, z (as point3)
+        return [
+            self.offset[i] + fraction[i] * self.addin[i]
+            for i in range(3)
+        ]
+
+    def lerpq(self, fraction):
+        """fraction: list/tuple/array of 4 floats"""
+        # Returns quaternion (x, y, z, w)
+        return [
+            self.offset[0] + fraction[0] * self.addin[0],
+            self.offset[1] + fraction[1] * self.addin[1],
+            self.offset[2] + fraction[2] * self.addin[2],
+            self.offset[3] + fraction[3] * self.addin[3],
+        ]
+
+
 @blender_registry.register_import_function(app_id="re5", extension='lmt', file_category="ANIMATION")
 @blender_registry.register_import_function(app_id="rev1", extension='lmt', file_category="ANIMATION")
+@blender_registry.register_import_function(app_id="rev2", extension='lmt', file_category="ANIMATION")
 def load_lmt(file_list_item, context):
     app_id = file_list_item.app_id
     lmt_bytes = file_list_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     lmt._read()
+    lmt_ver = lmt.version
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)
 
@@ -65,14 +91,21 @@ def load_lmt(file_list_item, context):
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
-        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "tracks"]
+        if lmt_ver < 67:
+            tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "tracks"]
         for track_index, track in enumerate(block.block_header.tracks):
-            # Custom attributes for a track
-            item = tracks.tracks.add()
-            item.copy_custom_properties_from(track)
-            item.raw_data = track.data
+            if lmt_ver < 67:
+                # Custom attributes for a track
+                item = tracks.tracks.add()
+                item.copy_custom_properties_from(track)
+                item.raw_data = track.data
             # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
+            if lmt_ver > 51:
+                bounds = None
+                bounds_body = track.ofs_bounds.body
+                if bounds_body:
+                    bounds = LMTKeyframeBounds(track.ofs_bounds.body)
 
             bone_index = mapping.get(str(track.bone_index))
 
@@ -91,25 +124,33 @@ def load_lmt(file_list_item, context):
                 bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
 
             TRACK_MODE = USAGE[track.usage]
-            if track.buffer_type == 6:
-                TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
-                decoded_frames = decode_type_6(track.data)
-            elif track.buffer_type == 4:
-                TRACK_MODE = "rotation_quaternion"
-                decoded_frames = decode_type_4(track.data, app_id)
-            elif track.buffer_type == 2:
-                TRACK_MODE = "location"
-                decoded_frames = decode_type_2(track.data)
-                decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
-            elif track.buffer_type == 9:
-                TRACK_MODE = "location"
-                decoded_frames = decode_type_9(track.data)
-                decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
+            if track.len_data > 0:
+                if track.buffer_type == 6:
+                    # TRACK_MODE = "rotation_quaternion"  # TODO: improve naming
+                    decoded_frames = decode_type_6(track.data)
+                elif track.buffer_type == 4:
+                    # TRACK_MODE = "rotation_quaternion"
+                    decoded_frames = decode_type_4(track.data, lmt_ver, bounds)
+                elif track.buffer_type == 2:
+                    # TRACK_MODE = "location"
+                    decoded_frames = decode_type_2(track.data)
+                    # decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
+                elif track.buffer_type == 9:
+                    # TRACK_MODE = "location"
+                    decoded_frames = decode_type_9(track.data)
+                    # decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
 
+                else:
+                    # TODO: print statistics of missing tracks
+                    print("Unknown buffer_type, skipping", track.buffer_type)
+                    continue
             else:
-                # TODO: print statistics of missing tracks
-                print("Unknown buffer_type, skipping", track.buffer_type)
                 continue
+                ref_data = track.reference_data
+                decoded_frames = [ref_data]
+
+            if track.usage > 2:
+                decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
 
             group_name = str(bone_index)
             group = action.groups.get(group_name) or action.groups.new(group_name)
@@ -129,25 +170,41 @@ def load_lmt(file_list_item, context):
                     curve.keyframe_points.add(1)
                     curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])
                     curve.keyframe_points[-1].interpolation = 'LINEAR'
-
-        col_events = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "col_events"]
-        col_events.copy_custom_properties_from(block.block_header.collision_events)
-        for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
-            item = col_events.attributes.add()
-            item.copy_custom_properties_from(attribute)
-
-        motion_se = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "motion_se"]
-        motion_se.copy_custom_properties_from(block.block_header.motion_sound_effects)
-        for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
-            item = motion_se.attributes.add()
-            item.copy_custom_properties_from(attribute)
-
         custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
+        if lmt_ver < 67:
+            col_events = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "col_events"]
+            col_events.copy_custom_properties_from(block.block_header.collision_events)
+            for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
+                item = col_events.attributes.add()
+                item.copy_custom_properties_from(attribute)
+
+            motion_se = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "motion_se"]
+            motion_se.copy_custom_properties_from(block.block_header.motion_sound_effects)
+            for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
+                item = motion_se.attributes.add()
+                item.copy_custom_properties_from(attribute)
+        else:
+            seq_infos = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "sequence_infos"]
+            # seq_info.copy_custom_properties_from(block.block_header.sequence_infos)
+            for s_index, s_info in enumerate(block.block_header.sequence_infos):
+                item = seq_infos.sequence_info.add()
+                item.copy_custom_properties_from(s_info)
+                for attr_index, s_attr in enumerate(s_info.attributes):
+                    a_item = item.attributes.add()
+                    a_item.copy_custom_properties_from(s_attr)
+
+            keyframe_infos = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "keyframe_infos"]
+            if len(block.block_header.key_infos) > 0:
+                for k_index, k_info in enumerate(block.block_header.key_infos):
+                    item = keyframe_infos.keyframe_info.add()
+                    item.copy_custom_properties_from(k_info)
 
     bl_object.albam_asset.original_bytes = lmt_bytes
     bl_object.albam_asset.app_id = app_id
@@ -172,6 +229,58 @@ def _create_bone_mapping(armature_obj):
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
         bone_names[reference_bone_id] = mapped_bone.name
     return bone_names
+
+
+class LMTUniKey:
+    def __init__(self):
+        self.value = [0.0, 0.0, 0.0]
+        self.intangenttype = "custom"
+        self.outtangenttype = "custom"
+        self.intangent = [0.0, 0.0, 0.0]
+        self.outtangent = [0.0, 0.0, 0.0]
+
+
+class LMTQuadraticVector3:
+    def __init__(self, chunk):
+        self.frame = LMTUniKey()
+        self.relframe = 0
+        self.nextframeintangent = [0.0, 0.0, 0.0]
+        self.size = 0
+
+        # Reading of the data
+        addcount = int.from_bytes(chunk.read(1), "little")
+        flags = int.from_bytes(chunk.read(1), "little")
+
+        self.relframe = struct.unpack("<H", chunk.read(2))[0]
+        self.frame.value = list(struct.unpack("<3f", chunk.read(12)))
+        float_fmt = "<f"
+
+        # Default tangents = 0
+        self.frame.outtangent = [0.0, 0.0, 0.0]
+        self.nextframeintangent = [0.0, 0.0, 0.0]
+
+        # Read flags
+        for b in range(1, 9):
+            if flags & (1 << (b - 1)):
+                if b == 1:
+                    self.frame.outtangent[0] = struct.unpack(float_fmt, chunk.read(4))[0]
+                elif b == 2:
+                    self.frame.outtangent[1] = struct.unpack(float_fmt, chunk.read(4))[0]
+                elif b == 3:
+                    self.frame.outtangent[2] = struct.unpack(float_fmt, chunk.read(4))[0]
+                elif b == 4:
+                    self.nextframeintangent[0] = struct.unpack(float_fmt, chunk.read(4))[0]
+                elif b == 5:
+                    self.nextframeintangent[1] = struct.unpack(float_fmt, chunk.read(4))[0]
+                elif b == 6:
+                    self.nextframeintangent[2] = struct.unpack(float_fmt, chunk.read(4))[0]
+                # b==7,8 not used
+
+        # Scale tangents
+        if self.relframe != 0:
+            self.frame.outtangent = [x * (0.19 / self.relframe) for x in self.frame.outtangent]
+            self.nextframeintangent = [x * (-0.19 / self.relframe) for x in self.nextframeintangent]
+        self.size = addcount
 
 
 class FrameQuat4_14(Structure):
@@ -208,6 +317,12 @@ class FrameQuat4_14(Structure):
         return self._clip_and_divide(self._z)
 
 
+class LMTQuatized32Quat(Structure):
+    def __init__(self, ivalue):
+        self.bitmask = 0x7f
+        self.ivalue = ivalue
+
+
 # LMTVec3 Single Vector
 def decode_type_1(data):
     decoded_framers = []
@@ -217,15 +332,16 @@ def decode_type_1(data):
 
 
 # LMTVec3Frame12 T_VECTOR3_CONST = 0x2,
-def decode_type_2(data):
+def decode_type_2(data, bound):
     decoded_frames = []
     CHUNK_SIZE = 12
 
     for start in range(0, len(data), CHUNK_SIZE):
         chunk = data[start: start + CHUNK_SIZE]
         u = struct.unpack("fff", chunk)
-        floats = (u[0] / 100, u[1] / 100, u[2] / 100)
-        decoded_frames.append(floats)
+        frame = (u[0] / 100, u[1] / 100, u[2] / 100)
+        frame = bound.lerp3(frame)
+        decoded_frames.append(frame)
     return decoded_frames
 
 
@@ -236,19 +352,26 @@ def decode_type_3(data):
     for start in range(0, len(data), CHUNK_SIZE):
         chunk = data[start: start + CHUNK_SIZE]
         u = struct.unpack("fffI", chunk)
-    print("Not implemented")
+        decoded_frames.append(u[0] / 100, u[1] / 100, u[2] / 100)
+        duration = u[3]
+        decoded_frames.extend([None] * (duration - 1))
+    return decoded_frames
 
 
 # LMTQuat3Frame but LMTQuatized16Vec3 for ver55+
-def decode_type_4(data, app_id):
-    lmt_ver = 51 if app_id == "re5" else 67
+def decode_type_4(data, lmt_ver, bounds=None):
     decoded_frames = []
     if lmt_ver > 55:
-        #LMTQuatized16Vec3
+        # LMTQuatized16Vec3
         CHUNK_SIZE = 8
         for start in range(0, len(data), CHUNK_SIZE):
-            u = struct.unpack("", data)
-            print("Non implemented")
+            chunk = data[start: start + CHUNK_SIZE]
+            u = struct.unpack("HHHH", chunk)
+            frame = (u[0] / 100, u[1] / 100, u[2] / 100)
+            frame = bounds.lerp3(frame)
+            decoded_frames.append(frame)
+            duration = u[3]
+            decoded_frames.extend([None] * (duration - 1))
     else:
         # LMTQuat3Frame
         CHUNK_SIZE = 12
@@ -261,8 +384,19 @@ def decode_type_4(data, app_id):
 
 
 # LMTQuadraticVector3 but LMTQuatized8Vec3 for ver55+
-def decode_type_5(data, app_id):
-    print("Non implemented")
+def decode_type_5(data, lmt_ver, bounds=None):
+    decoded_frames = []
+    if lmt_ver > 55:
+        CHUNK_SIZE = 4
+        for start in range(0, len(data), CHUNK_SIZE):
+            chunk = data[start: start + CHUNK_SIZE]
+            u = struct.unpack("BBBB", chunk)
+            frame = (u[0] / 100, u[1] / 100, u[2] / 100)
+            frame = bounds.lerp3(frame)
+            decoded_frames.append(frame)
+            duration = u[3]
+            decoded_frames.extend([None] * (duration - 1))
+    return decoded_frames
 
 
 # LMTQuatFramev14 T_POLAR3KEY = 0x6, Spherical Rotation
@@ -416,6 +550,23 @@ def _parent_space_to_local(decoded_frames, armature, bone_index):
     return local_space_frames
 
 
+def _parent_space_to_local_rotation(decoded_frames, armature, bone_index):
+    local_space_frame = []
+    for frame in decoded_frames:
+        if frame is None:
+            local_space_frame.append(None)
+            continue
+        bone = armature.data.bones[bone_index]
+        parent_matrix = bone.parent.matrix_local if bone.parent else Matrix.Identity(4)
+        bone_matrix = bone.matrix_local
+
+        parent_rot = parent_matrix.to_quaternion()
+        bone_rot = Quaternion(frame)  # frame (w, x, y, z)
+        local_rot = parent_rot.inverted() @ bone_rot
+        local_space_frame.append(local_rot)
+    return local_space_frame
+
+
 def filter_armatures(self, obj):
     # TODO: filter by custom properties that indicate is
     # a RE5 compatible armature
@@ -521,7 +672,7 @@ def _calculate_offsets(bl_objects, app_id):
             motion_se_attr_offsets.append(cur_frame_offset + tracks_headers_sizes[i] + tracks_data_sizes[i]
                                           + collision_attr_sizes[i])
 
-            # Offset для кожного raw_data в треках
+            # Offset for raw data
             data_offsets = []
             temp_size = 0
             for t_size in tracks_raw_data_sizes[i]:
@@ -674,6 +825,28 @@ class LMT51AnimationCustomProperties(CustomPropsBase):
     )
 
 
+@blender_registry.register_custom_properties_animation("lmt_67_anim", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_blender_prop
+class LMT67AnimationCustomProperties(CustomPropsBase):
+    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())
+    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())
+    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())
+    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())
+    init_position: bpy.props.FloatVectorProperty(
+        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())
+    init_quaterion: bpy.props.FloatVectorProperty(
+        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+    attr: bpy.props.IntProperty(name="Attr", default=0, options=set())
+    kf_num: bpy.props.IntProperty(name="Keyframe Number", default=0, options=set())
+    seq_num: bpy.props.IntProperty(name="Sequence Number", default=0, options=set())
+    duplicate: bpy.props.IntProperty(name="Duplicate", default=0, options=set())
+    reserved: bpy.props.IntProperty(name="Reserved", default=0, options=set())
+    action: bpy.props.PointerProperty(
+        name="Stored Action",
+        type=bpy.types.Action
+    )
+
+
 @blender_registry.register_blender_prop
 class LMT51Attribute(CustomPropsBase):
     group: bpy.props.IntProperty(name="Group", default=0, options=set())
@@ -725,7 +898,136 @@ class MotionSECustomProperties(CustomPropsBase):
 
 
 @blender_registry.register_blender_prop
+class SeqInfoAttribute(CustomPropsBase):
+    unk_00: bpy.props.IntProperty(name="Unk 00", default=0, options=set())
+    unk_01: bpy.props.IntProperty(name="Unk 01", default=0, options=set())
+    unk_02: bpy.props.IntProperty(name="Unk 02", default=0, options=set())
+
+
+@blender_registry.register_blender_prop
+class SeqInfo(CustomPropsBase):
+    work: bpy.props.IntVectorProperty(
+        name="Work",
+        size=32,
+        default=[0] * 32,
+    )
+    attributes: bpy.props.CollectionProperty(
+        type=SeqInfoAttribute,
+        name="Attributes"
+    )
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
+
+
+@blender_registry.register_custom_properties_animation(
+    "sequence_infos",
+    ("re0", "re1", "rev1", "rev2", "re6",), is_secondary=True, display_name="Sequence Infos")
+@blender_registry.register_blender_prop
+class SequenceInfoProperties(CustomPropsBase):
+    sequence_info: bpy.props.CollectionProperty(
+        type=SeqInfo,
+        name="Sequence Info"
+    )
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
+
+
+@blender_registry.register_blender_prop
+class KeyBlock(CustomPropsBase):
+    unk_00: bpy.props.IntProperty(
+        name="Unk 00",
+        default=0
+    )
+    unk_01: bpy.props.IntProperty(
+        name="Unk 01",
+        default=0
+    )
+    unk_02: bpy.props.IntProperty(
+        name="Unk 02",
+        default=0
+    )
+    unk_03: bpy.props.IntProperty(
+        name="Unk 03",
+        default=0
+    )
+
+
+@blender_registry.register_blender_prop
+class KeyInfo(CustomPropsBase):
+    type: bpy.props.IntProperty(
+        name="Type", default=0, options=set())
+    work: bpy.props.IntProperty(
+        name="Work", default=0, options=set())
+    attr: bpy.props.CollectionProperty(
+        type=KeyBlock
+    )
+
+
+@blender_registry.register_custom_properties_animation(
+    "keyframe_infos",
+    ("re0", "re1", "rev1", "rev2", "re6",), is_secondary=True, display_name="Keyframe Infos")
+@blender_registry.register_blender_prop
+class KeyframeInfoProperties(CustomPropsBase):
+    keyframe_info: bpy.props.CollectionProperty(
+        type=KeyInfo,
+        name="Sequence Info"
+    )
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
+
+
+@blender_registry.register_blender_prop
 class LMT51Track(CustomPropsBase):
+    buffer_type: bpy.props.IntProperty(
+        name="Buffer Type",
+        default=0,
+        options=set(),
+        description="Type of buffer used for this track")
+    usage: bpy.props.IntProperty(
+        name="Usage",
+        default=0,
+        options=set(),
+        description="Track type")
+    joint_type: bpy.props.IntProperty(
+        name="Joint Type",
+        default=0,
+        options=set())
+    bone_index: bpy.props.IntProperty(
+        name="Bone Index",
+        default=0,
+        options=set(),
+        description="Animation index of the bone in the armature")
+    weight: bpy.props.FloatProperty(
+        name="Weight",
+        default=1.0,
+        options=set(),
+        description="Weight of the track, used for blending")
+    reference_data: bpy.props.FloatVectorProperty(
+        name="Reference Data",
+        size=4,
+        default=(0.0, 0.0, 0.0, 1.0),
+        options=set(),
+        description="Reference data for the track, used for blending"
+    )
+    raw_data: bpy.props.StringProperty(
+        name="Raw Data",
+        description="Raw binary data for this track",
+        subtype='BYTE_STRING'
+    )
+
+
+
+@blender_registry.register_blender_prop
+class LMT67Track(CustomPropsBase):
     buffer_type: bpy.props.IntProperty(
         name="Buffer Type",
         default=0,
@@ -769,6 +1071,23 @@ class LMT51Track(CustomPropsBase):
     ("re5",), is_secondary=True, display_name="Animation Tracks")
 @blender_registry.register_blender_prop
 class AnimTrackCustomProperties(CustomPropsBase):
+    tracks: bpy.props.CollectionProperty(
+        type=LMT51Track,
+        name="Tracks",
+        description="Animation tracks for the LMT file"
+    )
+    item_index: bpy.props.IntProperty(
+        name="Item Index",
+        description="Allows to select an item from the collection",
+        default=0
+    )
+
+
+@blender_registry.register_custom_properties_animation(
+    "tracks",
+    ("re5",), is_secondary=True, display_name="Animation Tracks")
+@blender_registry.register_blender_prop
+class AnimTrack67CustomProperties(CustomPropsBase):
     tracks: bpy.props.CollectionProperty(
         type=LMT51Track,
         name="Tracks",

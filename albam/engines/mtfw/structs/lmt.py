@@ -270,6 +270,33 @@ class Lmt(ReadWriteKaitaiStruct):
 
 
 
+    class SeqInfoAttr(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.unk_00 = self._io.read_u2le()
+            self.unk_01 = self._io.read_u2le()
+            self.unk_02 = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Lmt.SeqInfoAttr, self)._write__seq(io)
+            self._io.write_u2le(self.unk_00)
+            self._io.write_u2le(self.unk_01)
+            self._io.write_u4le(self.unk_02)
+
+
+        def _check(self):
+            pass
+
+
     class OfsFrameBounds(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             self._io = _io
@@ -978,7 +1005,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.seek(self.ofs_seq)
             self._m_attributes = []
             for i in range(self.num_seq):
-                _t__m_attributes = Lmt.Attr(self._io, self, self._root)
+                _t__m_attributes = Lmt.SeqInfoAttr(self._io, self, self._root)
                 _t__m_attributes._read()
                 self._m_attributes.append(_t__m_attributes)
 
@@ -1137,8 +1164,8 @@ class Lmt(ReadWriteKaitaiStruct):
             self.seq_num = self._io.read_bits_int_le(3)
             self.duplicate = self._io.read_bits_int_le(3)
             self.reversed = self._io.read_bits_int_le(5)
-            self.ofs_attributes = self._io.read_u4le()
-            self.ofs_buffer_2 = self._io.read_u4le()
+            self.ofs_sequence_infos = self._io.read_u4le()
+            self.ofs_keyframe_infos = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -1189,8 +1216,8 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(3, self.seq_num)
             self._io.write_bits_int_le(3, self.duplicate)
             self._io.write_bits_int_le(5, self.reversed)
-            self._io.write_u4le(self.ofs_attributes)
-            self._io.write_u4le(self.ofs_buffer_2)
+            self._io.write_u4le(self.ofs_sequence_infos)
+            self._io.write_u4le(self.ofs_keyframe_infos)
 
 
         def _check(self):
@@ -1259,7 +1286,7 @@ class Lmt(ReadWriteKaitaiStruct):
                 return self._m_sequence_infos
 
             _pos = self._io.pos()
-            self._io.seek(self.ofs_attributes)
+            self._io.seek(self.ofs_sequence_infos)
             self._m_sequence_infos = []
             for i in range(self.seq_num):
                 _t__m_sequence_infos = Lmt.SequenceInfo(self._io, self, self._root)
@@ -1276,7 +1303,7 @@ class Lmt(ReadWriteKaitaiStruct):
         def _write_sequence_infos(self):
             self._should_write_sequence_infos = False
             _pos = self._io.pos()
-            self._io.seek(self.ofs_attributes)
+            self._io.seek(self.ofs_sequence_infos)
             for i in range(len(self._m_sequence_infos)):
                 pass
                 self.sequence_infos[i]._write__seq(self._io)
@@ -1304,7 +1331,7 @@ class Lmt(ReadWriteKaitaiStruct):
                 return self._m_key_infos
 
             _pos = self._io.pos()
-            self._io.seek(self.ofs_buffer_2)
+            self._io.seek(self.ofs_keyframe_infos)
             self._m_key_infos = []
             for i in range(self.kf_num):
                 _t__m_key_infos = Lmt.KeyframeInfo(self._io, self, self._root)
@@ -1321,7 +1348,7 @@ class Lmt(ReadWriteKaitaiStruct):
         def _write_key_infos(self):
             self._should_write_key_infos = False
             _pos = self._io.pos()
-            self._io.seek(self.ofs_buffer_2)
+            self._io.seek(self.ofs_keyframe_infos)
             for i in range(len(self._m_key_infos)):
                 pass
                 self.key_infos[i]._write__seq(self._io)
