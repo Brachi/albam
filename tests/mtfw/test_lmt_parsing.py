@@ -41,21 +41,30 @@ def test_lmt(parsed_lmt_from_arc):
                     assert tr.usage in ROTATION  # RE5
                 else:
                     assert tr.usage in SCALE or tr.usage in LOCATION
+                    assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 5:
                 assert tr.usage in SCALE or tr.usage in LOCATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 6:
                 assert tr.usage in ROTATION
             elif tr.buffer_type == 7:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 9:
                 assert tr.usage in SCALE or tr.usage in LOCATION
             elif tr.buffer_type == 11:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 12:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 13:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 14:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
             elif tr.buffer_type == 15:
                 assert tr.usage in ROTATION
+                assert tr.ofs_bounds.ofs_buffer != 0
+
