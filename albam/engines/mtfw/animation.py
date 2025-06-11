@@ -103,6 +103,8 @@ def load_lmt(file_list_item, context):
                 bounds = None
                 bounds_body = track.ofs_bounds.body
                 if bounds_body:
+                    b_item = item.bounds.add()
+                    b_item.copy_custom_properties_from(track.ofs_bounds.body)
                     bounds = LMTKeyframeBounds(track.ofs_bounds.body)
 
             bone_index = mapping.get(str(track.bone_index))
@@ -1030,6 +1032,21 @@ class LMT51Track(CustomPropsBase):
     )
 
 
+@blender_registry.register_blender_prop
+class FrameBounds(CustomPropsBase):
+    addin: bpy.props.FloatVectorProperty(
+        name="AddIn",
+        size=4,
+        default=(0.0, 0.0, 0.0, 0.0),
+        options=set(),
+    )
+    offset: bpy.props.FloatVectorProperty(
+        name="Offset",
+        size=4,
+        default=(0.0, 0.0, 0.0, 0.0),
+        options=set(),
+    )
+
 
 @blender_registry.register_blender_prop
 class LMT67Track(CustomPropsBase):
@@ -1071,6 +1088,50 @@ class LMT67Track(CustomPropsBase):
     )
 
 
+@blender_registry.register_blender_prop
+class LMT67Track(CustomPropsBase):
+    buffer_type: bpy.props.IntProperty(
+        name="Buffer Type",
+        default=0,
+        options=set(),
+        description="Type of buffer used for this track")
+    usage: bpy.props.IntProperty(
+        name="Usage",
+        default=0,
+        options=set(),
+        description="Track type")
+    joint_type: bpy.props.IntProperty(
+        name="Joint Type",
+        default=0,
+        options=set())
+    bone_index: bpy.props.IntProperty(
+        name="Bone Index",
+        default=0,
+        options=set(),
+        description="Animation index of the bone in the armature")
+    weight: bpy.props.FloatProperty(
+        name="Weight",
+        default=1.0,
+        options=set(),
+        description="Weight of the track, used for blending")
+    reference_data: bpy.props.FloatVectorProperty(
+        name="Reference Data",
+        size=4,
+        default=(0.0, 0.0, 0.0, 1.0),
+        options=set(),
+        description="Reference data for the track, used for blending"
+    )
+    raw_data: bpy.props.StringProperty(
+        name="Raw Data",
+        description="Raw binary data for this track",
+        subtype='BYTE_STRING'
+    )
+    bounds: bpy.props.CollectionProperty(
+        type=FrameBounds,
+        name="Frame Bounds",
+    )
+
+
 @blender_registry.register_custom_properties_animation(
     "tracks",
     ("re5",), is_secondary=True, display_name="Animation Tracks")
@@ -1094,7 +1155,7 @@ class AnimTrackCustomProperties(CustomPropsBase):
 @blender_registry.register_blender_prop
 class AnimTrack67CustomProperties(CustomPropsBase):
     tracks: bpy.props.CollectionProperty(
-        type=LMT51Track,
+        type=LMT67Track,
         name="Tracks",
         description="Animation tracks for the LMT file"
     )
