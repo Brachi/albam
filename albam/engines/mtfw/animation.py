@@ -91,15 +91,13 @@ def load_lmt(file_list_item, context):
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
-        if lmt_ver < 67:
-            tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
                 "tracks"]
         for track_index, track in enumerate(block.block_header.tracks):
-            if lmt_ver < 67:
-                # Custom attributes for a track
-                item = tracks.tracks.add()
-                item.copy_custom_properties_from(track)
-                item.raw_data = track.data
+            # Custom attributes for a track
+            item = tracks.tracks.add()
+            item.copy_custom_properties_from(track)
+            item.raw_data = track.data
             # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
             if lmt_ver > 51:
                 bounds = None
@@ -205,6 +203,9 @@ def load_lmt(file_list_item, context):
                 for k_index, k_info in enumerate(block.block_header.key_infos):
                     item = keyframe_infos.keyframe_info.add()
                     item.copy_custom_properties_from(k_info)
+                    for kb_index, k_block in enumerate(k_info.keyframe_blocks):
+                        k_item = item.attr.add()
+                        k_item.copy_custom_properties_from(k_block)
 
     bl_object.albam_asset.original_bytes = lmt_bytes
     bl_object.albam_asset.app_id = app_id
@@ -948,12 +949,16 @@ class KeyBlock(CustomPropsBase):
         name="Unk 01",
         default=0
     )
-    unk_02: bpy.props.IntProperty(
+    unk_02: bpy.props.FloatProperty(
         name="Unk 02",
         default=0
     )
-    unk_03: bpy.props.IntProperty(
+    unk_03: bpy.props.FloatProperty(
         name="Unk 03",
+        default=0
+    )
+    unk_04: bpy.props.FloatProperty(
+        name="Unk 04",
         default=0
     )
 
@@ -1085,7 +1090,7 @@ class AnimTrackCustomProperties(CustomPropsBase):
 
 @blender_registry.register_custom_properties_animation(
     "tracks",
-    ("re5",), is_secondary=True, display_name="Animation Tracks")
+    ("re0", "re1", "rev1", "rev2", "re6",), is_secondary=True, display_name="Animation Tracks")
 @blender_registry.register_blender_prop
 class AnimTrack67CustomProperties(CustomPropsBase):
     tracks: bpy.props.CollectionProperty(
