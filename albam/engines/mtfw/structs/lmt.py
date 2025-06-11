@@ -387,10 +387,11 @@ class Lmt(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unk_00 = self._io.read_u4le()
-            self.unk_01 = self._io.read_u4le()
-            self.unk_02 = self._io.read_u4le()
-            self.unk_03 = self._io.read_u4le()
+            self.unk_00 = self._io.read_u2le()
+            self.unk_01 = self._io.read_u2le()
+            self.unk_02 = self._io.read_f4le()
+            self.unk_03 = self._io.read_f4le()
+            self.unk_04 = self._io.read_f4le()
 
 
         def _fetch_instances(self):
@@ -399,10 +400,11 @@ class Lmt(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Lmt.KeyframeBlock, self)._write__seq(io)
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.unk_01)
-            self._io.write_u4le(self.unk_02)
-            self._io.write_u4le(self.unk_03)
+            self._io.write_u2le(self.unk_00)
+            self._io.write_u2le(self.unk_01)
+            self._io.write_f4le(self.unk_02)
+            self._io.write_f4le(self.unk_03)
+            self._io.write_f4le(self.unk_04)
 
 
         def _check(self):

@@ -137,10 +137,11 @@ types:
         
   keyframe_block:
     seq:
-      - {id: unk_00, type: u4}
-      - {id: unk_01, type: u4}
-      - {id: unk_02, type: u4}
-      - {id: unk_03, type: u4}
+      - {id: unk_00, type: u2}
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: f4}
+      - {id: unk_03, type: f4}
+      - {id: unk_04, type: f4}
         
   keyframe_info:
     seq:
