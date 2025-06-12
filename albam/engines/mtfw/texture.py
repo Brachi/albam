@@ -268,7 +268,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             bl_image.generated_type = 'UV_GRID'
             bl_image.albam_asset.app_id = app_id
             bl_image.albam_asset.relative_path = texture_path + ".rtex"
-            bl_image.albam_asset.render_target = True
+            #bl_image.albam_asset.render_target = True
             bl_image.albam_asset.extension = "rtex"
         else:
             bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
@@ -510,7 +510,9 @@ def serialize_textures(app_id, bl_materials):
 
 def _serialize_texture_156(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    is_rtex = bl_im.albam_asset.render_target
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    # is_rtex = bl_im.albam_asset.render_target
+    is_rtex = custom_properties.render_target
 
     if is_rtex:
         tex = Rtex112()
@@ -548,7 +550,6 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.dds_data = dds_header.data
         dds_data_len = len(tex.dds_data)
 
-    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_properties.set_to_dest(tex)
 
     tex._check()
@@ -709,8 +710,49 @@ def _calculate_cube_faces_data(tex):
 @blender_registry.register_custom_properties_image("tex_112", ("re5", ))
 @blender_registry.register_blender_prop
 class Tex112CustomProperties(bpy.types.PropertyGroup):
-    unk_02: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_03: bpy.props.IntProperty(default=0)  # TODO u1
+    texture_type: bpy.props.EnumProperty(
+        name="Texture Type",
+        items=[
+            ("0x0", "Undefined", "", 1),
+            ("0x1", "1D", "", 2),
+            ("0x2", "2D", "", 3),
+            ("0x3", "2D Cube", "", 4),
+            ("0x4", "3D", "", 5),
+        ],
+        options=set()
+    )
+    encoded_type: bpy.props.EnumProperty(
+        name="Encode Type",
+        items=[
+            ("0x0", "None", "", 1),
+            ("0x1", "RGBI", "", 2),
+            ("0x2", "RGBY", "", 3),
+            ("0x3", "RGBN", "", 4),
+            ("0x4", "Pal8", "", 5),
+        ],
+        options=set()
+    )
+    attr: bpy.props.EnumProperty(
+        name="Attribute",
+        items=[
+            ("0x0", "FillMargin", "", 1),
+            ("0x1", "Grayscale", "", 2),
+            ("0x2", "Nuki", "", 3),
+            ("0x3", "Dither", "", 4),
+            ("0x4", "RGBI Encoded", "", 5),
+        ],
+        options=set()
+    )
+    depend_screen: bpy.props.BoolProperty(
+        name="Depend on Screen",
+        description="Does this texture depend on screen resolution?",
+        default=False,
+    )
+    render_target: bpy.props.BoolProperty(
+        name="Render Target",
+        description="Is this texture a render target?",
+        default=False,
+    )
     red: bpy.props.FloatProperty(default=0.7)
     green: bpy.props.FloatProperty(default=0.7)
     blue: bpy.props.FloatProperty(default=0.7)
@@ -730,23 +772,72 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
     def copy_attr(src, dst, name):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
-        setattr(dst, name, src_value)
+        try:
+            setattr(dst, name, src_value)
+        except TypeError:
+            setattr(dst, name, hex(src_value))
 
 
 @blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
-    compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
-    unk_type: bpy.props.EnumProperty(
-        name="Unknown Type",
+    unk: bpy.props.IntProperty(
+        name="Unknown",
+        default=0,
+        description="Unknown property, usually 0"
+    )
+    version: bpy.props.EnumProperty(
+        name="Tex format version",
         items=[
-            ("0x209d", "0x209d", "", 1),
-            ("0x9a", "0x9a", "", 2),
-            ("0xa09d", "0xa09d", "", 3),
-            ("0x9e", "0x9e", "", 4),
-            ("0x99", "0x99", "", 5),
+            ("0x99", "153", "", 1),
+            ("0x9a", "154", "", 2),
+            ("0x9d", "157", "", 3),
+            ("0x9e", "158", "", 4),
         ],
         options=set()
+    )
+    attr: bpy.props.EnumProperty(
+        name="Attribute",
+        items=[
+            ("0x0", "FillMargin", "", 1),
+            ("0x2", "Grayscale", "", 2),
+            ("0x4", "Nuki", "", 3),
+            ("0x8", "Dither", "", 4),
+            ("0x10", "Linear", "", 5),
+            ("0x20", "Special", "", 5),
+        ],
+        options=set()
+    )
+    prebias: bpy.props.IntProperty(name="Prebias", default=0)
+    type: bpy.props.EnumProperty(
+        name="Texture Type",
+        items=[
+            ("0x0", "Undefined", "", 1),
+            ("0x1", "1D", "", 2),
+            ("0x2", "2D", "", 3),
+            ("0x3", "3D", "", 4),
+            ("0x4", "1D Array", "", 5),
+            ("0x5", "2D Array", "", 6),
+            ("0x6", "Cube", "", 7),
+            ("0x7", "Cube Array", "", 8),
+            ("0x8", "2D Multisample", "", 9),
+            ("0x9", "2D Multisample Array", "", 10),
+        ],
+        options=set()
+    )
+    format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
+    auto_resize: bpy.props.BoolProperty(
+        name="Auto Resize",
+        default=False,
+    )
+    render_target: bpy.props.BoolProperty(
+        name="Render Target",
+        description="Is this texture a render target?",
+        default=False,
+    )
+    use_vtf: bpy.props.BoolProperty(
+        name="Use VTF",
+        default=False,
     )
 
     # XXX copy paste in mesh, material
@@ -787,8 +878,8 @@ def check_dds_textures(func):
         images = get_bl_teximage_nodes(materials)
         non_dds = []
         for bl_im_name, bl_im_dict in images.items():
-            if bl_im_dict["image"].albam_asset.render_target is True:
-                continue
+            #if bl_im_dict["image"].albam_asset.render_target is True:
+            #    continue
             if not is_blimage_dds(bl_im_dict["image"]):
                 non_dds.append((bl_im_name, bl_im_dict))
         if any(non_dds):
