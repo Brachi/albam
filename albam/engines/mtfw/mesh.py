@@ -1312,7 +1312,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     elif dst_mod.header.version in (210, 211, 212):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
-            stored_vertex_format = int(custom_properties.get("vertex_format"))
+            stored_vertex_format = int(getattr(custom_properties, "vertex_format"), 16)
         except (TypeError, ValueError):
             stored_vertex_format = None
         default_vertex_format = DEFAULT_VERTEX_FORMAT_SKIN if has_bones else DEFAULT_VERTEX_FORMAT_NONSKIN
