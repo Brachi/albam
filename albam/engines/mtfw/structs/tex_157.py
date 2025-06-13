@@ -200,4 +200,14 @@ class Tex157(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    @property
+    def size_before_data_(self):
+        if hasattr(self, '_m_size_before_data_'):
+            return self._m_size_before_data_
+
+        self._m_size_before_data_ = ((16 + ((4 * self.num_mipmaps_per_image) * self.num_images)) if (self.num_images == 1) else ((16 + ((4 * self.num_mipmaps_per_image) * self.num_images)) + (36 * 3)))
+        return getattr(self, '_m_size_before_data_', None)
+
+    def _invalidate_size_before_data_(self):
+        del self._m_size_before_data_
 

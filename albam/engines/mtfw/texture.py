@@ -456,7 +456,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
 
     elif texture_code == 14:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend 2 BM"])
-        blender_texture_node.location = (-700, 350)
+        blender_texture_node.location = (-900, 350)
 
     elif texture_code == 10:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Vertex Displacement"])
@@ -531,15 +531,15 @@ def _serialize_texture_156(app_id, dict_tex):
         tex = Tex112()
         tex.id_magic = b"TEX\x00"
         tex.version = 112
-        revision = 34
-        if dds_header.image_count > 1:
-            revision = 3
-        tex.revision = revision
+        #revision = 34
+        #if dds_header.image_count > 1:
+        #    revision = 3
+        #tex.revision = revision
         tex.num_mipmaps_per_image = dds_header.dwMipMapCount
         tex.num_images = dds_header.image_count
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-        tex.reserved = 0
+        tex.padding = 0
         fmt = dds_header.pixelfmt_dwFourCC.decode()
         if fmt == "":
             fmt = b"\x15\x00\x00\x00".decode("ascii")
@@ -557,16 +557,16 @@ def _serialize_texture_156(app_id, dict_tex):
     final_size = tex.size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
-    relative_path = _handle_relative_path(bl_im)
+    relative_path = _handle_relative_path(bl_im, custom_properties.render_target)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 
 def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    is_rtex = bl_im.albam_asset.render_target
-
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    is_rtex = custom_properties.render_target
+
     compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
@@ -583,49 +583,51 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_header = DDSHeader.from_bl_image(bl_im)
         tex = Tex157()
         tex.id_magic = b"TEX\x00"
-        tex_type = int(custom_properties.unk_type, 16)
-        reserved_01 = 0
-        shift = 0
-        constant = 1  # XXX Not really, see tests
-        reserved_02 = 0
-        dimension = 2 if not dds_header.is_proper_cubemap else 6
+        #tex_type = int(custom_properties.unk_type, 16)
+        #reserved_01 = 0
+        #shift = 0
+        #constant = 1  # XXX Not really, see tests
+        #reserved_02 = 0
+        #dimension = 2 if not dds_header.is_proper_cubemap else 6
 
-    packed_data_1 = (
-        (tex_type & 0xffff) |
-        ((reserved_01 & 0x00ff) << 16) |
-        ((shift & 0x000f) << 24) |
-        ((dimension & 0x000f) << 28)
-    )
+    #packed_data_1 = (
+    #    (tex_type & 0xffff) |
+    #    ((reserved_01 & 0x00ff) << 16) |
+    #    ((shift & 0x000f) << 24) |
+    #    ((dimension & 0x000f) << 28)
+    #)
 
-    width = bl_im.size[0]
+    tex.width = bl_im.size[0]
     if is_rtex:
         image_count = 1  # curently hardcoded
         height = bl_im.size[1]
         num_mipmaps = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2))
     else:
-        image_count = dds_header.image_count
-        height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-        num_mipmaps = dds_header.dwMipMapCount
+        tex.num_images = dds_header.image_count
+        tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
+        tex.num_mipmaps_per_image = dds_header.dwMipMapCount
 
-    packed_data_2 = (
-        (num_mipmaps & 0x3f) |
-        ((width & 0x1fff) << 6) |
-        ((height & 0x1fff) << 19)
-    )
-    packed_data_3 = (
-        (image_count & 0xff) |
-        ((compression_format & 0xff) << 8) |
-        ((constant & 0x1fff) << 16) |
-        ((reserved_02 & 0x003) << 29)
-    )
-    tex.packed_data_1 = packed_data_1
-    tex.packed_data_2 = packed_data_2
-    tex.packed_data_3 = packed_data_3
+    #packed_data_2 = (
+    #    (num_mipmaps & 0x3f) |
+    #    ((width & 0x1fff) << 6) |
+    #    ((height & 0x1fff) << 19)
+    #)
+    #packed_data_3 = (
+    #    (image_count & 0xff) |
+    #    ((compression_format & 0xff) << 8) |
+    #    ((constant & 0x1fff) << 16) |
+    #    ((reserved_02 & 0x003) << 29)
+    #)
+    #tex.packed_data_1 = packed_data_1
+    #tex.packed_data_2 = packed_data_2
+    #tex.packed_data_3 = packed_data_3
     if not is_rtex:
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
         dds_data_size = len(tex.dds_data)
+
+    custom_properties.set_to_dest(tex)
     tex._check()
 
     final_size = tex.size_before_data_ + dds_data_size
@@ -678,10 +680,10 @@ def _infer_compression_format(dict_tex):
     return tex_type.value
 
 
-def _handle_relative_path(bl_im):
+def _handle_relative_path(bl_im, render_target=False):
     path = bl_im.albam_asset.relative_path or bl_im.name
     before, _, after = path.rpartition(".")
-    if bl_im.albam_asset.render_target:
+    if render_target:
         ext = "rtex"
     else:
         ext = "tex"
@@ -743,6 +745,10 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
+    depth: bpy.props.IntProperty(
+        name="Depth",
+        default=0,
+    )
     depend_screen: bpy.props.BoolProperty(
         name="Depend on Screen",
         description="Does this texture depend on screen resolution?",
@@ -773,6 +779,8 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
         try:
+            if isinstance(src_value, str):
+                src_value = int(src_value, 16)
             setattr(dst, name, src_value)
         except TypeError:
             setattr(dst, name, hex(src_value))
@@ -825,7 +833,11 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         ],
         options=set()
     )
-    format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
+    compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
+    depth: bpy.props.IntProperty(
+        name="Depth",
+        default=0,
+    )
     auto_resize: bpy.props.BoolProperty(
         name="Auto Resize",
         default=False,
@@ -855,6 +867,8 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
         try:
+            if isinstance(src_value, str):
+                src_value = int(src_value, 16)
             setattr(dst, name, src_value)
         except TypeError:
             setattr(dst, name, hex(src_value))

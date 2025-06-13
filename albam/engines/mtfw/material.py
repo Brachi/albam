@@ -336,7 +336,7 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
 
-        tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
+        tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures, app_id=app_id)
         mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
@@ -412,7 +412,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
 
-        tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
+        tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl, app_id=app_id)
         resources = _create_resources(app_id, tex_types, mat, mrl_params, custom_props_secondary)
         mat.resources = _insert_constant_buffers(resources, app_id, mat, custom_props_secondary)
 
@@ -851,7 +851,7 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     return resource
 
 
-def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
+def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id=None):
     tex_types = {}
     image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
     for im_node in image_nodes:
@@ -864,6 +864,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             # dummy texture, index 0
             tex_types[tex_type] = -1
             continue
+        custom_properties = im_node.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
@@ -880,7 +881,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             except ValueError:
 
                 tex = mrl.TextureSlot(_parent=mrl, _root=mrl._root)
-                if im_node.image.albam_asset.render_target is True:
+                if custom_properties.render_target is True:
                     tex.type_hash = 2013850128  # TYPE_rRenderTargetTexture
                 else:
                     tex.type_hash = mrl.TextureType.type_r_texture
