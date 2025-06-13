@@ -22,9 +22,6 @@ seq:
   - {id: auto_resize, type: b1}
   - {id: render_target, type: b1}
   - {id: use_vtf, type: b1}
-  #- {id: packed_data_1, type: u4}
-  #- {id: packed_data_2, type: u4}
-  #- {id: packed_data_3, type: u4}
   - {id: cube_faces, type: cube_face, repeat: expr, repeat-expr: 3, if: num_images == 6}
   - {id: mipmap_offsets, type: u4, repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
   - {id: dds_data, size-eos: true}

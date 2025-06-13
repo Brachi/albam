@@ -9,7 +9,6 @@ meta:
 seq:
   - {id: id_magic, contents: [0x54, 0x45, 0x58, 0x00]}
   - {id: version, type: u2}
-  #- {id: revision, type: u2}
   - {id: texture_type, type: b4}
   - {id: encoded_type, type: b4}
   - {id: depend_screen, type: b1}
@@ -18,8 +17,6 @@ seq:
   - {id: num_mipmaps_per_image, type: u1}
   - {id: num_images, type: u1}
   - {id: padding, type: u2}
-  #- {id: unk_02, type: u1}
-  #- {id: unk_03, type: u1}
   - {id: width, type: u2}
   - {id: height, type: u2}
   - {id: depth, type: u4}

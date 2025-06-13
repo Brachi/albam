@@ -132,6 +132,7 @@ TEX_FORMAT_MAPPER = {
     40: b"",  # uncompressed
     43: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
+    "DXT3": b"DXT3",
     "DXT5": b"DXT5",
     '\x15\x00\x00\x00': b"",
 }
@@ -518,12 +519,12 @@ def _serialize_texture_156(app_id, dict_tex):
         tex = Rtex112()
         tex.id_magic = b"RTX\x00"
         tex.version = 112
-        tex.revision = 514
+        #tex.revision = 514
         tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_images = 1
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1]
-        tex.reserved = 0
+        # tex.reserved = 0
         tex.compression_format = b"\x15\x00\x00\x00".decode("ascii")
         dds_data_len = 0
     else:
@@ -539,7 +540,7 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.num_images = dds_header.image_count
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-        tex.padding = 0
+
         fmt = dds_header.pixelfmt_dwFourCC.decode()
         if fmt == "":
             fmt = b"\x15\x00\x00\x00".decode("ascii")
@@ -549,7 +550,7 @@ def _serialize_texture_156(app_id, dict_tex):
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
         dds_data_len = len(tex.dds_data)
-
+    tex.padding = 0
     custom_properties.set_to_dest(tex)
 
     tex._check()
@@ -892,8 +893,11 @@ def check_dds_textures(func):
         images = get_bl_teximage_nodes(materials)
         non_dds = []
         for bl_im_name, bl_im_dict in images.items():
-            #if bl_im_dict["image"].albam_asset.render_target is True:
-            #    continue
+            app_id = bl_im_dict["image"].albam_asset.app_id
+            image = bl_im_dict["image"]
+            custom_propertins = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            if custom_propertins.render_target is True:
+                continue
             if not is_blimage_dds(bl_im_dict["image"]):
                 non_dds.append((bl_im_name, bl_im_dict))
         if any(non_dds):
