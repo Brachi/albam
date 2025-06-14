@@ -319,8 +319,8 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     color_out = blender_texture_image_node.outputs['Color']
     try:
         socket_name = color_out.links[0].to_socket.name
-    except ValueError:
-        print("the texture has no connections")
+    except IndexError:
+        print("The texture node {} has no connections".format(blender_texture_image_node))
         return None
 
     tex_codes_mapper = {
@@ -347,14 +347,24 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev1": (23, 19, 25, 31),
         "rev2": (24, 20, 25, 31),
         "re6": (24, 20, 25, 31),
+        "dd": (24, 20, 25, 31),
     }
 
-    UNKNOWN_TYPE = {
-        "re0": "0x209d",
-        "re1": "0x209d",
-        "rev1": "0xa09d",
-        "rev2": "0x209d",
+    VERSION = {
+        "re0": "0x9d",
+        "re1": "0x9d",
+        "rev1": "0x9d",
+        "rev2": "0x9d",
         "re6": "0x9a",
+        "dd": "0x99",
+    }
+
+    UNK = {
+        "re0": 32,
+        "re1": 32,
+        "rev1": 160,
+        "rev2": 32,
+        "re6": 0,
     }
 
     if not blender_material or not blender_material.node_tree:
@@ -381,8 +391,10 @@ def set_image_albam_attr(blender_material, app_id, local_path):
                 tex_157_props.compression_format = tex_compr_preset[2]
             if type == 7:
                 tex_157_props.compression_format = tex_compr_preset[3]
-        if app_id in UNKNOWN_TYPE:
-            tex_157_props.unk_type = UNKNOWN_TYPE.get(app_id)
+        if app_id in UNK:
+            tex_157_props.unk = UNK.get(app_id)
+        if app_id in VERSION:
+            tex_157_props.version = VERSION.get(app_id)
 
 
 def rename_bones(armature_ob, app_id, body_type):

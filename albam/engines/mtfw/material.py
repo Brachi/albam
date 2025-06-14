@@ -43,7 +43,7 @@ MRL_DEFAULT_VERSION = {
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
-MRL_UNK_01 = {
+MRL_SHADER_VERSION = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
     "re6": 0x6a5489b8,
@@ -187,8 +187,20 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             custom_props_top_level.blend_state_type = blend_state_type
             custom_props_top_level.depth_stencil_state_type = depth_stencil_state_type
             custom_props_top_level.rasterizer_state_type = rasterizer_state_type
-            custom_props_top_level.unk_flags = material.unk_flags
-            custom_props_top_level.unk_01 = material.unk_01
+            custom_props_top_level.reserverd1 = material.reserverd1
+            custom_props_top_level.id = material.id
+            custom_props_top_level.fog = material.fog
+            custom_props_top_level.tangent = material.tangent
+            custom_props_top_level.half_lambert = material.half_lambert
+            custom_props_top_level.stencil_ref = material.stencil_ref
+            custom_props_top_level.alphatest_ref = material.alphatest_ref
+            custom_props_top_level.polygon_offset = material.polygon_offset
+            custom_props_top_level.alphatest = material.alphatest
+            custom_props_top_level.alphatest_func = material.alphatest_func
+            custom_props_top_level.draw_pass = material.draw_pass
+            custom_props_top_level.layer_id = material.layer_id
+            custom_props_top_level.deffered_lighting = material.deffered_lighting
+
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
@@ -373,7 +385,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     mrl = Mrl(app_id=app_id)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
-    mrl.unk_01 = MRL_UNK_01[app_id]
+    mrl.shader_version = MRL_SHADER_VERSION[app_id]
     mrl.textures = []
     mrl.materials = []
     current_commands_offset = 0
@@ -406,9 +418,20 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
         mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
         mat.rasterizer_state_hash = (shader_objects[mrl_params.rasterizer_state_type]["hash"] << 12) + rasterizer_state_index  # noqa
-        mat.unk_01 = mrl_params.unk_01
-        mat.unk_flags = mrl_params.unk_flags
-        mat.reserved = [0, 0, 0, 0]
+        mat.reserverd1 = mrl_params.reserverd1
+        mat.id = mrl_params.id
+        mat.fog = mrl_params.fog
+        mat.tangent = mrl_params.tangent
+        mat.half_lambert = mrl_params.half_lambert
+        mat.stencil_ref = mrl_params.stencil_ref
+        mat.alphatest_ref = mrl_params.alphatest_ref
+        mat.polygon_offset = mrl_params.polygon_offset
+        mat.alphatest = mrl_params.alphatest
+        mat.alphatest_func = mrl_params.alphatest_func
+        mat.draw_pass = mrl_params.draw_pass
+        mat.layer_id = mrl_params.layer_id
+        mat.deffered_lighting = mrl_params.deffered_lighting
+        mat.blend_factor = [0, 0, 0, 0]
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
 
@@ -1423,10 +1446,58 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     blend_state_type: blend_state_enum
     depth_stencil_state_type: depth_stencil_enum
     rasterizer_state_type: rasterizer_state_enum
-    unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
+    reserverd1: bpy.props.IntProperty(
+        name="Reserved1",
+        min=0, max=0x1FF
+    )
+    id: bpy.props.IntProperty(
+        name="ID",
+        min=0, max=0xFF
+    )
+    fog: bpy.props.BoolProperty(
+        name="Fog"
+    )
+    tangent: bpy.props.BoolProperty(
+        name="Tangent",
+    )
+    half_lambert: bpy.props.BoolProperty(
+        name="Half Lambert",
+    )
+    stencil_ref: bpy.props.IntProperty(
+        name="Stencil Ref",
+        min=0, max=0xFF
+    )
+    alphatest_ref: bpy.props.IntProperty(
+        name="AlphaTest Ref",
+        min=0, max=0xFF
+    )
+    polygon_offset: bpy.props.IntProperty(
+        name="Polygon Offset",
+        description="Polygon Offset (4 bits)",
+        min=0, max=0xF
+    )
+    alphatest: bpy.props.BoolProperty(
+        name="AlphaTest",
+    )
+    alphatest_func: bpy.props.IntProperty(
+        name="AlphaTest Func",
+        min=0, max=0x7
+    )
+    draw_pass: bpy.props.IntProperty(
+        name="Draw Pass",
+        min=0, max=0x1F
+    )
+    layer_id: bpy.props.IntProperty(
+        name="Layer ID",
+        min=0, max=0x3
+    )
+    deffered_lighting: bpy.props.BoolProperty(
+        name="Deferred Lighting"
+    )
+    #unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
 
-    unk_flags: bpy.props.IntVectorProperty(
-        name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
+    #unk_flags: bpy.props.IntVectorProperty(
+    #    name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

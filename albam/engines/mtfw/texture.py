@@ -803,6 +803,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("0x9d", "157", "", 3),
             ("0x9e", "158", "", 4),
         ],
+        default="0x9d",
         options=set()
     )
     attr: bpy.props.EnumProperty(
@@ -832,12 +833,13 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("0x8", "2D Multisample", "", 9),
             ("0x9", "2D Multisample Array", "", 10),
         ],
+        default="0x2",
         options=set()
     )
     compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
     depth: bpy.props.IntProperty(
         name="Depth",
-        default=0,
+        default=1,
     )
     auto_resize: bpy.props.BoolProperty(
         name="Auto Resize",
