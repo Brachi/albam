@@ -605,7 +605,7 @@ def _pre_serialize_offset(dst_lmt, num_anim_blocks):
     return block_offsets
 
 
-def _calculate_offsets(bl_objects, app_id):
+def _calculate_offsets_lmt51(bl_objects, app_id):
     HEADER_SIZE = 8
     BLOCK_OFFSET_SIZE = 4
     MOTION_HEADER_SIZE = 192
@@ -706,7 +706,198 @@ def _calculate_offsets(bl_objects, app_id):
     )
 
 
+def _calculate_offsets_lmt67(bl_objects, app_id):
+    HEADER_SIZE = 8
+    BLOCK_OFFSET_SIZE = 4
+    MOTION_HEADER_SIZE = 64  # 4 bytes of padding, last one doesn't have it
+    SQ_ATTR_SIZE = 8
+    KF_ATTR_SIZE = 16
+    TRACK_SIZE = 36
+    BOUND_SIZE = 32
+    SEQ_INFO_SIZE = 72
+    KF_INFO_SIZE = 12
+    BOUNDS_BUFF_TYPES = {4, 5, 7, 11, 12, 13, 14, 15}
+
+    num_blocks = len(bl_objects)
+    block_offsets_table_size = num_blocks * BLOCK_OFFSET_SIZE
+
+    # first pass calculate sizes
+    total_headers_size = 0
+    block_body_sizes = []
+    tracks_headers_sizes = []
+    tracks_data_sizes = []
+    tracks_raw_data_sizes = []
+    seq_info_sizes = []
+    seq_info_attr_sizes = []
+    kf_info_sizes = []
+    key_info_attr_sizes = []
+    bounds_sizes = []
+
+    for bl_obj in bl_objects:
+        block_body_size = 0
+        track_raw_sizes = []
+        bounds_size = 0
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if getattr(custom_props, "ofs_frame", 0) != 0:
+            total_headers_size += MOTION_HEADER_SIZE
+
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            tracks = getattr(second_props["tracks"], "tracks")
+            t_size = len(tracks) * TRACK_SIZE
+            raw_data_size = 0
+            track_bounds = 0
+            for track in tracks:
+                track_data_size = len(track.raw_data)
+                if track_data_size % 4:
+                    track_data_size += 4 - (track_data_size % 4)  # padding
+                raw_data_size += track_data_size
+                track_raw_sizes.append(track_data_size)
+                if track.buffer_type in BOUNDS_BUFF_TYPES:
+                    track_bounds += 1
+            tracks_headers_sizes.append(t_size)
+            tracks_data_sizes.append(raw_data_size)
+            bounds_size = track_bounds * BOUND_SIZE
+            bounds_sizes.append(bounds_size)
+
+            #seq_infos = getattr(second_props, "sequence_infos")
+            seq_infos = getattr(second_props["sequence_infos"], "sequence_info")
+            seq_infos_size = 0
+            seq_info_attrs_num = 0
+            seq_info_attrs_size = 0
+            s_info_attr_sizes = []
+            for i, s_info in enumerate(seq_infos):
+                seq_infos_size += SEQ_INFO_SIZE
+                seq_info_attr = getattr(s_info, "attributes")
+                seq_info_attrs_num += len(seq_info_attr)
+                s_info_attr_sizes.append(len(seq_info_attr) * SQ_ATTR_SIZE)
+                #seq_info_attr_sizes.append(seq_info_attr_size)
+            seq_info_sizes.append(seq_infos_size)
+            seq_info_attrs_size = seq_info_attrs_num * SQ_ATTR_SIZE
+            seq_info_attr_sizes.append(s_info_attr_sizes)
+
+            #kf_infos = getattr(second_props, "keyframe_infos")
+            kf_infos = getattr(second_props["keyframe_infos"], "keyframe_info")
+            kf_infos_size = 0
+            kf_info_attr_num = 0
+            kf_info_attr_size = 0
+            kf_info_attr_sizes = []
+            for i, kf_info in enumerate(kf_infos):
+                kf_infos_size += KF_INFO_SIZE
+                kf_info_attr = getattr(kf_info, "attr")
+                kf_info_attr_num += len(kf_info_attr)
+                kf_info_attr_sizes.append(kf_info_attr_size)
+            kf_info_sizes.append(kf_infos_size)
+            key_info_attr_sizes.append(kf_info_attr_sizes)
+            kf_info_attr_size = kf_info_attr_num * KF_ATTR_SIZE
+
+            block_body_size = t_size + bounds_size + raw_data_size + seq_infos_size + seq_info_attrs_size + kf_infos_size + kf_info_attr_size
+            print("ololi")
+        else:
+            seq_info_sizes.append(0)
+            seq_info_attr_sizes.append([])
+            kf_info_sizes.append(0)
+            key_info_attr_sizes.append([])
+            tracks_headers_sizes.append(0)
+            tracks_data_sizes.append(0)
+            bounds_sizes.append(0)
+        tracks_raw_data_sizes.append(track_raw_sizes)
+        block_body_sizes.append(block_body_size)
+
+    # Offset for motion headers
+    motion_headers_start = HEADER_SIZE + block_offsets_table_size
+    block_offsets = []
+    cur_offset = motion_headers_start
+    for bl_obj in bl_objects:
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if getattr(custom_props, "ofs_frame", 0) != 0:
+            block_offsets.append(cur_offset)
+            cur_offset += MOTION_HEADER_SIZE
+        else:
+            block_offsets.append(0)
+
+    # Offset for motion body
+    motion_body_start = HEADER_SIZE + block_offsets_table_size + total_headers_size - 4
+    tracks_section_offsets = []
+    tracks_data_offsets = []
+    bounds_offsets = []
+    seq_infos_offsets = []
+    seq_info_attr_offsets = []
+    key_infos_offsets = []
+    key_info_attr_offsets = []
+
+    cur_tracks_section_offset = motion_body_start
+    for i, bl_obj in enumerate(bl_objects):
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if getattr(custom_props, "ofs_frame", 0) != 0:
+            # track
+            _ofs = cur_tracks_section_offset
+            tracks_section_offsets.append(_ofs)
+            # bounds
+            _ofs += tracks_headers_sizes[i] + tracks_data_sizes[i]
+            if _ofs % 16:
+                _ofs += 16 - (_ofs % 16)
+            bounds_offsets.append(_ofs)
+            _ofs += bounds_sizes[i]
+            # track data
+            track_data_offsets = []
+            temp_size = 0
+            for t in tracks_raw_data_sizes[i]:
+                _ofs += temp_size
+                track_data_offsets.append(_ofs)
+                temp_size += t
+            tracks_data_offsets.append(track_data_offsets)
+            # seq infos
+            seq_infos_offsets.append(_ofs)
+            # seq infos attr
+            _ofs += seq_info_sizes[i]
+            s_attr_ofs = []
+            for s_attr_size in seq_info_attr_sizes[i]:
+                s_attr_ofs.append(_ofs)
+                _ofs += s_attr_size
+            seq_info_attr_offsets.append(s_attr_ofs)
+            # key infos
+            key_info_attr_offsets.append(_ofs)
+            # key infos attr
+            k_attr_ofs = []
+            for k_attr_size in key_info_attr_sizes[i]:
+                k_attr_ofs.append(_ofs)
+                _ofs += k_attr_size
+            cur_tracks_section_offset += block_body_sizes[i]
+        else:
+            tracks_section_offsets.append(0)
+            bounds_offsets.append(0)
+            tracks_data_offsets.append([])
+            seq_infos_offsets.append(0)
+            seq_info_attr_offsets.append([])
+            key_info_attr_offsets.append(0)
+            key_info_attr_offsets.append([])
+
+    final_size = (
+        HEADER_SIZE +
+        block_offsets_table_size +
+        total_headers_size +
+        sum(block_body_sizes)
+    )
+
+    return (
+        block_offsets,
+        tracks_section_offsets,
+        seq_info_attr_offsets,
+        seq_info_attr_offsets,
+        tracks_data_offsets,
+        final_size
+    )
+
+
+def _calculate_offsets(bl_objects, app_id):
+    if app_id == "re5":
+        return _calculate_offsets_lmt51(bl_objects, app_id)
+    else:
+        return _calculate_offsets_lmt67(bl_objects, app_id)
+
+
 @blender_registry.register_export_function(app_id="re5", extension="lmt")
+@blender_registry.register_export_function(app_id="rev2", extension="lmt")
 def export_lmt(bl_obj):
     # export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
@@ -721,6 +912,8 @@ def export_lmt(bl_obj):
     block_offsets = _pre_serialize_offset(dst_lmt, len(bl_objects))
 
     ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
+    if app_id != "re5":
+        return None
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -1045,46 +1238,6 @@ class FrameBounds(CustomPropsBase):
         size=4,
         default=(0.0, 0.0, 0.0, 0.0),
         options=set(),
-    )
-
-
-@blender_registry.register_blender_prop
-class LMT67Track(CustomPropsBase):
-    buffer_type: bpy.props.IntProperty(
-        name="Buffer Type",
-        default=0,
-        options=set(),
-        description="Type of buffer used for this track")
-    usage: bpy.props.IntProperty(
-        name="Usage",
-        default=0,
-        options=set(),
-        description="Track type")
-    joint_type: bpy.props.IntProperty(
-        name="Joint Type",
-        default=0,
-        options=set())
-    bone_index: bpy.props.IntProperty(
-        name="Bone Index",
-        default=0,
-        options=set(),
-        description="Animation index of the bone in the armature")
-    weight: bpy.props.FloatProperty(
-        name="Weight",
-        default=1.0,
-        options=set(),
-        description="Weight of the track, used for blending")
-    reference_data: bpy.props.FloatVectorProperty(
-        name="Reference Data",
-        size=4,
-        default=(0.0, 0.0, 0.0, 1.0),
-        options=set(),
-        description="Reference data for the track, used for blending"
-    )
-    raw_data: bpy.props.StringProperty(
-        name="Raw Data",
-        description="Raw binary data for this track",
-        subtype='BYTE_STRING'
     )
 
 
