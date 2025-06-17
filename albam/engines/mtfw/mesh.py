@@ -1914,12 +1914,6 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
 
 
 VERTEX_FORMATS_LABELS = {
-    0x0: "RE5 VfSkin",
-    0x1: "RE5 VfSkinEx",
-    0x2: "RE5 VfNonSkin",
-    0x3: "RE5 VfNonSkinCol",
-    0x4: "RE5 VfSkin (placeholder shape)",
-    0x5: "RE5 VfSkin (placeholder skin_col)",
     0xa14e003c: "NonSkinBCA",
     0x2082f03b: "NonSkinBLA",
     0xc66fa03a: "NonSkinBA",
@@ -1995,7 +1989,7 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
         items=vertex_format_enum_items,
         options=set()
     )
-    
+
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:

@@ -269,7 +269,6 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             bl_image.generated_type = 'UV_GRID'
             bl_image.albam_asset.app_id = app_id
             bl_image.albam_asset.relative_path = texture_path + ".rtex"
-            #bl_image.albam_asset.render_target = True
             bl_image.albam_asset.extension = "rtex"
         else:
             bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
