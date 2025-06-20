@@ -721,7 +721,6 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     num_blocks = len(bl_objects)
     block_offsets_table_size = num_blocks * BLOCK_OFFSET_SIZE
 
-    # first pass calculate sizes
     total_headers_size = 0
     block_body_sizes = []
     tracks_headers_sizes = []
@@ -732,7 +731,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     kf_info_sizes = []
     key_info_attr_sizes = []
     bounds_sizes = []
-
+    # first pass calculate sizes
     for bl_obj in bl_objects:
         block_body_size = 0
         track_raw_sizes = []
@@ -785,13 +784,12 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 kf_infos_size += KF_INFO_SIZE
                 kf_info_attr = getattr(kf_info, "attr")
                 kf_info_attr_num += len(kf_info_attr)
-                kf_info_attr_sizes.append(kf_info_attr_size)
+                kf_info_attr_sizes.append(len(kf_info_attr) * KF_ATTR_SIZE)
             kf_info_sizes.append(kf_infos_size)
             key_info_attr_sizes.append(kf_info_attr_sizes)
             kf_info_attr_size = kf_info_attr_num * KF_ATTR_SIZE
 
             block_body_size = t_size + bounds_size + raw_data_size + seq_infos_size + seq_info_attrs_size + kf_infos_size + kf_info_attr_size
-            print("ololi")
         else:
             seq_info_sizes.append(0)
             seq_info_attr_sizes.append([])
@@ -824,29 +822,32 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     seq_info_attr_offsets = []
     key_infos_offsets = []
     key_info_attr_offsets = []
-
+    # Second pass
     cur_tracks_section_offset = motion_body_start
     for i, bl_obj in enumerate(bl_objects):
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if getattr(custom_props, "ofs_frame", 0) != 0:
-            # track
+            # track start
             _ofs = cur_tracks_section_offset
             tracks_section_offsets.append(_ofs)
-            # bounds
-            _ofs += tracks_headers_sizes[i] + tracks_data_sizes[i]
+            # track data
+            _ofs += tracks_headers_sizes[i]
+            # bounds start
+            #_ofs += tracks_headers_sizes[i] + tracks_data_sizes[i]
             if _ofs % 16:
                 _ofs += 16 - (_ofs % 16)
             bounds_offsets.append(_ofs)
+            # track data start
             _ofs += bounds_sizes[i]
-            # track data
             track_data_offsets = []
-            temp_size = 0
+            #temp_size = 0
             for t in tracks_raw_data_sizes[i]:
-                _ofs += temp_size
+                #_ofs += temp_size
                 track_data_offsets.append(_ofs)
-                temp_size += t
+                #temp_size = t
+                _ofs += t
             tracks_data_offsets.append(track_data_offsets)
-            # seq infos
+            # seq infos start
             seq_infos_offsets.append(_ofs)
             # seq infos attr
             _ofs += seq_info_sizes[i]
@@ -1176,7 +1177,7 @@ class KeyInfo(CustomPropsBase):
 class KeyframeInfoProperties(CustomPropsBase):
     keyframe_info: bpy.props.CollectionProperty(
         type=KeyInfo,
-        name="Sequence Info"
+        name="Keyframe Info"
     )
     item_index: bpy.props.IntProperty(
         name="Item Index",

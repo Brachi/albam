@@ -355,7 +355,7 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMa
                 active_index = custom_props.item_index
                 if 0 <= active_index < len(collection):
                     active_track = collection[active_index]
-                    name = k[:-1].capitalize()
+                    name = k.capitalize()
                     layout.label(text=f"{name}: {active_index}")
                     for collection in active_track.__annotations__:
                         layout.prop(active_track, collection)
