@@ -36,6 +36,17 @@ USAGE = {
     5: "scale",  # Unknown
 }
 
+APPID_VERSION_MAPPER = {
+    "re0": 67,
+    "re1": 67,
+    "re5": 51,
+    "re6": 67,
+    "rev1": 67,
+    "rev2": 67,
+    "dd": 67,
+}
+
+
 
 class LMTKeyframeBounds:
     def __init__(self, bound):
@@ -696,14 +707,14 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
         total_headers_size +
         sum(motion_body_sizes)
     )
-    return (
-        block_offsets,
-        frame_offsets,
-        collision_attr_offsets,
-        motion_se_attr_offsets,
-        track_data_offsets,
-        final_size
-    )
+    return {
+        "block_offsets": block_offsets,
+        "frame_offsets": frame_offsets,
+        "collision_attr_offsets": collision_attr_offsets,
+        "motion_se_attr_offsets": motion_se_attr_offsets,
+        "track_data_offsets": track_data_offsets,
+        "final_size": final_size
+    }
 
 
 def _calculate_offsets_lmt67(bl_objects, app_id):
@@ -723,8 +734,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
 
     total_headers_size = 0
     block_body_sizes = []
-    tracks_headers_sizes = []
-    tracks_data_sizes = []
+    track_headers_sizes = []
+    track_data_sizes = []
     tracks_raw_data_sizes = []
     seq_info_sizes = []
     seq_info_attr_sizes = []
@@ -753,12 +764,11 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 track_raw_sizes.append(track_data_size)
                 if track.buffer_type in BOUNDS_BUFF_TYPES:
                     track_bounds += 1
-            tracks_headers_sizes.append(t_size)
-            tracks_data_sizes.append(raw_data_size)
+            track_headers_sizes.append(t_size)
+            track_data_sizes.append(raw_data_size)
             bounds_size = track_bounds * BOUND_SIZE
             bounds_sizes.append(bounds_size)
 
-            #seq_infos = getattr(second_props, "sequence_infos")
             seq_infos = getattr(second_props["sequence_infos"], "sequence_info")
             seq_infos_size = 0
             seq_info_attrs_num = 0
@@ -769,12 +779,10 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 seq_info_attr = getattr(s_info, "attributes")
                 seq_info_attrs_num += len(seq_info_attr)
                 s_info_attr_sizes.append(len(seq_info_attr) * SQ_ATTR_SIZE)
-                #seq_info_attr_sizes.append(seq_info_attr_size)
             seq_info_sizes.append(seq_infos_size)
             seq_info_attrs_size = seq_info_attrs_num * SQ_ATTR_SIZE
             seq_info_attr_sizes.append(s_info_attr_sizes)
 
-            #kf_infos = getattr(second_props, "keyframe_infos")
             kf_infos = getattr(second_props["keyframe_infos"], "keyframe_info")
             kf_infos_size = 0
             kf_info_attr_num = 0
@@ -789,14 +797,15 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             key_info_attr_sizes.append(kf_info_attr_sizes)
             kf_info_attr_size = kf_info_attr_num * KF_ATTR_SIZE
 
-            block_body_size = t_size + bounds_size + raw_data_size + seq_infos_size + seq_info_attrs_size + kf_infos_size + kf_info_attr_size
+            block_body_size = (t_size + bounds_size + raw_data_size + seq_infos_size + seq_info_attrs_size +
+                               kf_infos_size + kf_info_attr_size)
         else:
             seq_info_sizes.append(0)
             seq_info_attr_sizes.append([])
             kf_info_sizes.append(0)
             key_info_attr_sizes.append([])
-            tracks_headers_sizes.append(0)
-            tracks_data_sizes.append(0)
+            track_headers_sizes.append(0)
+            track_data_sizes.append(0)
             bounds_sizes.append(0)
         tracks_raw_data_sizes.append(track_raw_sizes)
         block_body_sizes.append(block_body_size)
@@ -820,7 +829,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     bounds_offsets = []
     seq_infos_offsets = []
     seq_info_attr_offsets = []
-    key_infos_offsets = []
+    key_info_offsets = []
     key_info_attr_offsets = []
     # Second pass
     cur_tracks_section_offset = motion_body_start
@@ -831,20 +840,16 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             _ofs = cur_tracks_section_offset
             tracks_section_offsets.append(_ofs)
             # track data
-            _ofs += tracks_headers_sizes[i]
+            _ofs += track_headers_sizes[i]
             # bounds start
-            #_ofs += tracks_headers_sizes[i] + tracks_data_sizes[i]
             if _ofs % 16:
                 _ofs += 16 - (_ofs % 16)
             bounds_offsets.append(_ofs)
             # track data start
             _ofs += bounds_sizes[i]
             track_data_offsets = []
-            #temp_size = 0
             for t in tracks_raw_data_sizes[i]:
-                #_ofs += temp_size
                 track_data_offsets.append(_ofs)
-                #temp_size = t
                 _ofs += t
             tracks_data_offsets.append(track_data_offsets)
             # seq infos start
@@ -857,12 +862,14 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 _ofs += s_attr_size
             seq_info_attr_offsets.append(s_attr_ofs)
             # key infos
-            key_info_attr_offsets.append(_ofs)
+            key_info_offsets.append(_ofs)
+            _ofs += kf_info_sizes[i]
             # key infos attr
             k_attr_ofs = []
             for k_attr_size in key_info_attr_sizes[i]:
                 k_attr_ofs.append(_ofs)
                 _ofs += k_attr_size
+            key_info_attr_offsets.append(_ofs)
             cur_tracks_section_offset += block_body_sizes[i]
         else:
             tracks_section_offsets.append(0)
@@ -870,7 +877,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             tracks_data_offsets.append([])
             seq_infos_offsets.append(0)
             seq_info_attr_offsets.append([])
-            key_info_attr_offsets.append(0)
+            key_info_offsets.append(0)
             key_info_attr_offsets.append([])
 
     final_size = (
@@ -880,14 +887,17 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         sum(block_body_sizes)
     )
 
-    return (
-        block_offsets,
-        tracks_section_offsets,
-        seq_info_attr_offsets,
-        seq_info_attr_offsets,
-        tracks_data_offsets,
-        final_size
-    )
+    return {
+        "block_offsets": block_offsets,
+        "track_headers_offsets": tracks_section_offsets,
+        "bounds_offsets": bounds_offsets,
+        "tracks_data_offsets": tracks_data_offsets,
+        "seq_info_offsets": seq_infos_offsets,
+        "seq_info_attr_offsets": seq_info_attr_offsets,
+        "key_info_offsets": key_info_offsets,
+        "key_info_attr_offsets": key_info_attr_offsets,
+        "final_sizes": final_size
+    }
 
 
 def _calculate_offsets(bl_objects, app_id):
@@ -911,21 +921,37 @@ def export_lmt(bl_obj):
     dst_lmt.version = 51
     dst_lmt.num_block_offsets = len(bl_objects)
     block_offsets = _pre_serialize_offset(dst_lmt, len(bl_objects))
-
-    ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
-    if app_id != "re5":
+    lmt_offsets = _calculate_offsets(bl_objects, app_id)
+    ofc_block = lmt_offsets["block_offsets"]
+    final_size = lmt_offsets["final_size"]
+    if APPID_VERSION_MAPPER[app_id] == 51:
+        ofc_frames = lmt_offsets["frame_offsets"]
+        ofc_ce = lmt_offsets["collision_attr_offsets"]
+        ofc_mse = lmt_offsets["motion_se_attr_offsets"]
+        ofc_tr_data = lmt_offsets["track_data_offsets"]
+    else:
+        ofc_track_headers = lmt_offsets["track_headers_offsets"]
+        ofc_bounds = lmt_offsets["bounds_offsets"]
+        ofc_tr_data = lmt_offsets["track_data_offsets"]
+        ofc_sq_info = lmt_offsets["seq_info_offsets"]
+        ofc_sq_info_attr = lmt_offsets["seq_info_attr_offsets"]
+        ofc_kf_info = lmt_offsets["key_info_offsets"]
+        ofc_kf_info_attr = lmt_offsets["key_info_attr_offsets"]
         return None
+    # ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
             second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-            col_events = second_props["col_events"]
-            col_events_attr = getattr(col_events, "attributes")
-            motion_se = second_props["motion_se"]
-            motion_se_attr = getattr(motion_se, "attributes")
             tracks = getattr(second_props["tracks"], "tracks")
-
+            if APPID_VERSION_MAPPER[app_id] == 51:
+                col_events = second_props["col_events"]
+                col_events_attr = getattr(col_events, "attributes")
+                motion_se = second_props["motion_se"]
+                motion_se_attr = getattr(motion_se, "attributes")
+            else:
+                bounds = second_props["bounds"]
             anim_header = dst_lmt.BlockHeader51(
                 _parent=block_offset, _root=dst_lmt)
             custom_props.copy_custom_properties_to(anim_header)
