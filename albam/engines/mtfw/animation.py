@@ -824,8 +824,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
 
     # Offset for motion body
     motion_body_start = HEADER_SIZE + block_offsets_table_size + total_headers_size - 4
-    tracks_section_offsets = []
-    tracks_data_offsets = []
+    track_section_offsets = []
+    track_data_offsets = []
     bounds_offsets = []
     seq_infos_offsets = []
     seq_info_attr_offsets = []
@@ -838,8 +838,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         if getattr(custom_props, "ofs_frame", 0) != 0:
             # track start
             _ofs = cur_tracks_section_offset
-            tracks_section_offsets.append(_ofs)
-            # track data
+            track_section_offsets.append(_ofs)
+            # track headers
             _ofs += track_headers_sizes[i]
             # bounds start
             if _ofs % 16:
@@ -847,11 +847,11 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             bounds_offsets.append(_ofs)
             # track data start
             _ofs += bounds_sizes[i]
-            track_data_offsets = []
+            cur_track_data_offsets = []
             for t in tracks_raw_data_sizes[i]:
-                track_data_offsets.append(_ofs)
+                cur_track_data_offsets.append(_ofs)
                 _ofs += t
-            tracks_data_offsets.append(track_data_offsets)
+            track_data_offsets.append(cur_track_data_offsets)
             # seq infos start
             seq_infos_offsets.append(_ofs)
             # seq infos attr
@@ -872,9 +872,9 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             key_info_attr_offsets.append(_ofs)
             cur_tracks_section_offset += block_body_sizes[i]
         else:
-            tracks_section_offsets.append(0)
+            track_section_offsets.append(0)
             bounds_offsets.append(0)
-            tracks_data_offsets.append([])
+            track_data_offsets.append([])
             seq_infos_offsets.append(0)
             seq_info_attr_offsets.append([])
             key_info_offsets.append(0)
@@ -889,14 +889,14 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
 
     return {
         "block_offsets": block_offsets,
-        "track_headers_offsets": tracks_section_offsets,
+        "track_headers_offsets": track_section_offsets,
         "bounds_offsets": bounds_offsets,
-        "tracks_data_offsets": tracks_data_offsets,
+        "track_data_offsets": track_data_offsets,
         "seq_info_offsets": seq_infos_offsets,
         "seq_info_attr_offsets": seq_info_attr_offsets,
         "key_info_offsets": key_info_offsets,
         "key_info_attr_offsets": key_info_attr_offsets,
-        "final_sizes": final_size
+        "final_size": final_size
     }
 
 
@@ -930,6 +930,7 @@ def export_lmt(bl_obj):
         ofc_mse = lmt_offsets["motion_se_attr_offsets"]
         ofc_tr_data = lmt_offsets["track_data_offsets"]
     else:
+        # ofc_motion_headers = lmt_offsets["motion_headers_offsets"]
         ofc_track_headers = lmt_offsets["track_headers_offsets"]
         ofc_bounds = lmt_offsets["bounds_offsets"]
         ofc_tr_data = lmt_offsets["track_data_offsets"]
@@ -937,7 +938,7 @@ def export_lmt(bl_obj):
         ofc_sq_info_attr = lmt_offsets["seq_info_attr_offsets"]
         ofc_kf_info = lmt_offsets["key_info_offsets"]
         ofc_kf_info_attr = lmt_offsets["key_info_attr_offsets"]
-        return None
+        #return None
     # ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
@@ -951,54 +952,86 @@ def export_lmt(bl_obj):
                 motion_se = second_props["motion_se"]
                 motion_se_attr = getattr(motion_se, "attributes")
             else:
-                bounds = second_props["bounds"]
-            anim_header = dst_lmt.BlockHeader51(
-                _parent=block_offset, _root=dst_lmt)
-            custom_props.copy_custom_properties_to(anim_header)
-            anim_header.ofs_frame = ofc_frames[i]
-            anim_header.num_tracks = len(tracks)
-            anim_header.filler = 0
+                seq_infos = getattr(second_props["sequence_infos"], "sequence_info")
+                kf_infos = getattr(second_props["keyframe_infos"], "keyframe_info")
 
-            dst_col_event_attr = []
-            dst_collision_events = dst_lmt.EventCollision(_parent=anim_header, _root=dst_lmt)
-            dst_collision_events.event_id = col_events.event_id
-            dst_collision_events.num_events = len(col_events_attr)
-            dst_collision_events.ofs_events = ofc_ce[i]
-            for attr in col_events_attr:
-                dst_col_attr = dst_lmt.Attr(_parent=dst_collision_events, _root=dst_lmt)
-                attr.copy_custom_properties_to(dst_col_attr)
-                dst_col_event_attr.append(dst_col_attr)
-            dst_collision_events.attributes = dst_col_event_attr
-            anim_header.collision_events = dst_collision_events
-            dst_collision_events._check()
+            if APPID_VERSION_MAPPER[app_id] == 51:
+                anim_header = dst_lmt.BlockHeader51(
+                    _parent=block_offset, _root=dst_lmt)
+                custom_props.copy_custom_properties_to(anim_header)
+                anim_header.ofs_frame = ofc_frames[i]
+                anim_header.num_tracks = len(tracks)
+                anim_header.filler = 0
 
-            dst_motion_se_attr = []
-            motion_sound_effects = dst_lmt.MotionSe(_parent=anim_header, _root=dst_lmt)
-            motion_sound_effects.event_id = motion_se.event_id
-            motion_sound_effects.num_events = len(motion_se_attr)
-            motion_sound_effects.ofs_events = ofc_mse[i]
-            for attr in motion_se_attr:
-                motion_se_attr = dst_lmt.Attr(_parent=motion_sound_effects, _root=dst_lmt)
-                attr.copy_custom_properties_to(motion_se_attr)
-                dst_motion_se_attr.append(motion_se_attr)
-            motion_sound_effects.attributes = dst_motion_se_attr
-            motion_sound_effects._check()
+                dst_col_event_attr = []
+                dst_collision_events = dst_lmt.EventCollision(_parent=anim_header, _root=dst_lmt)
+                dst_collision_events.event_id = col_events.event_id
+                dst_collision_events.num_events = len(col_events_attr)
+                dst_collision_events.ofs_events = ofc_ce[i]
+                for attr in col_events_attr:
+                    dst_col_attr = dst_lmt.Attr(_parent=dst_collision_events, _root=dst_lmt)
+                    attr.copy_custom_properties_to(dst_col_attr)
+                    dst_col_event_attr.append(dst_col_attr)
+                dst_collision_events.attributes = dst_col_event_attr
+                anim_header.collision_events = dst_collision_events
+                dst_collision_events._check()
 
-            anim_header.motion_sound_effects = motion_sound_effects
+                dst_motion_se_attr = []
+                motion_sound_effects = dst_lmt.MotionSe(_parent=anim_header, _root=dst_lmt)
+                motion_sound_effects.event_id = motion_se.event_id
+                motion_sound_effects.num_events = len(motion_se_attr)
+                motion_sound_effects.ofs_events = ofc_mse[i]
+                for attr in motion_se_attr:
+                    motion_se_attr = dst_lmt.Attr(_parent=motion_sound_effects, _root=dst_lmt)
+                    attr.copy_custom_properties_to(motion_se_attr)
+                    dst_motion_se_attr.append(motion_se_attr)
+                motion_sound_effects.attributes = dst_motion_se_attr
+                motion_sound_effects._check()
 
-            dst_tracks = []
-            track_ofc = ofc_tr_data[i]
-            for j, track in enumerate(tracks):
-                dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
-                track.copy_custom_properties_to(dst_track)
-                dst_track.len_data = len(track.raw_data)
-                dst_track.ofs_data = track_ofc[j]
-                dst_track.data = track.raw_data
-                dst_tracks.append(dst_track)
-            anim_header.tracks = dst_tracks
+                anim_header.motion_sound_effects = motion_sound_effects
 
-            anim_header._check()
-            block_offset.block_header = anim_header
+                dst_tracks = []
+                track_ofc = ofc_tr_data[i]
+                for j, track in enumerate(tracks):
+                    dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
+                    track.copy_custom_properties_to(dst_track)
+                    dst_track.len_data = len(track.raw_data)
+                    dst_track.ofs_data = track_ofc[j]
+                    dst_track.data = track.raw_data
+                    dst_tracks.append(dst_track)
+                anim_header.tracks = dst_tracks
+
+                anim_header._check()
+                block_offset.block_header = anim_header
+            else:
+                anim_header = dst_lmt.BlockHeader67(
+                    _parent=block_offset, _root=dst_lmt)
+                custom_props.copy_custom_properties_to(anim_header)
+                anim_header.ofs_keyframe_infos = ofc_sq_info[i]
+                anim_header.ofs_keyframe_infos = ofc_kf_info[i]
+                anim_header.ofs_frame = ofc_track_headers[i]
+                anim_header.num_tracks = len(tracks)
+                anim_header.filler = 0
+
+                dst_seq_infos = []
+                for j, s_info in enumerate(seq_infos):
+                    dst_seq_info = dst_lmt.SequenceInfo(_parent=anim_header, _root=dst_lmt)
+                    s_info.copy_custom_properties_to(dst_seq_info)
+                    s_attr = getattr(s_info, "attributes")
+                    s_info.num_seq = len(s_attr)
+                    s_info.ofs_seq = ofc_sq_info_attr[i][j]
+                    si_attr = []
+                    for k, s_info_attr in enumerate(s_attr):
+                        dst_si_attr = dst_lmt.SeqInfoAttr(_parent=dst_seq_info, _root=dst_lmt)
+                        s_info_attr.copy_custom_properties_to(dst_si_attr)
+                        si_attr.append(dst_si_attr)
+                    dst_seq_infos.append(dst_seq_info)
+
+                dst_kf_infos = []
+                for j, kf_infos in enumerate(kf_infos):
+                    dst_kf_info = dst_lmt.KeyframeInfo(_parent=dst_seq_info, _root=dst_lmt)
+                    dst_kf_infos.append(dst_kf_info)
+                anim_header.sequence_infos = dst_seq_infos
         block_offset.offset = ofc_block[i]
         block_offsets.append(block_offset)
 
