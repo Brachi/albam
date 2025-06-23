@@ -1165,7 +1165,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self.kf_num = self._io.read_bits_int_le(5)
             self.seq_num = self._io.read_bits_int_le(3)
             self.duplicate = self._io.read_bits_int_le(3)
-            self.reversed = self._io.read_bits_int_le(5)
+            self.reserved = self._io.read_bits_int_le(5)
             self.ofs_sequence_infos = self._io.read_u4le()
             self.ofs_keyframe_infos = self._io.read_u4le()
 
@@ -1217,7 +1217,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(5, self.kf_num)
             self._io.write_bits_int_le(3, self.seq_num)
             self._io.write_bits_int_le(3, self.duplicate)
-            self._io.write_bits_int_le(5, self.reversed)
+            self._io.write_bits_int_le(5, self.reserved)
             self._io.write_u4le(self.ofs_sequence_infos)
             self._io.write_u4le(self.ofs_keyframe_infos)
 

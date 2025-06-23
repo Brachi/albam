@@ -31,7 +31,7 @@ types:
             67: block_header67
         if: is_used
 
-  block_header51:
+  block_header51: # MOTION_INFO
     seq:
       - {id: ofs_frame, type: u4}
       - {id: num_tracks, type: u4}
@@ -46,7 +46,7 @@ types:
       tracks:
         {pos: ofs_frame, type: track51, repeat: expr, repeat-expr: num_tracks}
 
-  block_header67:
+  block_header67: # MOTION_INFO
     seq:
       - {id: ofs_frame, type: u4}
       - {id: num_tracks, type: u4}
@@ -59,7 +59,7 @@ types:
       - {id: kf_num, type: b5}
       - {id: seq_num, type: b3}
       - {id: duplicate, type: b3}
-      - {id: reversed, type: b5}
+      - {id: reserved, type: b5}
       - {id: ofs_sequence_infos, type: u4}
       - {id: ofs_keyframe_infos, type: u4} # padding after it
     instances:
@@ -70,7 +70,7 @@ types:
       key_infos:
         {pos: ofs_keyframe_infos, type: keyframe_info, repeat: expr, repeat-expr: kf_num}
 
-  track51:
+  track51: # MOTION_PARAM
     seq:
       - {id: buffer_type, type: u1}
       - {id: usage, type: u1}
