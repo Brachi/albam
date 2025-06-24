@@ -30,7 +30,6 @@ VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
-<<<<<<< HEAD
     importlib.import_module(".blender_ui.import_panel", __package__)
     importlib.import_module(".blender_ui.export_panel", __package__)
     importlib.import_module(".engines.mtfw.animation", __package__)
@@ -38,6 +37,7 @@ def register():
     importlib.import_module(".engines.mtfw.archive", __package__)
     importlib.import_module(".engines.mtfw.mesh", __package__)
     importlib.import_module(".engines.hexn.archive")
+    importlib.import_module(".engines.hexn.mesh")
     if os.getenv("ALBAM_ENABLE_REEN"):
         importlib.import_module(".engines.reng.archive", __package__)
         importlib.import_module(".engines.reng.mesh", __package__)
