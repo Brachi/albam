@@ -48,7 +48,6 @@ APPID_VERSION_MAPPER = {
 }
 
 
-
 class LMTKeyframeBounds:
     def __init__(self, bound):
         self.addin = bound.addin
@@ -113,11 +112,11 @@ def load_lmt(file_list_item, context):
             # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
             if lmt_ver > 51:
                 bounds = None
-                bounds_body = track.ofs_bounds.body
+                bounds_body = track.bounds
                 if bounds_body:
-                    b_item = item.bounds.add()
-                    b_item.copy_custom_properties_from(track.ofs_bounds.body)
-                    bounds = LMTKeyframeBounds(track.ofs_bounds.body)
+                    b_item = item.track_bounds.add()
+                    b_item.copy_custom_properties_from(track.bounds)
+                    bounds = LMTKeyframeBounds(track.bounds)
 
             bone_index = mapping.get(str(track.bone_index))
 
@@ -218,7 +217,7 @@ def load_lmt(file_list_item, context):
                     item = keyframe_infos.keyframe_info.add()
                     item.copy_custom_properties_from(k_info)
                     for kb_index, k_block in enumerate(k_info.keyframe_blocks):
-                        k_item = item.attr.add()
+                        k_item = item.keyframe_blocks.add()
                         k_item.copy_custom_properties_from(k_block)
 
     bl_object.albam_asset.original_bytes = lmt_bytes
@@ -791,7 +790,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             kf_info_attr_sizes = []
             for i, kf_info in enumerate(kf_infos):
                 kf_infos_size += KF_INFO_SIZE
-                kf_info_attr = getattr(kf_info, "attr")
+                kf_info_attr = getattr(kf_info, "keyframe_blocks")
                 kf_info_attr_num += len(kf_info_attr)
                 kf_info_attr_sizes.append(len(kf_info_attr) * KF_ATTR_SIZE)
             kf_info_sizes.append(kf_infos_size)
@@ -919,7 +918,7 @@ def export_lmt(bl_obj):
     bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
     dst_lmt = Lmt()
     dst_lmt.id_magic = b"LMT\x00"
-    dst_lmt.version = 51
+    dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)
     block_offsets = _pre_serialize_offset(dst_lmt, len(bl_objects))
     lmt_offsets = _calculate_offsets(bl_objects, app_id)
@@ -1001,7 +1000,9 @@ def export_lmt(bl_obj):
                     dst_track.data = track.raw_data
                     dst_tracks.append(dst_track)
                 anim_header.tracks = dst_tracks
+                anim_header._check()
             else:
+                # Motion Header
                 anim_header = dst_lmt.BlockHeader67(
                     _parent=block_offset, _root=dst_lmt)
                 custom_props.copy_custom_properties_to(anim_header)
@@ -1010,60 +1011,72 @@ def export_lmt(bl_obj):
                 anim_header.ofs_frame = ofc_track_headers[i]
                 anim_header.num_tracks = len(tracks)
                 anim_header.filler = 0
-
+                # Sequence Info
                 dst_seq_infos = []
                 for j, s_info in enumerate(seq_infos):
                     dst_seq_info = dst_lmt.SequenceInfo(_parent=anim_header, _root=dst_lmt)
-                    s_info.copy_custom_properties_to(dst_seq_info)
+                    # s_info.copy_custom_properties_to(dst_seq_info)
                     s_attr = getattr(s_info, "attributes")
-                    s_info.num_seq = len(s_attr)
-                    s_info.ofs_seq = ofc_sq_info_attr[i][j]
+                    dst_seq_info.work = s_info.work
+                    dst_seq_info.num_seq = len(s_attr)
+                    dst_seq_info.ofs_seq = ofc_sq_info_attr[i][j]
                     si_attrs = []
                     for k, s_info_attr in enumerate(s_attr):
                         dst_si_attr = dst_lmt.SeqInfoAttr(_parent=dst_seq_info, _root=dst_lmt)
                         s_info_attr.copy_custom_properties_to(dst_si_attr)
                         si_attrs.append(dst_si_attr)
-                    dst_seq_infos.append(dst_seq_info)
+                    dst_seq_info.attributes = si_attrs
                     dst_seq_info._check()
-
+                    dst_seq_infos.append(dst_seq_info)
+                # Keyframe Info
                 dst_kf_infos = []
                 for j, kf_info in enumerate(kf_infos):
                     dst_kf_info = dst_lmt.KeyframeInfo(_parent=anim_header, _root=dst_lmt)
-                    kf_info.copy_custom_properties_to(dst_kf_info)
-                    k_attrs = getattr(kf_info, "attr")
-                    kf_attrs = []
-                    dst_kf_infos.append(dst_kf_info)
-                    for k, kf_info_attr in enumerate(k_attrs):
+                    #kf_info.copy_custom_properties_to(dst_kf_info)
+                    k_blocks = getattr(kf_info, "keyframe_blocks")
+                    dst_kf_info.type = kf_info.type
+                    dst_kf_info.work = kf_info.work
+                    dst_kf_info.attr = kf_info.attr
+                    dst_kf_info.num_key = len(k_blocks)
+                    dst_kf_info.ofs_seq = ofc_kf_info_attr[i]
+
+                    kf_blocks = []
+                    for k, kf_info_attr in enumerate(k_blocks):
                         dst_k_attr = dst_lmt.KeyframeBlock(_parent=dst_kf_info, _root=dst_lmt)
                         kf_info_attr.copy_custom_properties_to(dst_k_attr)
-                        kf_attrs.append(dst_k_attr)
-                    dst_kf_info.keyframe_blocks = kf_attrs
-
+                        kf_blocks.append(dst_k_attr)
+                    dst_kf_info.keyframe_blocks = kf_blocks
+                    dst_kf_info._check()
+                    dst_kf_infos.append(dst_kf_info)
+                # Tracks
                 dst_tracks = []
                 track_ofc = ofc_tr_data[i]
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track67(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    track.bounds = None
                     cur_bounds = 0
                     if dst_track.buffer_type in BOUNDS_BUFF_TYPES:
+                        # TODO move into calc offsets
                         dst_track.ofs_bounds = ofc_bounds[i] + cur_bounds * 32
-                        bound = getattr(track, "bounds")[0]
+                        bound = getattr(track, "track_bounds")[0]
                         dst_bound = dst_lmt.FloatBuffer(_parent=dst_track, _root=dst_lmt)
                         bound.copy_custom_properties_to(dst_bound)
-                        dst_track.body = dst_bound
+                        dst_bound._check()
+                        dst_track.bounds = dst_bound
                         cur_bounds += 1
                     else:
                         dst_track.ofs_bounds = 0
                     dst_track.len_data = len(track.raw_data)
                     dst_track.ofs_data = track_ofc[j]
                     dst_track.data = track.raw_data
-                    dst_tracks.append(dst_track)
                     dst_track._check()
+                    dst_tracks.append(dst_track)
                 anim_header.tracks = dst_tracks
-
                 anim_header.sequence_infos = dst_seq_infos
                 anim_header.key_infos = dst_kf_infos
-            anim_header._check()
+                anim_header._check()
+
             block_offset.block_header = anim_header
         block_offset.offset = ofc_block[i]
         block_offsets.append(block_offset)
@@ -1257,7 +1270,9 @@ class KeyInfo(CustomPropsBase):
         name="Type", default=0, options=set())
     work: bpy.props.IntProperty(
         name="Work", default=0, options=set())
-    attr: bpy.props.CollectionProperty(
+    attr: bpy.props.IntProperty(
+        name="Attr", default=0, options=set())
+    keyframe_blocks: bpy.props.CollectionProperty(
         type=KeyBlock
     )
 
@@ -1372,7 +1387,7 @@ class LMT67Track(CustomPropsBase):
         description="Raw binary data for this track",
         subtype='BYTE_STRING'
     )
-    bounds: bpy.props.CollectionProperty(
+    track_bounds: bpy.props.CollectionProperty(
         type=FrameBounds,
         name="Frame Bounds",
     )
