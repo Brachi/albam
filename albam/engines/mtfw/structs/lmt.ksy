@@ -94,10 +94,14 @@ types:
       - {id: len_data, type: u4}
       - {id: ofs_data, type: u4}
       - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: ofs_bounds, type: ofs_frame_bounds}
+      - {id: ofs_bounds, type: u4}
     instances:
       data:
         {pos: ofs_data, size: len_data}
+      is_used:
+        value: ofs_data != 0
+      bounds:
+        {pos: ofs_bounds, type: float_buffer, if: is_used}
        
   attr:
     seq:

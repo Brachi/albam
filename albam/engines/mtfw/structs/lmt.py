@@ -1049,6 +1049,8 @@ class Lmt(ReadWriteKaitaiStruct):
             self._root = _root
             self._should_write_data = False
             self.data__to_write = True
+            self._should_write_bounds = False
+            self.bounds__to_write = True
 
         def _read(self):
             self.buffer_type = self._io.read_u1()
@@ -1062,8 +1064,7 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(4):
                 self.reference_data.append(self._io.read_f4le())
 
-            self.ofs_bounds = Lmt.OfsFrameBounds(self._io, self, self._root)
-            self.ofs_bounds._read()
+            self.ofs_bounds = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -1071,13 +1072,18 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(len(self.reference_data)):
                 pass
 
-            self.ofs_bounds._fetch_instances()
             _ = self.data
+            if self.is_used:
+                pass
+                _ = self.bounds
+                self.bounds._fetch_instances()
+
 
 
         def _write__seq(self, io=None):
             super(Lmt.Track67, self)._write__seq(io)
             self._should_write_data = self.data__to_write
+            self._should_write_bounds = self.bounds__to_write
             self._io.write_u1(self.buffer_type)
             self._io.write_u1(self.usage)
             self._io.write_u1(self.joint_type)
@@ -1089,7 +1095,7 @@ class Lmt(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.reference_data[i])
 
-            self.ofs_bounds._write__seq(self._io)
+            self._io.write_u4le(self.ofs_bounds)
 
 
         def _check(self):
@@ -1099,10 +1105,6 @@ class Lmt(ReadWriteKaitaiStruct):
             for i in range(len(self.reference_data)):
                 pass
 
-            if self.ofs_bounds._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"ofs_bounds", self.ofs_bounds._root, self._root)
-            if self.ofs_bounds._parent != self:
-                raise kaitaistruct.ConsistencyError(u"ofs_bounds", self.ofs_bounds._parent, self)
 
         @property
         def data(self):
@@ -1133,6 +1135,58 @@ class Lmt(ReadWriteKaitaiStruct):
             pass
             if (len(self.data) != self.len_data):
                 raise kaitaistruct.ConsistencyError(u"data", len(self.data), self.len_data)
+
+        @property
+        def is_used(self):
+            if hasattr(self, '_m_is_used'):
+                return self._m_is_used
+
+            self._m_is_used = (self.ofs_data != 0)
+            return getattr(self, '_m_is_used', None)
+
+        def _invalidate_is_used(self):
+            del self._m_is_used
+        @property
+        def bounds(self):
+            if self._should_write_bounds:
+                self._write_bounds()
+            if hasattr(self, '_m_bounds'):
+                return self._m_bounds
+
+            if self.is_used:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bounds)
+                self._m_bounds = Lmt.FloatBuffer(self._io, self, self._root)
+                self._m_bounds._read()
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_bounds', None)
+
+        @bounds.setter
+        def bounds(self, v):
+            self._m_bounds = v
+
+        def _write_bounds(self):
+            self._should_write_bounds = False
+            if self.is_used:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bounds)
+                self.bounds._write__seq(self._io)
+                self._io.seek(_pos)
+
+
+
+        def _check_bounds(self):
+            pass
+            if self.is_used:
+                pass
+                if self.bounds._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"bounds", self.bounds._root, self._root)
+                if self.bounds._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"bounds", self.bounds._parent, self)
+
 
 
     class BlockHeader67(ReadWriteKaitaiStruct):
