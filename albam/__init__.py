@@ -36,6 +36,7 @@ def register():
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
     importlib.import_module("albam.engines.hexn.archive")
+    importlib.import_module("albam.engines.hexn.mesh")
     if os.getenv("ALBAM_ENABLE_REEN"):
         importlib.import_module("albam.engines.reng.archive")
         importlib.import_module("albam.engines.reng.mesh")
