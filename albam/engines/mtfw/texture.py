@@ -566,61 +566,31 @@ def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     is_rtex = custom_properties.render_target
-
     compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
         tex = Rtex157()
         tex.id_magic = b"RTX\x00"
-        tex_type = int(custom_properties.unk_type, 16)
-        reserved_01 = 0
-        shift = 0
-        constant = 0
-        reserved_02 = 2
-        dimension = 2
+        #tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
+        tex.num_mipmaps_per_image = 1
         dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
         tex = Tex157()
         tex.id_magic = b"TEX\x00"
-        #tex_type = int(custom_properties.unk_type, 16)
-        #reserved_01 = 0
-        #shift = 0
-        #constant = 1  # XXX Not really, see tests
-        #reserved_02 = 0
-        #dimension = 2 if not dds_header.is_proper_cubemap else 6
-
-    #packed_data_1 = (
-    #    (tex_type & 0xffff) |
-    #    ((reserved_01 & 0x00ff) << 16) |
-    #    ((shift & 0x000f) << 24) |
-    #    ((dimension & 0x000f) << 28)
-    #)
 
     tex.width = bl_im.size[0]
     if is_rtex:
-        image_count = 1  # curently hardcoded
-        height = bl_im.size[1]
-        num_mipmaps = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2))
+        if custom_properties.type == "0x6":
+            tex.num_images = 6
+        else:
+            tex.num_images = 1  # curently hardcoded
+        tex.height = bl_im.size[1]
     else:
         tex.num_images = dds_header.image_count
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
         tex.num_mipmaps_per_image = dds_header.dwMipMapCount
 
-    #packed_data_2 = (
-    #    (num_mipmaps & 0x3f) |
-    #    ((width & 0x1fff) << 6) |
-    #    ((height & 0x1fff) << 19)
-    #)
-    #packed_data_3 = (
-    #    (image_count & 0xff) |
-    #    ((compression_format & 0xff) << 8) |
-    #    ((constant & 0x1fff) << 16) |
-    #    ((reserved_02 & 0x003) << 29)
-    #)
-    #tex.packed_data_1 = packed_data_1
-    #tex.packed_data_2 = packed_data_2
-    #tex.packed_data_3 = packed_data_3
     if not is_rtex:
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)

@@ -22,7 +22,6 @@ seq:
   - {id: auto_resize, type: b1}
   - {id: render_target, type: b1}
   - {id: use_vtf, type: b1}
-  - {id: mipmap_offsets, type: u4, repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
 
 instances:
   size_before_data_:

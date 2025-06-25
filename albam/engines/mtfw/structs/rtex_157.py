@@ -32,17 +32,10 @@ class Rtex157(ReadWriteKaitaiStruct):
         self.auto_resize = self._io.read_bits_int_le(1) != 0
         self.render_target = self._io.read_bits_int_le(1) != 0
         self.use_vtf = self._io.read_bits_int_le(1) != 0
-        self.mipmap_offsets = []
-        for i in range((self.num_mipmaps_per_image * self.num_images)):
-            self.mipmap_offsets.append(self._io.read_u4le())
-
 
 
     def _fetch_instances(self):
         pass
-        for i in range(len(self.mipmap_offsets)):
-            pass
-
 
 
     def _write__seq(self, io=None):
@@ -62,10 +55,6 @@ class Rtex157(ReadWriteKaitaiStruct):
         self._io.write_bits_int_le(1, int(self.auto_resize))
         self._io.write_bits_int_le(1, int(self.render_target))
         self._io.write_bits_int_le(1, int(self.use_vtf))
-        for i in range(len(self.mipmap_offsets)):
-            pass
-            self._io.write_u4le(self.mipmap_offsets[i])
-
 
 
     def _check(self):
@@ -74,11 +63,6 @@ class Rtex157(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"id_magic", len(self.id_magic), 4)
         if not (self.id_magic == b"\x52\x54\x58\x00"):
             raise kaitaistruct.ValidationNotEqualError(b"\x52\x54\x58\x00", self.id_magic, None, u"/seq/0")
-        if (len(self.mipmap_offsets) != (self.num_mipmaps_per_image * self.num_images)):
-            raise kaitaistruct.ConsistencyError(u"mipmap_offsets", len(self.mipmap_offsets), (self.num_mipmaps_per_image * self.num_images))
-        for i in range(len(self.mipmap_offsets)):
-            pass
-
 
     @property
     def size_before_data_(self):
