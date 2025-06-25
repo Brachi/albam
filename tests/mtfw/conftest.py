@@ -39,6 +39,8 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("lmt", metafunc, "parsed_lmt_from_arc")
     elif "parsed_tex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
+    elif "parsed_rtex_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
 
 
 @pytest.fixture(scope="session")
@@ -205,6 +207,27 @@ def parsed_tex_from_arc(request):
     parsed_tex._num_bytes = len(tex_bytes)
 
     return parsed_tex
+
+
+@pytest.fixture
+def parsed_rtex_from_arc(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.texture import APPID_RTEXCLS_MAP
+    arc = request.param[0]
+    rtex_file_entry = request.param[1]
+    app_id = request.param[2]
+    Rtex = APPID_RTEXCLS_MAP[app_id]
+
+    rtex_bytes = arc.get_file(rtex_file_entry.file_path, rtex_file_entry.file_type)
+    parsed_rtex = Rtex.from_bytes(rtex_bytes)
+    parsed_rtex._read()
+    parsed_rtex._arc_name = os.path.basename(arc.file_path)
+    parsed_rtex._mrl_path = rtex_file_entry.file_path
+    parsed_rtex._num_bytes = len(rtex_bytes)
+
+    return parsed_rtex
 
 
 @pytest.fixture
