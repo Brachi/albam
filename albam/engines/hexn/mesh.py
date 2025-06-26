@@ -2,6 +2,7 @@ import struct
 
 import bpy
 
+from albam.lib.misc import chunks
 from albam.registry import blender_registry
 from .structs.hexane_edgemodel import HexaneEdgemodel
 
@@ -36,8 +37,14 @@ def build_blender_mesh(mesh_header):
         pos_y = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset + 4)
         pos_z = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset + 8)
 
-        vertices.append((pos_x[0], pos_y[0], pos_z[0]))
+        vertices.append((pos_x[0], -pos_z[0], pos_y[0]))
         current_offset += vertex_stride
-        me_ob.from_pydata(vertices, [], [])
+
+    indices = struct.unpack_from(f'{edge_mesh.size_buffer_indices // 2}H', edge_mesh.buffer_indices)
+    assert min(indices) >= 0, "Bad face indices"
+    indices = chunks(indices, 3)
+    indices = [triplet for triplet in indices if (triplet != (0, 0) and triplet != (0, 0, 0) and triplet != (0, ))]
+
+    me_ob.from_pydata(vertices, [], indices)
 
     return ob
