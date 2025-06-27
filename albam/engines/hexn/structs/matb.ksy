@@ -25,4 +25,4 @@ types:
   tmp:
     seq:
       - {id: shader, type: strz, encoding: ASCII}
-      - {id: textures, type: strz, encoding: ascii, repeat: expr, repeat-expr: _parent.num_textures}
+      - {id: textures, type: strz, encoding: ASCII, repeat: expr, repeat-expr: _parent.num_textures}
