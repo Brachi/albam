@@ -733,15 +733,15 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     block_offsets_table_size = num_blocks * BLOCK_OFFSET_SIZE
 
     total_headers_size = 0
-    block_body_sizes = []
-    track_headers_sizes = []
-    track_data_sizes = []
-    tracks_raw_data_sizes = []
-    seq_info_sizes = []
-    seq_info_attr_sizes = []
-    kf_info_sizes = []
-    key_info_attr_sizes = []
-    bounds_sizes = []
+    sz_motion_body_sizes = []
+    sz_track_headers = []
+    sz_track_data = []
+    sz_tracks_raw_data = []
+    sz_seq_infos = []
+    sz_seq_info_attrs = []
+    sz_key_infos = []
+    sz_key_info_attrs = []
+    sz_bounds = []
     # first pass calculate sizes
     for bl_obj in bl_objects:
         block_body_size = 0
@@ -764,10 +764,10 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 track_raw_sizes.append(track_data_size)
                 if track.buffer_type in BOUNDS_BUFF_TYPES:
                     track_bounds += 1
-            track_headers_sizes.append(t_size)
-            track_data_sizes.append(raw_data_size)
+            sz_track_headers.append(t_size)
+            sz_track_data.append(raw_data_size)
             bounds_size = track_bounds * BOUND_SIZE
-            bounds_sizes.append(bounds_size)
+            sz_bounds.append(bounds_size)
 
             seq_infos = getattr(second_props["sequence_infos"], "sequence_info")
             seq_infos_size = 0
@@ -779,9 +779,9 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 seq_info_attr = getattr(s_info, "attributes")
                 seq_info_attrs_num += len(seq_info_attr)
                 s_info_attr_sizes.append(len(seq_info_attr) * SQ_ATTR_SIZE)
-            seq_info_sizes.append(seq_infos_size)
+            sz_seq_infos.append(seq_infos_size)
             seq_info_attrs_size = seq_info_attrs_num * SQ_ATTR_SIZE
-            seq_info_attr_sizes.append(s_info_attr_sizes)
+            sz_seq_info_attrs.append(s_info_attr_sizes)
 
             kf_infos = getattr(second_props["keyframe_infos"], "keyframe_info")
             kf_infos_size = 0
@@ -793,22 +793,22 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 kf_info_attr = getattr(kf_info, "keyframe_blocks")
                 kf_info_attr_num += len(kf_info_attr)
                 kf_info_attr_sizes.append(len(kf_info_attr) * KF_ATTR_SIZE)
-            kf_info_sizes.append(kf_infos_size)
-            key_info_attr_sizes.append(kf_info_attr_sizes)
+            sz_key_infos.append(kf_infos_size)
+            sz_key_info_attrs.append(kf_info_attr_sizes)
             kf_info_attr_size = kf_info_attr_num * KF_ATTR_SIZE
 
             block_body_size = (t_size + bounds_size + raw_data_size + seq_infos_size + seq_info_attrs_size +
                                kf_infos_size + kf_info_attr_size)
         else:
-            seq_info_sizes.append(0)
-            seq_info_attr_sizes.append([])
-            kf_info_sizes.append(0)
-            key_info_attr_sizes.append([])
-            track_headers_sizes.append(0)
-            track_data_sizes.append(0)
-            bounds_sizes.append(0)
-        tracks_raw_data_sizes.append(track_raw_sizes)
-        block_body_sizes.append(block_body_size)
+            sz_seq_infos.append(0)
+            sz_seq_info_attrs.append([])
+            sz_key_infos.append(0)
+            sz_key_info_attrs.append([])
+            sz_track_headers.append(0)
+            sz_track_data.append(0)
+            sz_bounds.append(0)
+        sz_tracks_raw_data.append(track_raw_sizes)
+        sz_motion_body_sizes.append(block_body_size)
 
     # Offset for motion headers
     motion_headers_start = HEADER_SIZE + block_offsets_table_size
@@ -840,37 +840,37 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             _ofs = cur_tracks_section_offset
             track_section_offsets.append(_ofs)
             # track headers
-            _ofs += track_headers_sizes[i]
+            _ofs += sz_track_headers[i]
             # bounds start
-            if _ofs % 16:
-                _ofs += 16 - (_ofs % 16)
+            #if _ofs % 16:
+            #    _ofs += 16 - (_ofs % 16)
             bounds_start_offsets.append(_ofs)
             # track data start
-            _ofs += bounds_sizes[i]
+            _ofs += sz_bounds[i]
             cur_track_data_offsets = []
-            for t in tracks_raw_data_sizes[i]:
+            for t in sz_tracks_raw_data[i]:
                 cur_track_data_offsets.append(_ofs)
                 _ofs += t
             track_data_offsets.append(cur_track_data_offsets)
             # seq infos start
             seq_infos_offsets.append(_ofs)
             # seq infos attr
-            _ofs += seq_info_sizes[i]
+            _ofs += sz_seq_infos[i]
             s_attr_ofs = []
-            for s_attr_size in seq_info_attr_sizes[i]:
+            for s_attr_size in sz_seq_info_attrs[i]:
                 s_attr_ofs.append(_ofs)
                 _ofs += s_attr_size
             seq_info_attr_offsets.append(s_attr_ofs)
             # key infos
             key_info_offsets.append(_ofs)
-            _ofs += kf_info_sizes[i]
+            _ofs += sz_key_infos[i]
             # key infos attr
             k_attr_ofs = []
-            for k_attr_size in key_info_attr_sizes[i]:
+            for k_attr_size in sz_key_info_attrs[i]:
                 k_attr_ofs.append(_ofs)
                 _ofs += k_attr_size
-            key_info_attr_offsets.append(_ofs)
-            cur_tracks_section_offset += block_body_sizes[i]
+            key_info_attr_offsets.append(k_attr_ofs)
+            cur_tracks_section_offset += sz_motion_body_sizes[i]
         else:
             track_section_offsets.append(0)
             bounds_start_offsets.append(0)
@@ -884,7 +884,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         HEADER_SIZE +
         block_offsets_table_size +
         total_headers_size +
-        sum(block_body_sizes)
+        sum(sz_motion_body_sizes)
     )
 
     return {
@@ -1038,7 +1038,7 @@ def export_lmt(bl_obj):
                     dst_kf_info.work = kf_info.work
                     dst_kf_info.attr = kf_info.attr
                     dst_kf_info.num_key = len(k_blocks)
-                    dst_kf_info.ofs_seq = ofc_kf_info_attr[i]
+                    dst_kf_info.ofs_seq = ofc_kf_info_attr[i][j]
 
                     kf_blocks = []
                     for k, kf_info_attr in enumerate(k_blocks):
