@@ -403,14 +403,28 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMa
             collection = getattr(custom_props, k)
             if not collection:
                 return
+            # display collection item
             if isinstance(collection, bpy.types.bpy_prop_collection):
-                active_index = custom_props.item_index
+                active_index = getattr(custom_props, "item_index", 0)
                 if 0 <= active_index < len(collection):
-                    active_track = collection[active_index]
+                    active_item = collection[active_index]
                     name = k.capitalize()
                     layout.label(text=f"{name}: {active_index}")
-                    for collection in active_track.__annotations__:
-                        layout.prop(active_track, collection)
+                    # display child collection item
+                    for child_k in active_item.__annotations__:
+                        child_value = getattr(active_item, child_k)
+                        if isinstance(child_value, bpy.types.bpy_prop_collection):
+                            child_active_index = getattr(active_item, "item_index", 0)
+                            if 0 <= child_active_index < len(child_value):
+                                child_active_item = child_value[child_active_index]
+                                child_name = child_k.capitalize()
+                                layout.label(text=f"{child_name}: {child_active_index}")
+                                for prop in child_active_item.__annotations__:
+                                    layout.prop(child_active_item, prop)
+                            else:
+                                layout.label(text=f"{child_k}: (empty)")
+                        else:
+                            layout.prop(active_item, child_k)
 
 
 SUBPANEL_BASE = {
