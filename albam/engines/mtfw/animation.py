@@ -755,7 +755,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             tracks = getattr(second_props["tracks"], "tracks")
             t_size = len(tracks) * TRACK_SIZE
             raw_data_size = 0
-            track_bounds = 0
+            track_bounds = []
+            num_bounds = 0
             for track in tracks:
                 track_data_size = len(track.raw_data)
                 if track_data_size % 4:
@@ -763,11 +764,15 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
                 raw_data_size += track_data_size
                 track_raw_sizes.append(track_data_size)
                 if track.buffer_type in BOUNDS_BUFF_TYPES:
-                    track_bounds += 1
+                    track_bounds.append(BOUND_SIZE)
+                    num_bounds += 1
+                else:
+                    track_bounds.append(0)
+
             sz_track_headers.append(t_size)
             sz_track_data.append(raw_data_size)
-            bounds_size = track_bounds * BOUND_SIZE
-            sz_bounds.append(bounds_size)
+            bounds_size = num_bounds * BOUND_SIZE
+            sz_bounds.append(track_bounds)
 
             seq_infos = getattr(second_props["sequence_infos"], "sequence_info")
             seq_infos_size = 0
@@ -841,12 +846,16 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             track_section_offsets.append(_ofs)
             # track headers
             _ofs += sz_track_headers[i]
-            # bounds start
-            #if _ofs % 16:
-            #    _ofs += 16 - (_ofs % 16)
-            bounds_start_offsets.append(_ofs)
+            cur_b_offsets = []
+            for b_size in sz_bounds[i]:
+                if b_size != 0:
+                    cur_b_offsets.append(_ofs)
+                else:
+                    cur_b_offsets.append(0)
+                _ofs += b_size
+            bounds_start_offsets.append(cur_b_offsets)
             # track data start
-            _ofs += sz_bounds[i]
+            # _ofs += sum(sz_bounds[i])
             cur_track_data_offsets = []
             for t in sz_tracks_raw_data[i]:
                 cur_track_data_offsets.append(_ofs)
@@ -873,7 +882,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
             cur_tracks_section_offset += sz_motion_body_sizes[i]
         else:
             track_section_offsets.append(0)
-            bounds_start_offsets.append(0)
+            bounds_start_offsets.append([])
             track_data_offsets.append([])
             seq_infos_offsets.append(0)
             seq_info_attr_offsets.append([])
@@ -1055,16 +1064,15 @@ def export_lmt(bl_obj):
                     dst_track = dst_lmt.Track67(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
                     track.bounds = None
-                    cur_bounds = 0
                     if dst_track.buffer_type in BOUNDS_BUFF_TYPES:
                         # TODO move into calc offsets
-                        dst_track.ofs_bounds = ofc_bounds[i] + cur_bounds * 32
+                        #dst_track.ofs_bounds = ofc_bounds[i][j]
+                        dst_track.ofs_bounds = ofc_bounds[i][j]
                         bound = getattr(track, "track_bounds")[0]
                         dst_bound = dst_lmt.FloatBuffer(_parent=dst_track, _root=dst_lmt)
                         bound.copy_custom_properties_to(dst_bound)
                         dst_bound._check()
                         dst_track.bounds = dst_bound
-                        cur_bounds += 1
                     else:
                         dst_track.ofs_bounds = 0
                     dst_track.len_data = len(track.raw_data)
