@@ -1,18 +1,20 @@
-# Albam
+# Albam Redux
+ 
+Albam redux is a Blender addon intended to simplify modding by leveraging the Kaitai Struct parser.
 
-⚠️  
-Albam is currently in heavy development and may be unstable.  
-There's no documentation yet.  
-⚠️  
+This is a fork of Albam and the spiritual successor of Albam Reloaded
+
 <p align="left">
-<a href="https://github.com/Brachi/albam/actions"><img alt="Actions Status" src="https://github.com/Brachi/albam/workflows/Test/badge.svg"></a>
-<img alt="Code coverage" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Brachi/879e4f106f38b080ff10d3f46e3336e6/raw/covbadge.json">
+<a href="https://github.com/HenryOfCarim/albam_redux/actions"><img alt="Actions Status" src="https://github.com/HenryOfCarim/albam_redux/workflows/Test/badge.svg"></a>
+<img alt="Code coverage" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/HenryOfCarim/8d9d772c4e886406cfead04f0a5febc1/raw/covbadge.json">
 </p>
 
 This is the source of _Albam_, a [Blender](https://blender.org) [addon](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html) for importing and exporting 3d models and other game engine formats.   
 
-For user documentation and modding tutorials, refer to the ~User Docs~ (TODO)  
-For real time communication, join the [Chat](https://discord.gg/69sphky9UX)
+For user documentation and modding tutorials, refer to the [Wiki](https://github.com/HenryOfCarim/albam_redux/wiki)
+If you are willing to help in development or get quick help you can visit our discord server
+
+[<img src="https://discord.com/api/guilds/1008767651578925076/widget.png?style=banner2" alt="Discord Banner 2"/>](https://discord.gg/69sphky9UX)
 
 ## Quickstart
 
