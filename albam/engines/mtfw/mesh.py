@@ -913,7 +913,8 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
 def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=None):
     if bl_obj.type != "ARMATURE":
         return
-    export_bones = True
+    export_settings = bpy.context.scene.albam.export_settings
+    export_bones = export_settings.export_bones
     bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj)
     dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
