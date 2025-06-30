@@ -680,7 +680,7 @@ def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
     if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
         # bbox-space to global-space
         scale_matrix = Matrix.Scale(bbox_data.dimension, 4)
-        # 
+        # create a translation matrix that doesn't affect scale component
         translation_matrix = (
             Matrix.Translation((bbox_data.min_x, bbox_data.min_y, bbox_data.min_z)) - Matrix.Scale(1, 4)
         )
@@ -916,7 +916,8 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         return
     export_settings = bpy.context.scene.albam.export_settings
     export_bones = export_settings.export_bones
-    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj, dst_mod)
+    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transforms(
+        bl_obj, dst_mod)
     dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
     bones_data.bone_map = src_mod.bones_data.bone_map
@@ -1101,7 +1102,7 @@ def _restore_martix(m):
     return restored_matrix.transposed()
 
 
-def _get_bone_transform(armature, mod):
+def _get_bone_transforms(armature, mod):
     magnitudes = []
     bone_locations = []
     bone_matrices_local = []
@@ -1111,7 +1112,7 @@ def _get_bone_transform(armature, mod):
         rotation_matrix = Matrix.Rotation(math.radians(-90), 4, 'X')
         if parent_bone:
             parent_space_matrix = parent_bone.matrix_local.inverted() @ bone.matrix_local
-            relative_head_coords = bone.head - parent_bone.head
+            # relative_head_coords = bone.head - parent_bone.head
         else:
             parent_space_matrix = rotation_matrix @ bone.matrix_local
             print("The bone has no parent.")
