@@ -680,6 +680,7 @@ def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
     if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
         # bbox-space to global-space
         scale_matrix = Matrix.Scale(bbox_data.dimension, 4)
+        # 
         translation_matrix = (
             Matrix.Translation((bbox_data.min_x, bbox_data.min_y, bbox_data.min_z)) - Matrix.Scale(1, 4)
         )
@@ -915,7 +916,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         return
     export_settings = bpy.context.scene.albam.export_settings
     export_bones = export_settings.export_bones
-    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj)
+    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj, dst_mod)
     dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
     bones_data.bone_map = src_mod.bones_data.bone_map
@@ -1018,7 +1019,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         m2.row_3 = dst_mod.Vec4(_parent=m2, _root=m._root)
         m2.row_4 = dst_mod.Vec4(_parent=m2, _root=m._root)
 
-        if dst_mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+        if dst_mod.header.version in VERSIONS_BONES_BBOX_AFFECTED and not export_bones:
             # unapply transforms and apply the ones from the bbox to export
             # TODO: avoid doing this if bbox didn´t change
             src_bbox_data = _create_bbox_data(src_mod)
@@ -1100,7 +1101,7 @@ def _restore_martix(m):
     return restored_matrix.transposed()
 
 
-def _get_bone_transform(armature):
+def _get_bone_transform(armature, mod):
     magnitudes = []
     bone_locations = []
     bone_matrices_local = []
@@ -1115,17 +1116,31 @@ def _get_bone_transform(armature):
             parent_space_matrix = rotation_matrix @ bone.matrix_local
             print("The bone has no parent.")
         print("Bone:", bone.name)
+        # inverse space
         inverse_space_matrix = bone.matrix_local
-
         inverse_space_matrix = rotation_matrix @ inverse_space_matrix
         inverse_translation = inverse_space_matrix.to_translation() * 100
         inverse_space_copy = inverse_space_matrix.copy()
         inverse_space_copy.translation = inverse_translation
-        bone_matrices_inverse.append(inverse_space_copy.inverted().transposed())
+        if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+            # copied code from _create_bbox_data()
+            min_length = abs(min(mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z))
+            max_length = max(abs(mod.bbox_max.x), abs(
+                mod.bbox_max.y), abs(mod.bbox_max.z))
+            dimension = min_length + max_length
+            # shift the matrix to the bbox space and scale it
+            translation_matrix = Matrix.Translation(
+                (mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z)) - Matrix.Scale(1, 4)
+            scale_matrix = Matrix.Scale(dimension, 4)
+            ibbox_matrix = inverse_space_copy.inverted()
+            ibbox_matrix = ibbox_matrix @ scale_matrix + translation_matrix
+            bone_matrices_inverse.append(ibbox_matrix.transposed())
+        else:
+            bone_matrices_inverse.append(inverse_space_copy.inverted().transposed())
 
         parent_translation = parent_space_matrix.to_translation() * 100
         bone_locations.append(parent_translation)
-
+        # local space
         parent_space_copy = parent_space_matrix.copy()
         parent_space_copy.translation = parent_translation
         # bone_matrices_local.append(parent_space_matrix.transposed())
@@ -1139,7 +1154,10 @@ def _get_bone_transform(armature):
         print("Translation:", parent_translation)
         print("Magnitude:", magnitude)
         print("Inverse space Matrix:")
-        print(inverse_space_copy.inverted().transposed())
+        if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+            print(ibbox_matrix.transposed())
+        else:
+            print(inverse_space_copy.inverted().transposed())
 
     return magnitudes, bone_locations, bone_matrices_local, bone_matrices_inverse
 
