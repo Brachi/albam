@@ -26,6 +26,7 @@ from albam.lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from albam.lib.misc import chunks
+from albam.lib.export_checks import check_all_objects_have_materials
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
 from albam.exceptions import AlbamCheckFailure
@@ -752,6 +753,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
+@check_all_objects_have_materials
 def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset

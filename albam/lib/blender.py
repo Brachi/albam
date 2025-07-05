@@ -303,7 +303,7 @@ def get_bl_materials(blender_objects):
         if not ob.materials:
             continue
         mat = ob.materials[0]
-        if mat.name not in cache:
+        if mat and mat.name not in cache:
             materials.append(mat)
             cache.add(mat.name)
     return materials
