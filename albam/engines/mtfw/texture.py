@@ -741,9 +741,10 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         items=[
             ("0x209d", "0x209d", "", 1),
             ("0x9a", "0x9a", "", 2),
-            ("0xa09d", "0xa09d", "", 3),
-            ("0x9e", "0x9e", "", 4),
-            ("0x99", "0x99", "", 5),
+            ("0x9b", "0x9b", "", 3),
+            ("0xa09d", "0xa09d", "", 4),
+            ("0x9e", "0x9e", "", 5),
+            ("0x99", "0x99", "", 6),
         ],
         options=set()
     )
