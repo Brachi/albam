@@ -54,11 +54,38 @@ def build_blender_mesh(mesh_header, bl_materials):
                if (triplet != (0, 0) and triplet != (0, 0, 0) and triplet != (0, ))]
     me_ob.from_pydata(vertices, [], indices)
     _build_uvs(me_ob, uvs)
+    _build_weights(ob, edge_mesh)
     mesh_material_path = mesh_header.materials.first_material
     if bl_materials.get(mesh_material_path):
         me_ob.materials.append(bl_materials[mesh_material_path])
 
     return ob
+
+
+def _build_weights(bl_obj, edge_mesh):
+    WEIGHT = struct.Struct("8B")
+    weights_per_vertex = {}
+
+    for i in range(0, edge_mesh.size_buffer_weights, WEIGHT.size):
+        wv_and_bi = WEIGHT.unpack_from(edge_mesh.buffer_weights, i)
+        weightsval = wv_and_bi[0:4]
+        boneindices = wv_and_bi[4:8]
+        test = zip(boneindices, weightsval)
+        weights_per_vertex[i // 8] = tuple(test)
+
+    wperbone = {}
+    for vertex, tuples in weights_per_vertex.items():
+        for bone, value in tuples:
+            if value != 0 and bone != 0 and bone not in wperbone:
+                wperbone[bone] = []
+                wperbone[bone].append((vertex, value))
+            elif value != 0 and bone != 0 and bone in wperbone:
+                wperbone[bone].append((vertex, value))
+
+    for bone_index, data in wperbone.items():
+        vg = bl_obj.vertex_groups.new(name=str(bone_index))
+        for vertex_index, weight_value in data:
+            vg.add((vertex_index,), weight_value, "ADD")
 
 
 def _build_uvs(bl_mesh, uvs, name="uv"):
