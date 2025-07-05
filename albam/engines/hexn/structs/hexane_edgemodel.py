@@ -172,8 +172,8 @@ class HexaneEdgemodel(KaitaiStruct):
                 return self._m_buffer_weights
 
             _pos = self._io.pos()
-            self._io.seek(self.ofs_buffer_vertices)
-            self._m_buffer_weights = self._io.read_bytes(self.size_buffer_vertices)
+            self._io.seek(self.ofs_buffer_weights)
+            self._m_buffer_weights = self._io.read_bytes(self.size_buffer_weights)
             self._io.seek(_pos)
             return getattr(self, '_m_buffer_weights', None)
 
