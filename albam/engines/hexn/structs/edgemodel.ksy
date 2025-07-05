@@ -116,4 +116,4 @@ types:
       buffer_vertices:
         {pos: ofs_buffer_vertices, size: size_buffer_vertices}
       buffer_weights:
-        {pos: ofs_buffer_vertices, size: size_buffer_vertices}
+        {pos: ofs_buffer_weights, size: size_buffer_weights}
