@@ -40,6 +40,14 @@ class ExportableItem(bpy.types.PropertyGroup):
             return "Object missing"
         return self.bl_object.name
 
+    @property
+    def is_bl_object_missing(self):
+        if not self.bl_object:
+            return True
+        if self.bl_object and self.bl_object.name not in bpy.context.scene.objects:
+            return True
+        return False
+
 
 @blender_registry.register_blender_prop_albam(name="exportable")
 class ExportableItems(bpy.types.PropertyGroup):
@@ -59,6 +67,17 @@ class ALBAM_UL_ExportableObjects(bpy.types.UIList):
         row = layout.row(align=True)
         row.label(text=item.display_name)
 
+    def filter_items(self, context, data, propname):
+        item_list = getattr(data, propname)
+
+        filtered = []
+        for idx, item in enumerate(item_list):
+            if not item.is_bl_object_missing:
+                filtered.append(self.bitflag_filter_item)
+            else:
+                filtered.append(0)
+        return filtered, []
+
 
 @blender_registry.register_blender_type
 class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
@@ -77,6 +96,9 @@ class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
         exportable = context.scene.albam.exportable
         file_list = exportable.file_list
         index = exportable.file_list_selected_index
+        item = ALBAM_OT_Export.get_selected_item(context)
+        if item and item.is_bl_object_missing:
+            return False
         if len(file_list) > 0 and 0 <= index < len(file_list):
             return True
         return False
@@ -226,7 +248,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         item = cls.get_selected_item(context)
-        if not item:
+        if not item or not item.bl_object or item.is_bl_object_missing:
             return False
         albam_asset = item.bl_object.albam_asset
         if (albam_asset.app_id, albam_asset.extension) not in blender_registry.exportable_extensions:
