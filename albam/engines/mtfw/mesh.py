@@ -384,7 +384,6 @@ def build_blender_model(file_list_item, context):
 
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
-            raise
             continue
 
     bl_object.albam_asset.original_bytes = mod_bytes
