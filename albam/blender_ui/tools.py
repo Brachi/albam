@@ -131,6 +131,11 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
         row = layout.row()
         row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        row = layout.row()
+        row.label(text="Dump frames to json files")
+        row = layout.row()
+        row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
+        row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
 
     @classmethod
     def poll(cls, context):
@@ -320,15 +325,32 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
         subtype='FILE_PATH',
     )
     filepath: FILEPATH
+    side: bpy.props.EnumProperty(
+        name="Side",
+        description="Side of the character to dump frames for",
+        default="left",
+        options={'SKIP_SAVE'},
+        items=[
+            ('left', "Left", "Dump frames for left side"),
+            ('right', "Right", "Dump frames for right side"),
+        ],
+    )
+    EXTENSION_FILTER = bpy.props.StringProperty(
+        default="*.json",
+        options={'HIDDEN'},
+    )
+    filter_glob: EXTENSION_FILTER
+    filename = bpy.props.StringProperty(default="")
 
     def invoke(self, context, event):  # pragma: no cover
+        self.filepath = context.active_object.name + ".json"
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
         ob_armature = self.get_selected_armature(context)
         print(self.filepath)
-        dump_frames(self.filepath, ob_armature, 10)
+        dump_frames(self.filepath, ob_armature, 10, self.side)
         return {'FINISHED'}
 
     def get_selected_armature(self, context):

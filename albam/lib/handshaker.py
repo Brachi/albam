@@ -4,6 +4,57 @@ import os
 from mathutils import Quaternion
 
 
+KEYFRAMES = {}
+
+HAND_VG = [
+    "hand_r",
+    "lowerarm_hand_twist_r",
+    "hand_l",
+    "lowerarm_hand_twist_l",
+]
+
+LEFT_HAND_VG = [
+    "hand_l",
+    "lowerarm_hand_twist_l",
+    "palm_l",
+    "thumb_01_l",
+    "thumb_02_l",
+    "thumb_03_l",
+    "index_01_l",
+    "index_02_l",
+    "index_03_l",
+    "middle_01_l",
+    "middle_02_l",
+    "middle_03_l",
+    "ring_01_l",
+    "ring_02_l",
+    "ring_03_l",
+    "pinky_01_l",
+    "pinky_02_l",
+    "pinky_03_l",
+]
+
+RIGHT_HAND_VG = [
+    "hand_r",
+    "lowerarm_hand_twist_r",
+    "palm_r",
+    "thumb_01_r",
+    "thumb_02_r",
+    "thumb_03_r",
+    "index_01_r",
+    "index_02_r",
+    "index_03_r",
+    "middle_01_r",
+    "middle_02_r",
+    "middle_03_r",
+    "ring_01_r",
+    "ring_02_r",
+    "ring_03_r",
+    "pinky_01_r",
+    "pinky_02_r",
+    "pinky_03_r",
+]
+
 frames_folder = "stored_frames\\"
 frames_path = os.path.join(os.path.dirname(__file__), frames_folder)
 
@@ -14,30 +65,33 @@ def _get_bone_rotation(bone):
     return quat_value
 
 
-def dump_frames(filepath, armature, frame_interval):
+def _get_bone_location(bone):
+    loc = bone.location
+    loc_value = (loc[0], loc[1], loc[2])
+    return loc_value
+
+
+def dump_frames(filepath, armature, frame_interval, side="left"):
     buffer = {}
+    hand_vg = LEFT_HAND_VG if side == "left" else RIGHT_HAND_VG
     scene = bpy.context.scene
     scene.frame_current = 0
     while scene.frame_current <= scene.frame_end:
         keyframe = {}
         scene.frame_set(scene.frame_current)
         for bone in armature.pose.bones:
-            keyframe[bone.name] = _get_bone_rotation(bone)
+            deforms = []
+            if bone.name in hand_vg:
+                if bone.rotation_mode != 'QUATERNION':
+                    bone.rotation_mode = 'QUATERNION'
+                deforms.append(_get_bone_location(bone))
+                deforms.append(_get_bone_rotation(bone))
+                keyframe[bone.name] = deforms
         buffer[scene.frame_current] = keyframe
         scene.frame_current += frame_interval
 
     with open(filepath, 'w') as file:
         json.dump(buffer, file, indent=4)
-
-
-KEYFRAMES = {}
-
-HAND_VG = [
-    "hand_r",
-    "lowerarm_hand_twist_r",
-    "hand_l",
-    "lowerarm_hand_twist_l",
-]
 
 
 def set_poses(armature, keyframe, frame):
@@ -52,11 +106,13 @@ def set_poses(armature, keyframe, frame):
         # Why?
         pbone.rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
         pbone.keyframe_insert(data_path="rotation_quaternion", frame=0)
-        pbone.rotation_quaternion = Quaternion(qframe)
+        pbone.rotation_quaternion = Quaternion(qframe[1])
 
+        pbone.location = qframe[0]
         bpy.ops.object.mode_set(mode='OBJECT')
         pbone.keyframe_insert(
             data_path="rotation_quaternion", frame=int(frame))
+        pbone.keyframe_insert(data_path="location", frame=int(frame))
 
 
 def bake_pose(object, frame):
