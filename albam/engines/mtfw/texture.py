@@ -684,7 +684,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
     texture_type: bpy.props.EnumProperty(  # noqa: F821
         name="Texture Type",
         items=[
-            ("0x0", "Undefined", "", 1),
+            ("0x0", "Undefined", "", 1),  # noqa: F821
             ("0x1", "1D", "", 2),
             ("0x2", "2D", "", 3),
             ("0x3", "2D Cube", "", 4),
@@ -696,26 +696,26 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         name="Encode Type",
         items=[
             ("0x0", "None", "", 1),
-            ("0x1", "RGBI", "", 2),
-            ("0x2", "RGBY", "", 3),
-            ("0x3", "RGBN", "", 4),
-            ("0x4", "Pal8", "", 5),
+            ("0x1", "RGBI", "", 2),  # noqa: F821
+            ("0x2", "RGBY", "", 3),  # noqa: F821
+            ("0x3", "RGBN", "", 4),  # noqa: F821
+            ("0x4", "Pal8", "", 5),  # noqa: F821
         ],
         options=set()
     )
-    attr: bpy.props.EnumProperty(  # noqa: F821
-        name="Attribute",
+    attr: bpy.props.EnumProperty(
+        name="Attribute",   # noqa: F821
         items=[
-            ("0x0", "FillMargin", "", 1),
-            ("0x1", "Grayscale", "", 2),
-            ("0x2", "Nuki", "", 3),
-            ("0x3", "Dither", "", 4),
+            ("0x0", "FillMargin", "", 1),  # noqa: F821
+            ("0x1", "Grayscale", "", 2),  # noqa: F821
+            ("0x2", "Nuki", "", 3),  # noqa: F821
+            ("0x3", "Dither", "", 4),  # noqa: F821
             ("0x4", "RGBI Encoded", "", 5),
         ],
         options=set()
     )
-    depth: bpy.props.IntProperty(  # noqa: F821
-        name="Depth",
+    depth: bpy.props.IntProperty(
+        name="Depth",  # noqa: F821
         default=0,
     )
     depend_screen: bpy.props.BoolProperty(  # noqa: F821
@@ -759,7 +759,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     unk: bpy.props.IntProperty(  # noqa: F821
-        name="Unknown",
+        name="Unknown",  # noqa: F821
         default=0,
         description="Unknown property, usually 0"
     )
@@ -775,14 +775,14 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         options=set()
     )
     attr: bpy.props.EnumProperty(  # noqa: F821
-        name="Attribute",
+        name="Attribute",   # noqa: F821
         items=[
-            ("0x0", "FillMargin", "", 1),
-            ("0x2", "Grayscale", "", 2),
-            ("0x4", "Nuki", "", 3),
-            ("0x8", "Dither", "", 4),
-            ("0x10", "Linear", "", 5),
-            ("0x20", "Special", "", 5),
+            ("0x0", "FillMargin", "", 1),  # noqa: F821
+            ("0x2", "Grayscale", "", 2),  # noqa: F821
+            ("0x4", "Nuki", "", 3),  # noqa: F821
+            ("0x8", "Dither", "", 4),  # noqa: F821
+            ("0x10", "Linear", "", 5),  # noqa: F821
+            ("0x20", "Special", "", 5),  # noqa: F821
         ],
         options=set()
     )
@@ -796,7 +796,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("0x3", "3D", "", 4),
             ("0x4", "1D Array", "", 5),
             ("0x5", "2D Array", "", 6),
-            ("0x6", "Cube", "", 7),
+            ("0x6", "Cube", "", 7),  # noqa: F821
             ("0x7", "Cube Array", "", 8),
             ("0x8", "2D Multisample", "", 9),
             ("0x9", "2D Multisample Array", "", 10),
@@ -805,8 +805,8 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         options=set()
     )
     compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
-    depth: bpy.props.IntProperty(  # noqa: F821
-        name="Depth",
+    depth: bpy.props.IntProperty(
+        name="Depth",  # noqa: F821
         default=1,
     )
     auto_resize: bpy.props.BoolProperty(  # noqa: F821

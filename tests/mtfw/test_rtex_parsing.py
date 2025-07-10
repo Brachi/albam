@@ -1,7 +1,7 @@
 from albam.engines.mtfw.texture import (
     TEX_FORMAT_MAPPER,
-    Rtex112,
-    Rtex157,
+    # Rtex112,
+    # Rtex157,
 )
 
 

@@ -22,8 +22,8 @@ TEX_PREBIAS_157 = {0, 1, 2}
 
 def test_parse_tex(parsed_tex_from_arc):
     tex = parsed_tex_from_arc
-    #assert tex.width in ACCEPTABLE_SIZES
-    #assert tex.height in ACCEPTABLE_SIZES
+    # assert tex.width in ACCEPTABLE_SIZES
+    # assert tex.height in ACCEPTABLE_SIZES
     assert tex.num_images in (1, 6)  # XXX FAILS sometimes
     assert tex.compression_format in TEX_FORMAT_MAPPER  # TODO: rename compression_format
     assert 0 < tex.num_mipmaps_per_image <= 13  # XXX FAILS sometimes
