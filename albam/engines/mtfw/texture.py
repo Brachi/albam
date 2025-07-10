@@ -787,10 +787,10 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         options=set()
     )
     prebias: bpy.props.IntProperty(name="Prebias", default=0)  # noqa: F821
-    type: bpy.props.EnumProperty(  # noqa: F821
+    type: bpy.props.EnumProperty(
         name="Texture Type",
         items=[
-            ("0x0", "Undefined", "", 1),
+            ("0x0", "Undefined", "", 1),  # noqa: F821
             ("0x1", "1D", "", 2),
             ("0x2", "2D", "", 3),
             ("0x3", "3D", "", 4),
