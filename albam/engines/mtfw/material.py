@@ -348,7 +348,8 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
 
-        tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures, app_id=app_id)
+        tex_types = _gather_tex_types(
+            bl_mat, exported_textures, dst_mod.materials_data.textures, app_id=app_id)
         mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
@@ -1360,8 +1361,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
     heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
                                            default=0.2, options=set())  # noqa: F821
-    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())
-    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())
+    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())  # noqa: F821
+    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1447,56 +1448,56 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     depth_stencil_state_type: depth_stencil_enum
     rasterizer_state_type: rasterizer_state_enum
     reserverd1: bpy.props.IntProperty(
-        name="Reserved1",
+        name="Reserved1",  # noqa: F821
         min=0, max=0x1FF
     )
     id: bpy.props.IntProperty(
-        name="ID",
+        name="ID",  # noqa: F821
         min=0, max=0xFF
     )
     fog: bpy.props.BoolProperty(
-        name="Fog"
+        name="Fog",  # noqa: F821
     )
     tangent: bpy.props.BoolProperty(
-        name="Tangent",
+        name="Tangent",  # noqa: F821
     )
     half_lambert: bpy.props.BoolProperty(
-        name="Half Lambert",
+        name="Half Lambert",  # noqa: F821
     )
     stencil_ref: bpy.props.IntProperty(
-        name="Stencil Ref",
+        name="Stencil Ref",  # noqa: F821
         min=0, max=0xFF
     )
     alphatest_ref: bpy.props.IntProperty(
-        name="AlphaTest Ref",
+        name="AlphaTest Ref",  # noqa: F821
         min=0, max=0xFF
     )
     polygon_offset: bpy.props.IntProperty(
-        name="Polygon Offset",
-        description="Polygon Offset (4 bits)",
+        name="Polygon Offset",  # noqa: F821
+        description="Polygon Offset (4 bits)",  # noqa: F821
         min=0, max=0xF
     )
     alphatest: bpy.props.BoolProperty(
-        name="AlphaTest",
+        name="AlphaTest",  # noqa: F821
     )
     alphatest_func: bpy.props.IntProperty(
-        name="AlphaTest Func",
+        name="AlphaTest Func",  # noqa: F821
         min=0, max=0x7
     )
     draw_pass: bpy.props.IntProperty(
-        name="Draw Pass",
+        name="Draw Pass",  # noqa: F821
         min=0, max=0x1F
     )
     layer_id: bpy.props.IntProperty(
-        name="Layer ID",
+        name="Layer ID",  # noqa: F821
         min=0, max=0x3
     )
     deffered_lighting: bpy.props.BoolProperty(
-        name="Deferred Lighting"
+        name="Deferred Lighting",  # noqa: F821
     )
-    #unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
+    #  unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
 
-    #unk_flags: bpy.props.IntVectorProperty(
+    #  unk_flags: bpy.props.IntVectorProperty(
     #    name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
 
     # FIXME: dedupe
@@ -1515,7 +1516,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
-    f_vertex_displacement_param : bpy.props.EnumProperty(
+    f_vertex_displacement_param: bpy.props.EnumProperty(
         name="FVertexDisplacement",  # noqa: F821
         items=[
             ("FVertexDisplacement", "Default", "", 1),  # noqa: F821
@@ -1528,7 +1529,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set(),
     )
-    f_uv_vertex_displacement_param : bpy.props.EnumProperty(
+    f_uv_vertex_displacement_param: bpy.props.EnumProperty(
         name="FUVVertexDisplacement",  # noqa: F821
         items=[
             ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
@@ -1537,7 +1538,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_vd_mask_uv_transform_param : bpy.props.EnumProperty(
+    f_vd_mask_uv_transform_param: bpy.props.EnumProperty(
         name="FVDMaskUVTransform",  # noqa: F821
         items=[
             ("FVDMaskUVTransform", "Default", "", 1),  # noqa: F821
@@ -1545,7 +1546,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_vd_get_mask_param : bpy.props.EnumProperty(
+    f_vd_get_mask_param: bpy.props.EnumProperty(
         name="FVDGetMask",  # noqa: F821
         items=[
             ("FVDGetMask", "Default", "", 1),  # noqa: F821
@@ -1553,7 +1554,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_uv_transform_primary_param : bpy.props.EnumProperty(  # noqa: F82
+    f_uv_transform_primary_param: bpy.props.EnumProperty(  # noqa: F82
         name="FUVTransformPrimary",  # noqa: F821
         items=[
             ("FUVTransformPrimary", "Default", "", 1),  # noqa: F821
@@ -1562,7 +1563,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_uv_transform_secondary_param : bpy.props.EnumProperty(
+    f_uv_transform_secondary_param: bpy.props.EnumProperty(
         name="FUVTransformSecondary",  # noqa: F821
         items=[
             ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
@@ -1571,7 +1572,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_occlusion_param : bpy.props.EnumProperty(
+    f_occlusion_param: bpy.props.EnumProperty(
         name="FOcclusion",  # noqa: F821
         items=[
             ("FOcclusion", "Default", "", 1),  # noqa: F821

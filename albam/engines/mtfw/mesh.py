@@ -1982,9 +1982,9 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     bone_id_start: bpy.props.IntProperty(name="Bone ID Start", default=0, options=set())  # noqa: F821
     connect_id: bpy.props.IntProperty(name="Connect ID", default=0, options=set())  # noqa: F821
     boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # noqa: F821
-    #vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
+    #  vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
     vertex_format: bpy.props.EnumProperty(
-        name="Vertex Format",
+        name="Vertex Format",  # noqa: F821
         description="Vertex format (MT Framework)",
         items=vertex_format_enum_items,
         options=set()

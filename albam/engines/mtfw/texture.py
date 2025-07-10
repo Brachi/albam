@@ -518,7 +518,7 @@ def _serialize_texture_156(app_id, dict_tex):
         tex = Rtex112()
         tex.id_magic = b"RTX\x00"
         tex.version = 112
-        #tex.revision = 514
+        # tex.revision = 514
         tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_images = 1
         tex.width = bl_im.size[0]
@@ -531,10 +531,10 @@ def _serialize_texture_156(app_id, dict_tex):
         tex = Tex112()
         tex.id_magic = b"TEX\x00"
         tex.version = 112
-        #revision = 34
-        #if dds_header.image_count > 1:
+        #  revision = 34
+        # if dds_header.image_count > 1:
         #    revision = 3
-        #tex.revision = revision
+        # tex.revision = revision
         tex.num_mipmaps_per_image = dds_header.dwMipMapCount
         tex.num_images = dds_header.image_count
         tex.width = bl_im.size[0]
@@ -566,12 +566,12 @@ def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     is_rtex = custom_properties.render_target
-    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
+    # compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
         tex = Rtex157()
         tex.id_magic = b"RTX\x00"
-        #tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
+        # tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_mipmaps_per_image = 1
         dds_data_size = 0
     else:
@@ -682,7 +682,7 @@ def _calculate_cube_faces_data(tex):
 @blender_registry.register_custom_properties_image("tex_112", ("re5", ))
 @blender_registry.register_blender_prop
 class Tex112CustomProperties(bpy.types.PropertyGroup):
-    texture_type: bpy.props.EnumProperty(
+    texture_type: bpy.props.EnumProperty(  # noqa: F821
         name="Texture Type",
         items=[
             ("0x0", "Undefined", "", 1),
@@ -693,7 +693,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    encoded_type: bpy.props.EnumProperty(
+    encoded_type: bpy.props.EnumProperty(  # noqa: F821
         name="Encode Type",
         items=[
             ("0x0", "None", "", 1),
@@ -704,7 +704,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    attr: bpy.props.EnumProperty(
+    attr: bpy.props.EnumProperty(  # noqa: F821
         name="Attribute",
         items=[
             ("0x0", "FillMargin", "", 1),
@@ -715,16 +715,16 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    depth: bpy.props.IntProperty(
+    depth: bpy.props.IntProperty(  # noqa: F821
         name="Depth",
         default=0,
     )
-    depend_screen: bpy.props.BoolProperty(
+    depend_screen: bpy.props.BoolProperty(  # noqa: F821
         name="Depend on Screen",
         description="Does this texture depend on screen resolution?",
         default=False,
     )
-    render_target: bpy.props.BoolProperty(
+    render_target: bpy.props.BoolProperty(  # noqa: F821
         name="Render Target",
         description="Is this texture a render target?",
         default=False,
@@ -759,12 +759,12 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
-    unk: bpy.props.IntProperty(
+    unk: bpy.props.IntProperty(  # noqa: F821
         name="Unknown",
         default=0,
         description="Unknown property, usually 0"
     )
-    version: bpy.props.EnumProperty(
+    version: bpy.props.EnumProperty(  # noqa: F821
         name="Tex format version",
         items=[
             ("0x99", "153", "", 1),
@@ -775,7 +775,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         default="0x9d",
         options=set()
     )
-    attr: bpy.props.EnumProperty(
+    attr: bpy.props.EnumProperty(  # noqa: F821
         name="Attribute",
         items=[
             ("0x0", "FillMargin", "", 1),
@@ -787,8 +787,8 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         ],
         options=set()
     )
-    prebias: bpy.props.IntProperty(name="Prebias", default=0)
-    type: bpy.props.EnumProperty(
+    prebias: bpy.props.IntProperty(name="Prebias", default=0)  # noqa: F821
+    type: bpy.props.EnumProperty(  # noqa: F821
         name="Texture Type",
         items=[
             ("0x0", "Undefined", "", 1),
@@ -806,20 +806,20 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         options=set()
     )
     compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
-    depth: bpy.props.IntProperty(
+    depth: bpy.props.IntProperty(  # noqa: F821
         name="Depth",
         default=1,
     )
-    auto_resize: bpy.props.BoolProperty(
+    auto_resize: bpy.props.BoolProperty(  # noqa: F821
         name="Auto Resize",
         default=False,
     )
-    render_target: bpy.props.BoolProperty(
+    render_target: bpy.props.BoolProperty(  # noqa: F821
         name="Render Target",
         description="Is this texture a render target?",
         default=False,
     )
-    use_vtf: bpy.props.BoolProperty(
+    use_vtf: bpy.props.BoolProperty(  # noqa: F821
         name="Use VTF",
         default=False,
     )
