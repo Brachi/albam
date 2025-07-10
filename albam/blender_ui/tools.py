@@ -347,9 +347,13 @@ class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
         if selected_meshes:
             bpy.ops.object.select_all(action='DESELECT')
             for mesh_ob in selected_meshes:
+                try:
+                    target_collection = mesh_ob.users_collection[0]
+                except IndexError:
+                    target_collection = bpy.context.collection
                 duplicate = mesh_ob.copy()
                 duplicate.data = mesh_ob.data.copy()
-                bpy.context.collection.objects.link(duplicate)
+                target_collection.objects.link(duplicate)
                 bpy.ops.object.select_all(action='DESELECT')
                 duplicate.select_set(True)
 
@@ -359,7 +363,6 @@ class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
                 bpy.ops.mesh.select_all(action='SELECT')
                 bpy.ops.mesh.separate(type='MATERIAL')
                 bpy.ops.object.mode_set(mode='OBJECT')
-                # print(f"{mesh_ob.name} Separated")
                 show_message_box(message=f"Mesh {mesh_ob.name} was separated")
         return {'FINISHED'}
 
