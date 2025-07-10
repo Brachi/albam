@@ -1671,6 +1671,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVScreen", "FUVScreen", "", 4),  # noqa: F821
             ("FUVIndirect", "FUVIndirect", "", 5),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 6),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 7),  # noqa: F821
         ],
         options=set()
     )
@@ -1702,6 +1703,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
             ("FTransparencyAlphaClip", "FTransparencyAlphaClip", "", 4),  # noqa: F821
             ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
+            ("FColorMaskTransparencyMap", "FColorMaskTransparencyMap", "", 6),  # noqa: F821
         ],
         options=set()
     )
@@ -1712,6 +1714,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
             ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
             ("FUVExtend", "FUVExtend", "", 4),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 5),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 6),  # noqa: F821
         ],
         options=set()
     )
