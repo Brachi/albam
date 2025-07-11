@@ -508,9 +508,17 @@ def serialize_textures(app_id, bl_materials):
     return exported_textures
 
 
+def _check_is_power_of_two(image):
+    for i in range(2):
+        if image.size[i] > 0 and image.size[i] & (image.size[i] - 1) != 0:
+            print(f"Warning: Image {image.name} is not a power of two size.")
+            break
+
+
 def _serialize_texture_156(app_id, dict_tex):
     bl_im = dict_tex["image"]
     is_rtex = bl_im.albam_asset.render_target
+    _check_is_power_of_two(bl_im)
 
     if is_rtex:
         tex = Rtex112()
