@@ -13,6 +13,18 @@ HAND_VG = [
     "lowerarm_hand_twist_l",
 ]
 
+HAND_RE1_VG = [
+    "hand_r",
+    "hand_l",
+]
+
+HANDS_VG = {
+    "re0": HAND_RE1_VG,
+    "re1": HAND_RE1_VG,
+    "rev2": HAND_VG,
+    "re6": HAND_VG,
+}
+
 LEFT_HAND_VG = [
     "hand_l",
     "lowerarm_hand_twist_l",
@@ -115,8 +127,7 @@ def set_poses(armature, keyframe, frame):
         pbone.keyframe_insert(data_path="location", frame=int(frame))
 
 
-def bake_pose(object, frame):
-    # Select the object you want to duplicate
+def bake_pose(object, frame, side_id):
     ob_og = object
 
     # Duplicate the object
@@ -126,7 +137,7 @@ def bake_pose(object, frame):
     # Link the duplicated object to the current collection
     bpy.context.collection.objects.link(ob_copy)
 
-    if "hand_l" in ob_copy.vertex_groups:
+    if side_id == "l":
         side = "hand_l"
     else:
         side = "hand_r"
@@ -142,8 +153,9 @@ def bake_pose(object, frame):
     with bpy.context.temp_override(object=ob_copy):
         bpy.ops.object.modifier_apply(modifier=armature_modifier.name)
 
+    # Merge vertex groups
     for vg in ob_copy.vertex_groups:
-        if vg.name not in HAND_VG:
+        if vg.name not in HANDS_VG:
             merge_vgroups(ob_copy, side, vg.name)
     ob_copy.parent = None
     ob_copy.matrix_parent_inverse.identity()
@@ -208,11 +220,12 @@ def merge_vgroups(ob, vg_a, vg_b):
 def handshake(filepath, bl_obj):
     with open(filepath, 'r') as file:
         KEYFRAMES = json.load(file)
-
+    filename = os.path.splitext(os.path.basename(filepath))[0]
+    side = filename.split("_")[-1]
+    print("side is: ", side)
     armature = bpy.context.active_object
-    # mesh = bpy.data.objects['pl2202.mod_0001']
     print("lenght is {} frames".format(len(KEYFRAMES)))
     for frame, key in KEYFRAMES.items():
         set_poses(armature, key, frame)
         bpy.context.scene.frame_set(int(frame))
-        bake_pose(bl_obj, frame)
+        bake_pose(bl_obj, frame, side)

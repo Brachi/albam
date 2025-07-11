@@ -325,7 +325,7 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
         subtype='FILE_PATH',
     )
     filepath: FILEPATH
-    side: bpy.props.EnumProperty(
+    HAND_SIDE = bpy.props.EnumProperty(
         name="Side",
         description="Side of the character to dump frames for",
         default="left",
@@ -339,6 +339,7 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
         default="*.json",
         options={'HIDDEN'},
     )
+    side: HAND_SIDE
     filter_glob: EXTENSION_FILTER
     filename = bpy.props.StringProperty(default="")
 
