@@ -7,6 +7,7 @@ from kaitaistruct import KaitaiStream
 from albam.registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
+from albam.blender_ui.tools import show_message_box
 
 
 @blender_registry.register_archive_loader(app_id="re0", extension="arc")
@@ -103,34 +104,88 @@ class ArcWrapper:
         return file_
 
 
-def update_arc(filepath, vfiles):
-    file_ = None
-    arc = Arc()
-    imported = {}
-    exported = {}
-    # sort exported
-    vf_sorted = []
-    vf_mrl = []
-    vf_mod = []
-    vf_tail = []
-    for vf in vfiles:
-        if vf.extension == "tex":
-            vf_sorted.append(vf)
-        elif vf.extension == "mrl":
-            vf_mrl.append(vf)
-        elif vf.extension == "mod":
-            vf_mod.append(vf)
+def _sort_arc_entries(entries, vfile=True):
+    sorted = []
+    mrl = []
+    mod = []
+    tail = []
+    for entry in entries:
+        if vfile:
+            extension = getattr(entry, "extension")
         else:
-            vf_tail.append(vf)
-    vf_sorted.extend(vf_mrl)
-    vf_sorted.extend(vf_mod)
-    vf_sorted.extend(vf_tail)
+            extension = FILE_ID_TO_EXTENSION.get(entry.file_type, entry.file_type)
 
-    # build a dictionary for imported arc
-    with open(filepath, 'rb') as f:
-        parsed = Arc.from_bytes(f.read())
-        parsed._read()
-    for fe in parsed.file_entries:
+        if extension == "tex":
+            sorted.append(entry)
+        elif extension == "mrl":
+            mrl.append(entry)
+        elif extension == "mod":
+            mod.append(entry)
+        else:
+            tail.append(entry)
+
+    sorted.extend(mrl)
+    sorted.extend(mod)
+    sorted.extend(tail)
+    return sorted
+
+
+def _get_file_entry(vfile):
+    vf_data = vfile.data_bytes
+    chunk = zlib.compress(vf_data)
+    path = ntpath.normpath(vfile.relative_path)
+    file_path = ntpath.splitext(path)[0]
+    try:
+        file_type = EXTENSION_TO_FILE_ID[vfile.extension]
+    except KeyError:
+        file_type = int(vfile.extension)
+    item = Arc.FileEntry(None, _parent=None, _root=None)
+    item.file_path = file_path
+    item.file_type = file_type
+    item.zsize = len(chunk)
+    item.size = len(vf_data)
+    item.flags = 2
+    item.offset = 0
+    item.raw_data = chunk
+    return item
+
+
+def _serialize_arc(exported):
+    arc = Arc()
+    header = Arc.ArcHeader(None, arc, arc._root)
+    header.ident = b"ARC\00"
+    header.version = 7
+    header.num_files = len(exported)
+    header._check()
+    arc.header = header
+    file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
+
+    arc.file_entries = []
+    for _, fe in enumerate(exported.values()):
+        file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
+        file_entry.file_path = fe.file_path
+        file_entry.file_type = fe.file_type
+        file_entry.zsize = fe.zsize
+        file_entry.size = fe.size
+        file_entry.flags = 2
+        file_entry.offset = file_offset
+        file_entry.raw_data = fe.raw_data
+        file_entry._check()
+        arc.file_entries.append(file_entry)
+        file_offset += file_entry.zsize
+
+    arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
+    arc._check()
+
+    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
+    arc._write(stream)
+    file_ = stream.to_byte_array()
+    return file_
+
+
+def _to_dict(file_entries):
+    imported = {}
+    for fe in file_entries:
         path = fe.file_path
         try:
             extension = FILE_ID_TO_EXTENSION[fe.file_type]
@@ -138,6 +193,19 @@ def update_arc(filepath, vfiles):
             extension = str(fe.file_type)
         relative_path = (path + "." + extension)
         imported[relative_path] = fe
+    return imported
+
+
+def update_arc(filepath, vfiles):
+    imported = {}
+    exported = {}
+    vf_sorted = _sort_arc_entries(vfiles)
+
+    with open(filepath, 'rb') as f:
+        parsed = Arc.from_bytes(f.read())
+        parsed._read()
+
+    imported = _to_dict(parsed.file_entries)
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -168,34 +236,44 @@ def update_arc(filepath, vfiles):
             exported[path] = item
 
     exported.update(imported)
+    return _serialize_arc(exported)
 
-    # set header
-    header = Arc.ArcHeader(None, arc, arc._root)
-    header.ident = b"ARC\00"
-    header.version = 7
-    header.num_files = len(exported)
-    header._check()
-    arc.header = header
-    file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
 
-    arc.file_entries = []
-    for _, fe in enumerate(exported.values()):
-        file_entry = Arc.FileEntry(None, _parent=arc, _root=arc._root)
-        file_entry.file_path = fe.file_path
-        file_entry.file_type = fe.file_type
-        file_entry.zsize = fe.zsize
-        file_entry.size = fe.size
-        file_entry.flags = 2
-        file_entry.offset = file_offset
-        file_entry.raw_data = fe.raw_data
-        file_entry._check()
-        arc.file_entries.append(file_entry)
-        file_offset += file_entry.zsize
+def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
+    file_entries = {}
+    imported_entries = []
+    found = False
 
-    arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
-    arc._check()
+    with open(filepath, 'rb') as f:
+        parsed = Arc.from_bytes(f.read())
+        parsed._read()
 
-    stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
-    arc._write(stream)
-    file_ = stream.to_byte_array()
-    return file_
+    imported_entries = [fe for fe in parsed.file_entries]
+    if add_new:
+        file_entry = _get_file_entry(vfile)
+        imported_entries.append(file_entry)
+        imported_entries = _sort_arc_entries(imported_entries, False)
+        file_entries = _to_dict(imported_entries)
+    else:
+        for fe in imported_entries:
+            path = fe.file_path
+            name = ntpath.basename(path)
+            try:
+                extension = FILE_ID_TO_EXTENSION[fe.file_type]
+            except KeyError:
+                extension = str(fe.file_type)
+            if name == file_name and vfile.extension == extension:
+                show_message_box("File: {} found int the archive".format(file_name))
+                found = True
+                vf_data = vfile.data_bytes
+                chunk = zlib.compress(vf_data)
+                fe.zsize = len(chunk)
+                fe.size = len(vf_data)
+                fe.raw_data = chunk
+            file_entries[(fe.file_path + "." + extension)] = fe
+        assert len(file_entries) == len(parsed.file_entries), "File entries size mismatch"
+        if not found:
+            show_message_box("File: {} not found in the archive".format(file_name))
+            return None
+    assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
+    return _serialize_arc(file_entries)

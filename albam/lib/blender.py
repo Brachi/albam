@@ -1,3 +1,4 @@
+from albam.exceptions import AlbamCheckFailure
 from collections import namedtuple, deque
 from copy import deepcopy
 import math
@@ -217,7 +218,14 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
             # avoiding list comprehensions for readability
             # bones in blender are matched to vertex group only by name
             vgroup_name = vertex_groups[group.group].name
-            bone_index = bone_names_to_index[vgroup_name]
+            try:
+                bone_index = bone_names_to_index[vgroup_name]
+            except KeyError:
+                raise AlbamCheckFailure(
+                    "The object includes a vertex group that doesn't match any bone in the armature",
+                    details=f" Object: {blender_object.name}, Vertex group: {vgroup_name}",
+                    solution="Please remove or rename the vertex group to match the existing bones in"
+                    " the armature")
             pair = (bone_index, group.weight)
             weights_per_vertex[vertex.index].append(pair)
     return weights_per_vertex
@@ -295,7 +303,7 @@ def get_bl_materials(blender_objects):
         if not ob.materials:
             continue
         mat = ob.materials[0]
-        if mat.name not in cache:
+        if mat and mat.name not in cache:
             materials.append(mat)
             cache.add(mat.name)
     return materials

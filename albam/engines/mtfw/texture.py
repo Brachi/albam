@@ -133,6 +133,7 @@ TEX_FORMAT_MAPPER = {
     43: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
     "DXT5": b"DXT5",
+    '\x15\x00\x00\x00': b"",
 }
 
 # FIXME: take into account type of texture (BM/NM/MM, etc.)
@@ -528,14 +529,19 @@ def _serialize_texture_156(app_id, dict_tex):
         tex = Tex112()
         tex.id_magic = b"TEX\x00"
         tex.version = 112
-        tex.revision = 34  # FIXME: not really, changes with cubemaps
+        revision = 34
+        if dds_header.image_count > 1:
+            revision = 3
+        tex.revision = revision
         tex.num_mipmaps_per_image = dds_header.dwMipMapCount
         tex.num_images = dds_header.image_count
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
         tex.reserved = 0
-        tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
-
+        fmt = dds_header.pixelfmt_dwFourCC.decode()
+        if fmt == "":
+            fmt = b"\x15\x00\x00\x00".decode("ascii")
+        tex.compression_format = fmt
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
@@ -735,9 +741,10 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         items=[
             ("0x209d", "0x209d", "", 1),
             ("0x9a", "0x9a", "", 2),
-            ("0xa09d", "0xa09d", "", 3),
-            ("0x9e", "0x9e", "", 4),
-            ("0x99", "0x99", "", 5),
+            ("0x9b", "0x9b", "", 3),
+            ("0xa09d", "0xa09d", "", 4),
+            ("0x9e", "0x9e", "", 5),
+            ("0x99", "0x99", "", 6),
         ],
         options=set()
     )
