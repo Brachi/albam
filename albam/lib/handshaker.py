@@ -6,23 +6,10 @@ from mathutils import Quaternion
 
 KEYFRAMES = {}
 
-HAND_VG = [
-    "hand_r",
-    "lowerarm_hand_twist_r",
-    "hand_l",
-    "lowerarm_hand_twist_l",
-]
-
-HAND_RE1_VG = [
-    "hand_r",
-    "hand_l",
-]
 
 HANDS_VG = {
-    "re0": HAND_RE1_VG,
-    "re1": HAND_RE1_VG,
-    "rev2": HAND_VG,
-    "re6": HAND_VG,
+    "l": ["hand_l", "lowerarm_hand_twist_l"],
+    "r": ["hand_r", "lowerarm_hand_twist_r"],
 }
 
 LEFT_HAND_VG = [
@@ -155,7 +142,7 @@ def bake_pose(object, frame, side_id):
 
     # Merge vertex groups
     for vg in ob_copy.vertex_groups:
-        if vg.name not in HANDS_VG:
+        if vg.name not in HANDS_VG[side_id]:
             merge_vgroups(ob_copy, side, vg.name)
     ob_copy.parent = None
     ob_copy.matrix_parent_inverse.identity()
