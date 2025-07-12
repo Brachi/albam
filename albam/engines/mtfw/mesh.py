@@ -14,6 +14,7 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
+from albam.apps import get_app_description
 from albam.lib.blender import (
     get_bone_indices_and_weights_per_vertex,
     get_mesh_vertex_groups,
@@ -26,8 +27,10 @@ from albam.lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from albam.lib.misc import chunks
+from albam.lib.export_checks import check_all_objects_have_materials
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
+from albam.exceptions import AlbamCheckFailure
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -52,6 +55,13 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+}
+
+MOD_VERSION_APPID_MAPPER = {
+    156: {"re5"},
+    210: {"re0", "re1", "rev1", "rev2"},
+    211: {"re6"},
+    212: {"dd"},
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -291,6 +301,36 @@ MAIN_LODS = {
 }
 
 
+def _validate_app_id_for_mod(app_id, mod_bytes):
+    id_magic = mod_bytes[0:3]
+    version = mod_bytes[4]
+
+    app_desc = get_app_description(app_id)
+
+    if id_magic != b'MOD':
+        raise AlbamCheckFailure(
+            "The file to import doesn't seem to be valid for "
+            f"the app '{app_desc}'",
+            details=f"The file has an incorrect ID Magic: {id_magic}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+    try:
+        app_ids = MOD_VERSION_APPID_MAPPER[version]
+        if app_id not in app_ids:
+            raise AlbamCheckFailure(
+                "The file to import doesn't seem to be valid for "
+                f"the app '{app_desc}'",
+                details=f"The file has an invalid version ({version}) for {app_desc}",
+                solution="Double check that you selected the correct App and re-import"
+            )
+    except KeyError:
+        raise AlbamCheckFailure(
+            f"The version of this file ({version}) is not supported",
+            details=f"The file has an invalid version ({version}) for {app_desc}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+
+
 @blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
@@ -301,8 +341,10 @@ MAIN_LODS = {
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
+    _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
+
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = ModCls.from_bytes(mod_bytes)
     mod._read()
@@ -342,7 +384,6 @@ def build_blender_model(file_list_item, context):
 
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
-            raise
             continue
 
     bl_object.albam_asset.original_bytes = mod_bytes
@@ -751,6 +792,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
+@check_all_objects_have_materials
 def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
@@ -1132,6 +1174,13 @@ def _check_weights(weights, max_weights):
     return _weights
 
 
+def _check_armature(bl_mesh):
+    for modifier in bl_mesh.modifiers:
+        if modifier.type == 'ARMATURE' and modifier.object:
+            return True
+    return False
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1314,7 +1363,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vtx_stride = VertexCls().size_
 
-    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)  # enforced in `_process_weights_for_export`
+    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)
+    # It breaks index serealization without clamping
+    if max_bones_per_vertex > MAX_BONES:
+        max_bones_per_vertex = MAX_BONES
     weight_half_float = (dst_mod.header.version in (210, 211, 212) and
                          vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
@@ -1470,9 +1522,22 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
+            if not _check_armature(bl_mesh):
+                raise AlbamCheckFailure(
+                    "The mesh object has no Armature modifier",
+                    details=f"Object: {bl_mesh.name}",
+                    solution="Please add Armature modifier and set imported skeleton as Object"
+                )
             # applying bounding box constraints
             weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
             weight_values = [w for _, w in weights_data]
+            if not weight_values:
+                raise AlbamCheckFailure(
+                    "The mesh object has one or more vertices with zero skin weights",
+                    details=f"Object: {bl_mesh.name}",
+                    solution="Please move a root bone in Pose mode to detect vertices that stand still"
+                    " and use weight paint brush to fix them"
+                )
 
             weight_values.extend([0] * (MAX_BONES - len(weight_values)))  # add nulls if less than bone limit
             if mesh_bone_palette:
@@ -1480,8 +1545,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     bone_index) for bone_index, _ in weights_data]
             else:
                 bone_indices = [bi for bi, _ in weights_data]
-            # fill empty bone indices with the first bone id
+            # minmics ingame files pattern if vertex has less than max_bones_per_vertex influences
             bone_indices.extend([bone_indices[0]] * (max_bones_per_vertex - len(bone_indices)))
+            # fill other empty bone indices in vertex format range with 0
             bone_indices.extend([0] * (MAX_BONES - len(bone_indices)))
             if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)

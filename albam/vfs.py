@@ -210,6 +210,7 @@ class VirtualFileSystem(VirtualFileSystemBase, bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
+    """Add files to the virtual file system"""
     bl_idname = "albam.add_files"
     bl_label = "Add Files"
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
@@ -252,6 +253,7 @@ class ALBAM_OT_VirtualFileSystemSaveFileBase:
 
     bl_idname = "albam.save_file"
     bl_label = "Save files"
+    bl_description = "Save selected item as a new file"
     check_existing: CHECK_EXISTING
     filepath: FILEPATH
 
@@ -301,7 +303,13 @@ class ALBAM_OT_VirtualFileSystemCollapseToggleBase:
         item_list = vfs.file_list
         item = item_list[item_index]
         item.is_expanded = not item.is_expanded
-        self.NODES_CACHE[item.name] = item.is_expanded
+        if item.is_root:
+            cache_key = item.name
+        else:
+            cache_key = item.tree_node.root_id
+        if cache_key not in self.NODES_CACHE.keys():
+            self.NODES_CACHE[cache_key] = {}
+        self.NODES_CACHE[cache_key][item.name] = item.is_expanded
 
         vfs.file_list_selected_index = self.button_index
         item_list.update()
@@ -321,6 +329,7 @@ class ALBAM_OT_VirtualFileSystemCollapseToggle(
 class ALBAM_OT_VirtualFileSystemRemoveRootVFileBase:
     bl_idname = "albam.remove_imported"
     bl_label = "Remove imported files"
+    bl_description = "Remove files from the virtual file system"
     VFS_ID = ""
 
     def execute(self, context):
@@ -350,7 +359,7 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileBase:
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemRemoveRootVFile(
         ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
-
+    """Remove files from vitual files system"""
     bl_idname = "albam.remove_imported"
     bl_label = "Remove imported files"
     VFS_ID = "vfs"

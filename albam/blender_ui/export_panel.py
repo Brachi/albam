@@ -1,5 +1,5 @@
 import time
-
+import os
 import bpy
 
 from albam.registry import blender_registry
@@ -62,6 +62,8 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
                 "Select the point that optimizes the metric.", 1),
                ],
         default="metric")
+    far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
+    far_add_new: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -74,6 +76,14 @@ class ExportableItem(bpy.types.PropertyGroup):
         if not self.bl_object:
             return "Object missing"
         return self.bl_object.name
+
+    @property
+    def is_bl_object_missing(self):
+        if not self.bl_object:
+            return True
+        if self.bl_object and self.bl_object.name not in bpy.context.scene.objects:
+            return True
+        return False
 
 
 @blender_registry.register_blender_prop_albam(name="exportable")
@@ -91,7 +101,44 @@ class ExportedItems(VirtualFileSystemBase, bpy.types.PropertyGroup):
 class ALBAM_UL_ExportableObjects(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.label(text=item.display_name)
+        row = layout.row(align=True)
+        row.label(text=item.display_name)
+
+    def filter_items(self, context, data, propname):
+        item_list = getattr(data, propname)
+
+        filtered = []
+        for idx, item in enumerate(item_list):
+            if not item.is_bl_object_missing:
+                filtered.append(self.bitflag_filter_item)
+            else:
+                filtered.append(0)
+        return filtered, []
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveExportableItem(bpy.types.Operator):
+    "Remove exportable the item from the list"
+    bl_idname = "albam.remove_exportable_item"
+    bl_label = "Remove Exportable Item"
+
+    def execute(self, context):
+        exportable = context.scene.albam.exportable
+        index = exportable.file_list_selected_index
+        exportable.file_list.remove(index)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        exportable = context.scene.albam.exportable
+        file_list = exportable.file_list
+        index = exportable.file_list_selected_index
+        item = ALBAM_OT_Export.get_selected_item(context)
+        if item and item.is_bl_object_missing:
+            return False
+        if len(file_list) > 0 and 0 <= index < len(file_list):
+            return True
+        return False
 
 
 @blender_registry.register_blender_type
@@ -103,8 +150,13 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
 
     def draw(self, context):
-        row = self.layout.row()
-        row.template_list(
+        self.layout.separator()
+        self.layout.separator()
+        split = self.layout.split(factor=0.1)
+        col = split.column()
+        col.operator("albam.remove_exportable_item", icon="X", text="")
+        col = split.column()
+        col.template_list(
             "ALBAM_UL_ExportableObjects",
             "",
             context.scene.albam.exportable,
@@ -170,6 +222,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
         col.operator("albam.save_file_exported", icon="SORT_ASC", text="")
         col.operator("albam.pack", icon="PACKAGE", text="")
         col.operator("albam.patch", icon="FILE_REFRESH", text="")
+        col.operator("albam.find_and_replace", icon="ZOOM_ALL", text="")
         col.operator("albam.remove_exported", icon="X", text="")
         col = split.column()
         col.template_list(
@@ -189,6 +242,7 @@ class ALBAM_PT_FileExplorer2(bpy.types.Panel):
 @blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemSaveFileExported(
         ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    """Save an exported resource as a file"""
     bl_idname = "albam.save_file_exported"
     bl_label = "Save files"
     VFS_ID = "exported"
@@ -210,6 +264,7 @@ class ALBAM_UL_ExportedFileList(ALBAM_UL_VirtualFileSystemUIBase, bpy.types.UILi
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Export(bpy.types.Operator):
+    """Export selected item"""
     bl_idname = "albam.export"
     bl_label = "Export item"
 
@@ -239,7 +294,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         item = cls.get_selected_item(context)
-        if not item:
+        if not item or not item.bl_object or item.is_bl_object_missing:
             return False
         albam_asset = item.bl_object.albam_asset
         if (albam_asset.app_id, albam_asset.extension) not in blender_registry.exportable_extensions:
@@ -261,6 +316,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Pack(bpy.types.Operator):
+    """Save resources as a new archive"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -348,6 +404,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_Patch(bpy.types.Operator):
+    """Update an existing archive with selected resources"""
     FILEPATH = bpy.props.StringProperty(
         name="File Path",
         description="Filepath used for exporting the file",
@@ -402,8 +459,72 @@ class ALBAM_OT_Patch(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
+class ALBAM_OT_FindReplace(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    bl_idname = "albam.find_and_replace"
+    bl_description = "Find and replace exported resource in the archive"
+    bl_label = "Find and Replace"
+    VFS_ID = "exported"
+
+    file_name: bpy.props.StringProperty()
+
+    def draw(self, context):
+        export_settings = context.scene.albam.export_settings
+        row = self.layout
+        row.prop(self, "file_name", text="",)
+        row.prop(export_settings, "far_add_new", text="Add as a new file to the archive")
+
+    def execute(self, context):
+        export_settings = context.scene.albam.export_settings
+        # launch file selector
+        export_settings.far_file_name = self.file_name
+        bpy.ops.wm.findreplace_file_sel('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        vfs = self.get_vfs(self, context)
+        vfile = vfs.selected_vfile
+        self.file_name = os.path.splitext(vfile.display_name)[0]
+        return context.window_manager.invoke_props_dialog(self)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.types.Operator):
+    bl_idname = "wm.findreplace_file_sel"
+    bl_label = "Select arc"
+    VFS_ID = "exported"
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the file",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+
+    filepath: FILEPATH
+    filter_glob: bpy.props.StringProperty(default='*.arc', options={'HIDDEN'}, maxlen=255)  # noqa
+
+    def execute(self, context):
+        export_settings = context.scene.albam.export_settings
+        file_name = export_settings.far_file_name
+        add_new = export_settings.far_add_new
+        vfs = self.get_vfs(self, context)
+        vfile = vfs.selected_vfile
+        from albam.engines.mtfw.archive import find_and_replace_in_arc
+        arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
+        if arc:
+            with open(self.filepath, "wb") as f:
+                f.write(arc)
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
+@blender_registry.register_blender_type
 class ALBAM_OT_VirtualFileSystemRemoveRootVFileExported(
         ALBAM_OT_VirtualFileSystemRemoveRootVFileBase, bpy.types.Operator):
+    """Remove exported resources"""
     bl_idname = "albam.remove_exported"
     bl_label = "Remove exported files"
+    bl_description = "Remove exported files"
     VFS_ID = "exported"

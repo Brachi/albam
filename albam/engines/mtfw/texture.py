@@ -542,7 +542,6 @@ def _serialize_texture_156(app_id, dict_tex):
         if fmt == "":
             fmt = b"\x15\x00\x00\x00".decode("ascii")
         tex.compression_format = fmt
-
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
@@ -742,9 +741,10 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         items=[
             ("0x209d", "0x209d", "", 1),
             ("0x9a", "0x9a", "", 2),
-            ("0xa09d", "0xa09d", "", 3),
-            ("0x9e", "0x9e", "", 4),
-            ("0x99", "0x99", "", 5),
+            ("0x9b", "0x9b", "", 3),
+            ("0xa09d", "0xa09d", "", 4),
+            ("0x9e", "0x9e", "", 5),
+            ("0x99", "0x99", "", 6),
         ],
         options=set()
     )

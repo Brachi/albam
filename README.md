@@ -20,6 +20,9 @@ If you are willing to help in development or get quick help you can visit our di
 
 Creating a virtualenv, installing dependencies and running tests (headless Blender)  
 
+[bpy](https://pypi.org/project/bpy/) needs a specific Python version, matching the one used by the official release of Blender.
+This might not be the case in certain Linux distros.
+
 ```
 python -m venv .venv
 source .venv/bin/activate
@@ -44,7 +47,6 @@ Note: you need application data to run most useful tests.
 
 * Lukas Cone
 * Ekey
-* Knabsi
 * Henry of Carim
 * AsteriskAmpersand
 * Che
