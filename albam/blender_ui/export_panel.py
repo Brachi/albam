@@ -28,37 +28,40 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     force_max_num_weights: bpy.props.BoolProperty(default=False)
     algorithm: bpy.props.EnumProperty(
         name="Algorithm Choice",
-        description="BVH Construction Algorithm.",
-        items=[("hybrid", "Hybrid", "Uses a hybrid algorithm combining those listed for different tri counts (Recommended).", 0),
-               ("kdtree", "Naive KD-Tree", "Top-Down Median Split KD-Tree.", 1),
-               ("split", "Space Bisecting Planes",
+        description="BVH Construction Algorithm.",  # noqa: F722
+        items=[("hybrid", "Hybrid",  # noqa: 821
+                "Uses a hybrid algorithm combining those listed for different tri counts (Recommended).", 0),
+               ("kdtree", "Naive KD-Tree", "Top-Down Median Split KD-Tree.", 1),  # noqa: 821
+               ("split", "Space Bisecting Planes",  # noqa: 821
                 "Top-Down Linear search for optimal set bisection.", 2),
-               ("aproxcluster", "Aproximate Agglomerative Clustering",
+               ("aproxcluster", "Aproximate Agglomerative Clustering",# noqa: 821
                 "Approximation of Exact Agglomerative Clustering.", 3),
-               ("exactcluster", "Exact Agglomerative Clustering",
-                "Bottom-Up clusters that minimize the metric (Only Recommended when all meshes have low tri counts).", 4),
+               ("exactcluster", "Exact Agglomerative Clustering",  # noqa: 821
+                "Bottom-Up clusters that minimize the metric (Only Recommended when all meshes have"
+                " low tri counts).", 4),
                ],
-        default="hybrid")
+        default="hybrid")  # noqa F821
     metric: bpy.props.EnumProperty(
         name="Metric Choice",
         description="BVH Construction Metric to optimize.",
-        items=[("sah", "SAH Metric", "Surface Area Heuristic.", 0),
-               ("epo", "SAH+EPO Metric",
+        items=[("sah", "SAH Metric", "Surface Area Heuristic.", 0),  # noqa F821
+               ("epo", "SAH+EPO Metric",   # noqa F821
                 "End Point Overlap + Surface Area Heuristic.", 1),
                ],
-        default="sah")
+        default="sah")  # noqa F821
     mode: bpy.props.EnumProperty(
         name="KD-Tree Planes",
         description="KD-Tree Plane Axis.",
-        items=[("capcom", "CAPCOM", "X/Z Planes as Candidates.", 0),
-               ("normal", "Traditional", "X/Y/Z Plane as Candidates.", 1),
+        items=[("capcom", "CAPCOM", "X/Z Planes as Candidates.", 0),  # noqa F821
+               ("normal", "Traditional", "X/Y/Z Plane as Candidates.", 1),  # noqa F821
                ],
-        default="capcom")
+        default="capcom")  # noqa F821
     partition: bpy.props.EnumProperty(
         name="Space Bisection Split Plane Choice",
         description="Split Plane Method.",
-        items=[("morton", "Morton Digit Change", "Selects the point where the sign of the morton encoding changes.", 0),
-               ("metric", "Optimize Metric",
+        items=[("morton", "Morton Digit Change",  # noqa F821
+                "Selects the point where the sign of the morton encoding changes.", 0),
+               ("metric", "Optimize Metric",  # noqa F821
                 "Select the point that optimizes the metric.", 1),
                ],
         default="metric")

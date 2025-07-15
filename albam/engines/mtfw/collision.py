@@ -44,7 +44,7 @@ CLUSTERING = {
     "split": bvh.spatial_splits,
     "aproxcluster": bvh.aproximate_agglomerative_clustering,
     "exactcluster": bvh.exact_agglomerative_clustering
-    }
+}
 # Surface Area Heuristic (SAH)
 METRIC = {
     "sah": bvh.Cluster.SAHMetric,
@@ -129,28 +129,28 @@ def _unpack_bbox(min, max):
     min_x, min_y, min_z = min[0], min[1], min[2]
     max_x, max_y, max_z = max[0], max[1], max[2]
     unpack_bbox = [
-                    (max_x, max_y, max_z),
-                    (min_x, max_y, max_z),
-                    (min_x, min_y, max_z),
-                    (max_x, min_y, max_z),
-                    (max_x, min_y, min_z),
-                    (max_x, max_y, min_z),
-                    (min_x, max_y, min_z),
-                    (min_x, min_y, min_z),
+        (max_x, max_y, max_z),
+        (min_x, max_y, max_z),
+        (min_x, min_y, max_z),
+        (max_x, min_y, max_z),
+        (max_x, min_y, min_z),
+        (max_x, max_y, min_z),
+        (min_x, max_y, min_z),
+        (min_x, min_y, min_z),
     ]
     return unpack_bbox
 
 
 def _scale_bbox(box):
     scaled = []
-    scaled = (box.x/100, box.z/-100, box.y/100)
+    scaled = (box.x / 100, box.z / -100, box.y / 100)
     return scaled
 
 
 def _transform_coordinates(verts):
     transformed = []
     for v in verts:
-        vert = (v.position_x/100, v.position_z/-100, v.position_y/100)
+        vert = (v.position_x / 100, v.position_z / -100, v.position_y / 100)
         transformed.append(vert)
     return transformed
 
@@ -200,7 +200,7 @@ def debug_create_unk_nodes(sbc):
         boxes = [(a_min, a_max), (b_min, b_max)]
         for j, b in enumerate(boxes):
             name = "bbox_test.001"
-            b_mesh_data = _create_bbox(("sbc_unk_nodes_tests"+str(j)), b[0], b[1])
+            b_mesh_data = _create_bbox(("sbc_unk_nodes_tests" + str(j)), b[0], b[1])
             b_mesh_obj = bpy.data.objects.new(name + "_" + str(j), b_mesh_data)
             b_mesh_obj.active_material = bpy.data.materials.get(box_mats[j])
             b_mesh_obj.parent = empty
@@ -908,7 +908,6 @@ class BaseSBCProperties(bpy.types.PropertyGroup):
                                                        "rev2", "dd",))
 @blender_registry.register_blender_prop
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
-    #name: bpy.props.StringProperty(name="SBC params", default="placeholder", options=set())
     pass
 
 

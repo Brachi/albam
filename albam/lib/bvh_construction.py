@@ -467,9 +467,11 @@ def morton_partition(encodable_list, metric=None, morton_point=0):
     bit = MORTONLENGHT - 1 - morton_point
     # if all bits processed or less than 3 primitives returns split list on two
     if bit == -1 or len(encodable_list) < 3:
-        return encodable_list[:(len(encodable_list) + 1) // 2], encodable_list[(len(encodable_list) + 1) // 2:]
+        split = (len(encodable_list) + 1) // 2
+        return encodable_list[:split], encodable_list[split:]
 
-    # The key function extracts the value of the current bit (bit) from the Morton code of the element at index x.
+    # The key function extracts the value of the current bit (bit) from the Morton code of the element
+    # at index x.
     # encodable_list[x].encode() computes the Morton code for the element.
     # The bitwise operation ((2 << bit) & ...) isolates the value of the current bit.
     def key(x):
