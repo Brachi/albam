@@ -339,13 +339,15 @@ def load_sbc(file_item, context):
                                    vertex_collection[vs:vs + vc])
             sbc_objects.append(sbc_obj)
     print("num sbc objects {}".format(len(sbc_objects)))
-    for obj in sbc_objects:
-        mesh, ob = create_collision_mesh(obj, app_id)
+    for i, obj in enumerate(sbc_objects):
+        mesh_name = f"{bl_object_name}_{str(i).zfill(4)}"
+        mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
         # debug_create_bbox(obj) # sbc_info
         ob.parent = bl_object
     if app_id != "re5":
         for i, typing in enumerate(sbc.collision_types):
-            empty_ob = create_link_ob(typing)
+            link_name = f"{bl_object_name}_stage_link_{str(i).zfill(4)}"
+            empty_ob = create_link_ob(typing, app_id, link_name)
             # empty.sbc21_collision_properties = obj.sbc21_collision_properties
             # custom_properties = empty.albam_custom_properties.get_custom_properties_for_appid(app_id)
             # custom_properties.copy_custom_properties_from(typing)
@@ -368,27 +370,34 @@ def load_sbc(file_item, context):
     return bl_object
 
 
-def create_collision_mesh(sbc_object, app_id):
-    mesh, obj = create_sbc_mesh("CollisionMesh.000", decompose_sbc_ob(sbc_object, app_id), app_id)
+def create_collision_mesh(sbc_object, app_id, mesh_name):
+    mesh, obj = create_sbc_mesh(mesh_name, decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
-    custom_properties = obj.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
-    custom_properties.index_id = str(sbc_object.sbcinfo.index_id)
+    sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+        "sbc_21_mesh"]
+    sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
 
-    obj["Type"] = "SBC_Mesh"
-    obj["indexID"] = str(sbc_object.sbcinfo.index_id)
+    # obj["Type"] = "SBC_Mesh"
+    # obj["indexID"] = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
 
 
-def create_link_ob(link_ob):
+def create_link_ob(link_ob, app_id, link_name):
     # Add custom attributes from collision_types to an empty object
-    sbc_empty = common.create_root_nub("SBC Stage Link.000")
-    sbc_empty["Type"] = "SBC_Link"
-    sbc_empty["unk_01"] = link_ob.unk_01
-    sbc_empty["unk_02"] = link_ob.unk_02
-    sbc_empty["unk_03"] = link_ob.unk_03
-    sbc_empty["unk_04"] = link_ob.unk_04
-    sbc_empty["jp_path"] = link_ob.jp_path
+    sbc_empty = common.create_root_nub(link_name)
+    sbc_link_proprs = sbc_empty.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+        "sbc_21_link"]
+    sbc_link_proprs.unk_01 = link_ob.unk_01
+    sbc_link_proprs.unk_02 = link_ob.unk_02
+    sbc_link_proprs.unk_03 = link_ob.unk_03
+    sbc_link_proprs.unk_04 = link_ob.unk_04
+    sbc_link_proprs.jp_path = link_ob.jp_path
+    # sbc_empty["Type"] = "SBC_Link"
+    # sbc_empty["unk_01"] = link_ob.unk_01
+    # sbc_empty["unk_02"] = link_ob.unk_02
+    # sbc_empty["unk_03"] = link_ob.unk_03
+    # sbc_empty["unk_04"] = link_ob.unk_04
+    # sbc_empty["jp_path"] = link_ob.jp_path
     return sbc_empty
 
 
@@ -478,7 +487,8 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
-        custom_props = mesh.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            "sbc_21_mesh"]
         # get list of Tri objects from faces of the mesh and vertices
         try:
             vertices, tris = mesh_to_tri(mesh)
@@ -528,7 +538,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
     dst_sbc.vertices = build_vertices(dst_sbc, verts)
 
     # collisionTypes = list(map(buildTypes, links))
-    dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link) for link in links]
+    dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link, app_id) for link in links]
 
     # pairCollection = list(map(buildPairs, quads))
     dst_sbc.pairs_collections = build_pairs(dst_sbc, quads)
@@ -695,14 +705,16 @@ def build_pairs(dst_sbc, quads):
     return spairs
 
 
-def _serialize_col_types(dst_sbc, col_types_data):
+def _serialize_col_types(dst_sbc, link_ob, app_id):
     # Gets custom attributes from empty objects
+    sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
+        app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = col_types_data["unk_01"]
-    coltype.unk_02 = col_types_data["unk_02"]
-    coltype.unk_03 = col_types_data["unk_03"]
-    coltype.unk_04 = [v for v in col_types_data["unk_04"]]
-    coltype.jp_path = col_types_data["jp_path"]
+    coltype.unk_01 = sbc_link_props.unk_01  # link_ob["unk_01"]
+    coltype.unk_02 = sbc_link_props.unk_02  # link_ob["unk_02"]
+    coltype.unk_03 = sbc_link_props.unk_03  # link_ob["unk_03"]
+    coltype.unk_04 = sbc_link_props.unk_04  # [v for v in link_ob["unk_04"]]
+    coltype.jp_path = sbc_link_props.jp_path  # link_ob["jp_path"]
     coltype._check()
     return coltype
 
@@ -878,21 +890,11 @@ def mesh_rescale(ob):
     return ob
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_link", ("re0", "re1", "re6", "rev1",
-                                                                       "rev2", "dd",))
-@blender_registry.register_blender_prop
-class SBC21LinkCustomProperties(bpy.types.PropertyGroup):
-    unk_01: bpy.props.StringProperty(name="Unknown 01", default="", options=set())  # noqa: F821
-    unk_02: bpy.props.StringProperty(name="Unknown 02", default="", options=set())  # noqa: F821
-    unk_03: bpy.props.StringProperty(name="Unknown 03", default="", options=set())  # noqa: F821
-    jp_path: bpy.props.StringProperty(name="Japanese Path", default="", options=set())  # noqa: F821
-
-    # FIXME: dedupe
+class BaseSBCProperties(bpy.types.PropertyGroup):
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
             setattr(dst_obj, attr_name, getattr(self, attr_name))
 
-    # FIXME: dedupe
     def copy_custom_properties_from(self, src_obj):
         for attr_name in self.__annotations__:
             try:
@@ -902,8 +904,35 @@ class SBC21LinkCustomProperties(bpy.types.PropertyGroup):
                 # print(f"Type mismatch {attr_name}, {src_obj}")
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_mesh", ("re0", "re1", "re6", "rev1",
-                                                                       "rev2", "dd",))
+@blender_registry.register_custom_properties_collision("sbc_21_collision", ("re0", "re1", "re6", "rev1",
+                                                       "rev2", "dd",))
 @blender_registry.register_blender_prop
-class SBC21MeshCustomProperties(bpy.types.PropertyGroup):
+class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
+    #name: bpy.props.StringProperty(name="SBC params", default="placeholder", options=set())
+    pass
+
+
+@blender_registry.register_custom_properties_collision(
+    "sbc_21_link",
+    ("re0", "re1", "re6", "rev1", "rev2", "dd",),
+    is_secondary=True, display_name="SBC Link")
+@blender_registry.register_blender_prop
+class SBC21LinkCustomProperties(BaseSBCProperties):
+    unk_01: bpy.props.FloatProperty(name="Unknown 01", default=0.0, options=set())  # noqa: F821
+    unk_02: bpy.props.IntProperty(name="Unknown 02", default=0, options=set())  # noqa: F821
+    unk_03: bpy.props.IntProperty(name="Unknown 03", default=0, options=set())  # noqa: F821
+    unk_04: bpy.props.IntVectorProperty(name="Unknown 04", size=3, default=(0, 0, 0),
+                                        options=set())  # noqa: F821
+    jp_path: bpy.props.IntVectorProperty(name="Japanese Path", size=12,
+                                         default=(0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0),
+                                         options=set())  # noqa: F821
+
+
+@blender_registry.register_custom_properties_collision(
+    "sbc_21_mesh",
+    ("re0", "re1", "re6", "rev1", "rev2", "dd",),
+    is_secondary=True, display_name="SBC Mesh")
+@blender_registry.register_blender_prop
+class SBC21MeshCustomProperties(BaseSBCProperties):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
