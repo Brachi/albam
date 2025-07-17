@@ -1955,6 +1955,7 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
 
 
 VERTEX_FORMATS_LABELS = {
+    0x4325a03e: "NonSkinTBN_4M",  # shape keys not implemented yet
     0xa14e003c: "NonSkinBCA",
     0x2082f03b: "NonSkinBLA",
     0xc66fa03a: "NonSkinBA",
@@ -1989,6 +1990,7 @@ VERTEX_FORMATS_LABELS = {
     0xcbf6c01a: "SkinTBC1wt",
     0x667b1019: "SkinTBN1wt",
     0xa8fab018: "SkinTB1wt",
+    0x2f55c03d: "SkinOTB_4WT_4M",  # shape keys are not implemented yet
     0xa320c016: "Bridge8wt",
     0xcb68015: "Bridge4wt",
     0xdb7da014: "Bridge2wt",

@@ -15,7 +15,7 @@ def test_top_level(mrl_imported, mrl_exported):
     assert src_mrl.version == dst_mrl.version
     assert src_mrl.num_textures == dst_mrl.num_textures + num_missing_textures
     assert src_mrl.num_materials == dst_mrl.num_materials + num_missing_materials
-    assert src_mrl.unk_01 == dst_mrl.unk_01
+    assert src_mrl.shader_version == dst_mrl.shader_version
     assert src_mrl.ofs_textures == dst_mrl.ofs_textures
     assert src_mrl.ofs_materials == dst_mrl.ofs_materials + error_tex
     assert (src_mrl.ofs_resources_calculated_no_padding ==
