@@ -1238,7 +1238,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
             ("0x8", "LIGHTING_TEX4SPOT", "", 9),
             ("0x9", "MAX_LIGHTING", "", 9),
         ],
-        default="0x1",
+        default="0x2",
         options=set()
     )
     func_normalmap_enum = bpy.props.EnumProperty(
@@ -1315,7 +1315,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     func_lighting: func_lighting_enum
     func_normalmap: func_normalmap_enum
     func_specular: func_specular_enum
-    func_lightmap: func_lighting_enum
+    func_lightmap: func_lightmap_enum
     func_multitexture: func_multitexture_enum
     htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
                                          default="0x8727e606", options=set())  # noqa: F821
