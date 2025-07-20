@@ -341,10 +341,10 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
         mat.lightmap = tex_types.get(TextureType.LIGHTMAP, -1) + 1
-        mat.shadowmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
+        mat.shadowmap = tex_types.get(TextureType.UNK_01, -1) + 1
+        mat.additionalmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
         mat.envmap = tex_types.get(TextureType.ENVMAP, -1) + 1
         mat.detailmap = (tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
-        mat.additionalmap = 0
         mat.occlusionmap = 0
         mat.lightblendmap = 0
         mat.shadowblendmap = 0
