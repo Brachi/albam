@@ -15,6 +15,7 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
+from albam.apps import get_app_description
 from albam.lib.blender import (
     get_bone_indices_and_weights_per_vertex,
     get_mesh_vertex_groups,
@@ -27,6 +28,7 @@ from albam.lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from albam.lib.misc import chunks
+from albam.lib.export_checks import check_all_objects_have_materials
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
 from albam.exceptions import AlbamCheckFailure
@@ -54,6 +56,13 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+}
+
+MOD_VERSION_APPID_MAPPER = {
+    156: {"re5"},
+    210: {"re0", "re1", "rev1", "rev2"},
+    211: {"re6"},
+    212: {"dd"},
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -293,6 +302,36 @@ MAIN_LODS = {
 }
 
 
+def _validate_app_id_for_mod(app_id, mod_bytes):
+    id_magic = mod_bytes[0:3]
+    version = mod_bytes[4]
+
+    app_desc = get_app_description(app_id)
+
+    if id_magic != b'MOD':
+        raise AlbamCheckFailure(
+            "The file to import doesn't seem to be valid for "
+            f"the app '{app_desc}'",
+            details=f"The file has an incorrect ID Magic: {id_magic}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+    try:
+        app_ids = MOD_VERSION_APPID_MAPPER[version]
+        if app_id not in app_ids:
+            raise AlbamCheckFailure(
+                "The file to import doesn't seem to be valid for "
+                f"the app '{app_desc}'",
+                details=f"The file has an invalid version ({version}) for {app_desc}",
+                solution="Double check that you selected the correct App and re-import"
+            )
+    except KeyError:
+        raise AlbamCheckFailure(
+            f"The version of this file ({version}) is not supported",
+            details=f"The file has an invalid version ({version}) for {app_desc}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+
+
 @blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
@@ -303,8 +342,10 @@ MAIN_LODS = {
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
+    _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
+
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = ModCls.from_bytes(mod_bytes)
     mod._read()
@@ -344,7 +385,6 @@ def build_blender_model(file_list_item, context):
 
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
-            raise
             continue
 
     bl_object.albam_asset.original_bytes = mod_bytes
@@ -680,6 +720,7 @@ def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
     if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
         # bbox-space to global-space
         scale_matrix = Matrix.Scale(bbox_data.dimension, 4)
+        # create a translation matrix that doesn't affect scale component
         translation_matrix = (
             Matrix.Translation((bbox_data.min_x, bbox_data.min_y, bbox_data.min_z)) - Matrix.Scale(1, 4)
         )
@@ -753,6 +794,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
+@check_all_objects_have_materials
 def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
@@ -913,8 +955,10 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
 def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=None):
     if bl_obj.type != "ARMATURE":
         return
-    export_bones = True
-    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transform(bl_obj)
+    export_settings = bpy.context.scene.albam.export_settings
+    export_bones = export_settings.export_bones
+    bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transforms(
+        bl_obj, dst_mod)
     dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
     bones_data.bone_map = src_mod.bones_data.bone_map
@@ -1017,7 +1061,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         m2.row_3 = dst_mod.Vec4(_parent=m2, _root=m._root)
         m2.row_4 = dst_mod.Vec4(_parent=m2, _root=m._root)
 
-        if dst_mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+        if dst_mod.header.version in VERSIONS_BONES_BBOX_AFFECTED and not export_bones:
             # unapply transforms and apply the ones from the bbox to export
             # TODO: avoid doing this if bbox didn´t change
             src_bbox_data = _create_bbox_data(src_mod)
@@ -1099,7 +1143,7 @@ def _restore_martix(m):
     return restored_matrix.transposed()
 
 
-def _get_bone_transform(armature):
+def _get_bone_transforms(armature, mod):
     magnitudes = []
     bone_locations = []
     bone_matrices_local = []
@@ -1109,22 +1153,36 @@ def _get_bone_transform(armature):
         rotation_matrix = Matrix.Rotation(math.radians(-90), 4, 'X')
         if parent_bone:
             parent_space_matrix = parent_bone.matrix_local.inverted() @ bone.matrix_local
-            relative_head_coords = bone.head - parent_bone.head
+            # relative_head_coords = bone.head - parent_bone.head
         else:
             parent_space_matrix = rotation_matrix @ bone.matrix_local
             print("The bone has no parent.")
         print("Bone:", bone.name)
+        # inverse space
         inverse_space_matrix = bone.matrix_local
-
         inverse_space_matrix = rotation_matrix @ inverse_space_matrix
         inverse_translation = inverse_space_matrix.to_translation() * 100
         inverse_space_copy = inverse_space_matrix.copy()
         inverse_space_copy.translation = inverse_translation
-        bone_matrices_inverse.append(inverse_space_copy.inverted().transposed())
+        if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+            # copied code from _create_bbox_data()
+            min_length = abs(min(mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z))
+            max_length = max(abs(mod.bbox_max.x), abs(
+                mod.bbox_max.y), abs(mod.bbox_max.z))
+            dimension = min_length + max_length
+            # shift the matrix to the bbox space and scale it
+            translation_matrix = Matrix.Translation(
+                (mod.bbox_min.x, mod.bbox_min.y, mod.bbox_min.z)) - Matrix.Scale(1, 4)
+            scale_matrix = Matrix.Scale(dimension, 4)
+            ibbox_matrix = inverse_space_copy.inverted()
+            ibbox_matrix = ibbox_matrix @ scale_matrix + translation_matrix
+            bone_matrices_inverse.append(ibbox_matrix.transposed())
+        else:
+            bone_matrices_inverse.append(inverse_space_copy.inverted().transposed())
 
         parent_translation = parent_space_matrix.to_translation() * 100
         bone_locations.append(parent_translation)
-
+        # local space
         parent_space_copy = parent_space_matrix.copy()
         parent_space_copy.translation = parent_translation
         # bone_matrices_local.append(parent_space_matrix.transposed())
@@ -1138,7 +1196,10 @@ def _get_bone_transform(armature):
         print("Translation:", parent_translation)
         print("Magnitude:", magnitude)
         print("Inverse space Matrix:")
-        print(inverse_space_copy.inverted().transposed())
+        if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
+            print(ibbox_matrix.transposed())
+        else:
+            print(inverse_space_copy.inverted().transposed())
 
     return magnitudes, bone_locations, bone_matrices_local, bone_matrices_inverse
 
