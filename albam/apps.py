@@ -1,6 +1,15 @@
 import os
 
 
+def get_app_description(app_id):
+    app_desc = None
+    for stored_app_id, stored_app_desc, _, _ in APPS:
+        if stored_app_id == app_id:
+            app_desc = stored_app_desc
+            break
+    return app_desc
+
+
 APPS = [
     ("re0", "Resident Evil 0", "", 0),
     ("re1", "Resident Evil 1", "", 1),

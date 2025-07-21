@@ -15,6 +15,7 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
+from albam.apps import get_app_description
 from albam.lib.blender import (
     get_bone_indices_and_weights_per_vertex,
     get_mesh_vertex_groups,
@@ -27,6 +28,7 @@ from albam.lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from albam.lib.misc import chunks
+from albam.lib.export_checks import check_all_objects_have_materials
 from albam.registry import blender_registry
 from albam.vfs import VirtualFileData
 from albam.exceptions import AlbamCheckFailure
@@ -54,6 +56,13 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+}
+
+MOD_VERSION_APPID_MAPPER = {
+    156: {"re5"},
+    210: {"re0", "re1", "rev1", "rev2"},
+    211: {"re6"},
+    212: {"dd"},
 }
 
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
@@ -293,6 +302,36 @@ MAIN_LODS = {
 }
 
 
+def _validate_app_id_for_mod(app_id, mod_bytes):
+    id_magic = mod_bytes[0:3]
+    version = mod_bytes[4]
+
+    app_desc = get_app_description(app_id)
+
+    if id_magic != b'MOD':
+        raise AlbamCheckFailure(
+            "The file to import doesn't seem to be valid for "
+            f"the app '{app_desc}'",
+            details=f"The file has an incorrect ID Magic: {id_magic}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+    try:
+        app_ids = MOD_VERSION_APPID_MAPPER[version]
+        if app_id not in app_ids:
+            raise AlbamCheckFailure(
+                "The file to import doesn't seem to be valid for "
+                f"the app '{app_desc}'",
+                details=f"The file has an invalid version ({version}) for {app_desc}",
+                solution="Double check that you selected the correct App and re-import"
+            )
+    except KeyError:
+        raise AlbamCheckFailure(
+            f"The version of this file ({version}) is not supported",
+            details=f"The file has an invalid version ({version}) for {app_desc}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+
+
 @blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
@@ -303,8 +342,10 @@ MAIN_LODS = {
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
+    _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
+
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = ModCls.from_bytes(mod_bytes)
     mod._read()
@@ -344,7 +385,6 @@ def build_blender_model(file_list_item, context):
 
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
-            raise
             continue
 
     bl_object.albam_asset.original_bytes = mod_bytes
@@ -754,6 +794,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
+@check_all_objects_have_materials
 def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset

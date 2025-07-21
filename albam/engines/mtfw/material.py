@@ -341,10 +341,10 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
         mat.lightmap = tex_types.get(TextureType.LIGHTMAP, -1) + 1
-        mat.shadowmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
+        mat.shadowmap = tex_types.get(TextureType.UNK_01, -1) + 1
+        mat.additionalmap = tex_types.get(TextureType.ALPHAMAP, -1) + 1
         mat.envmap = tex_types.get(TextureType.ENVMAP, -1) + 1
         mat.detailmap = (tex_types.get(TextureType.NORMAL_DETAIL, -1) + 1)
-        mat.additionalmap = 0
         mat.occlusionmap = 0
         mat.lightblendmap = 0
         mat.shadowblendmap = 0
@@ -1238,7 +1238,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
             ("0x8", "LIGHTING_TEX4SPOT", "", 9),
             ("0x9", "MAX_LIGHTING", "", 9),
         ],
-        default="0x1",
+        default="0x2",
         options=set()
     )
     func_normalmap_enum = bpy.props.EnumProperty(
@@ -1315,7 +1315,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     func_lighting: func_lighting_enum
     func_normalmap: func_normalmap_enum
     func_specular: func_specular_enum
-    func_lightmap: func_lighting_enum
+    func_lightmap: func_lightmap_enum
     func_multitexture: func_multitexture_enum
     htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
                                          default="0x8727e606", options=set())  # noqa: F821
@@ -1598,6 +1598,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVScreen", "FUVScreen", "", 4),  # noqa: F821
             ("FUVIndirect", "FUVIndirect", "", 5),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 6),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 7),  # noqa: F821
         ],
         options=set()
     )
@@ -1629,6 +1630,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyVolume", "FTransparencyVolume", "", 3),  # noqa: F821
             ("FTransparencyAlphaClip", "FTransparencyAlphaClip", "", 4),  # noqa: F821
             ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
+            ("FColorMaskTransparencyMap", "FColorMaskTransparencyMap", "", 6),  # noqa: F821
         ],
         options=set()
     )
@@ -1639,6 +1641,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FVDUVSecondary", "FVDUVSecondary", "", 2),  # noqa: F821
             ("FVDUVExtend", "FVDUVExtend", "", 3),  # noqa: F821
             ("FUVExtend", "FUVExtend", "", 4),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 5),  # noqa: F821
+            ("FUVSecondary", "FUVSecondary", "", 6),  # noqa: F821
         ],
         options=set()
     )
