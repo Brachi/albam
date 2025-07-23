@@ -82,6 +82,14 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             context.scene.albam.tools_settings,
             "bone_names_preset",
             text="",)
+        row = layout.row()
+        row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
+        row = layout.row()
+        row.operator('albam.separate_by_material', text="Separate by material")
+        row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        row = layout.row()
+        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
+        row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
 
 
 @blender_registry.register_blender_type
@@ -281,6 +289,150 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         return {'FINISHED'}
 
 
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveEmptyVertexGroups(bpy.types.Operator):
+    '''Remove vertex groups with 0 skin weighs'''
+    bl_idname = "albam.remove_empty_vertex_groups"
+    bl_label = "remove empty vertex groups"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        bpy.ops.object.mode_set(mode='OBJECT')
+        selection = bpy.context.scene.objects
+        scene_meshes = [obj for obj in selection if obj.type == 'MESH']
+
+        for ob in scene_meshes:
+            ob.update_from_editmode()
+
+            vgroup_used = {i: False for i, k in enumerate(ob.vertex_groups)}
+
+            for v in ob.data.vertices:
+                for g in v.groups:
+                    if g.weight > 0.0:
+                        vgroup_used[g.group] = True
+
+            for i, used in sorted(vgroup_used.items(), reverse=True):
+                if not used:
+                    ob.vertex_groups.remove(ob.vertex_groups[i])
+        show_message_box(message="Removing complete")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
+    '''Separate selected mesh by material'''
+    bl_idname = "albam.separate_by_material"
+    bl_label = "Separate by material"
+    bl_options = {'UNDO'}
+    bl_description = "Separate selected mesh by material"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selected_meshes:
+            bpy.ops.object.select_all(action='DESELECT')
+            for mesh_ob in selected_meshes:
+                try:
+                    target_collection = mesh_ob.users_collection[0]
+                except IndexError:
+                    target_collection = bpy.context.collection
+                duplicate = mesh_ob.copy()
+                duplicate.data = mesh_ob.data.copy()
+                target_collection.objects.link(duplicate)
+                bpy.ops.object.select_all(action='DESELECT')
+                duplicate.select_set(True)
+
+                # Make the clone active
+                bpy.context.view_layer.objects.active = duplicate
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.separate(type='MATERIAL')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                show_message_box(message=f"Mesh {mesh_ob.name} was separated")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveUnusedMaterialSlots(bpy.types.Operator):
+    ''''Remove unused material slots from selected meshes'''
+    bl_idname = "albam.remove_unused_material_slots"
+    bl_label = "Remove unused material slots"
+    bl_options = {'UNDO'}
+    bl_description = "Remove unused material slots from selected meshes"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selected_meshes:
+            for mesh_ob in selected_meshes:
+                mesh = mesh_ob.data
+                used_materials = set()
+                for poly in mesh.polygons:
+                    used_materials.add(poly.material_index)
+                for i in reversed(range(len(mesh.materials))):
+                    if i not in used_materials:
+                        mesh.materials.pop(index=i)
+            show_message_box(message="Removing complete")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
+    '''Batch paste Albam custom properties'''
+    bl_idname = "albam.batch_props_paste"
+    bl_label = "Batch paste Albam custom properties"
+    bl_options = {'UNDO'}
+
+    prop_type: bpy.props.StringProperty(
+        name="Property Type",
+        description="Type of the property to paste",
+        default="",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selected_meshes:
+            for mesh_ob in selected_meshes:
+                if self.prop_type == "mesh":
+                    prop = mesh_ob.data
+                else:
+                    prop = mesh_ob.material_slots[0].material
+                paste_props(prop)
+        return {'FINISHED'}
+
+
 def split_seams(me):
     bm = bmesh.from_edit_mesh(me)
     bpy.context.scene.tool_settings.use_uv_select_sync = True
@@ -347,6 +499,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev1": (23, 19, 25, 31),
         "rev2": (24, 20, 25, 31),
         "re6": (24, 20, 25, 31),
+        "dd": (24, 20, 25, 31),
     }
 
     UNKNOWN_TYPE = {
@@ -355,6 +508,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev1": "0xa09d",
         "rev2": "0x209d",
         "re6": "0x9a",
+        "dd": "0x99",
     }
 
     if not blender_material or not blender_material.node_tree:
@@ -367,8 +521,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             name = ntpath.splitext(tn.image.name)[0]
         else:
             continue
-        if not tn.image.albam_asset.relative_path:
-            tn.image.albam_asset.relative_path = local_path + name + '.tex'
+        tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
         tex_157_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
@@ -430,3 +583,22 @@ def merge_vgroups(vg_a, vg_b):
         ob.vertex_groups.remove(ob.vertex_groups[vg_a])
         ob.vertex_groups.remove(ob.vertex_groups[vg_b])
         vg_merged.name = vg_a
+
+
+def paste_props(context_item):
+    albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+    app_id = albam_asset.app_id
+    custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_props_sec = context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+
+    props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+    buff = bpy.context.scene.albam.clipboard.get_buffer()
+    to_paste = buff.get(app_id, {}).get(props_name, {})
+
+    for k, v in to_paste.items():
+        setattr(custom_props, k, v)
+
+    for sec_prop_name, sec_prop in custom_props_sec.items():
+        to_paste = buff.get(app_id, {}).get(sec_prop_name, {})
+        for k, v in to_paste.items():
+            setattr(sec_prop, k, v)
