@@ -33,6 +33,7 @@ def register():
     importlib.import_module("albam.blender_ui.import_panel")
     importlib.import_module("albam.blender_ui.export_panel")
     importlib.import_module("albam.engines.mtfw.animation")
+    importlib.import_module("albam.engines.mtfw.collision")
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
     if os.getenv("ALBAM_ENABLE_REEN"):
@@ -50,10 +51,12 @@ def register():
     AlbamCustomPropertiesMaterial = AlbamCustomPropertiesFactory("material")
     AlbamCustomPropertiesMesh = AlbamCustomPropertiesFactory("mesh")
     AlbamCustomPropertiesImage = AlbamCustomPropertiesFactory("image")
+    AlbamCustomPropertiesCollision = AlbamCustomPropertiesFactory("collision")
     bpy.utils.register_class(AlbamData)
     bpy.utils.register_class(AlbamCustomPropertiesMaterial)
     bpy.utils.register_class(AlbamCustomPropertiesMesh)
     bpy.utils.register_class(AlbamCustomPropertiesImage)
+    bpy.utils.register_class(AlbamCustomPropertiesCollision)
 
     bpy.types.Scene.albam = bpy.props.PointerProperty(type=AlbamData)
 
@@ -63,6 +66,7 @@ def register():
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
+    bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesCollision)
 
 
 def unregister():
