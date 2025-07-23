@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Tex157(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -18,9 +18,20 @@ class Tex157(ReadWriteKaitaiStruct):
         self.id_magic = self._io.read_bytes(4)
         if not (self.id_magic == b"\x54\x45\x58\x00"):
             raise kaitaistruct.ValidationNotEqualError(b"\x54\x45\x58\x00", self.id_magic, self._io, u"/seq/0")
-        self.packed_data_1 = self._io.read_u4le()
-        self.packed_data_2 = self._io.read_u4le()
-        self.packed_data_3 = self._io.read_u4le()
+        self.version = self._io.read_bits_int_le(8)
+        self.unk = self._io.read_bits_int_le(8)
+        self.attr = self._io.read_bits_int_le(8)
+        self.prebias = self._io.read_bits_int_le(4)
+        self.type = self._io.read_bits_int_le(4)
+        self.num_mipmaps_per_image = self._io.read_bits_int_le(6)
+        self.width = self._io.read_bits_int_le(13)
+        self.height = self._io.read_bits_int_le(13)
+        self.num_images = self._io.read_bits_int_le(8)
+        self.compression_format = self._io.read_bits_int_le(8)
+        self.depth = self._io.read_bits_int_le(13)
+        self.auto_resize = self._io.read_bits_int_le(1) != 0
+        self.render_target = self._io.read_bits_int_le(1) != 0
+        self.use_vtf = self._io.read_bits_int_le(1) != 0
         if (self.num_images == 6):
             pass
             self.cube_faces = []
@@ -54,9 +65,20 @@ class Tex157(ReadWriteKaitaiStruct):
     def _write__seq(self, io=None):
         super(Tex157, self)._write__seq(io)
         self._io.write_bytes(self.id_magic)
-        self._io.write_u4le(self.packed_data_1)
-        self._io.write_u4le(self.packed_data_2)
-        self._io.write_u4le(self.packed_data_3)
+        self._io.write_bits_int_le(8, self.version)
+        self._io.write_bits_int_le(8, self.unk)
+        self._io.write_bits_int_le(8, self.attr)
+        self._io.write_bits_int_le(4, self.prebias)
+        self._io.write_bits_int_le(4, self.type)
+        self._io.write_bits_int_le(6, self.num_mipmaps_per_image)
+        self._io.write_bits_int_le(13, self.width)
+        self._io.write_bits_int_le(13, self.height)
+        self._io.write_bits_int_le(8, self.num_images)
+        self._io.write_bits_int_le(8, self.compression_format)
+        self._io.write_bits_int_le(13, self.depth)
+        self._io.write_bits_int_le(1, int(self.auto_resize))
+        self._io.write_bits_int_le(1, int(self.render_target))
+        self._io.write_bits_int_le(1, int(self.use_vtf))
         if (self.num_images == 6):
             pass
             for i in range(len(self.cube_faces)):
@@ -178,116 +200,6 @@ class Tex157(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
-    @property
-    def num_mipmaps_per_image(self):
-        if hasattr(self, '_m_num_mipmaps_per_image'):
-            return self._m_num_mipmaps_per_image
-
-        self._m_num_mipmaps_per_image = (self.packed_data_2 & 63)
-        return getattr(self, '_m_num_mipmaps_per_image', None)
-
-    def _invalidate_num_mipmaps_per_image(self):
-        del self._m_num_mipmaps_per_image
-    @property
-    def num_images(self):
-        if hasattr(self, '_m_num_images'):
-            return self._m_num_images
-
-        self._m_num_images = (self.packed_data_3 & 255)
-        return getattr(self, '_m_num_images', None)
-
-    def _invalidate_num_images(self):
-        del self._m_num_images
-    @property
-    def height(self):
-        if hasattr(self, '_m_height'):
-            return self._m_height
-
-        self._m_height = ((self.packed_data_2 >> 19) & 8191)
-        return getattr(self, '_m_height', None)
-
-    def _invalidate_height(self):
-        del self._m_height
-    @property
-    def constant(self):
-        if hasattr(self, '_m_constant'):
-            return self._m_constant
-
-        self._m_constant = ((self.packed_data_3 >> 16) & 8191)
-        return getattr(self, '_m_constant', None)
-
-    def _invalidate_constant(self):
-        del self._m_constant
-    @property
-    def unk_type(self):
-        if hasattr(self, '_m_unk_type'):
-            return self._m_unk_type
-
-        self._m_unk_type = (self.packed_data_1 & 65535)
-        return getattr(self, '_m_unk_type', None)
-
-    def _invalidate_unk_type(self):
-        del self._m_unk_type
-    @property
-    def dimension(self):
-        if hasattr(self, '_m_dimension'):
-            return self._m_dimension
-
-        self._m_dimension = ((self.packed_data_1 >> 28) & 15)
-        return getattr(self, '_m_dimension', None)
-
-    def _invalidate_dimension(self):
-        del self._m_dimension
-    @property
-    def width(self):
-        if hasattr(self, '_m_width'):
-            return self._m_width
-
-        self._m_width = ((self.packed_data_2 >> 6) & 8191)
-        return getattr(self, '_m_width', None)
-
-    def _invalidate_width(self):
-        del self._m_width
-    @property
-    def compression_format(self):
-        if hasattr(self, '_m_compression_format'):
-            return self._m_compression_format
-
-        self._m_compression_format = ((self.packed_data_3 >> 8) & 255)
-        return getattr(self, '_m_compression_format', None)
-
-    def _invalidate_compression_format(self):
-        del self._m_compression_format
-    @property
-    def reserved_01(self):
-        if hasattr(self, '_m_reserved_01'):
-            return self._m_reserved_01
-
-        self._m_reserved_01 = ((self.packed_data_1 >> 16) & 255)
-        return getattr(self, '_m_reserved_01', None)
-
-    def _invalidate_reserved_01(self):
-        del self._m_reserved_01
-    @property
-    def reserved_02(self):
-        if hasattr(self, '_m_reserved_02'):
-            return self._m_reserved_02
-
-        self._m_reserved_02 = ((self.packed_data_3 >> 29) & 3)
-        return getattr(self, '_m_reserved_02', None)
-
-    def _invalidate_reserved_02(self):
-        del self._m_reserved_02
-    @property
-    def shift(self):
-        if hasattr(self, '_m_shift'):
-            return self._m_shift
-
-        self._m_shift = ((self.packed_data_1 >> 24) & 15)
-        return getattr(self, '_m_shift', None)
-
-    def _invalidate_shift(self):
-        del self._m_shift
     @property
     def size_before_data_(self):
         if hasattr(self, '_m_size_before_data_'):

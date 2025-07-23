@@ -445,7 +445,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     custom_properties.copy_custom_properties_from(mesh)
     # XXX TMP hack, TODO convert vertex formats to enums
     if app_id != "re5":
-        custom_properties.vertex_format = str(mesh.vertex_format)
+        custom_properties.vertex_format = hex(mesh.vertex_format)
     return ob
 
 
@@ -1353,7 +1353,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     elif dst_mod.header.version in (210, 211, 212):
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
         try:
-            stored_vertex_format = int(custom_properties.get("vertex_format"))
+            stored_vertex_format = int(getattr(custom_properties, "vertex_format"), 16)
         except (TypeError, ValueError):
             stored_vertex_format = None
         default_vertex_format = DEFAULT_VERTEX_FORMAT_SKIN if has_bones else DEFAULT_VERTEX_FORMAT_NONSKIN
@@ -1954,6 +1954,60 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
                 setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
 
 
+VERTEX_FORMATS_LABELS = {
+    0x4325a03e: "NonSkinTBN_4M",  # shape keys not implemented yet
+    0xa14e003c: "NonSkinBCA",
+    0x2082f03b: "NonSkinBLA",
+    0xc66fa03a: "NonSkinBA",
+    0xd1a47038: "NonSkinBL",
+    0x207d6037: "NonSkinBC",
+    0xa7d7d036: "NonSkinB",
+    0x37a4e035: "NonSkinTBNLA",
+    0xb6681034: "NonSkinTBNCA",
+    0x9399c033: "NonSkinTBCA",
+    0x12553032: "NonSkinTBLA",
+    0x747d1031: "NonSkinTBNA",
+    0x63b6c02f: "NonSkinTBNL",
+    0x926fd02e: "NonSkinTBNC",
+    0xafa6302d: "NonSkinTBA",
+    0x5e7f202c: "NonSkinTBN",
+    0xb86de02a: "NonSkinTBL",
+    0x49b4f029: "NonSkinTBC",
+    0xd8297028: "NonSkinTB",
+    0xcbcf7027: "SkinTBNLA8wt",
+    0xd84e3026: "SkinTBC8wt",
+    0x75c3e025: "SkinTBN8wt",
+    0xbb424024: "SkinTB8wt",
+    0x64593023: "SkinTBNLA4wt",
+    0x77d87022: "SkinTBC4wt",
+    0xdA55a021: "SkinTBN4wt",
+    0x14d40020: "SkinTB4wt",
+    0xb392101f: "SkinTBNLA2wt",
+    0xa013501e: "SkinTBC2wt",
+    0xd9e801d: "SkinTBN2wt",
+    0xc31f201c: "SkinTB2wt",
+    0xd877801b: "SkinTBNLA1wt",
+    0xcbf6c01a: "SkinTBC1wt",
+    0x667b1019: "SkinTBN1wt",
+    0xa8fab018: "SkinTB1wt",
+    0x2f55c03d: "SkinOTB_4WT_4M",  # shape keys are not implemented yet
+    0xa320c016: "Bridge8wt",
+    0xcb68015: "Bridge4wt",
+    0xdb7da014: "Bridge2wt",
+    0xb0983013: "Bridge1wt",
+}
+
+vertex_format_enum_items = [
+    (
+        hex(key),  # value
+        label,     # label
+        f"{label} ({hex(key)})",  # description
+        idx
+    )
+    for idx, (key, label) in enumerate(VERTEX_FORMATS_LABELS.items())
+]
+
+
 @blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
@@ -1971,7 +2025,13 @@ class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     bone_id_start: bpy.props.IntProperty(name="Bone ID Start", default=0, options=set())  # noqa: F821
     connect_id: bpy.props.IntProperty(name="Connect ID", default=0, options=set())  # noqa: F821
     boundary: bpy.props.IntProperty(name="Boundary", default=0, options=set())  # noqa: F821
-    vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
+    #  vertex_format: bpy.props.StringProperty(name="Vertex Format", options=set())  # noqa: F821
+    vertex_format: bpy.props.EnumProperty(
+        name="Vertex Format",  # noqa: F821
+        description="Vertex format (MT Framework)",
+        items=vertex_format_enum_items,
+        options=set()
+    )
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

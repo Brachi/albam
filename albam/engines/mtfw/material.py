@@ -43,7 +43,7 @@ MRL_DEFAULT_VERSION = {
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
-MRL_UNK_01 = {
+MRL_SHADER_VERSION = {
     "re0": 0x419a398d,
     "re1": 0x244bbc26,
     "re6": 0x6a5489b8,
@@ -187,8 +187,20 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
             custom_props_top_level.blend_state_type = blend_state_type
             custom_props_top_level.depth_stencil_state_type = depth_stencil_state_type
             custom_props_top_level.rasterizer_state_type = rasterizer_state_type
-            custom_props_top_level.unk_flags = material.unk_flags
-            custom_props_top_level.unk_01 = material.unk_01
+            custom_props_top_level.reserverd1 = material.reserverd1
+            custom_props_top_level.id = material.id
+            custom_props_top_level.fog = material.fog
+            custom_props_top_level.tangent = material.tangent
+            custom_props_top_level.half_lambert = material.half_lambert
+            custom_props_top_level.stencil_ref = material.stencil_ref
+            custom_props_top_level.alphatest_ref = material.alphatest_ref
+            custom_props_top_level.polygon_offset = material.polygon_offset
+            custom_props_top_level.alphatest = material.alphatest
+            custom_props_top_level.alphatest_func = material.alphatest_func
+            custom_props_top_level.draw_pass = material.draw_pass
+            custom_props_top_level.layer_id = material.layer_id
+            custom_props_top_level.deffered_lighting = material.deffered_lighting
+
             # verified in tests that $Globals and CBMaterial resources are present if there are resources
             # see tests.mtfw.test_parsing_mrl::test_global_resources_mandatory
             if material.resources:
@@ -336,7 +348,8 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
         custom_properties.copy_custom_properties_to(mat)
 
-        tex_types = _gather_tex_types(bl_mat, exported_textures, dst_mod.materials_data.textures)
+        tex_types = _gather_tex_types(
+            bl_mat, exported_textures, dst_mod.materials_data.textures, app_id=app_id)
         mat.basemap = tex_types.get(TextureType.DIFFUSE, -1) + 1
         mat.normalmap = tex_types.get(TextureType.NORMAL, -1) + 1
         mat.maskmap = tex_types.get(TextureType.SPECULAR, -1) + 1
@@ -373,7 +386,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     mrl = Mrl(app_id=app_id)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
-    mrl.unk_01 = MRL_UNK_01[app_id]
+    mrl.shader_version = MRL_SHADER_VERSION[app_id]
     mrl.textures = []
     mrl.materials = []
     current_commands_offset = 0
@@ -406,13 +419,24 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
         mat.blend_state_hash = (shader_objects[mrl_params.blend_state_type]["hash"] << 12) + blend_state_index
         mat.depth_stencil_state_hash = (shader_objects[mrl_params.depth_stencil_state_type]["hash"] << 12) + depth_stencil_state_index  # noqa
         mat.rasterizer_state_hash = (shader_objects[mrl_params.rasterizer_state_type]["hash"] << 12) + rasterizer_state_index  # noqa
-        mat.unk_01 = mrl_params.unk_01
-        mat.unk_flags = mrl_params.unk_flags
-        mat.reserved = [0, 0, 0, 0]
+        mat.reserverd1 = mrl_params.reserverd1
+        mat.id = mrl_params.id
+        mat.fog = mrl_params.fog
+        mat.tangent = mrl_params.tangent
+        mat.half_lambert = mrl_params.half_lambert
+        mat.stencil_ref = mrl_params.stencil_ref
+        mat.alphatest_ref = mrl_params.alphatest_ref
+        mat.polygon_offset = mrl_params.polygon_offset
+        mat.alphatest = mrl_params.alphatest
+        mat.alphatest_func = mrl_params.alphatest_func
+        mat.draw_pass = mrl_params.draw_pass
+        mat.layer_id = mrl_params.layer_id
+        mat.deffered_lighting = mrl_params.deffered_lighting
+        mat.blend_factor = [0, 0, 0, 0]
         mat.anim_data_size = 0
         mat.ofs_anim_data = 0
 
-        tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl)
+        tex_types = _gather_tex_types(bl_mat, exported_textures, mrl.textures, mrl=mrl, app_id=app_id)
         resources = _create_resources(app_id, tex_types, mat, mrl_params, custom_props_secondary)
         mat.resources = _insert_constant_buffers(resources, app_id, mat, custom_props_secondary)
 
@@ -851,7 +875,7 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     return resource
 
 
-def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
+def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id=None):
     tex_types = {}
     image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
     for im_node in image_nodes:
@@ -864,6 +888,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             # dummy texture, index 0
             tex_types[tex_type] = -1
             continue
+        custom_properties = im_node.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         image_name = im_node.image.name
         vfile = exported_textures[image_name]["serialized_vfile"]
         relative_path_no_ext = vfile.relative_path.replace(".tex", "")
@@ -880,7 +905,7 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None):
             except ValueError:
 
                 tex = mrl.TextureSlot(_parent=mrl, _root=mrl._root)
-                if im_node.image.albam_asset.render_target is True:
+                if custom_properties.render_target is True:
                     tex.type_hash = 2013850128  # TYPE_rRenderTargetTexture
                 else:
                     tex.type_hash = mrl.TextureType.type_r_texture
@@ -1336,8 +1361,8 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
     flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
     heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
                                            default=0.2, options=set())  # noqa: F821
-    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())
-    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())
+    blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())  # noqa: F821
+    alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1422,10 +1447,58 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     blend_state_type: blend_state_enum
     depth_stencil_state_type: depth_stencil_enum
     rasterizer_state_type: rasterizer_state_enum
-    unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
+    reserverd1: bpy.props.IntProperty(
+        name="Reserved1",  # noqa: F821
+        min=0, max=0x1FF
+    )
+    id: bpy.props.IntProperty(
+        name="ID",  # noqa: F821
+        min=0, max=0xFF
+    )
+    fog: bpy.props.BoolProperty(
+        name="Fog",  # noqa: F821
+    )
+    tangent: bpy.props.BoolProperty(
+        name="Tangent",  # noqa: F821
+    )
+    half_lambert: bpy.props.BoolProperty(
+        name="Half Lambert",  # noqa: F821
+    )
+    stencil_ref: bpy.props.IntProperty(
+        name="Stencil Ref",  # noqa: F821
+        min=0, max=0xFF
+    )
+    alphatest_ref: bpy.props.IntProperty(
+        name="AlphaTest Ref",  # noqa: F821
+        min=0, max=0xFF
+    )
+    polygon_offset: bpy.props.IntProperty(
+        name="Polygon Offset",  # noqa: F821
+        description="Polygon Offset (4 bits)",  # noqa: F821
+        min=0, max=0xF
+    )
+    alphatest: bpy.props.BoolProperty(
+        name="AlphaTest",  # noqa: F821
+    )
+    alphatest_func: bpy.props.IntProperty(
+        name="AlphaTest Func",  # noqa: F821
+        min=0, max=0x7
+    )
+    draw_pass: bpy.props.IntProperty(
+        name="Draw Pass",  # noqa: F821
+        min=0, max=0x1F
+    )
+    layer_id: bpy.props.IntProperty(
+        name="Layer ID",  # noqa: F821
+        min=0, max=0x3
+    )
+    deffered_lighting: bpy.props.BoolProperty(
+        name="Deferred Lighting",  # noqa: F821
+    )
+    #  unk_01: bpy.props.IntProperty(name="Unk_01", options=set())  # noqa: F821
 
-    unk_flags: bpy.props.IntVectorProperty(
-        name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
+    #  unk_flags: bpy.props.IntVectorProperty(
+    #    name="Unknown Flags", size=4, default=(0, 0, 128, 140), options=set())
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):
@@ -1443,7 +1516,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
-    f_vertex_displacement_param : bpy.props.EnumProperty(
+    f_vertex_displacement_param: bpy.props.EnumProperty(
         name="FVertexDisplacement",  # noqa: F821
         items=[
             ("FVertexDisplacement", "Default", "", 1),  # noqa: F821
@@ -1456,7 +1529,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set(),
     )
-    f_uv_vertex_displacement_param : bpy.props.EnumProperty(
+    f_uv_vertex_displacement_param: bpy.props.EnumProperty(
         name="FUVVertexDisplacement",  # noqa: F821
         items=[
             ("FVDUVPrimary", "FVDUVPrimary", "", 1),  # noqa: F821
@@ -1465,7 +1538,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_vd_mask_uv_transform_param : bpy.props.EnumProperty(
+    f_vd_mask_uv_transform_param: bpy.props.EnumProperty(
         name="FVDMaskUVTransform",  # noqa: F821
         items=[
             ("FVDMaskUVTransform", "Default", "", 1),  # noqa: F821
@@ -1473,7 +1546,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_vd_get_mask_param : bpy.props.EnumProperty(
+    f_vd_get_mask_param: bpy.props.EnumProperty(
         name="FVDGetMask",  # noqa: F821
         items=[
             ("FVDGetMask", "Default", "", 1),  # noqa: F821
@@ -1481,7 +1554,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_uv_transform_primary_param : bpy.props.EnumProperty(  # noqa: F82
+    f_uv_transform_primary_param: bpy.props.EnumProperty(  # noqa: F82
         name="FUVTransformPrimary",  # noqa: F821
         items=[
             ("FUVTransformPrimary", "Default", "", 1),  # noqa: F821
@@ -1490,7 +1563,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_uv_transform_secondary_param : bpy.props.EnumProperty(
+    f_uv_transform_secondary_param: bpy.props.EnumProperty(
         name="FUVTransformSecondary",  # noqa: F821
         items=[
             ("FUVTransformSecondary", "Default", "", 1),  # noqa: F821
@@ -1499,7 +1572,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
         ],
         options=set()
     )
-    f_occlusion_param : bpy.props.EnumProperty(
+    f_occlusion_param: bpy.props.EnumProperty(
         name="FOcclusion",  # noqa: F821
         items=[
             ("FOcclusion", "Default", "", 1),  # noqa: F821
