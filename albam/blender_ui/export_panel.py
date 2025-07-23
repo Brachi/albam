@@ -23,8 +23,48 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     remove_duplicate_materials_suffix: bpy.props.BoolProperty(default=True)
     export_visible: bpy.props.BoolProperty(default=False)
     force_lod255: bpy.props.BoolProperty(default=False)
-    no_vf_grouping: bpy.props.BoolProperty(default=False)  # dd weapons and armor requires it
+    no_vf_grouping: bpy.props.BoolProperty(
+        default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
+    algorithm: bpy.props.EnumProperty(
+        name="Algorithm Choice",
+        description="BVH Construction Algorithm.",  # noqa: F722
+        items=[("hybrid", "Hybrid",  # noqa: 821
+                "Uses a hybrid algorithm combining those listed for different tri counts (Recommended).", 0),
+               ("kdtree", "Naive KD-Tree", "Top-Down Median Split KD-Tree.", 1),  # noqa: 821
+               ("split", "Space Bisecting Planes",  # noqa: 821
+                "Top-Down Linear search for optimal set bisection.", 2),
+               ("aproxcluster", "Aproximate Agglomerative Clustering",# noqa: 821
+                "Approximation of Exact Agglomerative Clustering.", 3),
+               ("exactcluster", "Exact Agglomerative Clustering",  # noqa: 821
+                "Bottom-Up clusters that minimize the metric (Only Recommended when all meshes have"
+                " low tri counts).", 4),
+               ],
+        default="hybrid")  # noqa F821
+    metric: bpy.props.EnumProperty(
+        name="Metric Choice",
+        description="BVH Construction Metric to optimize.",
+        items=[("sah", "SAH Metric", "Surface Area Heuristic.", 0),  # noqa F821
+               ("epo", "SAH+EPO Metric",   # noqa F821
+                "End Point Overlap + Surface Area Heuristic.", 1),
+               ],
+        default="sah")  # noqa F821
+    mode: bpy.props.EnumProperty(
+        name="KD-Tree Planes",
+        description="KD-Tree Plane Axis.",
+        items=[("capcom", "CAPCOM", "X/Z Planes as Candidates.", 0),  # noqa F821
+               ("normal", "Traditional", "X/Y/Z Plane as Candidates.", 1),  # noqa F821
+               ],
+        default="capcom")  # noqa F821
+    partition: bpy.props.EnumProperty(
+        name="Space Bisection Split Plane Choice",
+        description="Split Plane Method.",
+        items=[("morton", "Morton Digit Change",  # noqa F821
+                "Selects the point where the sign of the morton encoding changes.", 0),
+               ("metric", "Optimize Metric",  # noqa F821
+                "Select the point that optimizes the metric.", 1),
+               ],
+        default="metric")
     far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
     far_add_new: bpy.props.BoolProperty(default=False)
 
@@ -147,13 +187,21 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
     def draw(self, context):
         export_settings = context.scene.albam.export_settings
         layout = self.layout
-        layout.prop(export_settings, "export_visible", text="Export only visible meshes")
+        layout.prop(export_settings, "export_visible",
+                    text="Export only visible meshes")
         layout.prop(export_settings,
                     "force_lod255",
                     text="Set LOD ID = 255 (always visible) for exported meshes")
         layout.label(text="Dragon's Dogma export hacks")
-        layout.prop(export_settings, "no_vf_grouping", text="Don't group meshes by vertex format")
-        layout.prop(export_settings, "force_max_num_weights", text="Set max weigth always more that 4")
+        layout.prop(export_settings, "no_vf_grouping",
+                    text="Don't group meshes by vertex format")
+        layout.prop(export_settings, "force_max_num_weights",
+                    text="Set max weigth always more that 4")
+        layout.label(text="SBC generation")
+        layout.prop(export_settings, "algorithm")
+        layout.prop(export_settings, "metric")
+        layout.prop(export_settings, "mode")
+        layout.prop(export_settings, "partition")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
@@ -237,7 +285,8 @@ class ALBAM_OT_Export(bpy.types.Operator):
         asset = item.bl_object.albam_asset
         bl_obj = item.bl_object
         app_id = asset.app_id
-        export_function = blender_registry.export_registry[(asset.app_id, asset.extension)]
+        export_function = blender_registry.export_registry[(
+            asset.app_id, asset.extension)]
         vfiles = export_function(item.bl_object)
 
         root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
@@ -391,7 +440,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
         item_e = vfs_e.file_list[index_e]
-        exported = [item for item in vfs_e.file_list if item.is_expandable is False]
+        exported = [
+            item for item in vfs_e.file_list if item.is_expandable is False]
         for e in exported:
             try:
                 parent = e.tree_node_ancestors[0].node_id
