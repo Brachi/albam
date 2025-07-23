@@ -62,6 +62,7 @@ def AlbamCustomPropertiesFactory(kind: str):
         data = {}
         appid_map = {}
         appid_map_secondary = {}
+        subpanel_type = SUBPANEL_BASE.get(registry_name, None)
         registry = getattr(blender_registry, registry_name)
         for app_id, props_dict in registry.items():
             for name, (cls, is_secondary, display_name) in props_dict.items():
@@ -69,20 +70,20 @@ def AlbamCustomPropertiesFactory(kind: str):
                 if not is_secondary:
                     appid_map[app_id] = name
                 else:
-                    _create_custom_properties_secondary_subpanel(app_id, display_name, name)
+                    _create_custom_properties_secondary_subpanel(app_id, display_name, name, subpanel_type)
                     prop_names = appid_map_secondary.setdefault(app_id, [])
                     prop_names.append(name)
 
         return data, appid_map, appid_map_secondary
 
-    def _create_custom_properties_secondary_subpanel(app_id, label, custom_props_id):
+    def _create_custom_properties_secondary_subpanel(app_id, label, custom_props_id, subpanel_type):
 
         bl_idname = (f"ALBAM_PT_CustomProperties{kind.title()}Secondary"
                      f"{custom_props_id.title()}{app_id.title()}")
 
         SubPanel = type(
             bl_idname,
-            (ALBAM_PT_CustomPropertiesMaterialSubPanelBase, ),
+            (subpanel_type, ),
             {
                 "bl_label": label,
                 "bl_idname": bl_idname,
@@ -147,6 +148,17 @@ def AlbamCustomPropertiesFactory(kind: str):
                 break
         return albam_asset
 
+    def _get_parent_albam_asset_object(bl_obj):
+        albam_asset = None
+        for obj in bpy.data.objects:
+            if not obj.albam_asset.relative_path:
+                continue
+            children = {c for c in obj.children_recursive if c.type == "EMPTY"}
+            if bl_obj in children:
+                albam_asset = obj.albam_asset
+                break
+        return albam_asset
+
     def get_parent_albam_asset(self):
         custom_prop_context = self.id_data
         albam_asset = None
@@ -155,6 +167,8 @@ def AlbamCustomPropertiesFactory(kind: str):
             albam_asset = _get_parent_albam_asset_mesh(custom_prop_context)
         elif isinstance(custom_prop_context, bpy.types.Material):
             albam_asset = _get_parent_albam_asset_material(custom_prop_context)
+        elif isinstance(custom_prop_context, bpy.types.Object):
+            albam_asset = _get_parent_albam_asset_object(custom_prop_context)
 
         return albam_asset
 
@@ -199,7 +213,7 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image")
+    assert kind in ("mesh", "material", "image", "animation")
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -311,6 +325,62 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         return True
 
 
+class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMaterialSubPanelBase):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    bl_parent_id = "ALBAM_PT_CustomPropertiesAnimation"
+
+    APP_ID = None
+    custom_props_to_draw = None
+    CONTEXT_ITEM_NAME = "object"
+
+    def draw(self, context):
+        super().draw(context)
+
+        layout = self.layout
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+        custom_props = custom_props_sec.get(self.custom_props_to_draw)
+        for k in custom_props.__annotations__:
+            collection = getattr(custom_props, k)
+            if not collection:
+                return
+            # display collection item
+            if isinstance(collection, bpy.types.bpy_prop_collection):
+                active_index = getattr(custom_props, "item_index", 0)
+                if 0 <= active_index < len(collection):
+                    active_item = collection[active_index]
+                    name = k.capitalize()
+                    layout.label(text=f"{name}: {active_index}")
+                    # display child collection item
+                    for child_k in active_item.__annotations__:
+                        child_value = getattr(active_item, child_k)
+                        if isinstance(child_value, bpy.types.bpy_prop_collection):
+                            child_active_index = getattr(active_item, "item_index", 0)
+                            if 0 <= child_active_index < len(child_value):
+                                child_active_item = child_value[child_active_index]
+                                child_name = child_k.capitalize()
+                                layout.label(text=f"{child_name}: {child_active_index}")
+                                for prop in child_active_item.__annotations__:
+                                    layout.prop(child_active_item, prop)
+                            else:
+                                layout.label(text=f"{child_k}: (empty)")
+                        else:
+                            layout.prop(active_item, child_k)
+
+
+SUBPANEL_BASE = {
+    "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
+    "custom_properties_animation": ALBAM_PT_CustomPropertiesAnimationSubPanelBase,
+}
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_idname = "ALBAM_PT_CustomPropertiesMesh"
@@ -320,9 +390,18 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     CONTEXT_ITEM_NAME = "mesh"
 
 
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesAnimation(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesAnimation"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    CONTEXT_ITEM_NAME = "object"
+
+
 @blender_registry.register_blender_prop_albam(name="clipboard")
 class ClipboardData(bpy.types.PropertyGroup):
-    buff : bpy.props.StringProperty(default="{}")
+    buff: bpy.props.StringProperty(default="{}")
 
     def get_buffer(self):
         return json.loads(self.buff)

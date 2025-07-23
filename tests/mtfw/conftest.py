@@ -220,6 +220,7 @@ def parsed_lmt_from_arc(request):
     src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
 
     parsed = Lmt.from_bytes(src_bytes)
+    parsed._read()
     parsed._arc_name = os.path.basename(arc.file_path)
     parsed._file_path = file_entry.file_path
 
