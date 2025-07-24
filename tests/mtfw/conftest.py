@@ -72,6 +72,7 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
     if app_id == "dd":
         bpy.context.scene.albam.export_settings.no_vf_grouping = True
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
+    bpy.context.scene.albam.export_settings.export_bones = True
 
     vfile_mod = bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
     vfile_mrl = bpy.context.scene.albam.vfs.get_vfile(app_id, mrl_path) if mrl_path else None
