@@ -88,7 +88,7 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_psmatrix.row_4.y == pytest.approx(dst_psmatrix.row_4.y, abs=9e-05)
             assert src_psmatrix.row_4.z == pytest.approx(dst_psmatrix.row_4.z, abs=9e-05)
             assert src_psmatrix.row_4.w == pytest.approx(dst_psmatrix.row_4.w, abs=9e-05)
-    """
+
     for i, src_ibmatrix in enumerate(sbd.inverse_bind_matrices):
         dst_ibmatrix = dbd.inverse_bind_matrices[i]
         with subtests.test(matrix_index=i):
@@ -98,17 +98,17 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_ibmatrix.row_1.w == dst_ibmatrix.row_1.w
             assert src_ibmatrix.row_2.x == dst_ibmatrix.row_2.x
             assert src_ibmatrix.row_2.y == dst_ibmatrix.row_2.y
-            assert src_ibmatrix.row_2.z == pytest.approx(dst_ibmatrix.row_2.z, abs=5e-06)
+            assert src_ibmatrix.row_2.z == pytest.approx(dst_ibmatrix.row_2.z, abs=9e-05)
             assert src_ibmatrix.row_2.w == dst_ibmatrix.row_2.w
             assert src_ibmatrix.row_3.x == dst_ibmatrix.row_3.x
             assert src_ibmatrix.row_3.y == dst_ibmatrix.row_3.y
             assert src_ibmatrix.row_3.z == dst_ibmatrix.row_3.z
             assert src_ibmatrix.row_3.w == dst_ibmatrix.row_3.w
-            assert src_ibmatrix.row_4.x == pytest.approx(dst_ibmatrix.row_4.x, rel=0.01)
-            assert src_ibmatrix.row_4.y == pytest.approx(dst_ibmatrix.row_4.y, rel=0.01)
-            assert src_ibmatrix.row_4.z == pytest.approx(dst_ibmatrix.row_4.z, rel=0.01)
-            assert src_ibmatrix.row_4.w == pytest.approx(dst_ibmatrix.row_4.w, rel=0.01)
-    """
+            assert src_ibmatrix.row_4.x == pytest.approx(dst_ibmatrix.row_4.x, abs=9e-05)
+            assert src_ibmatrix.row_4.y == pytest.approx(dst_ibmatrix.row_4.y, abs=9e-05)
+            assert src_ibmatrix.row_4.z == pytest.approx(dst_ibmatrix.row_4.z, abs=9e-05)
+            assert src_ibmatrix.row_4.w == pytest.approx(dst_ibmatrix.row_4.w, abs=9e-05)
+
     assert sbd.bone_map == dbd.bone_map
 
 
