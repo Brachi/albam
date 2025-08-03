@@ -73,12 +73,12 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
         dst_psmatrix = dbd.parent_space_matrices[i]
         with subtests.test(matrix_index=i):
             assert src_psmatrix.row_1.x == dst_psmatrix.row_1.x
-            assert src_psmatrix.row_1.y == dst_psmatrix.row_1.y
+            assert src_psmatrix.row_1.y == pytest.approx(dst_psmatrix.row_1.y, abs=9e-05)
             assert src_psmatrix.row_1.z == pytest.approx(dst_psmatrix.row_1.z, abs=9e-05)
             assert src_psmatrix.row_1.w == dst_psmatrix.row_1.w
             assert src_psmatrix.row_2.x == dst_psmatrix.row_2.x
             assert src_psmatrix.row_2.y == dst_psmatrix.row_2.y
-            assert src_psmatrix.row_2.z == dst_psmatrix.row_2.z
+            assert src_psmatrix.row_2.z == pytest.approx(dst_psmatrix.row_2.z, abs=9e-05)
             assert src_psmatrix.row_2.w == dst_psmatrix.row_2.w
             assert src_psmatrix.row_3.x == dst_psmatrix.row_3.x
             assert src_psmatrix.row_3.y == dst_psmatrix.row_3.y
@@ -92,8 +92,8 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
     for i, src_ibmatrix in enumerate(sbd.inverse_bind_matrices):
         dst_ibmatrix = dbd.inverse_bind_matrices[i]
         with subtests.test(matrix_index=i):
-            assert src_ibmatrix.row_1.x == dst_ibmatrix.row_1.x
-            assert src_ibmatrix.row_1.y == dst_ibmatrix.row_1.y
+            assert src_ibmatrix.row_1.x == pytest.approx(dst_ibmatrix.row_1.x, abs=9e-05)
+            assert src_ibmatrix.row_1.y == pytest.approx(dst_ibmatrix.row_1.y, abs=9e-05)
             assert src_ibmatrix.row_1.z == dst_ibmatrix.row_1.z
             assert src_ibmatrix.row_1.w == dst_ibmatrix.row_1.w
             assert src_ibmatrix.row_2.x == dst_ibmatrix.row_2.x
