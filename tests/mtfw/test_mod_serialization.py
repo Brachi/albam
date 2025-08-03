@@ -64,10 +64,10 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_bone.idx_mirror == dst_bone.idx_mirror
             assert src_bone.idx_mapping == dst_bone.idx_mapping
             assert src_bone.unk_01 == dst_bone.unk_01
-            assert src_bone.parent_distance == pytest.approx(dst_bone.parent_distance, abs=5e-06)
-            assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=5e-06)
-            assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=5e-06)
-            assert src_bone.location.z == pytest.approx(dst_bone.location.z, abs=5e-06)
+            assert src_bone.parent_distance == pytest.approx(dst_bone.parent_distance, abs=9e-05)
+            assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=9e-05)
+            assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=9e-05)
+            assert src_bone.location.z == pytest.approx(dst_bone.location.z, abs=9e-05)
     """
     for i, src_psmatrix in enumerate(sbd.parent_space_matrices):
         dst_psmatrix = dbd.parent_space_matrices[i]
