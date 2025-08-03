@@ -68,13 +68,13 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=9e-05)
             assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=9e-05)
             assert src_bone.location.z == pytest.approx(dst_bone.location.z, abs=9e-05)
-    """
+
     for i, src_psmatrix in enumerate(sbd.parent_space_matrices):
         dst_psmatrix = dbd.parent_space_matrices[i]
         with subtests.test(matrix_index=i):
             assert src_psmatrix.row_1.x == dst_psmatrix.row_1.x
             assert src_psmatrix.row_1.y == dst_psmatrix.row_1.y
-            assert src_psmatrix.row_1.z == pytest.approx(dst_psmatrix.row_1.z, abs=5e-06)
+            assert src_psmatrix.row_1.z == pytest.approx(dst_psmatrix.row_1.z, abs=9e-05)
             assert src_psmatrix.row_1.w == dst_psmatrix.row_1.w
             assert src_psmatrix.row_2.x == dst_psmatrix.row_2.x
             assert src_psmatrix.row_2.y == dst_psmatrix.row_2.y
@@ -84,11 +84,11 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_psmatrix.row_3.y == dst_psmatrix.row_3.y
             assert src_psmatrix.row_3.z == dst_psmatrix.row_3.z
             assert src_psmatrix.row_3.w == dst_psmatrix.row_3.w
-            assert src_psmatrix.row_4.x == pytest.approx(dst_psmatrix.row_4.x, rel=0.01)
-            assert src_psmatrix.row_4.y == pytest.approx(dst_psmatrix.row_4.y, rel=0.01)
-            assert src_psmatrix.row_4.z == pytest.approx(dst_psmatrix.row_4.z, rel=0.01)
-            assert src_psmatrix.row_4.w == pytest.approx(dst_psmatrix.row_4.w, rel=0.01)
-
+            assert src_psmatrix.row_4.x == pytest.approx(dst_psmatrix.row_4.x, abs=9e-05)
+            assert src_psmatrix.row_4.y == pytest.approx(dst_psmatrix.row_4.y, abs=9e-05)
+            assert src_psmatrix.row_4.z == pytest.approx(dst_psmatrix.row_4.z, abs=9e-05)
+            assert src_psmatrix.row_4.w == pytest.approx(dst_psmatrix.row_4.w, abs=9e-05)
+    """
     for i, src_ibmatrix in enumerate(sbd.inverse_bind_matrices):
         dst_ibmatrix = dbd.inverse_bind_matrices[i]
         with subtests.test(matrix_index=i):
