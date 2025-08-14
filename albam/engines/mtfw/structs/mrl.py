@@ -3028,7 +3028,7 @@ class Mrl(ReadWriteKaitaiStruct):
         self.version = self._io.read_u4le()
         self.num_materials = self._io.read_u4le()
         self.num_textures = self._io.read_u4le()
-        self.unk_01 = self._io.read_u4le()
+        self.shader_version = self._io.read_u4le()
         self.ofs_textures = self._io.read_u4le()
         self.ofs_materials = self._io.read_u4le()
         self.textures = []
@@ -3063,7 +3063,7 @@ class Mrl(ReadWriteKaitaiStruct):
         self._io.write_u4le(self.version)
         self._io.write_u4le(self.num_materials)
         self._io.write_u4le(self.num_textures)
-        self._io.write_u4le(self.unk_01)
+        self._io.write_u4le(self.shader_version)
         self._io.write_u4le(self.ofs_textures)
         self._io.write_u4le(self.ofs_materials)
         for i in range(len(self.textures)):
@@ -7767,14 +7767,22 @@ class Mrl(ReadWriteKaitaiStruct):
             self.depth_stencil_state_hash = self._io.read_u4le()
             self.rasterizer_state_hash = self._io.read_u4le()
             self.num_resources = self._io.read_bits_int_le(12)
-            self.unk_01 = self._io.read_bits_int_le(20)
-            self.unk_flags = []
+            self.reserverd1 = self._io.read_bits_int_le(9)
+            self.id = self._io.read_bits_int_le(8)
+            self.fog = self._io.read_bits_int_le(1) != 0
+            self.tangent = self._io.read_bits_int_le(1) != 0
+            self.half_lambert = self._io.read_bits_int_le(1) != 0
+            self.stencil_ref = self._io.read_bits_int_le(8)
+            self.alphatest_ref = self._io.read_bits_int_le(8)
+            self.polygon_offset = self._io.read_bits_int_le(4)
+            self.alphatest = self._io.read_bits_int_le(1) != 0
+            self.alphatest_func = self._io.read_bits_int_le(3)
+            self.draw_pass = self._io.read_bits_int_le(5)
+            self.layer_id = self._io.read_bits_int_le(2)
+            self.deffered_lighting = self._io.read_bits_int_le(1) != 0
+            self.blend_factor = []
             for i in range(4):
-                self.unk_flags.append(self._io.read_u1())
-
-            self.reserved = []
-            for i in range(4):
-                self.reserved.append(self._io.read_u4le())
+                self.blend_factor.append(self._io.read_f4le())
 
             self.anim_data_size = self._io.read_u4le()
             self.ofs_cmd = self._io.read_u4le()
@@ -7783,10 +7791,7 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.unk_flags)):
-                pass
-
-            for i in range(len(self.reserved)):
+            for i in range(len(self.blend_factor)):
                 pass
 
             _ = self.resources
@@ -7812,14 +7817,22 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.depth_stencil_state_hash)
             self._io.write_u4le(self.rasterizer_state_hash)
             self._io.write_bits_int_le(12, self.num_resources)
-            self._io.write_bits_int_le(20, self.unk_01)
-            for i in range(len(self.unk_flags)):
+            self._io.write_bits_int_le(9, self.reserverd1)
+            self._io.write_bits_int_le(8, self.id)
+            self._io.write_bits_int_le(1, int(self.fog))
+            self._io.write_bits_int_le(1, int(self.tangent))
+            self._io.write_bits_int_le(1, int(self.half_lambert))
+            self._io.write_bits_int_le(8, self.stencil_ref)
+            self._io.write_bits_int_le(8, self.alphatest_ref)
+            self._io.write_bits_int_le(4, self.polygon_offset)
+            self._io.write_bits_int_le(1, int(self.alphatest))
+            self._io.write_bits_int_le(3, self.alphatest_func)
+            self._io.write_bits_int_le(5, self.draw_pass)
+            self._io.write_bits_int_le(2, self.layer_id)
+            self._io.write_bits_int_le(1, int(self.deffered_lighting))
+            for i in range(len(self.blend_factor)):
                 pass
-                self._io.write_u1(self.unk_flags[i])
-
-            for i in range(len(self.reserved)):
-                pass
-                self._io.write_u4le(self.reserved[i])
+                self._io.write_f4le(self.blend_factor[i])
 
             self._io.write_u4le(self.anim_data_size)
             self._io.write_u4le(self.ofs_cmd)
@@ -7828,14 +7841,9 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _check(self):
             pass
-            if (len(self.unk_flags) != 4):
-                raise kaitaistruct.ConsistencyError(u"unk_flags", len(self.unk_flags), 4)
-            for i in range(len(self.unk_flags)):
-                pass
-
-            if (len(self.reserved) != 4):
-                raise kaitaistruct.ConsistencyError(u"reserved", len(self.reserved), 4)
-            for i in range(len(self.reserved)):
+            if (len(self.blend_factor) != 4):
+                raise kaitaistruct.ConsistencyError(u"blend_factor", len(self.blend_factor), 4)
+            for i in range(len(self.blend_factor)):
                 pass
 
 

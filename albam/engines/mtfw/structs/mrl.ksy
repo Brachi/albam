@@ -14,7 +14,7 @@ seq:
   - {id: version, type: u4}
   - {id: num_materials, type: u4}
   - {id: num_textures, type: u4}
-  - {id: unk_01, type: u4}
+  - {id: shader_version, type: u4}
   - {id: ofs_textures, type: u4}
   - {id: ofs_materials, type: u4}
   - {id: textures, type: texture_slot, repeat: expr, repeat-expr: num_textures}
@@ -51,7 +51,7 @@ types:
       size_:
         value: 76
 
-  material:
+  material: # MATERIAL_INFO
     seq:
       #- {id: type_hash, type: u4, enum: material_type} # TYPE_nDraw_MaterialStd not in mfx
       - {id: type_hash, type: u4}
@@ -60,10 +60,21 @@ types:
       - {id: blend_state_hash, type: u4}
       - {id: depth_stencil_state_hash, type: u4}
       - {id: rasterizer_state_hash, type: u4}
-      - {id: num_resources, type: b12}
-      - {id: unk_01, type: b20}
-      - {id: unk_flags, type: u1, repeat: expr, repeat-expr: 4}
-      - {id: reserved, type: u4, repeat: expr, repeat-expr: 4}
+      - {id: num_resources, type: b12} # state_num
+      - {id: reserverd1, type: b9}
+      - {id: id, type: b8}
+      - {id: fog, type: b1}
+      - {id: tangent, type: b1}
+      - {id: half_lambert, type: b1}
+      - {id: stencil_ref, type: b8}
+      - {id: alphatest_ref, type: b8}
+      - {id: polygon_offset, type: b4}
+      - {id: alphatest, type: b1}
+      - {id: alphatest_func, type: b3}
+      - {id: draw_pass, type: b5}
+      - {id: layer_id, type: b2}
+      - {id: deffered_lighting, type: b1}
+      - {id: blend_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: anim_data_size, type: u4}
       - {id: ofs_cmd, type: u4}
       - {id: ofs_anim_data, type: u4}

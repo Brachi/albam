@@ -15,7 +15,7 @@ def test_top_level(mrl_imported, mrl_exported):
     assert src_mrl.version == dst_mrl.version
     assert src_mrl.num_textures == dst_mrl.num_textures + num_missing_textures
     assert src_mrl.num_materials == dst_mrl.num_materials + num_missing_materials
-    assert src_mrl.unk_01 == dst_mrl.unk_01
+    assert src_mrl.shader_version == dst_mrl.shader_version
     assert src_mrl.ofs_textures == dst_mrl.ofs_textures
     assert src_mrl.ofs_materials == dst_mrl.ofs_materials + error_tex
     assert (src_mrl.ofs_resources_calculated_no_padding ==
@@ -66,9 +66,20 @@ def test_materials(mrl_imported, mrl_exported, subtests):
             assert src_material.blend_state_hash == dst_material.blend_state_hash
             assert src_material.depth_stencil_state_hash == dst_material.depth_stencil_state_hash
             assert src_material.rasterizer_state_hash == dst_material.rasterizer_state_hash
-            assert src_material.unk_01 == dst_material.unk_01
-            assert src_material.unk_flags == dst_material.unk_flags
-            assert src_material.reserved == dst_material.reserved
+            assert src_material.reserverd1 == dst_material.reserverd1
+            assert src_material.id == dst_material.id
+            assert src_material.fog == dst_material.fog
+            assert src_material.tangent == dst_material.tangent
+            assert src_material.half_lambert == dst_material.half_lambert
+            assert src_material.stencil_ref == dst_material.stencil_ref
+            assert src_material.alphatest_ref == dst_material.alphatest_ref
+            assert src_material.polygon_offset == dst_material.polygon_offset
+            assert src_material.alphatest == dst_material.alphatest
+            assert src_material.alphatest_func == dst_material.alphatest_func
+            assert src_material.draw_pass == dst_material.draw_pass
+            assert src_material.layer_id == dst_material.layer_id
+            assert src_material.deffered_lighting == dst_material.deffered_lighting
+            assert src_material.blend_factor == dst_material.blend_factor
             assert (src_material.num_resources == dst_material.num_resources or
                     src_material.type_hash == 139777156 and src_material.num_resources == 0)
             assert (src_material.cmd_buffer_size == dst_material.cmd_buffer_size or
