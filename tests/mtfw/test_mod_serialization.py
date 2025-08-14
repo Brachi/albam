@@ -45,7 +45,7 @@ def test_export_top_level(mod_imported, mod_exported):
     assert mod_imported.bbox_max.w == pytest.approx(mod_exported.bbox_max.w, rel=0.001)
 
 
-def test_export_bones_data(mod_imported, mod_exported):
+def test_export_bones_data(mod_imported, mod_exported, subtests):
     # TODO: matrices
     sbd = mod_imported.bones_data
     dbd = mod_exported.bones_data
@@ -55,27 +55,59 @@ def test_export_bones_data(mod_imported, mod_exported):
 
     assert mod_imported.bones_data_size_ == mod_exported.bones_data_size_ - bones_data_error
 
-    assert (
-        [b.idx_anim_map for b in sbd.bones_hierarchy] ==
-        [b.idx_anim_map for b in dbd.bones_hierarchy])
-    assert (
-        [b.idx_parent for b in sbd.bones_hierarchy] ==
-        [b.idx_parent for b in dbd.bones_hierarchy])
-    assert (
-        [b.idx_mirror for b in sbd.bones_hierarchy] ==
-        [b.idx_mirror for b in dbd.bones_hierarchy])
-    assert (
-        [b.idx_mapping for b in sbd.bones_hierarchy] ==
-        [b.idx_mapping for b in dbd.bones_hierarchy])
-    assert (
-        [b.unk_01 for b in sbd.bones_hierarchy] ==
-        [b.unk_01 for b in dbd.bones_hierarchy])
-    assert (
-        [b.parent_distance for b in sbd.bones_hierarchy] ==
-        [b.parent_distance for b in dbd.bones_hierarchy])
-    assert (
-        [(b.location.x, b.location.y, b.location.z) for b in sbd.bones_hierarchy] ==
-        [(b.location.x, b.location.y, b.location.z) for b in dbd.bones_hierarchy])
+    for i, src_bone in enumerate(sbd.bones_hierarchy):
+        dst_bone = dbd.bones_hierarchy[i]
+
+        with subtests.test(bone_index=i):
+            assert src_bone.idx_anim_map == dst_bone.idx_anim_map
+            assert src_bone.idx_parent == dst_bone.idx_parent
+            assert src_bone.idx_mirror == dst_bone.idx_mirror
+            assert src_bone.idx_mapping == dst_bone.idx_mapping
+            assert src_bone.unk_01 == dst_bone.unk_01
+            assert src_bone.parent_distance == pytest.approx(dst_bone.parent_distance, abs=9e-05)
+            assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=9e-05)
+            assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=9e-05)
+            assert src_bone.location.z == pytest.approx(dst_bone.location.z, abs=9e-05)
+
+    for i, src_psmatrix in enumerate(sbd.parent_space_matrices):
+        dst_psmatrix = dbd.parent_space_matrices[i]
+        with subtests.test(matrix_index=i):
+            assert src_psmatrix.row_1.x == pytest.approx(dst_psmatrix.row_1.x, abs=9e-05)
+            assert src_psmatrix.row_1.y == pytest.approx(dst_psmatrix.row_1.y, abs=9e-05)
+            assert src_psmatrix.row_1.z == pytest.approx(dst_psmatrix.row_1.z, abs=9e-05)
+            assert src_psmatrix.row_1.w == dst_psmatrix.row_1.w
+            assert src_psmatrix.row_2.x == pytest.approx(dst_psmatrix.row_2.x, abs=9e-05)
+            assert src_psmatrix.row_2.y == pytest.approx(dst_psmatrix.row_2.y, abs=9e-05)
+            assert src_psmatrix.row_2.z == pytest.approx(dst_psmatrix.row_2.z, abs=9e-05)
+            assert src_psmatrix.row_2.w == dst_psmatrix.row_2.w
+            assert src_psmatrix.row_3.x == pytest.approx(dst_psmatrix.row_3.x, abs=9e-05)
+            assert src_psmatrix.row_3.y == pytest.approx(dst_psmatrix.row_3.y, abs=9e-05)
+            assert src_psmatrix.row_3.z == pytest.approx(dst_psmatrix.row_3.z, abs=9e-05)
+            assert src_psmatrix.row_3.w == dst_psmatrix.row_3.w
+            assert src_psmatrix.row_4.x == pytest.approx(dst_psmatrix.row_4.x, abs=9e-05)
+            assert src_psmatrix.row_4.y == pytest.approx(dst_psmatrix.row_4.y, abs=9e-05)
+            assert src_psmatrix.row_4.z == pytest.approx(dst_psmatrix.row_4.z, abs=9e-05)
+            assert src_psmatrix.row_4.w == pytest.approx(dst_psmatrix.row_4.w, abs=9e-05)
+
+    for i, src_ibmatrix in enumerate(sbd.inverse_bind_matrices):
+        dst_ibmatrix = dbd.inverse_bind_matrices[i]
+        with subtests.test(matrix_index=i):
+            assert src_ibmatrix.row_1.x == pytest.approx(dst_ibmatrix.row_1.x, abs=9e-04)
+            assert src_ibmatrix.row_1.y == pytest.approx(dst_ibmatrix.row_1.y, abs=9e-04)
+            assert src_ibmatrix.row_1.z == pytest.approx(dst_ibmatrix.row_1.z, abs=9e-04)
+            assert src_ibmatrix.row_1.w == dst_ibmatrix.row_1.w
+            assert src_ibmatrix.row_2.x == pytest.approx(dst_ibmatrix.row_2.x, abs=9e-04)
+            assert src_ibmatrix.row_2.y == pytest.approx(dst_ibmatrix.row_2.y, abs=9e-04)
+            assert src_ibmatrix.row_2.z == pytest.approx(dst_ibmatrix.row_2.z, abs=9e-04)
+            assert src_ibmatrix.row_2.w == dst_ibmatrix.row_2.w
+            assert src_ibmatrix.row_3.x == pytest.approx(dst_ibmatrix.row_3.x, abs=9e-04)
+            assert src_ibmatrix.row_3.y == pytest.approx(dst_ibmatrix.row_3.y, abs=9e-04)
+            assert src_ibmatrix.row_3.z == pytest.approx(dst_ibmatrix.row_3.z, abs=9e-04)
+            assert src_ibmatrix.row_3.w == dst_ibmatrix.row_3.w
+            assert src_ibmatrix.row_4.x == pytest.approx(dst_ibmatrix.row_4.x, abs=9e-04)
+            assert src_ibmatrix.row_4.y == pytest.approx(dst_ibmatrix.row_4.y, abs=9e-04)
+            assert src_ibmatrix.row_4.z == pytest.approx(dst_ibmatrix.row_4.z, abs=9e-04)
+            assert src_ibmatrix.row_4.w == pytest.approx(dst_ibmatrix.row_4.w, abs=9e-04)
 
     assert sbd.bone_map == dbd.bone_map
 
