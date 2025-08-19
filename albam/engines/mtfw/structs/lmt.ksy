@@ -1,5 +1,6 @@
 meta:
   endian: le
+  bit-endian: le
   file-extension: lmt
   id: lmt
   ks-version: 0.10
@@ -17,6 +18,8 @@ types:
     seq:
       - {id: offset, type: u4}
     instances:
+      is_used:
+        value: offset != 0
       lmt_ver:
         value: _parent.version
       block_header:
@@ -26,65 +29,61 @@ types:
           cases:
             51: block_header51
             67: block_header67
+        if: is_used
 
-  block_header51:
-    seq:
-      - {id: ofs_frame, type: u4}
-      - {id: num_tracks, type: u4}
-      - {id: num_frames, type: u4}
-      - {id: unk_01, type: f4, repeat: expr, repeat-expr: 9}
-      - {id: unk_02, type: u4, repeat: expr, repeat-expr: 16}
-      - {id: count_01, type: u4}
-      - {id: ofs_buffer_01, type: u4}
-      - {id: sfx, type: u2, repeat: expr, repeat-expr: 32}
-      - {id: count_02, type: u4}
-      - {id: ofs_buffer_02, type: u4}
-    instances:
-      tracks:
-        {pos: ofs_frame, type: track51, repeat: expr, repeat-expr: num_tracks}
-      atk_buff:
-        {pos: ofs_buffer_01, type: atk, repeat: expr, repeat-expr: count_01}
-      atk_buff2:
-        {pos: ofs_buffer_02, type: atk2, repeat: expr, repeat-expr: count_02}
-
-  track51:
-    seq:
-      - {id: buffer_type, type: u1}
-      - {id: usage, type: u1}
-      - {id: joint_type, type: u1}
-      - {id: bone_index, type: u1}
-      - {id: unk_01, type: f4}
-      - {id: len_data, type: u4}
-      - {id: ofs_data, type: u4}
-      - {id: unk_reference_data, type: f4, repeat: expr, repeat-expr: 4}
-    instances:
-      data:
-        {pos: ofs_data, size: len_data}
-        
-  atk:
-    seq:
-      - {id: unk_00, type: u4}
-      - {id: duration, type: u4}
-      
-  atk2:
-    seq:
-      - {id: unk_00, type: u4}
-      - {id: unk_01, type: u4}
-      
-  block_header67:
+  block_header51: # MOTION_INFO
     seq:
       - {id: ofs_frame, type: u4}
       - {id: num_tracks, type: u4}
       - {id: num_frames, type: u4}
       - {id: loop_frame, type: u4}
-      - {id: unk_floats, type: f4, repeat: expr, repeat-expr: 8}
-      - {id: unk_00, type: u4}
-      - {id: ofs_buffer_1, type: u4}
-      - {id: ofs_buffer_2, type: u4}
+      - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler, type: u4}
+      - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: collision_events, type: event_collision}
+      - {id: motion_sound_effects, type: motion_se}
+    instances:
+      tracks:
+        {pos: ofs_frame, type: track51, repeat: expr, repeat-expr: num_tracks}
+
+  block_header67: # MOTION_INFO
+    seq:
+      - {id: ofs_frame, type: u4}
+      - {id: num_tracks, type: u4}
+      - {id: num_frames, type: u4}
+      - {id: loop_frame, type: s4}
+      - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
+      - {id: filler, type: u4}
+      - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: attr, type: b16}
+      - {id: kf_num, type: b5}
+      - {id: seq_num, type: b3}
+      - {id: duplicate, type: b3}
+      - {id: reserved, type: b5}
+      - {id: ofs_sequence_infos, type: u4}
+      - {id: ofs_keyframe_infos, type: u4} # padding after it
     instances:
       tracks:
         {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
+      sequence_infos:
+        {pos: ofs_sequence_infos, type: sequence_info, repeat: expr, repeat-expr: seq_num}
+      key_infos:
+        {pos: ofs_keyframe_infos, type: keyframe_info, repeat: expr, repeat-expr: kf_num}
 
+  track51: # MOTION_PARAM
+    seq:
+      - {id: buffer_type, type: u1}
+      - {id: usage, type: u1}
+      - {id: joint_type, type: u1}
+      - {id: bone_index, type: u1}
+      - {id: weight, type: f4}
+      - {id: len_data, type: u4}
+      - {id: ofs_data, type: u4}
+      - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
+    instances:
+      data:
+        {pos: ofs_data, size: len_data}
+  
   track67:
     seq:
       - {id: buffer_type, type: u1}
@@ -94,13 +93,28 @@ types:
       - {id: weight, type: f4}
       - {id: len_data, type: u4}
       - {id: ofs_data, type: u4}
-      - {id: unk_reference_data, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: ofs_floats, type:  ofs_float_buff}
+      - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: ofs_bounds, type: u4}
     instances:
       data:
         {pos: ofs_data, size: len_data}
+      is_used:
+        value: ofs_data != 0
+      bounds:
+        {pos: ofs_bounds, type: float_buffer, if: is_used}
+       
+  attr:
+    seq:
+      - {id: group, type: u4}
+      - {id: frame, type: u4}
   
-  ofs_float_buff:
+  seq_info_attr:
+    seq:
+      - {id: unk_00, type: u2}
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: u4}
+ 
+  ofs_frame_bounds:
     seq:
     - {id: ofs_buffer, type: u4}
     instances:
@@ -113,4 +127,64 @@ types:
   
   float_buffer:
     seq:
-      - {id: unk_00, type: f4, repeat: expr, repeat-expr: 8}
+      - {id: addin, type: f4, repeat: expr, repeat-expr: 4} # names were took from Crazy's template
+      - {id: offset, type: f4, repeat: expr, repeat-expr: 4}
+  
+  sequence_info:
+    seq:
+      - {id: work, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: num_seq, type: u4}
+      - {id: ofs_seq, type: u4}
+    instances:
+      attributes:
+        {pos: ofs_seq, type: seq_info_attr, repeat: expr, repeat-expr: num_seq} # type is a placeholder for now
+        
+  keyframe_block:
+    seq:
+      - {id: unk_00, type: u2}
+      - {id: unk_01, type: u2}
+      - {id: unk_02, type: f4}
+      - {id: unk_03, type: f4}
+      - {id: unk_04, type: f4}
+        
+  keyframe_info:
+    seq:
+      - {id: type, type: b8}
+      - {id: work, type: b16}
+      - {id: attr, type: b8}
+      - {id: num_key, type: u4}
+      - {id: ofs_seq, type: u4}
+    instances:
+      keyframe_blocks:
+        {pos: ofs_seq, type: keyframe_block, repeat: expr, repeat-expr: num_key}
+      
+  event_collision:
+    seq:
+      - {id: event_id, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: num_events, type: u4}
+      - {id: ofs_events, type: u4}
+    instances:
+      attributes:
+        {pos: ofs_events, type: attr, repeat: expr, repeat-expr: num_events}
+  
+  motion_se:
+    seq:
+      - {id: event_id, type: u2, repeat: expr, repeat-expr: 32}
+      - {id: num_events, type: u4}
+      - {id: ofs_events, type: u4}
+    instances:
+      attributes:
+        {pos: ofs_events, type: attr, repeat: expr, repeat-expr: num_events}
+  
+  vec3:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
+      - {id: z, type: f4}
+      
+  vec4:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
+      - {id: z, type: f4}
+      - {id: w, type: f4}
