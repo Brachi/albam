@@ -212,6 +212,25 @@ def parsed_tex_from_arc(request):
 
 
 @pytest.fixture
+def parsed_rtex_from_arc(request):
+    # test collection before calling register() in pytest_session_start
+    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
+    # not found
+    from albam.engines.mtfw.texture import APPID_RTEXCLS_MAP
+    arc = request.param[0]
+    rtex_file_entry = request.param[1]
+    app_id = request.param[2]
+    Rtex = APPID_RTEXCLS_MAP[app_id]
+
+    rtex_bytes = arc.get_file(rtex_file_entry.file_path, rtex_file_entry.file_type)
+    parsed_rtex = Rtex.from_bytes(rtex_bytes)
+    parsed_rtex._read()
+    parsed_rtex._arc_name = os.path.basename(arc.file_path)
+    parsed_rtex._mrl_path = rtex_file_entry.file_path
+    parsed_rtex._num_bytes = len(rtex_bytes)
+
+
+@pytest.fixture
 def parsed_sbc_from_arc(request):
     from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
     # from albam.engines.mtfw.structs.sbc_156 import Sbc156
