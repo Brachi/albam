@@ -41,6 +41,8 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
     elif "parsed_sbc_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("sbc", metafunc, "parsed_sbc_from_arc")
+    elif "parsed_rtex_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
 
 
 @pytest.fixture(scope="session")
