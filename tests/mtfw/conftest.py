@@ -39,6 +39,8 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("lmt", metafunc, "parsed_lmt_from_arc")
     elif "parsed_tex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
+    elif "parsed_sbc_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("sbc", metafunc, "parsed_sbc_from_arc")
     elif "parsed_rtex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
 
@@ -228,7 +230,20 @@ def parsed_rtex_from_arc(request):
     parsed_rtex._mrl_path = rtex_file_entry.file_path
     parsed_rtex._num_bytes = len(rtex_bytes)
 
-    return parsed_rtex
+
+@pytest.fixture
+def parsed_sbc_from_arc(request):
+    from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
+    # from albam.engines.mtfw.structs.sbc_156 import Sbc156
+    arc = request.param[0]
+    sbc_file_entry = request.param[1]
+    app_id = request.param[2]
+    SBC = APPID_SBC_CLASS_MAPPER[app_id]
+    sbc_bytes = arc.get_file(sbc_file_entry.file_path, sbc_file_entry .file_type)
+    parsed_sbc = SBC.from_bytes(sbc_bytes)
+    parsed_sbc._read()
+
+    return parsed_sbc
 
 
 @pytest.fixture
