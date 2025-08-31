@@ -263,7 +263,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             except KeyError:
                 extension = str(fe.file_type)
             if name == file_name and vfile.extension == extension:
-                show_message_box("File: {} found int the archive".format(file_name))
+                show_message_box("File: {} was found and replaced in the archive".format(file_name))
                 found = True
                 vf_data = vfile.data_bytes
                 chunk = zlib.compress(vf_data)
@@ -273,7 +273,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             file_entries[(fe.file_path + "." + extension)] = fe
         assert len(file_entries) == len(parsed.file_entries), "File entries size mismatch"
         if not found:
-            show_message_box("File: {} not found in the archive".format(file_name))
+            show_message_box("File: {} was not found in the archive".format(file_name))
             return None
     assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
     return _serialize_arc(file_entries)
