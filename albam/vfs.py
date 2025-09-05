@@ -174,19 +174,21 @@ class VirtualFileSystemBase:
         for node in tree.flatten():
             self._add_vf_from_treenode(app_id, root_id, node)
 
-    def _expand_directory(self, absolute_path, vf, app_id):
+    def _abs_to_rel_path(self, path_to_file, root_path):
+        abs_path = Path(path_to_file)
+        root_path = Path(root_path)
+        return abs_path.relative_to(root_path)
+
+    def _expand_directory(self, root_folder, vf, app_id):
         root_id = vf.name
         tree = Tree(root_id=vf.name, app_id=app_id)
-        for root, dirs, files in os.walk(absolute_path):
+        for files_folder, dirs, files in os.walk(root_folder):
             for file in files:
-                abs_path = Path(root)
-                root_path = Path(absolute_path)
-                relative_path = abs_path.relative_to(root_path)
-                rel_file_path = os.path.join(relative_path, file)
-                tree.add_node_from_path(rel_file_path)
-                print(rel_file_path)
-            for node in tree.flatten():
-                self._add_vf_from_treenode(app_id, root_id, node)
+                rel_path = os.path.join(self._abs_to_rel_path(files_folder, root_folder), file)
+                abs_path = os.path.join(files_folder, file)
+                tree.add_node_from_path(rel_path, absolute_path=abs_path)
+        for node in tree.flatten():
+            self._add_vf_from_treenode(app_id, root_id, node)
 
     def _add_vf_from_treenode(self, app_id, root_id, node):
         child_vf = self.file_list.add()
@@ -194,6 +196,7 @@ class VirtualFileSystemBase:
         child_vf.app_id = app_id
         child_vf.name = node["node_id"]
         child_vf.relative_path = node["relative_path"]
+        child_vf.absolute_path = node["full_path"]
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
         child_vf.category = blender_registry.file_categories.get((app_id, child_vf.extension), "")
@@ -451,7 +454,7 @@ class Tree:
                 break
         return node_found
 
-    def add_node_from_path(self, full_path, vfile=None):
+    def add_node_from_path(self, full_path, vfile=None, absolute_path=""):
         p = PureWindowsPath(full_path)
         path_parts = p.parts
         # FIXME: adding a single root node doesn't work
@@ -476,7 +479,9 @@ class Tree:
                     "vfile": vfile,
                     "node_id": self.generate_node_id(path_parts[0 : i + 1], use_prefix=True),
                     "relative_path": self.generate_node_id(path_parts[0 : i + 1], use_prefix=False),
+                    "full_path": absolute_path,
                     "ancestors_ids": copy.copy(ancestors_ids),
+
                 }
                 current_dir.append(new_node)
                 self.nodes[new_node["node_id"]] = new_node
@@ -493,6 +498,7 @@ class Tree:
             "vfile": vfile,
             "node_id": node_id,
             "relative_path": self.generate_node_id(path_parts, use_prefix=False),
+            "full_path": absolute_path,
             "ancestors_ids": ancestors_ids,
         }
         current_dir.append(leaf_node)
