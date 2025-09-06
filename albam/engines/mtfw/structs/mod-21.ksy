@@ -94,7 +94,7 @@ types:
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
       - {id: idx_mapping, type: u1}
-      - {id: unk_01, type: f4}
+      - {id: length, type: f4}
       - {id: parent_distance, type: f4}
       - {id: location, type: vec3}
     instances:
