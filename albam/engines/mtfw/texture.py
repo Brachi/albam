@@ -369,7 +369,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         if tex_value == texture_type:
             tex_slot = tex_type
             break
-    tex_index = getattr(mtfw_material, tex_slot, 0)
+    tex_index = getattr(mtfw_material, tex_slot, 0)  # TODO: fix slots for DMC4
     return tex_index
 
 
