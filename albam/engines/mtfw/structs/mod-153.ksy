@@ -219,7 +219,8 @@ types:
       - {id: parallax_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: blend_state, type: u4}
       - {id: alpha_ref, type: u4}
-      - {id: reserved2, type: u4, repeat: expr, repeat-expr: 2}
+      - {id: reserved1, type: u4}
+      - {id: reserved2, type: u4}
     instances:
       size_:
         value: 160

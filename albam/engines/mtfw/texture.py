@@ -151,6 +151,7 @@ APPID_SERIALIZE_MAPPER = {
     "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
+    "dmc4": lambda: _serialize_texture_156,
 }
 
 APPID_TEXCLS_MAP = {
