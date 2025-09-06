@@ -939,6 +939,10 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.model_info.memory = src_mod.model_info.memory
     dst_mod.model_info.reserved = src_mod.model_info.reserved
 
+    if src_mod.header.version == 153:
+        dst_mod.reserved_01 = src_mod.reserved_01
+        dst_mod.reserved_02 = src_mod.reserved_02
+
     if src_mod.header.version == 156:
         dst_mod.rcn_header = dst_mod.RcnHeader(_parent=dst_mod, _root=dst_mod._root)
         dst_mod.reserved_01 = src_mod.reserved_01
@@ -994,7 +998,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         bone.idx_parent = src_bone.idx_parent
         bone.idx_mirror = src_bone.idx_mirror
         bone.idx_mapping = src_bone.idx_mapping
-        bone.unk_01 = src_bone.unk_01
+        bone.length = src_bone.length
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:

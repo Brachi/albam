@@ -643,7 +643,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self.idx_parent = self._io.read_u1()
             self.idx_mirror = self._io.read_u1()
             self.idx_mapping = self._io.read_u1()
-            self.unk_01 = self._io.read_f4le()
+            self.length = self._io.read_f4le()
             self.parent_distance = self._io.read_f4le()
             self.location = Mod156.Vec3(self._io, self, self._root)
             self.location._read()
@@ -660,7 +660,7 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u1(self.idx_parent)
             self._io.write_u1(self.idx_mirror)
             self._io.write_u1(self.idx_mapping)
-            self._io.write_f4le(self.unk_01)
+            self._io.write_f4le(self.length)
             self._io.write_f4le(self.parent_distance)
             self.location._write__seq(self._io)
 

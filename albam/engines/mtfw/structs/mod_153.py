@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod153(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -1466,10 +1466,8 @@ class Mod153(ReadWriteKaitaiStruct):
 
             self.blend_state = self._io.read_u4le()
             self.alpha_ref = self._io.read_u4le()
-            self.reserved2 = []
-            for i in range(2):
-                self.reserved2.append(self._io.read_u4le())
-
+            self.reserved1 = self._io.read_u4le()
+            self.reserved2 = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -1487,9 +1485,6 @@ class Mod153(ReadWriteKaitaiStruct):
                 pass
 
             for i in range(len(self.parallax_factor)):
-                pass
-
-            for i in range(len(self.reserved2)):
                 pass
 
 
@@ -1548,10 +1543,8 @@ class Mod153(ReadWriteKaitaiStruct):
 
             self._io.write_u4le(self.blend_state)
             self._io.write_u4le(self.alpha_ref)
-            for i in range(len(self.reserved2)):
-                pass
-                self._io.write_u4le(self.reserved2[i])
-
+            self._io.write_u4le(self.reserved1)
+            self._io.write_u4le(self.reserved2)
 
 
         def _check(self):
@@ -1579,11 +1572,6 @@ class Mod153(ReadWriteKaitaiStruct):
             if (len(self.parallax_factor) != 4):
                 raise kaitaistruct.ConsistencyError(u"parallax_factor", len(self.parallax_factor), 4)
             for i in range(len(self.parallax_factor)):
-                pass
-
-            if (len(self.reserved2) != 2):
-                raise kaitaistruct.ConsistencyError(u"reserved2", len(self.reserved2), 2)
-            for i in range(len(self.reserved2)):
                 pass
 
 
