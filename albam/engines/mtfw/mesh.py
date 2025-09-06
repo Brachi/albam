@@ -1156,8 +1156,6 @@ def _get_bone_transforms(armature, mod):
             # relative_head_coords = bone.head - parent_bone.head
         else:
             parent_space_matrix = rotation_matrix @ bone.matrix_local
-            print("The bone has no parent.")
-        print("Bone:", bone.name)
         # inverse space
         inverse_space_matrix = bone.matrix_local
         inverse_space_matrix = rotation_matrix @ inverse_space_matrix
@@ -1190,16 +1188,6 @@ def _get_bone_transforms(armature, mod):
 
         magnitude = math.sqrt(parent_translation[0]**2 + parent_translation[1]**2 + parent_translation[2]**2)
         magnitudes.append(magnitude)
-        print("Parent space Matrix:")
-        # print(parent_space_matrix.transposed())
-        print(parent_space_copy.transposed())
-        print("Translation:", parent_translation)
-        print("Magnitude:", magnitude)
-        print("Inverse space Matrix:")
-        if mod.header.version in VERSIONS_BONES_BBOX_AFFECTED:
-            print(ibbox_matrix.transposed())
-        else:
-            print(inverse_space_copy.inverted().transposed())
 
     return magnitudes, bone_locations, bone_matrices_local, bone_matrices_inverse
 
