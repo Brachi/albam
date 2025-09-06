@@ -230,6 +230,8 @@ def parsed_rtex_from_arc(request):
     parsed_rtex._mrl_path = rtex_file_entry.file_path
     parsed_rtex._num_bytes = len(rtex_bytes)
 
+    return parsed_rtex
+
 
 @pytest.fixture
 def parsed_sbc_from_arc(request):
