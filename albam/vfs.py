@@ -263,7 +263,7 @@ class ALBAM_OT_VirtualFileSystemAddFolder(bpy.types.Operator):
     """Add folder to the virtual file system"""
     bl_idname = "albam.add_folder"
     bl_label = "Add Folder"
-    directory: bpy.props.StringProperty(subtype='DIR_PATH')
+    directory: bpy.props.StringProperty(subtype='DIR_PATH')  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
 
     def invoke(self, context, event):
