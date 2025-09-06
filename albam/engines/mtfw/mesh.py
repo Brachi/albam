@@ -38,11 +38,13 @@ from .material import (
     check_mtfw_shader_group,
 )
 from .texture import check_dds_textures
+from .structs.mod_153 import Mod153
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
 
 
 MOD_CLASS_MAPPER = {
+    153: Mod153,
     156: Mod156,
     210: Mod21,
     211: Mod21,
@@ -56,9 +58,11 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+    "dmc4": Mod153,
 }
 
 MOD_VERSION_APPID_MAPPER = {
+    153: {"dmc4"},
     156: {"re5"},
     210: {"re0", "re1", "rev1", "rev2"},
     211: {"re6"},
@@ -290,7 +294,7 @@ BBOX_AFFECTED = [
 
 VERSIONS_USE_BONE_PALETTES = {156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
-VERSIONS_USE_TRISTRIPS = {156, 212}
+VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -299,6 +303,7 @@ MAIN_LODS = {
     "rev1": [1, 255],
     "rev2": [1, 255],
     "dd": [1, 255],
+    "dmc4": [1, 255],
 }
 
 
@@ -339,6 +344,7 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
 @blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
 @blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="dmc4", extension="mod", file_category="MESH")
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()
@@ -456,7 +462,7 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     z = vertex.position.z
 
     w = getattr(vertex.position, "w", None)
-    if w is not None and mod_version == 156:
+    if w is not None and mod_version in [153, 156]:
         x = x / 32767 * bbox_data.width + bbox_data.min_x
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
@@ -568,7 +574,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156 or mesh.vertex_format in (0xCB68015, 0xa320c016):
+    if mod.header.version in [153, 156] or mesh.vertex_format in (0xCB68015, 0xa320c016):
         return tuple([w / 255 for w in vertex.weight_values])
 
     # Assuming all vertex formats share this pattern.
@@ -775,7 +781,7 @@ def _create_bbox_data(mod):
 
 def _get_material_hash(mod, mesh):
     material_hash = None
-    if mod.header.version == 156:
+    if mod.header.version in [153, 156]:
         material_hash = mesh.idx_material
     elif mod.header.version == 210 or mod.header.version == 212:
         material_name = mod.materials_data.material_names[mesh.idx_material]
@@ -1233,7 +1239,7 @@ def _get_vertex_colors(blender_mesh):
 
 
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
-    if src_mod.header.version != 156:
+    if src_mod.header.version not in [153, 156]:
         return {}
     bone_palette_dicts = []
     MAX_BONE_PALETTE_SIZE = 32
@@ -2025,7 +2031,7 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5",))
+@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))
 @blender_registry.register_blender_prop
 class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     vdecl_enum = bpy.props.EnumProperty(
