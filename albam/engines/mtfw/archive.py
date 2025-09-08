@@ -19,6 +19,7 @@ from ...blender_ui.tools import show_message_box
 @blender_registry.register_archive_loader(app_id="rev1", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev2", extension="arc")
 @blender_registry.register_archive_loader(app_id="dd", extension="arc")
+@blender_registry.register_archive_loader(app_id="dmc4", extension="arc")
 def arc_loader(vfile, context=None):  # XXX context DEPRECATED
     arc = ArcWrapper(file_path=vfile.absolute_path)
     for file_entry in arc.get_file_entries():
@@ -32,8 +33,10 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
 @blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
 @blender_registry.register_archive_accessor(app_id="dd", extension="arc")
+@blender_registry.register_archive_accessor(app_id="dmc4", extension="arc")
 def arc_accessor(vfile, context):
     arc = ArcWrapper(vfile.root_vfile.absolute_path)
+    arc.app_id = vfile.app_id
 
     path = vfile.relative_path_windows
     path_no_ext = str(vfile.relative_path_windows_no_ext)
@@ -53,6 +56,7 @@ class ArcWrapper:
     PATH_SEPARATOR = "\\"
 
     def __init__(self, file_path):
+        self.app_id = None
         self.file_path = file_path
         self.parsed = Arc.from_file(file_path)
         self.parsed._read()
@@ -97,7 +101,10 @@ class ArcWrapper:
         for fe in self.parsed.file_entries:
             if fe.file_path == file_path and fe.file_type == file_type:
                 try:
-                    file_ = zlib.decompress(fe.raw_data)
+                    if self.app_id == "dmc4":
+                        file_ = xcompress.xcompress_decompress(fe.raw_data, fe.size)
+                    else:
+                        file_ = zlib.decompress(fe.raw_data)
                     break
                 except EOFError:
                     print(
