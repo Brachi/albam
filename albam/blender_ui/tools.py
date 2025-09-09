@@ -393,6 +393,7 @@ class ALBAM_OT_ApplyFrames(bpy.types.Operator):
     def execute(self, context):
         source_obj = context.scene.albam.meshes.all_meshes
         handshake(self.filepath, source_obj)
+        return {'FINISHED'}
 
 
 @blender_registry.register_blender_type
