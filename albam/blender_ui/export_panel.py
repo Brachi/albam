@@ -275,14 +275,13 @@ class ALBAM_OT_Export(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         item = self.get_selected_item(context)
-        current_mode = bpy.context.object.mode
-        if current_mode != 'OBJECT':
+        active_object = bpy.context.active_object
+        if active_object:
             bpy.ops.object.mode_set(mode='OBJECT')
         try:
             self._execute(context, item)
         except Exception:
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
-        bpy.ops.object.mode_set(mode=current_mode)
         return {"FINISHED"}
 
     @staticmethod
