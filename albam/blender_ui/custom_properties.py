@@ -429,6 +429,7 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMa
 
 SUBPANEL_BASE = {
     "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
+    "custom_properties_collision": ALBAM_PT_CustomPropertiesCollisionSubPanelBase,
     "custom_properties_animation": ALBAM_PT_CustomPropertiesAnimationSubPanelBase,
 }
 
@@ -471,12 +472,6 @@ class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "object"
     CONTEXT_ITEM_NAME = "object"
-
-
-SUBPANEL_BASE = {
-    "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
-    "custom_properties_collision": ALBAM_PT_CustomPropertiesCollisionSubPanelBase,
-}
 
 
 @blender_registry.register_blender_type

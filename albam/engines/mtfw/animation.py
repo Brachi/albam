@@ -110,8 +110,8 @@ def load_lmt(file_list_item, context):
             item.copy_custom_properties_from(track)
             item.raw_data = track.data
             # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
+            bounds = None
             if lmt_ver > 51:
-                bounds = None
                 bounds_body = track.bounds
                 if bounds_body:
                     b_item = item.track_bounds.add()
@@ -150,7 +150,6 @@ def load_lmt(file_list_item, context):
                     # TRACK_MODE = "location"
                     decoded_frames = decode_type_9(track.data)
                     # decoded_frames = _parent_space_to_local(decoded_frames, armature, bone_index)
-
                 else:
                     # TODO: print statistics of missing tracks
                     print("Unknown buffer_type, skipping", track.buffer_type)
@@ -346,7 +345,7 @@ def decode_type_1(data):
 
 
 # LMTVec3Frame12 T_VECTOR3_CONST = 0x2,
-def decode_type_2(data, bound):
+def decode_type_2(data, bound=None):
     decoded_frames = []
     CHUNK_SIZE = 12
 
@@ -354,7 +353,6 @@ def decode_type_2(data, bound):
         chunk = data[start: start + CHUNK_SIZE]
         u = struct.unpack("fff", chunk)
         frame = (u[0] / 100, u[1] / 100, u[2] / 100)
-        frame = bound.lerp3(frame)
         decoded_frames.append(frame)
     return decoded_frames
 
@@ -947,7 +945,7 @@ def export_lmt(bl_obj):
         ofc_sq_info_attr = lmt_offsets["seq_info_attr_offsets"]
         ofc_kf_info = lmt_offsets["key_info_offsets"]
         ofc_kf_info_attr = lmt_offsets["key_info_attr_offsets"]
-        #return None
+        # return None
     # ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
