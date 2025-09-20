@@ -213,7 +213,8 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image", "collision")
+    assert kind in ("mesh", "material", "image", "collision", "animation")
+
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -376,6 +377,63 @@ class ALBAM_PT_CustomPropertiesCollisionSubPanelBase(ALBAM_PT_CustomPropertiesMa
                             layout.prop(active_item, child_k)
 
 
+class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMaterialSubPanelBase):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    bl_parent_id = "ALBAM_PT_CustomPropertiesAnimation"
+
+    APP_ID = None
+    custom_props_to_draw = None
+    CONTEXT_ITEM_NAME = "object"
+
+    def draw(self, context):
+        super().draw(context)
+
+        layout = self.layout
+        context_item = getattr(context, self.CONTEXT_ITEM_NAME)
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+
+        custom_props_sec = (
+            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+        )
+        custom_props = custom_props_sec.get(self.custom_props_to_draw)
+        for k in custom_props.__annotations__:
+            collection = getattr(custom_props, k)
+            if not collection:
+                return
+            # display collection item
+            if isinstance(collection, bpy.types.bpy_prop_collection):
+                active_index = getattr(custom_props, "item_index", 0)
+                if 0 <= active_index < len(collection):
+                    active_item = collection[active_index]
+                    name = k.capitalize()
+                    layout.label(text=f"{name}: {active_index}")
+                    # display child collection item
+                    for child_k in active_item.__annotations__:
+                        child_value = getattr(active_item, child_k)
+                        if isinstance(child_value, bpy.types.bpy_prop_collection):
+                            child_active_index = getattr(active_item, "item_index", 0)
+                            if 0 <= child_active_index < len(child_value):
+                                child_active_item = child_value[child_active_index]
+                                child_name = child_k.capitalize()
+                                layout.label(text=f"{child_name}: {child_active_index}")
+                                for prop in child_active_item.__annotations__:
+                                    layout.prop(child_active_item, prop)
+                            else:
+                                layout.label(text=f"{child_k}: (empty)")
+                        else:
+                            layout.prop(active_item, child_k)
+
+
+SUBPANEL_BASE = {
+    "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
+    "custom_properties_collision": ALBAM_PT_CustomPropertiesCollisionSubPanelBase,
+    "custom_properties_animation": ALBAM_PT_CustomPropertiesAnimationSubPanelBase,
+}
+
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_idname = "ALBAM_PT_CustomPropertiesMesh"
@@ -383,6 +441,15 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "data"
     CONTEXT_ITEM_NAME = "mesh"
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesAnimation(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesAnimation"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    CONTEXT_ITEM_NAME = "object"
 
 
 @blender_registry.register_blender_prop_albam(name="clipboard")
@@ -405,12 +472,6 @@ class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "object"
     CONTEXT_ITEM_NAME = "object"
-
-
-SUBPANEL_BASE = {
-    "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
-    "custom_properties_collision": ALBAM_PT_CustomPropertiesCollisionSubPanelBase,
-}
 
 
 @blender_registry.register_blender_type
