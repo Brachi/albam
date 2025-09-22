@@ -282,6 +282,34 @@ class ALBAM_PT_CustomPropertiesMaterial(ALBAM_PT_CustomPropertiesBase):
     bl_context = "material"
     CONTEXT_ITEM_NAME = "material"
 
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesMesh"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "data"
+    CONTEXT_ITEM_NAME = "mesh"
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesCollision"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    CONTEXT_ITEM_NAME = "object"
+    bl_label = "Custom Properties (Albam — Collision)"
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesAnimation(ALBAM_PT_CustomPropertiesBase):
+    bl_idname = "ALBAM_PT_CustomPropertiesAnimation"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+    CONTEXT_ITEM_NAME = "object"
+    bl_label = "Custom Properties (Albam — Animation)"
+
 
 class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
     bl_space_type = 'PROPERTIES'
@@ -346,7 +374,7 @@ class ALBAM_PT_CustomPropertiesCollisionSubPanelBase(ALBAM_PT_CustomPropertiesMa
         app_id = albam_asset.app_id
 
         custom_props_sec = (
-            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            context_item.albam_custom_properties.collision.get_custom_properties_secondary_for_appid(app_id)
         )
         custom_props = custom_props_sec.get(self.custom_props_to_draw)
         for k in custom_props.__annotations__:
@@ -396,7 +424,7 @@ class ALBAM_PT_CustomPropertiesAnimationSubPanelBase(ALBAM_PT_CustomPropertiesMa
         app_id = albam_asset.app_id
 
         custom_props_sec = (
-            context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            context_item.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)
         )
         custom_props = custom_props_sec.get(self.custom_props_to_draw)
         for k in custom_props.__annotations__:
@@ -434,24 +462,6 @@ SUBPANEL_BASE = {
 }
 
 
-@blender_registry.register_blender_type
-class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
-    bl_idname = "ALBAM_PT_CustomPropertiesMesh"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "data"
-    CONTEXT_ITEM_NAME = "mesh"
-
-
-@blender_registry.register_blender_type
-class ALBAM_PT_CustomPropertiesAnimation(ALBAM_PT_CustomPropertiesBase):
-    bl_idname = "ALBAM_PT_CustomPropertiesAnimation"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "object"
-    CONTEXT_ITEM_NAME = "object"
-
-
 @blender_registry.register_blender_prop_albam(name="clipboard")
 class ClipboardData(bpy.types.PropertyGroup):
     buff: bpy.props.StringProperty(default="{}")
@@ -463,15 +473,6 @@ class ClipboardData(bpy.types.PropertyGroup):
         current = self.get_buffer()
         current.update(data)
         self.buff = json.dumps(current)
-
-
-@blender_registry.register_blender_type
-class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
-    bl_idname = "ALBAM_PT_CustomPropertiesCollision"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "object"
-    CONTEXT_ITEM_NAME = "object"
 
 
 @blender_registry.register_blender_type

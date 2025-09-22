@@ -32,8 +32,8 @@ def register():
     # Load registered functions into the blender_registry
     importlib.import_module("albam.blender_ui.import_panel")
     importlib.import_module("albam.blender_ui.export_panel")
-    importlib.import_module("albam.engines.mtfw.animation")
     importlib.import_module("albam.engines.mtfw.collision")
+    importlib.import_module("albam.engines.mtfw.animation")
     importlib.import_module("albam.engines.mtfw.archive")
     importlib.import_module("albam.engines.mtfw.mesh")
     if os.getenv("ALBAM_ENABLE_REEN"):
@@ -68,8 +68,14 @@ def register():
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
-    bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesCollision)
-    bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesAnimation)
+
+    class AlbamCustomPropertiesObject(bpy.types.PropertyGroup):
+        collision: bpy.props.PointerProperty(type=AlbamCustomPropertiesCollision)
+        animation: bpy.props.PointerProperty(type=AlbamCustomPropertiesAnimation)
+    bpy.utils.register_class(AlbamCustomPropertiesObject)
+    bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
+    #bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesCollision)
+    #bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesAnimation)
 
 
 def unregister():

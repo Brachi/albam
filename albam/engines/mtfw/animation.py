@@ -102,7 +102,7 @@ def load_lmt(file_list_item, context):
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
-        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+        tracks = anim_object.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)[
                 "tracks"]
         for track_index, track in enumerate(block.block_header.tracks):
             # Custom attributes for a track
@@ -180,26 +180,26 @@ def load_lmt(file_list_item, context):
                     curve.keyframe_points.add(1)
                     curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])
                     curve.keyframe_points[-1].interpolation = 'LINEAR'
-        custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
+        custom_properties = anim_object.albam_custom_properties.animation.get_custom_properties_for_appid(
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
         if lmt_ver < 67:
-            col_events = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            col_events = anim_object.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)[
                 "col_events"]
             col_events.copy_custom_properties_from(block.block_header.collision_events)
             for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
                 item = col_events.attributes.add()
                 item.copy_custom_properties_from(attribute)
 
-            motion_se = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            motion_se = anim_object.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)[
                 "motion_se"]
             motion_se.copy_custom_properties_from(block.block_header.motion_sound_effects)
             for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
                 item = motion_se.attributes.add()
                 item.copy_custom_properties_from(attribute)
         else:
-            seq_infos = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            seq_infos = anim_object.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)[
                 "sequence_infos"]
             # seq_info.copy_custom_properties_from(block.block_header.sequence_infos)
             for s_index, s_info in enumerate(block.block_header.sequence_infos):
@@ -209,7 +209,7 @@ def load_lmt(file_list_item, context):
                     a_item = item.attributes.add()
                     a_item.copy_custom_properties_from(s_attr)
 
-            keyframe_infos = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            keyframe_infos = anim_object.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)[
                 "keyframe_infos"]
             if len(block.block_header.key_infos) > 0:
                 for k_index, k_info in enumerate(block.block_header.key_infos):
@@ -640,14 +640,14 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
 
     cur_ofc_bloc_offsets = HEADER_SIZE + block_offsets_table_size
     for bl_obj in bl_objects:
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_obj.albam_custom_properties.animation.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
             ofc = cur_ofc_bloc_offsets
             block_offsets.append(ofc)
             cur_ofc_bloc_offsets += MOTION_HEADER_SIZE
             total_headers_size += MOTION_HEADER_SIZE
 
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = bl_obj.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)
             tracks = getattr(second_props["tracks"], "tracks")
             t_size = len(tracks) * TRACK_SIZE
             raw_data_size = sum(len(track.raw_data) for track in tracks)
@@ -745,11 +745,11 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         block_body_size = 0
         track_raw_sizes = []
         bounds_size = 0
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_obj.albam_custom_properties.animation.get_custom_properties_for_appid(app_id)
         if getattr(custom_props, "ofs_frame", 0) != 0:
             total_headers_size += MOTION_HEADER_SIZE
 
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = bl_obj.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)
             tracks = getattr(second_props["tracks"], "tracks")
             t_size = len(tracks) * TRACK_SIZE
             raw_data_size = 0
@@ -818,7 +818,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     block_offsets = []
     cur_offset = motion_headers_start
     for bl_obj in bl_objects:
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_obj.albam_custom_properties.animation.get_custom_properties_for_appid(app_id)
         if getattr(custom_props, "ofs_frame", 0) != 0:
             block_offsets.append(cur_offset)
             cur_offset += MOTION_HEADER_SIZE
@@ -837,7 +837,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     # Second pass
     cur_tracks_section_offset = motion_body_start
     for i, bl_obj in enumerate(bl_objects):
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_obj.albam_custom_properties.animation.get_custom_properties_for_appid(app_id)
         if getattr(custom_props, "ofs_frame", 0) != 0:
             # track start
             _ofs = cur_tracks_section_offset
@@ -949,9 +949,9 @@ def export_lmt(bl_obj):
     # ofc_block, ofc_frames, ofc_ce, ofc_mse, ofc_tr_data, final_size = _calculate_offsets(bl_objects, app_id)
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_obj.albam_custom_properties.animation.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = bl_obj.albam_custom_properties.animation.get_custom_properties_secondary_for_appid(app_id)
             tracks = getattr(second_props["tracks"], "tracks")
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
