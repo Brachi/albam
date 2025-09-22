@@ -14,6 +14,7 @@ class BlenderRegistry:
         self.custom_properties_mesh = {}
         self.custom_properties_collision = {}
         self.custom_properties_image = {}
+        self.custom_properties_animation = {}
         self.file_categories = {}
 
     def register_blender_prop_albam(self, name):
@@ -90,6 +91,13 @@ class BlenderRegistry:
         def decorator(cls):
             for app_id in app_ids:
                 self.custom_properties_mesh.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
+            return cls
+        return decorator
+
+    def register_custom_properties_animation(self, name, app_ids, is_secondary=False, display_name=""):
+        def decorator(cls):
+            for app_id in app_ids:
+                self.custom_properties_animation.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
             return cls
         return decorator
 

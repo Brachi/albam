@@ -373,7 +373,7 @@ def load_sbc(file_item, context):
 def create_collision_mesh(sbc_object, app_id, mesh_name):
     mesh, obj = create_sbc_mesh(mesh_name, decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
-    sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+    sbc_mesh_props = obj.albam_custom_properties.collision.get_custom_properties_secondary_for_appid(app_id)[
         "sbc_21_mesh"]
     sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
 
@@ -385,7 +385,7 @@ def create_collision_mesh(sbc_object, app_id, mesh_name):
 def create_link_ob(link_ob, app_id, link_name):
     # Add custom attributes from collision_types to an empty object
     sbc_empty = common.create_root_nub(link_name)
-    sbc_link_proprs = sbc_empty.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+    sbc_link_proprs = sbc_empty.albam_custom_properties.collision.get_custom_properties_secondary_for_appid(app_id)[
         "sbc_21_link"]
     sbc_link_proprs.unk_01 = link_ob.unk_01
     sbc_link_proprs.unk_02 = link_ob.unk_02
@@ -487,7 +487,7 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
-        custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+        custom_props = mesh.albam_custom_properties.collision.get_custom_properties_secondary_for_appid(app_id)[
             "sbc_21_mesh"]
         # get list of Tri objects from faces of the mesh and vertices
         try:
@@ -707,7 +707,7 @@ def build_pairs(dst_sbc, quads):
 
 def _serialize_col_types(dst_sbc, link_ob, app_id):
     # Gets custom attributes from empty objects
-    sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
+    sbc_link_props = link_ob.albam_custom_properties.collision.get_custom_properties_secondary_for_appid(
         app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
     coltype.unk_01 = sbc_link_props.unk_01  # link_ob["unk_01"]
