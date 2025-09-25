@@ -413,6 +413,15 @@ SUBPANEL_BASE = {
 }
 
 
+def get_context_item(context):  # workaround for bledner 4.5 api
+    space = context.space_data
+    if space.type == 'PROPERTIES':
+        if space.context == 'MATERIAL':
+            return context.material
+        elif space.context == 'DATA':
+            return context.mesh
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
     """
@@ -422,7 +431,7 @@ class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
     bl_label = "Copy Albam Custom Properties"
 
     def execute(self, context):
-        context_item = context.mesh or context.material
+        context_item = get_context_item(context)
         props_dict = context_item.albam_custom_properties.get_custom_properties_as_dict()
         context.scene.albam.clipboard.update_buffer(props_dict)
         return {'FINISHED'}
@@ -437,7 +446,7 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
     bl_label = "Paste Albam Custom Properties"
 
     def execute(self, context):
-        context_item = context.mesh or context.material
+        context_item = get_context_item(context)
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -491,7 +500,7 @@ class ALBAM_OT_CustomPropertiesExport(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        context_item = context.mesh or context.material
+        context_item = get_context_item(context)
         to_export = context_item.albam_custom_properties.get_custom_properties_as_dict()
         with open(self.filepath, "w") as w:
             json.dump(to_export, w, indent=4)
@@ -541,7 +550,7 @@ class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
                 print(err)
                 return {'FINISHED'}
 
-        context_item = context.mesh or context.material
+        context_item = get_context_item(context)
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
         current_props = context_item.albam_custom_properties.get_custom_properties()
