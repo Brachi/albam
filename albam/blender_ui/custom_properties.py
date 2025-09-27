@@ -420,6 +420,8 @@ def get_context_item(context):  # workaround for bledner 4.5 api
             return context.material
         elif space.context == 'DATA':
             return context.mesh
+    else:
+        return None
 
 
 @blender_registry.register_blender_type
