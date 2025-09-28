@@ -295,9 +295,10 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         layout.label(text=f"{app_selected_name}")
         layout.row()
 
-        row = self.layout.row(heading="App Folder:", align=True)
-        row.prop(context.scene.albam.apps, "app_dir")
-        row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
+        # Unused for now
+        # row = self.layout.row(heading="App Folder:", align=True)
+        # row.prop(context.scene.albam.apps, "app_dir")
+        # row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
         row = self.layout.row(heading="App Config:", align=True)
         row.prop(context.scene.albam.apps, "app_config_filepath")
