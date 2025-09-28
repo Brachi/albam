@@ -697,6 +697,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             ("0x3", "2D Cube", "", 4),
             ("0x4", "3D", "", 5),
         ],
+        default="0x2",
         options=set()
     )
     encoded_type: bpy.props.EnumProperty(  # noqa: F821
@@ -708,6 +709,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             ("0x3", "RGBN", "", 4),  # noqa: F821
             ("0x4", "Pal8", "", 5),  # noqa: F821
         ],
+        default="0x2",
         options=set()
     )
     attr: bpy.props.EnumProperty(
@@ -719,6 +721,7 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             ("0x3", "Dither", "", 4),  # noqa: F821
             ("0x4", "RGBI Encoded", "", 5),
         ],
+        default="0x0",
         options=set()
     )
     depth: bpy.props.IntProperty(
