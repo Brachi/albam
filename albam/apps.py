@@ -17,16 +17,13 @@ APPS = [
     ("re6", "Resident Evil 6", "", 3),
     ("rev1", "Resident Evil: Revelations 1", "", 4),
     ("rev2", "Resident Evil: Revelations 2", "", 5),
-    ("dd", "Dragon's Dogma", "", 11),
-]
-
-REENGINE_APPS = [
+    ("dd", "Dragon's Dogma", "", 6),
     None,
-    ("re2", "Resident Evil 2", "", 6),
-    ("re2_non_rt", "Resident Evil 2 (dx11 non rt)", "", 7),
-    ("re3", "Resident Evil 3", "", 8),
-    ("re3_non_rt", "Resident Evil 3 (dx11 non rt)", "", 9),
-    ("re8", "Resident Evil 8", "", 10),
+    ("re2", "Resident Evil 2", "", 7),
+    ("re2_non_rt", "Resident Evil 2 (dx11 non rt)", "", 8),
+    ("re3", "Resident Evil 3", "", 9),
+    ("re3_non_rt", "Resident Evil 3 (dx11 non rt)", "", 10),
+    ("re8", "Resident Evil 8", "", 11),
 ]
 
 

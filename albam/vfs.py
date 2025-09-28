@@ -152,7 +152,6 @@ class VirtualFileSystemBase:
 
         for vfile_data in vfiles_data:
             tree.add_node_from_path(vfile_data.relative_path, vfile_data)
-
         for node in tree.flatten():
             self._add_vf_from_treenode(bl_vf.app_id, root_id, node)
 
@@ -178,7 +177,8 @@ class VirtualFileSystemBase:
         child_vf.relative_path = node["relative_path"]
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
-        child_vf.category = blender_registry.file_categories.get((app_id, child_vf.extension), "")
+        # still detected as None for some reason with default get as empty string
+        child_vf.category = blender_registry.file_categories.get((app_id, child_vf.extension), "") or ""
         vfile = node["vfile"]
         if vfile:
             child_vf.data_bytes = vfile.data_bytes

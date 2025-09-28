@@ -36,10 +36,9 @@ def register():
     importlib.import_module(".engines.mtfw.collision", __package__)
     importlib.import_module(".engines.mtfw.archive", __package__)
     importlib.import_module(".engines.mtfw.mesh", __package__)
-    if os.getenv("ALBAM_ENABLE_REEN"):
-        importlib.import_module(".engines.reng.archive", __package__)
-        importlib.import_module(".engines.reng.mesh", __package__)
-        importlib.import_module(".engines.reng.texture", __package__)
+    importlib.import_module(".engines.reng.archive", __package__)
+    importlib.import_module(".engines.reng.mesh", __package__)
+    importlib.import_module(".engines.reng.texture", __package__)
 
     for _, cls in blender_registry.props:
         bpy.utils.register_class(cls)

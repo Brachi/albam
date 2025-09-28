@@ -92,9 +92,12 @@ def build_blender_mesh(re_mesh, sub_mesh):
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
     np.divide(vert_normals, norms, out=vert_normals, where=norms != 0)
     bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
-    bl_mesh.create_normals_split()
+    try:
+        bl_mesh.create_normals_split()
+    except AttributeError:
+        # blender 4.1+
+        pass
     bl_mesh.normals_split_custom_set_from_vertices(vert_normals)
-    bl_mesh.use_auto_smooth = True
 
     return ob
 
