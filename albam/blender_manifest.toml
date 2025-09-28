@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+
+id = "albam"
+version = "0.5.0"
+name = "Albam"
+tagline = "Import/export game engine formats"
+maintainer = "Sebastian Aguirre Brachi;HenryOfCarim"
+type = "add-on"
+website = "https://github.com/Brachi/albam"
+blender_version_min = "4.2.0"
+license = ["MIT"]
+platforms = ["windows-x64", "linux-x64"]
+
+wheels = [
+]

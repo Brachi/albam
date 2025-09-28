@@ -13,9 +13,9 @@ from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
 from .structs.sbc_211 import Sbc211
 from ...lib.primitive_geometry import EPS, Tri
-import albam.lib.primitive_geometry as geo
-import albam.lib.bvh_construction as bvh
-import albam.lib.common_op as common
+from ...lib import primitive_geometry as geo
+from ...lib import bvh_construction as bvh
+from ...lib import common_op as common
 
 SBC_CLASS_MAPPER = {
     49: Sbc156,

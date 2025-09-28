@@ -26,20 +26,19 @@ bl_info = {
 ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 
-
 def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
-    importlib.import_module("albam.blender_ui.import_panel")
-    importlib.import_module("albam.blender_ui.export_panel")
-    importlib.import_module("albam.engines.mtfw.animation")
-    importlib.import_module("albam.engines.mtfw.collision")
-    importlib.import_module("albam.engines.mtfw.archive")
-    importlib.import_module("albam.engines.mtfw.mesh")
+    importlib.import_module(".blender_ui.import_panel", __package__)
+    importlib.import_module(".blender_ui.export_panel", __package__)
+    importlib.import_module(".engines.mtfw.animation", __package__)
+    importlib.import_module(".engines.mtfw.collision", __package__)
+    importlib.import_module(".engines.mtfw.archive", __package__)
+    importlib.import_module(".engines.mtfw.mesh", __package__)
     if os.getenv("ALBAM_ENABLE_REEN"):
-        importlib.import_module("albam.engines.reng.archive")
-        importlib.import_module("albam.engines.reng.mesh")
-        importlib.import_module("albam.engines.reng.texture")
+        importlib.import_module(".engines.reng.archive", __package__)
+        importlib.import_module(".engines.reng.mesh", __package__)
+        importlib.import_module(".engines.reng.texture", __package__)
 
     for _, cls in blender_registry.props:
         bpy.utils.register_class(cls)
