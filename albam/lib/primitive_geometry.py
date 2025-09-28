@@ -9,9 +9,9 @@ try:
     from rays import Ray
     from vec_op import vect_int, vec_div, vec_unfold
 except ImportError:
-    from albam.lib.pymorton import interleave as morton_encode
-    from albam.lib.rays import Ray
-    from albam.lib.vec_op import vect_int, vec_div, vec_unfold
+    from .pymorton import interleave as morton_encode
+    from .rays import Ray
+    from .vec_op import vect_int, vec_div, vec_unfold
 
 from mathutils import Vector
 from functools import total_ordering

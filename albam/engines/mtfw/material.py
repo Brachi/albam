@@ -6,10 +6,10 @@ import re
 import bpy
 from kaitaistruct import KaitaiStream
 
-from albam.exceptions import AlbamCheckFailure
-from albam.lib.blender import get_bl_materials, ShaderGroupCompat
-from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
+from ...exceptions import AlbamCheckFailure
+from ...lib.blender import get_bl_materials, ShaderGroupCompat
+from ...registry import blender_registry
+from ...vfs import VirtualFileData
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
 from .texture import (

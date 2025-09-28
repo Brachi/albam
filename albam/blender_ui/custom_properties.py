@@ -2,8 +2,8 @@ import json
 
 import bpy
 
-from albam.apps import APPS
-from albam.registry import blender_registry
+from ..apps import APPS
+from ..registry import blender_registry
 
 
 def AlbamCustomPropertiesFactory(kind: str):

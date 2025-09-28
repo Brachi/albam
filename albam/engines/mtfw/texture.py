@@ -7,15 +7,15 @@ import math
 import bpy
 from kaitaistruct import KaitaiStream
 
-from albam.exceptions import AlbamCheckFailure
-from albam.lib.blender import (
+from ...exceptions import AlbamCheckFailure
+from ...lib.blender import (
     get_bl_teximage_nodes,
     get_bl_materials,
     is_blimage_dds,
 )
-from albam.lib.dds import DDSHeader
-from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
+from ...lib.dds import DDSHeader
+from ...registry import blender_registry
+from ...vfs import VirtualFileData
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157

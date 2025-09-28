@@ -2,9 +2,9 @@ import os
 
 import bpy
 
-from albam.apps import APPS
-from albam.registry import blender_registry
-from albam.vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
+from ..apps import APPS
+from ..registry import blender_registry
+from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}

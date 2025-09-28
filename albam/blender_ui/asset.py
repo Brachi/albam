@@ -1,7 +1,7 @@
 import bpy
 
-from albam.registry import blender_registry
-from albam.apps import APPS
+from ..registry import blender_registry
+from ..apps import APPS
 
 
 @blender_registry.register_blender_prop

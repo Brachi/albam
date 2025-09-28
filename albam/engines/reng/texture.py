@@ -5,7 +5,7 @@ import bpy
 from kaitaistruct import KaitaiStream
 from pybc7 import unpack_dds
 
-from albam.registry import blender_registry
+from ...registry import blender_registry
 from .apps import APPS_TODO
 from .structs.reengine_tex import ReengineTex
 

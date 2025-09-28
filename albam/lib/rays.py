@@ -13,7 +13,7 @@ import numpy as np
 try:
     from vec_op import vec_mult
 except ImportError:
-    from albam.lib.vec_op import vec_mult
+    from .vec_op import vec_mult
 
 
 class Ray():

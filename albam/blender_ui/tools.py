@@ -2,9 +2,9 @@ import bmesh
 import bpy
 import ntpath
 
-from albam.registry import blender_registry
-from albam.lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
-from albam.lib.handshaker import handshake, dump_frames, frames_path
+from ..registry import blender_registry
+from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+from ..lib.handshaker import handshake, dump_frames, frames_path
 
 BONE_NAMES = {
     "Body": BONES_BODY,
