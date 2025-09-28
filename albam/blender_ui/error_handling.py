@@ -5,9 +5,9 @@ import sys
 
 import bpy
 
-from albam.exceptions import AlbamCheckFailure
-from albam.registry import blender_registry
-from albam.__version__ import __version__ as albam_version
+from ..exceptions import AlbamCheckFailure
+from ..registry import blender_registry
+from ..__version__ import __version__ as albam_version
 
 ERROR_TEMPLATE = """
 ==================

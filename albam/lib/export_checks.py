@@ -2,7 +2,7 @@ import functools
 
 import bpy
 
-from albam.exceptions import AlbamCheckFailure
+from ..exceptions import AlbamCheckFailure
 
 
 def check_all_objects_have_materials(func):

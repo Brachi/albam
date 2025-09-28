@@ -1,6 +1,6 @@
 import bpy
 
-from albam.registry import blender_registry
+from ..registry import blender_registry
 
 
 def AlbamDataFactory():

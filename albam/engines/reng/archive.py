@@ -7,7 +7,7 @@ import pymmh3 as mmh3
 import zlib
 import zstd
 
-from albam.registry import blender_registry
+from ...registry import blender_registry
 from .structs.pak import Pak
 
 

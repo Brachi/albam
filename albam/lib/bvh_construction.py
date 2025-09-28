@@ -10,8 +10,8 @@ try:
     from primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
     from low_level_op import radix_sort
 except ImportError:
-    from albam.lib.primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
-    from albam.lib.low_level_op import radix_sort
+    from .primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
+    from .low_level_op import radix_sort
 
 
 def set_remove(poset, val):

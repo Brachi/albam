@@ -4,8 +4,8 @@ from pathlib import PureWindowsPath
 
 import bpy
 
-from albam.apps import APPS
-from albam.registry import blender_registry
+from .apps import APPS
+from .registry import blender_registry
 
 
 @blender_registry.register_blender_prop

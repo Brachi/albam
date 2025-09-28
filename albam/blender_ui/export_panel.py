@@ -2,8 +2,8 @@ import time
 import os
 import bpy
 
-from albam.registry import blender_registry
-from albam.vfs import (
+from ..registry import blender_registry
+from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
@@ -359,7 +359,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
-        from albam.engines.mtfw.archive import update_arc
+        from ..engines.mtfw.archive import update_arc
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
@@ -439,7 +439,7 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
-        from albam.engines.mtfw.archive import update_arc
+        from ..engines.mtfw.archive import update_arc
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
@@ -515,7 +515,7 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
         add_new = export_settings.far_add_new
         vfs = self.get_vfs(self, context)
         vfile = vfs.selected_vfile
-        from albam.engines.mtfw.archive import find_and_replace_in_arc
+        from ..engines.mtfw.archive import find_and_replace_in_arc
         arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
         if arc:
             with open(self.filepath, "wb") as f:

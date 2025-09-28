@@ -8,8 +8,8 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
-from albam.lib.misc import chunks
-from albam.registry import blender_registry
+from ...lib.misc import chunks
+from ...registry import blender_registry
 from .material import build_blender_materials
 from .structs.reengine_mesh import ReengineMesh
 

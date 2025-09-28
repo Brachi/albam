@@ -1,4 +1,4 @@
-from albam.exceptions import AlbamCheckFailure
+from ..exceptions import AlbamCheckFailure
 from collections import namedtuple, deque
 from copy import deepcopy
 import math

@@ -8,15 +8,15 @@ import math
 try:
     from math import dist as get_dist
 except ImportError:
-    from albam.lib.blender import get_dist
+    from ...lib.blender import get_dist
 
 import bpy
 from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
-from albam.apps import get_app_description
-from albam.lib.blender import (
+from ...apps import get_app_description
+from ...lib.blender import (
     get_bone_indices_and_weights_per_vertex,
     get_mesh_vertex_groups,
     get_model_bounding_box,
@@ -27,11 +27,11 @@ from albam.lib.blender import (
     strip_triangles_to_triangles_list,
     triangles_list_to_triangles_strip,
 )
-from albam.lib.misc import chunks
-from albam.lib.export_checks import check_all_objects_have_materials
-from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
-from albam.exceptions import AlbamCheckFailure
+from ...lib.misc import chunks
+from ...lib.export_checks import check_all_objects_have_materials
+from ...registry import blender_registry
+from ...vfs import VirtualFileData
+from ...exceptions import AlbamCheckFailure
 from .material import (
     build_blender_materials,
     serialize_materials_data,

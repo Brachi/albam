@@ -6,7 +6,7 @@ import bpy
 from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 
-from albam.registry import blender_registry
+from ...registry import blender_registry
 from .structs.lmt import Lmt
 
 

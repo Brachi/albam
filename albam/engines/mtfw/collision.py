@@ -7,12 +7,12 @@ from mathutils import Vector
 from io import BytesIO
 
 
-from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
+from ...registry import blender_registry
+from ...vfs import VirtualFileData
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
 from .structs.sbc_211 import Sbc211
-from albam.lib.primitive_geometry import EPS, Tri
+from ...lib.primitive_geometry import EPS, Tri
 import albam.lib.primitive_geometry as geo
 import albam.lib.bvh_construction as bvh
 import albam.lib.common_op as common

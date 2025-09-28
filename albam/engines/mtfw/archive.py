@@ -4,10 +4,10 @@ import zlib
 
 from kaitaistruct import KaitaiStream
 
-from albam.registry import blender_registry
+from ...registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
-from albam.blender_ui.tools import show_message_box
+from ...blender_ui.tools import show_message_box
 
 
 @blender_registry.register_archive_loader(app_id="re0", extension="arc")
