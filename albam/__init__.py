@@ -26,6 +26,7 @@ bl_info = {
 ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 
+
 def register():
     sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
