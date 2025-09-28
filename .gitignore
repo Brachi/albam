@@ -9,5 +9,6 @@ albam/albam_vendor/*.so
 albam/albam_vendor/*.dll
 albam/albam_vendor/*.list
 albam/albam_vendor/pybc7.py
+albam/wheels/*.whl
 Albam.egg-info/
 build/

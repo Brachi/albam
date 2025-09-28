@@ -12,4 +12,9 @@ license = ["MIT"]
 platforms = ["windows-x64", "linux-x64"]
 
 wheels = [
+    "./wheels/pybc7-0.1.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+    "./wheels/pybc7-0.1.0-py3-none-win_amd64.whl",
+    "./wheels/zstd-1.5.7.2-cp311-cp311-win_amd64.whl",
+    "./wheels/zstd-1.5.7.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl",
+    "./wheels/zstd-1.5.7.2-cp313-cp313-manylinux_2_14_x86_64.whl",
 ]
