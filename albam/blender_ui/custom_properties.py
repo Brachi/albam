@@ -252,7 +252,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         context_item = getattr(context, self.CONTEXT_ITEM_NAME)
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
-        app_name = [app[1] for app in APPS if app[0] == app_id][0]
+        app_name = [app[1] for app in APPS if app is not None and app[0] == app_id][0]
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
         props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
 
