@@ -633,7 +633,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             continue
         type = blender_texture_to_texture_code(tn)
         if tn.image:
-            name = ntpath.splitext(tn.image.name)[0]
+            # name = ntpath.splitext(tn.image.name)[0]
+            name = tn.image.name.split(".")[0]
         else:
             continue
         tn.image.albam_asset.relative_path = local_path + name + '.tex'
