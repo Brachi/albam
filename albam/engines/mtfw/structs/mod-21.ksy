@@ -6,6 +6,10 @@ meta:
   ks-version: 0.11
   title: MTFramework model format 210 and 211
 
+#params:
+#  - {id: big_int_211, type: bool}  # TODO: enum
+
+
 seq:
   - {id: header, type: mod_header}
   - {id: bsphere, type: vec4}
@@ -49,13 +53,13 @@ types:
       - {id: num_edges, type: u4}
       - {id: size_vertex_buffer, type: u4}
       - {id: reserved_01, type: u4}
-      - {id: num_groups, type: u4}
-      - {id: offset_bones_data, type: u4}
-      - {id: offset_groups, type: u4}
-      - {id: offset_materials_data, type: u4}
-      - {id: offset_meshes_data, type: u4}
-      - {id: offset_vertex_buffer, type: u4}
-      - {id: offset_index_buffer, type: u4}
+      - {id: num_groups, type: u8}
+      - {id: offset_bones_data, type: u8}
+      - {id: offset_groups, type: u8}
+      - {id: offset_materials_data, type: u8}
+      - {id: offset_meshes_data, type: u8}
+      - {id: offset_vertex_buffer, type: u8}
+      - {id: offset_index_buffer, type: u8}
       - {id: size_file, type: u4}
     instances:
       size_:
@@ -122,14 +126,14 @@ types:
   meshes_data:
     seq:
       - {id: meshes, type: mesh, repeat: expr, repeat-expr: _root.header.num_meshes}
-      - {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
-      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 ? _root.num_weight_bounds : num_weight_bounds"}
-    instances:
-      size_:
-        value: |
-          _root.header.version == 210 or _root.header.version == 212 ?
-          _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
-          _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
+      #- {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
+      #- {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 ? _root.num_weight_bounds : num_weight_bounds"}
+    #instances:
+    #  size_:
+    #    value: |
+    #      _root.header.version == 210 or _root.header.version == 212 ?
+    #      _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
+    #      _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
     seq:
       - {id: draw_mode, type: u2}
@@ -158,6 +162,7 @@ types:
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
       - {id: boundary, type: u4}
+      - {id: padding, type: u8}
     instances:
       size_:
         value: 48
@@ -812,3 +817,4 @@ types:
     instances:
       size_:
         value: 144
+

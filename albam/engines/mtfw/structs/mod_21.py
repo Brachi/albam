@@ -5,8 +5,8 @@ import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod21(ReadWriteKaitaiStruct):
     def __init__(self, _io=None, _parent=None, _root=None):
@@ -171,13 +171,13 @@ class Mod21(ReadWriteKaitaiStruct):
             self.num_edges = self._io.read_u4le()
             self.size_vertex_buffer = self._io.read_u4le()
             self.reserved_01 = self._io.read_u4le()
-            self.num_groups = self._io.read_u4le()
-            self.offset_bones_data = self._io.read_u4le()
-            self.offset_groups = self._io.read_u4le()
-            self.offset_materials_data = self._io.read_u4le()
-            self.offset_meshes_data = self._io.read_u4le()
-            self.offset_vertex_buffer = self._io.read_u4le()
-            self.offset_index_buffer = self._io.read_u4le()
+            self.num_groups = self._io.read_u8le()
+            self.offset_bones_data = self._io.read_u8le()
+            self.offset_groups = self._io.read_u8le()
+            self.offset_materials_data = self._io.read_u8le()
+            self.offset_meshes_data = self._io.read_u8le()
+            self.offset_vertex_buffer = self._io.read_u8le()
+            self.offset_index_buffer = self._io.read_u8le()
             self.size_file = self._io.read_u4le()
 
 
@@ -198,13 +198,13 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.num_edges)
             self._io.write_u4le(self.size_vertex_buffer)
             self._io.write_u4le(self.reserved_01)
-            self._io.write_u4le(self.num_groups)
-            self._io.write_u4le(self.offset_bones_data)
-            self._io.write_u4le(self.offset_groups)
-            self._io.write_u4le(self.offset_materials_data)
-            self._io.write_u4le(self.offset_meshes_data)
-            self._io.write_u4le(self.offset_vertex_buffer)
-            self._io.write_u4le(self.offset_index_buffer)
+            self._io.write_u8le(self.num_groups)
+            self._io.write_u8le(self.offset_bones_data)
+            self._io.write_u8le(self.offset_groups)
+            self._io.write_u8le(self.offset_materials_data)
+            self._io.write_u8le(self.offset_meshes_data)
+            self._io.write_u8le(self.offset_vertex_buffer)
+            self._io.write_u8le(self.offset_index_buffer)
             self._io.write_u4le(self.size_file)
 
 
@@ -2529,16 +2529,6 @@ class Mod21(ReadWriteKaitaiStruct):
                 _t_meshes._read()
                 self.meshes.append(_t_meshes)
 
-            if (self._root.header.version == 211):
-                pass
-                self.num_weight_bounds = self._io.read_u4le()
-
-            self.weight_bounds = []
-            for i in range((self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
-                _t_weight_bounds = Mod21.WeightBound(self._io, self, self._root)
-                _t_weight_bounds._read()
-                self.weight_bounds.append(_t_weight_bounds)
-
 
 
         def _fetch_instances(self):
@@ -2547,13 +2537,6 @@ class Mod21(ReadWriteKaitaiStruct):
                 pass
                 self.meshes[i]._fetch_instances()
 
-            if (self._root.header.version == 211):
-                pass
-
-            for i in range(len(self.weight_bounds)):
-                pass
-                self.weight_bounds[i]._fetch_instances()
-
 
 
         def _write__seq(self, io=None):
@@ -2561,14 +2544,6 @@ class Mod21(ReadWriteKaitaiStruct):
             for i in range(len(self.meshes)):
                 pass
                 self.meshes[i]._write__seq(self._io)
-
-            if (self._root.header.version == 211):
-                pass
-                self._io.write_u4le(self.num_weight_bounds)
-
-            for i in range(len(self.weight_bounds)):
-                pass
-                self.weight_bounds[i]._write__seq(self._io)
 
 
 
@@ -2583,29 +2558,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 if self.meshes[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"meshes", self.meshes[i]._parent, self)
 
-            if (self._root.header.version == 211):
-                pass
 
-            if (len(self.weight_bounds) != (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds)):
-                raise kaitaistruct.ConsistencyError(u"weight_bounds", len(self.weight_bounds), (self._root.num_weight_bounds if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else self.num_weight_bounds))
-            for i in range(len(self.weight_bounds)):
-                pass
-                if self.weight_bounds[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"weight_bounds", self.weight_bounds[i]._root, self._root)
-                if self.weight_bounds[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"weight_bounds", self.weight_bounds[i]._parent, self)
-
-
-        @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
-
-            self._m_size_ = (((self._root.header.num_meshes * self.meshes[0].size_) + (self._root.num_weight_bounds * self.weight_bounds[0].size_)) if  (((self._root.header.version == 210)) or ((self._root.header.version == 212)))  else (((self._root.header.num_meshes * self.meshes[0].size_) + (self.num_weight_bounds * self.weight_bounds[0].size_)) + 4))
-            return getattr(self, '_m_size_', None)
-
-        def _invalidate_size_(self):
-            del self._m_size_
 
     class VertexA013(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -2834,6 +2787,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self.min_index = self._io.read_u2le()
             self.max_index = self._io.read_u2le()
             self.boundary = self._io.read_u4le()
+            self.padding = self._io.read_u8le()
 
 
         def _fetch_instances(self):
@@ -2999,6 +2953,7 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.min_index)
             self._io.write_u2le(self.max_index)
             self._io.write_u4le(self.boundary)
+            self._io.write_u8le(self.padding)
 
 
         def _check(self):
