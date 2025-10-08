@@ -492,15 +492,24 @@ def serialize_textures(app_id, bl_materials):
     serialize_func = APPID_SERIALIZE_MAPPER[app_id]()
 
     bad_appid = []
+    texture_paths = []
+    duplicated_paths = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
+        if data["image"].albam_asset.relative_path in texture_paths:
+            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
+        texture_paths.append(data["image"].albam_asset.relative_path)
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
             "Go to Image -> tools -> Albam and select the proper app_id for each."
         )
-
+    if duplicated_paths:
+        raise AttributeError(
+            f"The following images have duplicated relative paths: {duplicated_paths}\n"
+            "Go to Image Editor -> Albam and select a unique relative path for each."
+        )
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
