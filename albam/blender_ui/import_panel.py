@@ -63,12 +63,13 @@ class ALBAM_OT_Import(bpy.types.Operator):
         vfile = self.get_selected_item(context)
         try:
             bl_object = self._execute(vfile, context)
+            # Animations right now don't return a blender object
             if bl_object:
-                # Animations right now don't return a blender object
                 bl_object.albam_asset.original_bytes = vfile.get_bytes()
                 bl_object.albam_asset.app_id = vfile.app_id
                 bl_object.albam_asset.relative_path = vfile.relative_path
                 bl_object.albam_asset.extension = vfile.extension
+                self._set_asset_type(vfile, bl_object)
                 self._make_exportable(vfile, bl_object, context)
 
         except Exception:
@@ -81,6 +82,13 @@ class ALBAM_OT_Import(bpy.types.Operator):
             exportable = context.scene.albam.exportable.file_list.add()
             exportable.bl_object = bl_object
             context.scene.albam.exportable.file_list.update()
+
+    def _set_asset_type(self, vfile, bl_object):
+        app_id = vfile.app_id
+        ext = vfile.extension
+        # mandatory on register decorator
+        asset_type = blender_registry.albam_asset_types.get((app_id, ext), "")
+        bl_object.albam_asset.asset_type = asset_type
 
     @staticmethod
     def _execute(vfile: VirtualFile, context: bpy.types.Context):
