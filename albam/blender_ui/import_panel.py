@@ -63,12 +63,13 @@ class ALBAM_OT_Import(bpy.types.Operator):
         vfile = self.get_selected_item(context)
         try:
             bl_object = self._execute(vfile, context)
-
-            bl_object.albam_asset.original_bytes = vfile.get_bytes()
-            bl_object.albam_asset.app_id = vfile.app_id
-            bl_object.albam_asset.relative_path = vfile.relative_path
-            bl_object.albam_asset.extension = vfile.extension
-            self._make_exportable(vfile, bl_object, context)
+            if bl_object:
+                # Animations right now don't return a blender object
+                bl_object.albam_asset.original_bytes = vfile.get_bytes()
+                bl_object.albam_asset.app_id = vfile.app_id
+                bl_object.albam_asset.relative_path = vfile.relative_path
+                bl_object.albam_asset.extension = vfile.extension
+                self._make_exportable(vfile, bl_object, context)
 
         except Exception:
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
