@@ -122,13 +122,13 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
         if item.is_expandable:
             icon = self.EXPAND_ICONS[item.is_expanded]
-        elif item.category == "MESH":
+        elif item.albam_asset_type == "MODEL":
             icon = "OUTLINER_OB_MESH"
-        elif item.category == "ANIMATION":
+        elif item.albam_asset_type == "ANIMATION":
             icon = "ACTION"
-        elif item.category == "MATERIAL":
+        elif item.albam_asset_type == "MATERIAL":
             icon = "MATERIAL"
-        elif item.category == "TEXTURE":
+        elif item.albam_asset_type == "TEXTURE":
             icon = "TEXTURE"
         else:
             icon = "DOT"

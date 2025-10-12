@@ -332,13 +332,13 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
         )
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re0", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re5", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re6", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
 def build_blender_model(file_list_item, context):
     app_id = file_list_item.app_id
     mod_bytes = file_list_item.get_bytes()

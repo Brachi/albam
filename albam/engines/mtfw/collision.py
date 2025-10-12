@@ -289,13 +289,13 @@ def debug_create_sbcinfo_nodes(node):
         collection.objects.link(b_mesh_obj)
 
 
-@blender_registry.register_import_function(app_id="re0", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re1", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re6", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="rev1", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="rev2", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="dd", extension='sbc', file_category="COLLISION")
+@blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re1", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re5", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re6", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="rev1", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="rev2", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="dd", extension='sbc', albam_asset_type="COLLISION")
 def load_sbc(file_item, context):
     app_id = file_item.app_id
     sbc_bytes = file_item.get_bytes()

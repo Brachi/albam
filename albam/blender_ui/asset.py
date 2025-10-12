@@ -1,7 +1,17 @@
+from enum import Enum
+
 import bpy
 
 from ..registry import blender_registry
 from ..apps import APPS
+
+
+class AlbamAssetType(Enum):
+    MODEL = "Model"
+    TEXTURE = "Texture"
+    ANIMATION = "Animation Bank"
+    COLLISON = "Collision"
+    MATERIAL = "Material"
 
 
 @blender_registry.register_blender_prop
