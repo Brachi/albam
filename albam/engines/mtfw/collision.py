@@ -905,7 +905,7 @@ class BaseSBCProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_object("sbc_21_collision", ("re0", "re1", "re6", "rev1",
-                                                    "rev2", "dd",))
+                                                    "rev2", "dd",), asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     pass
@@ -914,7 +914,7 @@ class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
 @blender_registry.register_custom_properties_object(
     "sbc_21_link",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
-    is_secondary=True, display_name="SBC Link")
+    is_secondary=True, display_name="SBC Link", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21LinkCustomProperties(BaseSBCProperties):
     unk_01: bpy.props.FloatProperty(name="Unknown 01", default=0.0, options=set())  # noqa: F821
@@ -931,7 +931,7 @@ class SBC21LinkCustomProperties(BaseSBCProperties):
 @blender_registry.register_custom_properties_object(
     "sbc_21_mesh",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
-    is_secondary=True, display_name="SBC Mesh")
+    is_secondary=True, display_name="SBC Mesh", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21MeshCustomProperties(BaseSBCProperties):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
