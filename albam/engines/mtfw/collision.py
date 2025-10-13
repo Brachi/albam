@@ -904,14 +904,14 @@ class BaseSBCProperties(bpy.types.PropertyGroup):
                 # print(f"Type mismatch {attr_name}, {src_obj}")
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_collision", ("re0", "re1", "re6", "rev1",
-                                                       "rev2", "dd",))
+@blender_registry.register_custom_properties_object("sbc_21_collision", ("re0", "re1", "re6", "rev1",
+                                                    "rev2", "dd",))
 @blender_registry.register_blender_prop
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     pass
 
 
-@blender_registry.register_custom_properties_collision(
+@blender_registry.register_custom_properties_object(
     "sbc_21_link",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
     is_secondary=True, display_name="SBC Link")
@@ -928,7 +928,7 @@ class SBC21LinkCustomProperties(BaseSBCProperties):
                                          options=set())  # noqa: F821
 
 
-@blender_registry.register_custom_properties_collision(
+@blender_registry.register_custom_properties_object(
     "sbc_21_mesh",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
     is_secondary=True, display_name="SBC Mesh")
