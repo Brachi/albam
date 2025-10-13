@@ -895,13 +895,6 @@ class BaseSBCProperties(bpy.types.PropertyGroup):
                 # print(f"Type mismatch {attr_name}, {src_obj}")
 
 
-
-@blender_registry.register_custom_properties_collision("sbc_156_collision", ("re5",),
-                                                       asset_type="COLLISION")
-@blender_registry.register_blender_prop
-class SBC156CollisionCustomProperties(bpy.types.PropertyGroup):
-    pass
-
 @blender_registry.register_custom_properties_object("sbc_21_collision", ("re0", "re1", "re6", "rev1",
                                                     "rev2", "dd",), asset_type="COLLISION")
 @blender_registry.register_blender_prop
