@@ -30,7 +30,7 @@ from ...lib.blender import (
 from ...lib.misc import chunks
 from ...lib.export_checks import check_all_objects_have_materials
 from ...registry import blender_registry
-from ...vfs import VirtualFileData
+from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
 from .material import (
     build_blender_materials,
@@ -332,16 +332,16 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
         )
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
-def build_blender_model(file_list_item, context):
-    app_id = file_list_item.app_id
-    mod_bytes = file_list_item.get_bytes()
+@blender_registry.register_import_function(app_id="re0", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re5", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re6", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
+def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
+    app_id = vfile.app_id
+    mod_bytes = vfile.get_bytes()
     _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
@@ -352,13 +352,13 @@ def build_blender_model(file_list_item, context):
 
     import_settings = context.scene.albam.import_settings
 
-    bl_object_name = file_list_item.display_name
+    bl_object_name = vfile.display_name
     bbox_data = _create_bbox_data(mod)
     skeleton = None if mod.header.num_bones == 0 else build_blender_armature(
         mod, bl_object_name, bbox_data)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     materials = build_blender_materials(
-        file_list_item, context, mod, bl_object_name)
+        vfile, context, mod, bl_object_name)
     imported_lods = MAIN_LODS.get(app_id)
 
     for i, mesh in enumerate(mod.meshes_data.meshes):
@@ -386,16 +386,6 @@ def build_blender_model(file_list_item, context):
         except Exception as err:
             print(f"[{bl_object_name}] error building mesh {i} {err}")
             continue
-
-    bl_object.albam_asset.original_bytes = mod_bytes
-    bl_object.albam_asset.app_id = app_id
-    bl_object.albam_asset.relative_path = file_list_item.relative_path
-    bl_object.albam_asset.extension = file_list_item.extension
-
-    exportable = context.scene.albam.exportable.file_list.add()
-    exportable.bl_object = bl_object
-
-    context.scene.albam.exportable.file_list.update()
 
     return bl_object
 
