@@ -358,15 +358,6 @@ def load_sbc(file_item, context):
     #        break
     #    debug_create_nodes(node)
 
-    bl_object.albam_asset.original_bytes = sbc_bytes
-    bl_object.albam_asset.app_id = app_id
-    bl_object.albam_asset.relative_path = file_item.relative_path
-    bl_object.albam_asset.extension = file_item.extension
-
-    exportable = context.scene.albam.exportable.file_list.add()
-    exportable.bl_object = bl_object
-
-    context.scene.albam.exportable.file_list.update()
     return bl_object
 
 
