@@ -255,7 +255,7 @@ class LMTKeyFrames:
 
     def unclip_and_multiply(self, val, qw=False):
         RANGE_ALL = 2 ** 14 - 1
-        RANGE_SPLIT = 2 ** 13 - 1
+        # RANGE_SPLIT = 2 ** 13 - 1
         DIVIDER = 8192 if qw else 4096
 
         signed = int(round(val * DIVIDER))
@@ -286,7 +286,7 @@ class LMTKeyframeBounds:
             self.offset[0] + fraction.x * self.addin[0],
             self.offset[1] + fraction.y * self.addin[1],
             self.offset[2] + fraction.z * self.addin[2],
-            ))
+        ))
 
     def lerpq(self, fraction):
         """fraction: imported quaternion keyframe"""
@@ -333,7 +333,7 @@ def load_lmt(file_list_item, context):
         action.use_fake_user = True
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-                "tracks"]
+            "tracks"]
         for track_index, track in enumerate(block.block_header.tracks):
             # Custom attributes for a track
             item = tracks.tracks.add()
@@ -648,7 +648,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
             if action_key.location is not None:
                 kf = action_key.location
                 # kf = _local_space_to_parent_translation(kf, bone)
-                location[frame] = action_key.location
+                location[frame] = kf
             if action_key.rotation_quaternion is not None:
                 rotation_quaternion[frame] = action_key.rotation_quaternion
             if action_key.scale is not None:
@@ -672,7 +672,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
 
 
 def _update_track_data(bl_obj, encoded_tracks, app_id):
-    custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    # custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
@@ -718,7 +718,8 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                             tracks[bone_name][frame].scale[index] = value
                         elif "rotation_quaternion" in path:
                             if getattr(tracks[bone_name][frame], "rotation_quaternion", None) is None:
-                                tracks[bone_name][frame].rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
+                                tracks[bone_name][frame].rotation_quaternion = Quaternion(
+                                    (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
             _update_track_data(bl_obj, track_attrs, app_id)
@@ -791,8 +792,8 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
         if motion_body_sizes[i] > 0:
             frame_offsets.append(cur_frame_offset)
             collision_attr_offsets.append(cur_frame_offset + tracks_headers_sizes[i] + tracks_data_sizes[i])
-            motion_se_attr_offsets.append(cur_frame_offset + tracks_headers_sizes[i] + tracks_data_sizes[i]
-                                          + collision_attr_sizes[i])
+            motion_se_attr_offsets.append(cur_frame_offset + tracks_headers_sizes[i] + tracks_data_sizes[i] +
+                                          collision_attr_sizes[i])
 
             # Offset for raw data
             data_offsets = []
@@ -1043,7 +1044,7 @@ def export_lmt(bl_obj):
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)
     block_offsets = []  # _pre_serialize_offset(dst_lmt, len(bl_objects))
-    anim_tracks = _generate_track_from_action(armature, bl_objects, app_id)
+    _generate_track_from_action(armature, bl_objects, app_id)
     lmt_offsets = _calculate_offsets(bl_objects, app_id)
     ofc_block = lmt_offsets["block_offsets"]
     final_size = lmt_offsets["final_size"]
@@ -1235,53 +1236,54 @@ class LMT51AnimationCustomProperties(CustomPropsBase):
         default=False,
         options=set(),
     )
-    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())
-    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())
+    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())  # noqa: F821
+    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
+    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
-        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())
+        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
     init_quaterion: bpy.props.FloatVectorProperty(
-        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())  # noqa: F821
     action: bpy.props.PointerProperty(
-        name="Stored Action",
+        name="Stored Action",  # noqa: F821
         type=bpy.types.Action
     )
 
 
 @blender_registry.register_custom_properties_object("lmt_67_anim",
-                                                       ("re0", "re1", "re6", "rev1", "rev2", "dd",),
-                                                       asset_type="ANIMATION")
+                                                    ("re0", "re1", "re6",
+                                                     "rev1", "rev2", "dd",),
+                                                    asset_type="ANIMATION")
 @blender_registry.register_blender_prop
 class LMT67AnimationCustomProperties(CustomPropsBase):
     generate_new: bpy.props.BoolProperty(
-        name="Generate new animation",
+        name="Generate new animation",  # noqa: F821
         default=False,
         options=set(),
     )
-    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())
-    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())
+    ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())  # noqa: F821
+    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
+    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
-        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())
+        name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
     init_quaterion: bpy.props.FloatVectorProperty(
-        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())
+        name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())  # noqa: F821
     attr: bpy.props.IntProperty(name="Attr", default=0, options=set())
-    kf_num: bpy.props.IntProperty(name="Keyframe Number", default=0, options=set())
-    seq_num: bpy.props.IntProperty(name="Sequence Number", default=0, options=set())
-    duplicate: bpy.props.IntProperty(name="Duplicate", default=0, options=set())
-    reserved: bpy.props.IntProperty(name="Reserved", default=0, options=set())
+    kf_num: bpy.props.IntProperty(name="Keyframe Number", default=0, options=set())  # noqa: F821
+    seq_num: bpy.props.IntProperty(name="Sequence Number", default=0, options=set())  # noqa: F821
+    duplicate: bpy.props.IntProperty(name="Duplicate", default=0, options=set())  # noqa: F821
+    reserved: bpy.props.IntProperty(name="Reserved", default=0, options=set())  # noqa: F821
     action: bpy.props.PointerProperty(
-        name="Stored Action",
+        name="Stored Action",  # noqa: F821
         type=bpy.types.Action
     )
 
 
 @blender_registry.register_blender_prop
 class LMT51Attribute(CustomPropsBase):
-    group: bpy.props.IntProperty(name="Group", default=0, options=set())
-    frame: bpy.props.IntProperty(name="Frame", default=0, options=set())
+    group: bpy.props.IntProperty(name="Group", default=0, options=set())  # noqa: F821
+    frame: bpy.props.IntProperty(name="Frame", default=0, options=set())  # noqa: F821
 
 
 @blender_registry.register_custom_properties_object(
@@ -1291,17 +1293,17 @@ class LMT51Attribute(CustomPropsBase):
 @blender_registry.register_blender_prop
 class ColEventsCustomProperties(CustomPropsBase):
     event_id: bpy.props.IntVectorProperty(
-        name="Event ID",
+        name="Event ID",  # noqa: F821
         size=32,
         default=[0] * 32,
         description="Collision group ID")
     attributes: bpy.props.CollectionProperty(
         type=LMT51Attribute,
-        name="Attributes",
+        name="Attributes",  # noqa: F821
         description="Collision attributes for each group"
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1314,17 +1316,17 @@ class ColEventsCustomProperties(CustomPropsBase):
 @blender_registry.register_blender_prop
 class MotionSECustomProperties(CustomPropsBase):
     event_id: bpy.props.IntVectorProperty(
-        name="Event ID",
+        name="Event ID",  # noqa: F821
         size=32,
         default=[0] * 32,
         description="Collision group ID")
     attributes: bpy.props.CollectionProperty(
         type=LMT51Attribute,
-        name="Attributes",
+        name="Attributes",  # noqa: F821
         description="Collision attributes for each group"
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1332,24 +1334,24 @@ class MotionSECustomProperties(CustomPropsBase):
 
 @blender_registry.register_blender_prop
 class SeqInfoAttribute(CustomPropsBase):
-    unk_00: bpy.props.IntProperty(name="Unk 00", default=0, options=set())
-    unk_01: bpy.props.IntProperty(name="Unk 01", default=0, options=set())
-    unk_02: bpy.props.IntProperty(name="Unk 02", default=0, options=set())
+    unk_00: bpy.props.IntProperty(name="Unk 00", default=0, options=set())  # noqa: F821
+    unk_01: bpy.props.IntProperty(name="Unk 01", default=0, options=set())  # noqa: F821
+    unk_02: bpy.props.IntProperty(name="Unk 02", default=0, options=set())  # noqa: F821
 
 
 @blender_registry.register_blender_prop
 class SeqInfo(CustomPropsBase):
     work: bpy.props.IntVectorProperty(
-        name="Work",
+        name="Work",  # noqa: F821
         size=32,
         default=[0] * 32,
     )
     attributes: bpy.props.CollectionProperty(
         type=SeqInfoAttribute,
-        name="Attributes"
+        name="Attributes"  # noqa: F821
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1363,10 +1365,10 @@ class SeqInfo(CustomPropsBase):
 class SequenceInfoProperties(CustomPropsBase):
     sequence_info: bpy.props.CollectionProperty(
         type=SeqInfo,
-        name="Sequence Info"
+        name="Sequence Info"  # noqa: F821
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1375,23 +1377,23 @@ class SequenceInfoProperties(CustomPropsBase):
 @blender_registry.register_blender_prop
 class KeyBlock(CustomPropsBase):
     unk_00: bpy.props.IntProperty(
-        name="Unk 00",
+        name="Unk 00",  # noqa: F821
         default=0
     )
     unk_01: bpy.props.IntProperty(
-        name="Unk 01",
+        name="Unk 01",  # noqa: F821
         default=0
     )
     unk_02: bpy.props.FloatProperty(
-        name="Unk 02",
+        name="Unk 02",  # noqa: F821
         default=0
     )
     unk_03: bpy.props.FloatProperty(
-        name="Unk 03",
+        name="Unk 03",  # noqa: F821
         default=0
     )
     unk_04: bpy.props.FloatProperty(
-        name="Unk 04",
+        name="Unk 04",  # noqa: F821
         default=0
     )
 
@@ -1399,11 +1401,11 @@ class KeyBlock(CustomPropsBase):
 @blender_registry.register_blender_prop
 class KeyInfo(CustomPropsBase):
     type: bpy.props.IntProperty(
-        name="Type", default=0, options=set())
+        name="Type", default=0, options=set())  # noqa: F821
     work: bpy.props.IntProperty(
-        name="Work", default=0, options=set())
+        name="Work", default=0, options=set())  # noqa: F821
     attr: bpy.props.IntProperty(
-        name="Attr", default=0, options=set())
+        name="Attr", default=0, options=set())  # noqa: F821
     keyframe_blocks: bpy.props.CollectionProperty(
         type=KeyBlock
     )
@@ -1417,10 +1419,10 @@ class KeyInfo(CustomPropsBase):
 class KeyframeInfoProperties(CustomPropsBase):
     keyframe_info: bpy.props.CollectionProperty(
         type=KeyInfo,
-        name="Keyframe Info"
+        name="Keyframe Info"  # noqa: F821
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1429,38 +1431,38 @@ class KeyframeInfoProperties(CustomPropsBase):
 @blender_registry.register_blender_prop
 class LMT51Track(CustomPropsBase):
     buffer_type: bpy.props.IntProperty(
-        name="Buffer Type",
+        name="Buffer Type",  # noqa: F821
         default=0,
         options=set(),
         description="Type of buffer used for this track")
     usage: bpy.props.IntProperty(
-        name="Usage",
+        name="Usage",  # noqa: F821
         default=0,
         options=set(),
         description="Track type")
     joint_type: bpy.props.IntProperty(
-        name="Joint Type",
+        name="Joint Type",  # noqa: F821
         default=0,
         options=set())
     bone_index: bpy.props.IntProperty(
-        name="Bone Index",
+        name="Bone Index",  # noqa: F821
         default=0,
         options=set(),
         description="Animation index of the bone in the armature")
     weight: bpy.props.FloatProperty(
-        name="Weight",
+        name="Weight",  # noqa: F821
         default=1.0,
         options=set(),
         description="Weight of the track, used for blending")
     reference_data: bpy.props.FloatVectorProperty(
-        name="Reference Data",
+        name="Reference Data",  # noqa: F821
         size=4,
         default=(0.0, 0.0, 0.0, 1.0),
         options=set(),
         description="Reference data for the track, used for blending"
     )
     raw_data: bpy.props.StringProperty(
-        name="Raw Data",
+        name="Raw Data",  # noqa: F821
         description="Raw binary data for this track",
         subtype='BYTE_STRING'
     )
@@ -1469,13 +1471,13 @@ class LMT51Track(CustomPropsBase):
 @blender_registry.register_blender_prop
 class FrameBounds(CustomPropsBase):
     addin: bpy.props.FloatVectorProperty(
-        name="AddIn",
+        name="AddIn",  # noqa: F821
         size=4,
         default=(0.0, 0.0, 0.0, 0.0),
         options=set(),
     )
     offset: bpy.props.FloatVectorProperty(
-        name="Offset",
+        name="Offset",  # noqa: F821
         size=4,
         default=(0.0, 0.0, 0.0, 0.0),
         options=set(),
@@ -1485,44 +1487,44 @@ class FrameBounds(CustomPropsBase):
 @blender_registry.register_blender_prop
 class LMT67Track(CustomPropsBase):
     buffer_type: bpy.props.IntProperty(
-        name="Buffer Type",
+        name="Buffer Type",  # noqa: F821
         default=0,
         options=set(),
         description="Type of buffer used for this track")
     usage: bpy.props.IntProperty(
-        name="Usage",
+        name="Usage",  # noqa: F821
         default=0,
         options=set(),
         description="Track type")
     joint_type: bpy.props.IntProperty(
-        name="Joint Type",
+        name="Joint Type",  # noqa: F821
         default=0,
         options=set())
     bone_index: bpy.props.IntProperty(
-        name="Bone Index",
+        name="Bone Index",  # noqa: F821
         default=0,
         options=set(),
         description="Animation index of the bone in the armature")
     weight: bpy.props.FloatProperty(
-        name="Weight",
+        name="Weight",  # noqa: F821
         default=1.0,
         options=set(),
         description="Weight of the track, used for blending")
     reference_data: bpy.props.FloatVectorProperty(
-        name="Reference Data",
+        name="Reference Data",  # noqa: F821
         size=4,
         default=(0.0, 0.0, 0.0, 1.0),
         options=set(),
         description="Reference data for the track, used for blending"
     )
     raw_data: bpy.props.StringProperty(
-        name="Raw Data",
+        name="Raw Data",  # noqa: F821
         description="Raw binary data for this track",
         subtype='BYTE_STRING'
     )
     track_bounds: bpy.props.CollectionProperty(
         type=FrameBounds,
-        name="Frame Bounds",
+        name="Frame Bounds",  # noqa: F821
     )
 
 
@@ -1534,11 +1536,11 @@ class LMT67Track(CustomPropsBase):
 class AnimTrackCustomProperties(CustomPropsBase):
     tracks: bpy.props.CollectionProperty(
         type=LMT51Track,
-        name="Tracks",
+        name="Tracks",  # noqa: F821
         description="Animation tracks for the LMT file"
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
@@ -1552,11 +1554,11 @@ class AnimTrackCustomProperties(CustomPropsBase):
 class AnimTrack67CustomProperties(CustomPropsBase):
     tracks: bpy.props.CollectionProperty(
         type=LMT67Track,
-        name="Tracks",
+        name="Tracks",  # noqa: F821
         description="Animation tracks for the LMT file"
     )
     item_index: bpy.props.IntProperty(
-        name="Item Index",
+        name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",
         default=0
     )
