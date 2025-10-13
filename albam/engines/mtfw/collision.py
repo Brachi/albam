@@ -289,13 +289,13 @@ def debug_create_sbcinfo_nodes(node):
         collection.objects.link(b_mesh_obj)
 
 
-@blender_registry.register_import_function(app_id="re0", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re1", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re5", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="re6", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="rev1", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="rev2", extension='sbc', file_category="COLLISION")
-@blender_registry.register_import_function(app_id="dd", extension='sbc', file_category="COLLISION")
+@blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re1", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re5", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="re6", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="rev1", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="rev2", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="dd", extension='sbc', albam_asset_type="COLLISION")
 def load_sbc(file_item, context):
     app_id = file_item.app_id
     sbc_bytes = file_item.get_bytes()
@@ -358,15 +358,6 @@ def load_sbc(file_item, context):
     #        break
     #    debug_create_nodes(node)
 
-    bl_object.albam_asset.original_bytes = sbc_bytes
-    bl_object.albam_asset.app_id = app_id
-    bl_object.albam_asset.relative_path = file_item.relative_path
-    bl_object.albam_asset.extension = file_item.extension
-
-    exportable = context.scene.albam.exportable.file_list.add()
-    exportable.bl_object = bl_object
-
-    context.scene.albam.exportable.file_list.update()
     return bl_object
 
 
@@ -904,17 +895,17 @@ class BaseSBCProperties(bpy.types.PropertyGroup):
                 # print(f"Type mismatch {attr_name}, {src_obj}")
 
 
-@blender_registry.register_custom_properties_collision("sbc_21_collision", ("re0", "re1", "re6", "rev1",
-                                                       "rev2", "dd",))
+@blender_registry.register_custom_properties_object("sbc_21_collision", ("re0", "re1", "re6", "rev1",
+                                                    "rev2", "dd",), asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     pass
 
 
-@blender_registry.register_custom_properties_collision(
+@blender_registry.register_custom_properties_object(
     "sbc_21_link",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
-    is_secondary=True, display_name="SBC Link")
+    is_secondary=True, display_name="SBC Link", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21LinkCustomProperties(BaseSBCProperties):
     unk_01: bpy.props.FloatProperty(name="Unknown 01", default=0.0, options=set())  # noqa: F821
@@ -928,10 +919,10 @@ class SBC21LinkCustomProperties(BaseSBCProperties):
                                          options=set())  # noqa: F821
 
 
-@blender_registry.register_custom_properties_collision(
+@blender_registry.register_custom_properties_object(
     "sbc_21_mesh",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
-    is_secondary=True, display_name="SBC Mesh")
+    is_secondary=True, display_name="SBC Mesh", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21MeshCustomProperties(BaseSBCProperties):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())

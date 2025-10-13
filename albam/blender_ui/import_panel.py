@@ -4,7 +4,7 @@ import bpy
 
 from ..apps import APPS
 from ..registry import blender_registry
-from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle
+from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
@@ -60,18 +60,42 @@ class ALBAM_OT_Import(bpy.types.Operator):
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
-        item = self.get_selected_item(context)
+        vfile = self.get_selected_item(context)
         try:
-            self._execute(item, context)
+            bl_object = self._execute(vfile, context)
+            # Animations right now don't return a blender object
+            if bl_object:
+                bl_object.albam_asset.original_bytes = vfile.get_bytes()
+                bl_object.albam_asset.app_id = vfile.app_id
+                bl_object.albam_asset.relative_path = vfile.relative_path
+                bl_object.albam_asset.extension = vfile.extension
+                self._set_asset_type(vfile, bl_object)
+                self._make_exportable(vfile, bl_object, context)
+
         except Exception:
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
-    @staticmethod
-    def _execute(item, context):
-        import_function = blender_registry.import_registry[(item.app_id, item.extension)]
+    def _make_exportable(self, vfile, bl_object, context):
+        export_function = blender_registry.export_registry.get((vfile.app_id, vfile.extension))
+        if export_function:
+            exportable = context.scene.albam.exportable.file_list.add()
+            exportable.bl_object = bl_object
+            context.scene.albam.exportable.file_list.update()
 
-        bl_container = import_function(item, context)
+    def _set_asset_type(self, vfile, bl_object):
+        app_id = vfile.app_id
+        ext = vfile.extension
+        # mandatory on register decorator
+        asset_type = blender_registry.albam_asset_types.get((app_id, ext), "")
+        bl_object.albam_asset.asset_type = asset_type
+
+    @staticmethod
+    def _execute(vfile: VirtualFile, context: bpy.types.Context):
+        bl_container = None
+        import_function = blender_registry.import_registry[(vfile.app_id, vfile.extension)]
+
+        bl_container = import_function(vfile, context)
         if not bl_container:
             return
 
@@ -84,6 +108,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 bpy.context.collection.objects.link(child)
             except RuntimeError:
                 pass
+        return bl_container
 
     @classmethod
     def poll(cls, context):
@@ -122,13 +147,13 @@ class ALBAM_UL_VirtualFileSystemUIBase:
 
         if item.is_expandable:
             icon = self.EXPAND_ICONS[item.is_expanded]
-        elif item.category == "MESH":
+        elif item.albam_asset_type == "MODEL":
             icon = "OUTLINER_OB_MESH"
-        elif item.category == "ANIMATION":
+        elif item.albam_asset_type == "ANIMATION":
             icon = "ACTION"
-        elif item.category == "MATERIAL":
+        elif item.albam_asset_type == "MATERIAL":
             icon = "MATERIAL"
-        elif item.category == "TEXTURE":
+        elif item.albam_asset_type == "TEXTURE":
             icon = "TEXTURE"
         else:
             icon = "DOT"

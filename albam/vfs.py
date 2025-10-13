@@ -24,7 +24,7 @@ class VirtualFile(bpy.types.PropertyGroup):
     is_root: bpy.props.BoolProperty(default=False)
     is_expandable: bpy.props.BoolProperty(default=False)
     is_expanded: bpy.props.BoolProperty(default=False)
-    category: bpy.props.StringProperty()
+    albam_asset_type: bpy.props.StringProperty()  # TODO: enum albam.asset.AlbamAssetType
     tree_node: bpy.props.PointerProperty(type=TreeNode)  # consider adding the attributes here directly
     # FIXME: consider strings, seems pretty inefficient
     tree_node_ancestors: bpy.props.CollectionProperty(type=TreeNode)
@@ -178,7 +178,7 @@ class VirtualFileSystemBase:
         child_vf.relative_path = node["relative_path"]
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
-        child_vf.category = blender_registry.file_categories.get((app_id, child_vf.extension), "")
+        child_vf.albam_asset_type = blender_registry.albam_asset_types.get((app_id, child_vf.extension), "")
         vfile = node["vfile"]
         if vfile:
             child_vf.data_bytes = vfile.data_bytes

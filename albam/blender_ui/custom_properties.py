@@ -59,16 +59,23 @@ def AlbamCustomPropertiesFactory(kind: str):
     """
 
     def create_data_custom_properties(registry_name):
+        """
+        Return the data necessary to generate a subclass of bpy.types.PropertyGroup
+        """
         data = {}
+        # app_id: {
+        #  "custom_props_name": <str>,
+        #  "custom_props_asset_type": <model,texture,collision,animation>
+        # }
         appid_map = {}
         appid_map_secondary = {}
         subpanel_type = SUBPANEL_BASE.get(registry_name, None)
         registry = getattr(blender_registry, registry_name)
         for app_id, props_dict in registry.items():
-            for name, (cls, is_secondary, display_name) in props_dict.items():
+            for name, (cls, is_secondary, display_name, asset_type) in props_dict.items():
                 data[f"{app_id}__{name}"] = bpy.props.PointerProperty(type=cls)
                 if not is_secondary:
-                    appid_map[app_id] = name
+                    appid_map[app_id] = {"custom_props_name": name, "custom_props_asset_type": asset_type}
                 else:
                     _create_custom_properties_secondary_subpanel(app_id, display_name, name, subpanel_type)
                     prop_names = appid_map_secondary.setdefault(app_id, [])
@@ -113,8 +120,21 @@ def AlbamCustomPropertiesFactory(kind: str):
         associated with the app_id
         """
         # TODO: error handling
-        property_name = self.APPID_MAP[app_id]
+        property_dict = self.APPID_MAP[app_id]
+        property_name = property_dict["custom_props_name"]
         return getattr(self, f"{app_id}__{property_name}")
+
+    def get_custom_properties_name(self):
+        albam_asset = self.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        property_dict = self.APPID_MAP[app_id]
+        return property_dict["custom_props_name"]
+
+    def get_custom_properties_asset_type(self):
+        albam_asset = self.get_parent_albam_asset()
+        app_id = albam_asset.app_id
+        property_dict = self.APPID_MAP.get(app_id, {})
+        return property_dict.get("custom_props_asset_type")
 
     def get_custom_properties_secondary_for_appid(self, app_id):
         # TODO: error handling
@@ -176,7 +196,7 @@ def AlbamCustomPropertiesFactory(kind: str):
         context_item = self.id_data
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
         app_id = albam_asset.app_id
-        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_name = context_item.albam_custom_properties.get_custom_properties_name()
         props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
 
         props_secondary = (
@@ -213,7 +233,7 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image", "collision")
+    assert kind in ("mesh", "material", "image", "object"), f"kind: {kind} incorrect"
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -224,6 +244,8 @@ def AlbamCustomPropertiesFactory(kind: str):
             'APPID_MAP': appid_map,
             'APPID_MAP_SECONDARY': appid_map_secondary,
             get_custom_properties.__name__: get_custom_properties,
+            get_custom_properties_name.__name__: get_custom_properties_name,
+            get_custom_properties_asset_type.__name__: get_custom_properties_asset_type,
             get_custom_properties_as_dict.__name__: get_custom_properties_as_dict,
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
             get_custom_properties_secondary_for_appid.__name__: get_custom_properties_secondary_for_appid,
@@ -239,11 +261,18 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
     @classmethod
     def poll(cls, context):  # pragma: no cover
         """
-        Only show custom properties panel if the contex_item (mesh or material)
+        Only show custom properties panel if the contex_item (mesh, object or material)
         are associated with an albam asset (e.g. a 3d model)
         """
         context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
-        return context_item and context_item.albam_custom_properties.get_parent_albam_asset()
+        if not context_item:
+            return False
+        albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        if not albam_asset:
+            return False
+        asset_type_context = context_item.albam_custom_properties.get_custom_properties_asset_type()
+
+        return asset_type_context == albam_asset.asset_type
 
     def draw(self, context):
         """
@@ -254,7 +283,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         app_id = albam_asset.app_id
         app_name = [app[1] for app in APPS if app[0] == app_id][0]
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_name = context_item.albam_custom_properties.get_custom_properties_name()
 
         layout = self.layout
         layout.use_property_split = True
@@ -326,7 +355,7 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         return True
 
 
-class ALBAM_PT_CustomPropertiesCollisionSubPanelBase(ALBAM_PT_CustomPropertiesMaterialSubPanelBase):
+class ALBAM_PT_CustomPropertiesObjectSubPanelBase(ALBAM_PT_CustomPropertiesMaterialSubPanelBase):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "object"
@@ -409,7 +438,7 @@ class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
 
 SUBPANEL_BASE = {
     "custom_properties_material": ALBAM_PT_CustomPropertiesMaterialSubPanelBase,
-    "custom_properties_collision": ALBAM_PT_CustomPropertiesCollisionSubPanelBase,
+    "custom_properties_object": ALBAM_PT_CustomPropertiesObjectSubPanelBase,
 }
 
 
@@ -455,7 +484,7 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
         custom_props_sec = (
             context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
         )
-        props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_name = context_item.albam_custom_properties.get_custom_properties_name()
         buff = context.scene.albam.clipboard.get_buffer()
 
         to_paste = buff.get(app_id, {}).get(props_name, {})
@@ -559,7 +588,7 @@ class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
         current_props_sec = (
             context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
         )
-        props_name_main = context_item.albam_custom_properties.APPID_MAP[app_id]
+        props_name_main = context_item.albam_custom_properties.get_custom_properties_name()
         props_main = {}
         props_sec = {}
         missing = []
