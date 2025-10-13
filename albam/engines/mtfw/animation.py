@@ -1269,7 +1269,7 @@ class LMT67AnimationCustomProperties(CustomPropsBase):
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
     init_quaterion: bpy.props.FloatVectorProperty(
         name="Initial Quaternion", size=4, default=(1.0, 0.0, 0.0, 0.0), options=set())  # noqa: F821
-    attr: bpy.props.IntProperty(name="Attr", default=0, options=set())
+    attr: bpy.props.IntProperty(name="Attr", default=0, options=set())  # noqa: F821
     kf_num: bpy.props.IntProperty(name="Keyframe Number", default=0, options=set())  # noqa: F821
     seq_num: bpy.props.IntProperty(name="Sequence Number", default=0, options=set())  # noqa: F821
     duplicate: bpy.props.IntProperty(name="Duplicate", default=0, options=set())  # noqa: F821
@@ -1464,7 +1464,7 @@ class LMT51Track(CustomPropsBase):
     raw_data: bpy.props.StringProperty(
         name="Raw Data",  # noqa: F821
         description="Raw binary data for this track",
-        subtype='BYTE_STRING'
+        subtype='BYTE_STRING'  # noqa: F821
     )
 
 
@@ -1520,7 +1520,7 @@ class LMT67Track(CustomPropsBase):
     raw_data: bpy.props.StringProperty(
         name="Raw Data",  # noqa: F821
         description="Raw binary data for this track",
-        subtype='BYTE_STRING'
+        subtype='BYTE_STRING'  # noqa: F821
     )
     track_bounds: bpy.props.CollectionProperty(
         type=FrameBounds,
