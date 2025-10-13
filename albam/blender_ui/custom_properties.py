@@ -133,8 +133,8 @@ def AlbamCustomPropertiesFactory(kind: str):
     def get_custom_properties_asset_type(self):
         albam_asset = self.get_parent_albam_asset()
         app_id = albam_asset.app_id
-        property_dict = self.APPID_MAP[app_id]
-        return property_dict["custom_props_asset_type"]
+        property_dict = self.APPID_MAP.get(app_id, {})
+        return property_dict.get("custom_props_asset_type")
 
     def get_custom_properties_secondary_for_appid(self, app_id):
         # TODO: error handling
