@@ -142,18 +142,18 @@ class LMTKeyFrames:
             if duration:
                 self.decoded_frames.extend([None] * (duration - 1))
 
-    def encode_framedata(self, key_type, bone_index, track, usage):
+    def encode_framedata(self, kf_type, bone_index, track, usage):
         if self.version == 51:
             dst_track = Lmt.Track51(_parent=None, _root=None)
-            dst_track.buffer_type = key_type
+            dst_track.buffer_type = kf_type
             dst_track.usage = usage
             dst_track.joint_type = 0
             dst_track.bone_index = bone_index
             dst_raw_data = bytearray()
 
-            kfcls = KEYFRAME_TYPES[self.version].get(key_type, None)
+            kfcls = KEYFRAME_TYPES[self.version].get(kf_type, None)
             if kfcls is None:
-                print("Unknown keyframe type:", key_type)
+                print("Unknown keyframe type:", kf_type)
                 return
             last_frame = 0
             for frame, value in track.items():
@@ -161,7 +161,7 @@ class LMTKeyFrames:
                 if self.track_type == "location":
                     value = value * 100
                 elif self.track_type == "rotation_quaternion":
-                    value = self.quantaize(value, 6)
+                    value = self.quantaize(value, kf_type)
                     kf.w = value.w
                 elif self.track_type == "scale":
                     print("Scale")
@@ -239,7 +239,7 @@ class LMTKeyFrames:
             qkf.y = self.unclip_and_multiply(kf.y)
             qkf.z = self.unclip_and_multiply(kf.z)
         else:
-            print("Not implemented yet")
+            return kf
         return qkf
 
     def clip_and_divide(self, num, qw=False):
@@ -453,16 +453,6 @@ def load_lmt(file_list_item, context):
                     for kb_index, k_block in enumerate(k_info.keyframe_blocks):
                         k_item = item.keyframe_blocks.add()
                         k_item.copy_custom_properties_from(k_block)
-
-    # bl_object.albam_asset.original_bytes = lmt_bytes
-    # bl_object.albam_asset.app_id = app_id
-    # bl_object.albam_asset.relative_path = file_list_item.relative_path
-    # bl_object.albam_asset.extension = file_list_item.extension
-
-    # exportable = context.scene.albam.exportable.file_list.add()
-    # exportable.bl_object = bl_object
-
-    # context.scene.albam.exportable.file_list.update()
     return bl_object
 
 
@@ -657,17 +647,20 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
             keyframes.track_type = "location"
             location_sorted = {k: location[k] for k in sorted(location)}
             usage = 1 if parent_bone else 4
-            keyframes.encode_framedata(2, bone_index, location_sorted, usage)
+            kf_type = 2 if len(location_sorted) == 1 else 9
+            keyframes.encode_framedata(kf_type, bone_index, location_sorted, usage)
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
+            kf_type = 4 if len(rotation_sorted) == 1 else 6
             usage = 0 if parent_bone else 3
-            keyframes.encode_framedata(6, bone_index, rotation_sorted, usage)
+            keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if scale:
             keyframes.track_type = "scale"
             scale_sorted = {k: scale[k] for k in sorted(scale)}
+            kf_type = 2 if len(scale_sorted) == 1 else 9
             usage = 2 if parent_bone else 5
-            keyframes.encode_framedata(9, bone_index, scale_sorted, usage)
+            keyframes.encode_framedata(kf_type, bone_index, scale_sorted, usage)
     return keyframes.encoded_frames
 
 
