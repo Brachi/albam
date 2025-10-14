@@ -1,6 +1,6 @@
 import copy
 import os
-from pathlib import PureWindowsPath
+from pathlib import PureWindowsPath, Path
 
 import bpy
 
@@ -57,7 +57,7 @@ class VirtualFile(bpy.types.PropertyGroup):
         e.g. texname.tex.34 -> tex.34
         """
         SEP = "."
-        name , _ , extension = self.display_name.rpartition(SEP)
+        name, _, extension = self.display_name.rpartition(SEP)
         if SEP in name:
             _, __, extension0 = name.rpartition(SEP)
             extension = SEP.join((extension0, extension))
@@ -98,8 +98,8 @@ class VirtualFile(bpy.types.PropertyGroup):
 
 
 class VirtualFileSystemBase:
-    file_list : bpy.props.CollectionProperty(type=VirtualFile)
-    file_list_selected_index : bpy.props.IntProperty()
+    file_list: bpy.props.CollectionProperty(type=VirtualFile)
+    file_list_selected_index: bpy.props.IntProperty()
 
     SEPARATOR = "::"
     VFS_ID = "vfs"
@@ -132,6 +132,10 @@ class VirtualFileSystemBase:
             vf.is_expandable = True
             vf.is_archive = True
             self._expand_archive(archive_loader_func, vf, app_id)
+        else:
+            vf.is_expandable = True
+            vf.is_archive = False
+            self._expand_directory(absolute_path, vf, app_id)
 
     def add_vfile(self, vfile_data):
         vf = self.file_list.add()
@@ -170,12 +174,29 @@ class VirtualFileSystemBase:
         for node in tree.flatten():
             self._add_vf_from_treenode(app_id, root_id, node)
 
+    def _abs_to_rel_path(self, path_to_file, root_path):
+        abs_path = Path(path_to_file)
+        root_path = Path(root_path)
+        return abs_path.relative_to(root_path)
+
+    def _expand_directory(self, root_folder, vf, app_id):
+        root_id = vf.name
+        tree = Tree(root_id=vf.name, app_id=app_id)
+        for files_folder, dirs, files in os.walk(root_folder):
+            for file in files:
+                rel_path = os.path.join(self._abs_to_rel_path(files_folder, root_folder), file)
+                abs_path = os.path.join(files_folder, file)
+                tree.add_node_from_path(rel_path, absolute_path=abs_path)
+        for node in tree.flatten():
+            self._add_vf_from_treenode(app_id, root_id, node)
+
     def _add_vf_from_treenode(self, app_id, root_id, node):
         child_vf = self.file_list.add()
         child_vf.vfs_id = self.VFS_ID
         child_vf.app_id = app_id
         child_vf.name = node["node_id"]
         child_vf.relative_path = node["relative_path"]
+        child_vf.absolute_path = node["full_path"]
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
         child_vf.albam_asset_type = blender_registry.albam_asset_types.get((app_id, child_vf.extension), "")
@@ -235,6 +256,33 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
         for f in files:
             absolute_path = os.path.join(directory, f.name)
             vfs.add_real_file(app_id, absolute_path)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VirtualFileSystemAddFolder(bpy.types.Operator):
+    """Add folder to the virtual file system"""
+    bl_idname = "albam.add_folder"
+    bl_label = "Add Folder"
+    directory: bpy.props.StringProperty(subtype='DIR_PATH')  # NOQA
+    files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):  # pragma: no cover
+        self.report({'INFO'}, f"Selected directory: {self.directory}")
+        self._execute(context, self.directory, self.files)
+        # context.scene.albam.vfs.file_list.update()
+        return {"FINISHED"}
+
+    @staticmethod
+    def _execute(context, directory, files):
+        app_id = context.scene.albam.apps.app_selected
+        vfs = context.scene.albam.vfs
+        # for f in files:
+        # absolute_path = os.path.join(directory, "unpacked")
+        vfs.add_real_file(app_id, directory)
 
 
 class ALBAM_OT_VirtualFileSystemSaveFileBase:
@@ -381,7 +429,7 @@ class VirtualFileData:
         e.g. texname.tex.34 -> tex.34
         """
         SEP = "."
-        name , _ , extension = self.relative_path.rpartition(SEP)
+        name, _, extension = self.relative_path.rpartition(SEP)
         if SEP in name:
             _, __, extension0 = name.rpartition(SEP)
             extension = SEP.join((extension0, extension))
@@ -406,7 +454,7 @@ class Tree:
                 break
         return node_found
 
-    def add_node_from_path(self, full_path, vfile=None):
+    def add_node_from_path(self, full_path, vfile=None, absolute_path=""):
         p = PureWindowsPath(full_path)
         path_parts = p.parts
         # FIXME: adding a single root node doesn't work
@@ -431,7 +479,9 @@ class Tree:
                     "vfile": vfile,
                     "node_id": self.generate_node_id(path_parts[0 : i + 1], use_prefix=True),
                     "relative_path": self.generate_node_id(path_parts[0 : i + 1], use_prefix=False),
+                    "full_path": absolute_path,
                     "ancestors_ids": copy.copy(ancestors_ids),
+
                 }
                 current_dir.append(new_node)
                 self.nodes[new_node["node_id"]] = new_node
@@ -448,6 +498,7 @@ class Tree:
             "vfile": vfile,
             "node_id": node_id,
             "relative_path": self.generate_node_id(path_parts, use_prefix=False),
+            "full_path": absolute_path,
             "ancestors_ids": ancestors_ids,
         }
         current_dir.append(leaf_node)
