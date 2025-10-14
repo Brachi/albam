@@ -559,17 +559,15 @@ def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
 
 def _local_space_to_parent_translation(frame, bone):
     parent = bone.parent
+    v_local = Vector((frame.x, -frame.z, frame.y))
+    global_pos = bone.matrix_local @ v_local
     if parent is None:
-        return frame
-    local_matrix = bone.matrix_local
-    new_local_matrix = local_matrix.copy()
-    new_local_matrix.translation += frame
-    global_matrix = parent.matrix @ new_local_matrix
-    # global_position = global_matrix.translation
-
-    reconstructed_local_matrix = parent.matrix.inverted() @ global_matrix
-    reconstructed_local_offset = reconstructed_local_matrix.translation - local_matrix.translation
-    return reconstructed_local_offset
+        # parent-space == armature/object space
+        return global_pos
+    # transform global position into parent's local space
+    parent_inv = parent.matrix_local.inverted()
+    parent_pos = parent_inv @ global_pos
+    return parent_pos
 
 
 def _parent_space_to_local_rotation(decoded_frames, armature, bone_index):
@@ -637,7 +635,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         for frame, action_key in bone_tracks.items():
             if action_key.location is not None:
                 kf = action_key.location
-                # kf = _local_space_to_parent_translation(kf, bone)
+                kf = _local_space_to_parent_translation(kf, bone)
                 location[frame] = kf
             if action_key.rotation_quaternion is not None:
                 rotation_quaternion[frame] = action_key.rotation_quaternion
