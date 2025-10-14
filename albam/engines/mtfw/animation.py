@@ -539,6 +539,10 @@ def _get_or_create_root_motion_bone(armature, mapping):
 
 
 def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
+    '''
+    LMT frames are usually stored in parent space, Blender uses local space
+    This function does the conversion and switches Y/Z axis
+    '''
     local_space_frames = []
     for frame in decoded_frames:
         if frame is None:
@@ -662,8 +666,9 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, app_id):
-    # custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+def _update_track_data(bl_obj, encoded_tracks, num_frames, app_id):
+    custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_props.num_frames = num_frames
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
@@ -685,6 +690,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
+            num_frames = int(action.frame_range[1])
             for fcurve in action.fcurves:
                 path = fcurve.data_path
                 index = fcurve.array_index
@@ -713,7 +719,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                                     (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
-            _update_track_data(bl_obj, track_attrs, app_id)
+            _update_track_data(bl_obj, track_attrs, num_frames, app_id)
 
 
 def _calculate_offsets_lmt51(bl_objects, app_id):
@@ -1023,7 +1029,6 @@ def _calculate_offsets(bl_objects, app_id):
 @blender_registry.register_export_function(app_id="rev1", extension="lmt")
 @blender_registry.register_export_function(app_id="rev2", extension="lmt")
 def export_lmt(bl_obj):
-    # export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
     app_id = asset.app_id
     vfiles = []
