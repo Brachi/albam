@@ -1,6 +1,6 @@
 import bmesh
 import bpy
-import ntpath
+import re
 
 from ..registry import blender_registry
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
@@ -599,6 +599,10 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     return texture_code
 
 
+def strict_sanitize(filename):
+    return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+
+
 def set_image_albam_attr(blender_material, app_id, local_path):
     TEX_COMPRESSION = {
         "re0": (24, 20, 25, 31),  # BM alpha, BM no alpha, MM, NM
@@ -633,7 +637,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             continue
         type = blender_texture_to_texture_code(tn)
         if tn.image:
-            name = ntpath.splitext(tn.image.name)[0]
+            name = tn.image.name.split(".")[0]
+            name = strict_sanitize(name)
         else:
             continue
         tn.image.albam_asset.relative_path = local_path + name + '.tex'
