@@ -609,7 +609,7 @@ def _serialize_texture_21(app_id, dict_tex):
     final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
-    relative_path = _handle_relative_path(bl_im)
+    relative_path = _handle_relative_path(bl_im, is_rtex)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
