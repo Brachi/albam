@@ -139,11 +139,11 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
         row = layout.row()
         row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
-        row = layout.row()
-        row.label(text="Dump frames to json files")
-        row = layout.row()
-        row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
-        row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
+        # row = layout.row()
+        # row.label(text="Dump frames to json files")
+        # row = layout.row()
+        # row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
+        # row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
 
     @classmethod
     def poll(cls, context):
