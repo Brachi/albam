@@ -54,6 +54,23 @@ RIGHT_HAND_VG = [
     "pinky_03_r",
 ]
 
+R_HAND_GROUP_ID = {"re0": [10, 11, 13, 14, 15, 16, 19, 20, 24, 32, 33],
+                   "re1": [24, 23, 22, 21, 20, 18, 17, 16, 15, 14, 13, 12, 11, 10],
+                   "rev2": [30, 32, 52, 34, 50, 38, 36, 54, 56],
+                   "re6": [30, 32, 34, 52, 54, 60, 68, 40, 42, 62, 64],
+
+                   }
+L_HAND_GROUP_ID = {"re0": [40, 41, 44, 45, 46, 47, 48, 52, 64],
+                   "re1": [38, 37, 36, 35, 34, 32, 31, 30],
+                   "rev2": [31, 33, 53, 35, 51, 39, 37, 55],
+                   "re6": [31, 35, 33, 55, 53, 61, 69, 43, 41, 63, 65],
+                   }
+
+HANDS_GROUP_ID = {
+    "right": R_HAND_GROUP_ID,
+    "left": L_HAND_GROUP_ID
+}
+
 frames_folder = "stored_frames\\"
 frames_path = os.path.join(os.path.dirname(__file__), frames_folder)
 
@@ -70,11 +87,13 @@ def _get_bone_location(bone):
     return loc_value
 
 
-def dump_frames(filepath, armature, frame_interval, side="left"):
+def dump_frames(filepath, armature, frame_interval, side="left", app_id=""):
     buffer = {}
+    group_ids = HANDS_GROUP_ID[side][app_id]
     hand_vg = LEFT_HAND_VG if side == "left" else RIGHT_HAND_VG
     scene = bpy.context.scene
     scene.frame_current = 0
+    i = 0
     while scene.frame_current <= scene.frame_end:
         keyframe = {}
         scene.frame_set(scene.frame_current)
@@ -86,7 +105,8 @@ def dump_frames(filepath, armature, frame_interval, side="left"):
                 deforms.append(_get_bone_location(bone))
                 deforms.append(_get_bone_rotation(bone))
                 keyframe[bone.name] = deforms
-        buffer[scene.frame_current] = keyframe
+        buffer[str(scene.frame_current) + "_" + str(group_ids[i])] = keyframe
+        i += 1
         scene.frame_current += frame_interval
 
     with open(filepath, 'w') as file:

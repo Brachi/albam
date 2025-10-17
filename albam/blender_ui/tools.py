@@ -358,8 +358,9 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
 
     def execute(self, context):
         ob_armature = self.get_selected_armature(context)
+        app_id = context.scene.albam.apps.app_selected
         print(self.filepath)
-        dump_frames(self.filepath, ob_armature, 10, self.side)
+        dump_frames(self.filepath, ob_armature, 10, self.side, app_id)
         return {'FINISHED'}
 
     def get_selected_armature(self, context):
