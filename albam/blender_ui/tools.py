@@ -139,11 +139,11 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
         row = layout.row()
         row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
-        row = layout.row()
-        row.label(text="Dump frames to json files")
-        row = layout.row()
-        row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
-        row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
+        # row = layout.row()
+        # row.label(text="Dump frames to json files")
+        # row = layout.row()
+        # row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
+        # row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
 
     @classmethod
     def poll(cls, context):
@@ -358,8 +358,9 @@ class ALBAM_OT_DumpFrames(bpy.types.Operator):
 
     def execute(self, context):
         ob_armature = self.get_selected_armature(context)
+        app_id = context.scene.albam.apps.app_selected
         print(self.filepath)
-        dump_frames(self.filepath, ob_armature, 10, self.side)
+        dump_frames(self.filepath, ob_armature, 10, self.side, app_id)
         return {'FINISHED'}
 
     def get_selected_armature(self, context):
