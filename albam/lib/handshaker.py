@@ -105,7 +105,7 @@ def dump_frames(filepath, armature, frame_interval, side="left", app_id=""):
                 deforms.append(_get_bone_location(bone))
                 deforms.append(_get_bone_rotation(bone))
                 keyframe[bone.name] = deforms
-        buffer[str(scene.frame_current) + "_" + str(group_ids[i])] = keyframe
+        buffer[str(scene.frame_current) + "_id" + str(group_ids[i])] = keyframe
         i += 1
         scene.frame_current += frame_interval
 
@@ -232,7 +232,8 @@ def handshake(filepath, bl_obj):
     print("side is: ", side)
     armature = bpy.context.active_object
     print("lenght is {} frames".format(len(KEYFRAMES)))
-    for frame, key in KEYFRAMES.items():
+    for frame_id, key in KEYFRAMES.items():
+        frame = frame_id.split("_")[0]
         set_poses(armature, key, frame)
         bpy.context.scene.frame_set(int(frame))
-        bake_pose(bl_obj, frame, side)
+        bake_pose(bl_obj, frame_id, side)
