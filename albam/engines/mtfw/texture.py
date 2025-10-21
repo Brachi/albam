@@ -24,6 +24,9 @@ from .structs.rtex_157 import Rtex157
 from .structs.mrl import Mrl
 
 
+APP_USES_64BIT_OFS = {"umvc3"}
+
+
 class TextureType2(Enum):  # TODO: unify
     # TODO: complete
     DIFFUSE = 20
@@ -161,6 +164,7 @@ APPID_TEXCLS_MAP = {
     "rev1": Tex157,
     "rev2": Tex157,
     "dd": Tex157,
+    "umvc3": Tex157,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -171,6 +175,7 @@ APPID_RTEXCLS_MAP = {
     "rev1": Rtex157,
     "rev2": Rtex157,
     "dd": Rtex157,
+    "umvc3": Rtex157,
 }
 
 TEX_TYPE_MAPPER = {
@@ -243,7 +248,11 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         if is_rtex:
             tex = RtexCls.from_bytes(tex_bytes)
         else:
-            tex = TexCls.from_bytes(tex_bytes)
+            use_64bit_ofs = app_id in APP_USES_64BIT_OFS
+            stream = KaitaiStream(io.BytesIO(tex_bytes))
+            args = [stream] if TexCls is Tex112 else [use_64bit_ofs, stream]
+            tex = TexCls(*args)
+
         tex._read()
         if not is_rtex:
             try:
@@ -765,7 +774,8 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             setattr(dst, name, hex(src_value))
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_custom_properties_image("tex_157",
+                                                   ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     unk: bpy.props.IntProperty(  # noqa: F821
