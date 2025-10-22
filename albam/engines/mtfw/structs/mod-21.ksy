@@ -6,8 +6,9 @@ meta:
   ks-version: 0.11
   title: MTFramework model format 210 and 211
 
-#params:
-#  - {id: big_int_211, type: bool}  # TODO: enum
+params:
+  - {id: app_id, type: str}  # TODO: enum
+  - {id: use_64bit_ofs, type: bool}
 
 
 seq:
@@ -16,7 +17,8 @@ seq:
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
   - {id: model_info, type: model_info}
-  - {id: num_weight_bounds, type: u4, if: _root.header.version == 210 or _root.header.version == 212}
+  - {id: num_weight_bounds, type: u4,
+     if: _root.header.version == 210 or _root.header.version == 212 or _root.app_id == "umvc3"}
   # TODO: padding
 
 instances:
@@ -53,14 +55,14 @@ types:
       - {id: num_edges, type: u4}
       - {id: size_vertex_buffer, type: u4}
       - {id: reserved_01, type: u4}
-      - {id: num_groups, type: u8}
-      - {id: offset_bones_data, type: u8}
-      - {id: offset_groups, type: u8}
-      - {id: offset_materials_data, type: u8}
-      - {id: offset_meshes_data, type: u8}
-      - {id: offset_vertex_buffer, type: u8}
-      - {id: offset_index_buffer, type: u8}
-      - {id: size_file, type: u4}
+      - {id: num_groups, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_bones_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_groups, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_materials_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_meshes_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_vertex_buffer, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_index_buffer, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: size_file, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
         value: 64
@@ -117,8 +119,10 @@ types:
 
   materials_data:
     seq:
-      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 210 or _root.header.version == 212}
-      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 211}
+      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials,
+         if: _root.header.version == 210 or _root.header.version == 212 or (_root.header.version == 211 and _root.app_id == "umvc3")}
+      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials,
+         if: (_root.header.version == 211 and _root.app_id != "umvc3")}
     instances:
       size_:
         value: "_root.header.version == 210 or _root.header.version == 212 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
@@ -126,14 +130,14 @@ types:
   meshes_data:
     seq:
       - {id: meshes, type: mesh, repeat: expr, repeat-expr: _root.header.num_meshes}
-      #- {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
-      #- {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 ? _root.num_weight_bounds : num_weight_bounds"}
-    #instances:
-    #  size_:
-    #    value: |
-    #      _root.header.version == 210 or _root.header.version == 212 ?
-    #      _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
-    #      _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
+      - {id: num_weight_bounds, type: u4, if: (_root.header.version == 211 and _root.app_id != "umvc3")}
+      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 or _root.app_id == 'umvc3' ? _root.num_weight_bounds : num_weight_bounds"}
+    instances:
+      size_:
+        value: |
+          _root.header.version == 210 or _root.header.version == 212  or _root.app_id == "umvc3" ?
+          _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
+          _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
     seq:
       - {id: draw_mode, type: u2}
@@ -162,7 +166,7 @@ types:
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
       - {id: boundary, type: u4}
-      - {id: padding, type: u8}
+      - {id: padding, type: u8, if: _root.use_64bit_ofs}
     instances:
       size_:
         value: 48
