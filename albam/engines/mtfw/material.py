@@ -12,8 +12,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
-from .texture import (
-    assign_textures,
+from .texture import ( assign_textures,
     build_blender_textures,
     serialize_textures,
     TextureType,
@@ -52,6 +51,7 @@ MRL_SHADER_VERSION = {
     "dd": 0xb46006d5,
 }
 
+MRL_APP_USES_64BIT_OFS = {"umvc3"}
 
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
@@ -159,7 +159,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     else:
         src_materials = parsed_mod.materials_data.materials
 
-    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES
+    mod_version = parsed_mod.header.version
+    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES or app_id == "umvc3"
     mat_inverse_hashes = {}
     if material_names_available:
         mat_inverse_hashes = {
@@ -303,7 +304,10 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("focclusion", "f_occlusion_param")
     copy_feature("fdistortion", "f_distortion_param")
     copy_float_buffer("globals", "globals")
-    copy_float_buffer("cbmaterial", "cb_material")
+    try:
+        copy_float_buffer("cbmaterial", "cb_material")
+    except KeyError:
+        pass  # umvc3
     copy_float_buffer("cbburncommon", "cb_burn_common")
     copy_float_buffer("cbburnemission", "cb_burn_emission")
     copy_float_buffer("cbappclipplane", "cb_app_clip_plane")
@@ -1143,12 +1147,13 @@ def _infer_mrl(context, mod_vfile, app_id):
     base = str(mod_vfile.relative_path_windows_no_ext)
     suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
     mrl = None
+    use_64bit_ofs = app_id in MRL_APP_USES_64BIT_OFS
 
     for suffix in suffixes:
         try:
             mrl_vfile = vfs.get_vfile(app_id, base + suffix)
             mrl_bytes = mrl_vfile.get_bytes()
-            mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
+            mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(mrl_bytes)))
             mrl._read()
             assert mrl.materials and mrl.textures
             break
@@ -1382,7 +1387,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material("mrl_params",
-                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd"))
+                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     material_type_enum = bpy.props.EnumProperty(
@@ -1512,7 +1517,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
 
 
 @blender_registry.register_custom_properties_material(
-    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1852,7 +1857,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd" "umvc3"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1883,7 +1888,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement")
 @blender_registry.register_blender_prop
 class CBVtxDisp(bpy.types.PropertyGroup):
@@ -1914,7 +1919,7 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement 2")
 @blender_registry.register_blender_prop
 class CBVtxDisp2(bpy.types.PropertyGroup):
@@ -1939,7 +1944,7 @@ class CBVtxDisp2(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Color Mask")
 @blender_registry.register_blender_prop
 class CBColorMaskCustomProperties(bpy.types.PropertyGroup):
@@ -2509,7 +2514,7 @@ class GlobalsCustomProperties2(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re6",), is_secondary=True, display_name="$Globals")
+    ("re6","umvc3"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties3(bpy.types.PropertyGroup):
     f_albedo_color: bpy.props.FloatVectorProperty(
