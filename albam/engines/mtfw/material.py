@@ -69,6 +69,9 @@ MRL_MATERIAL_TYPE_STR = {
     0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
     0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",  # nDraw::DDMaterialInner
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
+    0x6C468C46: "Unknown",
+    0x21617f54: "Unknown2",
+
 }
 
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
@@ -1399,6 +1402,8 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("TYPE_nDraw__DDMaterialStd", "DDMaterialStd", "", 4),
             ("TYPE_nDraw__DDMaterialInner", "DDMaterialInne", "", 5),
             ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
+            ("Unknown", "Unknown", "", 7),
+            ("Unknown2", "Unknown2", "", 8),
         ],
         default="TYPE_nDraw__MaterialStd",
         options=set()
@@ -1743,6 +1748,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
             ("FBRDFFur", "FBRDFFur", "", 5),  # noqa: F821
+            ("FToonShader", "FToonShader", "", 6),  # noqa: F821
+            ("FToonShaderHigh", "FToonShaderHigh", "", 7),  # noqa: F821
         ],
         options=set()
     )
@@ -1756,7 +1763,9 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
             ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
             ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
-            ("FDiffuseThin", "FDiffuseThin", "", 8)  # noqa: F821
+            ("FDiffuseThin", "FDiffuseThin", "", 8),  # noqa: F821
+            ("FDiffuseColorCorectSimple", "FDiffuseColorCorectSimple", "", 9),  # noqa: F821
+            ("FDiffuseColorCorect", "FDiffuseColorCorect", "", 10)  # noqa: F821
         ],
         options=set()
     )
@@ -1777,6 +1786,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
             ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
             ("FDamageSpecularMap", "FDamageSpecularMap", "", 6),  # noqa: F821
+            ("FSpecularMaskToon", "FSpecularMaskToon", "", 7),  # noqa: F821
         ],
         options=set(),
     )
@@ -1786,6 +1796,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
         ],
         options=set()
     )
