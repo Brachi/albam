@@ -389,8 +389,9 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     exported_materials_map = {}
     app_id = model_asset.app_id
     export_settings = bpy.context.scene.albam.export_settings
+    use_64bit_ofs = app_id in MRL_APP_USES_64BIT_OFS
 
-    mrl = Mrl(app_id=app_id)
+    mrl = Mrl(app_id, use_64bit_ofs)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
     mrl.shader_version = MRL_SHADER_VERSION[app_id]
