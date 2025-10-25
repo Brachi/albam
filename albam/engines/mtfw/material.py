@@ -39,6 +39,7 @@ MRL_DEFAULT_VERSION = {
     "rev1": 32,
     "rev2": 34,
     "dd": 32,
+    "umvc3": 34,
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
@@ -49,6 +50,7 @@ MRL_SHADER_VERSION = {
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
     "dd": 0xb46006d5,
+    "umvc3": 0xe588940a,
 }
 
 MRL_APP_USES_64BIT_OFS = {"umvc3"}
@@ -60,6 +62,7 @@ MRL_CBGLOBALS_MAP = {
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
     "dd": Mrl.CbGlobals4,
+    "umvc3": Mrl.CbGlobals3,  # FIXME
 }
 MRL_MATERIAL_TYPE_STR = {
     # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
@@ -547,7 +550,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["$Globals"] = [ri + 1, pos]
-        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial"):
+        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial") and app_id != "umvc3":  # FIXME
             pos = current_position
             current_position += 1
             cb_used["CBMaterial"] = [ri + 1, pos]
@@ -584,7 +587,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
-    MF = MRL_PER_MATERIAL_FEATURES[mrl_mat.type_hash]
+    # FIXME
+    MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
         set_constant_buffer("CBDDMaterialParamInnerCorrect", onlyif="CBDDMaterialParamInnerCorrect" in MF),
@@ -715,17 +719,23 @@ def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=No
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     so = Mrl.ShaderObject(_parent=resource, _root=resource._root)
     if not param_name:
         so.index = shader_obj_index
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly)
+        if app_id == "umvc3":
+            so.filling = 0
     else:
         shader_obj_data_2 = shader_objects[param_name]
         shader_obj_index_2 = shader_obj_data_2["apps"][app_id]["shader_object_index"]
         shader_obj_name_friendly_2 = shader_obj_data_2["friendly_name"]
         so.index = shader_obj_index_2
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly_2)
+        if app_id == "umvc3":
+            so.filling = 0
 
     resource.value_cmd = so
 
@@ -757,6 +767,8 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=T
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     set_texture = Mrl.CmdTexIdx(_parent=resource, _root=resource._root)
     set_texture.tex_idx = texture_index + 1  # zero is used for "dummy texture"
@@ -790,6 +802,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     cb_offset = Mrl.CmdOfsBuffer(_parent=resource, _root=resource._root)
     cb_offset.ofs_float_buff = 0  # will be set later
@@ -803,7 +817,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["globals"]
 
-    elif cb_name == "CBMaterial":
+    # FIXME
+    elif cb_name == "CBMaterial" and app_id != "umvc3":
         float_buffer_parent = Mrl.CbMaterial(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
         float_buffer = Mrl.CbMaterial1(_parent=float_buffer_parent, _root=float_buffer_parent._root)

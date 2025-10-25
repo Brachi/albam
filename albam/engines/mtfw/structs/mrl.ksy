@@ -27,7 +27,7 @@ instances:
   size_materials_:
     value: "materials[0].size_ * num_materials"
   ofs_textures_calculated:
-    value: 28
+    value: 'app_id == "umvc3" ? 40: 28'
   ofs_materials_calculated:
     value: "ofs_textures_calculated + size_textures_"
   ofs_resources_calculated_no_padding:  # TODO: # padding(16)
@@ -51,11 +51,10 @@ types:
 
     instances:
       size_:
-        value: 76
+        value: '_root.app_id == "umvc3" ? 88 : 76'
 
   material: # MATERIAL_INFO
     seq:
-      #- {id: type_hash, type: u4, enum: material_type} # TYPE_nDraw_MaterialStd not in mfx
       - {id: type_hash, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: name_hash_crcjam32, type: u4}
       - {id: cmd_buffer_size, type: u4}
@@ -86,7 +85,7 @@ types:
       anims:
         {pos: ofs_anim_data, type: anim_data, if: anim_data_size != 0}
       size_:
-        value: 60
+        value: '_root.app_id == "umvc3" ? 72 : 60'
 
   resource_binding:
     seq:
@@ -106,7 +105,7 @@ types:
       - {id: shader_object_id, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
-        value: 12
+        value: '_root.use_64bit_ofs ? 24 : 12'
       shader_object_hash:
         value: shader_object_id >> 12
         enum: shader_object_hash
@@ -184,7 +183,7 @@ types:
     seq:
       - {id: index, type: b12}
       - {id: name_hash, type: b20, enum: shader_object_hash}
-      - {id: averga3, type: u4, if: _root.use_64bit_ofs}
+      - {id: filling, type: u4, if: _root.use_64bit_ofs}
 
   cmd_ofs_buffer:
     seq:

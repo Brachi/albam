@@ -549,7 +549,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (128 * self._root.header.num_materials if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else 4 * self._root.header.num_materials)
+            self._m_size_ = (128 * self._root.header.num_materials if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else 4 * self._root.header.num_materials)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -1133,7 +1133,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 48
+            self._m_size_ = (56 if self._root.app_id == u"umvc3" else 48)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -1995,7 +1995,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 64
+            self._m_size_ = (96 if self._root.app_id == u"umvc3" else 64)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -6145,7 +6145,7 @@ class Mod21(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = (self._root.header.size_ + 68 if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else self._root.header.size_ + 64)
+        self._m_size_top_level_ = (self._root.header.size_ + 68 if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else self._root.header.size_ + 64)
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):

@@ -39,7 +39,7 @@ instances:
   index_buffer:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
   size_top_level_:
-    value: "_root.header.version == 210 or _root.header.version == 212 ? _root.header.size_ + 68 : _root.header.size_ + 64"
+    value: "_root.header.version == 210 or _root.header.version == 212  or _root.app_id == 'umvc3' ? _root.header.size_ + 68 : _root.header.size_ + 64"
 
 types:
   mod_header:
@@ -65,7 +65,7 @@ types:
       - {id: size_file, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
-        value: 64
+        value: '_root.app_id == "umvc3" ? 96 : 64'
 
   model_info:
     seq:
@@ -125,7 +125,7 @@ types:
          if: (_root.header.version == 211 and _root.app_id != "umvc3")}
     instances:
       size_:
-        value: "_root.header.version == 210 or _root.header.version == 212 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
+        value: "_root.header.version == 210 or _root.header.version == 212 or _root.app_id == 'umvc3' ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
 
   meshes_data:
     seq:
@@ -169,7 +169,7 @@ types:
       - {id: padding, type: u8, if: _root.use_64bit_ofs}
     instances:
       size_:
-        value: 48
+        value: '_root.app_id == "umvc3" ? 56 : 48'
       indices:
         pos: _root.header.offset_index_buffer + face_offset * 2 + face_position * 2
         repeat: expr
