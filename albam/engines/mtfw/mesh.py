@@ -343,7 +343,7 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
 @blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="umvc3", extension="mod", albam_asset_type="MODEL")
-def build_blender_model(vfile: VirtualFile, context: bpy.types.Context):
+def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
     mod_bytes = vfile.get_bytes()
     _validate_app_id_for_mod(app_id, mod_bytes)
