@@ -68,7 +68,8 @@ def loaded_arcs(pytestconfig):
 
 @pytest.fixture(scope="session")
 def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
-    from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
+    from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER, Mod156
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
     from albam.engines.mtfw.structs.mrl import Mrl
     from kaitaistruct import KaitaiStream
 
@@ -102,14 +103,26 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
         (mrl_path and vfile_mrl_exported) or
         (not mrl_path and not vfile_mrl_exported))
 
-    Mod = APPID_CLASS_MAPPER[app_id]
-    src_mod = Mod.from_bytes(vfile_mod.get_bytes())
-    dst_mod = Mod.from_bytes(vfile_mod_exported.get_bytes())
+    ModCls = APPID_CLASS_MAPPER[app_id]
+    src_bytes = vfile_mod.get_bytes()
+    dst_bytes = vfile_mod_exported.get_bytes()
+    src_stream = KaitaiStream(io.BytesIO(src_bytes))
+    dst_stream = KaitaiStream(io.BytesIO(dst_bytes))
+
+    mod_version = src_bytes[4]
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+    use_64bit_ofs = app_id == "umvc3"
+    src_mod_args = [src_stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, src_stream]
+    dst_mod_args = [dst_stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, dst_stream]
+
+    src_mod = ModCls(*src_mod_args)
+    dst_mod = ModCls(*dst_mod_args)
     src_mod._read()
     dst_mod._read()
 
-    src_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
-    dst_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes()))) if mrl_path else None
+    use_64bit_ofs = app_id == "umvc3"  # TODO remove
+    src_mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
+    dst_mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes()))) if mrl_path else None
     if mrl_path:
         src_mrl._read()
         dst_mrl._read()
@@ -174,15 +187,24 @@ def parsed_mod_from_arc(request):
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
     from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+    from kaitaistruct import KaitaiStream
+
+    from albam.engines.mtfw.structs.mod_156 import Mod156
+    from albam.engines.mtfw.structs.mod_21 import Mod21
 
     arc = request.param[0]
     file_entry = request.param[1]
+    app_id = request.param[2]
 
     src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
     mod_version = src_bytes[4]
     ModCls = MOD_CLASS_MAPPER[mod_version]
+    stream = KaitaiStream(io.BytesIO(src_bytes))
+    use_64bit_ofs = app_id == "umvc3"
+    mod_args = [stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, stream]
 
-    parsed = ModCls.from_bytes(src_bytes)
+
+    parsed = ModCls(*mod_args)
     parsed._read()
     parsed._arc_name = os.path.basename(arc.file_path)
     parsed._src_bytes = src_bytes
