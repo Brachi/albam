@@ -882,7 +882,7 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    if app_id not in ["re5", "dd"]:
+    if app_id not in ["re5"]:
         index_buffer.extend((0, 0))
 
     final_size = sum((
