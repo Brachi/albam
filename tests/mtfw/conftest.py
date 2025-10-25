@@ -121,8 +121,10 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
     dst_mod._read()
 
     use_64bit_ofs = app_id == "umvc3"  # TODO remove
-    src_mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
-    dst_mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes()))) if mrl_path else None
+    src_mrl = (Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes())))
+               if mrl_path else None)
+    dst_mrl = (Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
+               if mrl_path else None)
     if mrl_path:
         src_mrl._read()
         dst_mrl._read()
@@ -190,7 +192,6 @@ def parsed_mod_from_arc(request):
     from kaitaistruct import KaitaiStream
 
     from albam.engines.mtfw.structs.mod_156 import Mod156
-    from albam.engines.mtfw.structs.mod_21 import Mod21
 
     arc = request.param[0]
     file_entry = request.param[1]
@@ -202,7 +203,6 @@ def parsed_mod_from_arc(request):
     stream = KaitaiStream(io.BytesIO(src_bytes))
     use_64bit_ofs = app_id == "umvc3"
     mod_args = [stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, stream]
-
 
     parsed = ModCls(*mod_args)
     parsed._read()

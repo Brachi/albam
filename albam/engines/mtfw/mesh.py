@@ -338,14 +338,14 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
         )
 
 
-@blender_registry.register_import_function(app_id="re0", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re5", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="re6", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev1", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="rev2", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="dd", extension="mod", file_category="MESH")
-@blender_registry.register_import_function(app_id="umvc3", extension="mod", file_category="MESH")
+@blender_registry.register_import_function(app_id="re0", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re5", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re6", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev1", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="umvc3", extension="mod", albam_asset_type="MODEL")
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context):
     app_id = vfile.app_id
     mod_bytes = vfile.get_bytes()
@@ -715,6 +715,7 @@ def build_blender_armature(app_id, mod, armature_name, bbox_data):
     bpy.ops.object.mode_set(mode="OBJECT")
     return armature_ob
 
+
 def _to_bl_matrix(m):
     bl_matrix = Matrix((
         (m.row_1.x, m.row_1.y, m.row_1.z, m.row_1.w),
@@ -737,7 +738,6 @@ def _transform_parent_matrix(mod, bone_index):
     return world_matrix.to_translation()
 
 
-
 def _get_parents(mod, bone):
     parents = []
     current_parent_id = bone.idx_parent
@@ -748,7 +748,6 @@ def _get_parents(mod, bone):
         current_parent_id = parent.idx_parent
     parents.reverse()
     return parents
-
 
 
 def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
@@ -2182,7 +2181,8 @@ vertex_format_enum_items = [
 ]
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh",
+                                                  ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821

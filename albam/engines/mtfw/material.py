@@ -12,13 +12,13 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from .defines import get_shader_objects
 from .structs.mrl import Mrl
-from .texture import ( assign_textures,
+from .texture import (
+    assign_textures,
     build_blender_textures,
     serialize_textures,
     TextureType,
     NODE_NAMES_TO_TYPES,
     TEX_TYPE_MAP_2,
-
 )
 
 MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
@@ -166,7 +166,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         src_materials = parsed_mod.materials_data.materials
 
     mod_version = parsed_mod.header.version
-    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES or app_id == "umvc3"
+    material_names_available = mod_version in VERSION_USES_MATERIAL_NAMES or app_id == "umvc3"
     mat_inverse_hashes = {}
     if material_names_available:
         mat_inverse_hashes = {
@@ -550,7 +550,8 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["$Globals"] = [ri + 1, pos]
-        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial") and app_id != "umvc3":  # FIXME
+        elif (resource.value_cmd.name_hash.name in cb_material_users and
+              not cb_used.get("CBMaterial") and app_id != "umvc3"):  # FIXME
             pos = current_position
             current_position += 1
             cb_used["CBMaterial"] = [ri + 1, pos]
@@ -2541,7 +2542,7 @@ class GlobalsCustomProperties2(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re6","umvc3"), is_secondary=True, display_name="$Globals")
+    ("re6", "umvc3"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties3(bpy.types.PropertyGroup):
     f_albedo_color: bpy.props.FloatVectorProperty(
