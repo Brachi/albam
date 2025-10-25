@@ -842,6 +842,7 @@ def _get_material_hash(mod, mesh, app_id):
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @blender_registry.register_export_function(app_id="dmc4", extension="mod")
+@blender_registry.register_export_function(app_id="umvc3", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
@@ -865,7 +866,7 @@ def export_mod(bl_obj):
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
-    _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
+    _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
@@ -957,7 +958,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
     return dst_mod_header
 
 
-def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
+def _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod):
     SCALE = 100
 
     bl_bbox = get_model_bounding_box(bl_meshes)
@@ -1007,7 +1008,7 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.rcn_vertices = []
         dst_mod.rcn_trianlges = []
 
-    if src_mod.header.version in (210, 212):
+    if src_mod.header.version in (210, 212) or app_id == "umvc3":
         dst_mod.num_weight_bounds = 0
 
 
@@ -1466,7 +1467,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
         if app_id == "umvc3":
-            mesh_num.padding = 0
+            mesh.padding = 0
 
         # DD original hack, weapon meshes invisible without it
         if export_settings.force_max_num_weights:
@@ -1494,7 +1495,11 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
+<<<<<<< HEAD
     if dst_mod.header.version in (153, 156, 211):
+=======
+    if dst_mod.header.version in (156, 211) and app_id != "umvc3":
+>>>>>>> f677003 (Adapt structs for umvc3 export)
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)

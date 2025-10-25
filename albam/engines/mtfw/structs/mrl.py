@@ -9709,7 +9709,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 60
+            self._m_size_ = (72 if self._root.app_id == u"umvc3" else 60)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -10194,7 +10194,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 12
+            self._m_size_ = (24 if self._root.use_64bit_ofs else 12)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -10211,7 +10211,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self.name_hash = KaitaiStream.resolve_enum(Mrl.ShaderObjectHash, self._io.read_bits_int_le(20))
             if self._root.use_64bit_ofs:
                 pass
-                self.averga3 = self._io.read_u4le()
+                self.filling = self._io.read_u4le()
 
             self._dirty = False
 
@@ -10229,7 +10229,7 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(20, int(self.name_hash))
             if self._root.use_64bit_ofs:
                 pass
-                self._io.write_u4le(self.averga3)
+                self._io.write_u4le(self.filling)
 
 
 
@@ -10437,7 +10437,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 76
+            self._m_size_ = (88 if self._root.app_id == u"umvc3" else 76)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -10478,7 +10478,7 @@ class Mrl(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_ofs_textures_calculated'):
             return self._m_ofs_textures_calculated
 
-        self._m_ofs_textures_calculated = 28
+        self._m_ofs_textures_calculated = (40 if self.app_id == u"umvc3" else 28)
         return getattr(self, '_m_ofs_textures_calculated', None)
 
     def _invalidate_ofs_textures_calculated(self):
