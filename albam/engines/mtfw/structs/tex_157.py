@@ -242,9 +242,19 @@ class Tex157(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_before_data_'):
             return self._m_size_before_data_
 
-        self._m_size_before_data_ = (16 + (8 * self.num_mipmaps_per_image) * self.num_images if self.num_images == 1 else (16 + (4 * self.num_mipmaps_per_image) * self.num_images) + 36 * 3)
+        self._m_size_before_data_ = (16 + (self.size_mipmap_offset * self.num_mipmaps_per_image) * self.num_images if self.num_images == 1 else (16 + (4 * self.num_mipmaps_per_image) * self.num_images) + 36 * 3)
         return getattr(self, '_m_size_before_data_', None)
 
     def _invalidate_size_before_data_(self):
         del self._m_size_before_data_
+    @property
+    def size_mipmap_offset(self):
+        if hasattr(self, '_m_size_mipmap_offset'):
+            return self._m_size_mipmap_offset
+
+        self._m_size_mipmap_offset = (8 if self._root.use_64bit_ofs == True else 4)
+        return getattr(self, '_m_size_mipmap_offset', None)
+
+    def _invalidate_size_mipmap_offset(self):
+        del self._m_size_mipmap_offset
 
