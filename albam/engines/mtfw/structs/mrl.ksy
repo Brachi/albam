@@ -8,7 +8,6 @@ meta:
 
 params:
   - {id: app_id, type: str}  # TODO: enum
-  - {id: use_64bit_ofs, type: bool}
 
 seq:
   - {id: id_magic, contents: [0x4d, 0x52, 0x4c, 0x00]}
@@ -38,6 +37,8 @@ instances:
     value: 28
   size_todo_:  # TODO: # padding(16) + sum(m.cmd_buffer_size + m.anim_data_size for m in materials)
     value: size_top_level_ + size_textures_ + size_materials_
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
 
 types:
 

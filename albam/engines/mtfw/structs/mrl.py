@@ -3328,12 +3328,11 @@ class Mrl(ReadWriteKaitaiStruct):
     class TextureType(IntEnum):
         type_r_texture = 606035435
         type_r_render_target_texture = 2013850128
-    def __init__(self, app_id, use_64bit_ofs, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Mrl, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
         self.app_id = app_id
-        self.use_64bit_ofs = use_64bit_ofs
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -10523,4 +10522,14 @@ class Mrl(ReadWriteKaitaiStruct):
 
     def _invalidate_size_top_level_(self):
         del self._m_size_top_level_
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
 

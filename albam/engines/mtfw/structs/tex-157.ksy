@@ -7,7 +7,7 @@ meta:
   title: MTFramework texture format version 157
 
 params:
-  - {id: use_64bit_ofs, type: bool}
+  - {id: app_id, type: str}  # TODO: enum
 
 
 seq:
@@ -32,6 +32,8 @@ seq:
   - {id: dds_data, size-eos: true}
 
 instances:
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
   size_mipmap_offset:
     value: "_root.use_64bit_ofs == true ? 8 : 4"
   size_before_data_:
