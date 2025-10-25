@@ -9,12 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod21(ReadWriteKaitaiStruct):
-    def __init__(self, app_id, use_64bit_ofs, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Mod21, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
         self.app_id = app_id
-        self.use_64bit_ofs = use_64bit_ofs
         self._should_write_bones_data = False
         self.bones_data__enabled = True
         self._should_write_groups = False
@@ -1995,7 +1994,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (96 if self._root.app_id == u"umvc3" else 64)
+            self._m_size_ = (96 if self._root.use_64bit_ofs else 64)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -6150,6 +6149,16 @@ class Mod21(ReadWriteKaitaiStruct):
 
     def _invalidate_size_top_level_(self):
         del self._m_size_top_level_
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
     @property
     def vertex_buffer(self):
         if self._should_write_vertex_buffer:

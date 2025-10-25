@@ -8,8 +8,6 @@ meta:
 
 params:
   - {id: app_id, type: str}  # TODO: enum
-  - {id: use_64bit_ofs, type: bool}
-
 
 seq:
   - {id: header, type: mod_header}
@@ -40,6 +38,8 @@ instances:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
   size_top_level_:
     value: "_root.header.version == 210 or _root.header.version == 212  or _root.app_id == 'umvc3' ? _root.header.size_ + 68 : _root.header.size_ + 64"
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
 
 types:
   mod_header:
@@ -65,7 +65,7 @@ types:
       - {id: size_file, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
-        value: '_root.app_id == "umvc3" ? 96 : 64'
+        value: '_root.use_64bit_ofs ? 96 : 64'
 
   model_info:
     seq:

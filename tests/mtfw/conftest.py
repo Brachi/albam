@@ -111,19 +111,17 @@ def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
 
     mod_version = src_bytes[4]
     ModCls = MOD_CLASS_MAPPER[mod_version]
-    use_64bit_ofs = app_id == "umvc3"
-    src_mod_args = [src_stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, src_stream]
-    dst_mod_args = [dst_stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, dst_stream]
+    src_mod_args = [src_stream] if ModCls is Mod156 else [app_id, src_stream]
+    dst_mod_args = [dst_stream] if ModCls is Mod156 else [app_id, dst_stream]
 
     src_mod = ModCls(*src_mod_args)
     dst_mod = ModCls(*dst_mod_args)
     src_mod._read()
     dst_mod._read()
 
-    use_64bit_ofs = app_id == "umvc3"  # TODO remove
-    src_mrl = (Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes())))
+    src_mrl = (Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes())))
                if mrl_path else None)
-    dst_mrl = (Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
+    dst_mrl = (Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
                if mrl_path else None)
     if mrl_path:
         src_mrl._read()
@@ -201,8 +199,7 @@ def parsed_mod_from_arc(request):
     mod_version = src_bytes[4]
     ModCls = MOD_CLASS_MAPPER[mod_version]
     stream = KaitaiStream(io.BytesIO(src_bytes))
-    use_64bit_ofs = app_id == "umvc3"
-    mod_args = [stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, stream]
+    mod_args = [stream] if ModCls is Mod156 else [app_id, stream]
 
     parsed = ModCls(*mod_args)
     parsed._read()
@@ -219,13 +216,18 @@ def parsed_tex_from_arc(request):
     # doesn't have sys.path modified for albam_vendor, so kaitaistruct
     # not found
     from albam.engines.mtfw.texture import APPID_TEXCLS_MAP
+    from kaitaistruct import KaitaiStream
+    from albam.engines.mtfw.structs.tex_112 import Tex112
+
     arc = request.param[0]
     tex_file_entry = request.param[1]
     app_id = request.param[2]
-    Tex = APPID_TEXCLS_MAP[app_id]
+    TexCls = APPID_TEXCLS_MAP[app_id]
 
     tex_bytes = arc.get_file(tex_file_entry.file_path, tex_file_entry.file_type)
-    parsed_tex = Tex.from_bytes(tex_bytes)
+    stream = KaitaiStream(io.BytesIO(tex_bytes))
+    tex_args = [stream] if TexCls is Tex112 else [app_id, stream]
+    parsed_tex = TexCls(*tex_args)
     parsed_tex._read()
     parsed_tex._arc_name = os.path.basename(arc.file_path)
     parsed_tex._mrl_path = tex_file_entry.file_path

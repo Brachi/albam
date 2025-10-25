@@ -53,8 +53,6 @@ MRL_SHADER_VERSION = {
     "umvc3": 0xe588940a,
 }
 
-MRL_APP_USES_64BIT_OFS = {"umvc3"}
-
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
     "re1": Mrl.CbGlobals1,
@@ -392,9 +390,8 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     exported_materials_map = {}
     app_id = model_asset.app_id
     export_settings = bpy.context.scene.albam.export_settings
-    use_64bit_ofs = app_id in MRL_APP_USES_64BIT_OFS
 
-    mrl = Mrl(app_id, use_64bit_ofs)
+    mrl = Mrl(app_id)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
     mrl.shader_version = MRL_SHADER_VERSION[app_id]
@@ -1167,13 +1164,12 @@ def _infer_mrl(context, mod_vfile, app_id):
     base = str(mod_vfile.relative_path_windows_no_ext)
     suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
     mrl = None
-    use_64bit_ofs = app_id in MRL_APP_USES_64BIT_OFS
 
     for suffix in suffixes:
         try:
             mrl_vfile = vfs.get_vfile(app_id, base + suffix)
             mrl_bytes = mrl_vfile.get_bytes()
-            mrl = Mrl(app_id, use_64bit_ofs, KaitaiStream(io.BytesIO(mrl_bytes)))
+            mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
             mrl._read()
             assert mrl.materials and mrl.textures
             break

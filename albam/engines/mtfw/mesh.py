@@ -67,9 +67,6 @@ MOD_VERSION_APPID_MAPPER = {
     212: {"dd"},
 }
 
-MOD_USES_64BIT_OFS = {"umvc3"}
-
-
 DEFAULT_VERTEX_FORMAT_SKIN = 0x14D40020
 DEFAULT_VERTEX_FORMAT_NONSKIN = 0xa7d7d036
 
@@ -355,8 +352,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context):
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
     stream = KaitaiStream(BytesIO(mod_bytes))
-    use_64bit_ofs = app_id in MOD_USES_64BIT_OFS
-    mod_args = [stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, stream]
+    mod_args = [stream] if ModCls is Mod156 else [app_id, stream]
     mod = ModCls(*mod_args)
     mod._read()
 
@@ -846,9 +842,8 @@ def export_mod(bl_obj):
 
     ModCls = APPID_CLASS_MAPPER[app_id]
     src_stream = KaitaiStream(BytesIO(asset.original_bytes))
-    use_64bit_ofs = app_id in MOD_USES_64BIT_OFS
-    mod_args_src = [src_stream] if ModCls is Mod156 else [app_id, use_64bit_ofs, src_stream]
-    mod_args_dst = [] if ModCls is Mod156 else [app_id, use_64bit_ofs]
+    mod_args_src = [src_stream] if ModCls is Mod156 else [app_id, src_stream]
+    mod_args_dst = [] if ModCls is Mod156 else [app_id]
 
     src_mod = ModCls(*mod_args_src)
     src_mod._read()

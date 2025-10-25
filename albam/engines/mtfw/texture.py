@@ -249,9 +249,8 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         if is_rtex:
             tex = RtexCls.from_bytes(tex_bytes)
         else:
-            use_64bit_ofs = app_id in APP_USES_64BIT_OFS
             stream = KaitaiStream(io.BytesIO(tex_bytes))
-            args = [stream] if TexCls is Tex112 else [use_64bit_ofs, stream]
+            args = [stream] if TexCls is Tex112 else [app_id, stream]
             tex = TexCls(*args)
 
         tex._read()
@@ -592,8 +591,7 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        use_64bit_ofs = app_id in APP_USES_64BIT_OFS
-        tex = Tex157(use_64bit_ofs)
+        tex = Tex157(app_id)
         tex.id_magic = b"TEX\x00"
 
     tex.width = bl_im.size[0]

@@ -9,11 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Tex157(ReadWriteKaitaiStruct):
-    def __init__(self, use_64bit_ofs, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Tex157, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
-        self.use_64bit_ofs = use_64bit_ofs
+        self.app_id = app_id
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -257,4 +257,14 @@ class Tex157(ReadWriteKaitaiStruct):
 
     def _invalidate_size_mipmap_offset(self):
         del self._m_size_mipmap_offset
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
 
