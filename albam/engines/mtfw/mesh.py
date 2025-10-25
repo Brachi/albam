@@ -830,7 +830,6 @@ def _get_material_hash(mod, mesh, app_id):
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @blender_registry.register_export_function(app_id="dd", extension="mod")
-@blender_registry.register_export_function(app_id="umvc3", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
