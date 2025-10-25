@@ -1885,7 +1885,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd" "umvc3"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
