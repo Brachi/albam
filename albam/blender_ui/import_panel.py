@@ -73,7 +73,10 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 self._make_exportable(vfile, bl_object, context)
 
         except Exception:
+            self.report({'ERROR'}, 'Import failed')
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            return {"CANCELLED"}
+        self.report({'INFO'}, 'Import successful')
         return {"FINISHED"}
 
     def _make_exportable(self, vfile, bl_object, context):

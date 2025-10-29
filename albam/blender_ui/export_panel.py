@@ -281,7 +281,10 @@ class ALBAM_OT_Export(bpy.types.Operator):
         try:
             self._execute(context, item)
         except Exception:
+            self.report({'ERROR'}, 'Import failed')
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            return {"CANCELLED"}
+        self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
 
     @staticmethod
