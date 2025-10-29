@@ -15,7 +15,7 @@ from ...lib.blender import (
 )
 from ...lib.dds import DDSHeader
 from ...registry import blender_registry
-from ...vfs import VirtualFileData
+from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
@@ -204,6 +204,42 @@ TEX_TYPE_MAPPER = {
 }
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
+
+
+@blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
+def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
+    app_id = vfile.app_id
+    TexCls = APPID_TEXCLS_MAP[app_id]
+    stream = KaitaiStream(io.BytesIO(vfile.get_bytes()))
+    args = [stream] if TexCls is Tex112 else [app_id, stream]
+
+    tex = TexCls(*args)
+    tex._read()
+    dds = convert_tex_to_dds(tex)
+
+    bl_image = bpy.data.images.new(f"{vfile.display_name}.dds", tex.width, tex.height)
+    bl_image.source = "FILE"
+    bl_image.pack(data=dds, data_len=len(dds))
+
+    custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.set_from_source(tex)
+
+    return bl_image
+
+
+def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
+    compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
+    dds_header = DDSHeader(
+        dwHeight=tex.height,
+        dwWidth=tex.width,
+        pixelfmt_dwFourCC=compression_fmt,
+        dwMipMapCount=tex.num_mipmaps_per_image
+    )
+    dds_header.set_constants()
+    dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
+    dds = bytes(dds_header) + tex.dds_data
+
+    return dds
 
 
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):

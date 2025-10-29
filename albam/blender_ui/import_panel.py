@@ -99,10 +99,10 @@ class ALBAM_OT_Import(bpy.types.Operator):
         if not bl_container:
             return
 
-        if bl_container.type != "ARMATURE":
+        if bl_container.type != "ARMATURE" and bl_container.type != "IMAGE":
             # armature building needs it linked to for building
             bpy.context.collection.objects.link(bl_container)
-        for child in bl_container.children_recursive:
+        for child in getattr(bl_container, "children_recursive", {}):
             try:
                 # already linked
                 bpy.context.collection.objects.link(child)
