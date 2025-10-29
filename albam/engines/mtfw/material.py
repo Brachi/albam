@@ -72,6 +72,10 @@ MRL_MATERIAL_TYPE_STR = {
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
     0x6C468C46: "Unknown",
     0x21617f54: "Unknown2",
+    0x6ebe0b47: "Unknown3",
+    0x20813bb8: "Unknown4",
+    0x3b5107ca: "Unknown5",
+
 
 }
 
@@ -1417,6 +1421,9 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
             ("Unknown", "Unknown", "", 7),
             ("Unknown2", "Unknown2", "", 8),
+            ("Unknown3", "Unknown3", "", 9),
+            ("Unknown4", "Unknown4", "", 10),
+            ("Unknown5", "Unknown5", "", 11),
         ],
         default="TYPE_nDraw__MaterialStd",
         options=set()
