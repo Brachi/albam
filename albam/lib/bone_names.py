@@ -642,6 +642,7 @@ BODY_NAMES_FIX_DD = {
     200: "foot_twist_r",
     201: "butt_cheek_01_l",
     202: "butt_cheek_02_l",
+    203: "thigh_twist_l",
     204: "knee_l",
     205: "calf_twist_l",
     206: "foot_twist_l",
@@ -663,4 +664,14 @@ NAME_FIXES_BODY = {
 NAME_FIXES = {
     "Body": NAME_FIXES_BODY,
     "Head": NAME_FIXES_HEAD,
+}
+
+
+BONE_COLLECIONS = {
+    "Main Bones": ["pelvis", "spine_upper", "spine_lower", "neck", "head"],
+    "Legs Main": ["thigh", "knee", "calf", "foot", "toe"],
+    "Legs Twist": ["thigh_twist", "calf_twist", "foot_twist"],
+    "Arms Main": ["clavicle", "upperarm", "elbow", "lowerarm", "hand"],
+    "Hands Main": ["palm", "thumb", "index", "middle", "ring", "pinky"],
+    "Eyes": ["eye"],
 }
