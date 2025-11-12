@@ -4,6 +4,7 @@ import bpy
 from kaitaistruct import KaitaiStream
 from .structs.lfs import Lfs
 from .structs.udas import Udas
+from ...albam_vendor import xcompress
 
 
 @blender_registry.register_archive_loader(app_id="re4hd", extension="lfs")
