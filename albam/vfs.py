@@ -216,7 +216,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
     # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})  # NOQA
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.lfs", options={"HIDDEN"})  # NOQA
 
     def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager
