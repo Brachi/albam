@@ -1,6 +1,9 @@
 import bmesh
 import bpy
 import re
+import bmesh
+from mathutils import Vector, bvhtree
+
 
 from ..registry import blender_registry
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
@@ -84,6 +87,8 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="",)
         row = layout.row()
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
+        row = layout.row()
+        row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
         row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
@@ -541,6 +546,29 @@ class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
         return {'FINISHED'}
 
 
+@blender_registry.register_blender_type
+class ALBAM_OT_SortHairCards(bpy.types.Operator):
+    '''Sort hair cards by distance'''
+    bl_idname = "albam.sort_hair_cards"
+    bl_label = "sort hair cards by distance"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes or context.scene.albam.meshes.all_meshes is None:
+            return False
+        return True
+
+    def execute(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
+        sort_hair_card(source_obj, selected_meshes)
+        return {'FINISHED'}
+
+
 def split_seams(me):
     bm = bmesh.from_edit_mesh(me)
     bpy.context.scene.tool_settings.use_uv_select_sync = True
@@ -725,3 +753,71 @@ def paste_props(context_item):
         to_paste = buff.get(app_id, {}).get(sec_prop_name, {})
         for k, v in to_paste.items():
             setattr(sec_prop, k, v)
+
+
+# Get minimal distance to the head
+def min_distance_to_target(obj, target_bvh):
+    bm = bmesh.new()
+    bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+    bm.verts.ensure_lookup_table()
+    min_dist = float('inf')
+    for v in bm.verts:
+        world_v = obj.matrix_world @ v.co
+        hit = target_bvh.find_nearest(world_v)
+        if hit:
+            loc, normal, index, dist = hit
+            min_dist = min(min_dist, dist)
+    return min_dist
+
+
+# Check overlaping
+def is_blocked(v_from, v_to, bvh_list, exclude_obj):
+    direction = (v_to - v_from).normalized()
+    length = (v_to - v_from).length
+    for bvh, obj in bvh_list:
+        if obj in exclude_obj:
+            continue
+        hit = bvh.ray_cast(v_from, direction, length)
+        if hit[0]:
+            exclude_obj.append(obj)
+            return True
+    return False
+
+
+def sort_hair_card(target_obj, mesh_objs):
+    target_bm = bmesh.new()
+    target_bm.from_object(target_obj, bpy.context.evaluated_depsgraph_get())
+    target_bm.verts.ensure_lookup_table()
+    target_bm.faces.ensure_lookup_table()
+    target_bvh = bvhtree.BVHTree.FromBMesh(target_bm)
+
+    # Sorting hair cards by distance, probably unnesessary
+    sorted_objs = sorted(mesh_objs, key=lambda o: min_distance_to_target(o, target_bvh))
+
+    # Testing
+    for obj in sorted_objs:
+        obj['order'] = 0
+
+    # Build the BVH tree
+    bvh_list = []
+    for obj in sorted_objs:
+        bm = bmesh.new()
+        bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        bvh = bvhtree.BVHTree.FromBMesh(bm)
+        bvh_list.append((bvh, obj))
+
+    # Run
+    for i, obj in enumerate(sorted_objs):
+        bm = bmesh.new()
+        bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+        bm.verts.ensure_lookup_table()
+        exclude_obj = [obj]
+        for v in bm.verts:
+            world_v = obj.matrix_world @ v.co
+            hit = target_bvh.find_nearest(world_v)
+            if hit:
+                loc, normal, index, dist = hit
+                if is_blocked(world_v, loc, bvh_list, exclude_obj):
+                    obj['order'] += 1
