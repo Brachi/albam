@@ -771,53 +771,83 @@ def min_distance_to_target(obj, target_bvh):
 
 
 # Check overlaping
-def is_blocked(v_from, v_to, bvh_list, exclude_obj):
+def is_blocked(card_ob, v_from, v_to, bvh_list, exclude_obj):
     direction = (v_to - v_from).normalized()
     length = (v_to - v_from).length
-    for bvh, obj in bvh_list:
-        if obj in exclude_obj:
+    for bvh, target_ob in bvh_list:
+        if target_ob in exclude_obj:
             continue
         hit = bvh.ray_cast(v_from, direction, length)
         if hit[0]:
-            exclude_obj.append(obj)
+            # The index increments even if rays hit 2 objects with the same alpha priority, this should fix it
+            emitter_props = _get_mesh_albam_props(card_ob)
+            emitter_ap = emitter_props.alpha_priority if emitter_props else card_ob.get('order', 0)
+            target_props = _get_mesh_albam_props(target_ob)
+            target_ap = target_props.alpha_priority if target_props else target_ob.get('order', 0)
+            if emitter_ap > target_ap:
+                continue
+            exclude_obj.append(target_ob)
             return True
     return False
 
 
-def sort_hair_card(target_obj, mesh_objs):
-    target_bm = bmesh.new()
-    target_bm.from_object(target_obj, bpy.context.evaluated_depsgraph_get())
-    target_bm.verts.ensure_lookup_table()
-    target_bm.faces.ensure_lookup_table()
-    target_bvh = bvhtree.BVHTree.FromBMesh(target_bm)
+def _get_mesh_albam_props(obj):
+    albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+    if not albam_asset:
+        return None
+    app_id = albam_asset.app_id
+    custom_props = obj.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return custom_props
+
+
+def sort_hair_card(body_ob, cards_objs):
+    body_bm = bmesh.new()
+    body_bm.from_object(body_ob, bpy.context.evaluated_depsgraph_get())
+    body_bm.verts.ensure_lookup_table()
+    body_bm.faces.ensure_lookup_table()
+    body_bvh = bvhtree.BVHTree.FromBMesh(body_bm)
+    body_bm.free()
 
     # Sorting hair cards by distance, probably unnesessary
-    sorted_objs = sorted(mesh_objs, key=lambda o: min_distance_to_target(o, target_bvh))
+    cards_objs_sorted = sorted(cards_objs, key=lambda o: min_distance_to_target(o, body_bvh))
 
-    # Testing
-    for obj in sorted_objs:
-        obj['order'] = 0
+    # Set alpha priority index to 0 for all hair cards
+    for card_ob in cards_objs_sorted:
+        custom_props = _get_mesh_albam_props(card_ob)
+        if custom_props:
+            custom_props.alpha_priority = 0
+        card_ob['order'] = 0
 
     # Build the BVH tree
     bvh_list = []
-    for obj in sorted_objs:
+    for card_ob in cards_objs_sorted:
         bm = bmesh.new()
-        bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+        bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
         bvh = bvhtree.BVHTree.FromBMesh(bm)
-        bvh_list.append((bvh, obj))
+        bvh_list.append((bvh, card_ob))
+        bm.free()
 
-    # Run
-    for i, obj in enumerate(sorted_objs):
+    for i, card_ob in enumerate(cards_objs_sorted):
+        custom_props = _get_mesh_albam_props(card_ob)
+
         bm = bmesh.new()
-        bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+        bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
         bm.verts.ensure_lookup_table()
-        exclude_obj = [obj]
+        exclude_obj = [card_ob]
         for v in bm.verts:
-            world_v = obj.matrix_world @ v.co
-            hit = target_bvh.find_nearest(world_v)
+            world_v = card_ob.matrix_world @ v.co
+            hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
-                if is_blocked(world_v, loc, bvh_list, exclude_obj):
-                    obj['order'] += 1
+                if is_blocked(card_ob, world_v, loc, bvh_list, exclude_obj):
+                    if custom_props:
+                        custom_props.alpha_priority += 1
+                    card_ob['order'] += 1
+                    # if custom_props:
+                    #    custom_props.alpha_priority += 1
+                    # else:
+                    #    card_ob['order'] += 1
+                    #    print("Object {} has no Albam custom properties".format(card_ob.name))
+        bm.free()
