@@ -562,6 +562,7 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         return True
 
     def execute(self, context):
+        bpy.ops.object.mode_set(mode='OBJECT')
         source_obj = context.scene.albam.meshes.all_meshes
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
@@ -755,6 +756,22 @@ def paste_props(context_item):
             setattr(sec_prop, k, v)
 
 
+def _debug_draw_bvh_rays(rays):
+    mesh_vis = bpy.data.meshes.new("debug_raycast_viz")
+    obj_vis = bpy.data.objects.new("debug_raycast_viz", mesh_vis)
+    bpy.context.collection.objects.link(obj_vis)
+
+    bm_vis = bmesh.new()
+
+    for origin, hit_loc in rays:
+        v1 = bm_vis.verts.new(origin)
+        v2 = bm_vis.verts.new(hit_loc)
+        bm_vis.edges.new((v1, v2))
+
+    bm_vis.to_mesh(mesh_vis)
+    bm_vis.free()
+
+
 # Get minimal distance to the head
 def min_distance_to_target(obj, target_bvh):
     bm = bmesh.new()
@@ -774,21 +791,37 @@ def min_distance_to_target(obj, target_bvh):
 def is_blocked(card_ob, v_from, v_to, bvh_list, exclude_obj):
     direction = (v_to - v_from).normalized()
     length = (v_to - v_from).length
+    # Check if the ray the goes from card to body is blocked by other cards
     for bvh, target_ob in bvh_list:
         if target_ob in exclude_obj:
             continue
         hit = bvh.ray_cast(v_from, direction, length)
         if hit[0]:
+            exclude_obj.append(target_ob)
             # The index increments even if rays hit 2 objects with the same alpha priority, this should fix it
             emitter_props = _get_mesh_albam_props(card_ob)
             emitter_ap = emitter_props.alpha_priority if emitter_props else card_ob.get('order', 0)
             target_props = _get_mesh_albam_props(target_ob)
             target_ap = target_props.alpha_priority if target_props else target_ob.get('order', 0)
-            if emitter_ap > target_ap:
-                continue
-            exclude_obj.append(target_ob)
-            return True
-    return False
+            if emitter_ap <= target_ap:
+                try:
+                    emitter_props.alpha_priority = target_ap + 1
+                except AttributeError:
+                    print("Object {} has no Albam custom properties".format(card_ob.name))
+                card_ob["order"] = target_ap + 1
+
+
+def is_point_inside_nearest(point_world: Vector, bvh, eps=1e-6) -> bool:
+    """
+    Fast heuristic: take nearest surface point and check dot(normal, point - nearest).
+    For a closed manifold outward normal, dot < 0 => point is inside.
+    """
+    res = bvh.find_nearest(point_world)
+    if not res:
+        return False
+    nearest_co, nearest_no, _, _ = res
+    vec = point_world - nearest_co
+    return nearest_no.dot(vec) < -eps
 
 
 def _get_mesh_albam_props(obj):
@@ -818,7 +851,7 @@ def sort_hair_card(body_ob, cards_objs):
             custom_props.alpha_priority = 0
         card_ob['order'] = 0
 
-    # Build the BVH tree
+    # Build the BVH tree for cards
     bvh_list = []
     for card_ob in cards_objs_sorted:
         bm = bmesh.new()
@@ -831,23 +864,28 @@ def sort_hair_card(body_ob, cards_objs):
 
     for i, card_ob in enumerate(cards_objs_sorted):
         custom_props = _get_mesh_albam_props(card_ob)
-
         bm = bmesh.new()
         bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
         bm.verts.ensure_lookup_table()
-        exclude_obj = [card_ob]
+        debug_rays = []
+        exclude_objs = [card_ob]
+        sample_points = []
+
         for v in bm.verts:
             world_v = card_ob.matrix_world @ v.co
+            sample_points.append(world_v)
+        # sample_points = [point for point in sample_points if not is_point_inside_nearest(point, body_bvh)]
+
+        for face in bm.faces:
+            center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
+            sample_points.append(center)
+
+        for world_v in sample_points:  # bm.verts:
+            # world_v = card_ob.matrix_world @ v.co
             hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
-                if is_blocked(card_ob, world_v, loc, bvh_list, exclude_obj):
-                    if custom_props:
-                        custom_props.alpha_priority += 1
-                    card_ob['order'] += 1
-                    # if custom_props:
-                    #    custom_props.alpha_priority += 1
-                    # else:
-                    #    card_ob['order'] += 1
-                    #    print("Object {} has no Albam custom properties".format(card_ob.name))
+                debug_rays.append((world_v, loc))
+                is_blocked(card_ob, world_v, loc, bvh_list, exclude_objs)
+        _debug_draw_bvh_rays(debug_rays)
         bm.free()
