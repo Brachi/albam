@@ -756,10 +756,15 @@ def paste_props(context_item):
             setattr(sec_prop, k, v)
 
 
-def _debug_draw_bvh_rays(rays):
-    mesh_vis = bpy.data.meshes.new("debug_raycast_viz")
-    obj_vis = bpy.data.objects.new("debug_raycast_viz", mesh_vis)
-    bpy.context.collection.objects.link(obj_vis)
+def _debug_draw_bvh_rays(rays, ob_name):
+    rvis_name = ob_name + "_rays_viz"
+    rviz_ob = bpy.data.objects.get(rvis_name, None)
+    if rviz_ob:
+        rvis_mesh = rviz_ob.data
+    else:
+        rvis_mesh = bpy.data.meshes.new(rvis_name)
+        rviz_ob = bpy.data.objects.new(rvis_name, rvis_mesh)
+        bpy.context.collection.objects.link(rviz_ob)
 
     bm_vis = bmesh.new()
 
@@ -768,7 +773,7 @@ def _debug_draw_bvh_rays(rays):
         v2 = bm_vis.verts.new(hit_loc)
         bm_vis.edges.new((v1, v2))
 
-    bm_vis.to_mesh(mesh_vis)
+    bm_vis.to_mesh(rvis_mesh)
     bm_vis.free()
 
 
@@ -876,16 +881,16 @@ def sort_hair_card(body_ob, cards_objs):
             sample_points.append(world_v)
         # sample_points = [point for point in sample_points if not is_point_inside_nearest(point, body_bvh)]
 
+        # add center of triangles to the samples for better precition
         for face in bm.faces:
             center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
             sample_points.append(center)
 
-        for world_v in sample_points:  # bm.verts:
-            # world_v = card_ob.matrix_world @ v.co
+        for world_v in sample_points:
             hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
                 debug_rays.append((world_v, loc))
                 is_blocked(card_ob, world_v, loc, bvh_list, exclude_objs)
-        _debug_draw_bvh_rays(debug_rays)
+        _debug_draw_bvh_rays(debug_rays, card_ob.name)
         bm.free()
