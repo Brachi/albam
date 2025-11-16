@@ -1025,16 +1025,16 @@ def sort_hair_card(body_ob, cards_objs):
             sample_points.append(world_v)
         # sample_points = [point for point in sample_points if not is_point_inside_nearest(point, body_bvh)]
 
+        # add center of triangles to the samples for better precition
         for face in bm.faces:
             center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
             sample_points.append(center)
 
-        for world_v in sample_points:  # bm.verts:
-            # world_v = card_ob.matrix_world @ v.co
+        for world_v in sample_points:
             hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
                 debug_rays.append((world_v, loc))
                 is_blocked(card_ob, world_v, loc, bvh_list, exclude_objs)
-        _debug_draw_bvh_rays(debug_rays)
+        _debug_draw_bvh_rays(debug_rays, card_ob.name)
         bm.free()
