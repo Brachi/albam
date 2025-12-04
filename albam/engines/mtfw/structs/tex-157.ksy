@@ -3,8 +3,12 @@ meta:
   bit-endian: le
   file-extension: tex
   id: tex_157
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework texture format version 157
+
+params:
+  - {id: app_id, type: str}  # TODO: enum
+
 
 seq:
   - {id: id_magic, contents: [0x54, 0x45, 0x58, 0x00]}
@@ -23,12 +27,17 @@ seq:
   - {id: render_target, type: b1}
   - {id: use_vtf, type: b1}
   - {id: cube_faces, type: cube_face, repeat: expr, repeat-expr: 3, if: num_images == 6}
-  - {id: mipmap_offsets, type: u4, repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
+  - {id: mipmap_offsets, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}},
+     repeat: expr, repeat-expr: num_mipmaps_per_image * num_images}
   - {id: dds_data, size-eos: true}
 
 instances:
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
+  size_mipmap_offset:
+    value: "_root.use_64bit_ofs == true ? 8 : 4"
   size_before_data_:
-    value: "num_images == 1 ? 16 + (4 * num_mipmaps_per_image * num_images) : 16 + (4 * num_mipmaps_per_image * num_images)  + 36 * 3"
+    value: "num_images == 1 ? 16 + (size_mipmap_offset * num_mipmaps_per_image * num_images) : 16 + (4 * num_mipmaps_per_image * num_images)  + 36 * 3"
   #unk_type:
   #  value: packed_data_1 & 0xffff
   #reserved_01:
