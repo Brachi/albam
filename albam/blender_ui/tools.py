@@ -1,7 +1,6 @@
 import bmesh
 import bpy
 import re
-import bmesh
 from mathutils import Vector, bvhtree
 
 
@@ -566,7 +565,8 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         source_obj = context.scene.albam.meshes.all_meshes
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
-        sort_hair_card(source_obj, selected_meshes)
+        sort_hair_cards(source_obj, selected_meshes, debug_draw=True)
+        # merge_hair_cards(selected_meshes)
         return {'FINISHED'}
 
 
@@ -759,12 +759,17 @@ def paste_props(context_item):
 def _debug_draw_bvh_rays(rays, ob_name):
     rvis_name = ob_name + "_rays_viz"
     rviz_ob = bpy.data.objects.get(rvis_name, None)
+    debug_collection = bpy.data.collections.get("DebugDraw")
+    if debug_collection is None:
+        debug_collection = bpy.data.collections.new("DebugDraw")
+        bpy.context.scene.collection.children.link(debug_collection)
+
     if rviz_ob:
         rvis_mesh = rviz_ob.data
     else:
         rvis_mesh = bpy.data.meshes.new(rvis_name)
         rviz_ob = bpy.data.objects.new(rvis_name, rvis_mesh)
-        bpy.context.collection.objects.link(rviz_ob)
+        debug_collection.objects.link(rviz_ob)
 
     bm_vis = bmesh.new()
 
@@ -793,27 +798,34 @@ def min_distance_to_target(obj, target_bvh):
 
 
 # Check overlaping
-def is_blocked(card_ob, v_from, v_to, bvh_list, exclude_obj):
+def is_blocked(card_ob, v_from, v_to, bvh_list):
     direction = (v_to - v_from).normalized()
     length = (v_to - v_from).length
+    hit_objs = set()
+    exclude_obj = []
+    exclude_obj.append(card_ob)
     # Check if the ray the goes from card to body is blocked by other cards
     for bvh, target_ob in bvh_list:
         if target_ob in exclude_obj:
             continue
         hit = bvh.ray_cast(v_from, direction, length)
         if hit[0]:
+            hit_objs.add(target_ob)
             exclude_obj.append(target_ob)
             # The index increments even if rays hit 2 objects with the same alpha priority, this should fix it
-            emitter_props = _get_mesh_albam_props(card_ob)
-            emitter_ap = emitter_props.alpha_priority if emitter_props else card_ob.get('order', 0)
-            target_props = _get_mesh_albam_props(target_ob)
-            target_ap = target_props.alpha_priority if target_props else target_ob.get('order', 0)
-            if emitter_ap <= target_ap:
-                try:
-                    emitter_props.alpha_priority = target_ap + 1
-                except AttributeError:
-                    print("Object {} has no Albam custom properties".format(card_ob.name))
-                card_ob["order"] = target_ap + 1
+            #emitter_props = _get_mesh_albam_props(card_ob)
+            #emitter_ap = emitter_props.alpha_priority if emitter_props else card_ob.get('order', 0)
+            #target_props = _get_mesh_albam_props(target_ob)
+            ##target_ap = target_props.alpha_priority if target_props else target_ob.get('order', 0)
+            #if emitter_ap <= target_ap or target_ap == 0:
+            #    try:
+            #        emitter_props.alpha_priority = target_ap + 1
+            #    except AttributeError:
+            #        print("Object {} has no Albam custom properties".format(card_ob.name))
+            #    card_ob["order"] = target_ap + 1
+    #if card_ob.name == "helgast_winter_fur.092":
+    #    print("Card {} blocked by {}".format(card_ob.name, [ob.name for ob in hit_objs]))
+    return hit_objs
 
 
 def is_point_inside_nearest(point_world: Vector, bvh, eps=1e-6) -> bool:
@@ -838,7 +850,78 @@ def _get_mesh_albam_props(obj):
     return custom_props
 
 
-def sort_hair_card(body_ob, cards_objs):
+def _join_objects(objects_to_join, aprior=None):
+    """
+    Joins multiple Blender objects into a single new object using bmesh,
+    correctly applying all world transformations.
+    """
+    if not objects_to_join:
+        print("No objects provided for joining.")
+        return None
+
+    # bmesh instance will hold merged geometry
+    bm = bmesh.new()
+    # bmesh data should be stored into the mesh
+    temp_mesh = bpy.data.meshes.new("temp_mesh_data")
+    obj_name = ""
+    target_col = None
+
+    for obj in objects_to_join:
+        if obj.type == 'MESH':
+            if not obj_name:
+                obj_name = obj.name
+            if target_col is None:
+                try:
+                    target_col = obj.users_collection[0]
+                except IndexError:
+                    target_col = bpy.context.collection
+            # Get the object's mesh data and world transformation matrix
+            mesh = obj.data
+            matrix_world = obj.matrix_world
+
+            # Create a temporary bmesh from the object's mesh data
+            # The 'from_mesh' method loads local coordinates
+            temp_bm = bmesh.new()
+            temp_bm.from_mesh(mesh)
+
+            # Apply the object's world matrix to transform vertices to world space
+            # This is crucial for robust joining
+            temp_bm.transform(matrix_world)
+
+            # Add the transformed geometry to the main BMesh instance
+            # bmesh objects are inherently additive
+            # bm.from_mesh(temp_bm.to_mesh(temp_mesh))
+            temp_bm.to_mesh(temp_mesh)
+            bm.from_mesh(temp_mesh)
+            temp_bm.free()
+
+    # Create a new mesh data-block and object
+    obj_name = obj_name.split(".")[0] + "_ap_" + str(aprior) if aprior else obj_name
+    new_mesh = bpy.data.meshes.new(obj_name + "_data")
+    bm.to_mesh(new_mesh)
+    bm.free()
+
+    new_object = bpy.data.objects.new(obj_name, new_mesh)
+    target_col.objects.link(new_object)
+
+    # Remove original objects
+    for obj in objects_to_join:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+    return new_object
+
+
+def _get_max_alpha_priority(cards_objs):
+    max_aprior = 0
+    for card_ob in cards_objs:
+        custom_props = _get_mesh_albam_props(card_ob)
+        if custom_props:
+            if custom_props.alpha_priority > max_aprior:
+                max_aprior = custom_props.alpha_priority
+    return max_aprior
+
+
+def sort_hair_cards(body_ob, cards_objs, debug_draw=False):
     body_bm = bmesh.new()
     body_bm.from_object(body_ob, bpy.context.evaluated_depsgraph_get())
     body_bm.verts.ensure_lookup_table()
@@ -848,6 +931,21 @@ def sort_hair_card(body_ob, cards_objs):
 
     # Sorting hair cards by distance, probably unnesessary
     cards_objs_sorted = sorted(cards_objs, key=lambda o: min_distance_to_target(o, body_bvh))
+    count = len(cards_objs_sorted)
+
+    # draw distance to cards as a blue-red gradient in vertex colors
+    if debug_draw:
+        for i, obj in enumerate(cards_objs_sorted):
+            mesh = obj.data
+            if not mesh.vertex_colors:
+                vcol_layer = mesh.vertex_colors.new(name="Col")
+            else:
+                vcol_layer = mesh.vertex_colors.active
+            t = i / (count - 1) if count > 1 else 0
+            color = (t, 0.0, 1.0 - t, 1.0)  # RGBA
+            for poly in mesh.polygons:
+                for loop_index in poly.loop_indices:
+                    vcol_layer.data[loop_index].color = color
 
     # Set alpha priority index to 0 for all hair cards
     for card_ob in cards_objs_sorted:
@@ -858,6 +956,7 @@ def sort_hair_card(body_ob, cards_objs):
 
     # Build the BVH tree for cards
     bvh_list = []
+    deps = bpy.context.evaluated_depsgraph_get()
     for card_ob in cards_objs_sorted:
         bm = bmesh.new()
         bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
@@ -867,30 +966,99 @@ def sort_hair_card(body_ob, cards_objs):
         bvh_list.append((bvh, card_ob))
         bm.free()
 
-    for i, card_ob in enumerate(cards_objs_sorted):
-        custom_props = _get_mesh_albam_props(card_ob)
-        bm = bmesh.new()
-        bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
-        bm.verts.ensure_lookup_table()
+    visited = set()
+    processing = set()
+    blockers_cache = {}
+
+    def compute_blockers(card_ob, debug_draw=False):
+        # cached
+        if card_ob in blockers_cache:
+            return blockers_cache[card_ob]
+        if card_ob not in processing:
+            return set()
+        # if card_ob in processing:
+        #    # cycle detected — return empty set to break cycle
+        #    return set()
+        # processing.add(card_ob)
         debug_rays = []
-        exclude_objs = [card_ob]
+
+        bm = bmesh.new()
+        bm.from_object(card_ob, deps)
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+
         sample_points = []
-
+        # Add vertices as sample points
         for v in bm.verts:
-            world_v = card_ob.matrix_world @ v.co
-            sample_points.append(world_v)
-        # sample_points = [point for point in sample_points if not is_point_inside_nearest(point, body_bvh)]
-
-        # add center of triangles to the samples for better precition
+            sample_points.append(card_ob.matrix_world @ v.co)
+        # Add centers of faces as sample points
         for face in bm.faces:
             center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
             sample_points.append(center)
 
+        blocked_objs = set()
         for world_v in sample_points:
             hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
                 debug_rays.append((world_v, loc))
-                is_blocked(card_ob, world_v, loc, bvh_list, exclude_objs)
-        _debug_draw_bvh_rays(debug_rays, card_ob.name)
+                blocked = is_blocked(card_ob, world_v, loc, bvh_list)
+                if blocked:
+                    blocked_objs.update(blocked)
+
         bm.free()
+        # ensure self not included
+        blocked_objs.discard(card_ob)
+        blockers_cache[card_ob] = blocked_objs
+        processing.remove(card_ob)
+        if debug_draw:
+            _debug_draw_bvh_rays(debug_rays, card_ob.name)
+        return blocked_objs
+
+    def process_card_recursive(card_ob):
+        if card_ob in visited:
+            return
+        # detect and avoid deep cycles
+        if card_ob in processing:
+            return
+        processing.add(card_ob)
+        blockers = compute_blockers(card_ob, debug_draw=debug_draw)
+
+        # process blockers first if they are not yet visited
+        for b in list(blockers):
+            if b not in visited:
+                process_card_recursive(b)
+
+        # now assign priority for this card based on blockers and visited set
+        card_props = _get_mesh_albam_props(card_ob)
+        # if all blockers are already visited -> set priority to max(blockers)+1 else set to len(blockers)
+        if blockers.issubset(visited):
+            max_ap = _get_max_alpha_priority(blockers) if blockers else 0
+            if card_props:
+                card_props.alpha_priority = max_ap + 1
+            card_ob['order'] = max_ap + 1
+        else:
+            # some blockers unprocessed (cycle or external) — use fallback count
+            if card_props:
+                card_props.alpha_priority = len(blockers)
+            card_ob['order'] = len(blockers)
+
+        visited.add(card_ob)
+        processing.discard(card_ob)
+
+    for i, card_ob in enumerate(cards_objs_sorted):
+        if card_ob not in visited:
+            process_card_recursive(card_ob)
+
+
+def merge_hair_cards(objs):
+    alpha_prior_groups = {}
+    for obj in objs:
+        albam_props = _get_mesh_albam_props(obj)
+        if alpha_prior_groups.get(albam_props.alpha_priority) is None:
+            alpha_prior_groups[albam_props.alpha_priority] = []
+        alpha_prior_groups[albam_props.alpha_priority].append(obj)
+
+    for alpha_idx in alpha_prior_groups.keys():
+        continue
+        _join_objects(alpha_prior_groups[alpha_idx], alpha_idx)
