@@ -715,6 +715,7 @@ def paste_props(context_item):
     custom_props_sec = context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
 
     props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+    props_name = props_name.get("custom_props_name")
     buff = bpy.context.scene.albam.clipboard.get_buffer()
     to_paste = buff.get(app_id, {}).get(props_name, {})
 
