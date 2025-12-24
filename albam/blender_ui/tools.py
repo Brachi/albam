@@ -60,6 +60,10 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
+        row.label(text="Active Mesh")
+        row = layout.row()
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        row = layout.row()
         op = row.operator('albam.split_uv_seams', text="Split UV Seams")
         op.transfer_normals = context.scene.albam.tools_settings.split_uv_seams_transfer_normals
         row.prop(
@@ -68,8 +72,7 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="Transfer Normals",
         )
         row = layout.row()
-        row.operator('albam.transfer_normals', text="Transfer normals from")
-        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        row.operator('albam.transfer_normals', text="Transfer normals from Active mesh")
         row = layout.row()
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
@@ -85,8 +88,12 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row = layout.row()
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
         row = layout.row()
+        row.label(text="Automation tools")
+        row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        row = layout.row()
+        row.operator('albam.batch_transfer_weights', text="Transfer weights to selected meshes")
         row = layout.row()
         row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
@@ -538,6 +545,46 @@ class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
                 else:
                     prop = mesh_ob.material_slots[0].material
                 paste_props(prop)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchTransferWeights(bpy.types.Operator):
+    '''Transfer weights from master mesh to selected meshes'''
+    bl_idname = "albam.batch_transfer_weights"
+    bl_label = "Batch transfer skin weights"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if source_obj is None or not bpy.context.selected_objects:
+            return False
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        src_obj = context.scene.albam.meshes.all_meshes
+        dst_objs = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+        for dst_obj in dst_objs:
+            if dst_obj != src_obj:
+                # create vertex groups in destination object
+                for vg in src_obj.vertex_groups:
+                    if vg.name not in dst_obj.vertex_groups.keys():
+                        dst_obj.vertex_groups.new(name=vg.name)
+
+                mod = dst_obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+                mod.object = src_obj
+                mod.use_vert_data = True
+                mod.data_types_verts = {'VGROUP_WEIGHTS'}
+                mod.vert_mapping = 'NEAREST'
+
+                # apply modifier
+                bpy.context.view_layer.objects.active = dst_obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
         return {'FINISHED'}
 
 
