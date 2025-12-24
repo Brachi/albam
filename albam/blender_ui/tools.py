@@ -23,9 +23,18 @@ def mesh_filter(self, object):
     return object.type == 'MESH'
 
 
+def armature_filter(self, object):
+    return object.type == 'ARMATURE'
+
+
 @blender_registry.register_blender_prop_albam(name="meshes")
 class AlbamMeshes(bpy.types.PropertyGroup):
     all_meshes: bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
+
+
+@blender_registry.register_blender_prop_albam(name="armatures")
+class AlbamArmatures(bpy.types.PropertyGroup):
+    all_armatures: bpy.props.PointerProperty(type=bpy.types.Object, poll=armature_filter)
 
 
 @blender_registry.register_blender_prop_albam(name="tools_settings")
@@ -97,6 +106,12 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row = layout.row()
         row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row = layout.row()
+        row.label(text="Active Armature")
+        row = layout.row()
+        row.prop(context.scene.albam.armatures, "all_armatures", text="")
+        row = layout.row()
+        row.operator('albam.swap_armature_object', text="Swap armature object")
 
 
 @blender_registry.register_blender_type
@@ -146,6 +161,7 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
         row = layout.row()
         row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        # Commented to hide the dumper from users, they don't need it
         # row = layout.row()
         # row.label(text="Dump frames to json files")
         # row = layout.row()
@@ -585,6 +601,39 @@ class ALBAM_OT_BatchTransferWeights(bpy.types.Operator):
                 # apply modifier
                 bpy.context.view_layer.objects.active = dst_obj
                 bpy.ops.object.modifier_apply(modifier=mod.name)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SwapArmatureObject(bpy.types.Operator):
+    '''Swap armature object in selected meshes'''
+    bl_idname = "albam.swap_armature_object"
+    bl_label = "Swap armature object"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        armature_obj = context.scene.albam.armatures.all_armatures
+        if armature_obj is None:
+            return False
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        new_arm_obj = context.scene.albam.armatures.all_armatures
+        for mesh_ob in selected_meshes:
+            arm_modifier = None
+            for modifier in mesh_ob.modifiers:
+                if modifier.type == 'ARMATURE':
+                    arm_modifier = modifier
+                    break
+            if arm_modifier:
+                arm_modifier.object = new_arm_obj
         return {'FINISHED'}
 
 
