@@ -990,37 +990,41 @@ def _create_mtfw_shader():
     multiply_diff_light.location = (-450, -100)
 
     # RGB nodes
-    normal_separate = shader_group.nodes.new("ShaderNodeSeparateRGB")
+    normal_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
     normal_separate.name = "separate_normal"
     normal_separate.label = "Separate Normal"
     normal_separate.location = (-1700, -950)
 
-    normal_combine = shader_group.nodes.new("ShaderNodeCombineRGB")
+    normal_combine = shader_group.nodes.new("ShaderNodeCombineColor")
     normal_combine.name = "combine_normal"
     normal_combine.label = "Combine Normal"
     normal_combine.location = (-1500, -900)
 
-    detail_separate = shader_group.nodes.new("ShaderNodeSeparateRGB")
+    try:
+        detail_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
+    except RuntimeError:
+        # Blender < 5.0
+        detail_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
     detail_separate.name = "separate_detail"
     detail_separate.label = "Separate Detail"
     detail_separate.location = (-1700, -1100)
 
-    detail_combine = shader_group.nodes.new("ShaderNodeCombineRGB")
+    detail_combine = shader_group.nodes.new("ShaderNodeCombineColor")
     detail_combine.name = "combine_detail"
     detail_combine.label = "Combine Detail"
     detail_combine.location = (-1500, -1050)
 
-    separate_rgb_n = shader_group.nodes.new("ShaderNodeSeparateRGB")
+    separate_rgb_n = shader_group.nodes.new("ShaderNodeSeparateColor")
     separate_rgb_n.name = "separate_rgb_n"
     separate_rgb_n.label = "Separate RGB N"
     separate_rgb_n.location = (-1250, -1050)
 
-    separate_rgb_d = shader_group.nodes.new("ShaderNodeSeparateRGB")
+    separate_rgb_d = shader_group.nodes.new("ShaderNodeSeparateColor")
     separate_rgb_d.name = "separate_rgb_d"
     separate_rgb_d.label = "Separate RGB D"
     separate_rgb_d.location = (-1250, -1250)
 
-    combine_all_normals = shader_group.nodes.new("ShaderNodeCombineRGB")
+    combine_all_normals = shader_group.nodes.new("ShaderNodeCombineColor")
     combine_all_normals.name = "combine_all_normals"
     combine_all_normals.label = "Combine All Normals"
     combine_all_normals.location = (-750, -1150)
