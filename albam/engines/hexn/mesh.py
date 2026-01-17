@@ -8,7 +8,7 @@ from .structs.hexane_edgemodel import HexaneEdgemodel
 from .material import build_blender_materials
 
 
-@blender_registry.register_import_function(app_id="reorc", extension="edgemodel", file_category="MESH")
+@blender_registry.register_import_function(app_id="reorc", extension="edgemodel", albam_asset_type="MESH")
 def build_blender_model(vfile, context):
     edgemodel_bytes = vfile.get_bytes()
 
