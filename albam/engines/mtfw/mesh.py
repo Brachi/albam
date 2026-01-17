@@ -1,6 +1,7 @@
 from binascii import crc32
 from collections import namedtuple, OrderedDict
 import ctypes
+from functools import reduce
 from itertools import chain
 from io import BytesIO
 from struct import pack, unpack
@@ -56,12 +57,13 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+    "umvc3": Mod21,
 }
 
 MOD_VERSION_APPID_MAPPER = {
     156: {"re5"},
     210: {"re0", "re1", "rev1", "rev2"},
-    211: {"re6"},
+    211: {"re6", "umvc3"},
     212: {"dd"},
 }
 
@@ -299,6 +301,7 @@ MAIN_LODS = {
     "rev1": [1, 255],
     "rev2": [1, 255],
     "dd": [1, 255],
+    "umvc3": [1, 255],  # TODO: check
 }
 
 
@@ -339,6 +342,7 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
 @blender_registry.register_import_function(app_id="rev1", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="umvc3", extension="mod", albam_asset_type="MODEL")
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
     mod_bytes = vfile.get_bytes()
@@ -347,7 +351,9 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
-    mod = ModCls.from_bytes(mod_bytes)
+    stream = KaitaiStream(BytesIO(mod_bytes))
+    mod_args = [stream] if ModCls is Mod156 else [app_id, stream]
+    mod = ModCls(*mod_args)
     mod._read()
 
     import_settings = context.scene.albam.import_settings
@@ -355,7 +361,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     bl_object_name = vfile.display_name
     bbox_data = _create_bbox_data(mod)
     skeleton = None if mod.header.num_bones == 0 else build_blender_armature(
-        mod, bl_object_name, bbox_data)
+        app_id, mod, bl_object_name, bbox_data)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     materials = build_blender_materials(
         vfile, context, mod, bl_object_name)
@@ -366,7 +372,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             continue
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
-            material_hash = _get_material_hash(mod, mesh)
+            material_hash = _get_material_hash(mod, mesh, app_id)
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS
@@ -664,7 +670,7 @@ def _build_weights(bl_obj, weights_per_bone):
             vg.add((vertex_index,), weight_value, "ADD")
 
 
-def build_blender_armature(mod, armature_name, bbox_data):
+def build_blender_armature(app_id, mod, armature_name, bbox_data):
     armature = bpy.data.armatures.new(armature_name)
     armature_ob = bpy.data.objects.new(armature_name, armature)
     armature_ob.show_in_front = True
@@ -687,8 +693,16 @@ def build_blender_armature(mod, armature_name, bbox_data):
         valid_parent = bone.idx_parent < 255
         blender_bone.parent = blender_bones[bone.idx_parent] if valid_parent else None
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
-        m = mod.bones_data.inverse_bind_matrices[i]
-        head = _transform_inverse_bind_matrix(mod, m, bbox_data)
+
+        if app_id == "umvc3":
+            # Can't figure out numbers in this app inverse bind matrices
+            # Probably all apps can safely use this function, needs parsing tests
+            # to confirm their equivalence
+            head = _transform_parent_matrix(mod, i)
+        else:
+            inverse_bind_matrix = mod.bones_data.inverse_bind_matrices[i]
+            head = _transform_inverse_bind_matrix(mod, inverse_bind_matrix, bbox_data)
+
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
         blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
@@ -696,6 +710,40 @@ def build_blender_armature(mod, armature_name, bbox_data):
 
     bpy.ops.object.mode_set(mode="OBJECT")
     return armature_ob
+
+
+def _to_bl_matrix(m):
+    bl_matrix = Matrix((
+        (m.row_1.x, m.row_1.y, m.row_1.z, m.row_1.w),
+        (m.row_2.x, m.row_2.y, m.row_2.z, m.row_2.w),
+        (m.row_3.x, m.row_3.y, m.row_3.z, m.row_3.w),
+        (m.row_4.x, m.row_4.y, m.row_4.z, m.row_4.w),
+    )).transposed()  # directx to opengl style
+
+    return bl_matrix
+
+
+def _transform_parent_matrix(mod, bone_index):
+    bone = mod.bones_data.bones_hierarchy[bone_index]
+    parents = _get_parents(mod, bone)
+    local_matrices = [mod.bones_data.parent_space_matrices[pi] for pi in parents]
+    local_matrices.append(mod.bones_data.parent_space_matrices[bone_index])
+    local_matrices = [_to_bl_matrix(m) for m in local_matrices]
+
+    world_matrix = reduce(lambda m1, m2: m1 @ m2, local_matrices)
+    return world_matrix.to_translation()
+
+
+def _get_parents(mod, bone):
+    parents = []
+    current_parent_id = bone.idx_parent
+
+    while current_parent_id != 255:
+        parent = mod.bones_data.bones_hierarchy[current_parent_id]
+        parents.append(current_parent_id)
+        current_parent_id = parent.idx_parent
+    parents.reverse()
+    return parents
 
 
 def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
@@ -763,11 +811,11 @@ def _create_bbox_data(mod):
     return bbox_data
 
 
-def _get_material_hash(mod, mesh):
+def _get_material_hash(mod, mesh, app_id):
     material_hash = None
     if mod.header.version == 156:
         material_hash = mesh.idx_material
-    elif mod.header.version == 210 or mod.header.version == 212:
+    elif mod.header.version == 210 or mod.header.version == 212 or app_id == "umvc3":
         material_name = mod.materials_data.material_names[mesh.idx_material]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
     elif mod.header.version == 211:
@@ -789,18 +837,22 @@ def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    Mod = APPID_CLASS_MAPPER[app_id]
     vfiles = []
 
-    src_mod = Mod.from_bytes(asset.original_bytes)
+    ModCls = APPID_CLASS_MAPPER[app_id]
+    src_stream = KaitaiStream(BytesIO(asset.original_bytes))
+    mod_args_src = [src_stream] if ModCls is Mod156 else [app_id, src_stream]
+    mod_args_dst = [] if ModCls is Mod156 else [app_id]
+
+    src_mod = ModCls(*mod_args_src)
     src_mod._read()
-    dst_mod = Mod()
+    dst_mod = ModCls(*mod_args_dst)
     # TODO: export options like visibility
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
-    _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
+    _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
@@ -829,7 +881,7 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    if app_id not in ["re5", "dd"]:
+    if app_id not in ["re5"]:
         index_buffer.extend((0, 0))
 
     final_size = sum((
@@ -892,7 +944,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
     return dst_mod_header
 
 
-def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
+def _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod):
     SCALE = 100
 
     bl_bbox = get_model_bounding_box(bl_meshes)
@@ -938,7 +990,7 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.rcn_vertices = []
         dst_mod.rcn_trianlges = []
 
-    if src_mod.header.version in (210, 212):
+    if src_mod.header.version in (210, 212) or app_id == "umvc3":
         dst_mod.num_weight_bounds = 0
 
 
@@ -1321,9 +1373,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
-        mesh.indices__to_write = False
-        mesh.vertices__to_write = False
-        mesh.vertices2__to_write = False
+        mesh.indices__enabled = False
+        mesh.vertices__enabled = False
+        mesh.vertices2__enabled = False
         mesh_bone_palette = None
         mesh_bone_palette_index = None
         if bone_palettes:
@@ -1396,6 +1448,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
+        if app_id == "umvc3":
+            mesh.padding = 0
+
         # DD original hack, weapon meshes invisible without it
         if export_settings.force_max_num_weights:
             bone_limit = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format)
@@ -1422,7 +1477,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
-    if dst_mod.header.version in (156, 211):
+    if dst_mod.header.version in (156, 211) and app_id != "umvc3":
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)
@@ -2120,7 +2175,8 @@ vertex_format_enum_items = [
 ]
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh",
+                                                  ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821

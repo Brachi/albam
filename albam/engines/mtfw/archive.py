@@ -17,6 +17,7 @@ from ...blender_ui.tools import show_message_box
 @blender_registry.register_archive_loader(app_id="rev1", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev2", extension="arc")
 @blender_registry.register_archive_loader(app_id="dd", extension="arc")
+@blender_registry.register_archive_loader(app_id="umvc3", extension="arc")
 def arc_loader(vfile, context=None):  # XXX context DEPRECATED
     arc = ArcWrapper(file_path=vfile.absolute_path)
     for file_entry in arc.get_file_entries():
@@ -30,6 +31,7 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
 @blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
 @blender_registry.register_archive_accessor(app_id="dd", extension="arc")
+@blender_registry.register_archive_accessor(app_id="umvc3", extension="arc")
 def arc_accessor(vfile, context):
     arc = ArcWrapper(vfile.root_vfile.absolute_path)
 

@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mrl
   id: mrl
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework material format
 
 params:
@@ -14,9 +14,9 @@ seq:
   - {id: version, type: u4}
   - {id: num_materials, type: u4}
   - {id: num_textures, type: u4}
-  - {id: shader_version, type: u4}
-  - {id: ofs_textures, type: u4}
-  - {id: ofs_materials, type: u4}
+  - {id: shader_version, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+  - {id: ofs_textures, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+  - {id: ofs_materials, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
   - {id: textures, type: texture_slot, repeat: expr, repeat-expr: num_textures}
   - {id: materials, type: material, repeat: expr, repeat-expr: num_materials}
 
@@ -26,7 +26,7 @@ instances:
   size_materials_:
     value: "materials[0].size_ * num_materials"
   ofs_textures_calculated:
-    value: 28
+    value: 'app_id == "umvc3" ? 40: 28'
   ofs_materials_calculated:
     value: "ofs_textures_calculated + size_textures_"
   ofs_resources_calculated_no_padding:  # TODO: # padding(16)
@@ -37,24 +37,26 @@ instances:
     value: 28
   size_todo_:  # TODO: # padding(16) + sum(m.cmd_buffer_size + m.anim_data_size for m in materials)
     value: size_top_level_ + size_textures_ + size_materials_
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
 
 types:
+
   texture_slot:  # TODO: rename-me
     seq:
-      - {id: type_hash, type: u4, enum: texture_type} # rTexture not in mfx
-      - {id: unk_02, type: u4}
-      - {id: unk_03, type: u4}
+      - {id: type_hash, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}} # rTexture not in mfx
+      - {id: unk_02, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: unk_03, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: texture_path, type: str, encoding: ASCII, terminator: 0}
       - {id: filler, type: u1, repeat: expr, repeat-expr:  64 - texture_path.length - 1}
 
     instances:
       size_:
-        value: 76
+        value: '_root.app_id == "umvc3" ? 88 : 76'
 
   material: # MATERIAL_INFO
     seq:
-      #- {id: type_hash, type: u4, enum: material_type} # TYPE_nDraw_MaterialStd not in mfx
-      - {id: type_hash, type: u4}
+      - {id: type_hash, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: name_hash_crcjam32, type: u4}
       - {id: cmd_buffer_size, type: u4}
       - {id: blend_state_hash, type: u4}
@@ -76,21 +78,22 @@ types:
       - {id: deffered_lighting, type: b1}
       - {id: blend_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: anim_data_size, type: u4}
-      - {id: ofs_cmd, type: u4}
-      - {id: ofs_anim_data, type: u4}
+      - {id: ofs_cmd, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: ofs_anim_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       resources:
         {pos: ofs_cmd, type: resource_binding, repeat: expr, repeat-expr: num_resources}
       anims:
         {pos: ofs_anim_data, type: anim_data, if: anim_data_size != 0}
       size_:
-        value: 60
+        value: '_root.app_id == "umvc3" ? 72 : 60'
 
   resource_binding:
     seq:
       - {id: cmd_type, type: b4, enum: cmd_type}
       - {id: unused, type: b16}  # Always 0xDCDC
       - {id: shader_obj_idx, type: b12}
+      - {id: filling, type: u4, if: _root.use_64bit_ofs}
       - id: value_cmd
         type:
           switch-on: cmd_type
@@ -100,10 +103,10 @@ types:
             "cmd_type::set_sampler_state": shader_object
             "cmd_type::set_texture": cmd_tex_idx
             "cmd_type::set_unk": shader_object
-      - {id: shader_object_id, type: u4}
+      - {id: shader_object_id, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
-        value: 12
+        value: '_root.use_64bit_ofs ? 24 : 12'
       shader_object_hash:
         value: shader_object_id >> 12
         enum: shader_object_hash
@@ -181,14 +184,15 @@ types:
     seq:
       - {id: index, type: b12}
       - {id: name_hash, type: b20, enum: shader_object_hash}
+      - {id: filling, type: u4, if: _root.use_64bit_ofs}
 
   cmd_ofs_buffer:
     seq:
-      - {id: ofs_float_buff, type: u4}
+      - {id: ofs_float_buff, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
 
   cmd_tex_idx:
     seq:
-      - {id: tex_idx, type: u4}
+      - {id: tex_idx, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
   anim_sub_entry:
     seq:
       - {id: shader_hash, type: u4}
@@ -276,9 +280,6 @@ types:
     seq:
       - {id: shader_hash, type: u4}
 
-  ofs_buff:
-    seq:
-      - {id: ofs_const_buff, type: u4}
 
   cb_material:
       instances:
@@ -304,6 +305,7 @@ types:
               '"re0"': cb_globals_1
               '"re1"': cb_globals_1
               '"re6"': cb_globals_3
+              '"umvc3"': cb_globals_3
               '"rev1"': cb_globals_1
               '"rev2"': cb_globals_2
               '"dd"': cb_globals_4
@@ -317,6 +319,7 @@ types:
             switch-on: "_root.app_id"
             cases:
               '"re6"': cb_color_mask_1
+              '"umvc3"': cb_color_mask_1
               '"rev2"': cb_color_mask_1
               _ : cb_color_mask_1
 
@@ -330,6 +333,7 @@ types:
               '"re0"': cb_vertex_displacement_1
               '"re1"': cb_vertex_displacement_1
               '"re6"': cb_vertex_displacement_1
+              '"umvc3"': cb_vertex_displacement_1
               '"rev1"': cb_vertex_displacement_1
               '"rev2"': cb_vertex_displacement_1
               '"dd"': cb_vertex_displacement_1
@@ -346,6 +350,7 @@ types:
               '"re0"': cb_vertex_displacement2_1
               '"re1"': cb_vertex_displacement2_1
               '"re6"': cb_vertex_displacement2_1
+              '"umvc3"': cb_vertex_displacement2_1
               '"rev1"': cb_vertex_displacement2_1
               '"rev2"': cb_vertex_displacement2_1
               '"dd"': cb_vertex_displacement2_1
@@ -2200,7 +2205,7 @@ enums:
     0x19696: fcuboidlightd
     0x21351: fcuboidlights
     0x1a1c7: fbrdf
-    0x5B3E9: fbrdffur
+    0x5b3e9: fbrdffur
     0x7a331: fbrdfhalflambert
     0x23990: flighting
     0x71bac: flightingvs
@@ -3810,11 +3815,11 @@ enums:
     0xf32b9: fburnalbedomapburnmap
     0xf04df: fdamagebumpdetailnormalmap
     0x7af47: talbedoburnmap
-    0x6E11: tnormalburnmap
+    0x6e11: tnormalburnmap
     0xa463e: tspecularburnmap
     0x17009: tburnemissionmap
     0xce407: fuvalbedoburnmap
-    0x49B33: treflectwatermap
+    0x49b33: treflectwatermap
     0xcc68b: cbddmaterialparam
     0x6d828: cbburncommon
     0x7275e: cbappclipplane
@@ -3822,6 +3827,320 @@ enums:
     0xdeace: cbappreflect
     0xd7d4e: cbappreflectshadowlight
     0xe6d24: cbddmaterialparaminnercorrect
-    0xB4974: cbburnemission
-    0x1F0C6: cbspecularblend
+    0xb4974: cbburnemission
+    0x1f0c6: cbspecularblend
     0x247ee: cbuvrotationoffset
+    0xc74c9: iabhddepthwrite
+    0x290b0: ia_bhd_depth_write
+    0x9872c: bhd_depth_write_out
+    0x42441: computevals
+    0x9d638: cbbhddepthmap
+    0xb3854: tbhddepthmap
+    0x72bbb: rwtilemax
+    0x4e157: ffrontfacereversenormal
+    0xe2133: ffrontfacereversenormaltwosidedlh
+    0x4c3: cs_tilemax
+    0x54261: vs_bhddepthwrite
+    0xafd47: fdepthcalc
+    0x16945: ps_bhdbgwrite
+    0xfe79e: ps_bhdbgwriteblend
+    0xaf988: ps_bhdbgwriteblendx3
+    0x42b85: ps_bhddepthwrite
+    0x3a9b2: ps_bhddepthwriteblend
+    0xb9f3d: ps_bhddepthwritedebug
+    0x7736b: ps_bhddepthwritezfull
+    0x94525: tmotionblurfilter
+    0x164d5: tbhddepthwrite
+    0x7ddd8: cbdynamiclighting0
+    0xed4e: cbdynamiclighting1
+    0x9bcf4: cbdynamiclighting2
+    0xe8c62: cbdynamiclighting3
+    0xa19c1: cbdynamiclighting4
+    0xd2957: cbdynamiclighting5
+    0x478ed: cbdynamiclighting6
+    0x3487b: cbdynamiclighting7
+    0xeb0d0: cbdynamiclightingdl0
+    0x98046: cbdynamiclightingdl1
+    0xd1fc: cbdynamiclightingdl2
+    0x7e16a: cbdynamiclightingdl3
+    0x374c9: cbdynamiclightingdl4
+    0x4445f: cbdynamiclightingdl5
+    0xd15e5: cbdynamiclightingdl6
+    0xa2573: cbdynamiclightingdl7
+    0x9ff4a: combine_filter_out
+    0xefca7: ssmirrorlinear
+    0x11e3f: dsdeferredlightingstencilwritedepthfail
+    0x6e152: dsdeferredlightingstencilwritedepthpass
+    0xfad73: dsdeferredlightingstenciltestg0
+    0x89de5: dsdeferredlightingstenciltestg1
+    0xcbab1: dsdeferredlightingstenciltestwriteg0
+    0xb8a27: dsdeferredlightingstenciltestwriteg1
+    0xaa8d2: dsdeferredlightingstencilupdate
+    0x91a9d: dsdeferredlightingstencilclear
+    0xec84b: tvertexprevpositionmap
+    0xb8b24: tvertexprevpositionsubmap
+    0x30368: fmaterialnop
+    0xb6eb3: fmaterialnopfloat
+    0xb1f44: fmaterialnopv2
+    0xc2fd2: fmaterialnopv3
+    0x8ba71: fmaterialnopv4
+    0x4d712: ffiltercopyblue
+    0x9a227: ffiltercopyalpha
+    0x5d241: ffoguber
+    0x1d865: fblendfoguber
+    0x6850: ps_materialdebugfill
+    0x41f0a: fmaterialvelocitywposnmlfromtexture
+    0x46324: fgetmaterialshadowrt
+    0x51836: fgetnormal
+    0xd5415: fdeferredlightingshinessencode
+    0xb92d4: fdeferredlightingshinesslinearencode
+    0x1b6a1: fdeferredlightingshinessdecode
+    0x77060: fdeferredlightingshinesslineardecode
+    0x9834a: fgetnormalfromgbuffer
+    0x914e1: ps_materialstdzprepass
+    0x736a8: fshadowfiltermask0
+    0x63e: fshadowfiltermask1
+    0x95784: fshadowfiltermask2
+    0xe6712: fshadowfiltermask3
+    0x26e4c: fshadowmaskg0
+    0x55eda: fshadowmaskg1
+    0x8a8a0: fgetmaterialshadowmultirt
+    0x3c3d9: fcombinefiltertvnoiseenable
+    0x741ca: fcolorcorrect
+    0xc6faa: fcolorcorrecttable
+    0x9a41c: fcombinefilterbloomenable
+    0x59487: fimageblendalpha
+    0x86645: fimageblendadd
+    0x977e: fimageblendsub
+    0x3403: fimageblendmul
+    0x90872: fimageblendmin
+    0x4372b: fimageblendmax
+    0x78831: fcombinefilterimageplaneenable
+    0x15935: fcombinefilterimageplanecubeenable
+    0x57564: fblurmaskdistancemask
+    0x8bef0: fblurmaskdistancemaskenable
+    0x8f66d: fwaterrefractionsimplescene
+    0xdc420: ps_simplewater
+    0xacff2: fguicalccolorfinal
+    0x8d42b: fcombinefilterimageplane
+    0xbe507: fcombinefilterbloom
+    0x8927f: fcombinefiltercolorcorrect
+    0xc6f1e: fcombinefiltertvnoise
+    0x1f8d8: vs_combinefilter
+    0x913c: ps_combinefilter
+    0x5de6c: tcombinefilter
+    0x39bcc: dd_material_output
+    0xcf727: cbshininessblend
+    0x37650: cbuvtransformrotationoffset
+    0x6e29b: cbappcubemapfilter
+    0x8cf6c: cbddmaterialparamoptcamo
+    0x60da7: cbddmaterialparamoil
+    0xa3251: cbmaterialstdcld
+    0x9e55d: cbmaterialstdcldparam
+    0x62f04: cbcustomworldcoordparam
+    0x23ff6: cbcustomworldcoord
+    0x2f13b: tdetailnormalburnmap
+    0xe7007: tddmaterialalbedomapex
+    0x83b0f: tddmaterialnormalmapex
+    0x12959: tddmaterialspecularmapex
+    0x93d3a: tddmaterialalphamapex
+    0x999e7: tddmaterialenvmapex
+    0xc8df0: flightmaskshadowmultirt
+    0x761d1: ffilteredgeantialiasinggetedgeweightultrafast
+    0x2612d: ffilteredgeantialiasingtwopoint
+    0xdee78: fdamagecalcblendrate
+    0xabdfa: fburncalcblendrate
+    0x2c2ec: fburncalcblendcolor
+    0xe5ee5: fburncalceditbasecolor
+    0xf998: fburncalceditblendcolor
+    0xb6386: femissionblendrate
+    0xcef39: fdamagealbedomap
+    0x1945c: fdamagealbedomapburnmap
+    0x97324: fdamagealbedomapaddburnmap
+    0x41091: fburnsimplealbedomapburnmapex
+    0x24015: fburnsimplealbedomapaddburnmap
+    0xa0d53: fspecularmapalbedomap
+    0xf0e5: fspecularmapalphamap
+    0x59282: fspecularmapburnmap
+    0x5ce8d: fburnemission
+    0x91089: fburnemissionmap
+    0xb010: fburnemissionblend
+    0x9a0a7: fappclipplane
+    0x8fd5a: fappcliplocalplane
+    0xefa68: falbedomapmodulatevertexcolor
+    0xdbbc: fuvshininessblendmap
+    0x3617b: fshininessmapblend
+    0x241da: fshininessmapmodulate
+    0xf54d6: fshininessmapadd
+    0xa6fcb: fspecularmapblend
+    0xe354d: fspecularmapblendalpha
+    0x5892f: fspecularmapmodulate
+    0x87cf9: fspecularmapadd
+    0xcfbb3: freflectwatermap
+    0x19f8: fuvintegratedoutlineinnermap
+    0xbf9b6: fuvintegratedoutlineoutermap
+    0x91161: fintegratedoutlinefactor
+    0xf7ec6: fintegratedoutlineonecolor
+    0x3a9c0: fintegratedoutlinetwocolor
+    0xd7e72: fappoutlineblend
+    0x2be80: fappoutlineadd
+    0xaecc6: fappoutlinemul
+    0xbdeff: fcalcuvtransformrotation
+    0xc378e: fuvtransformrotation
+    0x80390: fuvtransformrotation2
+    0xf3306: fuvtransformrotation3
+    0x303e8: fcalcuvrotation
+    0x92f45: fuvprimaryrotation
+    0x3bd89: fuvsecondaryrotation
+    0x7fe41: fuvuniquerotation
+    0xa8e2d: fuvextendrotation
+    0x256cb: ps_appcubicblend
+    0x48da1: fddmaterialuvoil
+    0x4d9af: fddmaterialuvsand
+    0x7b3f2: fddcalcalphaborderrate
+    0xcdc1d: fddmaterialcalcborderblendalphamapfreeze
+    0x885c9: fddmaterialcalcborderblendalphamapoil
+    0xa2ccd: fddmaterialcalcborderblendalphamapsand
+    0xe605d: fddmaterialcalcborderblendalphamapoptcamo
+    0xf03f4: fddmaterialcalcborderblendratesphere
+    0x17d32: fddcalcborderrate
+    0xbe967: fddmaterialalbedofreeze
+    0x55f4a: fddmaterialalbedooptcamo
+    0xec91b: fddmaterialalbedooil
+    0x3e979: fddmaterialalbedosand
+    0x518f9: fddmaterialbumpfreeze
+    0x7dff8: fddmaterialbumpoptcamo
+    0x4568c: fddmaterialbumpoil
+    0xc501: fddmaterialbumpsand
+    0xecc1f: fddmaterialspecularfreeze
+    0xcdbf9: fddmaterialspecularoil
+    0xb2e0c: fddmaterialfinalcombineroptcamo
+    0xbf1ba: createddmaterialcontext
+    0x39494: vs_ddmaterialstd
+    0x2fd70: ps_ddmaterialstd
+    0x9a10: ps_dddeferredlighting_gbufferpass
+    0xb97ec: ps_dddeferredlighting_gbufferpassmrt
+    0xdfa7c: vs_ddmaterialinner
+    0xe0be5: fmaterialstdcldfinalcombiner
+    0x610e5: vs_materialstdcld
+    0x8c205: ps_ddmaterialwaterdepth
+    0xa7d08: getdivideindex
+    0x4f7b: fconvertenvelopeworldcoordinate
+    0xc5f1c: tappcubemapfilter
+    0x7b220: tddmaterialstd
+    0x96229: tddmaterialinner
+    0xc7356: tmaterialstdcld
+    0x9f3e5: tddmaterialwaterdepth
+    0x21938: iatvnoiseprimitive
+    0x52377: iatvnoiseprimitivevcolor
+    0x747f4: smaa_output
+    0xea108: ia_tvnoiseprimitive
+    0x73b9c: ia_tvnoiseprimitive_vcolor
+    0x22c41: tvnoiseprimitive_output
+    0x19c2a: cbsmaa
+    0x50ddc: ssindirectmapuser
+    0x2db20: ssfrozennoizemapuser
+    0x5bb67: cbindirectuser
+    0xfacd6: cbfrozenuser
+    0xb6fd: ssmvc3albedomap
+    0x6b55: ssmvc3albedomapclamp
+    0xe40f2: ssmvc3normalmap
+    0x14855: ssmvc3normalmapclamp
+    0x8a046: ssmvc3transparencymap
+    0x62b12: ssmvc3specularmap
+    0xafa43: ssmvc3occlusionmap
+    0xb0d74: ssmvc3lightmap
+    0xde5e0: sstransparencymapclamp
+    0x90268: cbtoon
+    0x4f1e8: cbtoon2
+    0xac903: cbhalflambert
+    0x7e1bf: cbdiffusecolorcorect
+    0x24709: sstoonmap
+    0xad4f1: cbhatchingfilter
+    0xfdec2: cbfursell
+    0xf7055: cbfilterantiedgebrightness
+    0x7bab9: ssantiedgebrightnessmask
+    0x87db1: cbfilteranaglyph
+    0x7748f: cbdistortionfilter
+    0xa9331: tindirectmapuser
+    0xce285: tindirectmapspecularuser
+    0x23264: tfrozennoizemapuser
+    0x59a32: ttoonmap
+    0x51942: ttoonrevmap
+    0xdba81: vs_edgedetection
+    0x6a34b: vs_blendingweightcalculation
+    0x505d: vs_neighborhoodblending
+    0xcd365: ps_edgedetection
+    0xc2f17: smaasearchxleft
+    0x25dfc: smaasearchxright
+    0xcc5f3: smaasearchyup
+    0x471f4: smaasearchydown
+    0xb5488: smaaarea
+    0x27ff8: smaadetecthorizontalcornerpattern
+    0x4978c: smaadetectverticalcornerpattern
+    0xaad05: ps_blendingweightcalculation
+    0xa2227: ps_neighborhoodblending
+    0x13f60: fuseralbedomapnoalpha
+    0x31540: fuseralbedomapindirect
+    0x100ce: fuseralbedomapfrozen
+    0xeced8: fuserdiffusestagefloor
+    0xf02cc: fuserdiffuseconstantmul
+    0xdbe19: fusersimplefinalcombiner
+    0x55efb: fuserspecularmapindirect
+    0x6c084: ftransparencymapclamp
+    0x97281: ftoonlightcalc
+    0x6cbb4: ftoonlightcalchalf
+    0xc8a5a: ftoonlightcalcnone
+    0xcf394: ftoonlightrevcalc
+    0xdcfa: ftoonlightrevcalchalf
+    0x35689: dorgb2hsv
+    0xfc148: dohsv2rgb
+    0xfe78b: fcalcrimlight
+    0xcc36f: fcalcrimlightdefault
+    0xc9fa: fcalcrimlightnone
+    0xf4aea: ftoonshader
+    0x53928: ftoonshaderhigh
+    0xfd0d9: ftoonshadernormal
+    0xecb66: fdiffusecolorcorectsimple
+    0x35363: fdiffusecolorcorect
+    0x3d94c: fdiffusecolorcorectsh
+    0x12bf7: fdiffusecolorcorectlightmap
+    0x28c3b: fdiffusecolorcorectbone
+    0x9ddd7: fspecularmasktoon
+    0xc40dc: ftoonshaderuroko
+    0xe054a: fworldcoordinatesimple
+    0xd70b: fworldcoordinatesimple2
+    0x95080: finalcombinerui  # FIXME: starts with underscore, not valid in kaitai (fixed by hand)
+    0xc5ee1: vs_materialui
+    0x9813c: ps_materialui
+    0x69401: vs_materialstgsimple
+    0x509d4: ps_materialstgsimple
+    0x8244: ps_materialstgsimple2
+    0xcf412: ps_materialchar
+    0xd8ed5: ps_materialcharalpha
+    0x2e972: ffiltercopycolorwhiteblackuser
+    0xcffc4: ffiltercopycolornega
+    0x443b2: ffiltercopycolormono
+    0x74b09: ffiltersimplehatching
+    0x43b57: vs_tvnoiseprimitive
+    0x83044: ps_tvnoiseprimitive
+    0xde962: vs_materialfursell
+    0xa486b: ffilterantiedgebrightnessdetectionsub
+    0xf3b4a: ffilterantiedgebrightnessdetectionfastsub
+    0xce716: ffilterantiedgebrightnessdetection
+    0x78ac: ffilterantiedgebrightnessdetectionfast
+    0xc00c8: ffilterantiedgebrightness
+    0xcfe2: ffilterantiedgebrightnessedgecoloronly
+    0x37011: ffilteranaglyphedge
+    0x5ad55: ffilteranaglyphedgegrayscale
+    0x6e90d: ffilterdistortion
+    0x59e19: ffilterdistortioncolor
+    0xdd074: tsmaa
+    0x44e9b: tmaterialui
+    0xe74c2: tmaterialstgsimple
+    0x90c68: tmaterialstgsimple2
+    0x104a0: tmaterialchar
+    0x6f3c3: tmaterialcharalpha
+    0x73ab4: ttvnoiseprimitive
+    0x97137: tmaterialfursell
+
