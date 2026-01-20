@@ -1000,11 +1000,7 @@ def _create_mtfw_shader():
     normal_combine.label = "Combine Normal"
     normal_combine.location = (-1500, -900)
 
-    try:
-        detail_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
-    except RuntimeError:
-        # Blender < 5.0
-        detail_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
+    detail_separate = shader_group.nodes.new("ShaderNodeSeparateColor")
     detail_separate.name = "separate_detail"
     detail_separate.label = "Separate Detail"
     detail_separate.location = (-1700, -1100)
