@@ -182,8 +182,15 @@ class VirtualFileSystemBase:
     def _expand_directory(self, root_folder, vf, app_id):
         root_id = vf.name
         tree = Tree(root_id=vf.name, app_id=app_id)
+
+        max_files = 60000
+        file_count = 0
         for files_folder, dirs, files in os.walk(root_folder):
             for file in files:
+                if file_count >= max_files:
+                    print(f"Reached the max file limit of {max_files}, change if needed")
+                    break
+                file_count += 1
                 rel_path = os.path.join(self._abs_to_rel_path(files_folder, root_folder), file)
                 abs_path = os.path.join(files_folder, file)
                 tree.add_node_from_path(rel_path, absolute_path=abs_path)
@@ -273,15 +280,12 @@ class ALBAM_OT_VirtualFileSystemAddFolder(bpy.types.Operator):
     def execute(self, context):  # pragma: no cover
         self.report({'INFO'}, f"Selected directory: {self.directory}")
         self._execute(context, self.directory, self.files)
-        # context.scene.albam.vfs.file_list.update()
         return {"FINISHED"}
 
     @staticmethod
     def _execute(context, directory, files):
         app_id = context.scene.albam.apps.app_selected
         vfs = context.scene.albam.vfs
-        # for f in files:
-        # absolute_path = os.path.join(directory, "unpacked")
         vfs.add_real_file(app_id, directory)
 
 
