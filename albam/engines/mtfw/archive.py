@@ -102,7 +102,7 @@ class ArcWrapper:
             if fe.file_path == file_path and fe.file_type == file_type:
                 try:
                     if self.app_id == "dmc4":
-                        file_ = xcompress.xcompress_decompress(fe.raw_data, fe.size)
+                        raise RuntimeError("The xcompression algoringm for DMC4 is not implemented yet.")
                     else:
                         file_ = zlib.decompress(fe.raw_data)
                     break
