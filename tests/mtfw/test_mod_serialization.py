@@ -63,7 +63,7 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
             assert src_bone.idx_parent == dst_bone.idx_parent
             assert src_bone.idx_mirror == dst_bone.idx_mirror
             assert src_bone.idx_mapping == dst_bone.idx_mapping
-            assert src_bone.unk_01 == dst_bone.unk_01
+            assert src_bone.lenght == dst_bone.lenght
             assert src_bone.parent_distance == pytest.approx(dst_bone.parent_distance, abs=9e-05)
             assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=9e-05)
             assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=9e-05)
