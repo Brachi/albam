@@ -512,7 +512,6 @@ def cycles(verts):
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    # assert app_id != "re5", "Resident Evil 5 SBC export is not supported yet."
     Sbc = APPID_SBC_CLASS_MAPPER[app_id]
 
     src_sbc = Sbc.from_bytes(asset.original_bytes)
