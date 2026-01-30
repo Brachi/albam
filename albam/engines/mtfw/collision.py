@@ -5,6 +5,7 @@ import colorsys
 import numpy as np
 from mathutils import Vector
 from io import BytesIO
+import traceback
 
 
 from ...registry import blender_registry
@@ -26,6 +27,7 @@ APPID_SBC_CLASS_MAPPER = {
     "re0": Sbc21,
     "re1": Sbc21,
     "re5": Sbc156,
+    "dmc4": Sbc156,
     "re6": Sbc211,
     "rev1": Sbc21,
     "rev2": Sbc21,
@@ -98,9 +100,10 @@ class SBCObject21():
 class SBCObject156():
     def __init__(self, info, faces, vertices):
         self.sbcinfo = info
-        # self.nodes = nodes
-        # self.bvhtree = BVHTree
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
+        self.attr = [{'group': f.type,
+                      'special_attr': f.special_attr,
+                      'surface_attr': f.surface_attr} for f in faces]
         self.vertices = vertices
 
 
@@ -292,6 +295,7 @@ def debug_create_sbcinfo_nodes(node):
 @blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re5", extension='sbc', albam_asset_type="COLLISION")
+@blender_registry.register_import_function(app_id="dmc4", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re6", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="rev1", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="rev2", extension='sbc', albam_asset_type="COLLISION")
@@ -325,6 +329,26 @@ def load_sbc(file_item, context):
                                   vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
             sbc_objects.append(sbc_obj)
     else:
+        triCollection = [fc for i, fc in enumerate(sbc.triangles)]
+        vertCollection = [fc.vector for i, fc in enumerate(sbc.vertices)]
+        # objects = []
+
+        for ix, ob_info in enumerate(sbc.groups):
+            if ix < (len(sbc.groups) - 1):
+                try:
+                    fs, fc = ob_info.start_tris, (sbc.groups[ix + 1].start_tris - sbc.groups[ix].start_tris)
+                    vs, vc = ob_info.start_vertices, (
+                        sbc.groups[ix + 1].start_vertices - sbc.groups[ix].start_vertices)
+                    obj = SBCObject156(ob_info, triCollection[fs:fs+fc], vertCollection[vs:vs+vc])
+                except Exception as e:
+                    print(traceback.format_exc())
+                    print(f'Error at group {ix}, Tri {fs}, Vert {vs}')
+            else:
+                fs = ob_info.start_tris
+                vs = ob_info.start_vertices
+                obj = SBCObject156(ob_info, triCollection[fs:], vertCollection[vs:])
+            sbc_objects.append(obj)
+        '''
         bvh_collection = [b for i, b in enumerate(sbc.nodes)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
@@ -338,10 +362,14 @@ def load_sbc(file_item, context):
             sbc_obj = SBCObject156(ob_info, face_collection[fs:fs + fc],
                                    vertex_collection[vs:vs + vc])
             sbc_objects.append(sbc_obj)
+        '''
     print("num sbc objects {}".format(len(sbc_objects)))
     for i, obj in enumerate(sbc_objects):
         mesh_name = f"{bl_object_name}_{str(i).zfill(4)}"
-        mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
+        if app_id not in ["re5", "dmc4"]:
+            mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
+        else:
+            mesh, ob = create_collision_mesh156(obj)
         # debug_create_bbox(obj) # sbc_info
         ob.parent = bl_object
     if app_id != "re5":
@@ -368,6 +396,13 @@ def create_collision_mesh(sbc_object, app_id, mesh_name):
     return mesh, obj
 
 
+def create_collision_mesh156(sbcObject):
+    mesh, obj = create_sbc_mesh156("CollisionMesh.000", decompose_sbc156(sbcObject))
+    obj["Type"] = "SBC_Mesh"
+    # obj["indexID"] = str(sbcObject.sbcinfo.index_id)
+    return mesh, obj
+
+
 def create_link_ob(link_ob, app_id, link_name):
     # Add custom attributes from collision_types to an empty object
     sbc_empty = common.create_root_nub(link_name)
@@ -388,6 +423,15 @@ def decompose_sbc_ob(sbc_ob, app_id):
                             for vert in sbc_ob.vertices]
     sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
     sbc_geom["materials"] = materials_from_sbc(sbc_ob)
+    return sbc_geom
+
+
+def decompose_sbc156(sbc_ob):
+    sbc_geom = {}
+    sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
+                            for vert in sbc_ob.vertices]
+    sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
+    sbc_geom['attr'] = sbc_ob.attr
     return sbc_geom
 
 
@@ -429,6 +473,31 @@ def create_sbc_mesh(name, meshpart, app_id):
     return bl_mesh, bl_obj
 
 
+def create_sbc_mesh156(name, meshpart):
+    blenderMesh = bpy.data.meshes.new(name)
+    blenderMesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
+    blenderMesh.update()
+    blenderObject = bpy.data.objects.new(name, blenderMesh)
+    # bpy.context.scene.objects.link(blenderObject)
+    bpy.context.collection.objects.link(blenderObject)
+
+    bm = bmesh.new()
+    bm.from_mesh(blenderMesh)
+    bm.faces.ensure_lookup_table()
+
+    group = bm.faces.layers.int.new('group')
+    surface_attr = bm.faces.layers.int.new('surface_attr')
+    special_attr = bm.faces.layers.int.new('special_attr')
+
+    for i, val in enumerate(meshpart['attr']):
+        bm.faces[i][group] = val['group']
+        bm.faces[i][surface_attr] = val['surface_attr']
+        bm.faces[i][special_attr] = val['special_attr']
+
+    bm.to_mesh(blenderMesh)
+    return blenderMesh, blenderObject
+
+
 def cycles(verts):
     return [(verts[i % 3].index, verts[(i + 1) % 3].index) for i in range(len(verts))]
 
@@ -443,7 +512,7 @@ def cycles(verts):
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    assert app_id != "re5", "Resident Evil 5 SBC export is not supported yet."
+    # assert app_id != "re5", "Resident Evil 5 SBC export is not supported yet."
     Sbc = APPID_SBC_CLASS_MAPPER[app_id]
 
     src_sbc = Sbc.from_bytes(asset.original_bytes)
@@ -460,6 +529,7 @@ def export_sbc(bl_obj):
     quadList = []
     sbcsList = []
     mesh_metadata = []
+    attrList = []
     errors = []
     options = {"clusteringFunction": CLUSTERING[export_settings.algorithm],
                "metric": METRIC[export_settings.metric],
@@ -468,28 +538,41 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
-        custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "sbc_21_mesh"]
+        if app_id not in ["re5", "dmc4"]:
+            custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "sbc_21_mesh"]
         # get list of Tri objects from faces of the mesh and vertices
         try:
-            vertices, tris = mesh_to_tri(mesh)
+            if app_id in ["re5", "dmc4"]:
+                vertices, tris, attr = mesh_to_tri156(mesh)
+                attrList.append(attr)
+            else:
+                vertices, tris = mesh_to_tri(mesh)
         except TriangulationRequiredError:
             errors.append("%s requires triangulating." % mesh.name)
         # pairs, bvhc
-        quads, sbc = bvh.primitive_to_sbc(tris, **options)
+        if app_id in ["re5", "dmc4"]:
+            quads, sbc = bvh.primitive_to_sbc156(tris, **options)
+        else:
+            quads, sbc = bvh.primitive_to_sbc(tris, **options)
         vertList.append(vertices)
         trisList.append(tris)  # tris primitive objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
-        mesh_metadata.append({"indexID": custom_props.index_id})
+        if app_id not in ["re5", "dmc4"]:
+            mesh_metadata.append({"indexID": custom_props.index_id})
     for clone in mesh_clones:
         common.delete_ob(clone)
     if errors:
         print(errors)
         raise ExportingFailedError
-    parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
-    final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
-                                       links, parent_tree, mesh_metadata, app_id)
+    if app_id in ["re5", "dmc4"]:
+        parent_tree = bvh.trees_to_sbc_col156(sbcsList, **options)
+        final_size = build_sbc156(bl_obj, dst_sbc, vertList, trisList, sbcsList, attrList, parent_tree)
+    else:
+        parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
+        final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
+                                           links, parent_tree, mesh_metadata, app_id)
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_sbc._check()
     dst_sbc._write(stream)
@@ -564,6 +647,45 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
     return final_size, dst_sbc
 
 
+def build_sbc156(bl_obj, dst_sbc, verts, tris, sbcs, attr, parent_tree):
+    def tally(x):
+        return sum(map(len, x))
+    nodes = []
+    groups = []
+    vertices = []
+    triangles = []
+    node_num = (len(sbcs) - 1) or 1
+    # vert_num = 0
+    # tri_num = 0
+    _init_sbc156_header(dst_sbc, parent_tree, len(sbcs), tally(
+        tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
+    for i, sbc in enumerate(sbcs):
+        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(triangles), len(vertices), node_num)
+        nodes.extend(node_list)
+        node_num += len(node_list)
+        # vert_num += len(verts[i]) - 1
+        # tri_num += len(tris[i]) - 1
+        groups.append(sbc_info)
+        triangles.extend(_serialize_faces156(dst_sbc, tris[i], attr[i]))
+        vertices.extend(_serialize_vertices156(dst_sbc, verts[i]))
+
+    final_node_list = _serialize_top_bvh(dst_sbc, parent_tree, groups)
+    final_node_list.extend(nodes)
+    dst_sbc.num_boxes = len(final_node_list)
+    dst_sbc.boxes = final_node_list
+    dst_sbc.groups = groups
+    dst_sbc.triangles = triangles
+    dst_sbc.vertices = vertices
+    final_size = sum((
+        0x30,
+        dst_sbc.num_boxes * 0x50,
+        dst_sbc.num_groups * 0x60,
+        dst_sbc.num_faces * 0x28,
+        dst_sbc.num_vertices * 16
+    ))
+    return final_size
+
+
 def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_count, face_count,
                      vertex_count, parent_tree, aabb_count):
     dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
@@ -589,6 +711,31 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
     dst_sbc_header._check()
     dst_sbc.header = dst_sbc_header
     return dst_sbc_header
+
+
+def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, num_tris):
+    bbox_data = parent_tree.boundingBox().serialize()
+    bbox = dst_sbc.Tbox(_parent=dst_sbc, _root=dst_sbc._root)
+    # bbox.min.x = bbox_data['minPos']['x']
+    # bbox.min.y = bbox_data['minPos']['y']
+    # bbox.min.z = bbox_data['minPos']['z']
+    # bbox.max.x = bbox_data['maxPos']['x']
+    # bbox.max.y = bbox_data['maxPos']['y']
+    # bbox.max.z = bbox_data['maxPos']['z']
+    bbox.min = write_vec3([v for v in bbox_data['minPos'].values()], dst_sbc)
+    bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
+    dst_sbc.__dict__.update(dict(
+        id_magic=b'SBC\x31',
+        version=18,
+        num_groups=num_groups,
+        num_groups_nodes=num_groups-1,
+        num_boxes=num_boxes,
+        num_vertices=num_verts,
+        num_faces=num_tris,
+        bbox=bbox,
+        max_parts_nest_count=0,
+        max_nest_count=0
+    ))
 
 
 def _serialize_bvhc(dst_sbc, bvhc_data):
@@ -632,6 +779,60 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
     return bvh_col
 
 
+def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
+    def vec4to3(x):
+        return write_vec3([x.x, x.y, x.z], dst_sbc)
+
+    bvhc_raw = bvhc_data.primitiveSerialize()
+    sbc_info = dst_sbc.Sbcgroup(_parent=dst_sbc, _root=dst_sbc._root)
+    bbox_data = bvhc_raw['boundingBox']
+    bbox = dst_sbc.Tbox(_parent=sbc_info, _root=dst_sbc._root)
+    # bbox.min.x = bbox_data['minPos']['x']
+    # bbox.min.y = bbox_data['minPos']['y']
+    # bbox.min.z = bbox_data['minPos']['z']
+    # bbox.max.x = bbox_data['maxPos']['x']
+    # bbox.max.y = bbox_data['maxPos']['y']
+    # bbox.max.z = bbox_data['maxPos']['z']
+    bbox.min = write_vec3([v for v in bbox_data['minPos'].values()], dst_sbc)
+    bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
+    sbc_info.bbox_this = bbox
+    sbc_info.group_id = 0
+    sbc_info.base = 0
+    sbc_info.start_boxes = start_node
+    sbc_info.start_tris = start_tri if start_tri >= 0 else 0
+    sbc_info.start_vertices = start_vert if start_vert >= 0 else 0
+    sbc_info.child_index = [0, 0]
+    node_list = []
+
+    for bvnode in bvhc_raw["AABBArray"]:
+        node = dst_sbc.Re5boxes(_parent=dst_sbc, _root=dst_sbc._root)
+        node.bit = bvnode['nodeType']
+        node.child_index = bvnode['nodeId']
+        boxes = []
+        for i in range(2):
+            bbox = dst_sbc.Pbox(_parent=node, _root=dst_sbc._root)
+            min_aabb = bvnode["minAABB"]
+            # box.min.x = min_aabb["xArray"][i]
+            # box.min.y = min_aabb["yArray"][i]
+            # box.min.z = min_aabb["zArray"][i]
+            bbox.min = write_vec4(
+                [min_aabb["xArray"][i], min_aabb["yArray"][i], min_aabb["zArray"][i], 0.0], dst_sbc)
+            max_aabb = bvnode["maxAABB"]
+            # box.max.x = max_aabb["xArray"][i]
+            # box.max.y = max_aabb["yArray"][i]
+            # box.max.z = max_aabb["zArray"][i]
+            bbox.max = write_vec4(
+                [max_aabb["xArray"][i], max_aabb["yArray"][i], max_aabb["zArray"][i], 0.0], dst_sbc)
+            # box._check()
+            boxes.append(bbox)
+        node.boxes = boxes
+        node.nulls = [0]*10
+        node_list.append(node)
+    sbc_info.vmin = [vec4to3(node_list[0].boxes[0].min), vec4to3(node_list[0].boxes[1].min)]
+    sbc_info.vmax = [vec4to3(node_list[0].boxes[0].max), vec4to3(node_list[0].boxes[1].max)]
+    return node_list, sbc_info
+
+
 def build_faces(dst_sbc, tris):
     stris = []
     for t in tris:
@@ -657,6 +858,23 @@ def _serialize_faces(dst_sbc, face_data):
     return faces
 
 
+def _serialize_faces156(dst_sbc, face_data, attr):
+    faces = []
+    for i, f in enumerate(face_data):
+        tri = dst_sbc.Re5triangle(_parent=dst_sbc, _root=dst_sbc._root)
+        tri.vert = f.dataFace.vert
+        tri.unk_00 = 0
+        tri.unk_01 = 0
+        tri.runtime_attr = 0
+        tri.type = attr[i]['group']
+        tri.surface_attr = attr[i]['surface_attr']
+        tri.special_attr = attr[i]['special_attr']
+        tri.unk_02 = 0
+        tri._check()
+        faces.append(tri)
+    return faces
+
+
 def build_vertices(dst_sbc, verts):
     svertices = []
     for v in verts:
@@ -675,6 +893,57 @@ def _serialize_vertices(dst_sbc, vertex_data):
         dst_vertex.z = vertex_raw["z"]
         dst_vertex.w = vertex_raw["w"]
         dst_vertex._check()
+        vertices.append(dst_vertex)
+    return vertices
+
+
+def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
+    def vec4to3(x):
+        return write_vec3([x.x, x.y, x.z], dst_sbc)
+
+    bvhc_raw = tree.primitiveSerialize()
+    node_list = []
+    for i, bvnode in enumerate(bvhc_raw["AABBArray"]):
+        node = dst_sbc.Re5boxes(_parent=dst_sbc, _root=dst_sbc._root)
+        node.bit = bvnode['nodeType']
+        node.child_index = bvnode['nodeId']
+        boxes = []
+        for j in range(2):
+            bbox = dst_sbc.Pbox(_parent=dst_sbc, _root=dst_sbc._root)
+            min_aabb = bvnode["minAABB"]
+            # box.min.x = min_aabb["xArray"]
+            # box.min.y = min_aabb["yArray"]
+            # box.min.z = min_aabb["zArray"]
+            bbox.min = write_vec4(
+                [min_aabb["xArray"][j], min_aabb["yArray"][j], min_aabb["zArray"][j], 0.0], dst_sbc)
+            max_aabb = bvnode["maxAABB"]
+            # box.max.x = max_aabb["xArray"]
+            # box.max.y = max_aabb["yArray"]
+            # box.max.z = max_aabb["zArray"]
+            bbox.max = write_vec4(
+                [max_aabb["xArray"][j], max_aabb["yArray"][j], max_aabb["zArray"][j], 0.0], dst_sbc)
+            # box._check()
+            boxes.append(bbox)
+        node.boxes = boxes
+        node.nulls = [0]*10
+        node_list.append(node)
+        sbc_groups[i].vmin = [vec4to3(node.boxes[0].min), vec4to3(node.boxes[1].min)]
+        sbc_groups[i].vmax = [vec4to3(node.boxes[0].max), vec4to3(node.boxes[1].max)]
+    return node_list
+
+
+def _serialize_vertices156(dst_sbc, vertex_data):
+    vertices = []
+    for v in vertex_data:
+        dst_vertex = dst_sbc.Vertex(_parent=dst_sbc, _root=dst_sbc._root)
+        vec = dst_sbc.Vec4(_parent=dst_vertex, _root=dst_sbc._root)
+        vertex_raw = geo.vec_unfold(v)
+        vec.x = vertex_raw["x"]
+        vec.y = vertex_raw["y"]
+        vec.z = vertex_raw["z"]
+        vec.w = vertex_raw["w"]
+        dst_vertex.vector = vec
+        # dst_vertex._check()
         vertices.append(dst_vertex)
     return vertices
 
@@ -748,7 +1017,7 @@ def get_vertex_box(v):
 
 
 class SemiTri():
-    def __init__(self, face, mat_type):
+    def __init__(self, face, mat_type=None):
         if not len(face.verts) == 3:
             raise TriangulationRequiredError()
         self.vert = [int(v.index) for v in face.verts]
@@ -855,6 +1124,25 @@ def mesh_to_tri(mesh):
     return vertices, faces
 
 
+def mesh_to_tri156(mesh):
+    bm = bmesh.new()
+    # bm.from_object(mesh, bpy.context.scene)
+    bm.from_mesh(mesh.data)
+    group = bm.faces.layers.int.get('group')
+    surface_attr = bm.faces.layers.int.get('surface_attr')
+    special_attr = bm.faces.layers.int.get('special_attr')
+    attr = []
+    faces = []
+    vertices = [Vector(v.co) for v in bm.verts]
+    for f in bm.faces:
+        faces.append(Tri(SemiTri(f), vertices))
+        attr.append({'group': f[group],
+                    'surface_attr': f[surface_attr],
+                     'special_attr': f[special_attr]})
+    bm.free()
+    return vertices, faces, attr
+
+
 def mesh_rescale(ob):
     '''Meshes should be transformed back to the game's up axis and scale'''
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -869,6 +1157,23 @@ def mesh_rescale(ob):
         vert.co.y = z
         vert.co.z = y
     return ob
+
+
+def write_vec3(data, dst_sbc):
+    vec = dst_sbc.Vec3()
+    vec.x = data[0]
+    vec.y = data[1]
+    vec.z = data[2]
+    return vec
+
+
+def write_vec4(data, dst_sbc):
+    vec = dst_sbc.Vec4()
+    vec.x = data[0]
+    vec.y = data[1]
+    vec.z = data[2]
+    vec.w = data[3]
+    return vec
 
 
 class BaseSBCProperties(bpy.types.PropertyGroup):
