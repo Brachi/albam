@@ -207,7 +207,7 @@ class BinaryCluster(Cluster):
                     children.append(side.binary_collapse())
         checkAddSide(self.left)
         checkAddSide(self.right)
-        children += [BBVH(None) for i in range(2-len(children))]
+        children += [BBVH(None) for i in range(2 - len(children))]
         # print(children)
         qnode = BBVH(self, *children)
         return qnode
@@ -413,17 +413,18 @@ class BBVH(QBVH):
             self.type = binaryCluster.type
             self.node = binaryCluster
             if not self.isPrimitive():
-                def check(x): return BBVH(None) if x is None else x
+                def check(x):
+                    return BBVH(None) if x is None else x
                 self.left = check(left)
                 self.right = check(right)
 
     def childBoxes(self):
         boxes = []
         default = self.parent.childBoxes() if self.parent else [
-            self.node.boundingBox()]*2
+            self.node.boundingBox()] * 2
         for ix, child in enumerate(self.children()):
-            boxes.append(child.AABB() if child.isNode()
-                         or child.isPrimitive() else default[ix])
+            boxes.append(child.AABB() if child.isNode() or
+                         child.isPrimitive() else default[ix])
         return boxes
 
     def typeMask(self):
@@ -438,7 +439,8 @@ class BBVH(QBVH):
             return node_type
 
     def nodeId(self):
-        def checkEmpty(node): return node.index() if node.type != Cluster.EMPTY else 0
+        def checkEmpty(node):
+            return node.index() if node.type != Cluster.EMPTY else 0
         if not self.isNode():
             raise NotImplementedError(
                 "Empties and Primitives don't have subnodes.")

@@ -339,8 +339,8 @@ def load_sbc(file_item, context):
                     fs, fc = ob_info.start_tris, (sbc.groups[ix + 1].start_tris - sbc.groups[ix].start_tris)
                     vs, vc = ob_info.start_vertices, (
                         sbc.groups[ix + 1].start_vertices - sbc.groups[ix].start_vertices)
-                    obj = SBCObject156(ob_info, triCollection[fs:fs+fc], vertCollection[vs:vs+vc])
-                except Exception as e:
+                    obj = SBCObject156(ob_info, triCollection[fs:fs + fc], vertCollection[vs:vs + vc])
+                except Exception:
                     print(traceback.format_exc())
                     print(f'Error at group {ix}, Tri {fs}, Vert {vs}')
             else:
@@ -728,7 +728,7 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
         id_magic=b'SBC\x31',
         version=18,
         num_groups=num_groups,
-        num_groups_nodes=num_groups-1,
+        num_groups_nodes=num_groups - 1,
         num_boxes=num_boxes,
         num_vertices=num_verts,
         num_faces=num_tris,
@@ -826,7 +826,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
             # box._check()
             boxes.append(bbox)
         node.boxes = boxes
-        node.nulls = [0]*10
+        node.nulls = [0] * 10
         node_list.append(node)
     sbc_info.vmin = [vec4to3(node_list[0].boxes[0].min), vec4to3(node_list[0].boxes[1].min)]
     sbc_info.vmax = [vec4to3(node_list[0].boxes[0].max), vec4to3(node_list[0].boxes[1].max)]
@@ -925,7 +925,7 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
             # box._check()
             boxes.append(bbox)
         node.boxes = boxes
-        node.nulls = [0]*10
+        node.nulls = [0] * 10
         node_list.append(node)
         sbc_groups[i].vmin = [vec4to3(node.boxes[0].min), vec4to3(node.boxes[1].min)]
         sbc_groups[i].vmax = [vec4to3(node.boxes[0].max), vec4to3(node.boxes[1].max)]
