@@ -17,9 +17,9 @@ from mathutils import Vector
 from functools import total_ordering
 import numpy as np
 
-MORTONLIMIT = 0x3FF
-MORTONLENGHT = 32
-EPS = 0.0001
+mortonLimit = 0x3FF
+mortonLength = 32
+eps = 0.0001
 
 
 class BoundingBox():
@@ -114,7 +114,7 @@ class GeometryPrimitive():
                 normalized = vec_div(
                     (self.barycenter() - self.sceneStart), self.sceneSize)
                 self.mortonCode = morton_encode(
-                    * (vect_int(MORTONLIMIT * normalized)))
+                    * (vect_int(mortonLimit * normalized)))
                 return self.mortonCode
         else:
             raise ValueError("No scene information to normalize the point")
@@ -137,8 +137,15 @@ def decontainer(vec):
 class Tri(GeometryPrimitive):
     def __init__(self, triface, vertList):
         self.dataFace = triface
-        self.vertices = [
-            Vector(decontainer(vertList[triface.vert[i]])) for i in range(3)]
+        verts = []
+        for i in range(3):
+            ind = triface.vert[i]
+            print(ind)
+            v = vertList[ind]
+            verts.append(Vector(decontainer(v)))
+        self.vertices = verts
+        # self.vertices = [
+        #     Vector(decontainer(vertList[triface.vert[i]])) for i in range(3)]
         self.type = triface.type
         self.encodable = False
 
@@ -185,7 +192,7 @@ class Tri(GeometryPrimitive):
     def parallel(self, tri2):
         n1 = self.normal()
         n2 = tri2.normal()
-        return np.dot(n1, n2) > 1 - EPS
+        return np.dot(n1, n2) > 1 - eps
 
     def __repr__(self):
         return str(self.vertices)
