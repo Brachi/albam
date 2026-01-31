@@ -862,7 +862,7 @@ def _serialize_faces156(dst_sbc, face_data, attr):
         tri.vert = f.dataFace.vert
         tri.unk_00 = 0
         tri.unk_01 = 0
-        tri.runtime_attr = 0
+        tri.runtime_attr = 256
         tri.type = attr[i]['group']
         tri.surface_attr = attr[i]['surface_attr']
         tri.special_attr = attr[i]['special_attr']
