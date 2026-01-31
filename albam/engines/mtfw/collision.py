@@ -34,10 +34,16 @@ APPID_SBC_CLASS_MAPPER = {
     "dd": Sbc21,
 }
 
-KNOWN_TYPE_ID = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192, 11264, 11776, 16384,
-                 17408, 32768, 33280, 33792, 34304, 34816, 35840, 40960, 40448, 41984, 42496, 42752, 44032,
-                 44288, 49152, 65536, 131072, 1048576, 2097152, 262144, 524288, 134217728, 33554432, 67108864
-                 ]
+SBC_VERSION = {
+    "re5:": 22,
+    "dmc4": 18,
+}
+
+KNOWN_RUNTIME_ATTR = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192,
+                      11264, 11776, 16384, 17408, 32768, 33280, 33792, 34304, 34816, 35840,
+                      40960, 40448, 41984, 42496, 42752, 44032, 44288, 49152, 65536, 131072,
+                      1048576, 2097152, 262144, 524288, 134217728, 33554432, 67108864
+                      ]
 
 
 CLUSTERING = {
@@ -101,7 +107,8 @@ class SBCObject156():
     def __init__(self, info, faces, vertices):
         self.sbcinfo = info
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
-        self.attr = [{'group': f.type,
+        self.attr = [{'runtime_attr': f.runtime_attr,
+                      'group': f.type,
                       'special_attr': f.special_attr,
                       'surface_attr': f.surface_attr} for f in faces]
         self.vertices = vertices
@@ -329,7 +336,7 @@ def load_sbc(file_item, context):
                                   vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
             sbc_objects.append(sbc_obj)
     else:
-        triCollection = [fc for i, fc in enumerate(sbc.triangles)]
+        triCollection = [fc for i, fc in enumerate(sbc.faces)]
         vertCollection = [fc.vector for i, fc in enumerate(sbc.vertices)]
         # objects = []
 
@@ -366,10 +373,10 @@ def load_sbc(file_item, context):
     print("num sbc objects {}".format(len(sbc_objects)))
     for i, obj in enumerate(sbc_objects):
         mesh_name = f"{bl_object_name}_{str(i).zfill(4)}"
-        if app_id not in ["re5", "dmc4"]:
-            mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
-        else:
-            mesh, ob = create_collision_mesh156(obj)
+        # if app_id not in ["re5", "dmc4"]:
+        mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
+        # else:
+        #    mesh, ob = create_collision_mesh156(obj)
         # debug_create_bbox(obj) # sbc_info
         ob.parent = bl_object
     if app_id != "re5":
@@ -422,7 +429,9 @@ def decompose_sbc_ob(sbc_ob, app_id):
     sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
                             for vert in sbc_ob.vertices]
     sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
-    sbc_geom["materials"] = materials_from_sbc(sbc_ob)
+    sbc_geom["materials"] = materials_from_sbc(sbc_ob, app_id)
+    if app_id in ("re5", "dmc4"):
+        sbc_geom['attr'] = sbc_ob.attr
     return sbc_geom
 
 
@@ -435,12 +444,18 @@ def decompose_sbc156(sbc_ob):
     return sbc_geom
 
 
-def materials_from_sbc(sbc_ob):
+def materials_from_sbc(sbc_ob, app_id):
     materials = {}
-    for ix, face in enumerate(sbc_ob.faces):
-        if face.type not in materials:
-            materials[face.type] = []
-        materials[face.type].append(ix)
+    if app_id not in ["re5", "dmc4"]:
+        for ix, face in enumerate(sbc_ob.faces):
+            if face.type not in materials:
+                materials[face.type] = []
+            materials[face.type].append(ix)
+    else:
+        for ix, face in enumerate(sbc_ob.attr):
+            if face['runtime_attr'] not in materials:
+                materials[face['runtime_attr']] = []
+            materials[face['runtime_attr']].append(ix)
     return materials
 
 
@@ -453,13 +468,24 @@ def create_sbc_mesh(name, meshpart, app_id):
     bm = bmesh.new()
     bm.from_mesh(bl_mesh)
     bm.faces.ensure_lookup_table()
+    # Unloaded stores custom attributes in the mesh faces, not the best idea
+    if app_id in ["re5", "dmc4"]:
+        group = bm.faces.layers.int.new('group')
+        surface_attr = bm.faces.layers.int.new('surface_attr')
+        special_attr = bm.faces.layers.int.new('special_attr')
+
+        for i, val in enumerate(meshpart['attr']):
+            bm.faces[i][group] = val['group']
+            bm.faces[i][surface_attr] = val['surface_attr']
+            bm.faces[i][special_attr] = val['special_attr']
+    # Store type/runtime_attr as material indices
     for ix, material in enumerate(meshpart["materials"]):
         mat = bpy.data.materials.get("Type %03d" % material)
         if not mat:
             mat = bpy.data.materials.new(name="Type %03d" % material)
         try:
             if app_id == "re5":
-                mat.diffuse_color = palette[KNOWN_TYPE_ID.index(material)]
+                mat.diffuse_color = palette[KNOWN_RUNTIME_ATTR.index(material)]
             else:
                 mat.diffuse_color = palette[material]
         except IndexError:
@@ -652,35 +678,35 @@ def build_sbc156(bl_obj, dst_sbc, verts, tris, sbcs, attr, parent_tree):
     nodes = []
     groups = []
     vertices = []
-    triangles = []
+    faces = []
     node_num = (len(sbcs) - 1) or 1
     # vert_num = 0
     # tri_num = 0
     _init_sbc156_header(dst_sbc, parent_tree, len(sbcs), tally(
         tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
     for i, sbc in enumerate(sbcs):
-        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(triangles), len(vertices), node_num)
+        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num)
         nodes.extend(node_list)
         node_num += len(node_list)
         # vert_num += len(verts[i]) - 1
         # tri_num += len(tris[i]) - 1
         groups.append(sbc_info)
-        triangles.extend(_serialize_faces156(dst_sbc, tris[i], attr[i]))
+        faces.extend(_serialize_faces156(dst_sbc, tris[i], attr[i]))
         vertices.extend(_serialize_vertices156(dst_sbc, verts[i]))
 
     final_node_list = _serialize_top_bvh(dst_sbc, parent_tree, groups)
     final_node_list.extend(nodes)
-    dst_sbc.num_boxes = len(final_node_list)
+    dst_sbc.header.num_boxes = len(final_node_list)
     dst_sbc.boxes = final_node_list
     dst_sbc.groups = groups
-    dst_sbc.triangles = triangles
+    dst_sbc.faces = faces
     dst_sbc.vertices = vertices
     final_size = sum((
         0x30,
-        dst_sbc.num_boxes * 0x50,
-        dst_sbc.num_groups * 0x60,
-        dst_sbc.num_faces * 0x28,
-        dst_sbc.num_vertices * 16
+        dst_sbc.header.num_boxes * 0x50,
+        dst_sbc.header.num_groups * 0x60,
+        dst_sbc.header.num_faces * 0x28,
+        dst_sbc.header.num_vertices * 16
     ))
     return final_size
 
@@ -713,8 +739,9 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
 
 
 def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, num_tris):
+    dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = parent_tree.boundingBox().serialize()
-    bbox = dst_sbc.Tbox(_parent=dst_sbc, _root=dst_sbc._root)
+    bbox = dst_sbc.Tbox(_parent=dst_sbc_header, _root=dst_sbc._root)
     # bbox.min.x = bbox_data['minPos']['x']
     # bbox.min.y = bbox_data['minPos']['y']
     # bbox.min.z = bbox_data['minPos']['z']
@@ -723,8 +750,8 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
     # bbox.max.z = bbox_data['maxPos']['z']
     bbox.min = write_vec3([v for v in bbox_data['minPos'].values()], dst_sbc)
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
-    dst_sbc.__dict__.update(dict(
-        id_magic=b'SBC\x31',
+    dst_sbc_header.__dict__.update(dict(
+        magic=b'SBC\x31',
         version=22,  # was 18
         num_groups=num_groups,
         num_groups_nodes=num_groups - 1,
@@ -735,6 +762,9 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
         max_parts_nest_count=0,
         max_nest_count=0
     ))
+
+    dst_sbc_header._check()
+    dst_sbc.header = dst_sbc_header
 
 
 def _serialize_bvhc(dst_sbc, bvhc_data):
@@ -862,7 +892,7 @@ def _serialize_faces156(dst_sbc, face_data, attr):
         tri.vert = f.dataFace.vert
         tri.unk_00 = 0
         tri.unk_01 = 0
-        tri.runtime_attr = 256
+        tri.runtime_attr = attr[i]['runtime_attr']
         tri.type = attr[i]['group']
         tri.surface_attr = attr[i]['surface_attr']
         tri.special_attr = attr[i]['special_attr']
@@ -1100,8 +1130,12 @@ class SemiTri():
             ix = face.material_index
             slot = mesh.material_slots[ix]
             mat = slot.material.name
-            # remove "Type " from material name and convert the index to number
-            return int(mat[len("Type "):len("Type 000")])
+            # clamp the name to [5:8] symbols, converto to int
+            # return int(mat[len("Type "):len("Type 000")])
+
+            # TODO: make someting adequate, guess limit for 8 symbols was because of
+            # .001 suffixes for duplicates
+            return int(mat[len("Type "):])
         except IndexError:
             raise MaterialMissingError
 
@@ -1133,8 +1167,9 @@ def mesh_to_tri156(mesh):
     vertices = [Vector(v.co) for v in bm.verts]
     for f in bm.faces:
         faces.append(Tri(SemiTri(f), vertices))
-        attr.append({'group': f[group],
-                    'surface_attr': f[surface_attr],
+        attr.append({'runtime_attr': SemiTri.getMaterial(f, mesh),
+                     'group': f[group],
+                     'surface_attr': f[surface_attr],
                      'special_attr': f[special_attr]})
     bm.free()
     return vertices, faces, attr

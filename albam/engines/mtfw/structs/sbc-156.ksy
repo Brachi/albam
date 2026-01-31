@@ -6,23 +6,14 @@ meta:
   title:  Resident Evil 5 (MTFramework) collision format
 
 seq:
-  - {id: id_magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
-  - {id: version, type: u2}
-  - {id: num_groups, type: u2}
-  - {id: num_groups_nodes, type: u2}
-  - {id: max_parts_nest_count, type: u1}
-  - {id: max_nest_count, type: u1}
-  - {id: num_boxes, type: u4}
-  - {id: num_faces, type: u4}
-  - {id: num_vertices, type: u4}
-  - {id: bbox, type: tbox}
-  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: num_boxes}
-  - {id: groups, type: sbcgroup, repeat: expr, repeat-expr: num_groups}
-  - {id: triangles, type : re5triangle, repeat: expr, repeat-expr: num_faces}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: num_vertices}
+  - {id: header, type: sbc_header}
+  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: header.num_boxes}
+  - {id: groups, type: sbcgroup, repeat: expr, repeat-expr: header.num_groups}
+  - {id: faces, type : re5triangle, repeat: expr, repeat-expr: header.num_faces}
+  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
 
 types:
-  sbc_header: # og
+  sbc_header_og: # og
     seq:
       - {id: magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
       - {id: version, type: u2}
@@ -33,7 +24,21 @@ types:
       - {id: num_nodes, type: u4} # total node num
       - {id: num_faces, type: u4} # total triangle num
       - {id: num_vertices, type: u4} # total vertex num
-      - {id: box, type: bbox}
+      - {id: box, type: tbox}
+
+  sbc_header:
+    seq:
+    - {id: magic, contents: [0x53, 0x42, 0x43, 0x31]} # SBC1
+    - {id: version, type: u2}
+    - {id: num_groups, type: u2}
+    - {id: num_groups_nodes, type: u2}
+    - {id: max_parts_nest_count, type: u1}
+    - {id: max_nest_count, type: u1}
+    - {id: num_boxes, type: u4}
+    - {id: num_faces, type: u4}
+    - {id: num_vertices, type: u4}
+    - {id: bbox, type: tbox}
+
 
   sbcgroup: #96 bytes unloaded
     seq:
@@ -54,7 +59,7 @@ types:
       - {id: start_nodes, type: u4} # ?
       - {id: start_vertices, type: u4}
       - {id: index_id, type: u4}
-      - {id: bounding_box, type: bbox}
+      - {id: bounding_box, type: tbox}
       - {id: min, type: vec3, repeat: expr, repeat-expr: 2} # binary tree for bboxes?
       - {id: max, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
