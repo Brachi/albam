@@ -725,7 +725,7 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
     dst_sbc.__dict__.update(dict(
         id_magic=b'SBC\x31',
-        version=18,
+        version=22,  # was 18
         num_groups=num_groups,
         num_groups_nodes=num_groups - 1,
         num_boxes=num_boxes,
@@ -740,8 +740,6 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
 def _serialize_bvhc(dst_sbc, bvhc_data):
     bvh_col = dst_sbc.BvhCollision(_parent=dst_sbc, _root=dst_sbc._root)
     bbox = dst_sbc.Bbox(_parent=bvh_col, _root=dst_sbc._root)
-    # bvh_node = dst_sbc.BvhNode(_parent=bvh_col, _root=dst_sbc._root)
-    # aabb = dst_sbc.AabbBlock(_parent=bvh_node, _root=dst_sbc._root)
     bvhc_raw = bvhc_data.primitiveSerialize()
 
     bvh_col.bvhc = [1128814146, 2008120100]  # Bound Volume Hierarchy Collision Identifier
@@ -795,7 +793,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     bbox.min = write_vec3([v for v in bbox_data['minPos'].values()], dst_sbc)
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
     sbc_info.bbox_this = bbox
-    sbc_info.group_id = 0
+    sbc_info.group_id = 0xffffffff  # was 0
     sbc_info.base = 0
     sbc_info.start_boxes = start_node
     sbc_info.start_tris = start_tri if start_tri >= 0 else 0
