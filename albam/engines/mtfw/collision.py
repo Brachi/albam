@@ -39,6 +39,8 @@ SBC_VERSION = {
     "dmc4": 18,
 }
 
+DEBUG_DRAW = False
+
 KNOWN_RUNTIME_ATTR = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192,
                       11264, 11776, 16384, 17408, 32768, 33280, 33792, 34304, 34816, 35840,
                       40960, 40448, 41984, 42496, 42752, 44032, 44288, 49152, 65536, 131072,
@@ -336,59 +338,46 @@ def load_sbc(file_item, context):
                                   vertex_collection[vs:vs + vc], pair_collection[ps:ps + pc])
             sbc_objects.append(sbc_obj)
     else:
-        triCollection = [fc for i, fc in enumerate(sbc.faces)]
-        vertCollection = [fc.vector for i, fc in enumerate(sbc.vertices)]
-        # objects = []
+        bvh_collection = [b for i, b in enumerate(sbc.nodes)]
+        face_collection = [fc for i, fc in enumerate(sbc.faces)]
+        vertex_collection = [fc.vector for i, fc in enumerate(sbc.vertices)]
 
-        for ix, ob_info in enumerate(sbc.groups):
-            if ix < (len(sbc.groups) - 1):
+        for ix, ob_info in enumerate(sbc.sbc_info):
+            if ix < (len(sbc.sbc_info) - 1):
                 try:
-                    fs, fc = ob_info.start_tris, (sbc.groups[ix + 1].start_tris - sbc.groups[ix].start_tris)
+                    fs, fc = ob_info.start_tris, (
+                        sbc.sbc_info[ix + 1].start_tris - sbc.sbc_info[ix].start_tris)
                     vs, vc = ob_info.start_vertices, (
-                        sbc.groups[ix + 1].start_vertices - sbc.groups[ix].start_vertices)
-                    obj = SBCObject156(ob_info, triCollection[fs:fs + fc], vertCollection[vs:vs + vc])
+                        sbc.sbc_info[ix + 1].start_vertices - sbc.sbc_info[ix].start_vertices)
+                    obj = SBCObject156(ob_info, face_collection[fs:fs + fc], vertex_collection[vs:vs + vc])
                 except Exception:
                     print(traceback.format_exc())
                     print(f'Error at group {ix}, Tri {fs}, Vert {vs}')
             else:
                 fs = ob_info.start_tris
                 vs = ob_info.start_vertices
-                obj = SBCObject156(ob_info, triCollection[fs:], vertCollection[vs:])
+                obj = SBCObject156(ob_info, face_collection[fs:], vertex_collection[vs:])
             sbc_objects.append(obj)
-        '''
-        bvh_collection = [b for i, b in enumerate(sbc.nodes)]
-        face_collection = [fc for i, fc in enumerate(sbc.faces)]
-        vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
-        num_faces = [ob_info.start_tris for ix, ob_info in enumerate(sbc.sbc_info)]
-        num_faces.append(sbc.header.num_faces)
-        num_vtx = [ob_info.start_vertices for ix, ob_info in enumerate(sbc.sbc_info)]
-        num_vtx.append(sbc.header.num_vertices)
-        for ix, ob_info in enumerate(sbc.sbc_info):
-            fs, fc = ob_info.start_tris, num_faces[ix + 1] - ob_info.start_tris
-            vs, vc = ob_info.start_vertices, num_vtx[ix + 1] - ob_info.start_vertices
-            sbc_obj = SBCObject156(ob_info, face_collection[fs:fs + fc],
-                                   vertex_collection[vs:vs + vc])
-            sbc_objects.append(sbc_obj)
-        '''
+
     print("num sbc objects {}".format(len(sbc_objects)))
     for i, obj in enumerate(sbc_objects):
         mesh_name = f"{bl_object_name}_{str(i).zfill(4)}"
-        # if app_id not in ["re5", "dmc4"]:
         mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
-        # else:
-        #    mesh, ob = create_collision_mesh156(obj)
-        # debug_create_bbox(obj) # sbc_info
+        if DEBUG_DRAW:
+            debug_create_bbox(obj)  # sbc_info
         ob.parent = bl_object
+
     if app_id != "re5":
         for i, typing in enumerate(sbc.collision_types):
             link_name = f"{bl_object_name}_stage_link_{str(i).zfill(4)}"
             empty_ob = create_link_ob(typing, app_id, link_name)
             empty_ob.parent = bl_object
 
-    # for i, node in enumerate(bvh_collection):
-    #    if i >= sbc.header.num_parts:
-    #        break
-    #    debug_create_nodes(node)
+    if DEBUG_DRAW:
+        for i, node in enumerate(bvh_collection):
+            if i >= sbc.header.num_parts:
+                break
+            debug_create_sbcinfo_nodes(node)
 
     return bl_object
 
@@ -504,7 +493,6 @@ def create_sbc_mesh156(name, meshpart):
     blenderMesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
     blenderMesh.update()
     blenderObject = bpy.data.objects.new(name, blenderMesh)
-    # bpy.context.scene.objects.link(blenderObject)
     bpy.context.collection.objects.link(blenderObject)
 
     bm = bmesh.new()
@@ -593,11 +581,14 @@ def export_sbc(bl_obj):
         raise ExportingFailedError
     if app_id in ["re5", "dmc4"]:
         parent_tree = bvh.trees_to_sbc_col156(sbcsList, **options)
-        final_size = build_sbc156(bl_obj, dst_sbc, vertList, trisList, sbcsList, attrList, parent_tree)
+        # version = SBC_VERSION[app_id]
+        version = 22 if app_id == "re5" else 18
+        final_size = build_sbc156(
+            bl_obj, dst_sbc, version, vertList, trisList, sbcsList, attrList, parent_tree)
     else:
         parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
-        final_size, serialized = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
-                                           links, parent_tree, mesh_metadata, app_id)
+        final_size = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
+                               links, parent_tree, mesh_metadata, app_id)
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
     dst_sbc._check()
     dst_sbc._write(stream)
@@ -672,7 +663,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
     return final_size, dst_sbc
 
 
-def build_sbc156(bl_obj, dst_sbc, verts, tris, sbcs, attr, parent_tree):
+def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree):
     def tally(x):
         return sum(map(len, x))
     nodes = []
@@ -682,7 +673,7 @@ def build_sbc156(bl_obj, dst_sbc, verts, tris, sbcs, attr, parent_tree):
     node_num = (len(sbcs) - 1) or 1
     # vert_num = 0
     # tri_num = 0
-    _init_sbc156_header(dst_sbc, parent_tree, len(sbcs), tally(
+    _init_sbc156_header(dst_sbc, version, parent_tree, len(sbcs), tally(
         tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
     for i, sbc in enumerate(sbcs):
         node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num)
@@ -697,8 +688,8 @@ def build_sbc156(bl_obj, dst_sbc, verts, tris, sbcs, attr, parent_tree):
     final_node_list = _serialize_top_bvh(dst_sbc, parent_tree, groups)
     final_node_list.extend(nodes)
     dst_sbc.header.num_boxes = len(final_node_list)
-    dst_sbc.boxes = final_node_list
-    dst_sbc.groups = groups
+    dst_sbc.nodes = final_node_list
+    dst_sbc.sbc_info = groups
     dst_sbc.faces = faces
     dst_sbc.vertices = vertices
     final_size = sum((
@@ -738,7 +729,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
     return dst_sbc_header
 
 
-def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, num_tris):
+def _init_sbc156_header(dst_sbc, version, parent_tree, num_groups, num_boxes, num_verts, num_tris):
     dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = parent_tree.boundingBox().serialize()
     bbox = dst_sbc.Tbox(_parent=dst_sbc_header, _root=dst_sbc._root)
@@ -752,7 +743,7 @@ def _init_sbc156_header(dst_sbc, parent_tree, num_groups, num_boxes, num_verts, 
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
     dst_sbc_header.__dict__.update(dict(
         magic=b'SBC\x31',
-        version=22,  # was 18
+        version=version,  # was 18
         num_groups=num_groups,
         num_groups_nodes=num_groups - 1,
         num_boxes=num_boxes,
@@ -811,7 +802,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
         return write_vec3([x.x, x.y, x.z], dst_sbc)
 
     bvhc_raw = bvhc_data.primitiveSerialize()
-    sbc_info = dst_sbc.Sbcgroup(_parent=dst_sbc, _root=dst_sbc._root)
+    sbc_info = dst_sbc.Info(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = bvhc_raw['boundingBox']
     bbox = dst_sbc.Tbox(_parent=sbc_info, _root=dst_sbc._root)
     # bbox.min.x = bbox_data['minPos']['x']
@@ -832,7 +823,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     node_list = []
 
     for bvnode in bvhc_raw["AABBArray"]:
-        node = dst_sbc.Re5boxes(_parent=dst_sbc, _root=dst_sbc._root)
+        node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
         node.bit = bvnode['nodeType']
         node.child_index = bvnode['nodeId']
         boxes = []
@@ -888,7 +879,7 @@ def _serialize_faces(dst_sbc, face_data):
 def _serialize_faces156(dst_sbc, face_data, attr):
     faces = []
     for i, f in enumerate(face_data):
-        tri = dst_sbc.Re5triangle(_parent=dst_sbc, _root=dst_sbc._root)
+        tri = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
         tri.vert = f.dataFace.vert
         tri.unk_00 = 0
         tri.unk_01 = 0
@@ -931,7 +922,7 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
     bvhc_raw = tree.primitiveSerialize()
     node_list = []
     for i, bvnode in enumerate(bvhc_raw["AABBArray"]):
-        node = dst_sbc.Re5boxes(_parent=dst_sbc, _root=dst_sbc._root)
+        node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
         node.bit = bvnode['nodeType']
         node.child_index = bvnode['nodeId']
         boxes = []
@@ -1129,13 +1120,10 @@ class SemiTri():
         try:
             ix = face.material_index
             slot = mesh.material_slots[ix]
-            mat = slot.material.name
-            # clamp the name to [5:8] symbols, converto to int
-            # return int(mat[len("Type "):len("Type 000")])
-
-            # TODO: make someting adequate, guess limit for 8 symbols was because of
-            # .001 suffixes for duplicates
-            return int(mat[len("Type "):])
+            mat_name = slot.material.name
+            #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+            mat_name = mat_name.replace("_", ".").split(".")[0]
+            return int(mat_name[len("Type "):])
         except IndexError:
             raise MaterialMissingError
 

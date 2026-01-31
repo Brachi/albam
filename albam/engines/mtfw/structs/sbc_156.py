@@ -17,25 +17,25 @@ class Sbc156(ReadWriteKaitaiStruct):
     def _read(self):
         self.header = Sbc156.SbcHeader(self._io, self, self._root)
         self.header._read()
-        self.boxes = []
+        self.nodes = []
         for i in range(self.header.num_boxes):
-            _t_boxes = Sbc156.Re5boxes(self._io, self, self._root)
+            _t_nodes = Sbc156.BvhNode(self._io, self, self._root)
             try:
-                _t_boxes._read()
+                _t_nodes._read()
             finally:
-                self.boxes.append(_t_boxes)
+                self.nodes.append(_t_nodes)
 
-        self.groups = []
+        self.sbc_info = []
         for i in range(self.header.num_groups):
-            _t_groups = Sbc156.Sbcgroup(self._io, self, self._root)
+            _t_sbc_info = Sbc156.Info(self._io, self, self._root)
             try:
-                _t_groups._read()
+                _t_sbc_info._read()
             finally:
-                self.groups.append(_t_groups)
+                self.sbc_info.append(_t_sbc_info)
 
         self.faces = []
         for i in range(self.header.num_faces):
-            _t_faces = Sbc156.Re5triangle(self._io, self, self._root)
+            _t_faces = Sbc156.Face(self._io, self, self._root)
             try:
                 _t_faces._read()
             finally:
@@ -55,13 +55,13 @@ class Sbc156(ReadWriteKaitaiStruct):
     def _fetch_instances(self):
         pass
         self.header._fetch_instances()
-        for i in range(len(self.boxes)):
+        for i in range(len(self.nodes)):
             pass
-            self.boxes[i]._fetch_instances()
+            self.nodes[i]._fetch_instances()
 
-        for i in range(len(self.groups)):
+        for i in range(len(self.sbc_info)):
             pass
-            self.groups[i]._fetch_instances()
+            self.sbc_info[i]._fetch_instances()
 
         for i in range(len(self.faces)):
             pass
@@ -76,13 +76,13 @@ class Sbc156(ReadWriteKaitaiStruct):
     def _write__seq(self, io=None):
         super(Sbc156, self)._write__seq(io)
         self.header._write__seq(self._io)
-        for i in range(len(self.boxes)):
+        for i in range(len(self.nodes)):
             pass
-            self.boxes[i]._write__seq(self._io)
+            self.nodes[i]._write__seq(self._io)
 
-        for i in range(len(self.groups)):
+        for i in range(len(self.sbc_info)):
             pass
-            self.groups[i]._write__seq(self._io)
+            self.sbc_info[i]._write__seq(self._io)
 
         for i in range(len(self.faces)):
             pass
@@ -99,23 +99,23 @@ class Sbc156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"header", self._root, self.header._root)
         if self.header._parent != self:
             raise kaitaistruct.ConsistencyError(u"header", self, self.header._parent)
-        if len(self.boxes) != self.header.num_boxes:
-            raise kaitaistruct.ConsistencyError(u"boxes", self.header.num_boxes, len(self.boxes))
-        for i in range(len(self.boxes)):
+        if len(self.nodes) != self.header.num_boxes:
+            raise kaitaistruct.ConsistencyError(u"nodes", self.header.num_boxes, len(self.nodes))
+        for i in range(len(self.nodes)):
             pass
-            if self.boxes[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"boxes", self._root, self.boxes[i]._root)
-            if self.boxes[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"boxes", self, self.boxes[i]._parent)
+            if self.nodes[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"nodes", self._root, self.nodes[i]._root)
+            if self.nodes[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"nodes", self, self.nodes[i]._parent)
 
-        if len(self.groups) != self.header.num_groups:
-            raise kaitaistruct.ConsistencyError(u"groups", self.header.num_groups, len(self.groups))
-        for i in range(len(self.groups)):
+        if len(self.sbc_info) != self.header.num_groups:
+            raise kaitaistruct.ConsistencyError(u"sbc_info", self.header.num_groups, len(self.sbc_info))
+        for i in range(len(self.sbc_info)):
             pass
-            if self.groups[i]._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"groups", self._root, self.groups[i]._root)
-            if self.groups[i]._parent != self:
-                raise kaitaistruct.ConsistencyError(u"groups", self, self.groups[i]._parent)
+            if self.sbc_info[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"sbc_info", self._root, self.sbc_info[i]._root)
+            if self.sbc_info[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"sbc_info", self, self.sbc_info[i]._parent)
 
         if len(self.faces) != self.header.num_faces:
             raise kaitaistruct.ConsistencyError(u"faces", self.header.num_faces, len(self.faces))
@@ -182,6 +182,87 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
+            self.boxes = []
+            for i in range(2):
+                _t_boxes = Sbc156.Pbox(self._io, self, self._root)
+                try:
+                    _t_boxes._read()
+                finally:
+                    self.boxes.append(_t_boxes)
+
+            self.bit = self._io.read_u2le()
+            self.child_index = []
+            for i in range(2):
+                self.child_index.append(self._io.read_u2le())
+
+            self.nulls = []
+            for i in range(10):
+                self.nulls.append(self._io.read_u1())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.boxes)):
+                pass
+                self.boxes[i]._fetch_instances()
+
+            for i in range(len(self.child_index)):
+                pass
+
+            for i in range(len(self.nulls)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Sbc156.BvhNode, self)._write__seq(io)
+            for i in range(len(self.boxes)):
+                pass
+                self.boxes[i]._write__seq(self._io)
+
+            self._io.write_u2le(self.bit)
+            for i in range(len(self.child_index)):
+                pass
+                self._io.write_u2le(self.child_index[i])
+
+            for i in range(len(self.nulls)):
+                pass
+                self._io.write_u1(self.nulls[i])
+
+
+
+        def _check(self):
+            if len(self.boxes) != 2:
+                raise kaitaistruct.ConsistencyError(u"boxes", 2, len(self.boxes))
+            for i in range(len(self.boxes)):
+                pass
+                if self.boxes[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"boxes", self._root, self.boxes[i]._root)
+                if self.boxes[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"boxes", self, self.boxes[i]._parent)
+
+            if len(self.child_index) != 2:
+                raise kaitaistruct.ConsistencyError(u"child_index", 2, len(self.child_index))
+            for i in range(len(self.child_index)):
+                pass
+
+            if len(self.nulls) != 10:
+                raise kaitaistruct.ConsistencyError(u"nulls", 10, len(self.nulls))
+            for i in range(len(self.nulls)):
+                pass
+
+            self._dirty = False
+
+
+    class BvhNodeOg(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc156.BvhNodeOg, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
             self.aabb_01 = Sbc156.Aabb(self._io, self, self._root)
             self.aabb_01._read()
             self.aabb_02 = Sbc156.Aabb(self._io, self, self._root)
@@ -212,7 +293,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Sbc156.BvhNode, self)._write__seq(io)
+            super(Sbc156.BvhNodeOg, self)._write__seq(io)
             self.aabb_01._write__seq(self._io)
             self.aabb_02._write__seq(self._io)
             self._io.write_u1(self.bit)
@@ -260,6 +341,58 @@ class Sbc156(ReadWriteKaitaiStruct):
             for i in range(3):
                 self.vert.append(self._io.read_u2le())
 
+            self.unk_00 = self._io.read_u1()
+            self.unk_01 = self._io.read_u1()
+            self.runtime_attr = self._io.read_u4le()
+            self.type = self._io.read_u4le()
+            self.special_attr = self._io.read_u4le()
+            self.surface_attr = self._io.read_u4le()
+            self.unk_02 = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.vert)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Sbc156.Face, self)._write__seq(io)
+            for i in range(len(self.vert)):
+                pass
+                self._io.write_u2le(self.vert[i])
+
+            self._io.write_u1(self.unk_00)
+            self._io.write_u1(self.unk_01)
+            self._io.write_u4le(self.runtime_attr)
+            self._io.write_u4le(self.type)
+            self._io.write_u4le(self.special_attr)
+            self._io.write_u4le(self.surface_attr)
+            self._io.write_u4le(self.unk_02)
+
+
+        def _check(self):
+            if len(self.vert) != 3:
+                raise kaitaistruct.ConsistencyError(u"vert", 3, len(self.vert))
+            for i in range(len(self.vert)):
+                pass
+
+            self._dirty = False
+
+
+    class FaceOg(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc156.FaceOg, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.vert = []
+            for i in range(3):
+                self.vert.append(self._io.read_u2le())
+
             self.unk_00 = []
             for i in range(2):
                 self.unk_00.append(self._io.read_u1())
@@ -286,7 +419,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Sbc156.Face, self)._write__seq(io)
+            super(Sbc156.FaceOg, self)._write__seq(io)
             for i in range(len(self.vert)):
                 pass
                 self._io.write_u2le(self.vert[i])
@@ -324,6 +457,112 @@ class Sbc156(ReadWriteKaitaiStruct):
     class Info(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sbc156.Info, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.base = self._io.read_u4le()
+            self.start_tris = self._io.read_u4le()
+            self.start_boxes = self._io.read_u4le()
+            self.start_vertices = self._io.read_u4le()
+            self.group_id = self._io.read_u4le()
+            self.bbox_this = Sbc156.Tbox(self._io, self, self._root)
+            self.bbox_this._read()
+            self.vmin = []
+            for i in range(2):
+                _t_vmin = Sbc156.Vec3(self._io, self, self._root)
+                try:
+                    _t_vmin._read()
+                finally:
+                    self.vmin.append(_t_vmin)
+
+            self.vmax = []
+            for i in range(2):
+                _t_vmax = Sbc156.Vec3(self._io, self, self._root)
+                try:
+                    _t_vmax._read()
+                finally:
+                    self.vmax.append(_t_vmax)
+
+            self.child_index = []
+            for i in range(2):
+                self.child_index.append(self._io.read_u2le())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            self.bbox_this._fetch_instances()
+            for i in range(len(self.vmin)):
+                pass
+                self.vmin[i]._fetch_instances()
+
+            for i in range(len(self.vmax)):
+                pass
+                self.vmax[i]._fetch_instances()
+
+            for i in range(len(self.child_index)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Sbc156.Info, self)._write__seq(io)
+            self._io.write_u4le(self.base)
+            self._io.write_u4le(self.start_tris)
+            self._io.write_u4le(self.start_boxes)
+            self._io.write_u4le(self.start_vertices)
+            self._io.write_u4le(self.group_id)
+            self.bbox_this._write__seq(self._io)
+            for i in range(len(self.vmin)):
+                pass
+                self.vmin[i]._write__seq(self._io)
+
+            for i in range(len(self.vmax)):
+                pass
+                self.vmax[i]._write__seq(self._io)
+
+            for i in range(len(self.child_index)):
+                pass
+                self._io.write_u2le(self.child_index[i])
+
+
+
+        def _check(self):
+            if self.bbox_this._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"bbox_this", self._root, self.bbox_this._root)
+            if self.bbox_this._parent != self:
+                raise kaitaistruct.ConsistencyError(u"bbox_this", self, self.bbox_this._parent)
+            if len(self.vmin) != 2:
+                raise kaitaistruct.ConsistencyError(u"vmin", 2, len(self.vmin))
+            for i in range(len(self.vmin)):
+                pass
+                if self.vmin[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"vmin", self._root, self.vmin[i]._root)
+                if self.vmin[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"vmin", self, self.vmin[i]._parent)
+
+            if len(self.vmax) != 2:
+                raise kaitaistruct.ConsistencyError(u"vmax", 2, len(self.vmax))
+            for i in range(len(self.vmax)):
+                pass
+                if self.vmax[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"vmax", self._root, self.vmax[i]._root)
+                if self.vmax[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"vmax", self, self.vmax[i]._parent)
+
+            if len(self.child_index) != 2:
+                raise kaitaistruct.ConsistencyError(u"child_index", 2, len(self.child_index))
+            for i in range(len(self.child_index)):
+                pass
+
+            self._dirty = False
+
+
+    class InfoOg(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc156.InfoOg, self).__init__(_io)
             self._parent = _parent
             self._root = _root
 
@@ -375,7 +614,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(Sbc156.Info, self)._write__seq(io)
+            super(Sbc156.InfoOg, self)._write__seq(io)
             self._io.write_u4le(self.flags)
             self._io.write_u4le(self.start_tris)
             self._io.write_u4le(self.start_nodes)
@@ -462,139 +701,6 @@ class Sbc156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"max", self._root, self.max._root)
             if self.max._parent != self:
                 raise kaitaistruct.ConsistencyError(u"max", self, self.max._parent)
-            self._dirty = False
-
-
-    class Re5boxes(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Sbc156.Re5boxes, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.boxes = []
-            for i in range(2):
-                _t_boxes = Sbc156.Pbox(self._io, self, self._root)
-                try:
-                    _t_boxes._read()
-                finally:
-                    self.boxes.append(_t_boxes)
-
-            self.bit = self._io.read_u2le()
-            self.child_index = []
-            for i in range(2):
-                self.child_index.append(self._io.read_u2le())
-
-            self.nulls = []
-            for i in range(10):
-                self.nulls.append(self._io.read_u1())
-
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.boxes)):
-                pass
-                self.boxes[i]._fetch_instances()
-
-            for i in range(len(self.child_index)):
-                pass
-
-            for i in range(len(self.nulls)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.Re5boxes, self)._write__seq(io)
-            for i in range(len(self.boxes)):
-                pass
-                self.boxes[i]._write__seq(self._io)
-
-            self._io.write_u2le(self.bit)
-            for i in range(len(self.child_index)):
-                pass
-                self._io.write_u2le(self.child_index[i])
-
-            for i in range(len(self.nulls)):
-                pass
-                self._io.write_u1(self.nulls[i])
-
-
-
-        def _check(self):
-            if len(self.boxes) != 2:
-                raise kaitaistruct.ConsistencyError(u"boxes", 2, len(self.boxes))
-            for i in range(len(self.boxes)):
-                pass
-                if self.boxes[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"boxes", self._root, self.boxes[i]._root)
-                if self.boxes[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"boxes", self, self.boxes[i]._parent)
-
-            if len(self.child_index) != 2:
-                raise kaitaistruct.ConsistencyError(u"child_index", 2, len(self.child_index))
-            for i in range(len(self.child_index)):
-                pass
-
-            if len(self.nulls) != 10:
-                raise kaitaistruct.ConsistencyError(u"nulls", 10, len(self.nulls))
-            for i in range(len(self.nulls)):
-                pass
-
-            self._dirty = False
-
-
-    class Re5triangle(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Sbc156.Re5triangle, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.vert = []
-            for i in range(3):
-                self.vert.append(self._io.read_u2le())
-
-            self.unk_00 = self._io.read_u1()
-            self.unk_01 = self._io.read_u1()
-            self.runtime_attr = self._io.read_u4le()
-            self.type = self._io.read_u4le()
-            self.special_attr = self._io.read_u4le()
-            self.surface_attr = self._io.read_u4le()
-            self.unk_02 = self._io.read_u4le()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.vert)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.Re5triangle, self)._write__seq(io)
-            for i in range(len(self.vert)):
-                pass
-                self._io.write_u2le(self.vert[i])
-
-            self._io.write_u1(self.unk_00)
-            self._io.write_u1(self.unk_01)
-            self._io.write_u4le(self.runtime_attr)
-            self._io.write_u4le(self.type)
-            self._io.write_u4le(self.special_attr)
-            self._io.write_u4le(self.surface_attr)
-            self._io.write_u4le(self.unk_02)
-
-
-        def _check(self):
-            if len(self.vert) != 3:
-                raise kaitaistruct.ConsistencyError(u"vert", 3, len(self.vert))
-            for i in range(len(self.vert)):
-                pass
-
             self._dirty = False
 
 
@@ -733,112 +839,6 @@ class Sbc156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"box", self._root, self.box._root)
             if self.box._parent != self:
                 raise kaitaistruct.ConsistencyError(u"box", self, self.box._parent)
-            self._dirty = False
-
-
-    class Sbcgroup(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Sbc156.Sbcgroup, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.base = self._io.read_u4le()
-            self.start_tris = self._io.read_u4le()
-            self.start_boxes = self._io.read_u4le()
-            self.start_vertices = self._io.read_u4le()
-            self.group_id = self._io.read_u4le()
-            self.bbox_this = Sbc156.Tbox(self._io, self, self._root)
-            self.bbox_this._read()
-            self.vmin = []
-            for i in range(2):
-                _t_vmin = Sbc156.Vec3(self._io, self, self._root)
-                try:
-                    _t_vmin._read()
-                finally:
-                    self.vmin.append(_t_vmin)
-
-            self.vmax = []
-            for i in range(2):
-                _t_vmax = Sbc156.Vec3(self._io, self, self._root)
-                try:
-                    _t_vmax._read()
-                finally:
-                    self.vmax.append(_t_vmax)
-
-            self.child_index = []
-            for i in range(2):
-                self.child_index.append(self._io.read_u2le())
-
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            self.bbox_this._fetch_instances()
-            for i in range(len(self.vmin)):
-                pass
-                self.vmin[i]._fetch_instances()
-
-            for i in range(len(self.vmax)):
-                pass
-                self.vmax[i]._fetch_instances()
-
-            for i in range(len(self.child_index)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.Sbcgroup, self)._write__seq(io)
-            self._io.write_u4le(self.base)
-            self._io.write_u4le(self.start_tris)
-            self._io.write_u4le(self.start_boxes)
-            self._io.write_u4le(self.start_vertices)
-            self._io.write_u4le(self.group_id)
-            self.bbox_this._write__seq(self._io)
-            for i in range(len(self.vmin)):
-                pass
-                self.vmin[i]._write__seq(self._io)
-
-            for i in range(len(self.vmax)):
-                pass
-                self.vmax[i]._write__seq(self._io)
-
-            for i in range(len(self.child_index)):
-                pass
-                self._io.write_u2le(self.child_index[i])
-
-
-
-        def _check(self):
-            if self.bbox_this._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"bbox_this", self._root, self.bbox_this._root)
-            if self.bbox_this._parent != self:
-                raise kaitaistruct.ConsistencyError(u"bbox_this", self, self.bbox_this._parent)
-            if len(self.vmin) != 2:
-                raise kaitaistruct.ConsistencyError(u"vmin", 2, len(self.vmin))
-            for i in range(len(self.vmin)):
-                pass
-                if self.vmin[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"vmin", self._root, self.vmin[i]._root)
-                if self.vmin[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"vmin", self, self.vmin[i]._parent)
-
-            if len(self.vmax) != 2:
-                raise kaitaistruct.ConsistencyError(u"vmax", 2, len(self.vmax))
-            for i in range(len(self.vmax)):
-                pass
-                if self.vmax[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"vmax", self._root, self.vmax[i]._root)
-                if self.vmax[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"vmax", self, self.vmax[i]._parent)
-
-            if len(self.child_index) != 2:
-                raise kaitaistruct.ConsistencyError(u"child_index", 2, len(self.child_index))
-            for i in range(len(self.child_index)):
-                pass
-
             self._dirty = False
 
 

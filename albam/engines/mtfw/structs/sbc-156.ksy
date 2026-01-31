@@ -7,9 +7,9 @@ meta:
 
 seq:
   - {id: header, type: sbc_header}
-  - {id: boxes, type: re5boxes, repeat: expr, repeat-expr: header.num_boxes}
-  - {id: groups, type: sbcgroup, repeat: expr, repeat-expr: header.num_groups}
-  - {id: faces, type : re5triangle, repeat: expr, repeat-expr: header.num_faces}
+  - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: header.num_boxes}
+  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_groups}
+  - {id: faces, type : face, repeat: expr, repeat-expr: header.num_faces}
   - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
 
 types:
@@ -40,7 +40,7 @@ types:
     - {id: bbox, type: tbox}
 
 
-  sbcgroup: #96 bytes unloaded
+  info: #96 bytes unloaded
     seq:
       - {id: base, type: u4}
       - {id: start_tris, type: u4}
@@ -52,7 +52,7 @@ types:
       - {id: vmax, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
 
-  info: #96 bytes og
+  info_og: #96 bytes og
     seq:
       - {id: flags, type: u4}
       - {id: start_tris, type: u4}
@@ -64,7 +64,7 @@ types:
       - {id: max, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
 
-  re5triangle: #28 bytes unloaded
+  face: #28 bytes unloaded
     seq:
       - {id: vert, type: u2, repeat: expr, repeat-expr: 3}
       - {id: unk_00, type: u1}
@@ -75,21 +75,21 @@ types:
       - {id: surface_attr, type: u4}
       - {id: unk_02, type: u4}
 
-  face: #28 bytes og
+  face_og: #28 bytes og
     seq:
       - {id: vert, type: u2, repeat: expr, repeat-expr: 3}
       - {id: unk_00, type: u1, repeat: expr, repeat-expr: 2}
       - {id: type, type: u4} # attribute
       - {id: attr, type: u4, repeat: expr, repeat-expr: 4}
 
-  re5boxes: # 80 bytes unloaded
+  bvh_node: # 80 bytes unloaded
     seq:
       - {id: boxes, type: pbox, repeat: expr, repeat-expr: 2}
       - {id: bit, type: u2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2} # references to a box
       - {id: nulls, type: u1, repeat: expr, repeat-expr: 10}
 
-  bvh_node: # 80 bytes og
+  bvh_node_og: # 80 bytes og
     seq:
       - {id: aabb_01, type: aabb}
       - {id: aabb_02, type: aabb}
