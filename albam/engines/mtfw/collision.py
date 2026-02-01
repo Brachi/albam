@@ -1153,12 +1153,12 @@ def mesh_to_tri156(mesh):
     attr = []
     faces = []
     vertices = [Vector(v.co) for v in bm.verts]
-    for f in bm.faces:
-        faces.append(Tri(SemiTri(f), vertices))
-        attr.append({'runtime_attr': SemiTri.getMaterial(f, mesh),
-                     'group': f[group],
-                     'surface_attr': f[surface_attr],
-                     'special_attr': f[special_attr]})
+    for face in bm.faces:
+        faces.append(Tri(SemiTri(face), vertices))
+        attr.append({'runtime_attr': SemiTri.getMaterial(face, mesh),
+                     'group': face[group] if group else 0,
+                     'surface_attr': face[surface_attr] if surface_attr else 0,
+                     'special_attr': face[special_attr] if special_attr else 0})
     bm.free()
     return vertices, faces, attr
 
