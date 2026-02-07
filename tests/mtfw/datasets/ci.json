@@ -2,16 +2,19 @@
     {
         "app_id": "re1",
         "mod_path": "model/pl/pl00/pl00.mod",
-        "mrl_path": "model/pl/pl00/pl00.mrl"
+        "mrl_path": "model/pl/pl00/pl00.mrl",
+        "sbc_path": null
     },
     {
         "app_id": "re5",
         "mod_path": "pawn/pl/pl00/model/pl0000.mod",
-        "mrl_path": null
+        "mrl_path": null,
+        "sbc_path": "stage/s400/src/src00/s400h_src.sbc"
     },
     {
         "app_id": "dd",
         "mod_path": "model/pl/m/m_body_b/m_body_b000_a/m_body_b000_a.mod",
-        "mrl_path": "model/pl/m/m_body_b/m_body_b000_a/m_body_b000_a.mrl"
+        "mrl_path": "model/pl/m/m_body_b/m_body_b000_a/m_body_b000_a.mrl",
+        "sbc_path": null
     }
 ]

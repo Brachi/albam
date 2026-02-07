@@ -110,7 +110,7 @@ class SBCObject156():
         self.sbcinfo = info
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
         self.attr = [{'runtime_attr': f.runtime_attr,
-                      'group': f.type,
+                      'type': f.type,
                       'special_attr': f.special_attr,
                       'surface_attr': f.surface_attr} for f in faces]
         self.vertices = vertices
@@ -392,13 +392,6 @@ def create_collision_mesh(sbc_object, app_id, mesh_name):
     return mesh, obj
 
 
-def create_collision_mesh156(sbcObject):
-    mesh, obj = create_sbc_mesh156("CollisionMesh.000", decompose_sbc156(sbcObject))
-    obj["Type"] = "SBC_Mesh"
-    # obj["indexID"] = str(sbcObject.sbcinfo.index_id)
-    return mesh, obj
-
-
 def create_link_ob(link_ob, app_id, link_name):
     # Add custom attributes from collision_types to an empty object
     sbc_empty = common.create_root_nub(link_name)
@@ -459,12 +452,12 @@ def create_sbc_mesh(name, meshpart, app_id):
     bm.faces.ensure_lookup_table()
     # Unloaded stores custom attributes in the mesh faces, not the best idea
     if app_id in ["re5", "dmc4"]:
-        group = bm.faces.layers.int.new('group')
+        type = bm.faces.layers.int.new('type')
         surface_attr = bm.faces.layers.int.new('surface_attr')
         special_attr = bm.faces.layers.int.new('special_attr')
 
         for i, val in enumerate(meshpart['attr']):
-            bm.faces[i][group] = val['group']
+            bm.faces[i][type] = val['type']
             bm.faces[i][surface_attr] = val['surface_attr']
             bm.faces[i][special_attr] = val['special_attr']
     # Store type/runtime_attr as material indices
@@ -486,30 +479,6 @@ def create_sbc_mesh(name, meshpart, app_id):
 
     bm.to_mesh(bl_mesh)
     return bl_mesh, bl_obj
-
-
-def create_sbc_mesh156(name, meshpart):
-    blenderMesh = bpy.data.meshes.new(name)
-    blenderMesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
-    blenderMesh.update()
-    blenderObject = bpy.data.objects.new(name, blenderMesh)
-    bpy.context.collection.objects.link(blenderObject)
-
-    bm = bmesh.new()
-    bm.from_mesh(blenderMesh)
-    bm.faces.ensure_lookup_table()
-
-    group = bm.faces.layers.int.new('group')
-    surface_attr = bm.faces.layers.int.new('surface_attr')
-    special_attr = bm.faces.layers.int.new('special_attr')
-
-    for i, val in enumerate(meshpart['attr']):
-        bm.faces[i][group] = val['group']
-        bm.faces[i][surface_attr] = val['surface_attr']
-        bm.faces[i][special_attr] = val['special_attr']
-
-    bm.to_mesh(blenderMesh)
-    return blenderMesh, blenderObject
 
 
 def cycles(verts):
@@ -729,7 +698,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, object_count, stage_count, pair_c
     return dst_sbc_header
 
 
-def _init_sbc156_header(dst_sbc, version, parent_tree, num_groups, num_boxes, num_verts, num_tris):
+def _init_sbc156_header(dst_sbc, version, parent_tree, num_groups, num_nodes, num_verts, num_tris):
     dst_sbc_header = dst_sbc.SbcHeader(_parent=dst_sbc, _root=dst_sbc._root)
     bbox_data = parent_tree.boundingBox().serialize()
     bbox = dst_sbc.Tbox(_parent=dst_sbc_header, _root=dst_sbc._root)
@@ -746,12 +715,12 @@ def _init_sbc156_header(dst_sbc, version, parent_tree, num_groups, num_boxes, nu
         version=version,  # was 18
         num_groups=num_groups,
         num_groups_nodes=num_groups - 1,
-        num_boxes=num_boxes,
-        num_vertices=num_verts,
-        num_faces=num_tris,
-        bbox=bbox,
         max_parts_nest_count=0,
-        max_nest_count=0
+        max_nest_count=0,
+        num_boxes=num_nodes,
+        num_faces=num_tris,
+        num_vertices=num_verts,
+        bbox=bbox
     ))
 
     dst_sbc_header._check()
