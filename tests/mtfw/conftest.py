@@ -157,6 +157,12 @@ def sbc_export(loaded_arcs, app_id, sbc_path):
     vfile_sbc = bpy.context.scene.albam.vfs.select_vfile(app_id, sbc_path) if sbc_path else None
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
     vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(app_id, sbc_path) if sbc_path else None
     assert vfile_sbc_exported
     Sbc = APPID_SBC_CLASS_MAPPER[app_id]
