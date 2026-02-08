@@ -70,9 +70,9 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
-    face_group: bpy.props.IntProperty(name='Group')
-    surface_attr: bpy.props.IntProperty(name='Surface attributes')
-    special_attr: bpy.props.IntProperty(name='Behavior attributes')
+    face_group: bpy.props.IntProperty(name='Group')  # noqa: F821
+    surface_attr: bpy.props.IntProperty(name='Surface attributes')  # noqa: F821
+    special_attr: bpy.props.IntProperty(name='Behavior attributes')  # noqa: F821
     face_preset_enum = bpy.props.EnumProperty(
         name="",
         description="Select face property",
