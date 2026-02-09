@@ -47,7 +47,7 @@ types:
       - {id: start_boxes, type: u4} # ?
       - {id: start_vertices, type: u4}
       - {id: group_id, type: u4}
-      - {id: bbox_this, type: tbox}
+      - {id: bounding_box, type: tbox}
       - {id: vmin, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: vmax, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
@@ -97,10 +97,6 @@ types:
       - {id: unk, type: u1}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2}
       - {id: nulls, type: u1, repeat: expr, repeat-expr: 10}
-
-  vertex:
-    seq:
-      - {id: vector, type: vec4}
   
   tbox:
     seq:
@@ -125,14 +121,14 @@ types:
       - {id: y, type: f4}
       - {id: z, type: f4}
 
-  rgba:
-    seq:
-      - {id: red, type: u1}
-      - {id: green, type: u1}
-      - {id: blue, type: u1}
-      - {id: alpha, type: u1}
-
   aabb:
     seq:
       - {id: min, type: vec4}
       - {id: max, type: vec4}
+      
+  vertex:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
+      - {id: z, type: f4}
+      - {id: w, type: f4}

@@ -137,170 +137,6 @@ palette = [colorsys.hsv_to_rgb(c / 55, 1.0, cycle()) for c in range(44)]
 palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 
-def _unpack_bbox(min, max):
-    min_x, min_y, min_z = min[0], min[1], min[2]
-    max_x, max_y, max_z = max[0], max[1], max[2]
-    unpack_bbox = [
-        (max_x, max_y, max_z),
-        (min_x, max_y, max_z),
-        (min_x, min_y, max_z),
-        (max_x, min_y, max_z),
-        (max_x, min_y, min_z),
-        (max_x, max_y, min_z),
-        (min_x, max_y, min_z),
-        (min_x, min_y, min_z),
-    ]
-    return unpack_bbox
-
-
-def _scale_bbox(box):
-    scaled = []
-    scaled = (box.x / 100, box.z / -100, box.y / 100)
-    return scaled
-
-
-def _transform_coordinates(verts):
-    transformed = []
-    for v in verts:
-        vert = (v.position_x / 100, v.position_z / -100, v.position_y / 100)
-        transformed.append(vert)
-    return transformed
-
-
-def _create_bbox(name, min, max):
-    box_indices = [(3, 2, 1, 0),
-                   (4, 5, 6, 7),
-                   (2, 3, 4, 7),
-                   (6, 5, 0, 1),
-                   (1, 2, 7, 6),
-                   (5, 4, 3, 0),
-                   ]
-    box_min = _scale_bbox(min)
-    box_max = _scale_bbox(max)
-
-    box = _unpack_bbox(box_min, box_max)
-    b_mesh_data = bpy.data.meshes.new(name)
-    b_mesh_data.from_pydata(box, [], box_indices)
-    return b_mesh_data
-
-
-def debug_create_unk_nodes(sbc):
-    colors = [(0.8, 0.65, 0, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
-    box_mats = ["m_node_main", "m_node_left", "m_node_right"]
-    for i, m in enumerate(box_mats):
-        if not bpy.data.materials.get(m):
-            mat = bpy.data.materials.new(name=m)
-            mat.diffuse_color = colors[i]
-    collection = bpy.data.collections.get("DebugUNKNodes")
-    if not collection:
-        collection = bpy.data.collections.new("DebugUNKNodes")
-        # Link the collection to the scene
-        bpy.context.scene.collection.children.link(collection)
-
-    for i, node in enumerate(sbc.nodes):
-        if i >= sbc.header.num_parts + 1:
-            break
-        empty_name = "NodeRoot" + str(i)
-        empty = bpy.data.objects.new(name=empty_name, object_data=None)
-        collection = bpy.data.collections.get("DebugUNKNodes")
-        empty.empty_display_type = 'PLAIN_AXES'
-        collection.objects.link(empty)
-        a_min = node.aabb_01.min
-        a_max = node.aabb_01.max
-        b_min = node.aabb_02.min
-        b_max = node.aabb_02.max
-        boxes = [(a_min, a_max), (b_min, b_max)]
-        for j, b in enumerate(boxes):
-            name = "bbox_test.001"
-            b_mesh_data = _create_bbox(("sbc_unk_nodes_tests" + str(j)), b[0], b[1])
-            b_mesh_obj = bpy.data.objects.new(name + "_" + str(j), b_mesh_data)
-            b_mesh_obj.active_material = bpy.data.materials.get(box_mats[j])
-            b_mesh_obj.parent = empty
-            collection.objects.link(b_mesh_obj)
-
-
-def debug_create_bbox(sbc):
-    collection = bpy.data.collections.get("DebugBoxes")
-    box_mats = ["m_sbc_main", "m_sbc_left", "m_sbc_right"]
-    colors = [(0.53, 0.3, 0.73, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
-    for i, m in enumerate(box_mats):
-        if not bpy.data.materials.get(m):
-            mat = bpy.data.materials.new(name=m)
-            mat.diffuse_color = colors[i]
-
-    if not collection:
-        collection = bpy.data.collections.new("DebugBoxes")
-        # Link the collection to the scene
-        bpy.context.scene.collection.children.link(collection)
-
-    bbox_min = sbc.sbcinfo.bounding_box.min
-    bbox_max = sbc.sbcinfo.bounding_box.max
-
-    a_min = sbc.sbcinfo.min[0]
-    b_min = sbc.sbcinfo.min[1]
-    a_max = sbc.sbcinfo.max[0]
-    b_max = sbc.sbcinfo.max[1]
-    boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
-    parent = None
-    for i, b in enumerate(boxes):
-        if i <= 0:
-            name = "bounding_box.000"
-        else:
-            name = "bbox_test.001"
-        b_mesh_data = _create_bbox(("sbs_nodes_test" + str(i)), b[0], b[1])
-        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
-        b_mesh_obj.active_material = bpy.data.materials.get(box_mats[i])
-        if not parent:
-            parent = b_mesh_obj
-        else:
-            b_mesh_obj.parent = parent
-        collection.objects.link(b_mesh_obj)
-
-
-def debug_create_sbcinfo_nodes(node):
-    empty = bpy.data.objects.new(name="NodeRoot", object_data=None)
-    collection = bpy.data.collections.get("DebugNodes")
-    empty.empty_display_type = 'PLAIN_AXES'
-
-    if not collection:
-        collection = bpy.data.collections.new("DebugNodes")
-        bpy.context.scene.collection.children.link(collection)
-    collection.objects.link(empty)
-
-    mat_name = "m_node_debug"
-    mat_color = (0.4, 0.75, 0.36, 1)
-    if not bpy.data.materials.get(mat_name):
-        mat = bpy.data.materials.new(name=mat_name)
-        mat.diffuse_color = mat_color
-    boxa = node.aabb_01
-    boxb = node.aabb_02
-    a_min = boxa.min
-    b_min = boxb.min
-    a_max = boxa.max
-    b_max = boxb.max
-    boxes = [(a_min, a_max), (b_min, b_max)]
-    box_indices = [(3, 2, 1, 0),
-                   (4, 5, 6, 7),
-                   (2, 3, 4, 7),
-                   (6, 5, 0, 1),
-                   (1, 2, 7, 6),
-                   (5, 4, 3, 0),
-                   ]
-    for i, b in enumerate(boxes):
-        # name = _create_mesh_name(i, file_path)
-        name = "node_test.001"
-        ba_min = _scale_bbox(b[0])
-        ba_max = _scale_bbox(b[1])
-
-        box = _unpack_bbox(ba_min, ba_max)
-        b_mesh_data = bpy.data.meshes.new("sbs_boxes_test" + str(i))
-        b_mesh_data.from_pydata(box, [], box_indices)
-        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
-        b_mesh_obj.parent = empty
-        b_mesh_obj.active_material = bpy.data.materials.get(mat_name)
-        collection.objects.link(b_mesh_obj)
-
-
 @blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re5", extension='sbc', albam_asset_type="COLLISION")
@@ -318,7 +154,6 @@ def load_sbc(file_item, context):
     sbc = SbcCls.from_bytes(sbc_bytes)
     sbc._read()
 
-    # debug_create_unk_nodes(sbc)  # first nodes
     bl_object_name = file_item.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
     sbc_objects = []
@@ -340,7 +175,7 @@ def load_sbc(file_item, context):
     else:
         bvh_collection = [b for i, b in enumerate(sbc.nodes)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
-        vertex_collection = [fc.vector for i, fc in enumerate(sbc.vertices)]
+        vertex_collection = [fc for i, fc in enumerate(sbc.vertices)]
 
         for ix, ob_info in enumerate(sbc.sbc_info):
             if ix < (len(sbc.sbc_info) - 1):
@@ -367,7 +202,7 @@ def load_sbc(file_item, context):
             debug_create_bbox(obj)  # sbc_info
         ob.parent = bl_object
 
-    if app_id != "re5":
+    if sbc_version == 255:
         for i, typing in enumerate(sbc.collision_types):
             link_name = f"{bl_object_name}_stage_link_{str(i).zfill(4)}"
             empty_ob = create_link_ob(typing, app_id, link_name)
@@ -375,7 +210,7 @@ def load_sbc(file_item, context):
 
     if DEBUG_DRAW:
         for i, node in enumerate(bvh_collection):
-            if i >= sbc.header.num_parts:
+            if i >= sbc.header.num_groups:
                 break
             debug_create_sbcinfo_nodes(node)
 
@@ -414,15 +249,6 @@ def decompose_sbc_ob(sbc_ob, app_id):
     sbc_geom["materials"] = materials_from_sbc(sbc_ob, app_id)
     if app_id in ("re5", "dmc4"):
         sbc_geom['attr'] = sbc_ob.attr
-    return sbc_geom
-
-
-def decompose_sbc156(sbc_ob):
-    sbc_geom = {}
-    sbc_geom["vertices"] = [(vert.x * 0.01, vert.z * -0.01, vert.y * 0.01)
-                            for vert in sbc_ob.vertices]
-    sbc_geom["faces"] = [face.dataFace.vert for face in sbc_ob.faces]
-    sbc_geom['attr'] = sbc_ob.attr
     return sbc_geom
 
 
@@ -652,7 +478,7 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree)
         # tri_num += len(tris[i]) - 1
         groups.append(sbc_info)
         faces.extend(_serialize_faces156(dst_sbc, tris[i], attr[i]))
-        vertices.extend(_serialize_vertices156(dst_sbc, verts[i]))
+        vertices.extend(_serialize_vertices(dst_sbc, verts[i]))
 
     final_node_list = _serialize_top_bvh(dst_sbc, parent_tree, groups)
     final_node_list.extend(nodes)
@@ -782,7 +608,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     # bbox.max.z = bbox_data['maxPos']['z']
     bbox.min = write_vec3([v for v in bbox_data['minPos'].values()], dst_sbc)
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
-    sbc_info.bbox_this = bbox
+    sbc_info.bounding_box = bbox
     sbc_info.group_id = 0xffffffff  # was 0
     sbc_info.base = 0
     sbc_info.start_boxes = start_node
@@ -848,17 +674,17 @@ def _serialize_faces(dst_sbc, face_data):
 def _serialize_faces156(dst_sbc, face_data, attr):
     faces = []
     for i, f in enumerate(face_data):
-        tri = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
-        tri.vert = f.dataFace.vert
-        tri.unk_00 = 0
-        tri.unk_01 = 0
-        tri.runtime_attr = attr[i]['runtime_attr']
-        tri.type = attr[i]['group']
-        tri.surface_attr = attr[i]['surface_attr']
-        tri.special_attr = attr[i]['special_attr']
-        tri.unk_02 = 0
-        tri._check()
-        faces.append(tri)
+        face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
+        face.vert = f.dataFace.vert
+        face.unk_00 = 0
+        face.unk_01 = 0
+        face.runtime_attr = attr[i]['runtime_attr']
+        face.type = attr[i]['group']
+        face.surface_attr = attr[i]['surface_attr']
+        face.special_attr = attr[i]['special_attr']
+        face.unk_02 = 0
+        face._check()
+        faces.append(face)
     return faces
 
 
@@ -1216,3 +1042,170 @@ class SBC21LinkCustomProperties(BaseSBCProperties):
 @blender_registry.register_blender_prop
 class SBC21MeshCustomProperties(BaseSBCProperties):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
+
+
+# Code for debug visualization #
+
+def _unpack_bbox(min, max):
+    min_x, min_y, min_z = min[0], min[1], min[2]
+    max_x, max_y, max_z = max[0], max[1], max[2]
+    unpack_bbox = [
+        (max_x, max_y, max_z),
+        (min_x, max_y, max_z),
+        (min_x, min_y, max_z),
+        (max_x, min_y, max_z),
+        (max_x, min_y, min_z),
+        (max_x, max_y, min_z),
+        (min_x, max_y, min_z),
+        (min_x, min_y, min_z),
+    ]
+    return unpack_bbox
+
+
+def _scale_bbox(box):
+    scaled = []
+    scaled = (box.x / 100, box.z / -100, box.y / 100)
+    return scaled
+
+
+def _transform_coordinates(verts):
+    transformed = []
+    for v in verts:
+        vert = (v.position_x / 100, v.position_z / -100, v.position_y / 100)
+        transformed.append(vert)
+    return transformed
+
+
+def _create_bbox(name, min, max):
+    box_indices = [(3, 2, 1, 0),
+                   (4, 5, 6, 7),
+                   (2, 3, 4, 7),
+                   (6, 5, 0, 1),
+                   (1, 2, 7, 6),
+                   (5, 4, 3, 0),
+                   ]
+    box_min = _scale_bbox(min)
+    box_max = _scale_bbox(max)
+
+    box = _unpack_bbox(box_min, box_max)
+    b_mesh_data = bpy.data.meshes.new(name)
+    b_mesh_data.from_pydata(box, [], box_indices)
+    return b_mesh_data
+
+
+def debug_create_unk_nodes(sbc):
+    colors = [(0.8, 0.65, 0, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
+    box_mats = ["m_node_main", "m_node_left", "m_node_right"]
+    for i, m in enumerate(box_mats):
+        if not bpy.data.materials.get(m):
+            mat = bpy.data.materials.new(name=m)
+            mat.diffuse_color = colors[i]
+    collection = bpy.data.collections.get("DebugUNKNodes")
+    if not collection:
+        collection = bpy.data.collections.new("DebugUNKNodes")
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+
+    for i, node in enumerate(sbc.nodes):
+        if i >= sbc.header.num_parts + 1:
+            break
+        empty_name = "NodeRoot" + str(i)
+        empty = bpy.data.objects.new(name=empty_name, object_data=None)
+        collection = bpy.data.collections.get("DebugUNKNodes")
+        empty.empty_display_type = 'PLAIN_AXES'
+        collection.objects.link(empty)
+        a_min = node.aabb_01.min
+        a_max = node.aabb_01.max
+        b_min = node.aabb_02.min
+        b_max = node.aabb_02.max
+        boxes = [(a_min, a_max), (b_min, b_max)]
+        for j, b in enumerate(boxes):
+            name = "bbox_test.001"
+            b_mesh_data = _create_bbox(("sbc_unk_nodes_tests" + str(j)), b[0], b[1])
+            b_mesh_obj = bpy.data.objects.new(name + "_" + str(j), b_mesh_data)
+            b_mesh_obj.active_material = bpy.data.materials.get(box_mats[j])
+            b_mesh_obj.parent = empty
+            collection.objects.link(b_mesh_obj)
+
+
+def debug_create_bbox(sbc):
+    coll_name = "DebugSBCInfoBBoxes"
+    collection = bpy.data.collections.get(coll_name)
+    box_mats = ["m_sbc_main", "m_sbc_left", "m_sbc_right"]
+    colors = [(0.53, 0.3, 0.73, 1), (1, 0.9, 0, 1), (0.35, 0.54, 0.02, 1)]
+    for i, m in enumerate(box_mats):
+        if not bpy.data.materials.get(m):
+            mat = bpy.data.materials.new(name=m)
+            mat.diffuse_color = colors[i]
+
+    if not collection:
+        collection = bpy.data.collections.new(coll_name)
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+
+    bbox_min = sbc.sbcinfo.bounding_box.min
+    bbox_max = sbc.sbcinfo.bounding_box.max
+
+    a_min = sbc.sbcinfo.vmin[0]
+    b_min = sbc.sbcinfo.vmin[1]
+    a_max = sbc.sbcinfo.vmax[0]
+    b_max = sbc.sbcinfo.vmax[1]
+    boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
+    parent = None
+    for i, b in enumerate(boxes):
+        if i <= 0:
+            name = "bounding_box.000"
+        else:
+            name = "bbox_test.001"
+        b_mesh_data = _create_bbox(("sbs_nodes_test" + str(i)), b[0], b[1])
+        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
+        b_mesh_obj.active_material = bpy.data.materials.get(box_mats[i])
+        if not parent:
+            parent = b_mesh_obj
+        else:
+            b_mesh_obj.parent = parent
+        collection.objects.link(b_mesh_obj)
+
+
+def debug_create_sbcinfo_nodes(node):
+    empty = bpy.data.objects.new(name="NodeRoot", object_data=None)
+    collection = bpy.data.collections.get("DebugNodes")
+    empty.empty_display_type = 'PLAIN_AXES'
+
+    if not collection:
+        collection = bpy.data.collections.new("DebugNodes")
+        bpy.context.scene.collection.children.link(collection)
+    collection.objects.link(empty)
+
+    mat_name = "m_node_debug"
+    mat_color = (0.4, 0.75, 0.36, 1)
+    if not bpy.data.materials.get(mat_name):
+        mat = bpy.data.materials.new(name=mat_name)
+        mat.diffuse_color = mat_color
+    boxa = node.boxes[0]
+    boxb = node.boxes[1]
+    a_min = boxa.min
+    b_min = boxb.min
+    a_max = boxa.max
+    b_max = boxb.max
+    boxes = [(a_min, a_max), (b_min, b_max)]
+    box_indices = [(3, 2, 1, 0),
+                   (4, 5, 6, 7),
+                   (2, 3, 4, 7),
+                   (6, 5, 0, 1),
+                   (1, 2, 7, 6),
+                   (5, 4, 3, 0),
+                   ]
+    for i, b in enumerate(boxes):
+        # name = _create_mesh_name(i, file_path)
+        name = "node_test.001"
+        ba_min = _scale_bbox(b[0])
+        ba_max = _scale_bbox(b[1])
+
+        box = _unpack_bbox(ba_min, ba_max)
+        b_mesh_data = bpy.data.meshes.new("sbs_boxes_test" + str(i))
+        b_mesh_data.from_pydata(box, [], box_indices)
+        b_mesh_obj = bpy.data.objects.new(name + "_" + str(i), b_mesh_data)
+        b_mesh_obj.parent = empty
+        b_mesh_obj.active_material = bpy.data.materials.get(mat_name)
+        collection.objects.link(b_mesh_obj)

@@ -9,7 +9,7 @@
         "app_id": "re5",
         "mod_path": "pawn/pl/pl00/model/pl0000.mod",
         "mrl_path": null,
-        "sbc_path": "stage/s400/src/src00/s400h_src.sbc"
+        "sbc_path": null
     },
     {
         "app_id": "dd",

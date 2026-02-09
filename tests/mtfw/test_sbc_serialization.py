@@ -2,13 +2,15 @@ import pytest
 
 
 def test_export_header(sbc_imported, sbc_exported):
+    sbc_version = 255 if sbc_imported.header.magic == b"SBC\xFF" else 49
     sheader = sbc_imported.header
     dheader = sbc_exported.header
     assert sheader.magic == dheader.magic
-    assert sheader.version == dheader.version
-    assert sheader.num_groups == dheader.num_groups
-    assert sheader.num_faces == dheader.num_faces
-    assert sheader.num_vertices == dheader.num_vertices
+    if sbc_version == 49:
+        assert sheader.version == dheader.version
+        assert sheader.num_groups == dheader.num_groups
+        assert sheader.num_faces == dheader.num_faces
+        assert sheader.num_vertices == dheader.num_vertices
     assert sheader.bbox.min.x == pytest.approx(dheader.bbox.min.x, rel=0.001)
     assert sheader.bbox.min.y == pytest.approx(dheader.bbox.min.y, rel=0.001)
     assert sheader.bbox.min.z == pytest.approx(dheader.bbox.min.z, rel=0.001)
@@ -23,15 +25,16 @@ def test_export_infos(sbc_imported, sbc_exported):
     assert len(sinfos) == len(dinfos)
     for sinfo, dinfo in zip(sinfos, dinfos):
         assert sinfo.group_id == dinfo.group_id
-        assert sinfo.bbox_this.min.x == pytest.approx(dinfo.bbox_this.min.x, rel=0.001)
-        assert sinfo.bbox_this.min.y == pytest.approx(dinfo.bbox_this.min.y, rel=0.001)
-        assert sinfo.bbox_this.min.z == pytest.approx(dinfo.bbox_this.min.z, rel=0.001)
-        assert sinfo.bbox_this.max.x == pytest.approx(dinfo.bbox_this.max.x, rel=0.001)
-        assert sinfo.bbox_this.max.y == pytest.approx(dinfo.bbox_this.max.y, rel=0.001)
-        assert sinfo.bbox_this.max.z == pytest.approx(dinfo.bbox_this.max.z, rel=0.001)
+        assert sinfo.bounding_box.min.x == pytest.approx(dinfo.bounding_box.min.x, rel=0.001)
+        assert sinfo.bounding_box.min.y == pytest.approx(dinfo.bounding_box.min.y, rel=0.001)
+        assert sinfo.bounding_box.min.z == pytest.approx(dinfo.bounding_box.min.z, rel=0.001)
+        assert sinfo.bounding_box.max.x == pytest.approx(dinfo.bounding_box.max.x, rel=0.001)
+        assert sinfo.bounding_box.max.y == pytest.approx(dinfo.bounding_box.max.y, rel=0.001)
+        assert sinfo.bounding_box.max.z == pytest.approx(dinfo.bounding_box.max.z, rel=0.001)
 
 
 def test_export_faces(sbc_imported, sbc_exported):
+    sbc_version = 255 if sbc_imported.header.magic == b"SBC\xFF" else 49
     sfaces = sbc_imported.faces
     dfaces = sbc_exported.faces
     assert len(sfaces) == len(dfaces)
@@ -39,7 +42,18 @@ def test_export_faces(sbc_imported, sbc_exported):
         assert sface.vert[0] == dface.vert[0]
         assert sface.vert[1] == dface.vert[1]
         assert sface.vert[2] == dface.vert[2]
-        assert sface.runtime_attr == dface.runtime_attr
-        assert sface.type == dface.type
-        assert sface.special_attr == dface.special_attr
-        assert sface.surface_attr == dface.surface_attr
+        if sbc_version == 49:
+            assert sface.runtime_attr == dface.runtime_attr
+            assert sface.type == dface.type
+            assert sface.special_attr == dface.special_attr
+            assert sface.surface_attr == dface.surface_attr
+
+
+def test_export_vertices(sbc_imported, sbc_exported):
+    sverts = sbc_imported.vertices
+    dverts = sbc_exported.vertices
+    assert len(sverts) == len(dverts)
+    for svert, dvert in zip(sverts, dverts):
+        assert svert.x == pytest.approx(dvert.x, rel=0.001)
+        assert svert.y == pytest.approx(dvert.y, rel=0.001)
+        assert svert.z == pytest.approx(dvert.z, rel=0.001)

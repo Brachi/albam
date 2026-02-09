@@ -466,8 +466,8 @@ class Sbc156(ReadWriteKaitaiStruct):
             self.start_boxes = self._io.read_u4le()
             self.start_vertices = self._io.read_u4le()
             self.group_id = self._io.read_u4le()
-            self.bbox_this = Sbc156.Tbox(self._io, self, self._root)
-            self.bbox_this._read()
+            self.bounding_box = Sbc156.Tbox(self._io, self, self._root)
+            self.bounding_box._read()
             self.vmin = []
             for i in range(2):
                 _t_vmin = Sbc156.Vec3(self._io, self, self._root)
@@ -493,7 +493,7 @@ class Sbc156(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            self.bbox_this._fetch_instances()
+            self.bounding_box._fetch_instances()
             for i in range(len(self.vmin)):
                 pass
                 self.vmin[i]._fetch_instances()
@@ -514,7 +514,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.start_boxes)
             self._io.write_u4le(self.start_vertices)
             self._io.write_u4le(self.group_id)
-            self.bbox_this._write__seq(self._io)
+            self.bounding_box._write__seq(self._io)
             for i in range(len(self.vmin)):
                 pass
                 self.vmin[i]._write__seq(self._io)
@@ -530,10 +530,10 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if self.bbox_this._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"bbox_this", self._root, self.bbox_this._root)
-            if self.bbox_this._parent != self:
-                raise kaitaistruct.ConsistencyError(u"bbox_this", self, self.bbox_this._parent)
+            if self.bounding_box._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self._root, self.bounding_box._root)
+            if self.bounding_box._parent != self:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self, self.bounding_box._parent)
             if len(self.vmin) != 2:
                 raise kaitaistruct.ConsistencyError(u"vmin", 2, len(self.vmin))
             for i in range(len(self.vmin)):
@@ -701,36 +701,6 @@ class Sbc156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"max", self._root, self.max._root)
             if self.max._parent != self:
                 raise kaitaistruct.ConsistencyError(u"max", self, self.max._parent)
-            self._dirty = False
-
-
-    class Rgba(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Sbc156.Rgba, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.red = self._io.read_u1()
-            self.green = self._io.read_u1()
-            self.blue = self._io.read_u1()
-            self.alpha = self._io.read_u1()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Sbc156.Rgba, self)._write__seq(io)
-            self._io.write_u1(self.red)
-            self._io.write_u1(self.green)
-            self._io.write_u1(self.blue)
-            self._io.write_u1(self.alpha)
-
-
-        def _check(self):
             self._dirty = False
 
 
@@ -945,26 +915,26 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.vector = Sbc156.Vec4(self._io, self, self._root)
-            self.vector._read()
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
+            self.z = self._io.read_f4le()
+            self.w = self._io.read_f4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
-            self.vector._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Sbc156.Vertex, self)._write__seq(io)
-            self.vector._write__seq(self._io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
+            self._io.write_f4le(self.z)
+            self._io.write_f4le(self.w)
 
 
         def _check(self):
-            if self.vector._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"vector", self._root, self.vector._root)
-            if self.vector._parent != self:
-                raise kaitaistruct.ConsistencyError(u"vector", self, self.vector._parent)
             self._dirty = False
 
 
