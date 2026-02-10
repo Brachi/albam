@@ -109,7 +109,9 @@ class SBCObject156():
     def __init__(self, info, faces, vertices):
         self.sbcinfo = info
         self.faces = bvh.indexize_ob([geo.Tri(face, vertices) for face in faces])
-        self.attr = [{'runtime_attr': f.runtime_attr,
+        self.attr = [{'unk_00': f.unk_00,
+                      'unk_01': f.unk_01,
+                      'runtime_attr': f.runtime_attr,
                       'type': f.type,
                       'special_attr': f.special_attr,
                       'surface_attr': f.surface_attr} for f in faces]
@@ -164,7 +166,6 @@ def load_sbc(file_item, context):
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
         pair_collection = [pc for i, pc in enumerate(sbc.pairs_collections)]
 
-        print("sbc type {}".format(sbc_version))
         for ix, ob_info in enumerate(sbc.sbc_info):
             ps, pc = ob_info.pairs_start, ob_info.pairs_count
             fs, fc = ob_info.faces_start, ob_info.face_count
@@ -194,7 +195,7 @@ def load_sbc(file_item, context):
                 obj = SBCObject156(ob_info, face_collection[fs:], vertex_collection[vs:])
             sbc_objects.append(obj)
 
-    print("num sbc objects {}".format(len(sbc_objects)))
+    print("num SBC objects {}".format(len(sbc_objects)))
     for i, obj in enumerate(sbc_objects):
         mesh_name = f"{bl_object_name}_{str(i).zfill(4)}"
         mesh, ob = create_collision_mesh(obj, app_id, mesh_name)
@@ -220,7 +221,7 @@ def load_sbc(file_item, context):
 def create_collision_mesh(sbc_object, app_id, mesh_name):
     mesh, obj = create_sbc_mesh(mesh_name, decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
-    if app_id != "re5":
+    if app_id not in ("re5", "dmc4"):
         sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "sbc_21_mesh"]
         sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
@@ -254,7 +255,7 @@ def decompose_sbc_ob(sbc_ob, app_id):
 
 def materials_from_sbc(sbc_ob, app_id):
     materials = {}
-    if app_id not in ["re5", "dmc4"]:
+    if app_id not in ("re5", "dmc4"):
         for ix, face in enumerate(sbc_ob.faces):
             if face.type not in materials:
                 materials[face.type] = []
@@ -277,12 +278,16 @@ def create_sbc_mesh(name, meshpart, app_id):
     bm.from_mesh(bl_mesh)
     bm.faces.ensure_lookup_table()
     # Unloaded stores custom attributes in the mesh faces, not the best idea
-    if app_id in ["re5", "dmc4"]:
+    if app_id in ("re5", "dmc4"):
+        unk_00 = bm.faces.layers.int.new('unk_00')
+        unk_01 = bm.faces.layers.int.new('unk_01')
         type = bm.faces.layers.int.new('type')
         surface_attr = bm.faces.layers.int.new('surface_attr')
         special_attr = bm.faces.layers.int.new('special_attr')
 
         for i, val in enumerate(meshpart['attr']):
+            bm.faces[i][unk_00] = val['unk_00']
+            bm.faces[i][unk_01] = val['unk_01']
             bm.faces[i][type] = val['type']
             bm.faces[i][surface_attr] = val['surface_attr']
             bm.faces[i][special_attr] = val['special_attr']
@@ -292,7 +297,7 @@ def create_sbc_mesh(name, meshpart, app_id):
         if not mat:
             mat = bpy.data.materials.new(name="Type %03d" % material)
         try:
-            if app_id == "re5":
+            if app_id in ("re5", "dmc4"):
                 mat.diffuse_color = palette[KNOWN_RUNTIME_ATTR.index(material)]
             else:
                 mat.diffuse_color = palette[material]
@@ -346,12 +351,12 @@ def export_sbc(bl_obj):
     vfiles = []
     print("Initiate SBC export")
     for mesh in mesh_clones:
-        if app_id not in ["re5", "dmc4"]:
+        if app_id not in ("re5", "dmc4"):
             custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
                 "sbc_21_mesh"]
         # get list of Tri objects from faces of the mesh and vertices
         try:
-            if app_id in ["re5", "dmc4"]:
+            if app_id in ("re5", "dmc4"):
                 vertices, tris, attr = mesh_to_tri156(mesh)
                 attrList.append(attr)
             else:
@@ -359,7 +364,7 @@ def export_sbc(bl_obj):
         except TriangulationRequiredError:
             errors.append("%s requires triangulating." % mesh.name)
         # pairs, bvhc
-        if app_id in ["re5", "dmc4"]:
+        if app_id in ("re5", "dmc4"):
             quads, sbc = bvh.primitive_to_sbc156(tris, **options)
         else:
             quads, sbc = bvh.primitive_to_sbc(tris, **options)
@@ -367,14 +372,14 @@ def export_sbc(bl_obj):
         trisList.append(tris)  # tris primitive objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
-        if app_id not in ["re5", "dmc4"]:
+        if app_id not in ("re5", "dmc4"):
             mesh_metadata.append({"indexID": custom_props.index_id})
     for clone in mesh_clones:
         common.delete_ob(clone)
     if errors:
         print(errors)
         raise ExportingFailedError
-    if app_id in ["re5", "dmc4"]:
+    if app_id in ("re5", "dmc4"):
         parent_tree = bvh.trees_to_sbc_col156(sbcsList, **options)
         # version = SBC_VERSION[app_id]
         version = 22 if app_id == "re5" else 18
@@ -466,16 +471,12 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree)
     vertices = []
     faces = []
     node_num = (len(sbcs) - 1) or 1
-    # vert_num = 0
-    # tri_num = 0
     _init_sbc156_header(dst_sbc, version, parent_tree, len(sbcs), tally(
         tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
     for i, sbc in enumerate(sbcs):
         node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num)
         nodes.extend(node_list)
         node_num += len(node_list)
-        # vert_num += len(verts[i]) - 1
-        # tri_num += len(tris[i]) - 1
         groups.append(sbc_info)
         faces.extend(_serialize_faces156(dst_sbc, tris[i], attr[i]))
         vertices.extend(_serialize_vertices(dst_sbc, verts[i]))
@@ -538,11 +539,11 @@ def _init_sbc156_header(dst_sbc, version, parent_tree, num_groups, num_nodes, nu
     bbox.max = write_vec3([v for v in bbox_data['maxPos'].values()], dst_sbc)
     dst_sbc_header.__dict__.update(dict(
         magic=b'SBC\x31',
-        version=version,  # was 18
+        version=version,
         num_groups=num_groups,
         num_groups_nodes=num_groups - 1,
-        max_parts_nest_count=0,
-        max_nest_count=0,
+        num_max_parts_nest=0,
+        num_max_nest=0,
         num_boxes=num_nodes,
         num_faces=num_tris,
         num_vertices=num_verts,
@@ -679,7 +680,7 @@ def _serialize_faces156(dst_sbc, face_data, attr):
         face.unk_00 = 0
         face.unk_01 = 0
         face.runtime_attr = attr[i]['runtime_attr']
-        face.type = attr[i]['group']
+        face.type = attr[i]['type']
         face.surface_attr = attr[i]['surface_attr']
         face.special_attr = attr[i]['special_attr']
         face.unk_02 = 0
@@ -942,7 +943,9 @@ def mesh_to_tri156(mesh):
     bm = bmesh.new()
     # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
-    group = bm.faces.layers.int.get('group')
+    unk_00 = bm.faces.layers.int.get('unk_00')
+    unk_01 = bm.faces.layers.int.get('unk_01')
+    type = bm.faces.layers.int.get('type')
     surface_attr = bm.faces.layers.int.get('surface_attr')
     special_attr = bm.faces.layers.int.get('special_attr')
     attr = []
@@ -950,8 +953,10 @@ def mesh_to_tri156(mesh):
     vertices = [Vector(v.co) for v in bm.verts]
     for face in bm.faces:
         faces.append(Tri(SemiTri(face), vertices))
-        attr.append({'runtime_attr': SemiTri.getMaterial(face, mesh),
-                     'group': face[group] if group else 0,
+        attr.append({'unk_00': face[unk_00] if unk_00 else 0,
+                     'unk_01': face[unk_01] if unk_01 else 0,
+                     'runtime_attr': SemiTri.getMaterial(face, mesh),
+                     'type': face[type] if type else 0,
                      'surface_attr': face[surface_attr] if surface_attr else 0,
                      'special_attr': face[special_attr] if special_attr else 0})
     bm.free()

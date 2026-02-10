@@ -43,10 +43,12 @@ def test_export_faces(sbc_imported, sbc_exported):
         assert sface.vert[1] == dface.vert[1]
         assert sface.vert[2] == dface.vert[2]
         if sbc_version == 49:
+            assert sface.unk_00 == dface.unk_00  # probably junk
+            assert sface.unk_01 == dface.unk_01  # probably junk
             assert sface.runtime_attr == dface.runtime_attr
             assert sface.type == dface.type
-            assert sface.special_attr == dface.special_attr
-            assert sface.surface_attr == dface.surface_attr
+            assert sface.special_attr == dface.special_attr  # 0 in re5
+            assert sface.surface_attr == dface.surface_attr  # 0 in re5
 
 
 def test_export_vertices(sbc_imported, sbc_exported):

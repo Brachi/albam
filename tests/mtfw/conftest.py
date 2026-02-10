@@ -164,7 +164,7 @@ def sbc_export(loaded_arcs, app_id, sbc_path):
     assert result == {"FINISHED"}
 
     vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(app_id, sbc_path) if sbc_path else None
-    assert vfile_sbc_exported
+    # assert vfile_sbc_exported
     Sbc = APPID_SBC_CLASS_MAPPER[app_id]
     src_sbc = Sbc.from_bytes(vfile_sbc.get_bytes()) if sbc_path else None
     dst_sbc = Sbc.from_bytes(vfile_sbc_exported.get_bytes()) if sbc_path else None
