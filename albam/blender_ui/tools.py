@@ -70,7 +70,7 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
-    face_group: bpy.props.IntProperty(name='Group')  # noqa: F821
+    face_group: bpy.props.IntProperty(name='Type')  # noqa: F821
     surface_attr: bpy.props.IntProperty(name='Surface attributes')  # noqa: F821
     special_attr: bpy.props.IntProperty(name='Behavior attributes')  # noqa: F821
     face_preset_enum = bpy.props.EnumProperty(
@@ -237,15 +237,15 @@ class ALBAM_PT_FACE_PROP(bpy.types.Panel):
         ob = context.edit_object
         bm = bmesh.from_edit_mesh(ob.data)
 
-        group = bm.faces.layers.int.get('group', None)
+        type = bm.faces.layers.int.get('type', None)
         surface_attr = bm.faces.layers.int.get('surface_attr', None)
         special_attr = bm.faces.layers.int.get('special_attr', None)
 
-        if group and surface_attr and special_attr:
+        if type and surface_attr and special_attr:
             for f in bm.faces:
                 if f.select:
                     layout.label(text=f'Index: {f.index}')
-                    layout.label(text=f'Group: {f[group]}')
+                    layout.label(text=f'Type: {f[type]}')
                     layout.label(text=f'Surface attribute: {hex(f[surface_attr])}')
                     layout.label(text=f'Behavior attribute: {hex(f[special_attr])}')
                     break
