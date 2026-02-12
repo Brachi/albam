@@ -2,21 +2,21 @@ import pytest
 
 
 def test_export_header(sbc_imported, sbc_exported):
-    sbc_version = 255 if sbc_imported.header.magic == b"SBC\xFF" else 49
+    sbc_version = 255 if sbc_imported.header.indent == b"SBC\xFF" else 49
     sheader = sbc_imported.header
     dheader = sbc_exported.header
-    assert sheader.magic == dheader.magic
+    assert sheader.indent == dheader.indet
     if sbc_version == 49:
         assert sheader.version == dheader.version
-        assert sheader.num_groups == dheader.num_groups
+        assert sheader.num_objects == dheader.num_objects
         assert sheader.num_faces == dheader.num_faces
         assert sheader.num_vertices == dheader.num_vertices
-    assert sheader.bbox.min.x == pytest.approx(dheader.bbox.min.x, rel=0.001)
-    assert sheader.bbox.min.y == pytest.approx(dheader.bbox.min.y, rel=0.001)
-    assert sheader.bbox.min.z == pytest.approx(dheader.bbox.min.z, rel=0.001)
-    assert sheader.bbox.max.x == pytest.approx(dheader.bbox.max.x, rel=0.001)
-    assert sheader.bbox.max.y == pytest.approx(dheader.bbox.max.y, rel=0.001)
-    assert sheader.bbox.max.z == pytest.approx(dheader.bbox.max.z, rel=0.001)
+    assert sheader.bounding_box.min.x == pytest.approx(dheader.bounding_box.min.x, rel=0.001)
+    assert sheader.bounding_box.min.y == pytest.approx(dheader.bounding_box.min.y, rel=0.001)
+    assert sheader.bounding_box.min.z == pytest.approx(dheader.bounding_box.min.z, rel=0.001)
+    assert sheader.bounding_box.max.x == pytest.approx(dheader.bounding_box.max.x, rel=0.001)
+    assert sheader.bounding_box.max.y == pytest.approx(dheader.bounding_box.max.y, rel=0.001)
+    assert sheader.bounding_box.max.z == pytest.approx(dheader.bounding_box.max.z, rel=0.001)
 
 
 def test_export_infos(sbc_imported, sbc_exported):
