@@ -592,7 +592,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     sbci_bbox.min = [v for v in bbox_data['minPos'].values()][:3]
     sbci_bbox.max = [v for v in bbox_data['maxPos'].values()][:3]
     sbc_info.bounding_box = sbci_bbox
-    sbc_info.group_id = 0xffffffff  # was 0
+    sbc_info.index_id = 0xffffffff  # was 0
     sbc_info.base = 0
     sbc_info.start_nodes = start_node
     sbc_info.start_faces = start_tri if start_tri >= 0 else 0

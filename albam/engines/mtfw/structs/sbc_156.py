@@ -389,7 +389,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             self.start_faces = self._io.read_u4le()
             self.start_nodes = self._io.read_u4le()
             self.start_vertices = self._io.read_u4le()
-            self.group_id = self._io.read_u4le()
+            self.index_id = self._io.read_u4le()
             self.bounding_box = Sbc156.Bbox3(self._io, self, self._root)
             self.bounding_box._read()
             self.vmin = []
@@ -437,7 +437,7 @@ class Sbc156(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.start_faces)
             self._io.write_u4le(self.start_nodes)
             self._io.write_u4le(self.start_vertices)
-            self._io.write_u4le(self.group_id)
+            self._io.write_u4le(self.index_id)
             self.bounding_box._write__seq(self._io)
             for i in range(len(self.vmin)):
                 pass

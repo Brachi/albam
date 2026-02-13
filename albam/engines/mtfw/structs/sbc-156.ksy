@@ -33,7 +33,7 @@ types:
       - {id: start_faces, type: u4}
       - {id: start_nodes, type: u4} # ?
       - {id: start_vertices, type: u4}
-      - {id: group_id, type: u4}
+      - {id: index_id, type: u4}
       - {id: bounding_box, type: bbox3}
       - {id: vmin, type: vec3, repeat: expr, repeat-expr: 2}
       - {id: vmax, type: vec3, repeat: expr, repeat-expr: 2}
