@@ -28,6 +28,12 @@ from ...lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from ...lib.misc import chunks
+from ...lib.common_op import (
+    clone_mesh,
+    apply_transform,
+    triangulate_meshes,
+    delete_ob
+)
 from ...lib.export_checks import check_all_objects_have_materials
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
@@ -40,6 +46,7 @@ from .material import (
 from .texture import check_dds_textures
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
+from ...blender_ui.tools import split_UV_seams
 
 
 MOD_CLASS_MAPPER = {
@@ -800,6 +807,12 @@ def export_mod(bl_obj):
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
+    if export_settings.export_autofix:
+        bl_meshes = [clone_mesh(mesh, keep_modifiers=True) for mesh in bl_meshes]
+        apply_transform(bl_meshes)
+        triangulate_meshes(bl_meshes)
+        # split_UV_seams(bl_meshes, True)
+
     _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
@@ -810,6 +823,9 @@ def export_mod(bl_obj):
 
     meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
+    if export_settings.export_autofix:
+        for ob in bl_meshes:
+            delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer

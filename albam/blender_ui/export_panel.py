@@ -68,6 +68,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
         default="metric")
     far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
     far_add_new: bpy.props.BoolProperty(default=False)
+    export_autofix: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -193,6 +194,7 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
         layout.prop(export_settings,
                     "force_lod255",
                     text="Set LOD ID = 255 (always visible) for exported meshes")
+        layout.prop(export_settings, "export_autofix", text="Make no mistake")
         layout.prop(export_settings, "export_bones", text="Export edited bones")
         layout.label(text="Dragon's Dogma export hacks")
         layout.prop(export_settings, "no_vf_grouping",
