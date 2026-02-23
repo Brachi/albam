@@ -811,7 +811,7 @@ def export_mod(bl_obj):
         bl_meshes = [clone_mesh(mesh, keep_modifiers=True) for mesh in bl_meshes]
         apply_transform(bl_meshes)
         triangulate_meshes(bl_meshes)
-        # split_UV_seams(bl_meshes, True)
+        split_UV_seams(bl_meshes, True)
 
     _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)

@@ -194,8 +194,8 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
         layout.prop(export_settings,
                     "force_lod255",
                     text="Set LOD ID = 255 (always visible) for exported meshes")
-        layout.prop(export_settings, "export_autofix", text="Make no mistake")
         layout.prop(export_settings, "export_bones", text="Export edited bones")
+        layout.prop(export_settings, "export_autofix", text="Make no mistakes")
         layout.label(text="Dragon's Dogma export hacks")
         layout.prop(export_settings, "no_vf_grouping",
                     text="Don't group meshes by vertex format")
