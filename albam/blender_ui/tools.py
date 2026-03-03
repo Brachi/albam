@@ -23,9 +23,18 @@ def mesh_filter(self, object):
     return object.type == 'MESH'
 
 
+def armature_filter(self, object):
+    return object.type == 'ARMATURE'
+
+
 @blender_registry.register_blender_prop_albam(name="meshes")
 class AlbamMeshes(bpy.types.PropertyGroup):
     all_meshes: bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
+
+
+@blender_registry.register_blender_prop_albam(name="armatures")
+class AlbamArmatures(bpy.types.PropertyGroup):
+    all_armatures: bpy.props.PointerProperty(type=bpy.types.Object, poll=armature_filter)
 
 
 @blender_registry.register_blender_prop_albam(name="tools_settings")
@@ -45,6 +54,7 @@ class ToolsSettings(bpy.types.PropertyGroup):
     bone_names_preset: bone_names_enum
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
+    use_clones: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
@@ -60,6 +70,10 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
+        row.label(text="Active Mesh")
+        row = layout.row()
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        row = layout.row()
         op = row.operator('albam.split_uv_seams', text="Split UV Seams")
         op.transfer_normals = context.scene.albam.tools_settings.split_uv_seams_transfer_normals
         row.prop(
@@ -68,8 +82,7 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="Transfer Normals",
         )
         row = layout.row()
-        row.operator('albam.transfer_normals', text="Transfer normals from")
-        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        row.operator('albam.transfer_normals', text="Transfer normals from Active mesh")
         row = layout.row()
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
@@ -85,11 +98,26 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row = layout.row()
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
         row = layout.row()
+        row.label(text="Automation tools")
+        row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
+        row.prop(
+            context.scene.albam.tools_settings,
+            "use_clones",
+            text="Use clones for separation",)
+        row = layout.row()
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        row = layout.row()
+        row.operator('albam.batch_transfer_weights', text="Transfer weights to selected meshes")
         row = layout.row()
         row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row = layout.row()
+        row.label(text="Active Armature")
+        row = layout.row()
+        row.prop(context.scene.albam.armatures, "all_armatures", text="")
+        row = layout.row()
+        row.operator('albam.set_armature_object', text="Set armature object")
 
 
 @blender_registry.register_blender_type
@@ -139,6 +167,7 @@ class ALBAM_PT_Handshaker(bpy.types.Panel):
         row = layout.row()
         row.operator("albam.handshake").filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        # Commented to hide the dumper from users, they don't need it
         # row = layout.row()
         # row.label(text="Dump frames to json files")
         # row = layout.row()
@@ -452,6 +481,7 @@ class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
     def execute(self, context):
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        use_clones = context.scene.albam.tools_settings.use_clones
         if selected_meshes:
             bpy.ops.object.select_all(action='DESELECT')
             for mesh_ob in selected_meshes:
@@ -459,14 +489,15 @@ class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
                     target_collection = mesh_ob.users_collection[0]
                 except IndexError:
                     target_collection = bpy.context.collection
-                duplicate = mesh_ob.copy()
-                duplicate.data = mesh_ob.data.copy()
-                target_collection.objects.link(duplicate)
-                bpy.ops.object.select_all(action='DESELECT')
-                duplicate.select_set(True)
-
-                # Make the clone active
-                bpy.context.view_layer.objects.active = duplicate
+                active_ob = mesh_ob
+                if use_clones:
+                    duplicate = mesh_ob.copy()
+                    duplicate.data = mesh_ob.data.copy()
+                    target_collection.objects.link(duplicate)
+                    bpy.ops.object.select_all(action='DESELECT')
+                    duplicate.select_set(True)
+                    active_ob = duplicate
+                bpy.context.view_layer.objects.active = active_ob
                 bpy.ops.object.mode_set(mode='EDIT')
                 bpy.ops.mesh.select_all(action='SELECT')
                 bpy.ops.mesh.separate(type='MATERIAL')
@@ -538,6 +569,82 @@ class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
                 else:
                     prop = mesh_ob.material_slots[0].material
                 paste_props(prop)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchTransferWeights(bpy.types.Operator):
+    '''Transfer weights from master mesh to selected meshes'''
+    bl_idname = "albam.batch_transfer_weights"
+    bl_label = "Batch transfer skin weights"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if source_obj is None or not bpy.context.selected_objects:
+            return False
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        src_obj = context.scene.albam.meshes.all_meshes
+        dst_objs = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+        for dst_obj in dst_objs:
+            if dst_obj != src_obj:
+                # create vertex groups in destination object
+                for vg in src_obj.vertex_groups:
+                    if vg.name not in dst_obj.vertex_groups.keys():
+                        dst_obj.vertex_groups.new(name=vg.name)
+
+                mod = dst_obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+                mod.object = src_obj
+                mod.use_vert_data = True
+                mod.data_types_verts = {'VGROUP_WEIGHTS'}
+                mod.vert_mapping = 'NEAREST'
+
+                # apply modifier
+                bpy.context.view_layer.objects.active = dst_obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SetArmatureObject(bpy.types.Operator):
+    '''Set armature object for selected meshes'''
+    bl_idname = "albam.set_armature_object"
+    bl_label = "Set armature object"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        armature_obj = context.scene.albam.armatures.all_armatures
+        if armature_obj is None:
+            return False
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        new_arm_obj = context.scene.albam.armatures.all_armatures
+        for mesh_ob in selected_meshes:
+            arm_modifier = None
+            for modifier in mesh_ob.modifiers:
+                if modifier.type == 'ARMATURE':
+                    arm_modifier = modifier
+                    break
+            if not arm_modifier:
+                arm_modifier = mesh_ob.modifiers.new(name="Armature", type='ARMATURE')
+            arm_modifier.object = new_arm_obj
+        show_message_box(
+            message=f"Armature object {new_arm_obj.name} was set for {len(selected_meshes)} meshes")
         return {'FINISHED'}
 
 
@@ -644,21 +751,30 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             continue
         tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
-        tex_157_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        tex_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)
             if type == 0:
-                tex_157_props.compression_format = tex_compr_preset[1]
+                tex_props.compression_format = tex_compr_preset[1]
             if type == 1:
-                tex_157_props.compression_format = tex_compr_preset[3]
+                tex_props.compression_format = tex_compr_preset[3]
             if type == 2:
-                tex_157_props.compression_format = tex_compr_preset[2]
+                tex_props.compression_format = tex_compr_preset[2]
             if type == 7:
-                tex_157_props.compression_format = tex_compr_preset[3]
+                tex_props.compression_format = tex_compr_preset[3]
+        else:
+            if type == 0:
+                tex_props.encoded_type = '0x2'
+            if type == 1:
+                tex_props.encoded_type = '0x3'
+            if type == 2:
+                tex_props.encoded_type = '0x0'
+            if type == 7:
+                tex_props.encoded_type = '0x3'
         if app_id in UNK:
-            tex_157_props.unk = UNK.get(app_id)
+            tex_props.unk = UNK.get(app_id)
         if app_id in VERSION:
-            tex_157_props.version = VERSION.get(app_id)
+            tex_props.version = VERSION.get(app_id)
 
 
 def rename_bones(armature_ob, app_id, body_type):
