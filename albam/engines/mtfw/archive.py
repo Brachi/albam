@@ -1,5 +1,7 @@
 import io
 import ntpath
+import os
+from pathlib import PureWindowsPath, Path
 import zlib
 
 from kaitaistruct import KaitaiStream
@@ -102,6 +104,19 @@ class ArcWrapper:
                         f"Requested to read out of bounds. Offset: {fe.offset}")
                     raise
         return file_
+
+    def unpack(self, out_path):
+        arc_path = Path(self.file_path)
+        out_path = Path(out_path)
+
+        for fe in self.get_file_entries():
+            file_entry_path = PureWindowsPath(fe.file_path_with_ext)
+            out_file_path = out_path / arc_path.stem / file_entry_path
+            if not out_file_path.parent.exists():
+                os.makedirs(str(out_file_path.parent))
+            with open(str(out_file_path), "wb") as w:
+                data = self.get_file(fe.file_path, fe.file_type)
+                w.write(data)
 
 
 def _sort_arc_entries(entries, vfile=True):

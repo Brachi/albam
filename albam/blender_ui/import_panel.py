@@ -241,6 +241,7 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
         split = self.layout.split(factor=0.1)
         col = split.column()
         col.operator("albam.add_files", icon="FILE_NEW", text="")
+        col.operator("albam.add_folder", icon="NEWFOLDER", text="")
         col.operator("albam.save_file", icon="SORT_ASC", text="")
         col.operator("albam.remove_imported", icon="X", text="")
         col = split.column()
