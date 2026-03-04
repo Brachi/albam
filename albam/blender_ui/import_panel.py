@@ -391,8 +391,8 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
     def draw(self, context):
         self.layout.separator()
         row = self.layout.row()
-        row.operator("albam.import_vfile", text="Import")
         row.operator("wm.import_options", icon="OPTIONS", text="")
+        row.operator("albam.import_vfile", text="Import")
         self.layout.row()
 
 

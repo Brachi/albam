@@ -172,8 +172,8 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
             maxrows=3,
         )
         row = self.layout.row()
-        row.operator("albam.export", text="Export")
         row.operator("wm.export_options", icon="OPTIONS", text="")
+        row.operator("albam.export", text="Export")
 
 
 @blender_registry.register_blender_type
