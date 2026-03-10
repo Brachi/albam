@@ -55,6 +55,7 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
+    overwrite_tex_path: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
@@ -83,22 +84,27 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         )
         row = layout.row()
         row.operator('albam.transfer_normals', text="Transfer normals from Active mesh")
+        layout.separator()
         row = layout.row()
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
             context.scene.albam.tools_settings,
+            "overwrite_tex_path",
+            text="Overwrite path if exists",
+            )
+        row = layout.row()
+        row.prop(
+            context.scene.albam.tools_settings,
             "relative_path_to_textures",
             text="",)
+        layout.separator()
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
         row.prop(
             context.scene.albam.tools_settings,
             "bone_names_preset",
             text="",)
-        row = layout.row()
-        row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
-        row = layout.row()
-        row.label(text="Automation tools")
+        layout.separator()
         row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.prop(
@@ -106,12 +112,15 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             "use_clones",
             text="Use clones for separation",)
         row = layout.row()
-        row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
-        row = layout.row()
-        row.operator('albam.batch_transfer_weights', text="Transfer weights to selected meshes")
-        row = layout.row()
         row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row = layout.row()
+        row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
+        row = layout.row()
+        row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        layout.separator()
+        row = layout.row()
+        row.operator('albam.batch_transfer_weights', text="Transfer weights to selected meshes")
         row = layout.row()
         row.label(text="Active Armature")
         row = layout.row()
@@ -135,9 +144,9 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
 
         scn = context.scene.albam.tools_settings
         row = layout.row()
-        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Group A")
+        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
         row = layout.row()
-        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Group B")
+        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
         row = layout.row()
         row.operator("albam.vg_merge")
 
@@ -574,7 +583,7 @@ class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_BatchTransferWeights(bpy.types.Operator):
-    '''Transfer weights from master mesh to selected meshes'''
+    '''Transfer weights from Active mesh to selected meshes'''
     bl_idname = "albam.batch_transfer_weights"
     bl_label = "Batch transfer skin weights"
     bl_options = {'UNDO'}
@@ -737,7 +746,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev2": 32,
         "re6": 0,
     }
-
+    overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
     for tn in blender_material.node_tree.nodes:
@@ -749,7 +758,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             name = strict_sanitize(name)
         else:
             continue
-        tn.image.albam_asset.relative_path = local_path + name + '.tex'
+        if not tn.image.albam_asset.relative_path or overwrite_tex_path:
+            tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
         tex_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
