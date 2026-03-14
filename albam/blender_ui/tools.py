@@ -117,8 +117,6 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row = layout.row()
         row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
         row = layout.row()
-        row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
-        row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.prop(
             context.scene.albam.tools_settings,
