@@ -670,6 +670,7 @@ class ALBAM_OT_SetArmatureObject(bpy.types.Operator):
         return {'FINISHED'}
 
 
+@blender_registry.register_blender_type
 class ALBAM_OT_SortHairCards(bpy.types.Operator):
     '''Sort hair cards by distance'''
     bl_idname = "albam.sort_hair_cards"
