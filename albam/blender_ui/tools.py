@@ -96,26 +96,29 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             context.scene.albam.tools_settings,
             "overwrite_tex_path",
             text="Overwrite path if exists",
-            )
+        )
         row = layout.row()
         row.prop(
             context.scene.albam.tools_settings,
             "relative_path_to_textures",
-            text="",)
+            text="",
+        )
         layout.separator()
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
         row.prop(
             context.scene.albam.tools_settings,
             "bone_names_preset",
-            text="",)
+            text="",
+        )
         layout.separator()
         row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.prop(
             context.scene.albam.tools_settings,
             "use_clones",
-            text="Use clones for separation",)
+            text="Use clones for separation",
+        )
         row = layout.row()
         row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
