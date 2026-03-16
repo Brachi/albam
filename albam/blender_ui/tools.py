@@ -117,20 +117,6 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         )
         layout.separator()
         row = layout.row()
-        row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
-        row = layout.row()
-        row.prop(
-            context.scene.albam.tools_settings,
-            "sorting_passes",
-            text="Number of sorting passes",
-        )
-        row = layout.row()
-        row.prop(
-            context.scene.albam.tools_settings,
-            "sorting_dbg_draw",
-            text="Debug draw",
-        )
-        row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
         row.prop(
             context.scene.albam.tools_settings,
@@ -144,6 +130,21 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
         row = layout.row()
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        layout.separator()
+        row = layout.row()
+        row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
+        row = layout.row()
+        row.prop(
+            context.scene.albam.tools_settings,
+            "sorting_passes",
+            text="Number of sorting passes",
+        )
+        row = layout.row()
+        row.prop(
+            context.scene.albam.tools_settings,
+            "sorting_dbg_draw",
+            text="Sorting debug draw",
+        )
         row = layout.row()
         row.label(text="Active Armature")
         row = layout.row()
@@ -705,6 +706,7 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         selection = bpy.context.selected_objects
         selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
         sort_hair_cards(source_obj, selected_meshes)
+        show_message_box(message=f"{len(selected_meshes)} hair cards were sorted")
         # merge_hair_cards(selected_meshes)
         return {'FINISHED'}
 
