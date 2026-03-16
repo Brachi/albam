@@ -91,6 +91,7 @@ class ToolsSettings(bpy.types.PropertyGroup):
         update=face_preset_update
     )
     face_preset: face_preset_enum
+    overwrite_tex_path: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
