@@ -608,7 +608,6 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
         for i in range(2):
             bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
             min_aabb = bvnode["minAABB"]
-            bbox
             # box.min.x = min_aabb["xArray"][i]
             # box.min.y = min_aabb["yArray"][i]
             # box.min.z = min_aabb["zArray"][i]
@@ -666,8 +665,8 @@ def _serialize_faces156(dst_sbc, face_data, attr):
     for i, f in enumerate(face_data):
         face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
         face.vert = f.dataFace.vert
-        face.unk_00 = 0
-        face.unk_01 = 0
+        face.unk_00 = attr[i]['unk_00']
+        face.unk_01 = attr[i]['unk_01']
         face.runtime_attr = attr[i]['runtime_attr']
         face.type = attr[i]['type']
         face.surface_attr = attr[i]['surface_attr']
