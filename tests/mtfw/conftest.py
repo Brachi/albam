@@ -153,8 +153,10 @@ def mrl_exported(mod_export):
 @pytest.fixture(scope="session")
 def sbc_export(loaded_arcs, app_id, sbc_path):
     from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
+    if not sbc_path:
+        pytest.skip("No sbc available")
     bpy.context.scene.albam.apps.app_selected = app_id
-    vfile_sbc = bpy.context.scene.albam.vfs.select_vfile(app_id, sbc_path) if sbc_path else None
+    vfile_sbc = bpy.context.scene.albam.vfs.select_vfile(app_id, sbc_path)
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
 
@@ -163,25 +165,32 @@ def sbc_export(loaded_arcs, app_id, sbc_path):
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
 
-    vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(app_id, sbc_path) if sbc_path else None
+    vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(app_id, sbc_path)
     assert vfile_sbc_exported
     Sbc = APPID_SBC_CLASS_MAPPER[app_id]
-    src_sbc = Sbc.from_bytes(vfile_sbc.get_bytes()) if sbc_path else None
-    dst_sbc = Sbc.from_bytes(vfile_sbc_exported.get_bytes()) if sbc_path else None
-    if sbc_path:
-        src_sbc._read()
-        dst_sbc._read()
+    src_sbc = Sbc.from_bytes(vfile_sbc.get_bytes())
+    dst_sbc = Sbc.from_bytes(vfile_sbc_exported.get_bytes())
+    src_sbc._read()
+    dst_sbc._read()
     return src_sbc, dst_sbc
 
 
 @pytest.fixture(scope="session")
 def sbc_imported(sbc_export):
-    return sbc_export[0]
+    sbc = sbc_export[0]
+    if not sbc:
+        pytest.skip("No imported sbc available")
+    else:
+        return sbc
 
 
 @pytest.fixture(scope="session")
 def sbc_exported(sbc_export):
-    return sbc_export[1]
+    sbc = sbc_export[1]
+    if not sbc:
+        pytest.skip("No exported sbc available")
+    else:
+        return sbc
 
 
 @pytest.fixture

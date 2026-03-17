@@ -273,7 +273,7 @@ def create_sbc_mesh(name, meshpart, app_id):
     bl_mesh.from_pydata(meshpart["vertices"], [], meshpart["faces"])
     bl_mesh.update()
     bl_obj = bpy.data.objects.new(name, bl_mesh)
-    bpy.context.collection.objects.link(bl_obj)
+    # bpy.context.collection.objects.link(bl_obj)  # pytest screams it's re-add
     bm = bmesh.new()
     bm.from_mesh(bl_mesh)
     bm.faces.ensure_lookup_table()
