@@ -626,6 +626,26 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
         node.boxes = boxes
         node.nulls = [0] * 10
         node_list.append(node)
+    # if one triangle
+    if not node_list:
+        node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
+        node.bit = 128
+        node.child_index = [0, 0]
+        boxes = []
+        # 2 dummy nodes, first with the junk(-431602080), second should use bbox data
+        for i in range(2):
+            bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
+            if i == 0:
+                bbox.min = [-431602080, -431602080, -431602080, 0.0]
+                bbox.max = [-431602080, -431602080, -431602080, 0.0]
+            else:
+                bbox.min = [v for v in bbox_data['minPos'].values()][:3]
+                bbox.max = [v for v in bbox_data['maxPos'].values()][:3]
+            boxes.append(bbox)
+        node.boxes = boxes
+        node.nulls = [0] * 10
+        node_list.append(node)
+    # should be from[top level bvh nodes = num_sbc_info][node_id] if dummy nodes
     # sbc_info.vmin = [vec4to3(node_list[0].boxes[0].min), vec4to3(node_list[0].boxes[1].min)]
     sbc_info.vmin = [write_vec3(node_list[0].boxes[0].min[:3], dst_sbc),
                      write_vec3(node_list[0].boxes[1].min[:3], dst_sbc)]
