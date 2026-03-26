@@ -868,7 +868,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
     dst_mod_header.__dict__.update(dict(
         ident=b"MOD\x00",
         version=src_mod.header.version,
-        revision=1,
+        revision=1 if src_mod.header.version != 153 else 0,
         num_bones=0,
         num_meshes=0,
         num_materials=0,
