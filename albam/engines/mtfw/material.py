@@ -1839,6 +1839,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBurnSimpleAlbedoMapBurnMap", "FBurnSimpleAlbedoMapBurnMap", "", 17),  # noqa: F821
             ("FDamageSimpleAlbedoMapBurnMap", "FDamageSimpleAlbedoMapBurnMap", "", 18),  # noqa: F821
             ("FBurnAlbedoMapBurnMap", "FBurnAlbedoMapBurnMap", "", 19),  # noqa: F821
+            ("FBlendRateAlbedoMap", "FBlendRateAlbedoMap", "", 20),  # noqa: F821
         ],
         options=set()
     )
@@ -1862,6 +1863,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVScreen", "FUVScreen", "", 3),  # noqa: F821
             ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 5),  # noqa: F821
         ],
         options=set()
     )
