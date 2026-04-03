@@ -2,9 +2,9 @@ meta:
   endian: le
   bit-endian: le
   file-extension: mod
-  id: mod_156
-  ks-version: 0.11
-  title: MTFramework model format 156
+  id: mod_153
+  ks-version: 0.10
+  title: MTFramework model format 153
 
 seq:
   - {id: header, type: mod_header}
@@ -14,10 +14,6 @@ seq:
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
   - {id: model_info, type: model_info}
-  - {id: rcn_header, type: rcn_header}
-  - {id: rcn_tables, type: rcn_table, repeat: expr, repeat-expr: rcn_header.num_tbl}
-  - {id: rcn_vertices, type: rcn_vertex, repeat: expr, repeat-expr: rcn_header.num_vtx}
-  - {id: rcn_trianlges, type: rcn_triangle, repeat: expr, repeat-expr: rcn_header.num_tri}
 
 instances:
   bones_data:
@@ -39,9 +35,10 @@ instances:
   index_buffer:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2) - 2, if: header.offset_index_buffer > 0}
   size_top_level_:
-    value: _root.header.size_ + 104
+    value: _root.header.size_ + 72
 
 types:
+
   mod_header:
     seq:
       - {id: ident, contents: [0x4d, 0x4f, 0x44, 0x00]}
@@ -211,24 +208,19 @@ types:
       - {id: shadowmap, type: u4}
       - {id: additionalmap, type: u4}
       - {id: envmap, type: u4}
-      - {id: detailmap, type: u4}
-      - {id: occlusionmap, type: u4}
+      - {id: heightmap, type: u4}
+      - {id: glossmap, type: u4}
       - {id: transparency, type: f4}
 
       - {id: fresnel_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: lightmap_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: detail_factor, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: reserved1, type: u4}
-      - {id: reserved2, type: u4}
-      - {id: lightblendmap, type: u4}
-      - {id: shadowblendmap, type: u4}
-      - {id: parallax_factor, type: f4, repeat: expr, repeat-expr: 2}
-      - {id: flip_binormal, type: f4}
-      - {id: heightmap_occ, type: f4}
+      - {id: transmit_factor, type: f4, repeat: expr, repeat-expr: 4}
+      - {id: parallax_factor, type: f4, repeat: expr, repeat-expr: 4}
       - {id: blend_state, type: u4}
       - {id: alpha_ref, type: u4}
-      - {id: heightmap, type: u4}
-      - {id: glossmap, type: u4}
+      - {id: reserved1, type: u4}
+      - {id: reserved2, type: u4}
     instances:
       size_:
         value: 160
@@ -252,15 +244,15 @@ types:
       - {id: disp, type: u1}
       - {id: level_of_detail, type: u1}
       - {id: alpha_priority, type: u1} # alphapri
-      - {id: max_bones_per_vertex, type: u1} # weight_num
+      - {id: vertex_format, type: u1} # weight_num
       - {id: vertex_stride, type: u1}
       - {id: vertex_stride_2, type: u1}
       - {id: connective, type: u1}
       - {id: shape, type: b1}
       - {id: env, type: b1}
       - {id: refrect, type: b1}
-      - {id: reserved2_flag_1, type: b1} # probably unused b2 value but need to check
-      - {id: reserved2_flag_2, type: b1} # probably unused b2 value but need to check
+      - {id: reserved2_flag_1, type: b1}
+      - {id: reserved2_flag_2, type: b1}
       - {id: shadow_cast, type: b1}
       - {id: shadow_receive, type: b1}
       - {id: sort, type: b1}
@@ -274,8 +266,8 @@ types:
       - {id: face_offset, type: u4} # index_base
       - {id: vdeclbase, type: u1}
       - {id: vdecl, type: u1}
-      - {id: min_index, type: u2}
-      - {id: num_weight_bounds, type: u1}
+      - {id: min_index, type: u2} # min_index
+      - {id: num_weight_bounds, type: u1} # probably num of OABB boundng volumes
       - {id: idx_bone_palette, type: u1} # envelope
       - {id: rcn_base, type: u2} 
       - {id: boundary, type: u4} # pointer in theory to the related weight_bounds
@@ -288,7 +280,7 @@ types:
         repeat-expr: num_indices
         type: u2
       vertices:
-        # XXX min_index and vertex_position_2 are equal most of the time
+        # XXX vertex_position and vertex_position_2 are equal most of the time
         # But if using vertex_position_2 when they are not, vertices import wrongly
         # needs investigation
         pos: "min_index > vertex_position_2 ?  _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset : _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset"
@@ -296,6 +288,17 @@ types:
           #repeat-expr: num_vertices # TODO: special case
         repeat-expr: "min_index > vertex_position_2 ? max_index - min_index + 1 : num_vertices"
         type:
+          # switch-on: vertex_format
+          # cases:
+          #   0: vertex_0 #vf_non_skin
+          #   1: vertex #vf_skin
+          #   2: vertex
+          #   3: vertex
+          #   4: vertex
+          #   5: vertex_5 #vf_skin_ex
+          #   6: vertex_5
+          #   7: vertex_5
+          #   8: vertex_5
           switch-on: _root.materials_data.materials[idx_material].vtype
           cases:
             0: vf_skin
@@ -304,6 +307,10 @@ types:
             3: vf_non_skin_col
             4: vf_skin # shape
             5: vf_skin # skin color?
+            6: vf_non_skin
+            7: vf_skin_ex
+            8: vf_non_skin_col
+            
       vertices2:
         pos: _root.header.offset_vertex_buffer_2 + (vertex_position_2 * vertex_stride_2) + vertex_offset_2
         repeat: expr
@@ -314,7 +321,7 @@ types:
             4: vertex2_4
             8: vertex2_8
         if: vertex_stride_2>0
-
+  
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
@@ -372,6 +379,42 @@ types:
       - {id: row_3, type: vec4}
       - {id: row_4, type: vec4}
 
+  vertex_0: #vf_non_skin
+    seq:
+      - {id: position, type: vec3}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+      - {id: uv3, type: vec2_half_float}
+
+  vertex: #vf_skin
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 4}
+      - {id: normal, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+      - {id: uv2, type: vec2_half_float}
+
+  vertex_5: #vf_skin_ex
+    seq:
+      - {id: position, type: vec4_s2}
+      - {id: bone_indices, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: weight_values, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: normal, type: vec4_u1}
+      - {id: uv, type: vec2_half_float}
+
+  vertex2_4:
+    seq:
+      - {id: occlusion, type: vec4_u1}
+
+  vertex2_8:
+    seq:
+      - {id: occlusion, type: vec4_u1}
+      - {id: tangent, type: vec4_u1}
+      
   vf_non_skin:
     seq:
       - {id: position, type: vec3}
@@ -407,12 +450,3 @@ types:
       - {id: weight_values, type: u1, repeat: expr, repeat-expr: 8}
       - {id: normal, type: vec4_u1}
       - {id: uv, type: vec2_half_float}
-
-  vertex2_4:
-    seq:
-      - {id: occlusion, type: vec4_u1}
-
-  vertex2_8:
-    seq:
-      - {id: occlusion, type: vec4_u1}
-      - {id: tangent, type: vec4_u1}
