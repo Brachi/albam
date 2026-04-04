@@ -172,8 +172,8 @@ class ALBAM_PT_ExportSection(bpy.types.Panel):
             maxrows=3,
         )
         row = self.layout.row()
-        row.operator("albam.export", text="Export")
         row.operator("wm.export_options", icon="OPTIONS", text="")
+        row.operator("albam.export", text="Export")
 
 
 @blender_registry.register_blender_type
@@ -281,7 +281,10 @@ class ALBAM_OT_Export(bpy.types.Operator):
         try:
             self._execute(context, item)
         except Exception:
+            self.report({'ERROR'}, 'Import failed')
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            return {"CANCELLED"}
+        self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
 
     @staticmethod

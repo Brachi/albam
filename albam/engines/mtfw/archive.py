@@ -1,5 +1,7 @@
 import io
 import ntpath
+import os
+from pathlib import PureWindowsPath, Path
 import zlib
 
 from kaitaistruct import KaitaiStream
@@ -17,6 +19,7 @@ from ...blender_ui.tools import show_message_box
 @blender_registry.register_archive_loader(app_id="rev1", extension="arc")
 @blender_registry.register_archive_loader(app_id="rev2", extension="arc")
 @blender_registry.register_archive_loader(app_id="dd", extension="arc")
+@blender_registry.register_archive_loader(app_id="dmc4", extension="arc")
 def arc_loader(vfile, context=None):  # XXX context DEPRECATED
     arc = ArcWrapper(file_path=vfile.absolute_path)
     for file_entry in arc.get_file_entries():
@@ -30,8 +33,10 @@ def arc_loader(vfile, context=None):  # XXX context DEPRECATED
 @blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
 @blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
 @blender_registry.register_archive_accessor(app_id="dd", extension="arc")
+@blender_registry.register_archive_accessor(app_id="dmc4", extension="arc")
 def arc_accessor(vfile, context):
     arc = ArcWrapper(vfile.root_vfile.absolute_path)
+    arc.app_id = vfile.app_id
 
     path = vfile.relative_path_windows
     path_no_ext = str(vfile.relative_path_windows_no_ext)
@@ -51,6 +56,7 @@ class ArcWrapper:
     PATH_SEPARATOR = "\\"
 
     def __init__(self, file_path):
+        self.app_id = None
         self.file_path = file_path
         self.parsed = Arc.from_file(file_path)
         self.parsed._read()
@@ -95,13 +101,29 @@ class ArcWrapper:
         for fe in self.parsed.file_entries:
             if fe.file_path == file_path and fe.file_type == file_type:
                 try:
-                    file_ = zlib.decompress(fe.raw_data)
+                    if self.app_id == "dmc4":
+                        raise RuntimeError("The xcompression algoringm for DMC4 is not implemented yet.")
+                    else:
+                        file_ = zlib.decompress(fe.raw_data)
                     break
                 except EOFError:
                     print(
                         f"Requested to read out of bounds. Offset: {fe.offset}")
                     raise
         return file_
+
+    def unpack(self, out_path):
+        arc_path = Path(self.file_path)
+        out_path = Path(out_path)
+
+        for fe in self.get_file_entries():
+            file_entry_path = PureWindowsPath(fe.file_path_with_ext)
+            out_file_path = out_path / arc_path.stem / file_entry_path
+            if not out_file_path.parent.exists():
+                os.makedirs(str(out_file_path.parent))
+            with open(str(out_file_path), "wb") as w:
+                data = self.get_file(fe.file_path, fe.file_type)
+                w.write(data)
 
 
 def _sort_arc_entries(entries, vfile=True):
