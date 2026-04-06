@@ -743,7 +743,7 @@ NAME_FIXES = {
 }
 
 
-BONE_COLLECIONS = {
+BONE_COLLECTIONS = {
     "Main Bones": ["pelvis", "spine_upper", "spine_lower", "neck", "head"],
     "Legs Main": ["thigh", "knee", "calf", "foot", "toe"],
     "Legs Twist": ["thigh_twist", "calf_twist", "foot_twist"],
