@@ -15,7 +15,7 @@ from ...lib.blender import (
 )
 from ...lib.dds import DDSHeader
 from ...registry import blender_registry
-from ...vfs import VirtualFileData
+from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
@@ -151,6 +151,7 @@ APPID_SERIALIZE_MAPPER = {
     "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
+    "dmc4": lambda: _serialize_texture_156,
 }
 
 APPID_TEXCLS_MAP = {
@@ -161,6 +162,7 @@ APPID_TEXCLS_MAP = {
     "rev1": Tex157,
     "rev2": Tex157,
     "dd": Tex157,
+    "dmc4": Tex112,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -171,6 +173,7 @@ APPID_RTEXCLS_MAP = {
     "rev1": Rtex157,
     "rev2": Rtex157,
     "dd": Rtex157,
+    "dmc4": Rtex112,
 }
 
 TEX_TYPE_MAPPER = {
@@ -204,6 +207,42 @@ TEX_TYPE_MAPPER = {
 }
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
+
+
+@blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
+def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
+    app_id = vfile.app_id
+    TexCls = APPID_TEXCLS_MAP[app_id]
+    stream = KaitaiStream(io.BytesIO(vfile.get_bytes()))
+    args = [stream] if TexCls is Tex112 else [app_id, stream]
+
+    tex = TexCls(*args)
+    tex._read()
+    dds = convert_tex_to_dds(tex)
+
+    bl_image = bpy.data.images.new(f"{vfile.display_name}.dds", tex.width, tex.height)
+    bl_image.source = "FILE"
+    bl_image.pack(data=dds, data_len=len(dds))
+
+    custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.set_from_source(tex)
+
+    return bl_image
+
+
+def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
+    compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
+    dds_header = DDSHeader(
+        dwHeight=tex.height,
+        dwWidth=tex.width,
+        pixelfmt_dwFourCC=compression_fmt,
+        dwMipMapCount=tex.num_mipmaps_per_image
+    )
+    dds_header.set_constants()
+    dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
+    dds = bytes(dds_header) + tex.dds_data
+
+    return dds
 
 
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):
@@ -367,7 +406,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         if tex_value == texture_type:
             tex_slot = tex_type
             break
-    tex_index = getattr(mtfw_material, tex_slot)
+    tex_index = getattr(mtfw_material, tex_slot, 0)  # TODO: fix slots for DMC4
     return tex_index
 
 
@@ -492,15 +531,24 @@ def serialize_textures(app_id, bl_materials):
     serialize_func = APPID_SERIALIZE_MAPPER[app_id]()
 
     bad_appid = []
+    texture_paths = []
+    duplicated_paths = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
+        if data["image"].albam_asset.relative_path in texture_paths:
+            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
+        texture_paths.append(data["image"].albam_asset.relative_path)
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
             "Go to Image -> tools -> Albam and select the proper app_id for each."
         )
-
+    if duplicated_paths:
+        raise AttributeError(
+            f"The following images have duplicated relative paths: {duplicated_paths}\n"
+            "Go to Image Editor -> Albam and select a unique relative path for each."
+        )
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
@@ -609,7 +657,7 @@ def _serialize_texture_21(app_id, dict_tex):
     final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
-    relative_path = _handle_relative_path(bl_im)
+    relative_path = _handle_relative_path(bl_im, is_rtex)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
@@ -685,7 +733,7 @@ def _calculate_cube_faces_data(tex):
     return cube_faces
 
 
-@blender_registry.register_custom_properties_image("tex_112", ("re5", ))
+@blender_registry.register_custom_properties_image("tex_112", ("re5", "dmc4",))
 @blender_registry.register_blender_prop
 class Tex112CustomProperties(bpy.types.PropertyGroup):
     texture_type: bpy.props.EnumProperty(  # noqa: F821
