@@ -56,18 +56,13 @@ def get_empties(key=None):
 
 def clone_mesh(original, keep_modifiers=False):
     copy = original.copy()
-    # bpy.context.scene.objects.link(copy)
     bpy.context.collection.objects.link(copy)
-    # bpy.context.scene.objects.active = copy
     bpy.context.view_layer.objects.active = copy
-    # original.select = False
     original.select_set(False)
-    # copy.select = True
     copy.select_set(True)
     bpy.ops.object.make_single_user(
         type='SELECTED_OBJECTS', object=True, obdata=True)
     copy.data.transform(copy.matrix_world)
-    # then reset matrix to identity
 
     copy.matrix_world = Matrix()
     if not keep_modifiers:
