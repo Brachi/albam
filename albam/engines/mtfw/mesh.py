@@ -44,12 +44,14 @@ from .material import (
     check_mtfw_shader_group,
 )
 from .texture import check_dds_textures
+from .structs.mod_153 import Mod153
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
 from ...blender_ui.tools import split_UV_seams
 
 
 MOD_CLASS_MAPPER = {
+    153: Mod153,
     156: Mod156,
     210: Mod21,
     211: Mod21,
@@ -63,9 +65,11 @@ APPID_CLASS_MAPPER = {
     "rev1": Mod21,
     "rev2": Mod21,
     "dd": Mod21,
+    "dmc4": Mod153,
 }
 
 MOD_VERSION_APPID_MAPPER = {
+    153: {"dmc4"},
     156: {"re5"},
     210: {"re0", "re1", "rev1", "rev2"},
     211: {"re6"},
@@ -295,9 +299,9 @@ BBOX_AFFECTED = [
     0xD877801B,
 ]
 
-VERSIONS_USE_BONE_PALETTES = {156}
+VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
-VERSIONS_USE_TRISTRIPS = {156, 212}
+VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -306,6 +310,7 @@ MAIN_LODS = {
     "rev1": [1, 255],
     "rev2": [1, 255],
     "dd": [1, 255],
+    "dmc4": [1, 255],
 }
 
 
@@ -346,6 +351,7 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
 @blender_registry.register_import_function(app_id="rev1", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="dmc4", extension="mod", albam_asset_type="MODEL")
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
     mod_bytes = vfile.get_bytes()
@@ -453,7 +459,7 @@ def _process_locations(mod_version, mesh, vertex, vertices_out, bbox_data):
     z = vertex.position.z
 
     w = getattr(vertex.position, "w", None)
-    if w is not None and mod_version == 156:
+    if w is not None and mod_version in (153, 156):
         x = x / 32767 * bbox_data.width + bbox_data.min_x
         y = y / 32767 * bbox_data.height + bbox_data.min_y
         z = z / 32767 * bbox_data.depth + bbox_data.min_z
@@ -565,7 +571,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
 
 
 def _get_weights(mod, mesh, vertex):
-    if mod.header.version == 156 or mesh.vertex_format in (0xCB68015, 0xa320c016):
+    if mod.header.version in (153, 156) or mesh.vertex_format in (0xCB68015, 0xa320c016):
         return tuple([w / 255 for w in vertex.weight_values])
 
     # Assuming all vertex formats share this pattern.
@@ -772,7 +778,7 @@ def _create_bbox_data(mod):
 
 def _get_material_hash(mod, mesh):
     material_hash = None
-    if mod.header.version == 156:
+    if mod.header.version in (153, 156):
         material_hash = mesh.idx_material
     elif mod.header.version == 210 or mod.header.version == 212:
         material_name = mod.materials_data.material_names[mesh.idx_material]
@@ -789,6 +795,7 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="rev1", extension="mod")
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @blender_registry.register_export_function(app_id="dd", extension="mod")
+@blender_registry.register_export_function(app_id="dmc4", extension="mod")
 @check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
@@ -877,7 +884,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
     dst_mod_header.__dict__.update(dict(
         ident=b"MOD\x00",
         version=src_mod.header.version,
-        revision=1,
+        revision=1 if src_mod.header.version != 153 else 0,
         num_bones=0,
         num_meshes=0,
         num_materials=0,
@@ -938,6 +945,10 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
     dst_mod.model_info.memory = src_mod.model_info.memory
     dst_mod.model_info.reserved = src_mod.model_info.reserved
 
+    if src_mod.header.version == 153:
+        dst_mod.reserved_01 = src_mod.reserved_01
+        dst_mod.reserved_02 = src_mod.reserved_02
+
     if src_mod.header.version == 156:
         dst_mod.rcn_header = dst_mod.RcnHeader(_parent=dst_mod, _root=dst_mod._root)
         dst_mod.reserved_01 = src_mod.reserved_01
@@ -993,7 +1004,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
         bone.idx_parent = src_bone.idx_parent
         bone.idx_mirror = src_bone.idx_mirror
         bone.idx_mapping = src_bone.idx_mapping
-        bone.unk_01 = src_bone.unk_01
+        bone.length = src_bone.length
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
@@ -1227,7 +1238,7 @@ def _get_vertex_colors(blender_mesh):
 
 
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
-    if src_mod.header.version != 156:
+    if src_mod.header.version not in (153, 156):
         return {}
     bone_palette_dicts = []
     MAX_BONE_PALETTE_SIZE = 32
@@ -1421,7 +1432,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                 max_bones_per_vertex = 5
         mesh.max_bones_per_vertex = max_bones_per_vertex
 
-        if dst_mod.header.version in (156,):
+        if dst_mod.header.version in (153, 156):
             mesh.reserved2 = 0
             mesh.connective = 0
 
@@ -1438,7 +1449,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
-    if dst_mod.header.version in (156, 211):
+    if dst_mod.header.version in (153, 156, 211):
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)
@@ -1467,7 +1478,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
 
     vertex_count = len(bl_mesh.data.vertices)
-    if dst_mod.header.version == 156:
+    if dst_mod.header.version in (153, 156):
         vertex_format = int(mod_156_material_props.vtype, 16)
         skin_function = int(mod_156_material_props.func_skin, 16)
         if vertex_format == 0x1 and skin_function == 0x4:
@@ -1542,7 +1553,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.position = dst_mod.Vec3(
                 _parent=vertex_struct, _root=vertex_struct._root)
         # Normals types
-        if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
+        if dst_mod.header.version in (153, 156) or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal = dst_mod.Vec4U1(
                 _parent=vertex_struct, _root=vertex_struct._root)
         else:
@@ -1647,7 +1658,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 raise
         # Set Weights
-        if dst_mod.header.version == 156 or vertex_format in VERTEX_FORMATS_NORMAL4:
+        if dst_mod.header.version in (153, 156) or vertex_format in VERTEX_FORMATS_NORMAL4:
             vertex_struct.normal.w = 255  # is this occlusion as well?
         if has_bones:
             if not _check_armature(bl_mesh):
@@ -1681,7 +1692,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 bone_indices.insert(1, 128)
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
-            if dst_mod.header.version != 156 and vertex_format not in VERTEX_FORMATS_BRIDGE:
+            if dst_mod.header.version not in (153, 156) and vertex_format not in VERTEX_FORMATS_BRIDGE:
                 match MAX_BONES:
                     case 2:
                         vertex_struct.bone_indices = [
@@ -1716,7 +1727,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
 def _apply_bbox_transforms(xyz_tuple, dst_mod, bbox_data):
     x, y, z = xyz_tuple
 
-    if dst_mod.header.version == 156:
+    if dst_mod.header.version in (153, 156):
 
         x -= dst_mod.bbox_min.x
         x /= (dst_mod.bbox_max.x - dst_mod.bbox_min.x)
@@ -2019,7 +2030,7 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5",))
+@blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))
 @blender_registry.register_blender_prop
 class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     vdecl_enum = bpy.props.EnumProperty(

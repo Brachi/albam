@@ -25,11 +25,9 @@ def apply_transform(objects):
 
 def create_root_nub(name):
     ob = bpy.data.objects.new(name, None)
-    # bpy.context.scene.objects.link(o)
-    bpy.context.collection.objects.link(ob)
+    # bpy.context.collection.objects.link(ob)  # pytest screams it's re-add
     ob.matrix_local = Matrix.Identity(4)
     ob.show_wire = True
-    # o.show_x_ray = True
     ob.show_in_front = True
     return ob
 

@@ -120,7 +120,11 @@ def set_poses(armature, keyframe, frame):
     bpy.ops.object.mode_set(mode='POSE')
 
     for bone_name, qframe in keyframe.items():
-        pbone = ob.pose.bones[bone_name]
+        try:
+            pbone = ob.pose.bones[bone_name]
+        except KeyError:
+            print("Bone {} not found in the armature.".format(bone_name))
+            continue
         pbone.rotation_mode = 'QUATERNION'
         # Why?
         pbone.rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
