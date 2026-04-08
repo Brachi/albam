@@ -24,6 +24,9 @@ from .structs.rtex_157 import Rtex157
 from .structs.mrl import Mrl
 
 
+APP_USES_64BIT_OFS = {"umvc3"}
+
+
 class TextureType2(Enum):  # TODO: unify
     # TODO: complete
     DIFFUSE = 20
@@ -152,6 +155,7 @@ APPID_SERIALIZE_MAPPER = {
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
     "dmc4": lambda: _serialize_texture_156,
+    "umvc3": lambda: _serialize_texture_21,
 }
 
 APPID_TEXCLS_MAP = {
@@ -163,6 +167,7 @@ APPID_TEXCLS_MAP = {
     "rev2": Tex157,
     "dd": Tex157,
     "dmc4": Tex112,
+    "umvc3": Tex157,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -174,6 +179,7 @@ APPID_RTEXCLS_MAP = {
     "rev2": Rtex157,
     "dd": Rtex157,
     "dmc4": Rtex112,
+    "umvc3": Rtex157,
 }
 
 TEX_TYPE_MAPPER = {
@@ -282,7 +288,10 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         if is_rtex:
             tex = RtexCls.from_bytes(tex_bytes)
         else:
-            tex = TexCls.from_bytes(tex_bytes)
+            stream = KaitaiStream(io.BytesIO(tex_bytes))
+            args = [stream] if TexCls is Tex112 else [app_id, stream]
+            tex = TexCls(*args)
+
         tex._read()
         if not is_rtex:
             try:
@@ -630,7 +639,7 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex157()
+        tex = Tex157(app_id)
         tex.id_magic = b"TEX\x00"
 
     tex.width = bl_im.size[0]
@@ -813,7 +822,8 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             setattr(dst, name, hex(src_value))
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_custom_properties_image("tex_157",
+                                                   ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     unk: bpy.props.IntProperty(  # noqa: F821

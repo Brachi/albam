@@ -19,7 +19,6 @@ from .texture import (
     TextureType,
     NODE_NAMES_TO_TYPES,
     TEX_TYPE_MAP_2,
-
 )
 
 MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
@@ -41,6 +40,7 @@ MRL_DEFAULT_VERSION = {
     "rev1": 32,
     "rev2": 34,
     "dd": 32,
+    "umvc3": 34,
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
@@ -51,8 +51,8 @@ MRL_SHADER_VERSION = {
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
     "dd": 0xb46006d5,
+    "umvc3": 0xe588940a,
 }
-
 
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
@@ -61,6 +61,7 @@ MRL_CBGLOBALS_MAP = {
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
     "dd": Mrl.CbGlobals4,
+    "umvc3": Mrl.CbGlobals3,  # FIXME
 }
 MRL_MATERIAL_TYPE_STR = {
     # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
@@ -70,6 +71,13 @@ MRL_MATERIAL_TYPE_STR = {
     0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
     0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",  # nDraw::DDMaterialInner
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
+    0x6C468C46: "Unknown",
+    0x21617f54: "Unknown2",
+    0x6ebe0b47: "Unknown3",
+    0x20813bb8: "Unknown4",
+    0x3b5107ca: "Unknown5",
+
+
 }
 
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
@@ -160,7 +168,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     else:
         src_materials = parsed_mod.materials_data.materials
 
-    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES
+    mod_version = parsed_mod.header.version
+    material_names_available = mod_version in VERSION_USES_MATERIAL_NAMES or app_id == "umvc3"
     mat_inverse_hashes = {}
     if material_names_available:
         mat_inverse_hashes = {
@@ -304,7 +313,10 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("focclusion", "f_occlusion_param")
     copy_feature("fdistortion", "f_distortion_param")
     copy_float_buffer("globals", "globals")
-    copy_float_buffer("cbmaterial", "cb_material")
+    try:
+        copy_float_buffer("cbmaterial", "cb_material")
+    except KeyError:
+        pass  # umvc3
     copy_float_buffer("cbburncommon", "cb_burn_common")
     copy_float_buffer("cbburnemission", "cb_burn_emission")
     copy_float_buffer("cbappclipplane", "cb_app_clip_plane")
@@ -384,7 +396,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     app_id = model_asset.app_id
     export_settings = bpy.context.scene.albam.export_settings
 
-    mrl = Mrl(app_id=app_id)
+    mrl = Mrl(app_id)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
     mrl.shader_version = MRL_SHADER_VERSION[app_id]
@@ -540,7 +552,8 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["$Globals"] = [ri + 1, pos]
-        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial"):
+        elif (resource.value_cmd.name_hash.name in cb_material_users and
+              not cb_used.get("CBMaterial") and app_id != "umvc3"):  # FIXME
             pos = current_position
             current_position += 1
             cb_used["CBMaterial"] = [ri + 1, pos]
@@ -577,7 +590,8 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
-    MF = MRL_PER_MATERIAL_FEATURES[mrl_mat.type_hash]
+    # FIXME
+    MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
         set_constant_buffer("CBDDMaterialParamInnerCorrect", onlyif="CBDDMaterialParamInnerCorrect" in MF),
@@ -708,17 +722,23 @@ def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=No
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     so = Mrl.ShaderObject(_parent=resource, _root=resource._root)
     if not param_name:
         so.index = shader_obj_index
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly)
+        if app_id == "umvc3":
+            so.filling = 0
     else:
         shader_obj_data_2 = shader_objects[param_name]
         shader_obj_index_2 = shader_obj_data_2["apps"][app_id]["shader_object_index"]
         shader_obj_name_friendly_2 = shader_obj_data_2["friendly_name"]
         so.index = shader_obj_index_2
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly_2)
+        if app_id == "umvc3":
+            so.filling = 0
 
     resource.value_cmd = so
 
@@ -750,6 +770,8 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=T
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     set_texture = Mrl.CmdTexIdx(_parent=resource, _root=resource._root)
     set_texture.tex_idx = texture_index + 1  # zero is used for "dummy texture"
@@ -783,6 +805,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     cb_offset = Mrl.CmdOfsBuffer(_parent=resource, _root=resource._root)
     cb_offset.ofs_float_buff = 0  # will be set later
@@ -796,7 +820,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["globals"]
 
-    elif cb_name == "CBMaterial":
+    # FIXME
+    elif cb_name == "CBMaterial" and app_id != "umvc3":
         float_buffer_parent = Mrl.CbMaterial(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
         float_buffer = Mrl.CbMaterial1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
@@ -1562,7 +1587,7 @@ class Mod153MaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material("mrl_params",
-                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd"))
+                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     material_type_enum = bpy.props.EnumProperty(
@@ -1574,6 +1599,11 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("TYPE_nDraw__DDMaterialStd", "DDMaterialStd", "", 4),
             ("TYPE_nDraw__DDMaterialInner", "DDMaterialInne", "", 5),
             ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
+            ("Unknown", "Unknown", "", 7),
+            ("Unknown2", "Unknown2", "", 8),
+            ("Unknown3", "Unknown3", "", 9),
+            ("Unknown4", "Unknown4", "", 10),
+            ("Unknown5", "Unknown5", "", 11),
         ],
         default="TYPE_nDraw__MaterialStd",
         options=set()
@@ -1692,7 +1722,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
 
 
 @blender_registry.register_custom_properties_material(
-    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1920,6 +1950,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
             ("FBRDFFur", "FBRDFFur", "", 5),  # noqa: F821
+            ("FToonShader", "FToonShader", "", 6),  # noqa: F821
+            ("FToonShaderHigh", "FToonShaderHigh", "", 7),  # noqa: F821
         ],
         options=set()
     )
@@ -1933,7 +1965,9 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
             ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
             ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
-            ("FDiffuseThin", "FDiffuseThin", "", 8)  # noqa: F821
+            ("FDiffuseThin", "FDiffuseThin", "", 8),  # noqa: F821
+            ("FDiffuseColorCorectSimple", "FDiffuseColorCorectSimple", "", 9),  # noqa: F821
+            ("FDiffuseColorCorect", "FDiffuseColorCorect", "", 10)  # noqa: F821
         ],
         options=set()
     )
@@ -1954,6 +1988,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
             ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
             ("FDamageSpecularMap", "FDamageSpecularMap", "", 6),  # noqa: F821
+            ("FSpecularMaskToon", "FSpecularMaskToon", "", 7),  # noqa: F821
         ],
         options=set(),
     )
@@ -1963,6 +1998,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
         ],
         options=set()
     )
@@ -2034,7 +2070,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -2065,7 +2101,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement")
 @blender_registry.register_blender_prop
 class CBVtxDisp(bpy.types.PropertyGroup):
@@ -2096,7 +2132,7 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement 2")
 @blender_registry.register_blender_prop
 class CBVtxDisp2(bpy.types.PropertyGroup):
@@ -2121,7 +2157,7 @@ class CBVtxDisp2(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Color Mask")
 @blender_registry.register_blender_prop
 class CBColorMaskCustomProperties(bpy.types.PropertyGroup):
@@ -2691,7 +2727,7 @@ class GlobalsCustomProperties2(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re6",), is_secondary=True, display_name="$Globals")
+    ("re6", "umvc3"), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties3(bpy.types.PropertyGroup):
     f_albedo_color: bpy.props.FloatVectorProperty(
