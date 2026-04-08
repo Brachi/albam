@@ -400,7 +400,7 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
 class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
     """Set settings for importing"""
     bl_label = "Import Options"
-    bl_idname = "wm.import_options"
+    bl_idname = "albam.import_options"
 
     def execute(self, context):
         return {'FINISHED'}
