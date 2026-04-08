@@ -1488,11 +1488,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         face_position += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
-<<<<<<< HEAD
-    if dst_mod.header.version in (153, 156, 211):
-=======
-    if dst_mod.header.version in (156, 211) and app_id != "umvc3":
->>>>>>> f677003 (Adapt structs for umvc3 export)
+    if dst_mod.header.version in (153, 156, 211) and app_id != "umvc3":
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)
