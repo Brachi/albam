@@ -2029,11 +2029,11 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-def _duplicate_vertex_attr(bl_mesh):
-    mesh = bl_mesh.data
+def _duplicate_vertex_attr(src_obj):
+    mesh = src_obj.data
     uv_layers = mesh.uv_layers
     color_layers = mesh.vertex_colors
-    groups = bl_mesh.vertex_groups
+    groups = src_obj.vertex_groups
 
     new_vertices = []
     new_normals = []
@@ -2089,7 +2089,7 @@ def _duplicate_vertex_attr(bl_mesh):
         new_faces.append(new_face)
 
     # Set new mew with duplicated vertices
-    temp_mesh = bpy.data.meshes.new("temp_" + bl_mesh.name)
+    temp_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
     temp_mesh.from_pydata(new_vertices, [], new_faces)
     temp_mesh.update()
 
@@ -2111,34 +2111,35 @@ def _duplicate_vertex_attr(bl_mesh):
     temp_mesh.normals_split_custom_set_from_vertices(new_normals)
 
     # Create new obj for exporting
-    temp_obj = bpy.data.objects.new("temp_" + bl_mesh.name, temp_mesh)
-    bpy.context.collection.objects.link(temp_obj)
+    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, temp_mesh)
+    bpy.context.collection.objects.link(dst_obj)
 
     # Set Vertex groups
     for g in groups:
-        vg = temp_obj.vertex_groups.new(name=g.name)
+        vg = dst_obj.vertex_groups.new(name=g.name)
     for i, group_tuple in enumerate(new_groups):
         for gname, weight in group_tuple:
-            vg = temp_obj.vertex_groups[gname]
+            vg = dst_obj.vertex_groups[gname]
             vg.add([i], weight, 'REPLACE')
 
-    for modifier in bl_mesh.modifiers:
+    for modifier in src_obj.modifiers:
         if modifier.type == 'ARMATURE' and modifier.object:
-            new_arm_modifier = temp_obj.modifiers.new(name="Armature", type='ARMATURE')
+            new_arm_modifier = dst_obj.modifiers.new(name="Armature", type='ARMATURE')
             new_arm_modifier.object = modifier.object
             break
-    app_id = bl_mesh.albam_asset.app_id
-    source_custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
-        app_id)
-    target_custom_properties = temp_obj.data.albam_custom_properties.get_custom_properties_for_appid(
-        app_id)
-    # source_custom_properties.copy_custom_properties_to(temp_obj)
-    for key, value in source_custom_properties.items():
-        setattr(target_custom_properties, key, value)
 
-    temp_obj.data.materials.append(bl_mesh.data.materials[0])
+    # TODO replace this ducktaped solution
+    for app_id in APPID_CLASS_MAPPER.keys():
+        src_albam_props = src_obj.data.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        dst_albam_props = dst_obj.data.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
 
-    return temp_obj
+        dst_albam_props.copy_custom_properties_from(src_albam_props)
+
+    dst_obj.data.materials.append(src_obj.data.materials[0])
+
+    return dst_obj
 
 
 @blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))
