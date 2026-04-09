@@ -29,10 +29,10 @@ from ...lib.blender import (
 )
 from ...lib.misc import chunks
 from ...lib.common_op import (
-    clone_mesh,
     apply_transform,
     triangulate_meshes,
-    delete_ob
+    delete_ob,
+    move_to_collection
 )
 from ...lib.export_checks import check_all_objects_have_materials
 from ...registry import blender_registry
@@ -47,7 +47,6 @@ from .texture import check_dds_textures
 from .structs.mod_153 import Mod153
 from .structs.mod_156 import Mod156
 from .structs.mod_21 import Mod21
-from ...blender_ui.tools import split_UV_seams
 
 
 MOD_CLASS_MAPPER = {
@@ -815,7 +814,8 @@ def export_mod(bl_obj):
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
     if export_settings.export_autofix:
-        bl_meshes = [clone_mesh(mesh, keep_modifiers=True) for mesh in bl_meshes]
+        bl_meshes = [_duplicate_vertex_attr(mesh) for mesh in bl_meshes]
+        move_to_collection(bl_meshes, "AlbamTemp")
         apply_transform(bl_meshes)
         triangulate_meshes(bl_meshes)
 
@@ -1459,7 +1459,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
 def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data):
     SCALE = 100
-    _duplicate_vertex_attr(bl_mesh)
     uvs_per_vertex = get_uvs_per_vertex(bl_mesh, 0)
     uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
     uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
@@ -2033,15 +2032,16 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
 def _duplicate_vertex_attr(bl_mesh):
     mesh = bl_mesh.data
     uv_layers = mesh.uv_layers
+    color_layers = mesh.vertex_colors
+    groups = bl_mesh.vertex_groups
 
     new_vertices = []
-    # for multy uv cases
-    new_uvs_layers = [[] for _ in uv_layers]
     new_normals = []
+    new_uvs_layers = [[] for _ in uv_layers]
+    new_colors_layers = [[] for _ in color_layers]
+    new_groups = []
     new_faces = []
     vertex_map = {}
-
-    # uv_layer = mesh.uv_layers.active.data
 
     for poly in mesh.polygons:
         new_face = []
@@ -2050,44 +2050,95 @@ def _duplicate_vertex_attr(bl_mesh):
             v = mesh.vertices[loop.vertex_index]
             n = loop.normal
 
-        uv_tuple = []
-        for uv_layer in uv_layers:
-            uv = uv_layer.data[li].uv
-            uv_tuple.append(tuple(round(x, 6) for x in uv))
+            # UVs
+            uv_tuple = []
+            for uv_layer in uv_layers:
+                uv = uv_layer.data[li].uv
+                uv_tuple.append(tuple(round(x, 6) for x in uv))
 
-        # key (vertex_index,(nx, ny, nz), [[u1,v1], [u2, v2], ...])
-        key = (loop.vertex_index,
-               tuple(round(x, 6) for x in n),
-               *uv_tuple)
+            # Colors
+            col_tuple = []
+            for col_layer in color_layers:
+                col = col_layer.data[li].color
+                col_tuple.append(tuple(round(x, 6) for x in col))
 
-        if key not in vertex_map:
-            idx = len(new_vertices)
-            vertex_map[key] = idx
-            new_vertices.append(v.co.copy())
-            new_normals.append(n.copy())
-            for layer_i, uv_layer in enumerate(uv_layers):
-                new_uvs_layers[layer_i].append(uv_layer.data[li].uv.copy())
+            # Vertex group weights
+            group_tuple = []
+            for g in v.groups:
+                group_tuple.append((groups[g.group].name, round(g.weight, 6)))
 
-        new_face.append(vertex_map[key])
-    new_faces.append(new_face)
+            # key (vertex_index,(nx, ny, nz),[(u1,v1),(u2,v2),...],[(vr, vg, vb, va),...], (vg,..))
+            key = (loop.vertex_index,
+                   tuple(round(x, 6) for x in n),
+                   *uv_tuple,
+                   *col_tuple,
+                   tuple(group_tuple))
 
-    # create mesh
+            if key not in vertex_map:
+                idx = len(new_vertices)
+                vertex_map[key] = idx
+                new_vertices.append(v.co.copy())
+                new_normals.append(n.copy())
+                for layer_i, uv_layer in enumerate(uv_layers):
+                    new_uvs_layers[layer_i].append(uv_layer.data[li].uv.copy())
+                for layer_i, col_layer in enumerate(color_layers):
+                    new_colors_layers[layer_i].append(col_layer.data[li].color.copy())
+                new_groups.append(group_tuple)
+
+            new_face.append(vertex_map[key])
+        new_faces.append(new_face)
+
+    # Set new mew with duplicated vertices
     temp_mesh = bpy.data.meshes.new("temp_" + bl_mesh.name)
     temp_mesh.from_pydata(new_vertices, [], new_faces)
     temp_mesh.update()
 
-    # set UV
+    # Set UV-layers
     for layer_i, uv_layer in enumerate(uv_layers):
         uv_layer_new = temp_mesh.uv_layers.new(name=uv_layer.name)
         for poly in temp_mesh.polygons:
             for li in poly.loop_indices:
                 uv_layer_new.data[li].uv = new_uvs_layers[layer_i][temp_mesh.loops[li].vertex_index]
 
-    # apply normals
+    # Set vertex colors
+    for layer_i, col_layer in enumerate(color_layers):
+        col_layer_new = temp_mesh.vertex_colors.new(name=col_layer.name)
+        for poly in temp_mesh.polygons:
+            for li in poly.loop_indices:
+                col_layer_new.data[li].color = new_colors_layers[layer_i][temp_mesh.loops[li].vertex_index]
+
+    # Set Normals
     temp_mesh.normals_split_custom_set_from_vertices(new_normals)
 
-    temp_obj = bpy.data.objects.new("TempObject", temp_mesh)
+    # Create new obj for exporting
+    temp_obj = bpy.data.objects.new("temp_" + bl_mesh.name, temp_mesh)
     bpy.context.collection.objects.link(temp_obj)
+
+    # Set Vertex groups
+    for g in groups:
+        vg = temp_obj.vertex_groups.new(name=g.name)
+    for i, group_tuple in enumerate(new_groups):
+        for gname, weight in group_tuple:
+            vg = temp_obj.vertex_groups[gname]
+            vg.add([i], weight, 'REPLACE')
+
+    for modifier in bl_mesh.modifiers:
+        if modifier.type == 'ARMATURE' and modifier.object:
+            new_arm_modifier = temp_obj.modifiers.new(name="Armature", type='ARMATURE')
+            new_arm_modifier.object = modifier.object
+            break
+    app_id = bl_mesh.albam_asset.app_id
+    source_custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
+        app_id)
+    target_custom_properties = temp_obj.data.albam_custom_properties.get_custom_properties_for_appid(
+        app_id)
+    # source_custom_properties.copy_custom_properties_to(temp_obj)
+    for key, value in source_custom_properties.items():
+        setattr(target_custom_properties, key, value)
+
+    temp_obj.data.materials.append(bl_mesh.data.materials[0])
+
+    return temp_obj
 
 
 @blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))

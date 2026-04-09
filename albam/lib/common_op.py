@@ -171,3 +171,15 @@ def triangulate_meshes(bl_objects):
         bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method='BEAUTY', ngon_method='BEAUTY')
         bm.to_mesh(mesh)
         mesh.update()
+
+
+def move_to_collection(bl_objects, col_name):
+    collection = bpy.data.collections.get(col_name)
+    if not collection:
+        collection = bpy.data.collections.new(col_name)
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+    for ob in bl_objects:
+        for col in ob.users_collection:
+            col.objects.unlink(ob)
+        collection.objects.link(ob)
