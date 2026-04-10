@@ -814,7 +814,7 @@ def export_mod(bl_obj):
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
     if export_settings.export_autofix:
-        bl_meshes = [_duplicate_vertex_attr(mesh) for mesh in bl_meshes]
+        bl_meshes = [_duplicate_vtx_by_attr(mesh) for mesh in bl_meshes]
         move_to_collection(bl_meshes, "AlbamTemp")
         apply_transform(bl_meshes)
         triangulate_meshes(bl_meshes)
@@ -829,9 +829,9 @@ def export_mod(bl_obj):
 
     meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    if export_settings.export_autofix:
-        for ob in bl_meshes:
-            delete_ob(ob)
+    # if export_settings.export_autofix:
+    #    for ob in bl_meshes:
+    #        delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
@@ -2029,7 +2029,7 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-def _duplicate_vertex_attr(src_obj):
+def _duplicate_vtx_by_attr(src_obj):
     mesh = src_obj.data
     uv_layers = mesh.uv_layers
     color_layers = mesh.vertex_colors
@@ -2042,24 +2042,29 @@ def _duplicate_vertex_attr(src_obj):
     new_groups = []
     new_faces = []
     vertex_map = {}
+    comp_vtx_map = {}
 
     for poly in mesh.polygons:
         new_face = []
-        for li in poly.loop_indices:
-            loop = mesh.loops[li]
+        for loop_idx in poly.loop_indices:
+            loop = mesh.loops[loop_idx]
             v = mesh.vertices[loop.vertex_index]
             n = loop.normal
 
             # UVs
             uv_tuple = []
             for uv_layer in uv_layers:
-                uv = uv_layer.data[li].uv
-                uv_tuple.append(tuple(round(x, 6) for x in uv))
+                uv = uv_layer.data[loop_idx].uv
+                # NaN affected later comparison
+                if not (uv.x != uv.x or uv.y != uv.y):
+                    uv_tuple.append(tuple(round(x, 6) for x in uv))
+                else:
+                    uv_tuple.append(tuple((0.0, 0.0)))
 
             # Colors
             col_tuple = []
             for col_layer in color_layers:
-                col = col_layer.data[li].color
+                col = col_layer.data[loop_idx].color
                 col_tuple.append(tuple(round(x, 6) for x in col))
 
             # Vertex group weights
@@ -2074,18 +2079,24 @@ def _duplicate_vertex_attr(src_obj):
                    *col_tuple,
                    tuple(group_tuple))
 
-            if key not in vertex_map:
+            # compare only by vtx index and uv
+            comp_key = (loop.vertex_index, *uv_tuple)
+
+            if comp_key not in comp_vtx_map:
+            # if key not in vertex_map:
                 idx = len(new_vertices)
+                comp_vtx_map[comp_key] = idx
                 vertex_map[key] = idx
                 new_vertices.append(v.co.copy())
                 new_normals.append(n.copy())
                 for layer_i, uv_layer in enumerate(uv_layers):
-                    new_uvs_layers[layer_i].append(uv_layer.data[li].uv.copy())
+                    new_uvs_layers[layer_i].append(uv_layer.data[loop_idx].uv.copy())
                 for layer_i, col_layer in enumerate(color_layers):
-                    new_colors_layers[layer_i].append(col_layer.data[li].color.copy())
+                    new_colors_layers[layer_i].append(col_layer.data[loop_idx].color)
                 new_groups.append(group_tuple)
 
-            new_face.append(vertex_map[key])
+            # new_face.append(vertex_map[key])
+            new_face.append(comp_vtx_map[comp_key])
         new_faces.append(new_face)
 
     # Set new mew with duplicated vertices
@@ -2097,15 +2108,15 @@ def _duplicate_vertex_attr(src_obj):
     for layer_i, uv_layer in enumerate(uv_layers):
         uv_layer_new = temp_mesh.uv_layers.new(name=uv_layer.name)
         for poly in temp_mesh.polygons:
-            for li in poly.loop_indices:
-                uv_layer_new.data[li].uv = new_uvs_layers[layer_i][temp_mesh.loops[li].vertex_index]
+            for loop_idx in poly.loop_indices:
+                uv_layer_new.data[loop_idx].uv = new_uvs_layers[layer_i][temp_mesh.loops[loop_idx].vertex_index]
 
     # Set vertex colors
     for layer_i, col_layer in enumerate(color_layers):
         col_layer_new = temp_mesh.vertex_colors.new(name=col_layer.name)
         for poly in temp_mesh.polygons:
-            for li in poly.loop_indices:
-                col_layer_new.data[li].color = new_colors_layers[layer_i][temp_mesh.loops[li].vertex_index]
+            for loop_idx in poly.loop_indices:
+                col_layer_new.data[loop_idx].color = new_colors_layers[layer_i][temp_mesh.loops[loop_idx].vertex_index]
 
     # Set Normals
     temp_mesh.normals_split_custom_set_from_vertices(new_normals)
