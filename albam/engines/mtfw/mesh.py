@@ -658,8 +658,8 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
     if len(vertex_colors) > 0:
-        bl_mesh.vertex_colors.new(name=name)
-        color_layer = bl_mesh.vertex_colors[name]
+        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='FLOAT_COLOR')
+        # color_layer = bl_mesh.data.color_attributes[name]
         for poly in bl_mesh.polygons:
             for loop_index in poly.loop_indices:
                 loop = bl_mesh.loops[loop_index]
@@ -1221,7 +1221,7 @@ def _get_vertex_colors(blender_mesh):
     mesh = blender_mesh.data
     colors = {}
     try:
-        color_layer = mesh.vertex_colors[0]
+        color_layer = mesh.color_attributes[0]
     except IndexError:
         return colors
     mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
@@ -2029,16 +2029,42 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
+def _convert_vtx_col_layer(mesh, src_layer):
+    """
+    Blender changed the way vertex colors work, now there are per vertex and per loop layers
+    This funciton convert vertex colors into loop colors
+    """
+    if src_layer.domain == 'CORNER' and src_layer.data_type == 'FLOAT_COLOR':
+        return src_layer
+    else:
+        scr_layer_name = src_layer.name
+        new_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='FLOAT_COLOR')
+
+        src_data = src_layer.data
+        dst_data = new_col_layer.data
+        # Transfer from vertices to loops
+        if src_layer.domain == 'POINT':
+            for i, loop in enumerate(mesh.loops):
+                dst_data[i].color = src_data[loop.vertex_index].color
+        elif src_layer.domain == 'CORNER':
+            for i in range(len(dst_data)):
+                dst_data[i].color = src_data[i].color
+        mesh.color_attributes.remove(src_layer)
+        new_col_layer.name = scr_layer_name
+        return new_col_layer
+
+
 def _duplicate_vtx_by_attr(src_obj):
     mesh = src_obj.data
     uv_layers = mesh.uv_layers
-    color_layers = mesh.vertex_colors
+    # TODO change vertex color import-export code, currently it uses legacy method
+    color_layers = mesh.color_attributes
     groups = src_obj.vertex_groups
 
     new_vertices = []
     new_normals = []
     new_uvs_layers = [[] for _ in uv_layers]
-    new_colors_layers = [[] for _ in color_layers]
+    new_col_layers = [[] for _ in color_layers]
     new_groups = []
     new_faces = []
     vertex_map = {}
@@ -2064,6 +2090,7 @@ def _duplicate_vtx_by_attr(src_obj):
             # Colors
             col_tuple = []
             for col_layer in color_layers:
+                col_layer = _convert_vtx_col_layer(mesh, col_layer)
                 col = col_layer.data[loop_idx].color
                 col_tuple.append(tuple(round(x, 6) for x in col))
 
@@ -2083,16 +2110,15 @@ def _duplicate_vtx_by_attr(src_obj):
             comp_key = (loop.vertex_index, *uv_tuple)
 
             if comp_key not in comp_vtx_map:
-            # if key not in vertex_map:
                 idx = len(new_vertices)
                 comp_vtx_map[comp_key] = idx
                 vertex_map[key] = idx
                 new_vertices.append(v.co.copy())
                 new_normals.append(n.copy())
-                for layer_i, uv_layer in enumerate(uv_layers):
-                    new_uvs_layers[layer_i].append(uv_layer.data[loop_idx].uv.copy())
-                for layer_i, col_layer in enumerate(color_layers):
-                    new_colors_layers[layer_i].append(col_layer.data[loop_idx].color)
+                for i, uv_layer in enumerate(uv_layers):
+                    new_uvs_layers[i].append(uv_layer.data[loop_idx].uv.copy())
+                for i, col_layer in enumerate(color_layers):
+                    new_col_layers[i].append(col_layer.data[loop_idx].color)
                 new_groups.append(group_tuple)
 
             # new_face.append(vertex_map[key])
@@ -2100,29 +2126,30 @@ def _duplicate_vtx_by_attr(src_obj):
         new_faces.append(new_face)
 
     # Set new mew with duplicated vertices
-    temp_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
-    temp_mesh.from_pydata(new_vertices, [], new_faces)
-    temp_mesh.update()
+    dst_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
+    dst_mesh.from_pydata(new_vertices, [], new_faces)
+    dst_mesh.update()
 
     # Set UV-layers
-    for layer_i, uv_layer in enumerate(uv_layers):
-        uv_layer_new = temp_mesh.uv_layers.new(name=uv_layer.name)
-        for poly in temp_mesh.polygons:
+    for i, uv_layer in enumerate(uv_layers):
+        uv_layer_new = dst_mesh.uv_layers.new(name=uv_layer.name)
+        for poly in dst_mesh.polygons:
             for loop_idx in poly.loop_indices:
-                uv_layer_new.data[loop_idx].uv = new_uvs_layers[layer_i][temp_mesh.loops[loop_idx].vertex_index]
+                uv_layer_new.data[loop_idx].uv = new_uvs_layers[i][dst_mesh.loops[loop_idx].vertex_index]
 
     # Set vertex colors
-    for layer_i, col_layer in enumerate(color_layers):
-        col_layer_new = temp_mesh.vertex_colors.new(name=col_layer.name)
-        for poly in temp_mesh.polygons:
+    for i, col_layer in enumerate(color_layers):
+        col_layer_new = dst_mesh.color_attributes.new(
+            name=col_layer.name, domain='CORNER', type='FLOAT_COLOR')
+        for poly in dst_mesh.polygons:
             for loop_idx in poly.loop_indices:
-                col_layer_new.data[loop_idx].color = new_colors_layers[layer_i][temp_mesh.loops[loop_idx].vertex_index]
+                col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]
 
     # Set Normals
-    temp_mesh.normals_split_custom_set_from_vertices(new_normals)
+    dst_mesh.normals_split_custom_set_from_vertices(new_normals)
 
     # Create new obj for exporting
-    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, temp_mesh)
+    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, dst_mesh)
     bpy.context.collection.objects.link(dst_obj)
 
     # Set Vertex groups
