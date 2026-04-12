@@ -658,7 +658,8 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
     if len(vertex_colors) > 0:
-        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='FLOAT_COLOR')
+        # As import-export works with 1byte colors, no need to use full float for that
+        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='BYTE_COLOR')
         # color_layer = bl_mesh.data.color_attributes[name]
         for poly in bl_mesh.polygons:
             for loop_index in poly.loop_indices:
@@ -829,9 +830,9 @@ def export_mod(bl_obj):
 
     meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    # if export_settings.export_autofix:
-    #    for ob in bl_meshes:
-    #        delete_ob(ob)
+    if export_settings.export_autofix:
+        for ob in bl_meshes:
+            delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
@@ -2032,32 +2033,29 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
 def _convert_vtx_col_layer(mesh, src_layer):
     """
     Blender changed the way vertex colors work, now there are per vertex and per loop layers
-    This funciton convert vertex colors into loop colors
+    This funciton convert vertex colors into loop colors with float values as exporter expects
     """
-    if src_layer.domain == 'CORNER' and src_layer.data_type == 'FLOAT_COLOR':
+    if src_layer.domain == 'CORNER':
         return src_layer
     else:
-        scr_layer_name = src_layer.name
-        new_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='FLOAT_COLOR')
+        scr_col_layer_name = src_layer.name
+        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='BYTE_COLOR')
 
         src_data = src_layer.data
-        dst_data = new_col_layer.data
+        dst_data = dst_col_layer.data
         # Transfer from vertices to loops
         if src_layer.domain == 'POINT':
             for i, loop in enumerate(mesh.loops):
                 dst_data[i].color = src_data[loop.vertex_index].color
-        elif src_layer.domain == 'CORNER':
-            for i in range(len(dst_data)):
-                dst_data[i].color = src_data[i].color
+
         mesh.color_attributes.remove(src_layer)
-        new_col_layer.name = scr_layer_name
-        return new_col_layer
+        dst_col_layer.name = scr_col_layer_name
+        return dst_col_layer
 
 
 def _duplicate_vtx_by_attr(src_obj):
     mesh = src_obj.data
     uv_layers = mesh.uv_layers
-    # TODO change vertex color import-export code, currently it uses legacy method
     color_layers = mesh.color_attributes
     groups = src_obj.vertex_groups
 
@@ -2067,7 +2065,7 @@ def _duplicate_vtx_by_attr(src_obj):
     new_col_layers = [[] for _ in color_layers]
     new_groups = []
     new_faces = []
-    vertex_map = {}
+    # vertex_map = {}
     comp_vtx_map = {}
 
     for poly in mesh.polygons:
@@ -2081,7 +2079,7 @@ def _duplicate_vtx_by_attr(src_obj):
             uv_tuple = []
             for uv_layer in uv_layers:
                 uv = uv_layer.data[loop_idx].uv
-                # NaN affected later comparison
+                # NaN in UV data affected later comparison
                 if not (uv.x != uv.x or uv.y != uv.y):
                     uv_tuple.append(tuple(round(x, 6) for x in uv))
                 else:
@@ -2100,11 +2098,11 @@ def _duplicate_vtx_by_attr(src_obj):
                 group_tuple.append((groups[g.group].name, round(g.weight, 6)))
 
             # key (vertex_index,(nx, ny, nz),[(u1,v1),(u2,v2),...],[(vr, vg, vb, va),...], (vg,..))
-            key = (loop.vertex_index,
-                   tuple(round(x, 6) for x in n),
-                   *uv_tuple,
-                   *col_tuple,
-                   tuple(group_tuple))
+            # key = (loop.vertex_index,
+            #       tuple(round(x, 6) for x in n),
+            #       *uv_tuple,
+            #       *col_tuple,
+            #       tuple(group_tuple))
 
             # compare only by vtx index and uv
             comp_key = (loop.vertex_index, *uv_tuple)
@@ -2112,7 +2110,6 @@ def _duplicate_vtx_by_attr(src_obj):
             if comp_key not in comp_vtx_map:
                 idx = len(new_vertices)
                 comp_vtx_map[comp_key] = idx
-                vertex_map[key] = idx
                 new_vertices.append(v.co.copy())
                 new_normals.append(n.copy())
                 for i, uv_layer in enumerate(uv_layers):
@@ -2140,7 +2137,7 @@ def _duplicate_vtx_by_attr(src_obj):
     # Set vertex colors
     for i, col_layer in enumerate(color_layers):
         col_layer_new = dst_mesh.color_attributes.new(
-            name=col_layer.name, domain='CORNER', type='FLOAT_COLOR')
+            name=col_layer.name, domain='CORNER', type='BYTE_COLOR')
         for poly in dst_mesh.polygons:
             for loop_idx in poly.loop_indices:
                 col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]
