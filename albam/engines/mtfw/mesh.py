@@ -815,6 +815,9 @@ def export_mod(bl_obj):
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
     if export_settings.export_autofix:
+        if bpy.data.collections.get("AlbamTemp"):
+            for ob in bpy.data.collections["AlbamTemp"].objects:
+                delete_ob(ob)
         bl_meshes = [_duplicate_vtx_by_attr(mesh) for mesh in bl_meshes]
         move_to_collection(bl_meshes, "AlbamTemp")
         apply_transform(bl_meshes)
@@ -2065,8 +2068,7 @@ def _duplicate_vtx_by_attr(src_obj):
     new_col_layers = [[] for _ in color_layers]
     new_groups = []
     new_faces = []
-    # vertex_map = {}
-    comp_vtx_map = {}
+    comparison_vtx_map = {}
 
     for poly in mesh.polygons:
         new_face = []
@@ -2097,19 +2099,12 @@ def _duplicate_vtx_by_attr(src_obj):
             for g in v.groups:
                 group_tuple.append((groups[g.group].name, round(g.weight, 6)))
 
-            # key (vertex_index,(nx, ny, nz),[(u1,v1),(u2,v2),...],[(vr, vg, vb, va),...], (vg,..))
-            # key = (loop.vertex_index,
-            #       tuple(round(x, 6) for x in n),
-            #       *uv_tuple,
-            #       *col_tuple,
-            #       tuple(group_tuple))
+            # compare only by vtx index and uv[(u1,v1),(u2,v2),...]
+            comparison_key = (loop.vertex_index, *uv_tuple)
 
-            # compare only by vtx index and uv
-            comp_key = (loop.vertex_index, *uv_tuple)
-
-            if comp_key not in comp_vtx_map:
+            if comparison_key not in comparison_vtx_map:
                 idx = len(new_vertices)
-                comp_vtx_map[comp_key] = idx
+                comparison_vtx_map[comparison_key] = idx
                 new_vertices.append(v.co.copy())
                 new_normals.append(n.copy())
                 for i, uv_layer in enumerate(uv_layers):
@@ -2119,7 +2114,7 @@ def _duplicate_vtx_by_attr(src_obj):
                 new_groups.append(group_tuple)
 
             # new_face.append(vertex_map[key])
-            new_face.append(comp_vtx_map[comp_key])
+            new_face.append(comparison_vtx_map[comparison_key])
         new_faces.append(new_face)
 
     # Set new mew with duplicated vertices
