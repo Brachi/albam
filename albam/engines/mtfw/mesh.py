@@ -478,6 +478,12 @@ def _process_normals(vertex, normals_out):
     normals_out.append((x, -z, y))
 
 
+def _fix_nan_uv(u, v):
+    if u != u or v != v:
+        return 0.0, 0.0
+    return u, v
+
+
 def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
     if not hasattr(vertex, "uv"):
         return
@@ -489,18 +495,21 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
         return
     u = unpack("e", bytes(vertex.uv2.u))[0]
     v = unpack("e", bytes(vertex.uv2.v))[0]
+    u, v = _fix_nan_uv(u, v)
     uvs_2_out.extend((u, 1 - v))
 
     if not hasattr(vertex, "uv3"):
         return
     u = unpack("e", bytes(vertex.uv3.u))[0]
     v = unpack("e", bytes(vertex.uv3.v))[0]
+    u, v = _fix_nan_uv(u, v)
     uvs_3_out.extend((u, 1 - v))
 
     if not hasattr(vertex, "uv4"):
         return
     u = unpack("e", bytes(vertex.uv4.u))[0]
     v = unpack("e", bytes(vertex.uv4.v))[0]
+    u, v = _fix_nan_uv(u, v)
     uvs_4_out.extend((u, 1 - v))
 
 
