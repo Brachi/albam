@@ -60,7 +60,6 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
     overwrite_tex_path: bpy.props.BoolProperty(default=False)
-    sorting_passes: bpy.props.IntProperty(default=2)
     sorting_dbg_draw: bpy.props.BoolProperty(default=False)
 
 
@@ -133,12 +132,6 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         layout.separator()
         row = layout.row()
         row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
-        row = layout.row()
-        row.prop(
-            context.scene.albam.tools_settings,
-            "sorting_passes",
-            text="Number of sorting passes",
-        )
         row = layout.row()
         row.prop(
             context.scene.albam.tools_settings,
@@ -950,7 +943,7 @@ def _min_distance_to_target(obj, target_bvh):
 
 
 # Check overlaping
-def _is_blocked(card_ob, v_from, v_to, bvh_list):
+def _is_blocked_old(card_ob, v_from, v_to, bvh_list):
     direction = (v_to - v_from).normalized()
     length = (v_to - v_from).length
     hit_objs = set()
@@ -963,6 +956,25 @@ def _is_blocked(card_ob, v_from, v_to, bvh_list):
         hit = bvh.ray_cast(v_from, direction, length)
         if hit[0]:
             hit_objs.add(target_ob)
+            exclude_obj.append(target_ob)
+    return hit_objs
+
+
+def _get_blocked_objs(card_ob, v_from, v_to, bvh_list):
+    '''Returns dictionary: {object: distance_to_hit}'''
+    direction = (v_to - v_from).normalized()
+    length = (v_to - v_from).length
+    hit_objs = {}
+    exclude_obj = []
+    exclude_obj.append(card_ob)
+    # Check if the ray the goes from card to body is blocked by other cards
+    for bvh, target_ob in bvh_list:
+        if target_ob in exclude_obj:
+            continue
+        hit = bvh.ray_cast(v_from, direction, length)
+        location, normal, index, distance = hit
+        if hit[0]:
+            hit_objs[target_ob] = [distance * 100]  # scaling value not sure if needed
             exclude_obj.append(target_ob)
     return hit_objs
 
@@ -1050,19 +1062,27 @@ def _get_max_alpha_priority(cards_objs):
     return max_aprior
 
 
+def _get_alpha_priority(card_ob):
+    alpha_prior = 0
+    custom_props = _get_mesh_albam_props(card_ob)
+    if custom_props:
+        alpha_prior = custom_props.alpha_priority
+    else:
+        alpha_prior = card_ob.get('order', 0)
+    return alpha_prior
+
+
 def _set_dbg_vtx_colors(bl_objects):
-    """
-    Get already ordered list of mesh objects, set vertex colors to them in blue-red gradient
-    """
-    num_objects = len(bl_objects)
+    max_alpha_pri = _get_max_alpha_priority(bl_objects)
     for i, obj in enumerate(bl_objects):
         if obj.type == 'MESH':
+            cur_apha_pri = _get_alpha_priority(obj)
             mesh = obj.data
             if not mesh.vertex_colors:
                 vcol_layer = mesh.vertex_colors.new(name="dbg_distance")
             else:
                 vcol_layer = mesh.vertex_colors.active
-            t = i / (num_objects - 1) if num_objects > 1 else 0
+            t = cur_apha_pri / max_alpha_pri if max_alpha_pri > 0 else 0
             color = (t, 0.0, 1.0 - t, 1.0)  # RGBA
             for poly in mesh.polygons:
                 for loop_index in poly.loop_indices:
@@ -1080,11 +1100,11 @@ def _nullify_alpha_prior(cards_objs):
 
 def sort_hair_cards(body_ob, cards_objs):
     albam_settings = bpy.context.scene.albam.tools_settings
-    num_passes = albam_settings.sorting_passes
     debug_draw = albam_settings.sorting_dbg_draw
 
+    deps = bpy.context.evaluated_depsgraph_get()
     body_bm = bmesh.new()
-    body_bm.from_object(body_ob, bpy.context.evaluated_depsgraph_get())
+    body_bm.from_object(body_ob, deps)
     body_bm.verts.ensure_lookup_table()
     body_bm.faces.ensure_lookup_table()
     body_bvh = bvhtree.BVHTree.FromBMesh(body_bm)
@@ -1092,30 +1112,16 @@ def sort_hair_cards(body_ob, cards_objs):
 
     # Build the BVH tree for cards
     bvh_list = []
-    deps = bpy.context.evaluated_depsgraph_get()
     for card_ob in cards_objs:
         bm = bmesh.new()
-        bm.from_object(card_ob, bpy.context.evaluated_depsgraph_get())
+        bm.from_object(card_ob, deps)
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
         bvh = bvhtree.BVHTree.FromBMesh(bm)
         bvh_list.append((bvh, card_ob))
         bm.free()
 
-    visited = set()
-    processing = set()
-    blockers_cache = {}
-
     def compute_blockers(card_ob, debug_draw=False):
-        # cached
-        if card_ob in blockers_cache:
-            return blockers_cache[card_ob]
-        if card_ob not in processing:
-            return set()
-        # if card_ob in processing:
-        #    # cycle detected — return empty set to break cycle
-        #    return set()
-        # processing.add(card_ob)
         debug_rays = []
 
         bm = bmesh.new()
@@ -1132,78 +1138,109 @@ def sort_hair_cards(body_ob, cards_objs):
             center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
             sample_points.append(center)
 
-        blocked_objs = set()
+        blockers_cache = {}
         for world_v in sample_points:
             hit = body_bvh.find_nearest(world_v)
             if hit:
                 loc, normal, index, dist = hit
                 debug_rays.append((world_v, loc))
-                blocked = _is_blocked(card_ob, world_v, loc, bvh_list)
+                # blocked_obj: distance
+                blocked = _get_blocked_objs(card_ob, world_v, loc, bvh_list)
                 if blocked:
-                    blocked_objs.update(blocked)
-
+                    for bobj, bdist in blocked.items():
+                        #
+                        blockers_cache[bobj] = blockers_cache.get(bobj, []) + bdist
+        # Naive average distance
+        blockers_cache = {k: sum(v) / len(v) for k, v in blockers_cache.items()}
+        # Sort by minimal distances to the head, reverse because the ray casts from the card
+        blocked_objs = sorted(blockers_cache, key=blockers_cache.get)
         bm.free()
-        # ensure self not included
-        blocked_objs.discard(card_ob)
-        blockers_cache[card_ob] = blocked_objs
-        processing.remove(card_ob)
+        print("Card {} is blocked by {}".format(card_ob.name, blocked_objs))
         if debug_draw:
             _debug_draw_bvh_rays(debug_rays, card_ob.name)
         return blocked_objs
 
-    def process_card_recursive(card_ob):
-        if card_ob in visited:
-            return
-        # detect and avoid deep cycles
-        if card_ob in processing:
-            return
-        processing.add(card_ob)
-        blockers = compute_blockers(card_ob, debug_draw=debug_draw)
+    # Function to build a complete chain for a card by following its blockers
+    def build_chain(card, key_map):
+        chain = [card]
+        current = card
+        visited_in_chain = {card}
+        while True:
+            blockers = key_map.get(current, [])
+            if blockers:
+                for b in blockers:
+                    if b not in chain:
+                        chain.append(b)
+                # Follow the last blocker in the list
+                last_blocker = blockers[-1]
+                if last_blocker not in visited_in_chain:
+                    # chain.append(last_blocker)
+                    visited_in_chain.add(last_blocker)
+                    current = last_blocker
+                else:
+                    break
+            else:
+                break
+        # Reverse so chain goes from root (no blockers) to card
+        chain.reverse()
+        return chain
 
-        # process blockers first if they are not yet visited
-        for b in list(blockers):
-            if b not in visited:
-                process_card_recursive(b)
+    def process_card(card_ob):
+        casted_cache = {}
+        # {card_ob: [blocker002, blocker001, blocker...]}
+        casted_cache[card_ob] = compute_blockers(card_ob, debug_draw)
+        return casted_cache
 
-        # now assign priority for this card based on blockers and visited set
-        card_props = _get_mesh_albam_props(card_ob)
-        # if all blockers are already visited -> set priority to max(blockers)+1 else set to len(blockers)
-        if blockers.issubset(visited):
-            max_ap = _get_max_alpha_priority(blockers) if blockers else 0
-            if card_props:
-                card_props.alpha_priority = max_ap + 1
-            card_ob['order'] = max_ap + 1
-        else:
-            # some blockers unprocessed (cycle or external) — use fallback count
-            if card_props:
-                card_props.alpha_priority = len(blockers)
-            card_ob['order'] = len(blockers)
-
-        visited.add(card_ob)
-        processing.discard(card_ob)
-
-    def sorting_pass(cards_objs, current_pass):
-        if current_pass == 0:
-            cards_objs_sorted = sorted(cards_objs, key=lambda o: _min_distance_to_target(o, body_bvh))
-        else:
-            cards_objs_sorted = cards_objs
-            cards_objs_sorted.sort(key=lambda o: _get_mesh_albam_props(
-                o).alpha_priority if _get_mesh_albam_props(o) else o.get('order', 0))
-
-        if debug_draw:
-            _set_dbg_vtx_colors(cards_objs_sorted)
-
+    def sorting_pass(cards_objs):
+        cards_objs_sorted = sorted(cards_objs, key=lambda o: _min_distance_to_target(o, body_bvh))
         _nullify_alpha_prior(cards_objs_sorted)
-        # recompute blockers and priorities
-        visited.clear()
-        processing.clear()
-        blockers_cache.clear()
+        processed_cards = []
         for i, card_ob in enumerate(cards_objs_sorted):
-            if card_ob not in visited:
-                process_card_recursive(card_ob)
+            processed_cards.append(process_card(card_ob))
+        # Ordered list to sort by quantity of blockers that contains dictionaries
+        # [0]{obj_blocker.001: obj_blocker.000}
+        # [1]{obj: obj_blocker.003, obj_blocker.002, obj_blocker.001}
+        sorted_cards = sorted(processed_cards, key=lambda d: len(next(iter(d.values()))))
 
-    for i in range(num_passes):
-        sorting_pass(cards_objs, i)
+        # Build a mapping of keys for quick lookup
+        cards_keys_map = {}
+        # Convert ordered list into lookup table
+        for card_dict in sorted_cards:
+            for key, values in card_dict.items():
+                cards_keys_map[key] = values
+
+        visited = set()
+        for cdict in processed_cards:
+            for card, v in cdict.items():
+                blockers_chain = build_chain(card, cards_keys_map)
+                print("Card chain is: {}".format(blockers_chain))
+                if blockers_chain:
+                    base_alphapri = 0
+                    for blocker in blockers_chain:
+                        if blocker in visited:
+                            base_alphapri = _get_alpha_priority(blocker)
+                            print("Visited", blocker.name, "with alpha priority", base_alphapri)
+                            continue
+                        albam_props = _get_mesh_albam_props(blocker)
+                        base_alphapri += 1
+                        if albam_props:
+                            albam_props.alpha_priority = base_alphapri
+                        blocker['order'] = base_alphapri
+                        visited.add(blocker)
+                else:
+                    albam_props = _get_mesh_albam_props(card)
+                    if len(v):
+                        print("Fallback!")
+                        if albam_props:
+                            albam_props.alpha_priority = len(v) + 1
+                        card['order'] = len(v) + 1
+                    else:
+                        if albam_props:
+                            albam_props.alpha_priority = 1
+                        card['order'] = 1
+    sorting_pass(cards_objs)
+    if debug_draw:
+        _set_dbg_vtx_colors(cards_objs)
 
 
 def merge_hair_cards(objs):
