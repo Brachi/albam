@@ -1160,84 +1160,89 @@ def sort_hair_cards(body_ob, cards_objs):
             _debug_draw_bvh_rays(debug_rays, card_ob.name)
         return blocked_objs
 
-    # Function to build a complete chain for a card by following its blockers
-    def build_chain(card, key_map):
-        chain = [card]
-        current = card
-        visited_in_chain = {card}
-        while True:
-            blockers = key_map.get(current, [])
-            if blockers:
-                for b in blockers:
-                    if b not in chain:
-                        chain.append(b)
-                # Follow the last blocker in the list
-                last_blocker = blockers[-1]
-                if last_blocker not in visited_in_chain:
-                    # chain.append(last_blocker)
-                    visited_in_chain.add(last_blocker)
-                    current = last_blocker
-                else:
-                    break
-            else:
-                break
-        # Reverse so chain goes from root (no blockers) to card
-        chain.reverse()
-        return chain
-
-    def process_card(card_ob):
-        casted_cache = {}
-        # {card_ob: [blocker002, blocker001, blocker...]}
-        casted_cache[card_ob] = compute_blockers(card_ob, debug_draw)
-        return casted_cache
-
     def sorting_pass(cards_objs):
+        # Collect blocker info for each card
         cards_objs_sorted = sorted(cards_objs, key=lambda o: _min_distance_to_target(o, body_bvh))
         _nullify_alpha_prior(cards_objs_sorted)
-        processed_cards = []
-        for i, card_ob in enumerate(cards_objs_sorted):
-            processed_cards.append(process_card(card_ob))
-        # Ordered list to sort by quantity of blockers that contains dictionaries
-        # [0]{obj_blocker.001: obj_blocker.000}
-        # [1]{obj: obj_blocker.003, obj_blocker.002, obj_blocker.001}
-        sorted_cards = sorted(processed_cards, key=lambda d: len(next(iter(d.values()))))
 
-        # Build a mapping of keys for quick lookup
-        cards_keys_map = {}
-        # Convert ordered list into lookup table
-        for card_dict in sorted_cards:
-            for key, values in card_dict.items():
-                cards_keys_map[key] = values
+        card_info = {}  # {card_ob: {'distance': float, 'blockers': [list]}}
+        for card_ob in cards_objs_sorted:
+            dist = _min_distance_to_target(card_ob, body_bvh)
+            blockers = compute_blockers(card_ob, debug_draw)
+            card_info[card_ob] = {
+                'distance': dist,
+                'blockers': blockers,
+                'priority': 0
+            }
 
-        visited = set()
-        for cdict in processed_cards:
-            for card, v in cdict.items():
-                blockers_chain = build_chain(card, cards_keys_map)
-                print("Card chain is: {}".format(blockers_chain))
-                if blockers_chain:
-                    base_alphapri = 0
-                    for blocker in blockers_chain:
-                        if blocker in visited:
-                            base_alphapri = _get_alpha_priority(blocker)
-                            print("Visited", blocker.name, "with alpha priority", base_alphapri)
-                            continue
-                        albam_props = _get_mesh_albam_props(blocker)
-                        base_alphapri += 1
-                        if albam_props:
-                            albam_props.alpha_priority = base_alphapri
-                        blocker['order'] = base_alphapri
-                        visited.add(blocker)
-                else:
-                    albam_props = _get_mesh_albam_props(card)
-                    if len(v):
-                        print("Fallback!")
-                        if albam_props:
-                            albam_props.alpha_priority = len(v) + 1
-                        card['order'] = len(v) + 1
+        # Topological sort: priority = max(priority of blockers) + 1
+        # Iterate until all priorities are assigned
+        max_iterations = len(cards_objs) + 1
+        iteration = 0
+        unassigned = set(card_info.keys())
+
+        print("\n=== Topological Sort ===")
+        while unassigned and iteration < max_iterations:
+            iteration += 1
+            assigned_this_pass = False
+
+            for card_ob in list(unassigned):
+                blockers = card_info[card_ob]['blockers']
+
+                # Check if all blockers have priority assigned
+                all_blockers_assigned = all(card_info[blocker]['priority'] > 0 for blocker in blockers)
+
+                if not blockers:
+                    # No blockers - priority 1
+                    card_info[card_ob]['priority'] = 1
+                    assigned_this_pass = True
+                    unassigned.remove(card_ob)
+                    print("Pass {}: {} - no blockers → priority=1".format(iteration, card_ob.name))
+
+                elif all_blockers_assigned:
+                    # All blockers have priority - take max + 1
+                    max_blocker_priority = max(card_info[b]['priority'] for b in blockers)
+                    priority = max_blocker_priority + 1
+                    card_info[card_ob]['priority'] = priority
+                    assigned_this_pass = True
+                    unassigned.remove(card_ob)
+                    print("Pass {}: {} - max(blockers)={} → priority={}".format(
+                        iteration, card_ob.name, max_blocker_priority, priority))
+
+            if not assigned_this_pass and unassigned:
+                # Fallback: assign remaining (cycle detection)
+                print("Warning: Cycle or missing blockers detected. Assigning remaining cards with fallback.")
+                for card_ob in list(unassigned):
+                    blockers = card_info[card_ob]['blockers']
+                    assigned_priorities = [card_info[b]['priority']
+                                           for b in blockers if card_info[b]['priority'] > 0]
+                    if assigned_priorities:
+                        priority = max(assigned_priorities) + 1
                     else:
-                        if albam_props:
-                            albam_props.alpha_priority = 1
-                        card['order'] = 1
+                        priority = 1
+                    card_info[card_ob]['priority'] = priority
+                    unassigned.remove(card_ob)
+                    print("Fallback: {} → priority={}".format(card_ob.name, priority))
+                break
+
+        # Apply priorities to objects
+        print("\n=== Final Priorities ===")
+        for card_ob in cards_objs_sorted:
+            priority = card_info[card_ob]['priority']
+            blockers_count = len(card_info[card_ob]['blockers'])
+
+            albam_props = _get_mesh_albam_props(card_ob)
+            if albam_props:
+                albam_props.alpha_priority = priority
+            card_ob['order'] = priority
+
+            print("{}: priority={}, blockers={} {}".format(
+                card_ob.name,
+                priority,
+                blockers_count,
+                [b.name for b in card_info[card_ob]['blockers']]
+            ))
+
     sorting_pass(cards_objs)
     if debug_draw:
         _set_dbg_vtx_colors(cards_objs)
