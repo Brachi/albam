@@ -151,6 +151,7 @@ APPID_SERIALIZE_MAPPER = {
     "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
+    "dmc4": lambda: _serialize_texture_156,
 }
 
 APPID_TEXCLS_MAP = {
@@ -161,6 +162,7 @@ APPID_TEXCLS_MAP = {
     "rev1": Tex157,
     "rev2": Tex157,
     "dd": Tex157,
+    "dmc4": Tex112,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -171,6 +173,7 @@ APPID_RTEXCLS_MAP = {
     "rev1": Rtex157,
     "rev2": Rtex157,
     "dd": Rtex157,
+    "dmc4": Rtex112,
 }
 
 TEX_TYPE_MAPPER = {
@@ -403,7 +406,7 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         if tex_value == texture_type:
             tex_slot = tex_type
             break
-    tex_index = getattr(mtfw_material, tex_slot)
+    tex_index = getattr(mtfw_material, tex_slot, 0)  # TODO: fix slots for DMC4
     return tex_index
 
 
@@ -730,7 +733,7 @@ def _calculate_cube_faces_data(tex):
     return cube_faces
 
 
-@blender_registry.register_custom_properties_image("tex_112", ("re5", ))
+@blender_registry.register_custom_properties_image("tex_112", ("re5", "dmc4",))
 @blender_registry.register_blender_prop
 class Tex112CustomProperties(bpy.types.PropertyGroup):
     texture_type: bpy.props.EnumProperty(  # noqa: F821

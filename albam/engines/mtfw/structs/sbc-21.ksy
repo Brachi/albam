@@ -3,32 +3,32 @@ meta:
   file-extension: sbc
   id: sbc_21
   ks-version: 0.11
-  title: MTFramework collision format version 211
+  title: MTFramework collision format version 210
   
 seq:
   - {id: header, type: sbc_header}
-  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.object_count}
-  - {id: sbc_bvhc, type: bvh_collision, repeat: expr, repeat-expr: header.object_count}
+  - {id: sbc_info, type: info, repeat: expr, repeat-expr: header.num_objects}
+  - {id: sbc_bvhc, type: bvh_collision, repeat: expr, repeat-expr: header.num_objects}
   - {id: bvh, type: bvh_collision}
-  - {id: faces, type: face, repeat: expr, repeat-expr: header.face_count}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.vertex_count}
-  - {id: collision_types, type: collision_type, repeat: expr, repeat-expr: header.stage_count}
-  - {id: pairs_collections, type: s_face_pair, repeat: expr, repeat-expr: header.pair_count}
+  - {id: faces, type: face, repeat: expr, repeat-expr: header.num_faces}
+  - {id: vertices, type: vertex, repeat: expr, repeat-expr: header.num_vertices}
+  - {id: collision_types, type: collision_type, repeat: expr, repeat-expr: header.num_stages}
+  - {id: pairs_collections, type: s_face_pair, repeat: expr, repeat-expr: header.num_pairs}
   
 types:
   sbc_header:
     seq:
-     - {id: magic, contents: [0x53, 0x42, 0x43, 0xff]}
+     - {id: indent, contents: [0x53, 0x42, 0x43, 0xff]}
      - {id: unk_00, type: u4}
      - {id: unk_02, type: u4}
      - {id: unk_03, type: u4}
-     - {id: object_count, type: u2}
-     - {id: stage_count, type: u2}
-     - {id: pair_count, type: u4}
-     - {id: face_count, type: u4}
-     - {id: vertex_count, type: u4}
+     - {id: num_objects, type: u2}
+     - {id: num_stages, type: u2}
+     - {id: num_pairs, type: u4}
+     - {id: num_faces, type: u4}
+     - {id: num_vertices, type: u4}
      - {id: nulls, type: u4, repeat: expr, repeat-expr: 4}
-     - {id: box, type: bbox}
+     - {id: bounding_box, type: bbox4}
      - {id: bb_size, type: u4}
     instances:
       size_:
@@ -36,27 +36,30 @@ types:
     
   info:
     seq:
-      - {id: bounding_box, type: bbox}
+      - {id: bounding_box, type: bbox4}
       - {id: unk_01, type: u4}
       - {id: nulls_01, type: u4, repeat: expr, repeat-expr: 2}
-      - {id: pairs_start, type: u4}
-      - {id: pairs_count, type: u4}
-      - {id: faces_start, type: u4}
-      - {id: face_count, type: u4}
-      - {id: vertex_start, type: u4}
-      - {id: vertex_count, type: u4}
+      - {id: start_pairs, type: u4}
+      - {id: num_pairs, type: u4}
+      - {id: start_faces, type: u4}
+      - {id: num_faces, type: u4}
+      - {id: start_vertices, type: u4}
+      - {id: num_vertices, type: u4}
       - {id: index_id, type: u4}
       - {id: nulls_02, type: u4, repeat: expr, repeat-expr: 2}
+    instances:
+      size_:
+        value: 80
       
   bvh_collision:
     seq:  
       - {id: bvhc, type: u4, repeat: expr, repeat-expr: 2}
       - {id: soh, type: u4}
       - {id: unk_01, type: u4}
-      - {id: bounding_box, type: bbox}
-      - {id: node_count, type: u4}
+      - {id: bounding_box, type: bbox4}
+      - {id: num_nodes, type: u4}
       - {id: nulls, type: u4, repeat: expr, repeat-expr: 3}
-      - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: node_count}
+      - {id: nodes, type: bvh_node, repeat: expr, repeat-expr: num_nodes}
     
   bvh_node:
     seq:
@@ -96,6 +99,9 @@ types:
       - {id: unk_03, type: u2}
       - {id: unk_04, type: u4, repeat: expr, repeat-expr: 3}
       - {id: jp_path, type: u1, repeat: expr, repeat-expr: 12}
+    instances:
+      size_:
+        value: 32
       
   s_face_pair: #When a face bounding box contains another face
     seq:
@@ -104,7 +110,7 @@ types:
       - {id: quad_order, type: u1, repeat: expr, repeat-expr: 4}#CommonEdge1(f1),CommonEdge2(f1),NoncommonEdge(f1),NoncommonEdge(f2)
       - {id: type, type: u2} #0 floor, 1 wall, 2 airwall
       
-  bbox:
+  bbox4:
     seq:
     - {id: min, type: f4, repeat: expr, repeat-expr: 4}
     - {id: max, type: f4, repeat: expr, repeat-expr: 4}

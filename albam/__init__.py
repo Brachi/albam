@@ -15,9 +15,9 @@ __version__ = version
 
 bl_info = {
     "name": "Albam",
-    "author": "Sebastian A. Brachi",
-    "version": (0, 4, 0),  # needs to be kept in sync with __version__ manually
-    "blender": (2, 80, 0),
+    "author": "Sebastian Aguirre Brachi",
+    "version": (0, 5, 0),  # needs to be kept in sync with __version__ manually
+    "blender": (4, 2, 0),
     "location": "Properties Panel",
     "description": "Import-Export multiple video-game formats",
     "category": "Import-Export",

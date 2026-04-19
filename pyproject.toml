@@ -1,9 +1,9 @@
 [project]
 name = "Albam"
-version = "0.4.0"
+version = "0.5.0"
 description = "Import and Export game engine formats in Blender"
 readme = "README.md"
-authors = [ {name = "Sebastian A. Brachi"}, {name = "Henry of Carim"} ]
+authors = [ {name = "Sebastian Aguirre Brachi"}, {name = "Henry of Carim"} ]
 requires-python = ">=3.10, <=3.12"
 license = {file = "LICENSE"}
 keywords = ["modding", "game-modding", "blender-addon", "import", "export"]

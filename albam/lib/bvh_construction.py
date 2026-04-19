@@ -194,6 +194,24 @@ class BinaryCluster(Cluster):
         qnode = QBVH(self, *children)
         return qnode
 
+    def binary_collapse(self):
+        if self.isPrimitive():
+            return BBVH(self)
+        children = []
+
+        def checkAddSide(side):
+            if side:
+                if side.isPrimitive():
+                    children.append(BBVH(side))
+                else:
+                    children.append(side.binary_collapse())
+        checkAddSide(self.left)
+        checkAddSide(self.right)
+        children += [BBVH(None) for i in range(2 - len(children))]
+        # print(children)
+        qnode = BBVH(self, *children)
+        return qnode
+
 
 # The QBVH class represents a Quad Bounding Volume Hierarchy
 # The QBVH class distinguishes between three types of nodes:
@@ -383,6 +401,57 @@ class QBVH():
         if not hasattr(self, "traversalBuffer"):
             self.separateTraverse()
         return self.traversalBuffer[1]
+
+
+class BBVH(QBVH):
+    def __init__(self, binaryCluster, left=None, right=None):
+        self.parent = None
+        if binaryCluster is None:
+            self.type = Cluster.EMPTY
+            self.node = None
+        else:
+            self.type = binaryCluster.type
+            self.node = binaryCluster
+            if not self.isPrimitive():
+                def check(x):
+                    return BBVH(None) if x is None else x
+                self.left = check(left)
+                self.right = check(right)
+
+    def childBoxes(self):
+        boxes = []
+        default = self.parent.childBoxes() if self.parent else [
+            self.node.boundingBox()] * 2
+        for ix, child in enumerate(self.children()):
+            boxes.append(child.AABB() if child.isNode() or
+                         child.isPrimitive() else default[ix])
+        return boxes
+
+    def typeMask(self):
+        if not self.isNode():
+            raise NotImplementedError(
+                "Empties and Primitives don't have a type mask.")
+        else:
+            node_type = 0
+            for i, side in enumerate(self.children()):
+                if side.type != Cluster.NODE:
+                    node_type |= (1 << (6 + i))
+            return node_type
+
+    def nodeId(self):
+        def checkEmpty(node):
+            return node.index() if node.type != Cluster.EMPTY else 0
+        if not self.isNode():
+            raise NotImplementedError(
+                "Empties and Primitives don't have subnodes.")
+        else:
+            return [checkEmpty(self.left), checkEmpty(self.right)]
+
+    def children(self):
+        if self.isNode():
+            return [self.left, self.right]
+        else:
+            return []
 
 
 # =============================================================================
@@ -730,6 +799,25 @@ def primitive_to_sbc(primitives, clusteringFunction=spatial_splits, **kwargs):
     nodes, pairPrimitives = qtree.separateTraverse()
     indexize_ob(nodes)
     return npair_primitives, PrimitiveTree(qtree).refine([vert for p in primitives for vert in p.vertices])
+
+
+def primitive_to_sbc156(primitives, clusteringFunction=spatial_splits, **kwargs):
+    indexize_ob(primitives, lambda x: x.dataFace)
+    indexize_ob(primitives)
+    btree = next(iter(clusteringFunction(primitives, **kwargs)))
+    btree = btree.binary_collapse()
+    indexize_ob(btree.subnodes())
+    npairPrimitives = mergerReindex(primitives, btree.subprimitives())
+    nodes, pairPrimitives = btree.separateTraverse()
+    indexize_ob(nodes)
+    return npairPrimitives, PrimitiveTree(btree).refine([vert for p in primitives for vert in p.vertices])
+
+
+def trees_to_sbc_col156(tree_list, clusteringFunction=spatial_splits, **kwargs):
+    indexize_ob(tree_list)
+    btree = next(iter(clusteringFunction(tree_list, **kwargs))).binary_collapse()
+    indexize_ob(btree.subnodes())
+    return PrimitiveTree(btree)
 
 
 # Spatial Bounding Cluster (SBC)

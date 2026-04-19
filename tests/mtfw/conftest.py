@@ -31,6 +31,12 @@ def pytest_generate_tests(metafunc):
             argvalues.append((app_id, mod_path, mrl_path))
         metafunc.parametrize(argnames, argvalues, scope="session")
 
+    elif ("app_id" in metafunc.fixturenames and
+          "sbc_path" in metafunc.fixturenames):
+        argnames = ("app_id", "sbc_path")
+        argvalues = [(d["app_id"], d["sbc_path"]) for d in MTFW_DATASET]
+        metafunc.parametrize(argnames, argvalues, scope="session")
+
     elif "parsed_mod_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("mod", metafunc, "parsed_mod_from_arc")
     elif "parsed_mrl_from_arc" in metafunc.fixturenames:
@@ -142,6 +148,49 @@ def mrl_exported(mod_export):
         pytest.skip("No mrl available")
     else:
         return mrl
+
+
+@pytest.fixture(scope="session")
+def sbc_export(loaded_arcs, app_id, sbc_path):
+    from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
+    if not sbc_path:
+        pytest.skip("No sbc available")
+    bpy.context.scene.albam.apps.app_selected = app_id
+    vfile_sbc = bpy.context.scene.albam.vfs.select_vfile(app_id, sbc_path)
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
+    vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(app_id, sbc_path)
+    assert vfile_sbc_exported
+    Sbc = APPID_SBC_CLASS_MAPPER[app_id]
+    src_sbc = Sbc.from_bytes(vfile_sbc.get_bytes())
+    dst_sbc = Sbc.from_bytes(vfile_sbc_exported.get_bytes())
+    src_sbc._read()
+    dst_sbc._read()
+    return src_sbc, dst_sbc
+
+
+@pytest.fixture(scope="session")
+def sbc_imported(sbc_export):
+    sbc = sbc_export[0]
+    if not sbc:
+        pytest.skip("No imported sbc available")
+    else:
+        return sbc
+
+
+@pytest.fixture(scope="session")
+def sbc_exported(sbc_export):
+    sbc = sbc_export[1]
+    if not sbc:
+        pytest.skip("No exported sbc available")
+    else:
+        return sbc
 
 
 @pytest.fixture
