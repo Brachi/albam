@@ -17,7 +17,7 @@ types:
     - {id: unk_01, type: u4}
     - {id: data_offset, type: u4}
     instances:
-     data_bloc:
+     data_blocks:
       {pos: data_offset, type: udas_data}
   
   udas_data:
