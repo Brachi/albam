@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [unreleased]
+
+### Added
+
+- Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
+
+### Fixed
+
+- Import of meshes with Nan UVs
+
+
+### Changed
+
+### Removed
+
 ## [0.5.0] - 2026-04-03
 
 ### Added
