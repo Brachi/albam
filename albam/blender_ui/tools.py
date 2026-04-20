@@ -1290,7 +1290,7 @@ def sort_hair_cards(body_ob, cards_objs):
                     for bobj, bdist in blocked.items():
                         #
                         blockers_cache[bobj] = blockers_cache.get(bobj, []) + bdist
-        # Naive average distance
+        # If few rays hit the same blocker, average the distance to it
         blockers_cache = {k: sum(v) / len(v) for k, v in blockers_cache.items()}
         # Sort by minimal distances to the head, reverse because the ray casts from the card
         blocked_objs = sorted(blockers_cache, key=blockers_cache.get)
@@ -1315,21 +1315,44 @@ def sort_hair_cards(body_ob, cards_objs):
                 'priority': 0
             }
 
-        # Topological sort: priority = max(priority of blockers) + 1
+        def _get_total_blocker_depth(card_ob, visited=None):
+            """Recursively count total blocker depth including blockers of blockers"""
+            if visited is None:
+                visited = set()
+            if card_ob in visited:
+                return 0
+            visited.add(card_ob)
+            blockers = card_info[card_ob]['blockers']
+            total = len(blockers)
+            for blocker in blockers:
+                total += _get_total_blocker_depth(blocker, visited)
+            return total
+
+        # Check for intersections of cards (cycles in blocker dependencies)
+        print("\n=== Checking for Intersections ===")
+        for card_ob in card_info.keys():
+            blockers = card_info[card_ob]['blockers']
+            # Check if any blocker has this card in its blockers (direct cycle)
+            for blocker in blockers:
+                if card_ob in card_info[blocker]['blockers']:
+                    print("WARNING: Intersection detected between {} and {}".format(
+                        card_ob.name, blocker.name))
+
+        # Topological sorting: priority = max(priority of blockers) + 1
         # Iterate until all priorities are assigned
         max_iterations = len(cards_objs) + 1
         iteration = 0
         unassigned = set(card_info.keys())
 
-        print("\n=== Topological Sort ===")
+        print("\n=== Topological Sorting ===")
         while unassigned and iteration < max_iterations:
             iteration += 1
             assigned_this_pass = False
 
-            for card_ob in list(unassigned):
+            for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
                 blockers = card_info[card_ob]['blockers']
 
-                # Check if all blockers have priority assigned
+                # check if all blockers have priority assigned
                 all_blockers_assigned = all(card_info[blocker]['priority'] > 0 for blocker in blockers)
 
                 if not blockers:
@@ -1352,7 +1375,7 @@ def sort_hair_cards(body_ob, cards_objs):
             if not assigned_this_pass and unassigned:
                 # Fallback: assign remaining (cycle detection)
                 print("Warning: Cycle or missing blockers detected. Assigning remaining cards with fallback.")
-                for card_ob in list(unassigned):
+                for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
                     blockers = card_info[card_ob]['blockers']
                     assigned_priorities = [card_info[b]['priority']
                                            for b in blockers if card_info[b]['priority'] > 0]
