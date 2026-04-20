@@ -57,8 +57,8 @@ class VirtualFile(bpy.types.PropertyGroup):
         e.g. texname.tex.34 -> tex.34
         """
         SEP = "."
-        name , _ , extension = self.display_name.rpartition(SEP)
-        if SEP in name:
+        name, _, extension = self.display_name.rpartition(SEP)
+        if SEP in name and extension != "lfs":
             _, __, extension0 = name.rpartition(SEP)
             extension = SEP.join((extension0, extension))
         return extension
@@ -98,8 +98,8 @@ class VirtualFile(bpy.types.PropertyGroup):
 
 
 class VirtualFileSystemBase:
-    file_list : bpy.props.CollectionProperty(type=VirtualFile)
-    file_list_selected_index : bpy.props.IntProperty()
+    file_list: bpy.props.CollectionProperty(type=VirtualFile)
+    file_list_selected_index: bpy.props.IntProperty()
 
     SEPARATOR = "::"
     VFS_ID = "vfs"
@@ -381,10 +381,11 @@ class VirtualFileData:
         e.g. texname.tex.34 -> tex.34
         """
         SEP = "."
-        name , _ , extension = self.relative_path.rpartition(SEP)
+        name, _, extension = self.relative_path.rpartition(SEP)
         if SEP in name:
             _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
+            if extension0 != "lfs":  # TODO implement something smarter
+                extension = SEP.join((extension0, extension))
         return extension
 
 
