@@ -28,6 +28,12 @@ from ...lib.blender import (
     triangles_list_to_triangles_strip,
 )
 from ...lib.misc import chunks
+from ...lib.common_op import (
+    apply_transform,
+    triangulate_meshes,
+    delete_ob,
+    move_to_collection
+)
 from ...lib.export_checks import check_all_objects_have_materials
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
@@ -661,8 +667,9 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
     if len(vertex_colors) > 0:
-        bl_mesh.vertex_colors.new(name=name)
-        color_layer = bl_mesh.vertex_colors[name]
+        # As import-export works with 1byte colors, no need to use full float for that
+        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='BYTE_COLOR')
+        # color_layer = bl_mesh.data.color_attributes[name]
         for poly in bl_mesh.polygons:
             for loop_index in poly.loop_indices:
                 loop = bl_mesh.loops[loop_index]
@@ -816,6 +823,15 @@ def export_mod(bl_obj):
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
 
+    if export_settings.export_autofix:
+        if bpy.data.collections.get("AlbamTemp"):
+            for ob in bpy.data.collections["AlbamTemp"].objects:
+                delete_ob(ob)
+        bl_meshes = [_duplicate_vtx_by_attr(mesh) for mesh in bl_meshes]
+        move_to_collection(bl_meshes, "AlbamTemp")
+        apply_transform(bl_meshes)
+        triangulate_meshes(bl_meshes)
+
     _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
@@ -826,6 +842,9 @@ def export_mod(bl_obj):
 
     meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
         _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
+    if export_settings.export_autofix:
+        for ob in bl_meshes:
+            delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
@@ -1215,7 +1234,7 @@ def _get_vertex_colors(blender_mesh):
     mesh = blender_mesh.data
     colors = {}
     try:
-        color_layer = mesh.vertex_colors[0]
+        color_layer = mesh.color_attributes[0]
     except IndexError:
         return colors
     mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
@@ -2021,6 +2040,145 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
 
     wb._check()
     return wb
+
+
+def _convert_vtx_col_layer(mesh, src_layer):
+    """
+    Blender changed the way vertex colors work, now there are per vertex and per loop layers
+    This funciton convert vertex colors into loop colors with float values as exporter expects
+    """
+    if src_layer.domain == 'CORNER':
+        return src_layer
+    else:
+        scr_col_layer_name = src_layer.name
+        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='BYTE_COLOR')
+
+        src_data = src_layer.data
+        dst_data = dst_col_layer.data
+        # Transfer from vertices to loops
+        if src_layer.domain == 'POINT':
+            for i, loop in enumerate(mesh.loops):
+                dst_data[i].color = src_data[loop.vertex_index].color
+
+        mesh.color_attributes.remove(src_layer)
+        dst_col_layer.name = scr_col_layer_name
+        return dst_col_layer
+
+
+def _duplicate_vtx_by_attr(src_obj):
+    mesh = src_obj.data
+    uv_layers = mesh.uv_layers
+    color_layers = mesh.color_attributes
+    groups = src_obj.vertex_groups
+
+    new_vertices = []
+    new_normals = []
+    new_uvs_layers = [[] for _ in uv_layers]
+    new_col_layers = [[] for _ in color_layers]
+    new_groups = []
+    new_faces = []
+    comparison_vtx_map = {}
+
+    for poly in mesh.polygons:
+        new_face = []
+        for loop_idx in poly.loop_indices:
+            loop = mesh.loops[loop_idx]
+            v = mesh.vertices[loop.vertex_index]
+            n = loop.normal
+
+            # UVs
+            uv_tuple = []
+            for uv_layer in uv_layers:
+                uv = uv_layer.data[loop_idx].uv
+                # NaN in UV data affected later comparison
+                if not (uv.x != uv.x or uv.y != uv.y):
+                    uv_tuple.append(tuple(round(x, 6) for x in uv))
+                else:
+                    uv_tuple.append(tuple((0.0, 0.0)))
+
+            # Colors
+            col_tuple = []
+            for col_layer in color_layers:
+                col_layer = _convert_vtx_col_layer(mesh, col_layer)
+                col = col_layer.data[loop_idx].color
+                col_tuple.append(tuple(round(x, 6) for x in col))
+
+            # Vertex group weights
+            group_tuple = []
+            for g in v.groups:
+                group_tuple.append((groups[g.group].name, round(g.weight, 6)))
+
+            # compare only by vtx index and uv[(u1,v1),(u2,v2),...]
+            comparison_key = (loop.vertex_index, *uv_tuple)
+
+            if comparison_key not in comparison_vtx_map:
+                idx = len(new_vertices)
+                comparison_vtx_map[comparison_key] = idx
+                new_vertices.append(v.co.copy())
+                new_normals.append(n.copy())
+                for i, uv_layer in enumerate(uv_layers):
+                    new_uvs_layers[i].append(uv_layer.data[loop_idx].uv.copy())
+                for i, col_layer in enumerate(color_layers):
+                    new_col_layers[i].append(col_layer.data[loop_idx].color)
+                new_groups.append(group_tuple)
+
+            # new_face.append(vertex_map[key])
+            new_face.append(comparison_vtx_map[comparison_key])
+        new_faces.append(new_face)
+
+    # Set new mew with duplicated vertices
+    dst_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
+    dst_mesh.from_pydata(new_vertices, [], new_faces)
+    dst_mesh.update()
+
+    # Set UV-layers
+    for i, uv_layer in enumerate(uv_layers):
+        uv_layer_new = dst_mesh.uv_layers.new(name=uv_layer.name)
+        for poly in dst_mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                uv_layer_new.data[loop_idx].uv = new_uvs_layers[i][dst_mesh.loops[loop_idx].vertex_index]
+
+    # Set vertex colors
+    for i, col_layer in enumerate(color_layers):
+        col_layer_new = dst_mesh.color_attributes.new(
+            name=col_layer.name, domain='CORNER', type='BYTE_COLOR')
+        for poly in dst_mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]
+
+    # Set Normals
+    dst_mesh.normals_split_custom_set_from_vertices(new_normals)
+
+    # Create new obj for exporting
+    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, dst_mesh)
+    bpy.context.collection.objects.link(dst_obj)
+
+    # Set Vertex groups
+    for g in groups:
+        vg = dst_obj.vertex_groups.new(name=g.name)
+    for i, group_tuple in enumerate(new_groups):
+        for gname, weight in group_tuple:
+            vg = dst_obj.vertex_groups[gname]
+            vg.add([i], weight, 'REPLACE')
+
+    for modifier in src_obj.modifiers:
+        if modifier.type == 'ARMATURE' and modifier.object:
+            new_arm_modifier = dst_obj.modifiers.new(name="Armature", type='ARMATURE')
+            new_arm_modifier.object = modifier.object
+            break
+
+    # TODO replace this ducktaped solution
+    for app_id in APPID_CLASS_MAPPER.keys():
+        src_albam_props = src_obj.data.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        dst_albam_props = dst_obj.data.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+
+        dst_albam_props.copy_custom_properties_from(src_albam_props)
+
+    dst_obj.data.materials.append(src_obj.data.materials[0])
+
+    return dst_obj
 
 
 @blender_registry.register_custom_properties_mesh("mod_156_mesh", ("re5", "dmc4"))
