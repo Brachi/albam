@@ -6,7 +6,7 @@ from .structs.udas import Udas
 from ...albam_vendor import xcompress
 
 
-@blender_registry.register_archive_loader(app_id="re4hd", extension="lfs")
+@blender_registry.register_archive_loader(app_id="re4uhd", extension="lfs")
 def lfs_loader(vfile, context=None):
     print(vfile.absolute_path)
     lfs = LfsWrapper(file_path=vfile.absolute_path)
@@ -14,7 +14,7 @@ def lfs_loader(vfile, context=None):
         yield file_entry.file_path_with_ext
 
 
-@blender_registry.register_archive_accessor(app_id="re4hd", extension="lfs")
+@blender_registry.register_archive_accessor(app_id="re4uhd", extension="lfs")
 def arc_accessor(vfile, context):
     print("accsessor")
     lfs = LfsWrapper(vfile.root_vfile.absolute_path)
@@ -37,9 +37,11 @@ class LfsWrapper:
             udas = Udas.from_bytes(decompressed)
             udas._read()
             self.parsed = udas
+            fe_base_name = os.path.basename(self.file_path)
+            fe_base_name = fe_base_name.split(".")[0] + "_"
             for i, fe in enumerate(udas.header.data_blocks.file_entries):
                 ext = udas.header.data_blocks.file_extension[i].ext
-                fe.file_path_with_ext = f"{str(i)}.{ext}"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
                 file_entries.append(fe)
         return file_entries
 
