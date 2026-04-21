@@ -19,6 +19,14 @@ def arc_accessor(vfile, context):
     print("accsessor")
     lfs = LfsWrapper(vfile.root_vfile.absolute_path)
 
+    path = vfile.relative_path_windows
+    path_no_ext = str(vfile.relative_path_windows_no_ext)
+    ext = path.suffix.replace(".", "")
+    file_type = ext
+    file_bytes = lfs.get_file(path_no_ext, file_type)
+
+    return file_bytes
+
 
 class LfsWrapper:
     PATH_SEPARATOR = "\\"
@@ -28,15 +36,19 @@ class LfsWrapper:
         self.file_type = self._get_all_extensions(file_path)[0]
         self.compressed = Lfs.from_file(file_path)
         self.compressed._read()
-        self.parsed = None
+        self.parsed = self.decompress()
 
-    def get_file_entries(self):
-        file_entries = []
+    def decompress(self):
         if self.file_type == ".udas":
             decompressed = xcompress.xcompress_decompress_re4hd(self.compressed.file_entries)
             udas = Udas.from_bytes(decompressed)
             udas._read()
-            self.parsed = udas
+            return udas
+
+    def get_file_entries(self):
+        file_entries = []
+        if self.file_type == ".udas":
+            udas = self.parsed
             fe_base_name = os.path.basename(self.file_path)
             fe_base_name = fe_base_name.split(".")[0] + "_"
             for i, fe in enumerate(udas.header.data_blocks.file_entries):
@@ -44,6 +56,14 @@ class LfsWrapper:
                 fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
                 file_entries.append(fe)
         return file_entries
+
+    def get_file(self, file_path_no_ext, file_type):
+        file_id = int(file_path_no_ext.split("_")[-1])
+        if self.file_type == ".udas":
+            for i,  fe in enumerate(self.parsed.header.data_blocks.file_entries):
+                if i == file_id and self.parsed.header.data_blocks.file_extension[i].ext == file_type:
+                    return fe.raw_data
+        raise RuntimeError(f"File {file_path_no_ext} with type {file_type} not found in {self.file_path}")
 
     def _get_all_extensions(self, filepath):
         exts = []
