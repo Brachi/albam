@@ -190,29 +190,12 @@ def _process_strip(faces, verts, ftype):
 # -- Materials ---------------------------------------------------------------
 
 def _apply_materials(me, bin, mat_face_ranges):
-    """
-    Create one Blender material per BIN material and assign to face ranges.
+    for mat_i, mat in enumerate(bin.materials):
 
-    material.raw (24 bytes, MaterialPart struct):
-      bytes 0-11  : unknown
-      byte  12    : diffuse_map  (TPL slot index)
-      byte  13    : bump_map     (TPL slot index)
-      byte  14    : opacity_map  (TPL slot index)
-      byte  15    : generic_specular_map
-      bytes 16-18 : specular RGB intensity
-      byte  21    : specular_scale
-      byte  23    : custom_specular_map
-    """
-    for mat_i, material in enumerate(bin.materials):
-        raw = bytes(material.raw)
-        diffuse_slot = raw[12]
-        bump_slot = raw[13]
-        opacity_slot = raw[14]
-
-        bl_mat = bpy.data.materials.new(name=f"re4uhd_mat_{mat_i}_diff{diffuse_slot}")
-        bl_mat["re4uhd_diffuse_tpl_slot"] = diffuse_slot
-        bl_mat["re4uhd_bump_tpl_slot"] = bump_slot
-        bl_mat["re4uhd_opacity_tpl_slot"] = opacity_slot
+        bl_mat = bpy.data.materials.new(name=f"re4uhd_mat_{mat_i}_diff{mat.diffuse_map}")
+        bl_mat["re4uhd_diffuse_tpl_slot"] = mat.diffuse_map
+        bl_mat["re4uhd_bump_tpl_slot"] = mat.bump_map
+        bl_mat["re4uhd_opacity_tpl_slot"] = mat.opacity_map
         me.materials.append(bl_mat)
 
     for mat_i, (start, end) in enumerate(mat_face_ranges):

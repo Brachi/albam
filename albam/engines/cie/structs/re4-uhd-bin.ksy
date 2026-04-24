@@ -128,7 +128,30 @@ types:
 
   material:
     seq:
-      - {id: raw, size: 24} # todo
+      - {id: unk_min_11, type: u1}
+      - {id: unk_min_10, type: u1}
+      - {id: unk_min_09, type: u1}
+      - {id: unk_min_08, type: u1}
+      - {id: unk_min_07, type: u1}
+      - {id: unk_min_06, type: u1}
+      - {id: unk_min_05, type: u1}
+      - {id: unk_min_04, type: u1}
+      - {id: unk_min_03, type: u1}
+      - {id: unk_min_02, type: u1}
+      - {id: unk_min_01, type: u1}
+      - {id: material_flag, type: u1}
+      - {id: diffuse_map, type: u1}
+      - {id: bump_map, type: u1}
+      - {id: opacity_map, type: u1}
+      - {id: generic_specular_map, type: u1}
+      - {id: intensity_specular_r, type: u1}
+      - {id: intensity_specular_g, type: u1}
+      - {id: intensity_specular_b, type: u1}
+      - {id: unk_00, type: u1}
+      - {id: unk_01, type: u1}
+      - {id: specular_scale, type: u1}
+      - {id: unk_02, type: u1}
+      - {id: custom_specular_map, type: u1}
       - {id: face_index, type: face_index}
 
   bone:

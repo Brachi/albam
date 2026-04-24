@@ -571,7 +571,30 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.raw = self._io.read_bytes(24)
+            self.unk_min_11 = self._io.read_u1()
+            self.unk_min_10 = self._io.read_u1()
+            self.unk_min_09 = self._io.read_u1()
+            self.unk_min_08 = self._io.read_u1()
+            self.unk_min_07 = self._io.read_u1()
+            self.unk_min_06 = self._io.read_u1()
+            self.unk_min_05 = self._io.read_u1()
+            self.unk_min_04 = self._io.read_u1()
+            self.unk_min_03 = self._io.read_u1()
+            self.unk_min_02 = self._io.read_u1()
+            self.unk_min_01 = self._io.read_u1()
+            self.material_flag = self._io.read_u1()
+            self.diffuse_map = self._io.read_u1()
+            self.bump_map = self._io.read_u1()
+            self.opacity_map = self._io.read_u1()
+            self.generic_specular_map = self._io.read_u1()
+            self.intensity_specular_r = self._io.read_u1()
+            self.intensity_specular_g = self._io.read_u1()
+            self.intensity_specular_b = self._io.read_u1()
+            self.unk_00 = self._io.read_u1()
+            self.unk_01 = self._io.read_u1()
+            self.specular_scale = self._io.read_u1()
+            self.unk_02 = self._io.read_u1()
+            self.custom_specular_map = self._io.read_u1()
             self.face_index = Re4UhdBin.FaceIndex(self._io, self, self._root)
             self.face_index._read()
             self._dirty = False
@@ -584,13 +607,34 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.Material, self)._write__seq(io)
-            self._io.write_bytes(self.raw)
+            self._io.write_u1(self.unk_min_11)
+            self._io.write_u1(self.unk_min_10)
+            self._io.write_u1(self.unk_min_09)
+            self._io.write_u1(self.unk_min_08)
+            self._io.write_u1(self.unk_min_07)
+            self._io.write_u1(self.unk_min_06)
+            self._io.write_u1(self.unk_min_05)
+            self._io.write_u1(self.unk_min_04)
+            self._io.write_u1(self.unk_min_03)
+            self._io.write_u1(self.unk_min_02)
+            self._io.write_u1(self.unk_min_01)
+            self._io.write_u1(self.material_flag)
+            self._io.write_u1(self.diffuse_map)
+            self._io.write_u1(self.bump_map)
+            self._io.write_u1(self.opacity_map)
+            self._io.write_u1(self.generic_specular_map)
+            self._io.write_u1(self.intensity_specular_r)
+            self._io.write_u1(self.intensity_specular_g)
+            self._io.write_u1(self.intensity_specular_b)
+            self._io.write_u1(self.unk_00)
+            self._io.write_u1(self.unk_01)
+            self._io.write_u1(self.specular_scale)
+            self._io.write_u1(self.unk_02)
+            self._io.write_u1(self.custom_specular_map)
             self.face_index._write__seq(self._io)
 
 
         def _check(self):
-            if len(self.raw) != 24:
-                raise kaitaistruct.ConsistencyError(u"raw", 24, len(self.raw))
             if self.face_index._root != self._root:
                 raise kaitaistruct.ConsistencyError(u"face_index", self._root, self.face_index._root)
             if self.face_index._parent != self:

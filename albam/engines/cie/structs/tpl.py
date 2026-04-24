@@ -128,26 +128,13 @@ class Tpl(ReadWriteKaitaiStruct):
             self._io.seek(_pos)
 
 
-    class TplInfo(ReadWriteKaitaiStruct):
+    class TplIds(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
-            super(Tpl.TplInfo, self).__init__(_io)
+            super(Tpl.TplIds, self).__init__(_io)
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.width = self._io.read_u2le()
-            self.height = self._io.read_u2le()
-            self.pixel_format_type = self._io.read_u4le()
-            self.id_offset = self._io.read_u4le()
-            self.wrap_s = self._io.read_u4le()
-            self.wrap_4 = self._io.read_u4le()
-            self.min_filter = self._io.read_u4le()
-            self.mag_filter = self._io.read_u4le()
-            self.lod_bias = self._io.read_f4le()
-            self.enable_lod = self._io.read_u1()
-            self.min_lod = self._io.read_u1()
-            self.max_lod = self._io.read_u1()
-            self.is_compressed = self._io.read_u1()
             self.pack_id = self._io.read_u4le()
             self.texture_id = self._io.read_u4le()
             self._dirty = False
@@ -158,13 +145,58 @@ class Tpl(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
+            super(Tpl.TplIds, self)._write__seq(io)
+            self._io.write_u4le(self.pack_id)
+            self._io.write_u4le(self.texture_id)
+
+
+        def _check(self):
+            self._dirty = False
+
+
+    class TplInfo(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Tpl.TplInfo, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._should_write_ids = False
+            self.ids__enabled = True
+
+        def _read(self):
+            self.width = self._io.read_u2le()
+            self.height = self._io.read_u2le()
+            self.pixel_format_type = self._io.read_u4le()
+            self.id_offset = self._io.read_u4le()
+            self.wrap_s = self._io.read_u4le()
+            self.wrap_t = self._io.read_u4le()
+            self.min_filter = self._io.read_u4le()
+            self.mag_filter = self._io.read_u4le()
+            self.lod_bias = self._io.read_f4le()
+            self.enable_lod = self._io.read_u1()
+            self.min_lod = self._io.read_u1()
+            self.max_lod = self._io.read_u1()
+            self.is_compressed = self._io.read_u1()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.ids
+            if hasattr(self, '_m_ids'):
+                pass
+                self._m_ids._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
             super(Tpl.TplInfo, self)._write__seq(io)
+            self._should_write_ids = self.ids__enabled
             self._io.write_u2le(self.width)
             self._io.write_u2le(self.height)
             self._io.write_u4le(self.pixel_format_type)
             self._io.write_u4le(self.id_offset)
             self._io.write_u4le(self.wrap_s)
-            self._io.write_u4le(self.wrap_4)
+            self._io.write_u4le(self.wrap_t)
             self._io.write_u4le(self.min_filter)
             self._io.write_u4le(self.mag_filter)
             self._io.write_f4le(self.lod_bias)
@@ -172,12 +204,46 @@ class Tpl(ReadWriteKaitaiStruct):
             self._io.write_u1(self.min_lod)
             self._io.write_u1(self.max_lod)
             self._io.write_u1(self.is_compressed)
-            self._io.write_u4le(self.pack_id)
-            self._io.write_u4le(self.texture_id)
 
 
         def _check(self):
+            if self.ids__enabled:
+                pass
+                if self._m_ids._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"ids", self._root, self._m_ids._root)
+                if self._m_ids._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"ids", self, self._m_ids._parent)
+
             self._dirty = False
+
+        @property
+        def ids(self):
+            if self._should_write_ids:
+                self._write_ids()
+            if hasattr(self, '_m_ids'):
+                return self._m_ids
+
+            if not self.ids__enabled:
+                return None
+
+            _pos = self._io.pos()
+            self._io.seek(self.id_offset)
+            self._m_ids = Tpl.TplIds(self._io, self, self._root)
+            self._m_ids._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_ids', None)
+
+        @ids.setter
+        def ids(self, v):
+            self._dirty = True
+            self._m_ids = v
+
+        def _write_ids(self):
+            self._should_write_ids = False
+            _pos = self._io.pos()
+            self._io.seek(self.id_offset)
+            self._m_ids._write__seq(self._io)
+            self._io.seek(_pos)
 
 
     @property
