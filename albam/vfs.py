@@ -58,7 +58,7 @@ class VirtualFile(bpy.types.PropertyGroup):
         """
         SEP = "."
         name, _, extension = self.display_name.rpartition(SEP)
-        if SEP in name and extension != "lfs":
+        if SEP in name and extension != "lfs":  # TODO fix this ductaped solution
             _, __, extension0 = name.rpartition(SEP)
             extension = SEP.join((extension0, extension))
         return extension
