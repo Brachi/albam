@@ -3,6 +3,7 @@ from ...registry import blender_registry
 import os
 from .structs.lfs import Lfs
 from .structs.udas import Udas
+from .structs.pack import Pack
 from ...albam_vendor import xcompress
 
 
@@ -16,7 +17,6 @@ def lfs_loader(vfile, context=None):
 
 @blender_registry.register_archive_accessor(app_id="re4uhd", extension="lfs")
 def arc_accessor(vfile, context):
-    print("accsessor")
     lfs = LfsWrapper(vfile.root_vfile.absolute_path)
 
     path = vfile.relative_path_windows
@@ -39,11 +39,17 @@ class LfsWrapper:
         self.parsed = self.decompress()
 
     def decompress(self):
+        decompressed = xcompress.xcompress_decompress_re4hd(self.compressed.file_entries)
         if self.file_type == ".udas":
-            decompressed = xcompress.xcompress_decompress_re4hd(self.compressed.file_entries)
             udas = Udas.from_bytes(decompressed)
             udas._read()
             return udas
+        elif self.file_type == ".pack":
+            pack = Pack.from_bytes(decompressed)
+            pack._read()
+            return pack
+        else:
+            raise NotImplementedError(f"Unknown file type {self.file_type}")
 
     def get_file_entries(self):
         file_entries = []
@@ -55,6 +61,14 @@ class LfsWrapper:
                 ext = udas.header.data_blocks.file_extension[i].ext
                 fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
                 file_entries.append(fe)
+        elif self.file_type == ".pack":
+            pack = self.parsed
+            fe_base_name = os.path.basename(self.file_path)
+            fe_base_name = fe_base_name.split(".")[0] + "_"
+            for i, fe in enumerate(pack.file_entries):
+                ext = ".dds" if fe.data.is_dds else ".tga"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}{ext}"
+                file_entries.append(fe)
         return file_entries
 
     def get_file(self, file_path_no_ext, file_type):
@@ -63,6 +77,11 @@ class LfsWrapper:
             for i,  fe in enumerate(self.parsed.header.data_blocks.file_entries):
                 if i == file_id and self.parsed.header.data_blocks.file_extension[i].ext == file_type:
                     return fe.raw_data
+        elif self.file_type == ".pack":
+            for i, fe in enumerate(self.parsed.file_entries):
+                ext = ".dds" if fe.data.is_dds else ".tga"
+                if i == file_id and ext.replace(".", "") == file_type:
+                    return fe.data.raw_data
         raise RuntimeError(f"File {file_path_no_ext} with type {file_type} not found in {self.file_path}")
 
     def _get_all_extensions(self, filepath):
