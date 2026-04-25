@@ -44,7 +44,7 @@ class Udas(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.ext = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+            self.ext = (KaitaiStream.bytes_terminate(self._io.read_bytes(4), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -54,11 +54,12 @@ class Udas(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Udas.Extension, self)._write__seq(io)
-            self._io.write_bytes((self.ext).encode(u"UTF-8"))
-            self._io.write_u1(0)
+            self._io.write_bytes_limit((self.ext).encode(u"UTF-8"), 4, 0, 0)
 
 
         def _check(self):
+            if len((self.ext).encode(u"UTF-8")) > 4:
+                raise kaitaistruct.ConsistencyError(u"ext", 4, len((self.ext).encode(u"UTF-8")))
             if KaitaiStream.byte_array_index_of((self.ext).encode(u"UTF-8"), 0) != -1:
                 raise kaitaistruct.ConsistencyError(u"ext", -1, KaitaiStream.byte_array_index_of((self.ext).encode(u"UTF-8"), 0))
             self._dirty = False

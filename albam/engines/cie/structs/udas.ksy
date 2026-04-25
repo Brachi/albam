@@ -19,6 +19,7 @@ types:
     instances:
      data_blocks:
       {pos: data_offset, type: udas_data}
+
   
   udas_data:
     seq:
@@ -45,4 +46,4 @@ types:
         
   extension:
     seq:
-      - {id: ext, type: str ,terminator: 0, encoding: UTF-8}
+      - {id: ext, type: str , size: 4, encoding: UTF-8, terminator: 0}

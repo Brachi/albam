@@ -5,6 +5,7 @@ from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
+from .structs.tpl import Tpl
 from .textures import load_textures_for_model
 
 
@@ -37,26 +38,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 
     bin = Re4UhdBin.from_bytes(bin_bytes)
     bin._read()
-
-    print(
-        f"[re4uhd] {bl_object_name}: "
-        f"{bin.header.num_vertices} verts, "
-        f"{bin.header.num_materials} materials, "
-        f"{bin.header.num_bones} bones, "
-        f"{bin.header.num_weights} weight maps"
-    )
-
-    # -- 1. Vertex positions ------------------------------------------------
     locations = [_yz_flip(v.x, v.y, v.z) for v in bin.vertex_positions]
-
-    # -- 2. Build faces from material strips --------------------------------
-    # RE4 UHD uses a non-indexed mesh layout: vertex_positions has one entry
-    # per face-corner (no vertex sharing). Faces are formed by consuming vertices
-    # sequentially, grouped per material and per strip within each material.
+    normals = []
+    _process_normals(bin, normals)
     faces, mat_face_ranges = _build_faces(bin)
-    print(f"[re4uhd] {bl_object_name}: {len(faces)} faces across {len(mat_face_ranges)} materials")
 
-    # -- 3. Create mesh -----------------------------------------------------
     me = bpy.data.meshes.new(bl_object_name)
     me.from_pydata(locations, [], faces)
     me.update()
@@ -75,12 +61,13 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             n = bin.normals[loop.vertex_index]
             loop_normals.append(_yz_flip(n.x, n.y, n.z))
         me.normals_split_custom_set(loop_normals)
-
+    tex_props = _process_tpls()
+    textures = _process_tex_indices(tex_props)
     # -- 6. Per-material face assignment ------------------------------------
     _apply_materials(me, bin, mat_face_ranges)
 
     # -- 7. Create mesh object ---------------------------------------------
-    mesh_ob = bpy.data.objects.new(f"{bl_object_name}_mesh", me)
+    mesh_ob = bpy.data.objects.new(f"{bl_object_name}", me)
 
     # -- 8. Armature + bones -----------------------------------------------
     arm_ob = _build_armature(bl_object_name, bin, context)
@@ -112,16 +99,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 
         return root
 
-# -- Face building -----------------------------------------------------------
 
 def _build_faces(bin):
-    """
-    Build the face list and per-material face ranges from material.face_index strips.
-
-    Returns:
-        faces           - list of (i1, i2, i3) tuples
-        mat_face_ranges - list of (start, end) face indices per material
-    """
+    # RE4 UHD uses a non-indexed mesh layout: vertex_positions has one entry
+    # per face-corner (no vertex sharing). Faces are formed by consuming vertices
+    # sequentially, grouped per material and per strip within each material.
     faces = []
     mat_face_ranges = []
     vertex_offset = 0
@@ -143,7 +125,6 @@ def _build_faces(bin):
 def _process_strip(faces, verts, ftype):
     """Append triangles from a single strip to the faces list."""
     ftype_str = FCOUNT_TYPES.get(ftype, "")
-    print("FTYPE is {}".format(ftype_str))
     match ftype_str:
         case "FTYPE_TRIANGLE_LIST":
             # Each consecutive triplet = one triangle
@@ -187,12 +168,63 @@ def _process_strip(faces, verts, ftype):
         case _:
             print(f"[re4uhd] WARNING: unknown ftype={ftype}, {len(verts)} verts skipped")
 
-# -- Materials ---------------------------------------------------------------
+
+def _process_normals(bin, normals_out):
+    for n in bin.normals:
+        normals_out.append((n.x/16384, n.y/16384, n.z/16384))
+
+
+def _process_tpls():
+    vfile_list = bpy.context.scene.albam.vfs.file_list
+    tpldb = []
+    for vfile in vfile_list:
+        if vfile.display_name.endswith(".TPL"):
+            print(f"TPL is: {vfile.display_name}")
+            tpl_bytes = vfile.get_bytes()
+
+            if len(tpl_bytes) < 12:
+                print(f"The {vfile.display_name} is incorrect and has {len(tpl_bytes)} size")
+                continue
+            tpl = Tpl.from_bytes(tpl_bytes)
+            tpl._read()
+            try:
+                tpl.tpl_entries
+            except EOFError:
+                print(f"The {vfile.display_name} is incorrect")
+                continue
+            for i, te in enumerate(tpl.tpl_entries):
+                tpl_entry = {
+                    "tpl_name": vfile.display_name,
+                    "pack_name": 0x0,
+                    "texture_id": 255.
+                }
+                tpl_entry["pack_name"] = str(hex(te.image_data.ids.pack_id))
+                tpl_entry["texture_id"] = te.image_data.ids.texture_id
+                tpldb.append(tpl_entry)
+                print(f"Texture size: {te.image_data.width}x{te.image_data.height}")
+                print("Pack: {}, Texture ID: {} ".format(tpl_entry["pack_name"], tpl_entry["texture_id"]))
+    return tpldb
+
+
+def _process_tex_indices(tex_props):
+    vfile_list = bpy.context.scene.albam.vfs.file_list
+    for tp in tex_props:
+        cached = []
+        pack_name = tp["pack_name"]
+        if pack_name not in cached:
+            for vfile in vfile_list:
+                if vfile.display_name.startswith(pack_name) and vfile.is_root:
+                    print(f"found {vfile.display_name}!")
+                    cached.append(vfile.display_name)
+        if not cached:
+            print(f"{pack_name} wasn't found")
+
 
 def _apply_materials(me, bin, mat_face_ranges):
     for mat_i, mat in enumerate(bin.materials):
+        mat_name = "re4uhd_" + str(mat_i).zfill(3) + "_diff" + str(mat.diffuse_map)
 
-        bl_mat = bpy.data.materials.new(name=f"re4uhd_mat_{mat_i}_diff{mat.diffuse_map}")
+        bl_mat = bpy.data.materials.new(name=mat_name)
         bl_mat["re4uhd_diffuse_tpl_slot"] = mat.diffuse_map
         bl_mat["re4uhd_bump_tpl_slot"] = mat.bump_map
         bl_mat["re4uhd_opacity_tpl_slot"] = mat.opacity_map
