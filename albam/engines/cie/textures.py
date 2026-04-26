@@ -28,9 +28,9 @@ import struct
 import tempfile
 import bpy
 from ...albam_vendor import xcompress
+from .material import _create_cie_shader
 from .structs.lfs import Lfs
-
-RE4UHD_NORMAL_GROUP_NAME = "RE4 UHD Normal Map"
+from .structs.tpl import Tpl
 
 
 def load_textures_for_model(mesh_ob, bin, vfile, context):
@@ -83,7 +83,7 @@ def load_textures_for_model(mesh_ob, bin, vfile, context):
         diffuse_slot = bl_mat.get("re4uhd_diffuse_tpl_slot", -1)
         bump_slot = bl_mat.get("re4uhd_bump_tpl_slot",    -1)
         opacity_slot = bl_mat.get("re4uhd_opacity_tpl_slot", -1)
-        _setup_material_nodes(bl_mat, image_cache, diffuse_slot, bump_slot, opacity_slot)
+        _create_cie_shader(bl_mat, image_cache, diffuse_slot, bump_slot, opacity_slot)
 
     print("[re4uhd] textures: materials set up")
 
@@ -241,100 +241,85 @@ def _load_image_from_pack(pack_raw, texture_id, slot_i, pack_id):
         return None
 
 
-# -- Material node setup -------------------------------------------------------
+def _process_tpls():
+    vfile_list = bpy.context.scene.albam.vfs.file_list
+    tpl_db = []
+    for vfile in vfile_list:
+        if vfile.display_name.endswith(".TPL"):
+            print(f"TPL is: {vfile.display_name}")
+            tpl_bytes = vfile.get_bytes()
 
-def _get_or_create_normal_group():
-    """
-    Create (once) a node group for RE4 UHD's swizzled normal map format.
+            if len(tpl_bytes) < 12:
+                print(f"The {vfile.display_name} is incorrect and has {len(tpl_bytes)} size")
+                continue
+            tpl = Tpl.from_bytes(tpl_bytes)
+            tpl._read()
+            try:
+                tpl.tpl_entries
+            except EOFError:
+                print(f"The {vfile.display_name} is incorrect")
+                continue
+            for i, te in enumerate(tpl.tpl_entries):
+                tpl_entry = {
+                    "tpl_name": vfile.display_name,
+                    "pack_name": str(hex(te.image_data.ids.pack_id))[2:],
+                    "texture_id": te.image_data.ids.texture_id,
+                    "width": te.image_data.width,
+                    "height": te.image_data.height
+                }
 
-    RE4 UHD stores normals with X in the R channel (G and B are identical to R)
-    and Y in the Alpha channel. Z is not stored and must be approximated.
-    Using B=1.0 as the Z approximation is accurate for typical surface normals
-    and avoids unnecessary math node complexity.
-
-    Compatible with Blender 4.x and 5.x (no deprecated RGB nodes).
-    """
-    existing = bpy.data.node_groups.get(RE4UHD_NORMAL_GROUP_NAME)
-    if existing:
-        return existing
-
-    g = bpy.data.node_groups.new(RE4UHD_NORMAL_GROUP_NAME, "ShaderNodeTree")
-
-    def new_socket(name, in_out, stype):
-        if hasattr(g, "interface"):
-            return g.interface.new_socket(name=name, in_out=in_out, socket_type=stype)
-        col = g.inputs if in_out == "INPUT" else g.outputs
-        return col.new(stype, name)
-
-    new_socket("Color",  "INPUT",  "NodeSocketColor")
-    new_socket("Alpha",  "INPUT",  "NodeSocketFloat")
-    new_socket("Normal", "OUTPUT", "NodeSocketVector")
-
-    def n(node_type, loc):
-        nd = g.nodes.new(node_type)
-        nd.location = loc
-        return nd
-
-    lk = g.links.new
-
-    group_in = n("NodeGroupInput",  (-600, 0))
-    group_out = n("NodeGroupOutput", (600, 0))
-
-    # X from Red channel, Y from Alpha, Z approximated as 1.0 (neutral forward)
-    sep = n("ShaderNodeSeparateColor", (-350, 0))
-    lk(group_in.outputs["Color"], sep.inputs["Color"])
-
-    combine = n("ShaderNodeCombineColor", (0, 0))
-    combine.inputs["Blue"].default_value = 1.0
-    lk(sep.outputs["Red"],        combine.inputs["Red"])
-    lk(group_in.outputs["Alpha"], combine.inputs["Green"])
-
-    nm = n("ShaderNodeNormalMap", (300, 0))
-    lk(combine.outputs["Color"], nm.inputs["Color"])
-    lk(nm.outputs["Normal"], group_out.inputs["Normal"])
-
-    return g
+                tpl_db.append(tpl_entry)
+                print(f"Texture size: {te.image_data.width}x{te.image_data.height}")
+                print("Pack: {}, Texture ID: {} ".format(tpl_entry["pack_name"], tpl_entry["texture_id"]))
+    return tpl_db
 
 
-def _setup_material_nodes(bl_mat, image_cache, diffuse_slot, bump_slot, opacity_slot):
-    """
-    Build a clean Principled BSDF material with textures wired correctly.
-    Compatible with Blender 4.x and 5.x.
-    """
-    bl_mat.use_nodes = True
-    bl_mat.blend_method = "CLIP"
-    nodes = bl_mat.node_tree.nodes
-    links = bl_mat.node_tree.links
-    nodes.clear()
+def _process_tex_indices(tex_props):
+    vfile_list = bpy.context.scene.albam.vfs.file_list
+    cached_packs = {}
+    for tp in tex_props:
+        pack_found = False
+        pack_name = tp["pack_name"]
+        if pack_name not in cached_packs.keys():
+            for vfile in vfile_list:
+                if vfile.display_name.startswith(pack_name) and vfile.is_root:
+                    print(f"found {vfile.display_name}!")
+                    pack_found = True
+                    cached_packs[vfile.display_name] = vfile.name
+        if not pack_found:
+            print(f"{pack_name} wasn't found")
+    tex_db = {}
+    for pack_name, root_id in cached_packs.items():
+        tex_list = []
+        for vfile in vfile_list:
+            if vfile.tree_node.root_id == root_id:
+                print(f"loading textures from {vfile.display_name}")
+                tex_list.append(vfile.display_name)
+        tex_db[pack_name] = tex_list
+    return tex_db
 
-    out = nodes.new("ShaderNodeOutputMaterial")
-    out.location = (600, 0)
 
-    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-    bsdf.location = (300, 0)
-    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+def _create_textures(tpl_db, tex_db,):
+    # tex_db = {"id.pack.lfs"[id_000.dds, id_001.dds, ...], ...}
+    vfile_list = bpy.context.scene.albam.vfs.file_list
+    for tpl in tpl_db:
+        for pack_name, pack_textures in tex_db.items():
+            if tpl["pack_name"] in pack_name:
+                try:
+                    tex = pack_textures[tpl["texture_id"]]
+                except IndexError:
+                    print(f"Texture with id {tpl['texture_id']} wasn't found in {pack_name}")
+                    continue
+                for vfile in vfile_list:
+                    if vfile.display_name == tex:
+                        print(f"Loading {tex} from {vfile.display_name}")
+                        _create_blender_image_from_tex(tpl, vfile)
+                        print(f"Texture size: {tpl['width']}x{tpl['height']}")
 
-    diffuse_img = image_cache.get(diffuse_slot)
-    if diffuse_img:
-        diff = nodes.new("ShaderNodeTexImage")
-        diff.image = diffuse_img
-        diff.location = (-200, 250)
-        links.new(diff.outputs["Color"], bsdf.inputs["Base Color"])
-        links.new(diff.outputs["Alpha"], bsdf.inputs["Alpha"])
 
-    bump_img = image_cache.get(bump_slot) if bump_slot >= 0 else None
-    if bump_img:
-        bump = nodes.new("ShaderNodeTexImage")
-        bump.image = bump_img
-        bump.image.colorspace_settings.name = "Non-Color"
-        bump.location = (-500, -150)
+def _create_blender_image_from_tex(tpl, vfile):
+    tex = vfile.get_bytes()
 
-        ng = _get_or_create_normal_group()
-        nm_group = nodes.new("ShaderNodeGroup")
-        nm_group.node_tree = ng
-        nm_group.label = "RE4 UHD Normal"
-        nm_group.location = (-100, -150)
-
-        links.new(bump.outputs["Color"], nm_group.inputs["Color"])
-        links.new(bump.outputs["Alpha"], nm_group.inputs["Alpha"])
-        links.new(nm_group.outputs["Normal"], bsdf.inputs["Normal"])
+    bl_image = bpy.data.images.new(f"{vfile.display_name}", tpl["width"], tpl["height"])
+    bl_image.source = "FILE"
+    bl_image.pack(data=tex, data_len=len(tex))

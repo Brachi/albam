@@ -5,8 +5,7 @@ from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
-from .structs.tpl import Tpl
-from .textures import load_textures_for_model
+from .textures import load_textures_for_model, _process_tpls, _process_tex_indices, _create_textures
 
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
@@ -63,6 +62,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         me.normals_split_custom_set(loop_normals)
     tex_props = _process_tpls()
     textures = _process_tex_indices(tex_props)
+    _create_textures(tex_props, textures)
     # -- 6. Per-material face assignment ------------------------------------
     _apply_materials(me, bin, mat_face_ranges)
 
@@ -172,52 +172,6 @@ def _process_strip(faces, verts, ftype):
 def _process_normals(bin, normals_out):
     for n in bin.normals:
         normals_out.append((n.x/16384, n.y/16384, n.z/16384))
-
-
-def _process_tpls():
-    vfile_list = bpy.context.scene.albam.vfs.file_list
-    tpldb = []
-    for vfile in vfile_list:
-        if vfile.display_name.endswith(".TPL"):
-            print(f"TPL is: {vfile.display_name}")
-            tpl_bytes = vfile.get_bytes()
-
-            if len(tpl_bytes) < 12:
-                print(f"The {vfile.display_name} is incorrect and has {len(tpl_bytes)} size")
-                continue
-            tpl = Tpl.from_bytes(tpl_bytes)
-            tpl._read()
-            try:
-                tpl.tpl_entries
-            except EOFError:
-                print(f"The {vfile.display_name} is incorrect")
-                continue
-            for i, te in enumerate(tpl.tpl_entries):
-                tpl_entry = {
-                    "tpl_name": vfile.display_name,
-                    "pack_name": 0x0,
-                    "texture_id": 255.
-                }
-                tpl_entry["pack_name"] = str(hex(te.image_data.ids.pack_id))
-                tpl_entry["texture_id"] = te.image_data.ids.texture_id
-                tpldb.append(tpl_entry)
-                print(f"Texture size: {te.image_data.width}x{te.image_data.height}")
-                print("Pack: {}, Texture ID: {} ".format(tpl_entry["pack_name"], tpl_entry["texture_id"]))
-    return tpldb
-
-
-def _process_tex_indices(tex_props):
-    vfile_list = bpy.context.scene.albam.vfs.file_list
-    for tp in tex_props:
-        cached = []
-        pack_name = tp["pack_name"]
-        if pack_name not in cached:
-            for vfile in vfile_list:
-                if vfile.display_name.startswith(pack_name) and vfile.is_root:
-                    print(f"found {vfile.display_name}!")
-                    cached.append(vfile.display_name)
-        if not cached:
-            print(f"{pack_name} wasn't found")
 
 
 def _apply_materials(me, bin, mat_face_ranges):
