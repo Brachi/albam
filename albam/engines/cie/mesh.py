@@ -5,7 +5,7 @@ from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
-from .textures import load_textures_for_model, _process_tpls, _process_tex_indices, _create_textures
+from .textures import load_textures_for_model, _process_tpls, _create_blender_image_from_tex
 
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
@@ -33,6 +33,7 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     bin_bytes = vfile.get_bytes()
     bl_object_name = vfile.display_name
+    bl_root_id = vfile.tree_node.root_id
     _validate_bin_mesh(bin_bytes, bl_object_name)
 
     bin = Re4UhdBin.from_bytes(bin_bytes)
@@ -60,11 +61,16 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             n = bin.normals[loop.vertex_index]
             loop_normals.append(_yz_flip(n.x, n.y, n.z))
         me.normals_split_custom_set(loop_normals)
-    tex_props = _process_tpls()
-    textures = _process_tex_indices(tex_props)
-    _create_textures(tex_props, textures)
+
+    # textures_db = _process_tpls(vfile)
+    # for tex in textures_db:
+    #    if tex["vfile"] is not None:
+    #        _create_blender_image_from_tex(tex)
+    #    else:
+    #        print(f"{tex['tpl_name']} has no associated texture file in the archive")
+
     # -- 6. Per-material face assignment ------------------------------------
-    _apply_materials(me, bin, mat_face_ranges)
+    _apply_materials(me, bin, mat_face_ranges, bl_root_id)
 
     # -- 7. Create mesh object ---------------------------------------------
     mesh_ob = bpy.data.objects.new(f"{bl_object_name}", me)
@@ -82,10 +88,10 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         arm_mod.use_vertex_groups = True
 
         # -- 10. Textures (optional, requires .pack.lfs in same dir) ----------
-        try:
-            load_textures_for_model(mesh_ob, bin, vfile, context)
-        except Exception as e:
-            print(f"[re4uhd] textures: skipped ({e})")
+        # try:
+        #    load_textures_for_model(mesh_ob, bin, vfile, context)
+        # except Exception as e:
+        #    print(f"[re4uhd] textures: skipped ({e})")
 
         return arm_ob
     else:
@@ -174,14 +180,36 @@ def _process_normals(bin, normals_out):
         normals_out.append((n.x/16384, n.y/16384, n.z/16384))
 
 
-def _apply_materials(me, bin, mat_face_ranges):
+def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
     for mat_i, mat in enumerate(bin.materials):
         mat_name = "re4uhd_" + str(mat_i).zfill(3) + "_diff" + str(mat.diffuse_map)
-
         bl_mat = bpy.data.materials.new(name=mat_name)
-        bl_mat["re4uhd_diffuse_tpl_slot"] = mat.diffuse_map
-        bl_mat["re4uhd_bump_tpl_slot"] = mat.bump_map
-        bl_mat["re4uhd_opacity_tpl_slot"] = mat.opacity_map
+        bl_mat.use_nodes = True
+        nodes = bl_mat.node_tree.nodes
+        bsdf = nodes.get("Principled BSDF")
+        link = bl_mat.node_tree.links.new
+
+        textures_db = _process_tpls(bin, bin_root_id)
+        diffuse_map = textures_db[mat.diffuse_map]
+        bump_map = textures_db[mat.bump_map] if mat.bump_map != 255 else None
+        opacity_map = textures_db[mat.opacity_map] if mat.opacity_map != 255 else None
+        specular_map = textures_db[mat.generic_specular_map] if mat.generic_specular_map != 255 else None
+        special_map = textures_db[mat.custom_specular_map] if mat.custom_specular_map != 255 else None
+
+        tex_code_mapper = {
+            1: diffuse_map,
+            2: bump_map,
+            3: opacity_map,
+            4: specular_map,
+            5: special_map,
+        }
+        for k, tex in tex_code_mapper.items():
+            if tex:
+                texture_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
+                bl_image = _create_blender_image_from_tex(tex)
+                texture_node.image = bl_image
+                if k == 1:
+                    link(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
         me.materials.append(bl_mat)
 
     for mat_i, (start, end) in enumerate(mat_face_ranges):
@@ -215,6 +243,7 @@ def _find_existing_armature(bin, context):
 # bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
 # Vertices are in centimeters (*0.01). Both produce ~1.7m scale in Blender.
 BONE_SCALE = 0.01  # same raw unit as vertex positions (*0.01 = Blender meters)
+
 
 def _build_armature(bl_object_name, bin, context):
     """Create an armature object from BIN bones and return it, or None if no bones."""

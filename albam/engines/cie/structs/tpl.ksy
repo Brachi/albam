@@ -6,7 +6,7 @@ meta:
   title: Capcom Internal Engine texture palette
   
 seq:
-  - {id: magic, type: u4}
+  - {id: magic, type: u4} # 0x78563412 or 0x12345678
   - {id: num_tpl, type: u4}
   - {id: offset, type: u4}
 instances:

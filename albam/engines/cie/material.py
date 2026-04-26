@@ -1,5 +1,22 @@
 import bpy
+from ...lib.blender import get_bl_materials, ShaderGroupCompat
+
+# from .textures import _process_tpls
 RE4UHD_NORMAL_GROUP_NAME = "RE4 UHD Normal Map"
+REUHD_SHADER_NODEGROUP_NAME = "RE4 UHD shader"
+
+
+def _build_materials(mesh_ob, bin, root_id):
+    # textures_db = _process_tpls(root_id)
+    for mat in bin.materials:
+        print(f"Building material: {mat.name}")
+        diffuse_slot = mat.texture_slots[0] if len(mat.texture_slots) > 0 else None
+        bump_slot = mat.texture_slots[1] if len(mat.texture_slots) > 1 else None
+        opacity_slot = mat.texture_slots[2] if len(mat.texture_slots) > 2 else None
+
+        bl_mat = bpy.data.materials.new(name=mat.name)
+        _create_cie_shader(bl_mat, mesh_ob.image_cache, diffuse_slot, bump_slot, opacity_slot)
+        mesh_ob.blender_object.data.materials.append(bl_mat)
 
 
 def _get_or_create_normal_group():
@@ -56,44 +73,26 @@ def _get_or_create_normal_group():
 
 
 def _create_cie_shader(bl_mat, image_cache, diffuse_slot, bump_slot, opacity_slot):
-    """
-    Build a clean Principled BSDF material with textures wired correctly.
-    Compatible with Blender 4.x and 5.x.
-    """
-    bl_mat.use_nodes = True
-    bl_mat.blend_method = "CLIP"
-    nodes = bl_mat.node_tree.nodes
-    links = bl_mat.node_tree.links
-    nodes.clear()
+    """Creates shader node group to hide all nodes from users under the hood"""
+    existing = bpy.data.node_groups.get(REUHD_SHADER_NODEGROUP_NAME)
+    if existing:
+        return existing
 
-    out = nodes.new("ShaderNodeOutputMaterial")
-    out.location = (600, 0)
+    shader_group = bpy.data.node_groups.new(REUHD_SHADER_NODEGROUP_NAME, "ShaderNodeTree")
+    group_inputs = shader_group.nodes.new("NodeGroupInput")
+    group_inputs.location = (-2000, -200)
+    bl_major, _, _ = bpy.app.version
+    compat = "OLD" if bl_major <= 3 else "NEW"
 
-    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-    bsdf.location = (300, 0)
-    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
-
-    diffuse_img = image_cache.get(diffuse_slot)
-    if diffuse_img:
-        diff = nodes.new("ShaderNodeTexImage")
-        diff.image = diffuse_img
-        diff.location = (-200, 250)
-        links.new(diff.outputs["Color"], bsdf.inputs["Base Color"])
-        links.new(diff.outputs["Alpha"], bsdf.inputs["Alpha"])
-
-    bump_img = image_cache.get(bump_slot) if bump_slot >= 0 else None
-    if bump_img:
-        bump = nodes.new("ShaderNodeTexImage")
-        bump.image = bump_img
-        bump.image.colorspace_settings.name = "Non-Color"
-        bump.location = (-500, -150)
-
-        ng = _get_or_create_normal_group()
-        nm_group = nodes.new("ShaderNodeGroup")
-        nm_group.node_tree = ng
-        nm_group.label = "RE4 UHD Normal"
-        nm_group.location = (-100, -150)
-
-        links.new(bump.outputs["Color"], nm_group.inputs["Color"])
-        links.new(bump.outputs["Alpha"], nm_group.inputs["Alpha"])
-        links.new(nm_group.outputs["Normal"], bsdf.inputs["Normal"])
+    sg = ShaderGroupCompat(shader_group, compat)
+    # Create group inputs
+    sg.new_socket("Diffuse BM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Alpha BM", in_out="INPUT", socket_type="NodeSocketFloat")
+    sg.inputs["Alpha BM"].default_value = 1
+    sg.new_socket("Albedo Blend BM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Albedo Blend 2 BM", in_out="INPUT", socket_type="NodeSocketColor", )
+    sg.new_socket("Normal NM", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.inputs["Normal NM"].default_value = (1, 0.5, 1, 1)
+    sg.new_socket("Alpha NM", in_out="INPUT", socket_type="NodeSocketFloat", )
+    sg.inputs["Alpha NM"].default_value = 0.5
+    sg.new_socket("Specular MM", in_out="INPUT", socket_type="NodeSocketColor")

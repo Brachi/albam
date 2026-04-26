@@ -33,6 +33,29 @@ from .structs.lfs import Lfs
 from .structs.tpl import Tpl
 
 
+def new_load_textures_for_model(mesh_ob, bin, vfile):
+    image_cache = {}
+    me = mesh_ob.data
+    textures_db = _process_tpls(vfile)
+    for mat in bin.materials:
+        mat.diffuse_map
+        mat.bump_map
+        mat.opacity_map
+        mat.special_special_map
+    # for tex in textures_db:
+    #    if tex["vfile"] is not None:
+    #        _create_blender_image_from_tex(tex)
+    #    else:
+    #        print(f"{tex['tpl_name']} has no associated texture file in the archive")
+    for bl_mat in me.materials:
+        if bl_mat is None:
+            continue
+        diffuse_slot = bl_mat.get("re4uhd_diffuse_tpl_slot", -1)
+        bump_slot = bl_mat.get("re4uhd_bump_tpl_slot",    -1)
+        opacity_slot = bl_mat.get("re4uhd_opacity_tpl_slot", -1)
+        _create_cie_shader(bl_mat, image_cache, diffuse_slot, bump_slot, opacity_slot)
+
+
 def load_textures_for_model(mesh_ob, bin, vfile, context):
     """
     Entry point: find pack files, parse TPLs from UDAS, assign to materials.
@@ -241,62 +264,72 @@ def _load_image_from_pack(pack_raw, texture_id, slot_i, pack_id):
         return None
 
 
-def _process_tpls():
-    vfile_list = bpy.context.scene.albam.vfs.file_list
+def _process_tpls(vfile_bin, root_id):
+    # Process TPLs in a scope of the container with BIN file
+    # root_id = vfile_bin.tree_node.root_id
+    print(f"Processing TPLs for root_id: {root_id}")
+    vf_list = bpy.context.scene.albam.vfs.file_list
+    tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
+                  root_id and vf.display_name.endswith(".TPL")]
     tpl_db = []
-    for vfile in vfile_list:
-        if vfile.display_name.endswith(".TPL"):
-            print(f"TPL is: {vfile.display_name}")
-            tpl_bytes = vfile.get_bytes()
+    for vfile in tpl_vfiles:
+        print(f"TPL is: {vfile.display_name}")
+        tpl_bytes = vfile.get_bytes()
+        tpl = Tpl.from_bytes(tpl_bytes)
+        tpl._read()
+        try:
+            tpl.tpl_entries
+        except EOFError:
+            print(f"The {vfile.display_name} is incorrect")
+            continue
+        for i, te in enumerate(tpl.tpl_entries):
+            tpl_entry = {
+                "tpl_name": vfile.display_name,
+                "pack_name": str(hex(te.image_data.ids.pack_id))[2:],
+                "pack_name_vfile": "",
+                "texture_id": te.image_data.ids.texture_id,
+                "width": te.image_data.width,
+                "height": te.image_data.height,
+                "vfile": None
+            }
 
-            if len(tpl_bytes) < 12:
-                print(f"The {vfile.display_name} is incorrect and has {len(tpl_bytes)} size")
-                continue
-            tpl = Tpl.from_bytes(tpl_bytes)
-            tpl._read()
-            try:
-                tpl.tpl_entries
-            except EOFError:
-                print(f"The {vfile.display_name} is incorrect")
-                continue
-            for i, te in enumerate(tpl.tpl_entries):
-                tpl_entry = {
-                    "tpl_name": vfile.display_name,
-                    "pack_name": str(hex(te.image_data.ids.pack_id))[2:],
-                    "texture_id": te.image_data.ids.texture_id,
-                    "width": te.image_data.width,
-                    "height": te.image_data.height
-                }
-
-                tpl_db.append(tpl_entry)
-                print(f"Texture size: {te.image_data.width}x{te.image_data.height}")
-                print("Pack: {}, Texture ID: {} ".format(tpl_entry["pack_name"], tpl_entry["texture_id"]))
-    return tpl_db
+            tpl_db.append(tpl_entry)
+            print(f"Texture size: {te.image_data.width}x{te.image_data.height}")
+            print("Pack: {}, Texture ID: {} ".format(tpl_entry["pack_name"], tpl_entry["texture_id"]))
+    return _process_tex_indices(tpl_db)
 
 
-def _process_tex_indices(tex_props):
+def _process_tex_indices(tpl_db):
     vfile_list = bpy.context.scene.albam.vfs.file_list
     cached_packs = {}
-    for tp in tex_props:
+    for tp in tpl_db:
         pack_found = False
         pack_name = tp["pack_name"]
         if pack_name not in cached_packs.keys():
             for vfile in vfile_list:
                 if vfile.display_name.startswith(pack_name) and vfile.is_root:
                     print(f"found {vfile.display_name}!")
+                    tp["pack_name_vfile"] = vfile.display_name
                     pack_found = True
                     cached_packs[vfile.display_name] = vfile.name
         if not pack_found:
             print(f"{pack_name} wasn't found")
+
     tex_db = {}
     for pack_name, root_id in cached_packs.items():
         tex_list = []
         for vfile in vfile_list:
             if vfile.tree_node.root_id == root_id:
                 print(f"loading textures from {vfile.display_name}")
-                tex_list.append(vfile.display_name)
+                # tex_list.append(vfile.display_name)
+                tex_list.append(vfile)
         tex_db[pack_name] = tex_list
-    return tex_db
+
+    for tp in tpl_db:
+        tex_pack = tex_db.get(tp["pack_name_vfile"], [None])
+        tp["vfile"] = tex_pack[tp["texture_id"]]
+
+    return tpl_db
 
 
 def _create_textures(tpl_db, tex_db,):
@@ -317,9 +350,11 @@ def _create_textures(tpl_db, tex_db,):
                         print(f"Texture size: {tpl['width']}x{tpl['height']}")
 
 
-def _create_blender_image_from_tex(tpl, vfile):
+def _create_blender_image_from_tex(tpl):
+    vfile = tpl["vfile"]
     tex = vfile.get_bytes()
 
     bl_image = bpy.data.images.new(f"{vfile.display_name}", tpl["width"], tpl["height"])
     bl_image.source = "FILE"
     bl_image.pack(data=tex, data_len=len(tex))
+    return bl_image
