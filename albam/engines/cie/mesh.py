@@ -6,7 +6,7 @@ from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .textures import load_textures_for_model, _process_tpls, _create_blender_image_from_tex
-from .material import  _create_cie_shader
+from .material import _create_cie_shader
 
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
@@ -62,13 +62,6 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             n = bin.normals[loop.vertex_index]
             loop_normals.append(_yz_flip(n.x, n.y, n.z))
         me.normals_split_custom_set(loop_normals)
-
-    # textures_db = _process_tpls(vfile)
-    # for tex in textures_db:
-    #    if tex["vfile"] is not None:
-    #        _create_blender_image_from_tex(tex)
-    #    else:
-    #        print(f"{tex['tpl_name']} has no associated texture file in the archive")
 
     # -- 6. Per-material face assignment ------------------------------------
     _apply_materials(me, bin, mat_face_ranges, bl_root_id)
@@ -208,7 +201,7 @@ def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
 
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
-        
+
         textures_db = _process_tpls(bin, bin_root_id)
         if textures_db:
             diffuse_map = _get_texture_from_db(textures_db, mat.diffuse_map)
@@ -233,10 +226,11 @@ def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
                         link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Diffuse BM"])
                         blender_texture_node.location = (-300, 350)
                     if k == 2:
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Normal NM"])
                         blender_texture_node.location = (-300, 0)
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Normal NM"])
+                        link(blender_texture_node.outputs["Alpha"], shader_node_group.inputs["Alpha NM"])
                     if k == 4:
-                        link(blender_texture_node.outputs["Alpha"], shader_node_group.inputs["Specular MM"])
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Specular MM"])
                         blender_texture_node.location = (-300, -350)
         me.materials.append(blender_material)
 

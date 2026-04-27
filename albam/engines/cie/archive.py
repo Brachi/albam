@@ -63,7 +63,7 @@ class LfsWrapper:
                     ext = "NULL"
                 fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
                 file_entries.append(fe)
-        elif self.file_type == ".pack":
+        elif self.file_type == ".pack" or ".yz2":
             pack = self.parsed
             fe_base_name = os.path.basename(self.file_path)
             fe_base_name = fe_base_name.split(".")[0] + "_"
