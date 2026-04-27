@@ -6,6 +6,7 @@ from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .textures import load_textures_for_model, _process_tpls, _create_blender_image_from_tex
+from .material import  _create_cie_shader
 
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
@@ -182,41 +183,73 @@ def _process_normals(bin, normals_out):
 
 def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
     for mat_i, mat in enumerate(bin.materials):
-        mat_name = "re4uhd_" + str(mat_i).zfill(3) + "_diff" + str(mat.diffuse_map)
-        bl_mat = bpy.data.materials.new(name=mat_name)
-        bl_mat.use_nodes = True
-        nodes = bl_mat.node_tree.nodes
-        bsdf = nodes.get("Principled BSDF")
-        link = bl_mat.node_tree.links.new
+        _create_cie_shader()
+        mat_name = me.name + "_" + str(mat_i).zfill(3) + "_diff" + str(mat.diffuse_map)
+        blender_material = bpy.data.materials.new(name=mat_name)
+        blender_material.use_nodes = True
+        blender_material.blend_method = "CLIP"
+        node_to_delete = None
+        for node in blender_material.node_tree.nodes:
+            if node.type == 'BSDF_PRINCIPLED':
+                node_to_delete = node
+                blender_material.node_tree.nodes.remove(node_to_delete)
+                break
 
+        shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
+        shader_node_group.node_tree = bpy.data.node_groups["RE4 UHD shader"]
+        shader_node_group.name = "RE4 UHD shader group"
+        shader_node_group.width = 300
+
+        for node in blender_material.node_tree.nodes:
+            if node.type == 'OUTPUT_MATERIAL':
+                material_output = node
+                break
+        material_output.location = (400, 0)
+
+        link = blender_material.node_tree.links.new
+        link(shader_node_group.outputs[0], material_output.inputs[0])
+        
         textures_db = _process_tpls(bin, bin_root_id)
-        diffuse_map = textures_db[mat.diffuse_map]
-        bump_map = textures_db[mat.bump_map] if mat.bump_map != 255 else None
-        opacity_map = textures_db[mat.opacity_map] if mat.opacity_map != 255 else None
-        specular_map = textures_db[mat.generic_specular_map] if mat.generic_specular_map != 255 else None
-        special_map = textures_db[mat.custom_specular_map] if mat.custom_specular_map != 255 else None
+        if textures_db:
+            diffuse_map = _get_texture_from_db(textures_db, mat.diffuse_map)
+            bump_map = _get_texture_from_db(textures_db, mat.bump_map)
+            opacity_map = _get_texture_from_db(textures_db, mat.opacity_map)
+            specular_map = _get_texture_from_db(textures_db, mat.generic_specular_map)
+            special_map = _get_texture_from_db(textures_db, mat.custom_specular_map)
 
-        tex_code_mapper = {
-            1: diffuse_map,
-            2: bump_map,
-            3: opacity_map,
-            4: specular_map,
-            5: special_map,
-        }
-        for k, tex in tex_code_mapper.items():
-            if tex:
-                texture_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
-                bl_image = _create_blender_image_from_tex(tex)
-                texture_node.image = bl_image
-                if k == 1:
-                    link(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
-        me.materials.append(bl_mat)
+            tex_code_mapper = {
+                1: diffuse_map,
+                2: bump_map,
+                3: opacity_map,
+                4: specular_map,
+                5: special_map,
+            }
+            for k, tex in tex_code_mapper.items():
+                if tex:
+                    blender_texture_node = blender_material.node_tree.nodes.new("ShaderNodeTexImage")
+                    bl_image = _create_blender_image_from_tex(tex)
+                    blender_texture_node.image = bl_image
+                    if k == 1:
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Diffuse BM"])
+                        blender_texture_node.location = (-300, 350)
+                    if k == 2:
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Normal NM"])
+                        blender_texture_node.location = (-300, 0)
+                    if k == 4:
+                        link(blender_texture_node.outputs["Alpha"], shader_node_group.inputs["Specular MM"])
+                        blender_texture_node.location = (-300, -350)
+        me.materials.append(blender_material)
 
     for mat_i, (start, end) in enumerate(mat_face_ranges):
         for fi in range(start, end):
             me.polygons[fi].material_index = mat_i
 
-# -- Armature ----------------------------------------------------------------
+
+def _get_texture_from_db(tex_db, tex_index):
+    if tex_index == 255:
+        return None
+    return tex_db[tex_index] if 0 <= tex_index < len(tex_db) else None
+
 
 def _find_existing_armature(bin, context):
     """

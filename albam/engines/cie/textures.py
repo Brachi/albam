@@ -266,7 +266,6 @@ def _load_image_from_pack(pack_raw, texture_id, slot_i, pack_id):
 
 def _process_tpls(vfile_bin, root_id):
     # Process TPLs in a scope of the container with BIN file
-    # root_id = vfile_bin.tree_node.root_id
     print(f"Processing TPLs for root_id: {root_id}")
     vf_list = bpy.context.scene.albam.vfs.file_list
     tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
@@ -307,20 +306,24 @@ def _process_tex_indices(tpl_db):
         pack_name = tp["pack_name"]
         if pack_name not in cached_packs.keys():
             for vfile in vfile_list:
-                if vfile.display_name.startswith(pack_name) and vfile.is_root:
-                    print(f"found {vfile.display_name}!")
-                    tp["pack_name_vfile"] = vfile.display_name
-                    pack_found = True
-                    cached_packs[vfile.display_name] = vfile.name
+                if vfile.display_name not in cached_packs.keys():
+                    if vfile.display_name.startswith(pack_name) and vfile.is_root:
+                        print(f"found {vfile.display_name}!")
+                        tp["pack_name_vfile"] = vfile.display_name
+                        pack_found = True
+                        cached_packs[vfile.display_name] = vfile.name
         if not pack_found:
-            print(f"{pack_name} wasn't found")
+            print(f"{pack_name} texture pack wasn't found in the virtual file system")
+
+    if not cached_packs:
+        return None
 
     tex_db = {}
     for pack_name, root_id in cached_packs.items():
         tex_list = []
         for vfile in vfile_list:
             if vfile.tree_node.root_id == root_id:
-                print(f"loading textures from {vfile.display_name}")
+                # print(f"loading textures from {vfile.display_name}")
                 # tex_list.append(vfile.display_name)
                 tex_list.append(vfile)
         tex_db[pack_name] = tex_list
