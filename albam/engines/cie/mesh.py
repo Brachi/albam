@@ -5,7 +5,7 @@ from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
-from .textures import load_textures_for_model, _process_tpls, _create_blender_image_from_tex
+from .textures import _process_tpls, _create_blender_image_from_tex
 from .material import _create_cie_shader
 
 
@@ -229,9 +229,16 @@ def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
                         blender_texture_node.location = (-300, 0)
                         link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Normal NM"])
                         link(blender_texture_node.outputs["Alpha"], shader_node_group.inputs["Alpha NM"])
+                    if k == 3:
+                        blender_texture_node.location = (-600, 350)
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Alpha BM"])
                     if k == 4:
                         link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Specular MM"])
                         blender_texture_node.location = (-300, -350)
+                    if k == 5:
+                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Special MM"])
+                        blender_texture_node.location = (-300, -700)
+
         me.materials.append(blender_material)
 
     for mat_i, (start, end) in enumerate(mat_face_ranges):
