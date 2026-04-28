@@ -28,10 +28,11 @@ from .structs.tpl import Tpl
 
 def _process_tpls(vfile_bin, root_id):
     # Process TPLs in a scope of the container with BIN file
-    print(f"Processing TPLs for root_id: {root_id}")
+    # print(f"Processing TPLs for root_id: {root_id}")
     vf_list = bpy.context.scene.albam.vfs.file_list
-    tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
-                  root_id and vf.display_name.endswith(".TPL")]
+    #tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
+    #              root_id and vf.display_name.endswith(".TPL")]
+    tpl_vfiles = [vf for vf in vf_list if vf.name == root_id]
     tpl_db = []
     for vfile in tpl_vfiles:
         print(f"TPL is: {vfile.display_name}")

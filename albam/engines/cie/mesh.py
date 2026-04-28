@@ -80,23 +80,10 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         arm_mod = mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = arm_ob
         arm_mod.use_vertex_groups = True
-
-        # -- 10. Textures (optional, requires .pack.lfs in same dir) ----------
-        # try:
-        #    load_textures_for_model(mesh_ob, bin, vfile, context)
-        # except Exception as e:
-        #    print(f"[re4uhd] textures: skipped ({e})")
-
         return arm_ob
     else:
         root = bpy.data.objects.new(bl_object_name, None)
         mesh_ob.parent = root
-
-        try:
-            load_textures_for_model(mesh_ob, bin, vfile, context)
-        except Exception as e:
-            print(f"[re4uhd] textures: skipped ({e})")
-
         return root
 
 
@@ -202,12 +189,15 @@ def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
 
-        textures_db = _process_tpls(bin, bin_root_id)
+        selected_tpl = bpy.context.scene.albam.import_options_bin.tpl_file_id
+        # textures_db = _process_tpls(bin, bin_root_id)
+        textures_db = _process_tpls(bin, selected_tpl)
         if textures_db:
             diffuse_map = _get_texture_from_db(textures_db, mat.diffuse_map)
             bump_map = _get_texture_from_db(textures_db, mat.bump_map)
             opacity_map = _get_texture_from_db(textures_db, mat.opacity_map)
-            specular_map = _get_texture_from_db(textures_db, mat.generic_specular_map)
+            # specular_map = _get_texture_from_db(textures_db, mat.generic_specular_map)
+            specular_map = None  # looks like it's not used
             special_map = _get_texture_from_db(textures_db, mat.custom_specular_map)
 
             tex_code_mapper = {
@@ -276,7 +266,7 @@ def _find_existing_armature(bin, context):
 # Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
 # bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
 # Vertices are in centimeters (*0.01). Both produce ~1.7m scale in Blender.
-BONE_SCALE = 0.01  # same raw unit as vertex positions (*0.01 = Blender meters)
+BONE_SCALE = 0.001  # same raw unit as vertex positions (*0.01 = Blender meters)
 
 
 def _build_armature(bl_object_name, bin, context):
@@ -347,7 +337,7 @@ def _build_armature(bl_object_name, bin, context):
 
     # Show bones in front of the mesh (same style as MT Framework armatures in albam)
     arm_ob.show_in_front = True
-    arm_data.display_type = 'OCTAHEDRAL'
+    arm_data.display_type = 'STICK'
 
     print(f"[re4uhd] armature: {len(bin.bones)} bones")
     return arm_ob
@@ -401,4 +391,55 @@ def _apply_weights(mesh_ob, bin):
 
 def _yz_flip(x, y, z):
     """Convert Y-up (RE4, centimeters) to Z-up (Blender, meters)."""
-    return (x * 0.01, -z * 0.01, y * 0.01)
+    return (x * 0.001, -z * 0.001, y * 0.001)
+
+
+def _get_tpl_files_enum(self, context):
+    """Dynamically generate enum items for available .tpl files in same root"""
+    vfs = context.scene.albam.vfs
+    try:
+        index = vfs.file_list_selected_index
+        item = vfs.file_list[index]
+        root_id = item.tree_node.root_id
+    except (IndexError, AttributeError, RuntimeError):
+        return [("", "No files loaded", "")]
+
+    items = []
+    for vf in vfs.file_list:
+        if vf.display_name.lower().endswith('.tpl') and vf.tree_node.root_id == root_id:
+            items.append((vf.name, vf.display_name, ""))
+
+    return items if items else [("", "No .tpl files found", "")]
+
+
+@blender_registry.register_blender_prop_albam(name='import_options_bin')
+class ImportOptionsBIN(bpy.types.PropertyGroup):
+    tpl_file_id: bpy.props.EnumProperty(
+        items=_get_tpl_files_enum,
+        description="Select .tpl file"
+    )
+
+    def get_tpl_file(self, context):
+        """Get the selected .tpl VirtualFile object"""
+        vfs = context.scene.albam.vfs
+        try:
+            return vfs.file_list[self.tpl_file_id]
+        except (KeyError, RuntimeError):
+            return None
+
+
+@blender_registry.register_import_options_custom_draw_func(extension='BIN')
+def draw_bin_options(panel_instance, context):
+    panel_instance.bl_label = "BIN Options"
+    layout = panel_instance.layout
+    layout.prop(context.scene.albam.import_options_bin, 'tpl_file_id', text="TPL File")
+
+
+@blender_registry.register_import_options_custom_poll_func(extension='BIN')
+def poll_bin_options(panel_instance, context):
+    return True
+
+
+@blender_registry.register_import_operator_poll_func(extension='BIN')
+def poll_import_operator_for_bin(panel_class, context):
+    return bool(context.scene.albam.import_options_bin.tpl_file_id)
