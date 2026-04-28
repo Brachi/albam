@@ -5,8 +5,7 @@ from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
-from .textures import _process_tpls, _create_blender_image_from_tex
-from .material import _create_cie_shader
+from .material import build_blender_materials
 
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
@@ -34,7 +33,6 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     bin_bytes = vfile.get_bytes()
     bl_object_name = vfile.display_name
-    bl_root_id = vfile.tree_node.root_id
     _validate_bin_mesh(bin_bytes, bl_object_name)
 
     bin = Re4UhdBin.from_bytes(bin_bytes)
@@ -44,46 +42,46 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     _process_normals(bin, normals)
     faces, mat_face_ranges = _build_faces(bin)
 
-    me = bpy.data.meshes.new(bl_object_name)
-    me.from_pydata(locations, [], faces)
-    me.update()
+    bl_mesh = bpy.data.meshes.new(bl_object_name)
+    bl_mesh.from_pydata(locations, [], faces)
+    bl_mesh.update()
 
     # -- 4. UV coordinates --------------------------------------------------
     if bin.texcoords:
-        uv_layer = me.uv_layers.new(name="uv")
-        for loop in me.loops:
+        uv_layer = bl_mesh.uv_layers.new(name="uv")
+        for loop in bl_mesh.loops:
             uv = bin.texcoords[loop.vertex_index]
             uv_layer.data[loop.index].uv = (uv.u, 1.0 - uv.v)  # flip V for Blender
 
     # -- 5. Split normals ---------------------------------------------------
     if bin.normals:
         loop_normals = []
-        for loop in me.loops:
+        for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
             loop_normals.append(_yz_flip(n.x, n.y, n.z))
-        me.normals_split_custom_set(loop_normals)
+        bl_mesh.normals_split_custom_set(loop_normals)
 
     # -- 6. Per-material face assignment ------------------------------------
-    _apply_materials(me, bin, mat_face_ranges, bl_root_id)
+    _apply_materials(bl_mesh, bin, mat_face_ranges)
 
     # -- 7. Create mesh object ---------------------------------------------
-    mesh_ob = bpy.data.objects.new(f"{bl_object_name}", me)
+    bl_object = bpy.data.objects.new(f"{bl_object_name}", bl_mesh)
 
     # -- 8. Armature + bones -----------------------------------------------
     arm_ob = _build_armature(bl_object_name, bin, context)
 
     if arm_ob:
         # -- 9. Vertex groups (skin weights) --------------------------------
-        _apply_weights(mesh_ob, bin)
+        _apply_weights(bl_object, bin)
 
-        mesh_ob.parent = arm_ob
-        arm_mod = mesh_ob.modifiers.new("Armature", 'ARMATURE')
+        bl_object.parent = arm_ob
+        arm_mod = bl_object.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = arm_ob
         arm_mod.use_vertex_groups = True
         return arm_ob
     else:
         root = bpy.data.objects.new(bl_object_name, None)
-        mesh_ob.parent = root
+        bl_object.parent = root
         return root
 
 
@@ -161,85 +159,11 @@ def _process_normals(bin, normals_out):
         normals_out.append((n.x/16384, n.y/16384, n.z/16384))
 
 
-def _apply_materials(me, bin, mat_face_ranges, bin_root_id):
-    for mat_i, mat in enumerate(bin.materials):
-        _create_cie_shader()
-        mat_name = me.name + "_" + str(mat_i).zfill(3) + "_diff" + str(mat.diffuse_map)
-        blender_material = bpy.data.materials.new(name=mat_name)
-        blender_material.use_nodes = True
-        blender_material.blend_method = "CLIP"
-        node_to_delete = None
-        for node in blender_material.node_tree.nodes:
-            if node.type == 'BSDF_PRINCIPLED':
-                node_to_delete = node
-                blender_material.node_tree.nodes.remove(node_to_delete)
-                break
-
-        shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
-        shader_node_group.node_tree = bpy.data.node_groups["RE4 UHD shader"]
-        shader_node_group.name = "RE4 UHD shader group"
-        shader_node_group.width = 300
-
-        for node in blender_material.node_tree.nodes:
-            if node.type == 'OUTPUT_MATERIAL':
-                material_output = node
-                break
-        material_output.location = (400, 0)
-
-        link = blender_material.node_tree.links.new
-        link(shader_node_group.outputs[0], material_output.inputs[0])
-
-        selected_tpl = bpy.context.scene.albam.import_options_bin.tpl_file_id
-        # textures_db = _process_tpls(bin, bin_root_id)
-        textures_db = _process_tpls(bin, selected_tpl)
-        if textures_db:
-            diffuse_map = _get_texture_from_db(textures_db, mat.diffuse_map)
-            bump_map = _get_texture_from_db(textures_db, mat.bump_map)
-            opacity_map = _get_texture_from_db(textures_db, mat.opacity_map)
-            # specular_map = _get_texture_from_db(textures_db, mat.generic_specular_map)
-            specular_map = None  # looks like it's not used
-            special_map = _get_texture_from_db(textures_db, mat.custom_specular_map)
-
-            tex_code_mapper = {
-                1: diffuse_map,
-                2: bump_map,
-                3: opacity_map,
-                4: specular_map,
-                5: special_map,
-            }
-            for k, tex in tex_code_mapper.items():
-                if tex:
-                    blender_texture_node = blender_material.node_tree.nodes.new("ShaderNodeTexImage")
-                    bl_image = _create_blender_image_from_tex(tex)
-                    blender_texture_node.image = bl_image
-                    if k == 1:
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Diffuse BM"])
-                        blender_texture_node.location = (-300, 350)
-                    if k == 2:
-                        blender_texture_node.location = (-300, 0)
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Normal NM"])
-                        link(blender_texture_node.outputs["Alpha"], shader_node_group.inputs["Alpha NM"])
-                    if k == 3:
-                        blender_texture_node.location = (-600, 350)
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Alpha BM"])
-                    if k == 4:
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Specular MM"])
-                        blender_texture_node.location = (-300, -350)
-                    if k == 5:
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Special MM"])
-                        blender_texture_node.location = (-300, -700)
-
-        me.materials.append(blender_material)
-
+def _apply_materials(bl_mesh, bin, mat_face_ranges):
+    build_blender_materials(bl_mesh, bin)
     for mat_i, (start, end) in enumerate(mat_face_ranges):
         for fi in range(start, end):
-            me.polygons[fi].material_index = mat_i
-
-
-def _get_texture_from_db(tex_db, tex_index):
-    if tex_index == 255:
-        return None
-    return tex_db[tex_index] if 0 <= tex_index < len(tex_db) else None
+            bl_mesh.polygons[fi].material_index = mat_i
 
 
 def _find_existing_armature(bin, context):
@@ -374,9 +298,12 @@ def _apply_weights(mesh_ob, bin):
         # Weights are stored as raw bytes (0-255) whose sum may not equal 255.
         # Dividing by actual sum ensures full vertex coverage.
         active = []
-        if wm.count >= 1: active.append((wm.bone_id1, wm.weight1))
-        if wm.count >= 2: active.append((wm.bone_id2, wm.weight2))
-        if wm.count >= 3: active.append((wm.bone_id3, wm.weight3))
+        if wm.count >= 1:
+            active.append((wm.bone_id1, wm.weight1))
+        if wm.count >= 2:
+            active.append((wm.bone_id2, wm.weight2))
+        if wm.count >= 3:
+            active.append((wm.bone_id3, wm.weight3))
 
         total = sum(w for _, w in active)
         if total == 0:
@@ -390,7 +317,7 @@ def _apply_weights(mesh_ob, bin):
 # -- Coordinate conversion ---------------------------------------------------
 
 def _yz_flip(x, y, z):
-    """Convert Y-up (RE4, centimeters) to Z-up (Blender, meters)."""
+    """Convert Y-up (RE4, milimeters) to Z-up (Blender, meters)."""
     return (x * 0.001, -z * 0.001, y * 0.001)
 
 

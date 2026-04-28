@@ -1,28 +1,5 @@
-"""
-RE4 UHD texture loading: TPL metadata + PACK pixel data -> Blender images.
-
-Flow:
-  1. The UDAS contains .TPL file entries alongside the mesh .BINs.
-     Each TPL holds metadata: PackID, TextureID, width, height.
-  2. A .pack.lfs file (same directory as the .lfs) contains the actual image data.
-     Its first u32 = PackID, matching the TPL entry.
-  3. TextureID indexes into the pack's offset table -> raw image bytes.
-  4. Image bytes start with a magic: 0x20534444 = DDS, 0x00020000 = TGA.
-  5. Written to a temp file and loaded via bpy.data.images.load().
-
-Limitations:
-  - TPL slot indices in each BIN's materials are relative to the set of TPL entries
-    that belong to that BIN. Currently all TPL entries in the UDAS are read together
-    and treated as a global list, which works correctly for the main body BIN (_000)
-    but may assign incorrect textures to secondary BINs (head, hands, etc.) if their
-    TPL entries are not at the start of the global list.
-  - Mods such as the HD Project route certain textures (e.g. Leon's head) through a
-    separate .pack.lfs file (e.g. 07000000.pack.lfs). The code will find this file if
-    it is placed in the same directory, but only if the TPL entry for that BIN is
-    correctly identified in the UDAS — which is not guaranteed with the current
-    global-list approach. See README for details.
-"""
 import bpy
+from ...registry import blender_registry
 from .structs.tpl import Tpl
 
 
@@ -30,7 +7,7 @@ def _process_tpls(vfile_bin, root_id):
     # Process TPLs in a scope of the container with BIN file
     # print(f"Processing TPLs for root_id: {root_id}")
     vf_list = bpy.context.scene.albam.vfs.file_list
-    #tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
+    # tpl_vfiles = [vf for vf in vf_list if vf.tree_node.root_id ==
     #              root_id and vf.display_name.endswith(".TPL")]
     tpl_vfiles = [vf for vf in vf_list if vf.name == root_id]
     tpl_db = []
@@ -114,3 +91,31 @@ def _create_blender_image_from_tex(tpl):
     bl_image.source = "FILE"
     bl_image.pack(data=tex, data_len=len(tex))
     return bl_image
+
+
+@blender_registry.register_custom_properties_image("tex_cie", ("re4uhd",))
+@blender_registry.register_blender_prop
+class TexCIECustomProperties(bpy.types.PropertyGroup):
+    tpl_id: bpy.props.StringProperty(default="")
+    pack_id: bpy.props.StringProperty(default="")
+
+    # XXX copy paste in mesh, material
+    def set_from_source(self, mesh):
+        # XXX assume only properties are part of annotations
+        for attr_name in self.__annotations__:
+            self.copy_attr(mesh, self, attr_name)
+
+    def set_to_dest(self, mesh):
+        for attr_name in self.__annotations__:
+            self.copy_attr(self, mesh, attr_name)
+
+    @staticmethod
+    def copy_attr(src, dst, name):
+        # will raise, making sure there's consistency
+        src_value = getattr(src, name)
+        try:
+            if isinstance(src_value, str):
+                src_value = int(src_value, 16)
+            setattr(dst, name, src_value)
+        except TypeError:
+            setattr(dst, name, hex(src_value))

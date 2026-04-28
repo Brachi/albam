@@ -1202,6 +1202,22 @@ def _has_mtfw_shader_group(bl_mat):
     return bool(existing_mtfw_shader_groups)
 
 
+class BaseMaterialCustomProperties(bpy.types.PropertyGroup):
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))
+
+
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
 @blender_registry.register_blender_prop
 class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
