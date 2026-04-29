@@ -24,6 +24,7 @@ def _process_tpls(vfile_bin, root_id):
         for i, te in enumerate(tpl.tpl_entries):
             tpl_entry = {
                 "tpl_name": vfile.display_name,
+                "tpl_entry": te,
                 "pack_name": str(hex(te.image_data.ids.pack_id))[2:],
                 "pack_name_vfile": "",
                 "texture_id": te.image_data.ids.texture_id,
@@ -80,6 +81,7 @@ def _process_tex_indices(tpl_db):
 
 
 def _create_blender_image_from_tex(tpl):
+    app_id = "re4uhd"
     vfile = tpl["vfile"]
     bl_image = bpy.data.images.get(vfile.display_name)
     if bl_image:
@@ -90,6 +92,13 @@ def _create_blender_image_from_tex(tpl):
     bl_image = bpy.data.images.new(f"{vfile.display_name}", tpl["width"], tpl["height"])
     bl_image.source = "FILE"
     bl_image.pack(data=tex, data_len=len(tex))
+
+    bl_image.albam_asset.app_id = app_id
+    custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.tpl_id = tpl["tpl_name"]
+    custom_properties.pack_id = tpl["pack_name"]
+    image_data = tpl["tpl_entry"].image_data
+    custom_properties.set_from_source(image_data)
     return bl_image
 
 
@@ -98,6 +107,18 @@ def _create_blender_image_from_tex(tpl):
 class TexCIECustomProperties(bpy.types.PropertyGroup):
     tpl_id: bpy.props.StringProperty(default="")
     pack_id: bpy.props.StringProperty(default="")
+    pixel_format_type: bpy.props.IntProperty(default=0)
+    id_offset: bpy.props.IntProperty(default=0)
+    wrap_s: bpy.props.IntProperty(default=0)
+    wrap_t: bpy.props.IntProperty(default=0)
+    min_filter: bpy.props.IntProperty(default=0)
+    mag_filter: bpy.props.IntProperty(default=0)
+    lod_bias: bpy.props.FloatProperty(default=0.0)
+    enable_lod: bpy.props.IntProperty(default=0)
+    min_lod: bpy.props.IntProperty(default=0)
+    max_lod: bpy.props.IntProperty(default=0)
+    is_compressed: bpy.props.IntProperty(default=0)
+
 
     # XXX copy paste in mesh, material
     def set_from_source(self, mesh):
@@ -112,10 +133,15 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
     @staticmethod
     def copy_attr(src, dst, name):
         # will raise, making sure there's consistency
-        src_value = getattr(src, name)
         try:
-            if isinstance(src_value, str):
-                src_value = int(src_value, 16)
+            src_value = getattr(src, name)
             setattr(dst, name, src_value)
-        except TypeError:
-            setattr(dst, name, hex(src_value))
+        except AttributeError:
+            print(name)
+
+        #try:
+        #    if isinstance(src_value, str):
+        #        src_value = int(src_value, 16)
+        #    setattr(dst, name, src_value)
+        #except TypeError:
+        #    setattr(dst, name, hex(src_value))

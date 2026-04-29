@@ -189,7 +189,6 @@ def _find_existing_armature(bin, context):
 
 # Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
 # bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
-# Vertices are in centimeters (*0.01). Both produce ~1.7m scale in Blender.
 BONE_SCALE = 0.001  # same raw unit as vertex positions (*0.01 = Blender meters)
 
 
