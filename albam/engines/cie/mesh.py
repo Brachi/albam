@@ -8,6 +8,10 @@ from .structs.re4_uhd_bin import Re4UhdBin
 from .material import build_blender_materials
 
 
+# Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
+# bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
+BONE_SCALE = 0.001  # same raw unit as vertex positions
+
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
 FCOUNT_TYPES = {
     5: "FTYPE_TRIANGLE_LIST",  # fcount/3 triangles, 3 sequential verts per triangle
@@ -33,56 +37,55 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     bin_bytes = vfile.get_bytes()
     bl_object_name = vfile.display_name
+    bl_object = bpy.data.objects.new(bl_object_name, None)
+
     _validate_bin_mesh(bin_bytes, bl_object_name)
 
     bin = Re4UhdBin.from_bytes(bin_bytes)
     bin._read()
     locations = [_yz_flip(v.x, v.y, v.z) for v in bin.vertex_positions]
-    normals = []
-    _process_normals(bin, normals)
     faces, mat_face_ranges = _build_faces(bin)
 
     bl_mesh = bpy.data.meshes.new(bl_object_name)
     bl_mesh.from_pydata(locations, [], faces)
     bl_mesh.update()
 
-    # -- 4. UV coordinates --------------------------------------------------
     if bin.texcoords:
         uv_layer = bl_mesh.uv_layers.new(name="uv")
         for loop in bl_mesh.loops:
             uv = bin.texcoords[loop.vertex_index]
             uv_layer.data[loop.index].uv = (uv.u, 1.0 - uv.v)  # flip V for Blender
 
-    # -- 5. Split normals ---------------------------------------------------
     if bin.normals:
         loop_normals = []
         for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
-            loop_normals.append(_yz_flip(n.x, n.y, n.z))
+            #loop_normals.append(_yz_flip(n.x, n.y, n.z))
+            loop_normals.append((n.x/16384, -n.z/16384, n.y/16384))
         bl_mesh.normals_split_custom_set(loop_normals)
+    bl_mesh.normals_split_custom_set(loop_normals)
 
-    # -- 6. Per-material face assignment ------------------------------------
     _apply_materials(bl_mesh, bin, mat_face_ranges)
 
-    # -- 7. Create mesh object ---------------------------------------------
-    bl_object = bpy.data.objects.new(f"{bl_object_name}", bl_mesh)
+    bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
+    bpy.context.collection.objects.link(bl_mesh_ob)
 
-    # -- 8. Armature + bones -----------------------------------------------
-    arm_ob = _build_armature(bl_object_name, bin, context)
+    shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
+    skeleton = _build_armature(bl_object_name, bin, context, shared_armature)
 
-    if arm_ob:
-        # -- 9. Vertex groups (skin weights) --------------------------------
-        _apply_weights(bl_object, bin)
-
-        bl_object.parent = arm_ob
-        arm_mod = bl_object.modifiers.new("Armature", 'ARMATURE')
-        arm_mod.object = arm_ob
+    if skeleton:
+        _apply_weights(bl_mesh_ob, bin)
+        arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
+        arm_mod.object = skeleton
         arm_mod.use_vertex_groups = True
-        return arm_ob
-    else:
-        root = bpy.data.objects.new(bl_object_name, None)
-        bl_object.parent = root
-        return root
+
+    bl_mesh_ob.parent = bl_object
+    return bl_object
+
+
+def _yz_flip(x, y, z):
+    """Convert Y-up (RE4, milimeters) to Z-up (Blender, meters)."""
+    return (x * 0.001, -z * 0.001, y * 0.001)
 
 
 def _build_faces(bin):
@@ -154,11 +157,6 @@ def _process_strip(faces, verts, ftype):
             print(f"[re4uhd] WARNING: unknown ftype={ftype}, {len(verts)} verts skipped")
 
 
-def _process_normals(bin, normals_out):
-    for n in bin.normals:
-        normals_out.append((n.x/16384, n.y/16384, n.z/16384))
-
-
 def _apply_materials(bl_mesh, bin, mat_face_ranges):
     build_blender_materials(bl_mesh, bin)
     for mat_i, (start, end) in enumerate(mat_face_ranges):
@@ -176,7 +174,7 @@ def _find_existing_armature(bin, context):
     Subsequent BINs (head, hands, etc.) need a subset of those bones, so we
     reuse the existing armature when all required bones are already present.
     """
-    needed = {f"bone_{b.bone_id:03d}" for b in bin.bones}
+    needed = {f"{b.bone_id}" for b in bin.bones}
     for obj in context.collection.objects:
         if obj.type != 'ARMATURE':
             continue
@@ -187,19 +185,15 @@ def _find_existing_armature(bin, context):
     return None
 
 
-# Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
-# bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
-BONE_SCALE = 0.001  # same raw unit as vertex positions (*0.01 = Blender meters)
-
-
-def _build_armature(bl_object_name, bin, context):
+def _build_armature(bl_object_name, bin, context, shared_armature=None):
     """Create an armature object from BIN bones and return it, or None if no bones."""
     if not bin.bones:
         return None
 
     # Reuse an existing armature if the scene already has one with matching bones.
     # This avoids duplicates when importing multiple BINs from the same character.
-    existing = _find_existing_armature(bin, context)
+    #existing = _find_existing_armature(bin, context)
+    existing = shared_armature
     if existing:
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
         return existing
@@ -235,7 +229,7 @@ def _build_armature(bl_object_name, bin, context):
     edit_bone_map = {}
 
     for b in bin.bones:
-        eb = arm_data.edit_bones.new(f"bone_{b.bone_id:03d}")
+        eb = arm_data.edit_bones.new(f"{b.bone_id}")
         head = world_positions[b.bone_id]
         eb.head = head
 
@@ -283,7 +277,7 @@ def _apply_weights(mesh_ob, bin):
     vg_cache = {}  # bone_id -> VertexGroup
 
     def get_vg(bone_id):
-        name = f"bone_{bone_id:03d}"
+        name = f"{bone_id}"
         if name not in vg_cache:
             vg_cache[name] = mesh_ob.vertex_groups.new(name=name)
         return vg_cache[name]
@@ -313,12 +307,6 @@ def _apply_weights(mesh_ob, bin):
 
     print(f"[re4uhd] weights: {len(weight_index)} verts, {len(vg_cache)} vertex groups")
 
-# -- Coordinate conversion ---------------------------------------------------
-
-def _yz_flip(x, y, z):
-    """Convert Y-up (RE4, milimeters) to Z-up (Blender, meters)."""
-    return (x * 0.001, -z * 0.001, y * 0.001)
-
 
 def _get_tpl_files_enum(self, context):
     """Dynamically generate enum items for available .tpl files in same root"""
@@ -338,12 +326,19 @@ def _get_tpl_files_enum(self, context):
     return items if items else [("", "No .tpl files found", "")]
 
 
+def filter_armatures(self, obj):
+    # TODO: filter by custom properties that indicate is
+    # a RE5 compatible armature
+    return obj.type == 'ARMATURE'
+
+
 @blender_registry.register_blender_prop_albam(name='import_options_bin')
 class ImportOptionsBIN(bpy.types.PropertyGroup):
     tpl_file_id: bpy.props.EnumProperty(
         items=_get_tpl_files_enum,
         description="Select .tpl file"
     )
+    shared_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=filter_armatures)
 
     def get_tpl_file(self, context):
         """Get the selected .tpl VirtualFile object"""
@@ -353,12 +348,12 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
         except (KeyError, RuntimeError):
             return None
 
-
 @blender_registry.register_import_options_custom_draw_func(extension='BIN')
 def draw_bin_options(panel_instance, context):
     panel_instance.bl_label = "BIN Options"
     layout = panel_instance.layout
     layout.prop(context.scene.albam.import_options_bin, 'tpl_file_id', text="TPL File")
+    layout.prop(context.scene.albam.import_options_bin, 'shared_armature', text="Use existing armature")
 
 
 @blender_registry.register_import_options_custom_poll_func(extension='BIN')
