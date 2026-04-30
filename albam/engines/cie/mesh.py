@@ -68,7 +68,6 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     _apply_materials(bl_mesh, bin, mat_face_ranges)
 
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
-    bpy.context.collection.objects.link(bl_mesh_ob)
 
     shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
     skeleton = _build_armature(bl_object_name, bin, context, shared_armature)
@@ -164,27 +163,6 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges):
             bl_mesh.polygons[fi].material_index = mat_i
 
 
-def _find_existing_armature(bin, context):
-    """
-    Look for an armature in the current collection that can be reused for this BIN.
-
-    RE4 UHD characters are split across multiple BINs (body, head, hands, etc.).
-    Each BIN carries only the bones relevant to that part — a subset of the full
-    skeleton. The body BIN (typically _000) imports the full armature first.
-    Subsequent BINs (head, hands, etc.) need a subset of those bones, so we
-    reuse the existing armature when all required bones are already present.
-    """
-    needed = {f"{b.bone_id}" for b in bin.bones}
-    for obj in context.collection.objects:
-        if obj.type != 'ARMATURE':
-            continue
-        existing = {b.name for b in obj.data.bones}
-        # Reuse if all needed bones are present (subset: head/hands ⊆ full body)
-        if needed.issubset(existing):
-            return obj
-    return None
-
-
 def _build_armature(bl_object_name, bin, context, shared_armature=None):
     """Create an armature object from BIN bones and return it, or None if no bones."""
     if not bin.bones:
@@ -192,7 +170,6 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
 
     # Reuse an existing armature if the scene already has one with matching bones.
     # This avoids duplicates when importing multiple BINs from the same character.
-    #existing = _find_existing_armature(bin, context)
     existing = shared_armature
     if existing:
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
@@ -352,8 +329,10 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
 def draw_bin_options(panel_instance, context):
     panel_instance.bl_label = "BIN Options"
     layout = panel_instance.layout
-    layout.prop(context.scene.albam.import_options_bin, 'tpl_file_id', text="TPL File")
-    layout.prop(context.scene.albam.import_options_bin, 'shared_armature', text="Use existing armature")
+    layout.label(text="TPL File")
+    layout.prop(context.scene.albam.import_options_bin, 'tpl_file_id', text="")
+    layout.label(text="Use already imported armature")
+    layout.prop(context.scene.albam.import_options_bin, 'shared_armature', text="")
 
 
 @blender_registry.register_import_options_custom_poll_func(extension='BIN')
@@ -364,3 +343,10 @@ def poll_bin_options(panel_instance, context):
 @blender_registry.register_import_operator_poll_func(extension='BIN')
 def poll_import_operator_for_bin(panel_class, context):
     return bool(context.scene.albam.import_options_bin.tpl_file_id)
+
+
+@blender_registry.register_export_function(app_id="re4uhd", extension="BIN")
+def export_bin(bl_obj):
+    vfiles = []
+    print("Test")
+    return vfiles
