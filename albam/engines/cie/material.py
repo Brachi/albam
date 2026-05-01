@@ -18,6 +18,7 @@ def build_blender_materials(bl_mesh, bin):
         custom_props_top_level.copy_custom_properties_from(mat)
         blender_material.use_nodes = True
         blender_material.blend_method = "CLIP"
+
         node_to_delete = None
         for node in blender_material.node_tree.nodes:
             if node.type == 'BSDF_PRINCIPLED':
@@ -41,7 +42,7 @@ def build_blender_materials(bl_mesh, bin):
 
         selected_tpl = bpy.context.scene.albam.import_options_bin.tpl_file_id
         # textures_db = _process_tpls(bin, bin_root_id)
-        textures_db = _process_tpls(bin, selected_tpl)
+        textures_db = _process_tpls(selected_tpl)
         if textures_db:
             diffuse_map = _get_texture_from_db(textures_db, mat.diffuse_map)
             bump_map = _get_texture_from_db(textures_db, mat.bump_map)

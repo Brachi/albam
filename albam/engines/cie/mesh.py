@@ -37,7 +37,6 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     bin_bytes = vfile.get_bytes()
     bl_object_name = vfile.display_name
-    bl_object = bpy.data.objects.new(bl_object_name, None)
 
     _validate_bin_mesh(bin_bytes, bl_object_name)
 
@@ -69,6 +68,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
 
+    # usually only one armature is full, other bin files include only bones used by the mesh
     shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
     skeleton = _build_armature(bl_object_name, bin, context, shared_armature)
 
@@ -77,6 +77,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = skeleton
         arm_mod.use_vertex_groups = True
+
+    if skeleton and not shared_armature:
+        bl_object = skeleton
+    else:
+        bl_object = bpy.data.objects.new(bl_object_name, None)
 
     bl_mesh_ob.parent = bl_object
     return bl_object
@@ -347,6 +352,21 @@ def poll_import_operator_for_bin(panel_class, context):
 
 @blender_registry.register_export_function(app_id="re4uhd", extension="BIN")
 def export_bin(bl_obj):
+    asset = bl_obj.albam_asset
+    app_id = asset.app_id
     vfiles = []
-    print("Test")
+
+    src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
+    src_bin._read()
+    dst_mod = Re4UhdBin()
+    bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    for bl_mesh in bl_meshes:
+        verts_by_material = {}
+        mesh = bl_mesh.data
+        for poly in mesh.polygons:
+            mat_index = poly.material_index
+            if mat_index not in verts_by_material:
+                verts_by_material[mat_index] = []
+            verts_by_material[mat_index].extend(poly.vertices)
+        print(bl_mesh.name)
     return vfiles
