@@ -63,8 +63,16 @@ def AlbamCustomPropertiesFactory(kind: str):
         Return the data necessary to generate a subclass of bpy.types.PropertyGroup
         """
         data = {}
-        # For object registry: app_id -> {asset_type -> {"custom_props_name": <str>, "custom_props_asset_type": <str>}}
-        # For other registries: app_id -> {"custom_props_name": <str>, "custom_props_asset_type": <str>}
+        # Special case for object registry:
+        # app_id = {
+        #   asset_type: { # "ANIMATION", "COLLISION"
+        #       "custom_props_name": <str>,
+        #       "custom_props_asset_type": <str>}}
+
+        # For other registries:
+        # app_id = {
+        #   "custom_props_name": <str>,
+        #   "custom_props_asset_type": <str>}
         appid_map = {}
         appid_map_secondary = {}
         subpanel_type = SUBPANEL_BASE.get(registry_name, None)
@@ -163,7 +171,7 @@ def AlbamCustomPropertiesFactory(kind: str):
                 # This handles cases where custom properties are accessed on objects
                 # that don't have an albam_asset parent (e.g., during animation import)
                 property_dict = next(iter(property_dict.values())) if property_dict else None
-            
+
             if not property_dict:
                 return None
         # Old format or non-object registry: app_id -> {...}
@@ -180,7 +188,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             app_id = app_ids[0]
         else:
             app_id = albam_asset.app_id
-        
+
         property_dict = self.APPID_MAP[app_id]
         if _is_new_object_format(property_dict):
             # New format: app_id -> {asset_type -> {...}}
@@ -190,7 +198,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             else:
                 # Fallback: pick the first available asset_type
                 property_dict = next(iter(property_dict.values())) if property_dict else None
-            
+
             if not property_dict:
                 return None
         return property_dict["custom_props_name"]
@@ -205,7 +213,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             app_id = app_ids[0]
         else:
             app_id = albam_asset.app_id
-        
+
         property_dict = self.APPID_MAP.get(app_id, {})
         if _is_new_object_format(property_dict):
             # New format: app_id -> {asset_type -> {...}}
@@ -239,7 +247,7 @@ def AlbamCustomPropertiesFactory(kind: str):
                 for asset_type_names in property_names.values():
                     all_names.extend(asset_type_names)
                 property_names = all_names
-        
+
         return {pn: getattr(self, f"{app_id}__{pn}") for pn in property_names}
 
     def _get_parent_albam_asset_mesh(mesh):
@@ -300,7 +308,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             app_id = app_ids[0]
         else:
             app_id = albam_asset.app_id
-        
+
         props_name = context_item.albam_custom_properties.get_custom_properties_name()
         if not props_name:
             return {}
