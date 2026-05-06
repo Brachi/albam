@@ -5,6 +5,7 @@ LOCATION = [1, 4]
 ROTATION = [0, 3]
 SCALE = [2, 5]
 BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
+JOINT_TYPES = [0, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 42, 43, 44, 48, 49]
 # re0 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 # re1 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 # rev1 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13]
@@ -27,6 +28,7 @@ def test_lmt(parsed_lmt_from_arc):
                 assert ab.kf_num == 4
         tracks = getattr(ab, "tracks")
         for tr in tracks:
+            assert tr.joint_type in JOINT_TYPES
             assert tr.buffer_type in SUPPORTED_BUFFER_TYPES
             if tr.buffer_type == 1:
                 assert tr.usage in LOCATION or tr.usage in SCALE
