@@ -457,12 +457,18 @@ def load_lmt(vfile, context):
 
 
 def _create_bone_mapping(armature_obj):
+    # creates a dictionary: animation bone index(reference_bone_id) -> bone_name
     bone_names = {}
+    root_bone_names = [b.name for idx, b in enumerate(
+        armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
         reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
         if reference_bone_id is None:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
+        if reference_bone_id == 0 and root_bone_names > 1:
+            if mapped_bone.parent is None:
+                continue
         if reference_bone_id in bone_names:
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
         bone_names[reference_bone_id] = mapped_bone.name
@@ -491,6 +497,7 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
     blender_bone = armature.data.edit_bones.new(bone_name)
     blender_bone.head = armature.data.edit_bones[bone_index].head
     blender_bone.tail = armature.data.edit_bones[bone_index].tail
+    blender_bone['mtfw.anim_retarget'] = str(track_bone_index)
     bpy.ops.object.mode_set(mode='OBJECT')
 
     pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
@@ -561,16 +568,21 @@ def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
     return local_space_frames
 
 
+def _swap_zy(val):
+    return Vector((val.x, -val.z, val.y))
+
+
 def _local_space_to_parent_translation(frame, bone):
     parent = bone.parent
-    v_local = Vector((frame.x, -frame.z, frame.y))
-    global_pos = bone.matrix_local @ v_local
-    if parent is None:
-        # parent-space == armature/object space
-        return global_pos
+    # v_local = Vector((frame.x, -frame.z, frame.y))
+    global_pos = bone.matrix_local @ frame
+    if parent is not None:
+        parent_pos = parent.matrix_local.inverted() @ global_pos
+    else:
+        if bone['mtfw.anim_retarget'] in ("19", "23"):
+            return frame
+        parent_pos = global_pos
     # transform global position into parent's local space
-    parent_inv = parent.matrix_local.inverted()
-    parent_pos = parent_inv @ global_pos
     return parent_pos
 
 
@@ -626,6 +638,19 @@ def _pre_serialize_offset(dst_lmt, num_anim_blocks):
     return block_offsets
 
 
+def _select_kf_usage(bone, track_type):
+    is_mroot = bone.get('mtfw.anim_retarget', "-1") == "255"
+    match track_type:
+        case "rotation_quaternion":
+            return 3 if is_mroot else 0
+        case "location":
+            return 4 if is_mroot else 1
+        case "scale":
+            return 5 if is_mroot else 2
+        case _:
+            raise f" Track type {track_type} isn't correct"
+
+
 def _serialize_lmt_track(armature, tracks, mapping, app_id):
     keyframes = LMTKeyFrames()
     keyframes.version = APPID_VERSION_MAPPER[app_id]
@@ -634,7 +659,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         rotation_quaternion = {}
         scale = {}
         bone = armature.data.bones.get(bone_name)
-        parent_bone = bone.parent
+        # parent_bone = bone.parent
         bone_index = mapping.get(bone_name)
         for frame, action_key in bone_tracks.items():
             if action_key.location is not None:
@@ -648,20 +673,20 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if location:
             keyframes.track_type = "location"
             location_sorted = {k: location[k] for k in sorted(location)}
-            usage = 1 if parent_bone else 4
+            usage = _select_kf_usage(bone, "location")
             kf_type = 2 if len(location_sorted) == 1 else 9
             keyframes.encode_framedata(kf_type, bone_index, location_sorted, usage)
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
             kf_type = 4 if len(rotation_sorted) == 1 else 6
-            usage = 0 if parent_bone else 3
+            usage = _select_kf_usage(bone, "rotation_quaternion")
             keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if scale:
             keyframes.track_type = "scale"
             scale_sorted = {k: scale[k] for k in sorted(scale)}
             kf_type = 2 if len(scale_sorted) == 1 else 9
-            usage = 2 if parent_bone else 5
+            usage = _select_kf_usage(bone, "scale")
             keyframes.encode_framedata(kf_type, bone_index, scale_sorted, usage)
     return keyframes.encoded_frames
 
