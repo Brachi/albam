@@ -305,9 +305,9 @@ class LMTKeyframeBounds:
 @blender_registry.register_import_function(app_id="re6", extension='lmt', albam_asset_type="ANIMATION")
 @blender_registry.register_import_function(app_id="rev1", extension='lmt', albam_asset_type="ANIMATION")
 @blender_registry.register_import_function(app_id="rev2", extension='lmt', albam_asset_type="ANIMATION")
-def load_lmt(file_list_item, context):
-    app_id = file_list_item.app_id
-    lmt_bytes = file_list_item.get_bytes()
+def load_lmt(vfile, context):
+    app_id = vfile.app_id
+    lmt_bytes = vfile.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
     lmt._read()
     lmt_ver = lmt.version
@@ -316,11 +316,11 @@ def load_lmt(file_list_item, context):
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
-    bl_object_name = file_list_item.display_name
+    bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
 
     for block_index, block in enumerate(lmt.block_offsets):
-        anim_object_name = f"{file_list_item.display_name}.{str(block_index).zfill(4)}"
+        anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
         if block.offset == 0:
@@ -328,7 +328,7 @@ def load_lmt(file_list_item, context):
         if DEBUG_BLOCK is not None and DEBUG_BLOCK != block_index:
             continue
         armature.animation_data_create()
-        name = f"{armature.name}.{file_list_item.display_name}.{str(block_index).zfill(4)}"
+        name = f"{armature.name}.{vfile.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
 
