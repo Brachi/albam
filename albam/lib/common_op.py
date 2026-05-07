@@ -183,3 +183,127 @@ def move_to_collection(bl_objects, col_name):
         for col in ob.users_collection:
             col.objects.unlink(ob)
         collection.objects.link(ob)
+
+
+def split_mesh_by_material(src_obj):
+    """Split mesh by materials, preserving attributes"""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    eval_obj = src_obj.evaluated_get(depsgraph)
+    src_mesh = eval_obj.to_mesh()
+
+    mat_count = len(src_obj.data.materials)
+    if mat_count == 0:
+        eval_obj.to_mesh_clear()
+        return []
+    result_objects = []
+
+    for mat_index in range(mat_count):
+        dst_mesh = bpy.data.meshes.new(f"{src_obj.name}_mat{mat_index}")
+
+        verts_map = {}  # src mesh vertex index: dst mesh vertex index
+        verts_list = []
+        new_faces = []
+
+        for src_poly in src_mesh.polygons:
+            if src_poly.material_index == mat_index:
+                face_verts = []
+                for v_idx in src_poly.vertices:
+                    if v_idx not in verts_map:
+                        v = src_mesh.vertices[v_idx]
+                        verts_map[v_idx] = len(verts_list)
+                        verts_list.append(v.co)
+                    face_verts.append(verts_map[v_idx])
+                new_faces.append(face_verts)
+
+        dst_mesh.from_pydata(verts_list, [], new_faces)
+        dst_mesh.update()
+
+        # uv layers
+        for uv_layer_idx, uv_layer in enumerate(src_mesh.uv_layers):
+            uv_layer_new = dst_mesh.uv_layers.new(name=uv_layer.name)
+
+            # find the corresponding dst polygon for each src polygon and copy uv data
+            dst_poly_idx = 0
+            for src_poly_idx, src_poly in enumerate(src_mesh.polygons):
+                if src_poly.material_index == mat_index:
+                    new_poly = dst_mesh.polygons[dst_poly_idx]
+
+                    for loop_offset in range(len(src_poly.loop_indices)):
+                        old_loop_idx = src_poly.loop_indices[loop_offset]
+                        new_loop_idx = new_poly.loop_indices[loop_offset]
+                        uv_layer_new.data[new_loop_idx].uv = uv_layer.data[old_loop_idx].uv
+                    dst_poly_idx += 1
+
+        # vertex colors
+        for col_attr in src_mesh.color_attributes:
+            new_col = dst_mesh.color_attributes.new(
+                name=col_attr.name,
+                domain=col_attr.domain,
+                type=col_attr.type
+            )
+
+            if col_attr.domain == 'POINT':
+                # Vertex color
+                for src_v_idx, dst_v_idx in verts_map.items():
+                    new_col.data[dst_v_idx].color = col_attr.data[src_v_idx].color
+            elif col_attr.domain == 'CORNER':
+                # Face corner color
+                dst_poly_idx = 0
+                for src_poly_idx, src_poly in enumerate(src_mesh.polygons):
+                    if src_poly.material_index == mat_index:
+                        new_poly = dst_mesh.polygons[dst_poly_idx]
+                        for loop_offset in range(len(src_poly.loop_indices)):
+                            old_loop_idx = src_poly.loop_indices[loop_offset]
+                            new_loop_idx = new_poly.loop_indices[loop_offset]
+                            new_col.data[new_loop_idx].color = col_attr.data[old_loop_idx].color
+                        dst_poly_idx += 1
+
+        new_normals_data = []
+        for src_poly_idx, src_poly in enumerate(src_mesh.polygons):
+            if src_poly.material_index == mat_index:
+                for loop_offset in range(len(src_poly.loop_indices)):
+                    old_loop_idx = src_poly.loop_indices[loop_offset]
+                    src_normal = src_mesh.loops[old_loop_idx].normal
+                    new_normals_data.append(src_normal)
+
+        if new_normals_data:
+            dst_mesh.normals_split_custom_set(new_normals_data)
+
+        # blender object
+        dst_obj = bpy.data.objects.new(dst_mesh.name, dst_mesh)
+        bpy.context.collection.objects.link(dst_obj)
+
+        # vertex groups
+        for vgroup in src_obj.vertex_groups:
+            new_vgroup = dst_obj.vertex_groups.new(name=vgroup.name)
+            for src_v_idx, dst_v_idx in verts_map.items():
+                try:
+                    weight = vgroup.weight(src_v_idx)
+                    new_vgroup.add([dst_v_idx], weight, 'REPLACE')
+                except RuntimeError:
+                    pass
+
+        # shape keys
+        if src_obj.data.shape_keys:
+            if not dst_mesh.shape_keys:
+                dst_mesh.shape_keys_clear()
+
+            for shape_key in src_obj.data.shape_keys.key_blocks:
+                new_shape = dst_mesh.shape_keys.key_blocks.new(name=shape_key.name)
+                for src_v_idx, dst_v_idx in verts_map.items():
+                    new_shape.data[dst_v_idx].co = shape_key.data[src_v_idx].co
+
+        # material
+        if mat_index < len(src_obj.data.materials) and src_obj.data.materials[mat_index]:
+            dst_mesh.materials.append(src_obj.data.materials[mat_index])
+
+        for modifier in src_obj.modifiers:
+            if modifier.type == 'ARMATURE' and modifier.object:
+                new_arm_modifier = dst_obj.modifiers.new(name="Armature", type='ARMATURE')
+                new_arm_modifier.object = modifier.object
+                break
+
+        result_objects.append(dst_obj)
+
+    eval_obj.to_mesh_clear()
+    return result_objects

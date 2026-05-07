@@ -3,6 +3,8 @@ from mathutils import Vector
 from ...registry import blender_registry
 from ...vfs import VirtualFile
 from ...lib.misc import chunks
+from ...lib.blender import triangles_list_to_triangles_strip
+from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .material import build_blender_materials
@@ -90,6 +92,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 def _yz_flip(x, y, z):
     """Convert Y-up (RE4, milimeters) to Z-up (Blender, meters)."""
     return (x * 0.001, -z * 0.001, y * 0.001)
+
+
+def _zy_flip(x, y, z):
+    """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
+    return (x * 1000, y * 1000, -z * 1000)
 
 
 def _build_faces(bin):
@@ -355,18 +362,23 @@ def export_bin(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
     vfiles = []
+    vtx_locations = []
 
     src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
     src_bin._read()
     dst_mod = Re4UhdBin()
+
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    separated_meshes = []
+    if bpy.data.collections.get("AlbamTemp"):
+        for ob in bpy.data.collections["AlbamTemp"].objects:
+            delete_ob(ob)
+
     for bl_mesh in bl_meshes:
-        verts_by_material = {}
-        mesh = bl_mesh.data
-        for poly in mesh.polygons:
-            mat_index = poly.material_index
-            if mat_index not in verts_by_material:
-                verts_by_material[mat_index] = []
-            verts_by_material[mat_index].extend(poly.vertices)
-        print(bl_mesh.name)
+        separated_meshes.extend(split_mesh_by_material(bl_mesh))
+    move_to_collection(separated_meshes, "AlbamTemp")
+    for bl_mesh in separated_meshes:
+        for vtx in bl_mesh.data.vertices:
+            vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
+        triangles = triangles_list_to_triangles_strip(bl_mesh)
     return vfiles
