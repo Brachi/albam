@@ -418,8 +418,8 @@ def load_lmt(vfile, context):
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
+        anim_props = anim_object.albam_custom_properties
         if lmt_ver < 67:
-            anim_props = anim_object.albam_custom_properties
             col_events = anim_props.get_custom_properties_secondary_for_appid(app_id)[
                 "col_events"]
             col_events.copy_custom_properties_from(block.block_header.collision_events)
