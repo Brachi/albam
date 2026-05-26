@@ -128,9 +128,11 @@ TEX_FORMAT_MAPPER = {
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
+    37: b"DXT1",  # FIXME: unchecked
     39: b"",  # uncompressed
     40: b"",  # uncompressed
     43: b"DXT1",  # FIXME: unchecked
+    47: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
     "DXT3": b"DXT3",
     "DXT5": b"DXT5",
@@ -828,6 +830,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("0x9a", "154", "", 2),
             ("0x9d", "157", "", 3),
             ("0x9e", "158", "", 4),
+            ("0x9b", "155", "", 5),
         ],
         default="0x9d",
         options=set()
