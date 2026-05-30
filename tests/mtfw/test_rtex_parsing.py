@@ -1,5 +1,4 @@
-from albam.engines.mtfw.texture import TEX_FORMAT_MAPPER
-TEX_VERSIONS_157 = {153, 154, 155, 157, 158}
+from albam.engines.mtfw.texture import TEX_FORMAT_MAPPER, TEX_VERSION
 
 
 def test_parse_rtex(parsed_rtex_from_arc):
@@ -11,4 +10,4 @@ def test_parse_rtex(parsed_rtex_from_arc):
     assert rtex.num_images in (1, 6)
     assert rtex.compression_format in TEX_FORMAT_MAPPER  # TODO: rename compression_format
     if rtex_version != 112:
-        assert rtex.version in TEX_VERSIONS_157
+        assert rtex.version in TEX_VERSION.values()

@@ -815,6 +815,17 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             setattr(dst, name, hex(src_value))
 
 
+TEX_VERSION = {
+    "0x99": 153,
+    "0x9a": 154,
+    "0x9b": 155,
+    "0x9d": 157,
+    "0x9e": 158,
+}
+
+tex_version_enum_items = [(key, str(label), "", idx) for idx, (key, label) in enumerate(TEX_VERSION.items())]
+
+
 @blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
@@ -825,13 +836,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     )
     version: bpy.props.EnumProperty(  # noqa: F821
         name="Tex format version",
-        items=[
-            ("0x99", "153", "", 1),
-            ("0x9a", "154", "", 2),
-            ("0x9d", "157", "", 3),
-            ("0x9e", "158", "", 4),
-            ("0x9b", "155", "", 5),
-        ],
+        items=tex_version_enum_items,
         default="0x9d",
         options=set()
     )
