@@ -173,8 +173,9 @@ def triangulate_meshes(bl_objects):
         bm = bmesh.new()
         bm.from_mesh(mesh)
         # In theory it should save time if we skip already triangulated meshes
-        # adds overhead  ~0.0002 seconds for the test mesh
+        # the check adds overhead  ~0.0002 seconds for the test mesh
         if not any(len(f.verts) >= 4 for f in bm.faces):
+            bm.free()
             continue
         # Create a custom BMesh float vector layer for loops to hold the original normals
         # BMesh automatically ensures this data persists across structural splits
@@ -204,7 +205,6 @@ def triangulate_meshes(bl_objects):
 def triangulate_meshes_modifier(bl_objects):
     unselect()
     for ob in bl_objects:
-
         ob.select_set(True)
         bpy.context.view_layer.objects.active = ob
 
