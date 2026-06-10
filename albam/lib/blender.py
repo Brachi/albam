@@ -114,6 +114,86 @@ def triangles_list_to_triangles_strip(blender_mesh):
     return joined_strips
 
 
+def triangles_list_to_vtx_strips(blender_mesh):
+    """
+    Export triangle strips from a blender mesh as separate vertex object strips.
+    It assumes the mesh is all triangulated.
+    Returns a list of strips, where each strip is a list of blender vertex objects.
+    Strips with 1-2 triangles (3-4 vertices) are excluded.
+    Based on a paper by Pierre Terdiman: http://www.codercorner.com/Strips.htm
+    """
+    # TODO: Fix changing of face orientation in some cases (see tests)
+    blender_mesh_data = blender_mesh.data
+    edges_faces = {}
+    current_strip = []
+    strips = []
+    faces_indices = deque(p.index for p in blender_mesh_data.polygons)
+    done_faces_indices = set()
+    current_face_index = faces_indices.popleft()
+    process_faces = True
+
+    for polygon in blender_mesh_data.polygons:
+        for edge in polygon.edge_keys:
+            edges_faces.setdefault(edge, set()).add(polygon.index)
+
+    while process_faces:
+        current_face = blender_mesh_data.polygons[current_face_index]
+        current_face_verts = current_face.vertices[:]
+        strip_indices = [v for v in current_face_verts if v not in current_strip[-2:]]
+        if current_strip:
+            face_to_add = tuple(current_strip[-2:]) + tuple(strip_indices)
+            if face_to_add != current_face_verts and face_to_add != tuple(reversed(current_face_verts)):
+                # we arrived here because the current face shares and edge with the face in the strip
+                # however, if we just add the verts, we would be changing the direction of the face
+                # so we create a degenerate triangle before adding to it to the strip
+                current_strip.append(current_strip[-2])
+        current_strip.extend(strip_indices)
+        done_faces_indices.add(current_face_index)
+
+        next_face_index = None
+        possible_face_indices = {}
+        for edge in current_face.edge_keys:
+            if edge not in edges_faces:
+                continue
+            checked_edge = {face_index: edge for face_index in edges_faces[edge]
+                            if face_index != current_face_index and face_index not in done_faces_indices}
+            possible_face_indices.update(checked_edge)
+        for face_index, edge in possible_face_indices.items():
+            if not current_strip:
+                next_face_index = face_index
+                break
+            elif edge == tuple(current_strip[-2:]) or edge == tuple(reversed(current_strip[-2:])):
+                next_face_index = face_index
+                break
+            elif edge == (current_strip[-1], current_strip[-2]):
+                if len(current_strip) % 2 != 0:
+                    # create a degenerate triangle to join them
+                    current_strip.append(current_strip[-2])
+                next_face_index = face_index
+
+        if next_face_index:
+            faces_indices.remove(next_face_index)
+            current_face_index = next_face_index
+        else:
+            strips.append(current_strip)
+            current_strip = []
+            try:
+                current_face_index = faces_indices.popleft()
+            except IndexError:
+                process_faces = False
+
+    # Convert vertex indices to vertex objects and filter out strips with 1-2 triangles
+    result_strips = []
+    for strip_indices in strips:
+        # if len(strip_indices) <= 4:
+        #    continue
+        # Convert indices to vertex objects
+        vertex_objects = [blender_mesh_data.vertices[v_index] for v_index in strip_indices]
+        result_strips.append(vertex_objects)
+
+    return result_strips
+
+
 def get_model_bounding_box(blender_objects):
     meshes = (ob.data for ob in blender_objects if ob.type == 'MESH')
     min_x = 99999999

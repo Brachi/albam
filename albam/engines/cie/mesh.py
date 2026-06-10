@@ -3,7 +3,7 @@ from mathutils import Vector
 from ...registry import blender_registry
 from ...vfs import VirtualFile
 from ...lib.misc import chunks
-from ...lib.blender import triangles_list_to_triangles_strip
+from ...lib.blender import triangles_list_to_vtx_strips
 from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
@@ -248,8 +248,8 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
     print(f"[re4uhd] armature: {len(bin.bones)} bones")
     return arm_ob
 
-# -- Vertex weights ----------------------------------------------------------
 
+# -- Vertex weights ----------------------------------------------------------
 def _apply_weights(mesh_ob, bin):
     """
     Create vertex groups and assign bone weights.
@@ -363,6 +363,7 @@ def export_bin(bl_obj):
     app_id = asset.app_id
     vfiles = []
     vtx_locations = []
+    vtx_normals = []
 
     src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
     src_bin._read()
@@ -378,7 +379,33 @@ def export_bin(bl_obj):
         separated_meshes.extend(split_mesh_by_material(bl_mesh))
     move_to_collection(separated_meshes, "AlbamTemp")
     for bl_mesh in separated_meshes:
+        dst_mat = dst_mod.Material()
+        loop_cache = {loop.vertex_index: loop for loop in bl_mesh.data.loops}
         for vtx in bl_mesh.data.vertices:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
-        triangles = triangles_list_to_triangles_strip(bl_mesh)
+        strips_vtx = triangles_list_to_vtx_strips(bl_mesh)
+        for strip in strips_vtx:
+            vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
+            for vtx in strip:
+                loop = loop_cache[vtx.index]
+                vtx_normals.append(_zy_flip(loop.normal.x, loop.normal.y, loop.normal.z))
+            match len(strip):
+                case 3:
+                    print("ftype = 5: triangle")
+                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
+                    #    fcount=3,
+                    #    ftype=5
+                    #))
+                case 4:
+                    print("ftype = 8: quad")
+                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
+                    #    fcount=4,
+                    #    ftype=8
+                    #))
+                case _:
+                    print("ftype = 6: strip")
+                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
+                    #    fcount=4,
+                    #    ftype=8
+                    #))
     return vfiles
