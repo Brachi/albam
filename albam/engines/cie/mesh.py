@@ -3,7 +3,7 @@ from mathutils import Vector
 from ...registry import blender_registry
 from ...vfs import VirtualFile
 from ...lib.misc import chunks
-from ...lib.blender import triangles_list_to_vtx_strips
+from ...lib.blender import triangles_list_to_vtx_strips, get_uvs_per_vertex, get_bone_indices_and_weights_per_vertex
 from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
@@ -61,7 +61,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         loop_normals = []
         for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
-            #loop_normals.append(_yz_flip(n.x, n.y, n.z))
+            # loop_normals.append(_yz_flip(n.x, n.y, n.z))
             loop_normals.append((n.x/16384, -n.z/16384, n.y/16384))
         bl_mesh.normals_split_custom_set(loop_normals)
     bl_mesh.normals_split_custom_set(loop_normals)
@@ -364,48 +364,53 @@ def export_bin(bl_obj):
     vfiles = []
     vtx_locations = []
     vtx_normals = []
+    vtx_uvs = []
 
     src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
     src_bin._read()
-    dst_mod = Re4UhdBin()
+    dst_bin = Re4UhdBin()
 
-    bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    separated_meshes = []
+    bl_mesh_objs = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    separated_mesh_objs = []
     if bpy.data.collections.get("AlbamTemp"):
         for ob in bpy.data.collections["AlbamTemp"].objects:
             delete_ob(ob)
 
-    for bl_mesh in bl_meshes:
-        separated_meshes.extend(split_mesh_by_material(bl_mesh))
-    move_to_collection(separated_meshes, "AlbamTemp")
-    for bl_mesh in separated_meshes:
-        dst_mat = dst_mod.Material()
-        loop_cache = {loop.vertex_index: loop for loop in bl_mesh.data.loops}
-        for vtx in bl_mesh.data.vertices:
+    for bl_mesh_ob in bl_mesh_objs:
+        separated_mesh_objs.extend(split_mesh_by_material(bl_mesh_ob))
+    move_to_collection(separated_mesh_objs, "AlbamTemp")
+    for bl_mesh_ob in separated_mesh_objs:
+        weights_per_vtx = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
+        bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
+        dst_mat = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
+        custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_properties.copy_custom_properties_to(dst_mat)
+
+        dst_face_idx = dst_bin.FaceIndex(_parent=dst_mat, _root=dst_bin._root)
+        loop_cache = {loop.vertex_index: loop for loop in bl_mesh_ob.data.loops}
+
+        vtx_uvs.extend(get_uvs_per_vertex(bl_mesh_ob, 0))
+        for vtx in bl_mesh_ob.data.vertices:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
-        strips_vtx = triangles_list_to_vtx_strips(bl_mesh)
+
+        strips_vtx = triangles_list_to_vtx_strips(bl_mesh_ob)
         for strip in strips_vtx:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
             for vtx in strip:
                 loop = loop_cache[vtx.index]
                 vtx_normals.append(_zy_flip(loop.normal.x, loop.normal.y, loop.normal.z))
+            dst_strip = dst_bin.Strip(_parent=dst_face_idx, _root=dst_bin._root)
             match len(strip):
                 case 3:
                     print("ftype = 5: triangle")
-                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
-                    #    fcount=3,
-                    #    ftype=5
-                    #))
+                    dst_strip.ftype = 5
+                    dst_strip.fcount = 3
                 case 4:
                     print("ftype = 8: quad")
-                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
-                    #    fcount=4,
-                    #    ftype=8
-                    #))
+                    dst_strip.ftype = 8
+                    dst_strip.fcount = 4
                 case _:
                     print("ftype = 6: strip")
-                    #dst_mat.face_index.strips.append(dst_mod.FaceIndexStrip(
-                    #    fcount=4,
-                    #    ftype=8
-                    #))
+                    dst_strip.ftype = 6
+                    dst_strip.fcount = len(strip)
     return vfiles
