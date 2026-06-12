@@ -1,9 +1,12 @@
 import bpy
 from mathutils import Vector
+import math
 from ...registry import blender_registry
 from ...vfs import VirtualFile
 from ...lib.misc import chunks
-from ...lib.blender import triangles_list_to_vtx_strips, get_uvs_per_vertex, get_bone_indices_and_weights_per_vertex
+from ...lib.blender import (triangles_list_to_vtx_strips,
+                            get_uvs_per_vertex,
+                            get_bone_indices_and_weights_per_vertex)
 from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
@@ -62,7 +65,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
             # loop_normals.append(_yz_flip(n.x, n.y, n.z))
-            loop_normals.append((n.x/16384, -n.z/16384, n.y/16384))
+            loop_normals.append(_convert_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
     bl_mesh.normals_split_custom_set(loop_normals)
 
@@ -97,6 +100,13 @@ def _yz_flip(x, y, z):
 def _zy_flip(x, y, z):
     """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
     return (x * 1000, y * 1000, -z * 1000)
+
+
+def _convert_normal(n):
+    normal_fix = math.sqrt(n.x ** 2 + n.y ** 2 + n.z ** 2)
+    if normal_fix == 0:
+        normal_fix = 1
+    return (n.x/normal_fix, n.z/normal_fix * -1, n.y/normal_fix)
 
 
 def _build_faces(bin):
@@ -413,4 +423,34 @@ def export_bin(bl_obj):
                     print("ftype = 6: strip")
                     dst_strip.ftype = 6
                     dst_strip.fcount = len(strip)
+    # header
+    header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
+    header.offset_bones = src_bin.header.offset_bones
+    header.unk00 = src_bin.header.unk_00
+    header.unk01 = src_bin.header.unk_01
+    header.offset_vertex_colors = src_bin.header.offset_vertex_colors
+    header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
+    header.offset_weights = src_bin.header.offset_weights
+    header.num_weights = src_bin.header.num_weights
+    header.num_bones = src_bin.header.num_bones
+    header.num_materials = src_bin.header.num_materials
+    header.offset_materials = src_bin.header.offset_materials
+    header.texture1_flags = src_bin.header.texture1_flags
+    header.texture2_flags = src_bin.header.texture2_flags
+    header.num_tpl = src_bin.header.num_tpl
+    header.vertex_scale = src_bin.header.vertex_scale
+    header.unk_02 = src_bin.header.unk_02
+    header.num_weights2 = src_bin.header.num_weights2
+    header.offset_morphs = src_bin.header.offset_morphs
+    header.offset_vertex_position = src_bin.header.offset_vertex_position
+    header.offset_vertex_normals = src_bin.header.offset_vertex_normals
+    header.num_vertices = len(vtx_locations)
+    header.num_vertex_normals = src_bin.header.num_vertex_normals
+    header.version_flags = src_bin.header.version_flags
+    header.offset_bonepairs = src_bin.header.offset_bonepairs
+    header.offset_adjacents = src_bin.header.offset_adjacents
+    header.offset_index_buffer = src_bin.header.offset_index_buffer
+    header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
+    dst_bin.header = header
+
     return vfiles
