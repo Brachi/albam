@@ -166,11 +166,56 @@ def copy_faces(sourceMesh, targetMesh, numVertices, materialsMap):
 def triangulate_meshes(bl_objects):
     for ob in bl_objects:
         mesh = ob.data
+
+        # bmesh ignores custom normals, so we need to manually transfer them
+        original_corner_normals = [n.vector[:] for n in mesh.corner_normals]
+
         bm = bmesh.new()
         bm.from_mesh(mesh)
-        bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method='BEAUTY', ngon_method='BEAUTY')
+        # In theory it should save time if we skip already triangulated meshes
+        # the check adds overhead  ~0.0002 seconds for the test mesh
+        if not any(len(f.verts) >= 4 for f in bm.faces):
+            bm.free()
+            continue
+        # Create a custom BMesh float vector layer for loops to hold the original normals
+        # BMesh automatically ensures this data persists across structural splits
+        normal_layer = bm.loops.layers.float_vector.new("original_custom_normals")
+
+        loop_index = 0
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[normal_layer] = original_corner_normals[loop_index]
+                loop_index += 1
+
+        bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
         bm.to_mesh(mesh)
+
+        new_custom_normals = []
+        for face in bm.faces:
+            for loop in face.loops:
+                new_custom_normals.append(loop[normal_layer])
+
+        bm.free()
+
+        mesh.normals_split_custom_set(new_custom_normals)
         mesh.update()
+
+
+# Works but slower ~+ 0.015 seconds for the test mesh
+def triangulate_meshes_modifier(bl_objects):
+    unselect()
+    for ob in bl_objects:
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+
+        tri_mod = ob.modifiers.new(name="Triangulate", type='TRIANGULATE')
+        tri_mod.quad_method = 'BEAUTY'
+        tri_mod.ngon_method = 'BEAUTY'
+        tri_mod.keep_custom_normals = True
+
+        bpy.ops.object.modifier_apply(modifier=tri_mod.name)
+
+        ob.select_set(False)
 
 
 def move_to_collection(bl_objects, col_name):

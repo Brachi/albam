@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Fixed
 
 - Import of meshes with Nan UVs
+- Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
 
 ### Changed
