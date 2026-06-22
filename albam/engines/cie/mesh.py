@@ -15,7 +15,9 @@ from .material import build_blender_materials
 
 # Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
 # bone_000 raw_y=1140 = 1.14m hip height, bone_004 accumulated = 1.65m chest).
-BONE_SCALE = 0.001  # same raw unit as vertex positions
+GLOBAL_SCALE = 0.001  # same raw unit as vertex positions
+GLOBAL_NORMAL_FIX_EXTENDED = 545460800000
+GLOBAL_NORMAL_FIX_REDUCED = 16384
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
 FCOUNT_TYPES = {
@@ -65,7 +67,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
             # loop_normals.append(_yz_flip(n.x, n.y, n.z))
-            loop_normals.append(_convert_normal(n))
+            loop_normals.append(_decode_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
     bl_mesh.normals_split_custom_set(loop_normals)
 
@@ -94,19 +96,26 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 
 def _yz_flip(x, y, z):
     """Convert Y-up (RE4, milimeters) to Z-up (Blender, meters)."""
-    return (x * 0.001, -z * 0.001, y * 0.001)
+    return (x * GLOBAL_SCALE, -z * GLOBAL_SCALE, y * GLOBAL_SCALE,)
 
 
 def _zy_flip(x, y, z):
     """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
-    return (x * 1000, y * 1000, -z * 1000)
+    return (x / GLOBAL_SCALE, y / GLOBAL_SCALE, -z / GLOBAL_SCALE)
 
 
-def _convert_normal(n):
+def _decode_normal(n):
     normal_fix = math.sqrt(n.x ** 2 + n.y ** 2 + n.z ** 2)
     if normal_fix == 0:
         normal_fix = 1
     return (n.x/normal_fix, n.z/normal_fix * -1, n.y/normal_fix)
+
+
+def _encode_normal(vector, n):
+    NORMAL_FIX = GLOBAL_NORMAL_FIX_EXTENDED
+    vector.x = n.x * NORMAL_FIX
+    vector.y = n.z * NORMAL_FIX
+    vector.z = - n.y * NORMAL_FIX
 
 
 def _build_faces(bin):
@@ -208,7 +217,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
         visited.add(bone_id)
         b = bone_data[bone_id]
         # Y-up (RE4) -> Z-up (Blender), game units -> Blender meters
-        local = Vector((b.x * BONE_SCALE, -b.z * BONE_SCALE, b.y * BONE_SCALE))
+        local = Vector((b.x * GLOBAL_SCALE, -b.z * GLOBAL_SCALE, b.y * GLOBAL_SCALE))
         if b.parent == b.bone_id or b.parent not in bone_data:
             return local
         return world_pos(b.parent, visited) + local
@@ -226,27 +235,27 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
     bpy.ops.object.mode_set(mode='EDIT')
 
     edit_bone_map = {}
-
-    for b in bin.bones:
-        eb = arm_data.edit_bones.new(f"{b.bone_id}")
-        head = world_positions[b.bone_id]
-        eb.head = head
-
+    # Create bones
+    for bone in bin.bones:
+        blender_bone = arm_data.edit_bones.new(f"{bone.bone_id}")
+        blender_bone['cie.anim_retarget'] = str(bone.bone_id)
+        head = world_positions[bone.bone_id]
+        blender_bone.head = head
         children = [c for c in bin.bones
-                    if c.parent == b.bone_id and c.bone_id != b.bone_id]
+                    if c.parent == bone.bone_id and c.bone_id != bone.bone_id]
         if children:
             child_avg = sum((world_positions[c.bone_id] for c in children), Vector((0, 0, 0)))
             child_avg /= len(children)
-            eb.tail = child_avg if (child_avg - head).length > 0.001 else head + Vector((0, 0, 0.02))
+            blender_bone.tail = child_avg if (child_avg - head).length > 0.001 else head + Vector((0, 0, 0.02))
         else:
-            eb.tail = head + Vector((0, 0, 0.02))
+            blender_bone.tail = head + Vector((0, 0, 0.02))
 
-        edit_bone_map[b.bone_id] = eb
+        edit_bone_map[bone.bone_id] = blender_bone
 
-    for b in bin.bones:
-        if b.parent != b.bone_id and b.parent in edit_bone_map:
-            edit_bone_map[b.bone_id].parent = edit_bone_map[b.parent]
-            edit_bone_map[b.bone_id].use_connect = False
+    for bone in bin.bones:
+        if bone.parent != bone.bone_id and bone.parent in edit_bone_map:
+            edit_bone_map[bone.bone_id].parent = edit_bone_map[bone.parent]
+            edit_bone_map[bone.bone_id].use_connect = False
 
     bpy.ops.object.mode_set(mode='OBJECT')
     context.view_layer.objects.active = prev_active
@@ -347,6 +356,7 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
         except (KeyError, RuntimeError):
             return None
 
+
 @blender_registry.register_import_options_custom_draw_func(extension='BIN')
 def draw_bin_options(panel_instance, context):
     panel_instance.bl_label = "BIN Options"
@@ -367,6 +377,37 @@ def poll_import_operator_for_bin(panel_class, context):
     return bool(context.scene.albam.import_options_bin.tpl_file_id)
 
 
+def _classify_mesh_ob(bl_mesh_ob):
+    """
+    As RE4UHD .bin files can have full or partial armature, we need to classify the mesh
+    object to determine how to handle it.
+    """
+    if bl_mesh_ob:
+        parent = bl_mesh_ob.parent
+        armature_mod = bl_mesh_ob.modifiers.get("Armature")
+        armature = armature_mod.object if armature_mod else None
+        bin_type = None
+        if parent and parent.type == 'ARMATURE':
+            bin_type = 'full armature'
+        elif parent and parent.type == 'EMPTY' and armature_mod:
+            bin_type = 'inherited armature'
+        else:
+            bin_type = 'static'  # not sure if it exist
+        return bin_type, armature
+
+
+def _serialize_bones(dst_bin, bones):
+    dst_bones = []
+    for bone in bones:
+        dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
+        dst_bone.bone_id = int(bone.get('cie.anim_retarget', 255))
+        dst_bone.parent = bone.parent
+        dst_bone.x, dst_bone.y, dst_bone.z = _yz_flip(bone.head.x, bone.head.y, bone.head.z)
+        dst_bone._check()
+        dst_bones.append(dst_bone)
+    return dst_bones
+
+
 @blender_registry.register_export_function(app_id="re4uhd", extension="BIN")
 def export_bin(bl_obj):
     asset = bl_obj.albam_asset
@@ -375,13 +416,17 @@ def export_bin(bl_obj):
     vtx_locations = []
     vtx_normals = []
     vtx_uvs = []
+    separated_mesh_objs = []
 
     src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
     src_bin._read()
     dst_bin = Re4UhdBin()
 
     bl_mesh_objs = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    separated_mesh_objs = []
+    try:
+        bin_type, armature = _classify_mesh_ob(bl_mesh_objs[0])
+    except IndexError:
+        raise "No mesh objects found to export"
     if bpy.data.collections.get("AlbamTemp"):
         for ob in bpy.data.collections["AlbamTemp"].objects:
             delete_ob(ob)
@@ -389,8 +434,12 @@ def export_bin(bl_obj):
     for bl_mesh_ob in bl_mesh_objs:
         separated_mesh_objs.extend(split_mesh_by_material(bl_mesh_ob))
     move_to_collection(separated_mesh_objs, "AlbamTemp")
+
     for bl_mesh_ob in separated_mesh_objs:
         weights_per_vtx = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
+        if bin_type == "inherited armature":
+            for vg in bl_mesh_ob.vertex_groups:
+                bone_id = int(vg.name)
         bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
         dst_mat = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -424,33 +473,60 @@ def export_bin(bl_obj):
                     dst_strip.ftype = 6
                     dst_strip.fcount = len(strip)
     # header
-    header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
-    header.offset_bones = src_bin.header.offset_bones
-    header.unk00 = src_bin.header.unk_00
-    header.unk01 = src_bin.header.unk_01
-    header.offset_vertex_colors = src_bin.header.offset_vertex_colors
-    header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
-    header.offset_weights = src_bin.header.offset_weights
-    header.num_weights = src_bin.header.num_weights
-    header.num_bones = src_bin.header.num_bones
-    header.num_materials = src_bin.header.num_materials
-    header.offset_materials = src_bin.header.offset_materials
-    header.texture1_flags = src_bin.header.texture1_flags
-    header.texture2_flags = src_bin.header.texture2_flags
-    header.num_tpl = src_bin.header.num_tpl
-    header.vertex_scale = src_bin.header.vertex_scale
-    header.unk_02 = src_bin.header.unk_02
-    header.num_weights2 = src_bin.header.num_weights2
-    header.offset_morphs = src_bin.header.offset_morphs
-    header.offset_vertex_position = src_bin.header.offset_vertex_position
-    header.offset_vertex_normals = src_bin.header.offset_vertex_normals
-    header.num_vertices = len(vtx_locations)
-    header.num_vertex_normals = src_bin.header.num_vertex_normals
-    header.version_flags = src_bin.header.version_flags
-    header.offset_bonepairs = src_bin.header.offset_bonepairs
-    header.offset_adjacents = src_bin.header.offset_adjacents
-    header.offset_index_buffer = src_bin.header.offset_index_buffer
-    header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
-    dst_bin.header = header
+    dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
+    dst_header.offset_bones = src_bin.header.offset_bones
+    dst_header.unk00 = src_bin.header.unk_00
+    dst_header.unk01 = src_bin.header.unk_01
+    dst_header.offset_vertex_colors = src_bin.header.offset_vertex_colors
+    dst_header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
+    dst_header.offset_weights = src_bin.header.offset_weights
+    dst_header.num_weights = src_bin.header.num_weights
+    dst_header.num_bones = src_bin.header.num_bones
+    dst_header.num_materials = src_bin.header.num_materials
+    dst_header.offset_materials = src_bin.header.offset_materials
+    dst_header.texture1_flags = src_bin.header.texture1_flags
+    dst_header.texture2_flags = src_bin.header.texture2_flags
+    dst_header.num_tpl = src_bin.header.num_tpl
+    dst_header.vertex_scale = src_bin.header.vertex_scale
+    dst_header.unk_02 = src_bin.header.unk_02
+    dst_header.num_weights2 = src_bin.header.num_weights2
+    dst_header.offset_morphs = src_bin.header.offset_morphs
+    dst_header.offset_vertex_position = src_bin.header.offset_vertex_position
+    dst_header.offset_vertex_normals = src_bin.header.offset_vertex_normals
+    dst_header.num_vertices = len(vtx_locations)
+    dst_header.num_vertex_normals = src_bin.header.num_vertex_normals
+    dst_header.version_flags = src_bin.header.version_flags
+    dst_header.offset_bonepairs = src_bin.header.offset_bonepairs
+    dst_header.offset_adjacents = src_bin.header.offset_adjacents
+    dst_header.offset_index_buffer = src_bin.header.offset_index_buffer
+    dst_header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
+    dst_header._check()
+    dst_bin.header = dst_header
+    # adjacent
+    dst_adjacent = dst_bin.BoneAdj(_parent=dst_bin, _root=dst_bin._root)
+    dst_adjacent.count = src_bin.adjacent.count
+    dst_adjacent.adj = src_bin.adjacent.adj
+    dst_adjacent._check()
+    dst_bin.adjacent = dst_adjacent
+    # bone pairs
+    if getattr(src_bin, "bone_pairs"):  # looks like doesn't exist in inherited armature bins
+        dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
+        dst_bone_pairs.num_pair = src_bin.bone_pairs.num_pair
+        dst_bone_pairs.line = [l for _, l in enumerate(src_bin.bone_pairs.line)]
+        dst_bin.bone_pair = dst_bone_pairs
+    # bones
+    bones = []
+    match bin_type:
+        case 'full armature':
+            bones = _serialize_bones(dst_bin, armature.data.bones)
+        case 'inherited armature':
+            vg_names_cache = []
+            for mesh_ob in bl_mesh_objs:
+                for vg in bl_mesh_ob.vertex_groups:
+                    if vg.name not in vg_names_cache:
+                        vg_names_cache.append(vg.name)
+            inherited_bones = [armature.data.bones[vg_name] for vg_name in vg_names_cache if vg_name in armature.data.bones]
+            bones = _serialize_bones(dst_bin, inherited_bones)
+    dst_bin.bones = bones
 
     return vfiles
