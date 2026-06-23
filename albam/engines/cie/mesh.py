@@ -111,8 +111,8 @@ def _decode_normal(n):
     return (n.x/normal_fix, n.z/normal_fix * -1, n.y/normal_fix)
 
 
-def _encode_normal(vector, n):
-    NORMAL_FIX = GLOBAL_NORMAL_FIX_EXTENDED
+def _encode_normal(vector, n, extended=True):
+    NORMAL_FIX = GLOBAL_NORMAL_FIX_EXTENDED if extended else GLOBAL_NORMAL_FIX_REDUCED
     vector.x = n.x * NORMAL_FIX
     vector.y = n.z * NORMAL_FIX
     vector.z = - n.y * NORMAL_FIX
@@ -408,6 +408,29 @@ def _serialize_bones(dst_bin, bones):
     return dst_bones
 
 
+def _serialize_vertex_positions(dst_bin, vtx_locations):
+    dst_vertex_positions = []
+    for loc in vtx_locations:
+        dst_vtx = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
+        locl = list(loc)  # WTF? debug says it's tuple, the error says it's generator
+        dst_vtx.x = locl[0]
+        dst_vtx.y = locl[1]
+        dst_vtx.z = locl[2]
+        dst_vtx._check()
+        dst_vertex_positions.append(dst_vtx)
+    return dst_vertex_positions
+
+
+def _serialize_vertex_normals(dst_bin, vtx_normals):
+    dst_vertex_normals = []
+    for n in vtx_normals:
+        dst_n = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
+        _encode_normal(dst_n, Vector(n), extended=True)
+        dst_n._check()
+        dst_vertex_normals.append(dst_n)
+    return dst_vertex_normals
+
+
 @blender_registry.register_export_function(app_id="re4uhd", extension="BIN")
 def export_bin(bl_obj):
     asset = bl_obj.albam_asset
@@ -417,6 +440,7 @@ def export_bin(bl_obj):
     vtx_normals = []
     vtx_uvs = []
     separated_mesh_objs = []
+    materials = []
 
     src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
     src_bin._read()
@@ -453,6 +477,7 @@ def export_bin(bl_obj):
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
 
         strips_vtx = triangles_list_to_vtx_strips(bl_mesh_ob)
+        dst_strips = []
         for strip in strips_vtx:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
             for vtx in strip:
@@ -472,6 +497,10 @@ def export_bin(bl_obj):
                     print("ftype = 6: strip")
                     dst_strip.ftype = 6
                     dst_strip.fcount = len(strip)
+            dst_strips.append(dst_strip)
+        dst_mat.face_index = dst_face_idx
+        dst_mat._check()
+        materials.append(dst_mat)
     # header
     dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
     dst_header.offset_bones = src_bin.header.offset_bones
@@ -527,6 +556,22 @@ def export_bin(bl_obj):
                         vg_names_cache.append(vg.name)
             inherited_bones = [armature.data.bones[vg_name] for vg_name in vg_names_cache if vg_name in armature.data.bones]
             bones = _serialize_bones(dst_bin, inherited_bones)
-    dst_bin.bones = bones
-
+    if not bin_type == 'static':
+        dst_bin.bones = bones
+    # indexes
+    dst_bin.indexes = src_bin.indexes
+    # indexes2
+    dst_bin.indexes2 = src_bin.indexes2
+    # materials
+    dst_bin.materials = materials
+    # normals
+    dst_bin.normals = _serialize_vertex_normals(dst_bin, vtx_normals)
+    # vertex colors
+    dst_bin.vertex_colors = src_bin.vertex_colors
+    # texcoords
+    dst_bin.texcoords = src_bin.texcoords
+    # vertex positions
+    dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
+    # weights
+    dst_bin.weights = src_bin.weights
     return vfiles
