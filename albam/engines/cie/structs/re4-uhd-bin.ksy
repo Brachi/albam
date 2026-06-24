@@ -47,8 +47,8 @@ types:
   uhd_bin_header:
     seq:
       - {id: offset_bones, type: u4} # bone_offset
-      - {id: unk_00, type: u4}
-      - {id: unk_01, type: u4}
+      - {id: unk_00, type: u4} # unknown_x04 //--zeros
+      - {id: unk_01, type: u4} #unknown_x08 adress to blank area
       - {id: offset_vertex_colors, type: u4} # vertex_colour_offset
       - {id: offset_vertex_texcoord, type: u4} # vertex_texcoord_offset
       - {id: offset_weights, type: u4} # weight_offset
@@ -56,7 +56,7 @@ types:
       - {id: num_bones, type: u1} # bone_count
       - {id: num_materials, type: u2} # material_count
       - {id: offset_materials, type: u4} # material_offset
-      - {id: texture1_flags, type: u2}
+      - {id: texture1_flags, type: u2} # bin flags
       - {id: texture2_flags, type: u2}
       - {id: num_tpl, type: u4} # tpl_count
       - {id: vertex_scale, type: u1}
@@ -72,59 +72,41 @@ types:
       - {id: offset_adjacents, type: u4} # adjacent_offset
       - {id: offset_index_buffer, type: u4} # vertex_weight_index_offset
       - {id: offset_index_buffer2, type: u4} # vertex_weight2_index_offset
+    instances:
+      size_:
+        value: 96
 
-  vec3:
+  bone_adj:
     seq:
+      - {id: count, type: u1, repeat: expr, repeat-expr: 4}
+      - id: adj
+        type: u2
+        repeat: expr
+        repeat-expr: count[3] # num bones?
+    instances:
+      size_:
+        value: 4 + count[3] * 2
+
+  bone_pair:
+    seq:
+      - {id: num_pair, type: u4}
+      - {id: line, type: pair_line, repeat: expr, repeat-expr: num_pair}
+    instances:
+      size_:
+        value: 4 + 8*num_pair
+
+  pair_line:
+    seq:
+      - {id: data, size: 8}
+
+  bone:
+    seq:
+      - {id: bone_id, type: u1}
+      - {id: parent, type: u1}
+      - {id: filler, type: u2}
       - {id: x, type: f4}
       - {id: y, type: f4}
       - {id: z, type: f4}
-
-  uv:
-    seq:
-      - {id: u, type: f4}
-      - {id: v, type: f4}
-
-  rgba:
-    seq:
-      - {id: a, type: u1}
-      - {id: r, type: u1}
-      - {id: g, type: u1}
-      - {id: b, type: u1}
-
-  strip:
-    seq:
-      - {id: ftype, type: u2}
-      - {id: fcount, type: u2}
-
-  face_index:
-    seq:
-      - {id: buffer_size, type: u4}
-      - {id: count, type: u4}
-      - {id: strip_count, type: u4}
-      - {id: strips, type: strip, repeat: expr, repeat-expr: strip_count}
-      - {id: padding, size: buffer_size - (strip_count * 4 + 4)}
-
-  fmtbin_weight_ext:
-    seq:
-      - {id: bone_id1, type: u2}
-      - {id: bone_id2, type: u2}
-      - {id: bone_id3, type: u2}
-      - {id: count, type: u2}
-      - {id: weight1, type: u1}
-      - {id: weight2, type: u1}
-      - {id: weight3, type: u1}
-      - {id: unk00, type: u1}
-
-  fmtbin_weight:
-    seq:
-      - {id: bone_id1, type: u1}
-      - {id: bone_id2, type: u1}
-      - {id: bone_id3, type: u1}
-      - {id: count, type: u1}
-      - {id: weight1, type: u1}
-      - {id: weight2, type: u1}
-      - {id: weight3, type: u1}
-      - {id: unk00, type: u1}
 
   material:
     seq:
@@ -154,28 +136,55 @@ types:
       - {id: custom_specular_map, type: u1}
       - {id: face_index, type: face_index}
 
-  bone:
+  face_index:
     seq:
-      - {id: bone_id, type: u1}
-      - {id: parent, type: u1}
-      - {id: filler, type: u2}
+      - {id: buffer_size, type: u4}
+      - {id: count, type: u4}
+      - {id: strip_count, type: u4}
+      - {id: strips, type: strip, repeat: expr, repeat-expr: strip_count}
+      - {id: padding, size: buffer_size - (strip_count * 4 + 4)}
+
+  strip:
+    seq:
+      - {id: ftype, type: u2}
+      - {id: fcount, type: u2}
+
+  fmtbin_weight_ext: #bone id 2bytes
+    seq:
+      - {id: bone_ids, type: u2, repeat: expr, repeat-expr: 3}
+      #- {id: bone_id2, type: u2}
+      #- {id: bone_id3, type: u2}
+      - {id: count, type: u2}
+      - {id: weights, type: u1, repeat: expr, repeat-expr: 3}
+      #- {id: weight2, type: u1}
+      #- {id: weight3, type: u1}
+      - {id: unk00, type: u1}
+
+  fmtbin_weight:
+    seq:
+      - {id: bone_ids, type: u1, repeat: expr, repeat-expr: 3}
+      #- {id: bone_id2, type: u1}
+      #- {id: bone_id3, type: u1}
+      - {id: count, type: u1}
+      - {id: weights, type: u1, repeat: expr, repeat-expr: 3}
+      #- {id: weight2, type: u1}
+      #- {id: weight3, type: u1}
+      - {id: unk00, type: u1}
+
+  vec3:
+    seq:
       - {id: x, type: f4}
       - {id: y, type: f4}
       - {id: z, type: f4}
 
-  pair_line:
+  uv:
     seq:
-      - {id: data, size: 8}
+      - {id: u, type: f4}
+      - {id: v, type: f4}
 
-  bone_pair:
+  rgba:
     seq:
-      - {id: num_pair, type: u4}
-      - {id: line, type: pair_line, repeat: expr, repeat-expr: num_pair}
-
-  bone_adj:
-    seq:
-      - {id: count, type: u1, repeat: expr, repeat-expr: 4}
-      - id: adj
-        type: u2
-        repeat: expr
-        repeat-expr: count[3]
+      - {id: a, type: u1}
+      - {id: r, type: u1}
+      - {id: g, type: u1}
+      - {id: b, type: u1}

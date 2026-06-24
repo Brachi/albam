@@ -101,7 +101,7 @@ def _yz_flip(x, y, z):
 
 def _zy_flip(x, y, z):
     """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
-    return (x / GLOBAL_SCALE, y / GLOBAL_SCALE, -z / GLOBAL_SCALE)
+    return (x / GLOBAL_SCALE, y / GLOBAL_SCALE, -z / GLOBAL_SCALE)  # in some cases returned as generator
 
 
 def _decode_normal(n):
@@ -299,12 +299,8 @@ def _apply_weights(mesh_ob, bin):
         # Weights are stored as raw bytes (0-255) whose sum may not equal 255.
         # Dividing by actual sum ensures full vertex coverage.
         active = []
-        if wm.count >= 1:
-            active.append((wm.bone_id1, wm.weight1))
-        if wm.count >= 2:
-            active.append((wm.bone_id2, wm.weight2))
-        if wm.count >= 3:
-            active.append((wm.bone_id3, wm.weight3))
+        for i in range(wm.count):
+            active.append((wm.bone_ids[i], wm.weights[i]))
 
         total = sum(w for _, w in active)
         if total == 0:
@@ -421,6 +417,18 @@ def _serialize_vertex_positions(dst_bin, vtx_locations):
     return dst_vertex_positions
 
 
+def _serialize_skinweights(dst_bin, vtx_weights):
+    dst_skinweights = []
+    for vw in vtx_weights.values():
+        dst_bin_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
+        count = 0
+        for w in vw:
+            dst_bin_weight.count = count
+            count += 1
+
+    return dst_skinweights
+
+
 def _serialize_vertex_normals(dst_bin, vtx_normals):
     dst_vertex_normals = []
     for n in vtx_normals:
@@ -460,10 +468,7 @@ def export_bin(bl_obj):
     move_to_collection(separated_mesh_objs, "AlbamTemp")
 
     for bl_mesh_ob in separated_mesh_objs:
-        weights_per_vtx = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
-        if bin_type == "inherited armature":
-            for vg in bl_mesh_ob.vertex_groups:
-                bone_id = int(vg.name)
+        vtx_skinweights = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
         bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
         dst_mat = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -554,7 +559,9 @@ def export_bin(bl_obj):
                 for vg in bl_mesh_ob.vertex_groups:
                     if vg.name not in vg_names_cache:
                         vg_names_cache.append(vg.name)
-            inherited_bones = [armature.data.bones[vg_name] for vg_name in vg_names_cache if vg_name in armature.data.bones]
+            for vg_name in vg_names_cache:
+                if vg_name in armature.data.bones:
+                    inherited_bones = armature.data.bones[vg_name]
             bones = _serialize_bones(dst_bin, inherited_bones)
     if not bin_type == 'static':
         dst_bin.bones = bones
@@ -573,5 +580,5 @@ def export_bin(bl_obj):
     # vertex positions
     dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
     # weights
-    dst_bin.weights = src_bin.weights
+    dst_bin.weights = _serialize_skinweights(dst_bin, vtx_skinweights)
     return vfiles

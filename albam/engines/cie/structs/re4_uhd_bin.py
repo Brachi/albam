@@ -381,6 +381,16 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4 + self.count[3] * 2
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class BonePair(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -430,6 +440,16 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4 + 8 * self.num_pair
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class FaceIndex(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -495,34 +515,54 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.bone_id1 = self._io.read_u1()
-            self.bone_id2 = self._io.read_u1()
-            self.bone_id3 = self._io.read_u1()
+            self.bone_ids = []
+            for i in range(3):
+                self.bone_ids.append(self._io.read_u1())
+
             self.count = self._io.read_u1()
-            self.weight1 = self._io.read_u1()
-            self.weight2 = self._io.read_u1()
-            self.weight3 = self._io.read_u1()
+            self.weights = []
+            for i in range(3):
+                self.weights.append(self._io.read_u1())
+
             self.unk00 = self._io.read_u1()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            for i in range(len(self.bone_ids)):
+                pass
+
+            for i in range(len(self.weights)):
+                pass
+
 
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.FmtbinWeight, self)._write__seq(io)
-            self._io.write_u1(self.bone_id1)
-            self._io.write_u1(self.bone_id2)
-            self._io.write_u1(self.bone_id3)
+            for i in range(len(self.bone_ids)):
+                pass
+                self._io.write_u1(self.bone_ids[i])
+
             self._io.write_u1(self.count)
-            self._io.write_u1(self.weight1)
-            self._io.write_u1(self.weight2)
-            self._io.write_u1(self.weight3)
+            for i in range(len(self.weights)):
+                pass
+                self._io.write_u1(self.weights[i])
+
             self._io.write_u1(self.unk00)
 
 
         def _check(self):
+            if len(self.bone_ids) != 3:
+                raise kaitaistruct.ConsistencyError(u"bone_ids", 3, len(self.bone_ids))
+            for i in range(len(self.bone_ids)):
+                pass
+
+            if len(self.weights) != 3:
+                raise kaitaistruct.ConsistencyError(u"weights", 3, len(self.weights))
+            for i in range(len(self.weights)):
+                pass
+
             self._dirty = False
 
 
@@ -533,34 +573,54 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.bone_id1 = self._io.read_u2le()
-            self.bone_id2 = self._io.read_u2le()
-            self.bone_id3 = self._io.read_u2le()
+            self.bone_ids = []
+            for i in range(3):
+                self.bone_ids.append(self._io.read_u2le())
+
             self.count = self._io.read_u2le()
-            self.weight1 = self._io.read_u1()
-            self.weight2 = self._io.read_u1()
-            self.weight3 = self._io.read_u1()
+            self.weights = []
+            for i in range(3):
+                self.weights.append(self._io.read_u1())
+
             self.unk00 = self._io.read_u1()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            for i in range(len(self.bone_ids)):
+                pass
+
+            for i in range(len(self.weights)):
+                pass
+
 
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.FmtbinWeightExt, self)._write__seq(io)
-            self._io.write_u2le(self.bone_id1)
-            self._io.write_u2le(self.bone_id2)
-            self._io.write_u2le(self.bone_id3)
+            for i in range(len(self.bone_ids)):
+                pass
+                self._io.write_u2le(self.bone_ids[i])
+
             self._io.write_u2le(self.count)
-            self._io.write_u1(self.weight1)
-            self._io.write_u1(self.weight2)
-            self._io.write_u1(self.weight3)
+            for i in range(len(self.weights)):
+                pass
+                self._io.write_u1(self.weights[i])
+
             self._io.write_u1(self.unk00)
 
 
         def _check(self):
+            if len(self.bone_ids) != 3:
+                raise kaitaistruct.ConsistencyError(u"bone_ids", 3, len(self.bone_ids))
+            for i in range(len(self.bone_ids)):
+                pass
+
+            if len(self.weights) != 3:
+                raise kaitaistruct.ConsistencyError(u"weights", 3, len(self.weights))
+            for i in range(len(self.weights)):
+                pass
+
             self._dirty = False
 
 
@@ -797,6 +857,16 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _check(self):
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 96
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Uv(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
