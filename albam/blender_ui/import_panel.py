@@ -393,6 +393,8 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
         row = self.layout.row()
         row.operator("wm.import_options", icon="OPTIONS", text="")
         row.operator("albam.import_vfile", text="Import")
+        row = self.layout.row()
+        row.operator("albam.batch_import_folder", text="Batch Import Folder (.mod)")
         self.layout.row()
 
 
@@ -412,3 +414,82 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
+    """Import all .mod files from the selected folder in the VFS tree"""
+    bl_idname = "albam.batch_import_folder"
+    bl_label = "Batch import folder"
+
+    def execute(self, context):
+        vfs = context.scene.albam.vfs
+        if len(vfs.file_list) == 0:
+            self.report({'WARNING'}, 'No files loaded')
+            return {'CANCELLED'}
+
+        index = vfs.file_list_selected_index
+        selected = vfs.file_list[index]
+
+        if not selected.is_expandable:
+            self.report({'WARNING'}, 'Select a folder, not a file')
+            return {'CANCELLED'}
+
+        selected_node_id = selected.name
+
+        # Find all .mod children of the selected folder
+        mod_items = []
+        for item in vfs.file_list:
+            if item.is_expandable:
+                continue
+            if item.display_name.lower().endswith(".mod"):
+                for ancestor in item.tree_node_ancestors:
+                    if ancestor.node_id == selected_node_id:
+                        mod_items.append(item)
+                        break
+
+        if not mod_items:
+            self.report({'WARNING'}, 'No .mod files found in selected folder')
+            return {'CANCELLED'}
+
+        imported_count = 0
+        failed = []
+        for vfile in mod_items:
+            if (vfile.app_id, vfile.extension) not in blender_registry.importable_extensions:
+                continue
+            try:
+                bl_object = ALBAM_OT_Import._execute(vfile, context)
+                if bl_object:
+                    bl_object.albam_asset.original_bytes = vfile.get_bytes()
+                    bl_object.albam_asset.app_id = vfile.app_id
+                    bl_object.albam_asset.relative_path = vfile.relative_path
+                    bl_object.albam_asset.extension = vfile.extension
+                    asset_type = blender_registry.albam_asset_types.get(
+                        (vfile.app_id, vfile.extension), "")
+                    bl_object.albam_asset.asset_type = asset_type
+                    export_function = blender_registry.export_registry.get(
+                        (vfile.app_id, vfile.extension))
+                    if export_function:
+                        exportable = context.scene.albam.exportable.file_list.add()
+                        exportable.bl_object = bl_object
+                        context.scene.albam.exportable.file_list.update()
+                    imported_count += 1
+            except Exception as e:
+                failed.append(vfile.display_name)
+
+        msg = f"Imported {imported_count} .mod file(s)"
+        if failed:
+            msg += f", {len(failed)} failed: {', '.join(failed)}"
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        if len(context.scene.albam.vfs.file_list) == 0:
+            return False
+        index = context.scene.albam.vfs.file_list_selected_index
+        try:
+            item = context.scene.albam.vfs.file_list[index]
+        except IndexError:
+            return False
+        return item.is_expandable
