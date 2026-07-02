@@ -99,7 +99,8 @@ class LfsWrapper:
                     return fe.data.raw_data
         elif self.file_type == ".evd":
             for i, fe in enumerate(self.parsed.file_entries):
-                return fe.raw_data
+                if os.path.normpath(fe.name_file) == os.path.normpath(f"{file_path_no_ext}.{file_type}"):
+                    return fe.raw_data
         raise RuntimeError(f"File {file_path_no_ext} with type {file_type} not found in {self.file_path}")
 
     def _get_all_extensions(self, filepath):

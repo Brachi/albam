@@ -116,6 +116,8 @@ class Evd(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"file_entries", self._root, self._m_file_entries[i]._root)
                 if self._m_file_entries[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"file_entries", self, self._m_file_entries[i]._parent)
+                if self._m_file_entries[i].i != i:
+                    raise kaitaistruct.ConsistencyError(u"file_entries", i, self._m_file_entries[i].i)
 
 
         if self.packets__enabled:
@@ -231,7 +233,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -241,12 +243,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpCam, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -327,7 +331,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -338,13 +342,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEndEm, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -357,7 +363,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -368,13 +374,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEndList, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -387,7 +395,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -398,13 +406,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEndOm, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -417,7 +427,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -428,13 +438,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEndParts, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -447,7 +459,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -458,13 +470,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEndPl, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -477,7 +491,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.kind = KaitaiStream.resolve_enum(Evd.EvtEspKindId, self._io.read_u4le())
             self.id_est = self._io.read_u4le()
             self.filler = self._io.read_bytes(12)
@@ -490,15 +504,17 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpEsp, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_u4le(int(self.kind))
             self._io.write_u4le(self.id_est)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 12:
                 raise kaitaistruct.ConsistencyError(u"filler", 12, len(self.filler))
             self._dirty = False
@@ -543,7 +559,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -553,12 +569,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpFocus, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -569,7 +587,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -579,12 +597,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpFog, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -1143,7 +1163,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -1153,12 +1173,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpLit, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -1199,7 +1221,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
@@ -1211,14 +1233,16 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpMot, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len((self.name_bin).encode(u"UTF-8")) != 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
             if len(self.filler) != 4:
@@ -1233,7 +1257,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -1244,13 +1268,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpParentOff, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -1263,8 +1289,8 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_oya = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_oya = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(8)
             self._dirty = False
 
@@ -1275,16 +1301,20 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpParentOn, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_oya).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_oya).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
-            if len((self.name_oya).encode(u"UTF-8")) != 12:
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
+            if len((self.name_oya).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_oya", 12, len((self.name_oya).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_oya", -1, KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0))
             if len(self.filler) != 8:
                 raise kaitaistruct.ConsistencyError(u"filler", 8, len(self.filler))
             self._dirty = False
@@ -1297,8 +1327,8 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_oya = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_oya = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.pos = Evd.Vec3(self._io, self, self._root)
             self.pos._read()
             self.ang = Evd.Vec3(self._io, self, self._root)
@@ -1316,8 +1346,8 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpPos, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_oya).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_oya).encode(u"UTF-8"), 12, 0, 0)
             self.pos._write__seq(self._io)
             self.ang._write__seq(self._io)
             self._io.write_u4le(self.parts_no)
@@ -1325,10 +1355,14 @@ class Evd(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
-            if len((self.name_oya).encode(u"UTF-8")) != 12:
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
+            if len((self.name_oya).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_oya", 12, len((self.name_oya).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_oya", -1, KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0))
             if self.pos._root != self._root:
                 raise kaitaistruct.ConsistencyError(u"pos", self._root, self.pos._root)
             if self.pos._parent != self:
@@ -1349,7 +1383,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(8)
             self._dirty = False
 
@@ -1360,13 +1394,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpPosPl, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 8:
                 raise kaitaistruct.ConsistencyError(u"filler", 8, len(self.filler))
             self._dirty = False
@@ -1409,7 +1445,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -1419,12 +1455,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetEff, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -1435,7 +1473,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -1446,13 +1484,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetEm, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -1465,7 +1505,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.no_list = self._io.read_u4le()
             self.filler = self._io.read_bytes(1)
             self._dirty = False
@@ -1477,14 +1517,16 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetList, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_u4le(self.no_list)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 1:
                 raise kaitaistruct.ConsistencyError(u"filler", 1, len(self.filler))
             self._dirty = False
@@ -1497,7 +1539,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self._dirty = False
 
 
@@ -1507,12 +1549,14 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetMdt, self)._write__seq(io)
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
 
 
         def _check(self):
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             self._dirty = False
 
 
@@ -1523,9 +1567,9 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
-            self.name_tpl = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
+            self.name_tpl = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -1536,19 +1580,25 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetOm, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_tpl).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
+            self._io.write_bytes_limit((self.name_tpl).encode(u"UTF-8"), 48, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
-            if len((self.name_tpl).encode(u"UTF-8")) != 48:
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
+            if len((self.name_tpl).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_tpl", 48, len((self.name_tpl).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_tpl).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_tpl", -1, KaitaiStream.byte_array_index_of((self.name_tpl).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -1561,10 +1611,10 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_oya = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
-            self.name_tpl = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_oya = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
+            self.name_tpl = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(8)
             self._dirty = False
 
@@ -1575,22 +1625,30 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetParts, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_oya).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_tpl).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_oya).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
+            self._io.write_bytes_limit((self.name_tpl).encode(u"UTF-8"), 48, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
-            if len((self.name_oya).encode(u"UTF-8")) != 12:
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
+            if len((self.name_oya).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_oya", 12, len((self.name_oya).encode(u"UTF-8")))
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_oya", -1, KaitaiStream.byte_array_index_of((self.name_oya).encode(u"UTF-8"), 0))
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
-            if len((self.name_tpl).encode(u"UTF-8")) != 48:
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
+            if len((self.name_tpl).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_tpl", 48, len((self.name_tpl).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_tpl).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_tpl", -1, KaitaiStream.byte_array_index_of((self.name_tpl).encode(u"UTF-8"), 0))
             if len(self.filler) != 8:
                 raise kaitaistruct.ConsistencyError(u"filler", 8, len(self.filler))
             self._dirty = False
@@ -1603,7 +1661,7 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -1614,13 +1672,15 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpSetPl, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -1633,8 +1693,8 @@ class Evd(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.name_mod = (self._io.read_bytes(12)).decode(u"UTF-8")
-            self.name_bin = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_mod = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"UTF-8")
+            self.name_bin = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self.filler = self._io.read_bytes(4)
             self._dirty = False
 
@@ -1645,16 +1705,20 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Evd.EvpShp, self)._write__seq(io)
-            self._io.write_bytes((self.name_mod).encode(u"UTF-8"))
-            self._io.write_bytes((self.name_bin).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_mod).encode(u"UTF-8"), 12, 0, 0)
+            self._io.write_bytes_limit((self.name_bin).encode(u"UTF-8"), 48, 0, 0)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_mod).encode(u"UTF-8")) != 12:
+            if len((self.name_mod).encode(u"UTF-8")) > 12:
                 raise kaitaistruct.ConsistencyError(u"name_mod", 12, len((self.name_mod).encode(u"UTF-8")))
-            if len((self.name_bin).encode(u"UTF-8")) != 48:
+            if KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_mod", -1, KaitaiStream.byte_array_index_of((self.name_mod).encode(u"UTF-8"), 0))
+            if len((self.name_bin).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_bin", 48, len((self.name_bin).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_bin", -1, KaitaiStream.byte_array_index_of((self.name_bin).encode(u"UTF-8"), 0))
             if len(self.filler) != 4:
                 raise kaitaistruct.ConsistencyError(u"filler", 4, len(self.filler))
             self._dirty = False
@@ -1691,15 +1755,16 @@ class Evd(ReadWriteKaitaiStruct):
 
 
     class FileEntry(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
+        def __init__(self, i, _io=None, _parent=None, _root=None):
             super(Evd.FileEntry, self).__init__(_io)
             self._parent = _parent
             self._root = _root
+            self.i = i
             self._should_write_raw_data = False
             self.raw_data__enabled = True
 
         def _read(self):
-            self.name_file = (self._io.read_bytes(48)).decode(u"UTF-8")
+            self.name_file = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
             self.offset = self._io.read_u4le()
             self.size = self._io.read_u4le()
             self.filler = self._io.read_bytes(8)
@@ -1717,21 +1782,21 @@ class Evd(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Evd.FileEntry, self)._write__seq(io)
             self._should_write_raw_data = self.raw_data__enabled
-            self._io.write_bytes((self.name_file).encode(u"UTF-8"))
+            self._io.write_bytes_limit((self.name_file).encode(u"UTF-8"), 48, 0, 0)
             self._io.write_u4le(self.offset)
             self._io.write_u4le(self.size)
             self._io.write_bytes(self.filler)
 
 
         def _check(self):
-            if len((self.name_file).encode(u"UTF-8")) != 48:
+            if len((self.name_file).encode(u"UTF-8")) > 48:
                 raise kaitaistruct.ConsistencyError(u"name_file", 48, len((self.name_file).encode(u"UTF-8")))
+            if KaitaiStream.byte_array_index_of((self.name_file).encode(u"UTF-8"), 0) != -1:
+                raise kaitaistruct.ConsistencyError(u"name_file", -1, KaitaiStream.byte_array_index_of((self.name_file).encode(u"UTF-8"), 0))
             if len(self.filler) != 8:
                 raise kaitaistruct.ConsistencyError(u"filler", 8, len(self.filler))
             if self.raw_data__enabled:
                 pass
-                if len(self._m_raw_data) != self.size:
-                    raise kaitaistruct.ConsistencyError(u"raw_data", self.size, len(self._m_raw_data))
 
             self._dirty = False
 
@@ -1747,7 +1812,7 @@ class Evd(ReadWriteKaitaiStruct):
 
             _pos = self._io.pos()
             self._io.seek(self.offset)
-            self._m_raw_data = self._io.read_bytes(self.size)
+            self._m_raw_data = self._io.read_bytes((self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset))
             self._io.seek(_pos)
             return getattr(self, '_m_raw_data', None)
 
@@ -1760,6 +1825,8 @@ class Evd(ReadWriteKaitaiStruct):
             self._should_write_raw_data = False
             _pos = self._io.pos()
             self._io.seek(self.offset)
+            if len(self._m_raw_data) != (self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset):
+                raise kaitaistruct.ConsistencyError(u"raw_data", (self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset), len(self._m_raw_data))
             self._io.write_bytes(self._m_raw_data)
             self._io.seek(_pos)
 
@@ -1806,7 +1873,7 @@ class Evd(ReadWriteKaitaiStruct):
         self._io.seek(self.header.offst_bin_tbl)
         self._m_file_entries = []
         for i in range(self.header.num_bin_tbl):
-            _t__m_file_entries = Evd.FileEntry(self._io, self, self._root)
+            _t__m_file_entries = Evd.FileEntry(i, self._io, self, self._root)
             try:
                 _t__m_file_entries._read()
             finally:

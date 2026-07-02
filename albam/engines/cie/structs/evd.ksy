@@ -15,7 +15,7 @@ instances:
     repeat-until: _io.pos >= header.offset_pac + header.size_pac
   file_entries:
     pos: header.offst_bin_tbl
-    type: file_entry
+    type: file_entry(_index)
     repeat: expr
     repeat-expr: header.num_bin_tbl
  
@@ -81,48 +81,51 @@ types:
             'evp_tp::evp_tp_focus': evp_focus
             'evp_tp::evp_tp_set_mdt': evp_set_mdt
   file_entry:
+    params:
+      - id: i
+        type: s4
     seq:
-      - {id: name_file, type: str, size: 48, encoding: UTF-8}
+      - {id: name_file, type: str, size: 48, encoding: UTF-8, terminator: 0}
       - {id: offset, type: u4}
       - {id: size, type: u4}
       - {id: filler, size: 8}
     instances:
       raw_data:
         pos: offset
-        size: size
+        size: "i == _parent.header.num_bin_tbl - 1 ? (_io.size - offset) : (_parent.file_entries[i + 1].offset - offset)"
       
   evp_set_pl:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}  
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}  
       - {id: filler, size: 4}
   evp_set_em:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}  
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}  
       - {id: filler, size: 4}
   evp_set_om:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
-      - {id: name_tpl, type: str, size: 48, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
+      - {id: name_tpl, type: str, size: 48, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_set_parts:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
-      - {id: name_oya, type: str, size: 12, encoding: UTF-8}
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
-      - {id: name_tpl, type: str, size: 48, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_oya, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
+      - {id: name_tpl, type: str, size: 48, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 8}
   evp_set_eff:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   evp_set_list:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: no_list, type: u4}
       - {id: filler, size: 1}
   evp_cam:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   evp_cam_pos:
     seq:
       - {id: pos, type: vec3}
@@ -134,41 +137,41 @@ types:
       - {id: filler, size: 12}
   evp_pos:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
-      - {id: name_oya, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_oya, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: pos, type: vec3}
       - {id: ang, type: vec3}
       - {id: parts_no, type: u4}
       - {id: filler, size: 12}
   evp_pos_pl:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 8}
   evp_mot:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: name_bin, type: str, size: 48, encoding: UTF-8}
       - {id: filler, size: 4}
   evp_shp:
      seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_esp:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: kind, type: u4, enum: evt_esp_kind_id}
       - {id: id_est, type: u4}
       - {id: filler, size: 12}
   evp_lit:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   evp_fog:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   evp_focus:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   evp_str:
     seq:
       - {id: no_tar, type: u4}
@@ -197,36 +200,36 @@ types:
       - {id: filler, size: 8}  
   evp_parent_on:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
-      - {id: name_oya, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
+      - {id: name_oya, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 8}     
   evp_parent_off:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}     
   evp_end_pl:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_end_em:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_end_om:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_end_list:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}
   evp_end_parts:
     seq:
-      - {id: name_mod, type: str, size: 12, encoding: UTF-8}
+      - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}
       - {id: filler, size: 4}    
   evp_set_mdt:
     seq:
-      - {id: name_bin, type: str, size: 48, encoding: UTF-8}
+      - {id: name_bin, type: str, size: 48, encoding: UTF-8, terminator: 0}
   vec3:
     seq:
       - {id: x, type: f4}
