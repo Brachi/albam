@@ -447,6 +447,7 @@ def export_bin(bl_obj):
     vtx_locations = []
     vtx_normals = []
     vtx_uvs = []
+    vtx_colors = []
     separated_mesh_objs = []
     materials = []
 
