@@ -66,7 +66,7 @@ class LfsWrapper:
                 ext = udas.header.data_blocks.file_extension[i].ext
                 if not ext:
                     ext = "NULL"
-                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext.lower()}"
                 file_entries.append(fe)
         elif self.file_type in (".pack", ".yz2"):
             pack = self.parsed
@@ -74,7 +74,7 @@ class LfsWrapper:
             fe_base_name = fe_base_name.split(".")[0] + "_"
             for i, fe in enumerate(pack.file_entries):
                 ext = ".dds" if fe.data.is_dds else ".tga"
-                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}{ext}"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}{ext.lower()}"
                 file_entries.append(fe)
         elif self.file_type == ".evd":
             evd = self.parsed

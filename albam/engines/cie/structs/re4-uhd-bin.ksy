@@ -20,6 +20,8 @@ instances:
         false: fmtbin_weight
     repeat: expr
     repeat-expr: header.num_weights
+  morphs:
+    {pos: header.offset_morphs, type: morph_bin_section, if: header.offset_morphs > 0 }
   bone_pairs:
     {pos: header.offset_bonepairs, type: bone_pair, if: header.offset_bonepairs > 0}
   adjacent:
@@ -59,7 +61,7 @@ types:
       - {id: texture1_flags, type: u2} # bin flags
       - {id: texture2_flags, type: u2}
       - {id: num_tpl, type: u4} # tpl_count
-      - {id: vertex_scale, type: u1}
+      - {id: vertex_scale, type: u1} # used for converting morphs
       - {id: unk_02, type: u1}
       - {id: num_weights2, type: u2} # weight2_count
       - {id: offset_morphs, type: u4} # morph_offset
@@ -86,6 +88,32 @@ types:
     instances:
       size_:
         value: 4 + count[3] * 2
+
+  morph_bin_section:
+    seq:
+      - {id: num_morph, type: u4}
+      - {id: groups, type: morph_group, repeat: expr, repeat-expr: num_morph}
+
+  morph_group:
+    seq:
+      - {id: offset, type: u4}
+      - {id: count, type: u4}
+    instances:
+      body:
+        pos: _root.header.offset_morphs + offset
+        type: morph_group_body
+
+  morph_group_body:
+    seq:
+      - {id: header, type: u4}
+      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.count}
+
+  morph_vertex:
+    seq:
+      - {id: vertex_id, type: u2}
+      - {id: pos_x, type: s2}
+      - {id: pos_y, type: s2}
+      - {id: pos_z, type: s2}
 
   bone_pair:
     seq:

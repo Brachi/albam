@@ -40,7 +40,7 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
         )
 
 
-@blender_registry.register_import_function(app_id="re4uhd", extension="BIN", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="re4uhd", extension="bin", albam_asset_type="MODEL")
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     bin_bytes = vfile.get_bytes()
     bl_object_name = vfile.display_name
@@ -72,8 +72,8 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     bl_mesh.normals_split_custom_set(loop_normals)
 
     _apply_materials(bl_mesh, bin, mat_face_ranges)
-
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
+    _build_shape_keys(bl_mesh_ob, bin)
 
     # usually only one armature is full, other bin files include only bones used by the mesh
     shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
@@ -102,6 +102,24 @@ def _yz_flip(x, y, z):
 def _zy_flip(x, y, z):
     """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
     return (x / GLOBAL_SCALE, y / GLOBAL_SCALE, -z / GLOBAL_SCALE)  # in some cases returned as generator
+
+
+def _build_shape_keys(bl_ob, bin):
+    if not bin.morphs:
+        return
+    extra_scale = 2 ** bin.header.vertex_scale
+
+    def _yz_flip_scaled(x, y, z):
+        return ((x / extra_scale), (z / extra_scale), (y / extra_scale))
+    bl_ob.shape_key_add(name="Basis", from_mix=False)
+
+    for i, morph in enumerate(bin.morphs.groups):
+        sk = bl_ob.shape_key_add(name=str(i), from_mix=False)
+        for i, vtx in enumerate(morph.body.vertices):
+            vtx_shift = _yz_flip_scaled(vtx.pos_x, vtx.pos_y, vtx.pos_z)
+            sk.data[vtx.vertex_id].co.x += vtx_shift[0] * GLOBAL_SCALE
+            sk.data[vtx.vertex_id].co.y += vtx_shift[1] * GLOBAL_SCALE
+            sk.data[vtx.vertex_id].co.z += vtx_shift[2] * GLOBAL_SCALE
 
 
 def _decode_normal(n):
@@ -353,7 +371,7 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
             return None
 
 
-@blender_registry.register_import_options_custom_draw_func(extension='BIN')
+@blender_registry.register_import_options_custom_draw_func(extension='bin')
 def draw_bin_options(panel_instance, context):
     panel_instance.bl_label = "BIN Options"
     layout = panel_instance.layout
@@ -363,12 +381,12 @@ def draw_bin_options(panel_instance, context):
     layout.prop(context.scene.albam.import_options_bin, 'shared_armature', text="")
 
 
-@blender_registry.register_import_options_custom_poll_func(extension='BIN')
+@blender_registry.register_import_options_custom_poll_func(extension='bin')
 def poll_bin_options(panel_instance, context):
     return True
 
 
-@blender_registry.register_import_operator_poll_func(extension='BIN')
+@blender_registry.register_import_operator_poll_func(extension='bin')
 def poll_import_operator_for_bin(panel_class, context):
     return bool(context.scene.albam.import_options_bin.tpl_file_id)
 
@@ -439,7 +457,7 @@ def _serialize_vertex_normals(dst_bin, vtx_normals):
     return dst_vertex_normals
 
 
-@blender_registry.register_export_function(app_id="re4uhd", extension="BIN")
+@blender_registry.register_export_function(app_id="re4uhd", extension="bin")
 def export_bin(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id

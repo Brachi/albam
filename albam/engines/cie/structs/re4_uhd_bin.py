@@ -25,6 +25,8 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         self.indexes2__enabled = True
         self._should_write_materials = False
         self.materials__enabled = True
+        self._should_write_morphs = False
+        self.morphs__enabled = True
         self._should_write_normals = False
         self.normals__enabled = True
         self._should_write_texcoords = False
@@ -85,6 +87,11 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
                 self._m_materials[i]._fetch_instances()
 
 
+        _ = self.morphs
+        if hasattr(self, '_m_morphs'):
+            pass
+            self._m_morphs._fetch_instances()
+
         _ = self.normals
         if hasattr(self, '_m_normals'):
             pass
@@ -141,6 +148,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         self._should_write_indexes = self.indexes__enabled
         self._should_write_indexes2 = self.indexes2__enabled
         self._should_write_materials = self.materials__enabled
+        self._should_write_morphs = self.morphs__enabled
         self._should_write_normals = self.normals__enabled
         self._should_write_texcoords = self.texcoords__enabled
         self._should_write_vertex_colors = self.vertex_colors__enabled
@@ -218,6 +226,16 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"materials", self._root, self._m_materials[i]._root)
                 if self._m_materials[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"materials", self, self._m_materials[i]._parent)
+
+
+        if self.morphs__enabled:
+            pass
+            if self.header.offset_morphs > 0:
+                pass
+                if self._m_morphs._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"morphs", self._root, self._m_morphs._root)
+                if self._m_morphs._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"morphs", self, self._m_morphs._parent)
 
 
         if self.normals__enabled:
@@ -702,6 +720,204 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
+    class MorphBinSection(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.MorphBinSection, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.num_morph = self._io.read_u4le()
+            self.groups = []
+            for i in range(self.num_morph):
+                _t_groups = Re4UhdBin.MorphGroup(self._io, self, self._root)
+                try:
+                    _t_groups._read()
+                finally:
+                    self.groups.append(_t_groups)
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.groups)):
+                pass
+                self.groups[i]._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.MorphBinSection, self)._write__seq(io)
+            self._io.write_u4le(self.num_morph)
+            for i in range(len(self.groups)):
+                pass
+                self.groups[i]._write__seq(self._io)
+
+
+
+        def _check(self):
+            if len(self.groups) != self.num_morph:
+                raise kaitaistruct.ConsistencyError(u"groups", self.num_morph, len(self.groups))
+            for i in range(len(self.groups)):
+                pass
+                if self.groups[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"groups", self._root, self.groups[i]._root)
+                if self.groups[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"groups", self, self.groups[i]._parent)
+
+            self._dirty = False
+
+
+    class MorphGroup(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.MorphGroup, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._should_write_body = False
+            self.body__enabled = True
+
+        def _read(self):
+            self.offset = self._io.read_u4le()
+            self.count = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                self._m_body._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.MorphGroup, self)._write__seq(io)
+            self._should_write_body = self.body__enabled
+            self._io.write_u4le(self.offset)
+            self._io.write_u4le(self.count)
+
+
+        def _check(self):
+            if self.body__enabled:
+                pass
+                if self._m_body._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"body", self._root, self._m_body._root)
+                if self._m_body._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"body", self, self._m_body._parent)
+
+            self._dirty = False
+
+        @property
+        def body(self):
+            if self._should_write_body:
+                self._write_body()
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            if not self.body__enabled:
+                return None
+
+            _pos = self._io.pos()
+            self._io.seek(self._root.header.offset_morphs + self.offset)
+            self._m_body = Re4UhdBin.MorphGroupBody(self._io, self, self._root)
+            self._m_body._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+        @body.setter
+        def body(self, v):
+            self._dirty = True
+            self._m_body = v
+
+        def _write_body(self):
+            self._should_write_body = False
+            _pos = self._io.pos()
+            self._io.seek(self._root.header.offset_morphs + self.offset)
+            self._m_body._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+    class MorphGroupBody(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.MorphGroupBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.header = self._io.read_u4le()
+            self.vertices = []
+            for i in range(self._parent.count):
+                _t_vertices = Re4UhdBin.MorphVertex(self._io, self, self._root)
+                try:
+                    _t_vertices._read()
+                finally:
+                    self.vertices.append(_t_vertices)
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.vertices)):
+                pass
+                self.vertices[i]._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.MorphGroupBody, self)._write__seq(io)
+            self._io.write_u4le(self.header)
+            for i in range(len(self.vertices)):
+                pass
+                self.vertices[i]._write__seq(self._io)
+
+
+
+        def _check(self):
+            if len(self.vertices) != self._parent.count:
+                raise kaitaistruct.ConsistencyError(u"vertices", self._parent.count, len(self.vertices))
+            for i in range(len(self.vertices)):
+                pass
+                if self.vertices[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"vertices", self._root, self.vertices[i]._root)
+                if self.vertices[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"vertices", self, self.vertices[i]._parent)
+
+            self._dirty = False
+
+
+    class MorphVertex(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.MorphVertex, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.vertex_id = self._io.read_u2le()
+            self.pos_x = self._io.read_s2le()
+            self.pos_y = self._io.read_s2le()
+            self.pos_z = self._io.read_s2le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.MorphVertex, self)._write__seq(io)
+            self._io.write_u2le(self.vertex_id)
+            self._io.write_s2le(self.pos_x)
+            self._io.write_s2le(self.pos_y)
+            self._io.write_s2le(self.pos_z)
+
+
+        def _check(self):
+            self._dirty = False
+
+
     class PairLine(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Re4UhdBin.PairLine, self).__init__(_io)
@@ -1147,6 +1363,41 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._m_materials[i]._write__seq(self._io)
 
         self._io.seek(_pos)
+
+    @property
+    def morphs(self):
+        if self._should_write_morphs:
+            self._write_morphs()
+        if hasattr(self, '_m_morphs'):
+            return self._m_morphs
+
+        if not self.morphs__enabled:
+            return None
+
+        if self.header.offset_morphs > 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_morphs)
+            self._m_morphs = Re4UhdBin.MorphBinSection(self._io, self, self._root)
+            self._m_morphs._read()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_morphs', None)
+
+    @morphs.setter
+    def morphs(self, v):
+        self._dirty = True
+        self._m_morphs = v
+
+    def _write_morphs(self):
+        self._should_write_morphs = False
+        if self.header.offset_morphs > 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_morphs)
+            self._m_morphs._write__seq(self._io)
+            self._io.seek(_pos)
+
 
     @property
     def normals(self):
