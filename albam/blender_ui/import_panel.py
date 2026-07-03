@@ -525,7 +525,7 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
                         exportable.bl_object = bl_object
                         context.scene.albam.exportable.file_list.update()
                     imported_count += 1
-            except Exception as e:
+            except Exception:
                 failed.append(vfile.display_name)
 
         msg = f"Imported {imported_count} .mod file(s)"
