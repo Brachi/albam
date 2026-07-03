@@ -27,7 +27,7 @@ def _process_tpls(tpl_id):
         tpl_entry = {
             "tpl_name": tpl_vfile.display_name,
             "tpl_entry": te,
-            "pack_name": str(hex(te.image_data.ids.pack_id))[2:],
+            "pack_name": f"{te.image_data.ids.pack_id:08x}",
             "pack_name_vfile": "",
             "texture_id": te.image_data.ids.texture_id,
             "width": te.image_data.width,

@@ -5,7 +5,7 @@ from .structs.lfs import Lfs
 from .structs.udas import Udas
 from .structs.pack import Pack
 from .structs.evd import Evd
-from ...albam_vendor import xcompress
+from ...albam_vendor import lfs_decompress as xcompress
 
 
 @blender_registry.register_archive_loader(app_id="re4uhd", extension="lfs")
@@ -16,9 +16,15 @@ def lfs_loader(vfile, context=None):
         yield file_entry.file_path_with_ext
 
 
+_lfs_cache = {}
+
+
 @blender_registry.register_archive_accessor(app_id="re4uhd", extension="lfs")
 def arc_accessor(vfile, context):
-    lfs = LfsWrapper(vfile.root_vfile.absolute_path)
+    abs_path = vfile.root_vfile.absolute_path
+    if abs_path not in _lfs_cache:
+        _lfs_cache[abs_path] = LfsWrapper(abs_path)
+    lfs = _lfs_cache[abs_path]
 
     path = vfile.relative_path_windows
     path_no_ext = str(vfile.relative_path_windows_no_ext)
@@ -63,10 +69,10 @@ class LfsWrapper:
             fe_base_name = os.path.basename(self.file_path)
             fe_base_name = fe_base_name.split(".")[0] + "_"
             for i, fe in enumerate(udas.header.data_blocks.file_entries):
-                ext = udas.header.data_blocks.file_extension[i].ext
+                ext = udas.header.data_blocks.file_extension[i].ext.lower()
                 if not ext:
                     ext = "NULL"
-                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext.lower()}"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
                 file_entries.append(fe)
         elif self.file_type in (".pack", ".yz2"):
             pack = self.parsed
@@ -74,7 +80,7 @@ class LfsWrapper:
             fe_base_name = fe_base_name.split(".")[0] + "_"
             for i, fe in enumerate(pack.file_entries):
                 ext = ".dds" if fe.data.is_dds else ".tga"
-                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}{ext.lower()}"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}{ext}"
                 file_entries.append(fe)
         elif self.file_type == ".evd":
             evd = self.parsed
@@ -90,7 +96,7 @@ class LfsWrapper:
             file_id = None
         if self.file_type == ".udas":
             for i,  fe in enumerate(self.parsed.header.data_blocks.file_entries):
-                if i == file_id and self.parsed.header.data_blocks.file_extension[i].ext == file_type:
+                if i == file_id and self.parsed.header.data_blocks.file_extension[i].ext.lower() == file_type.lower():
                     return fe.raw_data
         elif self.file_type == ".pack":
             for i, fe in enumerate(self.parsed.file_entries):
