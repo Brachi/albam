@@ -51,6 +51,7 @@ class AlbamApps(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop_albam(name="import_settings")
 class AlbamImportSettings(bpy.types.PropertyGroup):
     import_only_main_lods: bpy.props.BoolProperty(default=True)
+    batch_import_folder: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
@@ -60,7 +61,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
+        batch = context.scene.albam.import_settings.batch_import_folder
         vfile = self.get_selected_item(context)
+
+        if batch and vfile and vfile.is_expandable:
+            return self._execute_batch(vfile, context)
+
         try:
             bl_object = self._execute(vfile, context)
             # Animations right now don't return a blender object
@@ -77,6 +83,45 @@ class ALBAM_OT_Import(bpy.types.Operator):
             bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
+        return {"FINISHED"}
+
+    def _execute_batch(self, folder_item, context):
+        vfs = context.scene.albam.vfs
+        folder_node_id = folder_item.name
+        imported_count = 0
+        failed = []
+
+        for item in vfs.file_list:
+            if item.is_expandable:
+                continue
+            if not item.display_name.lower().endswith(".mod"):
+                continue
+            if (item.app_id, item.extension) not in blender_registry.importable_extensions:
+                continue
+            is_child = False
+            for ancestor in item.tree_node_ancestors:
+                if ancestor.node_id == folder_node_id:
+                    is_child = True
+                    break
+            if not is_child:
+                continue
+            try:
+                bl_object = self._execute(item, context)
+                if bl_object:
+                    bl_object.albam_asset.original_bytes = item.get_bytes()
+                    bl_object.albam_asset.app_id = item.app_id
+                    bl_object.albam_asset.relative_path = item.relative_path
+                    bl_object.albam_asset.extension = item.extension
+                    self._set_asset_type(item, bl_object)
+                    self._make_exportable(item, bl_object, context)
+                    imported_count += 1
+            except Exception:
+                failed.append(item.display_name)
+
+        msg = f"Batch imported {imported_count} .mod file(s)"
+        if failed:
+            msg += f", {len(failed)} failed: {', '.join(failed)}"
+        self.report({'INFO'}, msg)
         return {"FINISHED"}
 
     def _make_exportable(self, vfile, bl_object, context):
@@ -116,7 +161,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         item = cls.get_selected_item(context)
-        if not item or (item.app_id, item.extension) not in blender_registry.importable_extensions:
+        if not item:
+            return False
+        batch = context.scene.albam.import_settings.batch_import_folder
+        if batch and item.is_expandable:
+            return True
+        if (item.app_id, item.extension) not in blender_registry.importable_extensions:
             return False
         custom_poll_func = blender_registry.import_operator_poll_funcs.get(item.extension)
         if custom_poll_func:
@@ -411,6 +461,7 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
         import_settings = context.scene.albam.import_settings
         layout = self.layout
         layout.prop(import_settings, "import_only_main_lods", text="Import main LODs only")
+        layout.prop(import_settings, "batch_import_folder", text="Batch import folder (.mod)")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
