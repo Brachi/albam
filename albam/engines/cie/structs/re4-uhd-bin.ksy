@@ -21,7 +21,7 @@ instances:
     repeat: expr
     repeat-expr: header.num_weights
   morphs:
-    {pos: header.offset_morphs, type: morph_bin_section, if: header.offset_morphs > 0 }
+    {pos: header.offset_morphs, type: morph_block, if: header.offset_morphs > 0 }
   bone_pairs:
     {pos: header.offset_bonepairs, type: bone_pair, if: header.offset_bonepairs > 0}
   adjacent:
@@ -89,15 +89,15 @@ types:
       size_:
         value: 4 + count[3] * 2
 
-  morph_bin_section:
+  morph_block:
     seq:
-      - {id: num_morph, type: u4}
-      - {id: groups, type: morph_group, repeat: expr, repeat-expr: num_morph}
+      - {id: num_morph_groups, type: u4}
+      - {id: morph_groups, type: morph_group, repeat: expr, repeat-expr: num_morph_groups}
 
   morph_group:
     seq:
       - {id: offset, type: u4}
-      - {id: count, type: u4}
+      - {id: num_vertices, type: u4}
     instances:
       body:
         pos: _root.header.offset_morphs + offset
@@ -106,14 +106,15 @@ types:
   morph_group_body:
     seq:
       - {id: header, type: u4}
-      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.count}
+      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.num_vertices}
 
   morph_vertex:
     seq:
-      - {id: vertex_id, type: u2}
-      - {id: pos_x, type: s2}
-      - {id: pos_y, type: s2}
-      - {id: pos_z, type: s2}
+      - {id: id, type: u2}
+      - {id: position, type: vec3s2}
+      #- {id: pos_x, type: s2}
+      #- {id: pos_y, type: s2}
+      #- {id: pos_z, type: s2}
 
   bone_pair:
     seq:
@@ -204,6 +205,12 @@ types:
       - {id: x, type: f4}
       - {id: y, type: f4}
       - {id: z, type: f4}
+
+  vec3s2:
+    seq:
+      - {id: x, type: s2}
+      - {id: y, type: s2}
+      - {id: z, type: s2}
 
   uv:
     seq:

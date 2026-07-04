@@ -111,15 +111,17 @@ def _build_shape_keys(bl_ob, bin):
 
     def _yz_flip_scaled(x, y, z):
         return ((x / extra_scale), (z / extra_scale), (y / extra_scale))
-    bl_ob.shape_key_add(name="Basis", from_mix=False)
 
-    for i, morph in enumerate(bin.morphs.groups):
-        sk = bl_ob.shape_key_add(name=str(i), from_mix=False)
-        for i, vtx in enumerate(morph.body.vertices):
-            vtx_shift = _yz_flip_scaled(vtx.pos_x, vtx.pos_y, vtx.pos_z)
-            sk.data[vtx.vertex_id].co.x += vtx_shift[0] * GLOBAL_SCALE
-            sk.data[vtx.vertex_id].co.y += vtx_shift[1] * GLOBAL_SCALE
-            sk.data[vtx.vertex_id].co.z += vtx_shift[2] * GLOBAL_SCALE
+    bl_ob.shape_key_add(name="Basis", from_mix=False)
+    for i, mgroup in enumerate(bin.morphs.morph_groups):
+        sk = bl_ob.shape_key_add(name=str(i).zfill(3), from_mix=False)
+        for i, vtx in enumerate(mgroup.body.vertices):
+            vtx_shift = _yz_flip_scaled(vtx.position.x,
+                                        vtx.position.y,
+                                        vtx.position.z)
+            sk.data[vtx.id].co.x += vtx_shift[0] * GLOBAL_SCALE
+            sk.data[vtx.id].co.y += vtx_shift[1] * GLOBAL_SCALE
+            sk.data[vtx.id].co.z += vtx_shift[2] * GLOBAL_SCALE
 
 
 def _decode_normal(n):

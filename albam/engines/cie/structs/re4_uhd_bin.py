@@ -720,51 +720,51 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
-    class MorphBinSection(ReadWriteKaitaiStruct):
+    class MorphBlock(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
-            super(Re4UhdBin.MorphBinSection, self).__init__(_io)
+            super(Re4UhdBin.MorphBlock, self).__init__(_io)
             self._parent = _parent
             self._root = _root
 
         def _read(self):
-            self.num_morph = self._io.read_u4le()
-            self.groups = []
-            for i in range(self.num_morph):
-                _t_groups = Re4UhdBin.MorphGroup(self._io, self, self._root)
+            self.num_morph_groups = self._io.read_u4le()
+            self.morph_groups = []
+            for i in range(self.num_morph_groups):
+                _t_morph_groups = Re4UhdBin.MorphGroup(self._io, self, self._root)
                 try:
-                    _t_groups._read()
+                    _t_morph_groups._read()
                 finally:
-                    self.groups.append(_t_groups)
+                    self.morph_groups.append(_t_morph_groups)
 
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
-            for i in range(len(self.groups)):
+            for i in range(len(self.morph_groups)):
                 pass
-                self.groups[i]._fetch_instances()
+                self.morph_groups[i]._fetch_instances()
 
 
 
         def _write__seq(self, io=None):
-            super(Re4UhdBin.MorphBinSection, self)._write__seq(io)
-            self._io.write_u4le(self.num_morph)
-            for i in range(len(self.groups)):
+            super(Re4UhdBin.MorphBlock, self)._write__seq(io)
+            self._io.write_u4le(self.num_morph_groups)
+            for i in range(len(self.morph_groups)):
                 pass
-                self.groups[i]._write__seq(self._io)
+                self.morph_groups[i]._write__seq(self._io)
 
 
 
         def _check(self):
-            if len(self.groups) != self.num_morph:
-                raise kaitaistruct.ConsistencyError(u"groups", self.num_morph, len(self.groups))
-            for i in range(len(self.groups)):
+            if len(self.morph_groups) != self.num_morph_groups:
+                raise kaitaistruct.ConsistencyError(u"morph_groups", self.num_morph_groups, len(self.morph_groups))
+            for i in range(len(self.morph_groups)):
                 pass
-                if self.groups[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"groups", self._root, self.groups[i]._root)
-                if self.groups[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"groups", self, self.groups[i]._parent)
+                if self.morph_groups[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"morph_groups", self._root, self.morph_groups[i]._root)
+                if self.morph_groups[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"morph_groups", self, self.morph_groups[i]._parent)
 
             self._dirty = False
 
@@ -779,7 +779,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.offset = self._io.read_u4le()
-            self.count = self._io.read_u4le()
+            self.num_vertices = self._io.read_u4le()
             self._dirty = False
 
 
@@ -796,7 +796,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             super(Re4UhdBin.MorphGroup, self)._write__seq(io)
             self._should_write_body = self.body__enabled
             self._io.write_u4le(self.offset)
-            self._io.write_u4le(self.count)
+            self._io.write_u4le(self.num_vertices)
 
 
         def _check(self):
@@ -848,7 +848,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _read(self):
             self.header = self._io.read_u4le()
             self.vertices = []
-            for i in range(self._parent.count):
+            for i in range(self._parent.num_vertices):
                 _t_vertices = Re4UhdBin.MorphVertex(self._io, self, self._root)
                 try:
                     _t_vertices._read()
@@ -876,8 +876,8 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if len(self.vertices) != self._parent.count:
-                raise kaitaistruct.ConsistencyError(u"vertices", self._parent.count, len(self.vertices))
+            if len(self.vertices) != self._parent.num_vertices:
+                raise kaitaistruct.ConsistencyError(u"vertices", self._parent.num_vertices, len(self.vertices))
             for i in range(len(self.vertices)):
                 pass
                 if self.vertices[i]._root != self._root:
@@ -895,26 +895,28 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.vertex_id = self._io.read_u2le()
-            self.pos_x = self._io.read_s2le()
-            self.pos_y = self._io.read_s2le()
-            self.pos_z = self._io.read_s2le()
+            self.id = self._io.read_u2le()
+            self.position = Re4UhdBin.Vec3s2(self._io, self, self._root)
+            self.position._read()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            self.position._fetch_instances()
 
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.MorphVertex, self)._write__seq(io)
-            self._io.write_u2le(self.vertex_id)
-            self._io.write_s2le(self.pos_x)
-            self._io.write_s2le(self.pos_y)
-            self._io.write_s2le(self.pos_z)
+            self._io.write_u2le(self.id)
+            self.position._write__seq(self._io)
 
 
         def _check(self):
+            if self.position._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"position", self._root, self.position._root)
+            if self.position._parent != self:
+                raise kaitaistruct.ConsistencyError(u"position", self, self.position._parent)
             self._dirty = False
 
 
@@ -1132,6 +1134,34 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.x)
             self._io.write_f4le(self.y)
             self._io.write_f4le(self.z)
+
+
+        def _check(self):
+            self._dirty = False
+
+
+    class Vec3s2(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.Vec3s2, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_s2le()
+            self.y = self._io.read_s2le()
+            self.z = self._io.read_s2le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.Vec3s2, self)._write__seq(io)
+            self._io.write_s2le(self.x)
+            self._io.write_s2le(self.y)
+            self._io.write_s2le(self.z)
 
 
         def _check(self):
@@ -1378,7 +1408,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             pass
             _pos = self._io.pos()
             self._io.seek(self.header.offset_morphs)
-            self._m_morphs = Re4UhdBin.MorphBinSection(self._io, self, self._root)
+            self._m_morphs = Re4UhdBin.MorphBlock(self._io, self, self._root)
             self._m_morphs._read()
             self._io.seek(_pos)
 
