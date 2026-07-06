@@ -5,6 +5,7 @@ from .structs.lfs import Lfs
 from .structs.udas import Udas
 from .structs.pack import Pack
 from .structs.evd import Evd
+from .structs.dat import Dat
 from ...albam_vendor import lfs_decompress as xcompress
 
 
@@ -51,6 +52,10 @@ class LfsWrapper:
             udas = Udas.from_bytes(decompressed)
             udas._read()
             return udas
+        elif self.file_type == ".dat":
+            dat = Dat.from_bytes(decompressed)
+            dat._read()
+            return dat
         elif self.file_type == ".pack":
             pack = Pack.from_bytes(decompressed)
             pack._read()
@@ -68,8 +73,18 @@ class LfsWrapper:
             udas = self.parsed
             fe_base_name = os.path.basename(self.file_path)
             fe_base_name = fe_base_name.split(".")[0] + "_"
-            for i, fe in enumerate(udas.header.data_blocks.file_entries):
-                ext = udas.header.data_blocks.file_extension[i].ext.lower()
+            for i, fe in enumerate(udas.header.file_entries):
+                ext = udas.header.file_extension[i].ext.lower()
+                if not ext:
+                    ext = "NULL"
+                fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
+                file_entries.append(fe)
+        elif self.file_type == ".dat":
+            dat = self.parsed
+            fe_base_name = os.path.basename(self.file_path)
+            fe_base_name = fe_base_name.split(".")[0] + "_"
+            for i, fe in enumerate(dat.header.file_entries):
+                ext = dat.header.file_extension[i].ext.lower()
                 if not ext:
                     ext = "NULL"
                 fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
@@ -97,6 +112,10 @@ class LfsWrapper:
         if self.file_type == ".udas":
             for i,  fe in enumerate(self.parsed.header.data_blocks.file_entries):
                 if i == file_id and self.parsed.header.data_blocks.file_extension[i].ext.lower() == file_type.lower():
+                    return fe.raw_data
+        elif self.file_type == ".dat":
+            for i, fe in enumerate(self.parsed.header.file_entries):
+                if i == file_id and self.parsed.header.file_extension[i].ext.lower() == file_type.lower():
                     return fe.raw_data
         elif self.file_type == ".pack":
             for i, fe in enumerate(self.parsed.file_entries):
