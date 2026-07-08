@@ -423,6 +423,65 @@ def _serialize_bones(dst_bin, bones):
         dst_bones.append(dst_bone)
     return dst_bones
 
+def _serialize_skinweights(dst_bin, vtx_weights):
+    dst_skinweights = []
+    for vw in vtx_weights.values():
+        dst_bin_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
+        count = 0
+        for w in vw:
+            dst_bin_weight.count = count
+            count += 1
+
+    return dst_skinweights
+
+
+def _serialize_morphs(dst_bin, scr_bin, bl_ob):
+    if not bl_ob.data.shape_keys or len(bl_ob.data.shape_keys.key_blocks) <= 1 or not scr_bin.morphs:
+        return
+
+    base_sk = [vtx.co for vtx in bl_ob.data.vertices]
+    extra_scale = 2 ** scr_bin.header.vertex_scale
+    num_morph_groups = scr_bin.morphs.num_morph_groups
+    src_morph_groups = scr_bin.morphs.morph_groups
+    morphs_size = 4
+
+    def _zy_flip_scaled(base_vtx_pos, sk_vtx_pos):
+        x = int((sk_vtx_pos.x - base_vtx_pos.x) * extra_scale / GLOBAL_SCALE)
+        y = int((sk_vtx_pos.y - base_vtx_pos.y) * extra_scale / GLOBAL_SCALE)
+        z = int((sk_vtx_pos.z - base_vtx_pos.z) * extra_scale / GLOBAL_SCALE)
+        return (x, y, -z)
+
+    morph_groups = []
+    sk_i = 0
+    for sk in bl_ob.data.shape_keys.key_blocks[1:num_morph_groups + 1]:
+        sk_i += 1
+        src_morph_group = src_morph_groups[sk_i]
+        morph_group = dst_bin.MorphGroup(_parent=dst_bin, _root=dst_bin._root)
+        morph_group.body = dst_bin.MorphBody(_parent=morph_group, _root=dst_bin._root)
+        morph_group.body.header = src_morph_group.body.header
+        morph_group.body.vertices = []
+        for i, vtx in enumerate(sk.data):
+            morph_vertex = dst_bin.MorphVertex(_parent=morph_group.body, _root=dst_bin._root)
+            morph_vertex.id = i
+            base_vtx_pos = base_sk[vtx.index]
+            vtx_shift = _zy_flip_scaled(base_vtx_pos, vtx.co)
+            morph_vertex.position.x = vtx_shift[0]
+            morph_vertex.position.y = vtx_shift[1]
+            morph_vertex.position.z = vtx_shift[2]
+            morph_group.body.vertices.append(morph_vertex)
+        morph_groups.append(morph_group)
+
+    start_group_offset = num_morph_groups * 8 + 16
+    for i, mg in enumerate(morph_groups):
+        morphs_size += 8
+        if mg.num_vertices > 0:
+            morphs_size += 4 + len(mg.body.vertices) * 8
+        mg.offset = start_group_offset
+        start_group_offset += 4 + len(mg.body.vertices) * 8
+    dst_bin.morphs = dst_bin.Morphs(_parent=dst_bin, _root=dst_bin._root)
+    dst_bin.morphs.morph_groups = morph_groups
+    return morphs_size + (16 - morphs_size % 16) % 16  # align to 16 bytes
+
 
 def _serialize_vertex_positions(dst_bin, vtx_locations):
     dst_vertex_positions = []
@@ -435,18 +494,6 @@ def _serialize_vertex_positions(dst_bin, vtx_locations):
         dst_vtx._check()
         dst_vertex_positions.append(dst_vtx)
     return dst_vertex_positions
-
-
-def _serialize_skinweights(dst_bin, vtx_weights):
-    dst_skinweights = []
-    for vw in vtx_weights.values():
-        dst_bin_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
-        count = 0
-        for w in vw:
-            dst_bin_weight.count = count
-            count += 1
-
-    return dst_skinweights
 
 
 def _serialize_vertex_normals(dst_bin, vtx_normals):
@@ -563,12 +610,7 @@ def export_bin(bl_obj):
     dst_adjacent.adj = src_bin.adjacent.adj
     dst_adjacent._check()
     dst_bin.adjacent = dst_adjacent
-    # bone pairs
-    if getattr(src_bin, "bone_pairs"):  # looks like doesn't exist in inherited armature bins
-        dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
-        dst_bone_pairs.num_pair = src_bin.bone_pairs.num_pair
-        dst_bone_pairs.line = [l for _, l in enumerate(src_bin.bone_pairs.line)]
-        dst_bin.bone_pair = dst_bone_pairs
+
     # bones
     bones = []
     match bin_type:
@@ -586,6 +628,20 @@ def export_bin(bl_obj):
             bones = _serialize_bones(dst_bin, inherited_bones)
     if not bin_type == 'static':
         dst_bin.bones = bones
+    bones_size = len(dst_bin.bones) * 16 + 16
+    # weights
+    dst_bin.weights = _serialize_skinweights(dst_bin, vtx_skinweights)
+    weight_block_size = 8 if len(bones) < 255 else 16
+    weights_size = len(dst_bin.weights) * weight_block_size + 16
+    # morphs
+    morphs_size = _serialize_morphs(dst_bin, src_bin, bl_mesh_ob)
+    # bone pairs
+    bone_pairs_size = 0
+    if getattr(src_bin, "bone_pairs"):  # looks like doesn't exist in inherited armature bins
+        dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
+        dst_bone_pairs.num_pair = src_bin.bone_pairs.num_pair
+        dst_bone_pairs.line = [l for _, l in enumerate(src_bin.bone_pairs.line)]
+        dst_bin.bone_pair = dst_bone_pairs
     # indexes
     dst_bin.indexes = src_bin.indexes
     # indexes2
@@ -594,12 +650,13 @@ def export_bin(bl_obj):
     dst_bin.materials = materials
     # normals
     dst_bin.normals = _serialize_vertex_normals(dst_bin, vtx_normals)
+    normals_size = len(dst_bin.normals) * 12
     # vertex colors
     dst_bin.vertex_colors = src_bin.vertex_colors
     # texcoords
     dst_bin.texcoords = src_bin.texcoords
     # vertex positions
     dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
-    # weights
-    dst_bin.weights = _serialize_skinweights(dst_bin, vtx_skinweights)
+
+    final_size = sum(dst_bin.header.size_, bones_size, weights_size, morphs_size, normals_size)
     return vfiles

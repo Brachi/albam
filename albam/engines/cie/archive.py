@@ -73,8 +73,8 @@ class LfsWrapper:
             udas = self.parsed
             fe_base_name = os.path.basename(self.file_path)
             fe_base_name = fe_base_name.split(".")[0] + "_"
-            for i, fe in enumerate(udas.header.file_entries):
-                ext = udas.header.file_extension[i].ext.lower()
+            for i, fe in enumerate(udas.header.data_blocks.file_entries):
+                ext = udas.header.data_blocks.file_extension[i].ext.lower()
                 if not ext:
                     ext = "NULL"
                 fe.file_path_with_ext = f"{fe_base_name}{str(i).zfill(3)}.{ext}"
