@@ -443,8 +443,6 @@ class ALBAM_PT_ImportButton(bpy.types.Panel):
         row = self.layout.row()
         row.operator("wm.import_options", icon="OPTIONS", text="")
         row.operator("albam.import_vfile", text="Import")
-        row = self.layout.row()
-        row.operator("albam.batch_import_folder", text="Batch Import Folder (.mod)")
         self.layout.row()
 
 
