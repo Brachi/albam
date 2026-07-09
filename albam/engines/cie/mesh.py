@@ -1,3 +1,5 @@
+from io import BytesIO
+from kaitaistruct import KaitaiStream
 import bpy
 from mathutils import Vector
 import math
@@ -393,6 +395,11 @@ def poll_import_operator_for_bin(panel_class, context):
     return bool(context.scene.albam.import_options_bin.tpl_file_id)
 
 
+def _calc_padding(size, alignment):
+    """Workaround for now, probably kaitai parser should do it"""
+    return (alignment - (size % alignment)) % alignment
+
+
 def _classify_mesh_ob(bl_mesh_ob):
     """
     As RE4UHD .bin files can have full or partial armature, we need to classify the mesh
@@ -423,6 +430,7 @@ def _serialize_bones(dst_bin, bones):
         dst_bones.append(dst_bone)
     return dst_bones
 
+
 def _serialize_skinweights(dst_bin, vtx_weights):
     dst_skinweights = []
     for vw in vtx_weights.values():
@@ -437,7 +445,7 @@ def _serialize_skinweights(dst_bin, vtx_weights):
 
 def _serialize_morphs(dst_bin, scr_bin, bl_ob):
     if not bl_ob.data.shape_keys or len(bl_ob.data.shape_keys.key_blocks) <= 1 or not scr_bin.morphs:
-        return
+        return 0
 
     base_sk = [vtx.co for vtx in bl_ob.data.vertices]
     extra_scale = 2 ** scr_bin.header.vertex_scale
@@ -480,7 +488,7 @@ def _serialize_morphs(dst_bin, scr_bin, bl_ob):
         start_group_offset += 4 + len(mg.body.vertices) * 8
     dst_bin.morphs = dst_bin.Morphs(_parent=dst_bin, _root=dst_bin._root)
     dst_bin.morphs.morph_groups = morph_groups
-    return morphs_size + (16 - morphs_size % 16) % 16  # align to 16 bytes
+    return morphs_size + _calc_padding(morphs_size, 16)
 
 
 def _serialize_vertex_positions(dst_bin, vtx_locations):
@@ -535,6 +543,7 @@ def export_bin(bl_obj):
         separated_mesh_objs.extend(split_mesh_by_material(bl_mesh_ob))
     move_to_collection(separated_mesh_objs, "AlbamTemp")
 
+    materials_size = 0
     for bl_mesh_ob in separated_mesh_objs:
         vtx_skinweights = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
         bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
@@ -550,6 +559,9 @@ def export_bin(bl_obj):
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
 
         strips_vtx = triangles_list_to_vtx_strips(bl_mesh_ob)
+        cur_mat_size = 24 + 12 + len(strips_vtx) * 4
+        cur_mat_size += _calc_padding(cur_mat_size, 16) + 16
+        materials_size += cur_mat_size
         dst_strips = []
         for strip in strips_vtx:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
@@ -604,13 +616,6 @@ def export_bin(bl_obj):
     dst_header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
     dst_header._check()
     dst_bin.header = dst_header
-    # adjacent
-    dst_adjacent = dst_bin.BoneAdj(_parent=dst_bin, _root=dst_bin._root)
-    dst_adjacent.count = src_bin.adjacent.count
-    dst_adjacent.adj = src_bin.adjacent.adj
-    dst_adjacent._check()
-    dst_bin.adjacent = dst_adjacent
-
     # bones
     bones = []
     match bin_type:
@@ -640,23 +645,65 @@ def export_bin(bl_obj):
     if getattr(src_bin, "bone_pairs"):  # looks like doesn't exist in inherited armature bins
         dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
         dst_bone_pairs.num_pair = src_bin.bone_pairs.num_pair
-        dst_bone_pairs.line = [l for _, l in enumerate(src_bin.bone_pairs.line)]
+        line_pairs = []
+        for i in range(src_bin.bone_pairs.num_pair):
+            line = dst_bin.PairLine(_parent=dst_bone_pairs, _root=dst_bin._root)
+            line.data = src_bin.bone_pairs.line[i].data
+            line_pairs.append(line)
+        dst_bone_pairs.line = line_pairs
+        dst_bone_pairs._check()
         dst_bin.bone_pair = dst_bone_pairs
+        bone_pairs_size = 4 + len(dst_bin.bone_pair.line) * 8
+        bone_pairs_size += _calc_padding(bone_pairs_size, 16)
+    # adjacent
+    dst_adjacent = dst_bin.BoneAdj(_parent=dst_bin, _root=dst_bin._root)
+    dst_adjacent.count = src_bin.adjacent.count
+    dst_adjacent.adj = src_bin.adjacent.adj
+    dst_adjacent._check()
+    adjacent_size = 4 + dst_adjacent.count[3] * 2  # count is probably num bones
+    adjacent_size += _calc_padding(adjacent_size, 16)
+    dst_bin.adjacent = dst_adjacent
+    # vertex positions
+    dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
+    vertex_positions_size = len(dst_bin.vertex_positions) * 12
+    vertex_positions_size += _calc_padding(vertex_positions_size, 16)
     # indexes
     dst_bin.indexes = src_bin.indexes
-    # indexes2
-    dst_bin.indexes2 = src_bin.indexes2
-    # materials
-    dst_bin.materials = materials
+    indexes_size = len(dst_bin.indexes) * 2
+    indexes_size += _calc_padding(indexes_size, 16)
     # normals
     dst_bin.normals = _serialize_vertex_normals(dst_bin, vtx_normals)
     normals_size = len(dst_bin.normals) * 12
+    normals_size += _calc_padding(normals_size, 16)
+    # indexes2
+    dst_bin.indexes2 = src_bin.indexes2
+    indexes2_size = len(dst_bin.indexes2) * 2
+    indexes2_size += _calc_padding(indexes2_size, 16)
     # vertex colors
     dst_bin.vertex_colors = src_bin.vertex_colors
+    vtx_colors_size = len(dst_bin.vertex_colors) * 4
+    vtx_colors_size += _calc_padding(vtx_colors_size, 16) + 16
     # texcoords
     dst_bin.texcoords = src_bin.texcoords
-    # vertex positions
-    dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
+    texcoords_size = len(dst_bin.texcoords) * 8
+    texcoords_size += _calc_padding(texcoords_size, 16) + 16
+    # materials
+    dst_bin.materials = materials
 
-    final_size = sum(dst_bin.header.size_, bones_size, weights_size, morphs_size, normals_size)
+    header_size = 96
+    final_size = sum((header_size,
+                     bones_size,
+                     weights_size,
+                     morphs_size,
+                     bone_pairs_size,
+                     adjacent_size,
+                     indexes_size,
+                     normals_size,
+                     indexes2_size,
+                     vtx_colors_size,
+                     texcoords_size,
+                     materials_size))
+    stream = KaitaiStream(BytesIO(bytearray(final_size)))
+    dst_bin._check()
+    dst_bin._write(stream)
     return vfiles
