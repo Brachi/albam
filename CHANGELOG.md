@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
+- Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
 
 ### Fixed
