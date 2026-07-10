@@ -22,3 +22,9 @@ def pytest_addoption(parser):
         action="store",
         help="Path to json file containing files to import. See tests/mtfw/datasets for examples"
     )
+    parser.addoption(
+        "--lfsdir",
+        action="append",
+        help="Format: <app-id>::<dir>: Directory to look for lfs files "
+        "to test with the app-id provided. Can be passed multiple times",
+    )
