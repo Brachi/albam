@@ -285,17 +285,14 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
     # Show bones in front of the mesh (same style as MT Framework armatures in albam)
     arm_ob.show_in_front = True
     arm_data.display_type = 'STICK'
-
-    print(f"[re4uhd] armature: {len(bin.bones)} bones")
     return arm_ob
 
 
-# -- Vertex weights ----------------------------------------------------------
 def _apply_weights(mesh_ob, bin):
     """
     Create vertex groups and assign bone weights.
 
-    bin.indexes[i]  = WeightMap index for vertex i (vertex_weight_index_offset)
+    bin.indexes[i]  = value is the index j for weights table bin.weights[j]
     bin.weights[j]  = WeightMap entry: up to 3 (bone_id, weight/255) pairs;
                       count tells how many bones are active (1-3).
     """
@@ -432,15 +429,57 @@ def _serialize_bones(dst_bin, bones):
 
 
 def _serialize_skinweights(dst_bin, vtx_weights):
+    limit = 3
     dst_skinweights = []
-    for vw in vtx_weights.values():
-        dst_bin_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
-        count = 0
-        for w in vw:
-            dst_bin_weight.count = count
-            count += 1
-
-    return dst_skinweights
+    dst_sw_indices = []
+    skinweights_palette = []
+    used_bones = set()
+    for weights_per_vertex in vtx_weights:
+        # influence list [(bone_index, weight), ...]
+        for vertex_index, influence_list in weights_per_vertex.items():
+            if len(influence_list) > limit:
+                influence_list = sorted(influence_list, key=lambda t: t[1])[-limit:]
+            weight_data = {t[0]: t[1] for t in influence_list}  # trasform to {bone_index: weight}
+            wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+            bone_indices = [bi for bi in wd_sorted.keys()]
+            weights = [w for w in wd_sorted.values()]
+            # normalize
+            total_weight = sum(weights)
+            if total_weight:
+                weights = [round((w / total_weight), 4) for w in weights]
+            # can't have zero values
+            weights = [round(w * 255) or 1 for w in weights]
+            excess = sum(weights) - 255
+            if excess:
+                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+                weights[max_index] -= excess
+            used_bones.update(bone_indices)
+            bone_key = tuple(bone_indices)
+            weight_key = tuple(weights)
+            try:
+                skinweight_index = skinweights_palette.index((bone_key, weight_key))
+            except ValueError:
+                skinweights_palette.append((bone_key, weight_key))
+                skinweight_index = len(skinweights_palette) - 1
+            dst_sw_indices.append(skinweight_index)
+        for bone_key, weight_key in skinweights_palette:
+            if len(used_bones) > 255:
+                dst_weight = dst_bin.FmtbinWeightExt(_parent=dst_bin, _root=dst_bin._root)
+            else:
+                dst_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
+            dst_weight.count = len(bone_key)
+            dst_bone_id = [0, 0, 0]
+            dst_weights = [0, 0, 0]
+            for i in range(len(bone_key)):
+                dst_bone_id[i] = bone_key[i]
+                dst_weights[i] = weight_key[i]
+            dst_weight.bone_ids = dst_bone_id
+            dst_weight.weights = dst_weights
+            dst_weight.unk_00 = 0
+            dst_weight._check()
+            dst_skinweights.append(dst_weight)
+    print(f"[re4uhd] skin indices: {len(dst_sw_indices)} unique, {len(used_bones)} bones used")
+    return dst_skinweights, dst_sw_indices, used_bones
 
 
 def _serialize_morphs(dst_bin, scr_bin, bl_ob):
@@ -522,7 +561,8 @@ def export_bin(bl_obj):
     vtx_locations = []
     vtx_normals = []
     vtx_uvs = []
-    vtx_colors = []
+    vtx_ids = []
+    vtx_skinweights = []
     separated_mesh_objs = []
     materials = []
 
@@ -545,7 +585,7 @@ def export_bin(bl_obj):
 
     materials_size = 0
     for bl_mesh_ob in separated_mesh_objs:
-        vtx_skinweights = get_bone_indices_and_weights_per_vertex(bl_mesh_ob)
+        vtx_skinweights.append(get_bone_indices_and_weights_per_vertex(bl_mesh_ob))
         bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
         dst_mat = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
         custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
@@ -554,7 +594,7 @@ def export_bin(bl_obj):
         dst_face_idx = dst_bin.FaceIndex(_parent=dst_mat, _root=dst_bin._root)
         loop_cache = {loop.vertex_index: loop for loop in bl_mesh_ob.data.loops}
 
-        vtx_uvs.extend(get_uvs_per_vertex(bl_mesh_ob, 0))
+        vtx_uvs.append(get_uvs_per_vertex(bl_mesh_ob, 0))
         for vtx in bl_mesh_ob.data.vertices:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
 
@@ -564,7 +604,7 @@ def export_bin(bl_obj):
         materials_size += cur_mat_size
         dst_strips = []
         for strip in strips_vtx:
-            vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
+            # vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
             for vtx in strip:
                 loop = loop_cache[vtx.index]
                 vtx_normals.append(_zy_flip(loop.normal.x, loop.normal.y, loop.normal.z))
@@ -586,36 +626,7 @@ def export_bin(bl_obj):
         dst_mat.face_index = dst_face_idx
         dst_mat._check()
         materials.append(dst_mat)
-    # header
-    dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
-    dst_header.offset_bones = src_bin.header.offset_bones
-    dst_header.unk00 = src_bin.header.unk_00
-    dst_header.unk01 = src_bin.header.unk_01
-    dst_header.offset_vertex_colors = src_bin.header.offset_vertex_colors
-    dst_header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
-    dst_header.offset_weights = src_bin.header.offset_weights
-    dst_header.num_weights = src_bin.header.num_weights
-    dst_header.num_bones = src_bin.header.num_bones
-    dst_header.num_materials = src_bin.header.num_materials
-    dst_header.offset_materials = src_bin.header.offset_materials
-    dst_header.texture1_flags = src_bin.header.texture1_flags
-    dst_header.texture2_flags = src_bin.header.texture2_flags
-    dst_header.num_tpl = src_bin.header.num_tpl
-    dst_header.vertex_scale = src_bin.header.vertex_scale
-    dst_header.unk_02 = src_bin.header.unk_02
-    dst_header.num_weights2 = src_bin.header.num_weights2
-    dst_header.offset_morphs = src_bin.header.offset_morphs
-    dst_header.offset_vertex_position = src_bin.header.offset_vertex_position
-    dst_header.offset_vertex_normals = src_bin.header.offset_vertex_normals
-    dst_header.num_vertices = len(vtx_locations)
-    dst_header.num_vertex_normals = src_bin.header.num_vertex_normals
-    dst_header.version_flags = src_bin.header.version_flags
-    dst_header.offset_bonepairs = src_bin.header.offset_bonepairs
-    dst_header.offset_adjacents = src_bin.header.offset_adjacents
-    dst_header.offset_index_buffer = src_bin.header.offset_index_buffer
-    dst_header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
-    dst_header._check()
-    dst_bin.header = dst_header
+
     # bones
     bones = []
     match bin_type:
@@ -635,7 +646,10 @@ def export_bin(bl_obj):
         dst_bin.bones = bones
     bones_size = len(dst_bin.bones) * 16 + 16
     # weights
-    dst_bin.weights = _serialize_skinweights(dst_bin, vtx_skinweights)
+    test_num_skinweights = sum(len(w) for w in vtx_skinweights)
+    print(f"[re4uhd] total skinweights: {test_num_skinweights}")
+    dst_skinweights, dst_indices, used_bones = _serialize_skinweights(dst_bin, vtx_skinweights)
+    dst_bin.weights = dst_skinweights
     weight_block_size = 8 if len(bones) < 255 else 16
     weights_size = len(dst_bin.weights) * weight_block_size + 16
     # morphs
@@ -655,6 +669,7 @@ def export_bin(bl_obj):
         dst_bin.bone_pair = dst_bone_pairs
         bone_pairs_size = 4 + len(dst_bin.bone_pair.line) * 8
         bone_pairs_size += _calc_padding(bone_pairs_size, 16)
+        dst_bin.bone_pairs = dst_bone_pairs
     # adjacent
     dst_adjacent = dst_bin.BoneAdj(_parent=dst_bin, _root=dst_bin._root)
     dst_adjacent.count = src_bin.adjacent.count
@@ -668,7 +683,7 @@ def export_bin(bl_obj):
     vertex_positions_size = len(dst_bin.vertex_positions) * 12
     vertex_positions_size += _calc_padding(vertex_positions_size, 16)
     # indexes
-    dst_bin.indexes = src_bin.indexes
+    dst_bin.indexes = dst_indices
     indexes_size = len(dst_bin.indexes) * 2
     indexes_size += _calc_padding(indexes_size, 16)
     # normals
@@ -676,19 +691,65 @@ def export_bin(bl_obj):
     normals_size = len(dst_bin.normals) * 12
     normals_size += _calc_padding(normals_size, 16)
     # indexes2
-    dst_bin.indexes2 = src_bin.indexes2
-    indexes2_size = len(dst_bin.indexes2) * 2
+    dst_bin.indexes2 = dst_indices
+    indexes2_size = len(dst_bin.indexes) * 2
     indexes2_size += _calc_padding(indexes2_size, 16)
     # vertex colors
-    dst_bin.vertex_colors = src_bin.vertex_colors
+    vtx_colors = []
+    for vtx in vtx_locations:
+        vc = dst_bin.Rgba(_parent=dst_bin, _root=dst_bin._root)
+        vc.a = 255
+        vc.r = 255
+        vc.g = 255
+        vc.a = 255
+        vtx_colors.append(vc)
+    dst_bin.vertex_colors = vtx_colors
     vtx_colors_size = len(dst_bin.vertex_colors) * 4
     vtx_colors_size += _calc_padding(vtx_colors_size, 16) + 16
     # texcoords
-    dst_bin.texcoords = src_bin.texcoords
-    texcoords_size = len(dst_bin.texcoords) * 8
+    texcoord = []
+    for mesh_uv in vtx_uvs:
+        for vtx_uv in mesh_uv.values():
+            uv = dst_bin.Uv(_parent=dst_bin, _root=dst_bin._root)
+            uv.u = vtx_uv[0]
+            uv.v = vtx_uv[1]
+            texcoord.append(uv)
+    dst_bin.texcoords = texcoord
+    texcoords_size = len(texcoord) * 8
     texcoords_size += _calc_padding(texcoords_size, 16) + 16
     # materials
     dst_bin.materials = materials
+
+    # header
+    dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
+    dst_header.offset_bones = 96
+    dst_header.unk_00 = src_bin.header.unk_00
+    dst_header.unk_01 = src_bin.header.unk_01
+    dst_header.offset_vertex_colors = src_bin.header.offset_vertex_colors
+    dst_header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
+    dst_header.offset_weights = src_bin.header.offset_weights
+    dst_header.num_weights = len(dst_bin.weights)
+    dst_header.num_bones = src_bin.header.num_bones
+    dst_header.num_materials = src_bin.header.num_materials
+    dst_header.offset_materials = src_bin.header.offset_materials
+    dst_header.texture1_flags = src_bin.header.texture1_flags
+    dst_header.texture2_flags = src_bin.header.texture2_flags
+    dst_header.num_tpl = src_bin.header.num_tpl
+    dst_header.vertex_scale = src_bin.header.vertex_scale
+    dst_header.unk_02 = src_bin.header.unk_02
+    dst_header.num_weights2 = src_bin.header.num_weights2
+    dst_header.offset_morphs = src_bin.header.offset_morphs
+    dst_header.offset_vertex_position = src_bin.header.offset_vertex_position
+    dst_header.offset_vertex_normals = src_bin.header.offset_vertex_normals
+    dst_header.num_vertices = len(vtx_locations)
+    dst_header.num_vertex_normals = len(vtx_normals)
+    dst_header.version_flags = src_bin.header.version_flags
+    dst_header.offset_bonepairs = src_bin.header.offset_bonepairs
+    dst_header.offset_adjacents = src_bin.header.offset_adjacents
+    dst_header.offset_index_buffer = src_bin.header.offset_index_buffer
+    dst_header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
+    dst_header._check()
+    dst_bin.header = dst_header
 
     header_size = 96
     final_size = sum((header_size,
