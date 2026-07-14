@@ -721,37 +721,62 @@ def export_bin(bl_obj):
     dst_bin.materials = materials
 
     # header
+    cur_size = 0
+    header_size = 96
     dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
-    dst_header.offset_bones = 96
     dst_header.unk_00 = src_bin.header.unk_00
     dst_header.unk_01 = src_bin.header.unk_01
-    dst_header.offset_vertex_colors = src_bin.header.offset_vertex_colors
-    dst_header.offset_vertex_texcoord = src_bin.header.offset_vertex_texcoord
-    dst_header.offset_weights = src_bin.header.offset_weights
-    dst_header.num_weights = len(dst_bin.weights)
     dst_header.num_bones = src_bin.header.num_bones
-    dst_header.num_materials = src_bin.header.num_materials
-    dst_header.offset_materials = src_bin.header.offset_materials
+    cur_size += header_size
+    dst_header.offset_bones = cur_size
+
+    dst_header.num_weights = len(dst_bin.weights)
+    cur_size += bones_size
+    dst_header.offset_weights = cur_size
+
+    cur_size += weights_size
+    dst_header.offset_morphs = cur_size if morphs_size > 0 else 0
+
+    cur_size += morphs_size
+    dst_header.offset_bonepairs = cur_size
+    cur_size += bone_pairs_size
+    dst_header.offset_adjacents = cur_size
+
+    dst_header.num_vertices = len(vtx_locations)
+    cur_size += adjacent_size
+    dst_header.offset_vertex_position = cur_size
+
+    cur_size += vertex_positions_size
+    dst_header.offset_index_buffer = cur_size
+
+    dst_header.num_vertex_normals = len(vtx_normals)
+    cur_size += indexes_size
+    dst_header.offset_vertex_normals = cur_size
+
+    cur_size += normals_size
+    dst_header.offset_index_buffer2 = cur_size
+
+    cur_size += indexes2_size
+    dst_header.offset_vertex_colors = cur_size
+
+    cur_size += vtx_colors_size
+    dst_header.offset_vertex_texcoord = cur_size
+
+    dst_header.num_materials = len(separated_mesh_objs)
+    cur_size += texcoords_size
+    dst_header.offset_materials = cur_size
+
     dst_header.texture1_flags = src_bin.header.texture1_flags
     dst_header.texture2_flags = src_bin.header.texture2_flags
     dst_header.num_tpl = src_bin.header.num_tpl
     dst_header.vertex_scale = src_bin.header.vertex_scale
     dst_header.unk_02 = src_bin.header.unk_02
     dst_header.num_weights2 = src_bin.header.num_weights2
-    dst_header.offset_morphs = src_bin.header.offset_morphs
-    dst_header.offset_vertex_position = src_bin.header.offset_vertex_position
-    dst_header.offset_vertex_normals = src_bin.header.offset_vertex_normals
-    dst_header.num_vertices = len(vtx_locations)
-    dst_header.num_vertex_normals = len(vtx_normals)
     dst_header.version_flags = src_bin.header.version_flags
-    dst_header.offset_bonepairs = src_bin.header.offset_bonepairs
-    dst_header.offset_adjacents = src_bin.header.offset_adjacents
-    dst_header.offset_index_buffer = src_bin.header.offset_index_buffer
-    dst_header.offset_index_buffer2 = src_bin.header.offset_index_buffer2
+
     dst_header._check()
     dst_bin.header = dst_header
 
-    header_size = 96
     final_size = sum((header_size,
                      bones_size,
                      weights_size,
