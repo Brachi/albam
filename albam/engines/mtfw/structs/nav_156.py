@@ -21,9 +21,9 @@ class Nav156(ReadWriteKaitaiStruct):
         self._root = _root or self
 
     def _read(self):
-        self.magic = self._io.read_bytes(4)
-        if not self.magic == b"\x4E\x41\x56\x00":
-            raise kaitaistruct.ValidationNotEqualError(b"\x4E\x41\x56\x00", self.magic, self._io, u"/seq/0")
+        self.indent = self._io.read_bytes(4)
+        if not self.indent == b"\x4E\x41\x56\x00":
+            raise kaitaistruct.ValidationNotEqualError(b"\x4E\x41\x56\x00", self.indent, self._io, u"/seq/0")
         self.version = self._io.read_u4le()
         if not self.version == 2:
             raise kaitaistruct.ValidationNotEqualError(2, self.version, self._io, u"/seq/1")
@@ -54,14 +54,12 @@ class Nav156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ValidationNotEqualError(b"\x07\x55\x15\x00\x00", self.footer_magic, self._io, u"/seq/9")
         self.footer_padding = self._io.read_bytes(5460)
         self.lookup_grid = []
-        i = 0
-        while not self._io.is_eof():
+        for i in range(4096):
             _t_lookup_grid = Nav156.GridCell(self._io, self, self._root)
             try:
                 _t_lookup_grid._read()
             finally:
                 self.lookup_grid.append(_t_lookup_grid)
-            i += 1
 
         self._dirty = False
 
@@ -85,7 +83,7 @@ class Nav156(ReadWriteKaitaiStruct):
 
     def _write__seq(self, io=None):
         super(Nav156, self)._write__seq(io)
-        self._io.write_bytes(self.magic)
+        self._io.write_bytes(self.indent)
         self._io.write_u4le(self.version)
         self._io.write_u4le(self.reserved)
         self._io.write_u4le(self.vertex_count)
@@ -104,19 +102,15 @@ class Nav156(ReadWriteKaitaiStruct):
         self._io.write_bytes(self.footer_padding)
         for i in range(len(self.lookup_grid)):
             pass
-            if self._io.is_eof():
-                raise kaitaistruct.ConsistencyError(u"lookup_grid", 0, self._io.size() - self._io.pos())
             self.lookup_grid[i]._write__seq(self._io)
 
-        if not self._io.is_eof():
-            raise kaitaistruct.ConsistencyError(u"lookup_grid", 0, self._io.size() - self._io.pos())
 
 
     def _check(self):
-        if len(self.magic) != 4:
-            raise kaitaistruct.ConsistencyError(u"magic", 4, len(self.magic))
-        if not self.magic == b"\x4E\x41\x56\x00":
-            raise kaitaistruct.ValidationNotEqualError(b"\x4E\x41\x56\x00", self.magic, None, u"/seq/0")
+        if len(self.indent) != 4:
+            raise kaitaistruct.ConsistencyError(u"indent", 4, len(self.indent))
+        if not self.indent == b"\x4E\x41\x56\x00":
+            raise kaitaistruct.ValidationNotEqualError(b"\x4E\x41\x56\x00", self.indent, None, u"/seq/0")
         if not self.version == 2:
             raise kaitaistruct.ValidationNotEqualError(2, self.version, None, u"/seq/1")
         if len(self.vertices) != self.vertex_count:
@@ -147,6 +141,8 @@ class Nav156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ValidationNotEqualError(b"\x07\x55\x15\x00\x00", self.footer_magic, None, u"/seq/9")
         if len(self.footer_padding) != 5460:
             raise kaitaistruct.ConsistencyError(u"footer_padding", 5460, len(self.footer_padding))
+        if len(self.lookup_grid) != 4096:
+            raise kaitaistruct.ConsistencyError(u"lookup_grid", 4096, len(self.lookup_grid))
         for i in range(len(self.lookup_grid)):
             pass
             if self.lookup_grid[i]._root != self._root:
@@ -212,8 +208,8 @@ class Nav156(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.index = self._io.read_u4le()
-            self.unk1 = self._io.read_u4le()
-            self.unk2 = self._io.read_u4le()
+            self.unk_00 = self._io.read_u4le()
+            self.flags = self._io.read_u4le()
             self.vertex_per_face = self._io.read_u4le()
             self.v1 = self._io.read_u4le()
             self.v2 = self._io.read_u4le()
@@ -241,8 +237,8 @@ class Nav156(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Nav156.Face, self)._write__seq(io)
             self._io.write_u4le(self.index)
-            self._io.write_u4le(self.unk1)
-            self._io.write_u4le(self.unk2)
+            self._io.write_u4le(self.unk_00)
+            self._io.write_u4le(self.flags)
             self._io.write_u4le(self.vertex_per_face)
             self._io.write_u4le(self.v1)
             self._io.write_u4le(self.v2)

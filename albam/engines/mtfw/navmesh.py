@@ -7,14 +7,19 @@ from io import BytesIO
 from .structs.nav_156 import Nav156
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
-from .collision import palette, mesh_rescale
+from .collision import mesh_rescale
 from ...lib import common_op as common
+import numpy as np
 
+BASE = np.array([0.20, 0.20, 0.20])
 
-KNOWN_FACE_FLAGS = [0, 256, 2048, 2049, 2050, 2560, 3072, 3584, 4096, 4098, 4608, 5120, 5124, 6144, 6145,
-                    6146, 6656, 7168, 7172, 7176, 7680, 8448, 8452, 8456, 24832, 41216, 134144, 134656,
-                    138240, 138752, 145664, 155904, 172288, 175872, 179968, 8390656, 8391168, 8397056,
-                    8528128, 12591360]
+MODE = np.array([0.35, -0.05, 0.15])
+OPTION = np.array([0.05, 0.40, -0.10])
+INDEX = np.array([-0.05, 0.10, 0.30])
+
+BIT23 = np.array([0.25, 0.00, 0.00])
+BIT24 = np.array([0.00, 0.25, 0.00])
+BIT30 = np.array([0.00, 0.00, 0.25])
 
 
 @blender_registry.register_import_function(app_id="re5", extension="nav", albam_asset_type="NAVMESH")
@@ -39,7 +44,7 @@ def build_navmesh_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         vertices.append((vtx.x/100, -vtx.z/100, vtx.y/100))
     for i, face in enumerate(nav.faces):
         faces.append((face.v1, face.v2, face.v3))
-        face_flags[face.index] = face.unk2
+        face_flags[face.index] = face.flags
     me_ob.from_pydata(vertices, [], faces)
     _set_flags_as_mat(me_ob, face_flags)
     ob.parent = bl_object
@@ -67,12 +72,11 @@ def export_nav(bl_obj):
         for poly in nav_mesh.polygons:
             faces.append(poly.vertices[:])
             face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
-            # print("Polygon", poly.index, "uses vertices", poly.vertices[:])
     neiborgs = build_neighbors(vertices, faces)
     for clone in mesh_clones:
         common.delete_ob(clone)
 
-    dst_nav.magic = b"NAV\x00"
+    dst_nav.indent = b"NAV\x00"
     dst_nav.version = 2
     dst_nav.reserved = 0
     dst_nav.vertex_count = len(vertices)
@@ -83,9 +87,6 @@ def export_nav(bl_obj):
     size_vertices = 0
     for vtx in vertices:
         dst_vtx = dst_nav.Vertex(_parent=dst_nav, _root=dst_nav._root)
-        # dst_vtx.x = vtx[0] * 100
-        # dst_vtx.y = -vtx[2] * 100
-        # dst_vtx.z = vtx[1] * 100
         dst_vtx.x = vtx[0]
         dst_vtx.y = vtx[1]
         dst_vtx.z = vtx[2]
@@ -96,8 +97,8 @@ def export_nav(bl_obj):
     for face_index, face in enumerate(faces):
         dst_face = dst_nav.Face(_parent=dst_nav, _root=dst_nav._root)
         dst_face.index = face_index
-        dst_face.unk1 = 1
-        dst_face.unk2 = face_flags[face_index]  # flags
+        dst_face.unk_00 = 1
+        dst_face.flags = face_flags[face_index]
         dst_face.vertex_per_face = 3
         dst_face.v1 = face[0]
         dst_face.v2 = face[1]
@@ -120,15 +121,15 @@ def export_nav(bl_obj):
     dst_bbox = dst_nav.BoundingBox(_parent=dst_nav, _root=dst_nav._root)
     dst_bbox.padding0 = 0
     dst_lower = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
-    dst_lower.x = lower[0]  # lower[0] * 100
-    dst_lower.y = lower[1]  # lower[2] * 100
-    dst_lower.z = lower[2]  # lower[1] * 100
+    dst_lower.x = lower[0]
+    dst_lower.y = lower[1]
+    dst_lower.z = lower[2]
     dst_bbox.lower = dst_lower
     dst_bbox.padding1 = b"\xCD\xCD\xCD\xCD"
     dst_upper = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
-    dst_upper.x = upper[0]  # upper[0] * 100
-    dst_upper.y = upper[1]  # upper[2] * 100
-    dst_upper.z = upper[2]  # upper[1] * 100
+    dst_upper.x = upper[0]
+    dst_upper.y = upper[1]
+    dst_upper.z = upper[2]
     dst_bbox.upper = dst_upper
     dst_bbox.padding2 = b"\xCD\xCD\xCD\xCD"
     dst_bbox._check()
@@ -146,6 +147,27 @@ def export_nav(bl_obj):
     return vfiles
 
 
+def flag_to_color(value):
+    rgb = BASE.copy()
+    mode = (value >> 11) & 31
+    option = (value >> 16) & 127
+    index = (value >> 8) & 7
+
+    rgb += MODE * (mode / 12)
+    rgb += OPTION * (option / 127)
+    rgb += INDEX * (index / 7)
+
+    if value & (1 << 23):
+        rgb += BIT23
+    if value & (1 << 24):
+        rgb += BIT24
+    if value & (1 << 30):
+        rgb += BIT30
+    rgb = np.clip(rgb, 0.0, 1.0)
+
+    return (*rgb, 1.0)
+
+
 def _set_flags_as_mat(mesh, flags):
     unique_flags = []
     for flag in flags.values():
@@ -158,7 +180,7 @@ def _set_flags_as_mat(mesh, flags):
         if not mat:
             mat = bpy.data.materials.new(name="Nav %03d" % uf)
         try:
-            mat.diffuse_color = palette[KNOWN_FACE_FLAGS.index(uf)]
+            mat.diffuse_color = flag_to_color(uf)  # palette[KNOWN_FACE_FLAGS.index(uf)]
         except (IndexError, ValueError):
             mat.diffuse_color = (0, 0, 0, 1)
             print("Unknown nav type: %d" % uf)
@@ -188,7 +210,6 @@ def _mat_name_to_flags(face, ob_mesh):
 
 
 def bounding_box(vertices):
-
     xs = [v[0] for v in vertices]
     ys = [v[1] for v in vertices]
     zs = [v[2] for v in vertices]

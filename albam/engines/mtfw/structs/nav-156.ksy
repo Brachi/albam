@@ -6,7 +6,7 @@ meta:
   title: Resident Evil 5 navmesh
 
 seq:
-  - {id: magic, contents: [0x4e, 0x41, 0x56, 0x00]}
+  - {id: indent, contents: [0x4e, 0x41, 0x56, 0x00]}
   - {id: version, type: u4, valid: 2}
   - {id: reserved, type: u4}
   - {id: vertex_count, type: u4}
@@ -17,7 +17,7 @@ seq:
   - {id: bbox, type: bounding_box}
   - {id: footer_magic, contents: [0x07, 0x55, 0x15, 0x00, 0x00]}
   - {id: footer_padding, size: 5460}
-  - {id: lookup_grid, type: grid_cell, repeat: eos}
+  - {id: lookup_grid, type: grid_cell, repeat: expr, repeat-expr: 4096}
 
 types:
   vertex:
@@ -29,8 +29,8 @@ types:
   face:
     seq:
       - {id: index, type: u4}
-      - {id: unk1, type: u4}
-      - {id: unk2, type: u4}
+      - {id: unk_00, type: u4}
+      - {id: flags, type: u4}
       - {id: vertex_per_face, type: u4}
       - {id: v1, type: u4}
       - {id: v2, type: u4}
