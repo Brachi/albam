@@ -7,7 +7,9 @@ from io import BytesIO
 from .structs.nav_156 import Nav156
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
-from .collision import palette
+from .collision import palette, mesh_rescale
+from ...lib import common_op as common
+
 
 KNOWN_FACE_FLAGS = [0, 256, 2048, 2049, 2050, 2560, 3072, 3584, 4096, 4098, 4608, 5120, 5124, 6144, 6145,
                     6146, 6656, 7168, 7172, 7176, 7680, 8448, 8452, 8456, 24832, 41216, 134144, 134656,
@@ -52,16 +54,23 @@ def export_nav(bl_obj):
     dst_nav = Nav156()
     vertices = []
     faces = []
+    face_flags = {}
     vfiles = []
 
     meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    if meshes:
-        for v in meshes[0].data.vertices:
+    mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
+    mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
+    if mesh_clones:
+        nav_mesh = mesh_clones[0].data
+        for v in nav_mesh.vertices:
             vertices.append(v.co)
-        for poly in meshes[0].data.polygons:
+        for poly in nav_mesh.polygons:
             faces.append(poly.vertices[:])
+            face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
             # print("Polygon", poly.index, "uses vertices", poly.vertices[:])
     neiborgs = build_neighbors(vertices, faces)
+    for clone in mesh_clones:
+        common.delete_ob(clone)
 
     dst_nav.magic = b"NAV\x00"
     dst_nav.version = 2
@@ -74,9 +83,12 @@ def export_nav(bl_obj):
     size_vertices = 0
     for vtx in vertices:
         dst_vtx = dst_nav.Vertex(_parent=dst_nav, _root=dst_nav._root)
-        dst_vtx.x = vtx[0] * 100
-        dst_vtx.y = -vtx[2] * 100
-        dst_vtx.z = vtx[1] * 100
+        # dst_vtx.x = vtx[0] * 100
+        # dst_vtx.y = -vtx[2] * 100
+        # dst_vtx.z = vtx[1] * 100
+        dst_vtx.x = vtx[0]
+        dst_vtx.y = vtx[1]
+        dst_vtx.z = vtx[2]
         dst_vertices.append(dst_vtx)
         size_vertices += 12
     dst_nav.vertices = dst_vertices
@@ -85,7 +97,7 @@ def export_nav(bl_obj):
         dst_face = dst_nav.Face(_parent=dst_nav, _root=dst_nav._root)
         dst_face.index = face_index
         dst_face.unk1 = 1
-        dst_face.unk2 = 0  # flags
+        dst_face.unk2 = face_flags[face_index]  # flags
         dst_face.vertex_per_face = 3
         dst_face.v1 = face[0]
         dst_face.v2 = face[1]
@@ -108,15 +120,15 @@ def export_nav(bl_obj):
     dst_bbox = dst_nav.BoundingBox(_parent=dst_nav, _root=dst_nav._root)
     dst_bbox.padding0 = 0
     dst_lower = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
-    dst_lower.x = lower[0] * 100
-    dst_lower.y = lower[2] * 100
-    dst_lower.z = lower[1] * 100
+    dst_lower.x = lower[0]  # lower[0] * 100
+    dst_lower.y = lower[1]  # lower[2] * 100
+    dst_lower.z = lower[2]  # lower[1] * 100
     dst_bbox.lower = dst_lower
     dst_bbox.padding1 = b"\xCD\xCD\xCD\xCD"
     dst_upper = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
-    dst_upper.x = upper[0] * 100
-    dst_upper.y = upper[2] * 100
-    dst_upper.z = upper[1] * 100
+    dst_upper.x = upper[0]  # upper[0] * 100
+    dst_upper.y = upper[1]  # upper[2] * 100
+    dst_upper.z = upper[2]  # upper[1] * 100
     dst_bbox.upper = dst_upper
     dst_bbox.padding2 = b"\xCD\xCD\xCD\xCD"
     dst_bbox._check()
@@ -142,7 +154,9 @@ def _set_flags_as_mat(mesh, flags):
 
     mat_cache = {}
     for i, uf in enumerate(unique_flags):
-        mat = bpy.data.materials.new(name="Nav %03d" % uf)
+        mat = bpy.data.materials.get("Nav %03d" % uf)
+        if not mat:
+            mat = bpy.data.materials.new(name="Nav %03d" % uf)
         try:
             mat.diffuse_color = palette[KNOWN_FACE_FLAGS.index(uf)]
         except (IndexError, ValueError):
@@ -161,6 +175,18 @@ def _set_flags_as_mat(mesh, flags):
     # print(sorted(unique_flags))
 
 
+def _mat_name_to_flags(face, ob_mesh):
+    try:
+        ix = face.material_index
+        slot = ob_mesh.material_slots[ix]
+        mat_name = slot.material.name
+        #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+        mat_name = mat_name.replace("_", ".").split(".")[0]
+        return int(mat_name[len("Nav "):])
+    except IndexError:
+        raise f"MaterialMissingError {ob_mesh.name}"
+
+
 def bounding_box(vertices):
 
     xs = [v[0] for v in vertices]
@@ -176,9 +202,9 @@ def bounding_box(vertices):
 def centroid(vertices, face):
     a, b, c = face
 
-    ax, ay, az = vertices[a]
-    bx, by, bz = vertices[b]
-    cx, cy, cz = vertices[c]
+    ax, ay, az = vertices[a] / 100
+    bx, by, bz = vertices[b] / 100
+    cx, cy, cz = vertices[c] / 100
 
     return (
         (ax + bx + cx) / 3.0,
@@ -189,7 +215,6 @@ def centroid(vertices, face):
 
 def build_neighbors(vertices, faces):
     edge_map = defaultdict(list)
-
     edge_ids = [
         (0, 1),  # edge 0 = v1-v2
         (1, 2),  # edge 1 = v2-v3
@@ -204,7 +229,6 @@ def build_neighbors(vertices, faces):
             edge_map[key].append((face_index, edge_id))
 
     centroids = [centroid(vertices, face) for face in faces]
-
     neighbors = [[] for _ in faces]
 
     for edge, refs in edge_map.items():
