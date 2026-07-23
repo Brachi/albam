@@ -41,7 +41,7 @@ def build_navmesh_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     faces = []
     face_flags = {}
     for i, vtx in enumerate(nav.vertices):
-        vertices.append((vtx.x/100, -vtx.z/100, vtx.y/100))
+        vertices.append((vtx.x / 100, -vtx.z / 100, vtx.y / 100))
     for i, face in enumerate(nav.faces):
         faces.append((face.v1, face.v2, face.v3))
         face_flags[face.index] = face.flags
@@ -258,7 +258,7 @@ def build_neighbors(vertices, faces):
         (f0, e0), (f1, e1) = refs
         c0 = centroids[f0]
         c1 = centroids[f1]
-        dist = math.sqrt((c0[0]-c1[0])**2 + (c0[1]-c1[1])**2 + (c0[2]-c1[2])**2)
+        dist = math.sqrt((c0[0] - c1[0])**2 + (c0[1] - c1[1])**2 + (c0[2] - c1[2])**2)
         neighbors[f0].append((f1, e0, dist))
         neighbors[f1].append((f0, e1, dist))
 
@@ -332,7 +332,6 @@ def write_lookup_grid(dst_nav, vertices, faces, lower, upper):
             for x in range(cell_min_x, cell_max_x + 1):
 
                 morton = morton2D(x, z)
-
                 grid[morton].append(face_index)
 
     # Write cells
