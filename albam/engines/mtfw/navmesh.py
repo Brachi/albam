@@ -206,7 +206,7 @@ def _mat_name_to_flags(face, ob_mesh):
         mat_name = mat_name.replace("_", ".").split(".")[0]
         return int(mat_name[len("Nav "):])
     except IndexError:
-        raise f"MaterialMissingError {ob_mesh.name}"
+        return 0
 
 
 def bounding_box(vertices):
