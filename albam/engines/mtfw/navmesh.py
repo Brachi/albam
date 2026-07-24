@@ -79,8 +79,8 @@ def export_nav(bl_obj):
     dst_nav.indent = b"NAV\x00"
     dst_nav.version = 2
     dst_nav.reserved = 0
-    dst_nav.vertex_count = len(vertices)
-    dst_nav.face_count = len(faces)
+    dst_nav.num_vertices = len(vertices)
+    dst_nav.num_faces = len(faces)
     dst_nav.header_padding = 1
     dst_vertices = []
     dst_faces = []
@@ -103,7 +103,7 @@ def export_nav(bl_obj):
         dst_face.v1 = face[0]
         dst_face.v2 = face[1]
         dst_face.v3 = face[2]
-        dst_face.neighbor_count = len(neiborgs[face_index])
+        dst_face.num_neighbors = len(neiborgs[face_index])
         size_faces += (32 + len(neiborgs[face_index]) * 16)
         dst_face_neighbors = []
         for neighbor_index, edge_id, distance in neiborgs[face_index]:
@@ -119,22 +119,22 @@ def export_nav(bl_obj):
     dst_nav.faces = dst_faces
     lower, upper = bounding_box(vertices)
     dst_bbox = dst_nav.BoundingBox(_parent=dst_nav, _root=dst_nav._root)
-    dst_bbox.padding0 = 0
+    dst_bbox.padding_00 = 0
     dst_lower = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
     dst_lower.x = lower[0]
     dst_lower.y = lower[1]
     dst_lower.z = lower[2]
     dst_bbox.lower = dst_lower
-    dst_bbox.padding1 = b"\xCD\xCD\xCD\xCD"
+    dst_bbox.padding_01 = b"\xCD\xCD\xCD\xCD"
     dst_upper = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
     dst_upper.x = upper[0]
     dst_upper.y = upper[1]
     dst_upper.z = upper[2]
     dst_bbox.upper = dst_upper
-    dst_bbox.padding2 = b"\xCD\xCD\xCD\xCD"
+    dst_bbox.padding_02 = b"\xCD\xCD\xCD\xCD"
     dst_bbox._check()
     dst_nav.bbox = dst_bbox
-    dst_nav.footer_magic = b"\x07\x55\x15\x00\x00"
+    dst_nav.footer_indent = b"\x07\x55\x15\x00\x00"
     dst_nav.footer_padding = b"\x00" * 5460
     dst_grid, size_grid = write_lookup_grid(dst_nav, vertices, faces, lower, upper)
     dst_nav.lookup_grid = dst_grid
@@ -253,14 +253,20 @@ def build_neighbors(vertices, faces):
     neighbors = [[] for _ in faces]
 
     for edge, refs in edge_map.items():
-        if len(refs) != 2:
+        if len(refs) < 2:
             continue
-        (f0, e0), (f1, e1) = refs
-        c0 = centroids[f0]
-        c1 = centroids[f1]
-        dist = math.sqrt((c0[0] - c1[0])**2 + (c0[1] - c1[1])**2 + (c0[2] - c1[2])**2)
-        neighbors[f0].append((f1, e0, dist))
-        neighbors[f1].append((f0, e1, dist))
+
+        for i in range(len(refs)):
+            for j in range(i + 1, len(refs)):
+                (f0, e0) = refs[i]
+                (f1, e1) = refs[j]
+
+                c0 = centroids[f0]
+                c1 = centroids[f1]
+                dist = math.dist(c0, c1)
+
+                neighbors[f0].append((f1, e0, dist))
+                neighbors[f1].append((f0, e1, dist))
 
     for n in neighbors:
         n.sort(key=lambda x: x[0])

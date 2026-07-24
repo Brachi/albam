@@ -9,13 +9,13 @@ seq:
   - {id: indent, contents: [0x4e, 0x41, 0x56, 0x00]}
   - {id: version, type: u4, valid: 2}
   - {id: reserved, type: u4}
-  - {id: vertex_count, type: u4}
-  - {id: face_count, type: u4}
+  - {id: num_vertices, type: u4}
+  - {id: num_faces, type: u4}
   - {id: header_padding, type: u4}
-  - {id: vertices, type: vertex, repeat: expr, repeat-expr: vertex_count}
-  - {id: faces, type: face, repeat: expr, repeat-expr: face_count}
+  - {id: vertices, type: vertex, repeat: expr, repeat-expr: num_vertices}
+  - {id: faces, type: face, repeat: expr, repeat-expr: num_faces}
   - {id: bbox, type: bounding_box}
-  - {id: footer_magic, contents: [0x07, 0x55, 0x15, 0x00, 0x00]}
+  - {id: footer_indent, contents: [0x07, 0x55, 0x15, 0x00, 0x00]}
   - {id: footer_padding, size: 5460}
   - {id: lookup_grid, type: grid_cell, repeat: expr, repeat-expr: 4096}
 
@@ -35,8 +35,8 @@ types:
       - {id: v1, type: u4}
       - {id: v2, type: u4}
       - {id: v3, type: u4}
-      - {id: neighbor_count, type: u4}
-      - {id: neighbors, type: neighbor, repeat: expr, repeat-expr: neighbor_count}
+      - {id: num_neighbors, type: u4}
+      - {id: neighbors, type: neighbor, repeat: expr, repeat-expr: num_neighbors}
 
   neighbor:
     seq:
@@ -47,11 +47,11 @@ types:
 
   bounding_box:
     seq:
-      - {id: padding0, type: u4}
+      - {id: padding_00, type: u4}
       - {id: lower, type: vertex}
-      - {id: padding1, size: 4}
+      - {id: padding_01, size: 4}
       - {id: upper, type: vertex}
-      - {id: padding2, size: 4}
+      - {id: padding_02, size: 4}
 
   grid_cell:
     seq:
