@@ -200,6 +200,7 @@ def sbc_exported(sbc_export):
     else:
         return sbc
 
+
 @pytest.fixture(scope="session")
 def nav_export(loaded_arcs, app_id, nav_path):
     if not nav_path:

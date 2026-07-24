@@ -32,16 +32,17 @@ def test_export_faces(nav_imported, nav_exported):
         assert sface.v2 == dface.v2
         assert sface.v3 == dface.v3
         assert sface.num_neighbors == dface.num_neighbors
-        sface_idxs = set()
-        dface_idxs = set()
+        sface_idxs = {}
+        dface_idxs = {}
         for snrg, dnrg in zip(sface.neighbors, dface.neighbors):
-            # assert snrg.face_index == dnrg.face_index
-            sface_idxs.add(snrg.face_index)
-            dface_idxs.add(dnrg.face_index)
+            sface_idxs[snrg.face_index] = (snrg.edge, snrg.centroid_distance)
+            dface_idxs[dnrg.face_index] = (dnrg.edge, dnrg.centroid_distance)
             assert snrg.padding == dnrg.padding
-            # assert snrg.edge == dnrg.edge
-            # assert snrg.centroid_distance == pytest.approx(dnrg.centroid_distance, rel=0.001)
-        assert sface_idxs == dface_idxs
+        for k, sv in sface_idxs.items():
+            assert k in dface_idxs.keys()
+            dv = dface_idxs[k]
+            assert sv[0] == dv[0]
+            assert sv[1] == pytest.approx(dv[1], rel=0.001)
 
 
 def test_export_grid_header(nav_imported, nav_exported):
