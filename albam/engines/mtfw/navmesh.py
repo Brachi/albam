@@ -9,17 +9,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from .collision import mesh_rescale
 from ...lib import common_op as common
-import numpy as np
-
-BASE = np.array([0.20, 0.20, 0.20])
-
-MODE = np.array([0.35, -0.05, 0.15])
-OPTION = np.array([0.05, 0.40, -0.10])
-INDEX = np.array([-0.05, 0.10, 0.30])
-
-BIT23 = np.array([0.25, 0.00, 0.00])
-BIT24 = np.array([0.00, 0.25, 0.00])
-BIT30 = np.array([0.00, 0.00, 0.25])
+import colorsys
 
 
 @blender_registry.register_import_function(app_id="re5", extension="nav", albam_asset_type="NAVMESH")
@@ -63,6 +53,7 @@ def export_nav(bl_obj):
     vfiles = []
 
     meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    assert meshes, "There is no mesh to export"
     mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
     mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
     if mesh_clones:
@@ -147,25 +138,15 @@ def export_nav(bl_obj):
     return vfiles
 
 
-def flag_to_color(value):
-    rgb = BASE.copy()
-    mode = (value >> 11) & 31
-    option = (value >> 16) & 127
-    index = (value >> 8) & 7
+def flag_to_color(flags: int):
+    # Knuth hash
+    h = (flags * 2654435761) & 0xFFFFFFFF
+    hue = h / 2**32
+    saturation = 0.45
+    value = 0.90
+    r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
 
-    rgb += MODE * (mode / 12)
-    rgb += OPTION * (option / 127)
-    rgb += INDEX * (index / 7)
-
-    if value & (1 << 23):
-        rgb += BIT23
-    if value & (1 << 24):
-        rgb += BIT24
-    if value & (1 << 30):
-        rgb += BIT30
-    rgb = np.clip(rgb, 0.0, 1.0)
-
-    return (*rgb, 1.0)
+    return (r, g, b, 1.0)
 
 
 def _set_flags_as_mat(mesh, flags):
@@ -180,7 +161,7 @@ def _set_flags_as_mat(mesh, flags):
         if not mat:
             mat = bpy.data.materials.new(name="Nav %03d" % uf)
         try:
-            mat.diffuse_color = flag_to_color(uf)  # palette[KNOWN_FACE_FLAGS.index(uf)]
+            mat.diffuse_color = flag_to_color(uf)
         except (IndexError, ValueError):
             mat.diffuse_color = (0, 0, 0, 1)
             print("Unknown nav type: %d" % uf)
@@ -194,7 +175,6 @@ def _set_flags_as_mat(mesh, flags):
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
-    # print(sorted(unique_flags))
 
 
 def _mat_name_to_flags(face, ob_mesh):
@@ -235,6 +215,7 @@ def centroid(vertices, face):
 
 
 def build_neighbors(vertices, faces):
+    # edge: list of faces that use the edge
     edge_map = defaultdict(list)
     edge_ids = [
         (0, 1),  # edge 0 = v1-v2

@@ -72,7 +72,7 @@ def test_export_grid(nav_imported, nav_exported):
         dface_idxs = set()
         for sgface, dgface in zip(sgfaces, dgfaces):
             # assert sgface.face_index == dgface.face_index
-            sface_idxs.add(sgface)
-            dface_idxs.add(dgface)
+            sface_idxs.add(sgface.face_index)
+            dface_idxs.add(dgface.face_index)
             assert sgface.padding == dgface.padding
-        # assert sface_idxs == dface_idxs
+        # assert sface_idxs == dface_idxs  # looks like misses a little with faces in the grid cell
