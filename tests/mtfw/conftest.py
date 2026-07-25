@@ -32,6 +32,13 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize(argnames, argvalues, scope="session")
 
     elif ("app_id" in metafunc.fixturenames and
+          "lmt_path" in metafunc.fixturenames and
+          "mod_path" in metafunc.fixturenames):
+        argnames = ("app_id", "lmt_path", "mod_path")
+        argvalues = [(d["app_id"], d["lmt_path"], d["mod_path"]) for d in MTFW_DATASET]
+        metafunc.parametrize(argnames, argvalues, scope="session")
+
+    elif ("app_id" in metafunc.fixturenames and
           "sbc_path" in metafunc.fixturenames):
         argnames = ("app_id", "sbc_path")
         argvalues = [(d["app_id"], d["sbc_path"]) for d in MTFW_DATASET]
@@ -191,6 +198,59 @@ def sbc_exported(sbc_export):
         pytest.skip("No exported sbc available")
     else:
         return sbc
+
+
+@pytest.fixture(scope="session")
+def lmt_export(loaded_arcs, app_id, lmt_path, mod_path):
+    if not mod_path:
+        pytest.skip("No armature mesh avaiable")
+    vfile_mod = bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
+    assert vfile_mod
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    armature = next((obj for obj in bpy.data.objects if obj.type == 'ARMATURE'), None)
+    assert armature
+    bpy.context.scene.albam.import_options_lmt.armature = armature
+
+    if not lmt_path:
+        pytest.skip("No animation available")
+    bpy.context.scene.albam.apps.app_selected = app_id
+    vfile_lmt = bpy.context.scene.albam.vfs.select_vfile(app_id, lmt_path)
+    assert vfile_lmt
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
+    vfile_lmt_exported = bpy.context.scene.albam.exported.select_vfile(app_id, lmt_path)
+    assert vfile_lmt_exported
+    from albam.engines.mtfw.structs.lmt import Lmt
+    src_lmt = Lmt.from_bytes(vfile_lmt.get_bytes())
+    dst_lmt = Lmt.from_bytes(vfile_lmt_exported.get_bytes())
+    src_lmt._read()
+    dst_lmt._read()
+    return src_lmt, dst_lmt
+
+
+@pytest.fixture(scope="session")
+def lmt_imported(lmt_export):
+    lmt = lmt_export[0]
+    if not lmt:
+        pytest.skip("No imported lmt available")
+    else:
+        return lmt
+
+
+@pytest.fixture(scope="session")
+def lmt_exported(lmt_export):
+    lmt = lmt_export[1]
+    if not lmt:
+        pytest.skip("No exported sbc available")
+    else:
+        return lmt
 
 
 @pytest.fixture
