@@ -218,7 +218,95 @@ def _to_dict(file_entries):
     return imported
 
 
-def update_arc(filepath, vfiles):
+TEXTURE_EXTENSIONS = ("tex", "rtex")
+
+
+def _file_entry_extension(file_entry):
+    try:
+        return FILE_ID_TO_EXTENSION[file_entry.file_type]
+    except KeyError:
+        return str(file_entry.file_type)
+
+
+def _normalize_texture_key(path):
+    return path.replace("/", "\\").strip("\\").lower()
+
+
+def _texture_paths_from_mod(mod_bytes, app_id):
+    from .structs.mod_153 import Mod153
+    from .structs.mod_156 import Mod156
+    from .structs.mod_21 import Mod21
+
+    mod_cls = {"re5": Mod156, "dmc4": Mod153}.get(app_id, Mod21)
+    try:
+        mod = mod_cls.from_bytes(mod_bytes)
+        mod._read()
+    except Exception:
+        return None
+    materials_data = getattr(mod, "materials_data", None)
+    textures = getattr(materials_data, "textures", None)
+    if not textures:
+        return set()
+    return {_normalize_texture_key(t) for t in textures if t}
+
+
+def _texture_paths_from_mrl(mrl_bytes, app_id):
+    from kaitaistruct import BytesIO, KaitaiStream
+    from .structs.mrl import Mrl
+    try:
+        mrl = Mrl(app_id, KaitaiStream(BytesIO(mrl_bytes)))
+        mrl._read()
+    except Exception:
+        return None
+    return {_normalize_texture_key(t.texture_path) for t in mrl.textures if t.texture_path}
+
+
+def _get_texture_paths_from_arc_entry(fe, app_id):
+    ext = _file_entry_extension(fe)
+    try:
+        data = zlib.decompress(fe.raw_data)
+    except Exception:
+        return None
+    if ext == "mod":
+        return _texture_paths_from_mod(data, app_id)
+    elif ext == "mrl":
+        return _texture_paths_from_mrl(data, app_id)
+    return None
+
+
+def _find_orphaned_textures(file_entries, app_id, old_texture_paths, new_texture_paths):
+    """
+    Only considers textures that the exported model USED TO reference but
+    NO LONGER does. Checks if any OTHER model in the arc still uses them.
+    Safe for cross-arc shared textures.
+    """
+    candidates = old_texture_paths - new_texture_paths
+    if not candidates:
+        return file_entries, []
+
+    for fe in file_entries.values():
+        ext = _file_entry_extension(fe)
+        if ext not in ("mod", "mrl"):
+            continue
+        paths = _get_texture_paths_from_arc_entry(fe, app_id)
+        if paths is None:
+            return file_entries, []  # can't parse → abort for safety
+        candidates -= paths
+        if not candidates:
+            return file_entries, []
+
+    cleaned = {}
+    removed = []
+    for path_with_ext, fe in file_entries.items():
+        if _file_entry_extension(fe) in TEXTURE_EXTENSIONS:
+            if _normalize_texture_key(fe.file_path) in candidates:
+                removed.append(path_with_ext)
+                continue
+        cleaned[path_with_ext] = fe
+    return cleaned, removed
+
+
+def update_arc(filepath, vfiles, remove_unused_textures=False):
     imported = {}
     exported = {}
     vf_sorted = _sort_arc_entries(vfiles)
@@ -228,6 +316,10 @@ def update_arc(filepath, vfiles):
         parsed._read()
 
     imported = _to_dict(parsed.file_entries)
+
+    app_id = vf_sorted[0].app_id if vf_sorted else None
+    old_texture_paths = set()
+    new_texture_paths = set()
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -239,6 +331,23 @@ def update_arc(filepath, vfiles):
             file_type = EXTENSION_TO_FILE_ID[vf.extension]
         except KeyError:
             file_type = int(vf.extension)
+
+        if vf.extension in TEXTURE_EXTENSIONS:
+            new_texture_paths.add(_normalize_texture_key(file_path))
+
+        # Collect old texture refs before overwriting
+        if remove_unused_textures and vf.extension in ("mod", "mrl"):
+            old_entry = imported.get(path)
+            if old_entry:
+                old_paths = _get_texture_paths_from_arc_entry(old_entry, app_id)
+                if old_paths is not None:
+                    old_texture_paths |= old_paths
+            if vf.extension == "mod":
+                new_paths = _texture_paths_from_mod(vf_data, app_id)
+            else:
+                new_paths = _texture_paths_from_mrl(vf_data, app_id)
+            if new_paths is not None:
+                new_texture_paths |= new_paths
 
         if imported.get(path):
             item = imported.get(path)
@@ -258,6 +367,17 @@ def update_arc(filepath, vfiles):
             exported[path] = item
 
     exported.update(imported)
+
+    if remove_unused_textures and app_id and old_texture_paths:
+        exported, removed = _find_orphaned_textures(
+            exported, app_id, old_texture_paths, new_texture_paths)
+        if removed:
+            preview = ", ".join(ntpath.basename(p) for p in removed[:8])
+            if len(removed) > 8:
+                preview += ", ..."
+            show_message_box(
+                f"Removed {len(removed)} orphaned texture(s): {preview}")
+
     return _serialize_arc(exported)
 
 

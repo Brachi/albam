@@ -69,6 +69,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
     far_add_new: bpy.props.BoolProperty(default=False)
     export_autofix: bpy.props.BoolProperty(default=False)
+    remove_unused_textures: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -196,6 +197,8 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
                     text="Set LOD ID = 255 (always visible) for exported meshes")
         layout.prop(export_settings, "export_bones", text="Export edited bones")
         layout.prop(export_settings, "export_autofix", text="Make no mistakes")
+        layout.prop(export_settings, "remove_unused_textures",
+                    text="Remove orphaned textures from arc")
         layout.label(text="Dragon's Dogma export hacks")
         layout.prop(export_settings, "no_vf_grouping",
                     text="Don't group meshes by vertex format")
@@ -388,7 +391,8 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(path_i, files_e)
+        remove_unused = context.scene.albam.export_settings.remove_unused_textures
+        arc = update_arc(path_i, files_e, remove_unused_textures=remove_unused)
         with open(self.filepath, "wb") as f:
             f.write(arc)
 
@@ -458,7 +462,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(self.filepath, files_e)
+        arc = update_arc(self.filepath, files_e,
+                         remove_unused_textures=context.scene.albam.export_settings.remove_unused_textures)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}

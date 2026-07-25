@@ -2108,8 +2108,11 @@ def _duplicate_vtx_by_attr(src_obj):
             for g in v.groups:
                 group_tuple.append((groups[g.group].name, round(g.weight, 6)))
 
-            # compare only by vtx index and uv[(u1,v1),(u2,v2),...]
-            comparison_key = (loop.vertex_index, *uv_tuple)
+            # Split normal attribute, duplicate in case of Blender's hard edges
+            normal_tuple = tuple(round(x, 6) for x in n)
+
+            # compare by vtx index, uv[(u1,v1),(u2,v2),...] + split normals
+            comparison_key = (loop.vertex_index, *uv_tuple, normal_tuple)
 
             if comparison_key not in comparison_vtx_map:
                 idx = len(new_vertices)
@@ -2126,7 +2129,7 @@ def _duplicate_vtx_by_attr(src_obj):
             new_face.append(comparison_vtx_map[comparison_key])
         new_faces.append(new_face)
 
-    # Set new mew with duplicated vertices
+    # Set new mesh with duplicated vertices
     dst_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
     dst_mesh.from_pydata(new_vertices, [], new_faces)
     dst_mesh.update()

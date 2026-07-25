@@ -1,5 +1,6 @@
 from albam.engines.mtfw.texture import (
     TEX_FORMAT_MAPPER,
+    TEX_VERSION,
     Tex157,
     Tex112
 )
@@ -13,7 +14,6 @@ ACCEPTABLE_SIZES.add(768)
 ACCEPTABLE_SIZES.add(1280)
 ACCEPTABLE_SIZES.add(1920)
 ACCEPTABLE_SIZES.add(1080)
-TEX_VERSIONS_157 = {153, 154, 157, 158}
 TEX_TYPES_157 = {0x2, 0x3, 0x6}
 TEX_ATTR_157 = {0x0}
 UNK = {0, 32, 160}
@@ -29,7 +29,7 @@ def test_parse_tex(parsed_tex_from_arc):
     assert 0 < tex.num_mipmaps_per_image <= 13  # XXX FAILS sometimes
 
     if type(tex) is Tex157:
-        assert tex.version in TEX_VERSIONS_157
+        assert tex.version in TEX_VERSION.values()
         assert tex.unk in UNK
         assert tex.attr == 0
         assert tex.prebias in TEX_PREBIAS_157
