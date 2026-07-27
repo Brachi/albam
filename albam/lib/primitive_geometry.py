@@ -33,10 +33,10 @@ class BoundingBox():
         self.capcom()
 
     def capcom(self):
+        # Correction for flat bounding boxes
         x, y, z = (self.maxPos - self.minPos)
         self.minPos -= Vector([x == 0, y == 0, z == 0])
         self.maxPos += Vector([x == 0, y == 0, z == 0])
-        # Correction for flat bounding boxes
 
     def __contains__(self, bb):
         if isinstance(bb, BoundingBox):
@@ -299,8 +299,9 @@ class PrimitiveTree(GeometryPrimitive):
         return {
             "BVHC": 0x77B17B2443485642,
             "SOH": 0x1,
-            "boundingBox": self.content.boundingBox().serialize(),
             "nodeCount": len(self.content),
+            # was self.content.boundingBox().serialize() and didn't match
+            "boundingBox": self.boundingBox().serialize(),
             "null": [0] * 3,
             "AABBArray": [sn.serialize() for sn in self.content.subnodes()]
         }

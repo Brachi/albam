@@ -351,7 +351,6 @@ def export_sbc(bl_obj):
                "partition": PARTITION[export_settings.partition],
                "mode": MODE[export_settings.mode]}
     vfiles = []
-    print("Initiate SBC export")
     for mesh in mesh_clones:
         if app_id not in ("re5", "dmc4"):
             custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
@@ -482,11 +481,11 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree)
     dst_sbc.faces = faces
     dst_sbc.vertices = vertices
     final_size = sum((
-        0x30,
-        dst_sbc.header.num_boxes * 0x50,
-        dst_sbc.header.num_objects * 0x60,
-        dst_sbc.header.num_faces * 0x28,
-        dst_sbc.header.num_vertices * 16
+        48,
+        dst_sbc.header.num_boxes * 80,
+        dst_sbc.header.num_objects * 96,
+        dst_sbc.header.num_faces * 28,
+        dst_sbc.header.num_vertices * 16,
     ))
     return final_size
 
@@ -510,7 +509,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, num_objects, num_stages, num_pair
         num_vertices=num_vertices,
         nulls=[0, 0, 0, 0],
         bounding_box=bbox,
-        bb_size=0x70 * (aabb_count),
+        bb_size=112 * (aabb_count),  # 0x70
     ))
 
     dst_sbc_header._check()
@@ -597,7 +596,7 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     sbc_info.start_nodes = start_node
     sbc_info.start_faces = start_tri if start_tri >= 0 else 0
     sbc_info.start_vertices = start_vert if start_vert >= 0 else 0
-    sbc_info.child_index = [0, 0]
+    sbc_info.child_index = [0, 0]  # not correct should be index for leaf nodes
     node_list = []
 
     for bvnode in bvhc_raw["AABBArray"]:

@@ -1,12 +1,16 @@
 from albam.engines.mtfw.collision import KNOWN_RUNTIME_ATTR
 SBC_MAGIC_ID = [49, 255]
-KNOWN_NODE_BIT = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 15, 17, 19, 20, 21, 23, 29, 30, 31, 33,
-                  45, 47, 53, 55, 61, 63, 64, 67, 69, 76, 127, 128, 129, 195,
-                  200, 207, 216, 225, 227, 237, 239, 245, 255]
+KNOWN_NODE156_BIT = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 15, 17, 19, 20, 21, 23, 29, 30, 31, 33,
+                     45, 47, 53, 55, 61, 63, 64, 67, 69, 76, 127, 128, 129, 195,
+                     200, 207, 216, 225, 227, 237, 239, 245, 255]
 
-KNOWN_TYPE = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 8192, 16384, 32768, 131072,
-              524288, 1048576, 209715, 262144, 4194304, 2097152, 8388608, 67108864, 536870912,
-              134217728,]  # power of 2 flags ?
+KNOWN_TYPE156 = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 8192, 16384, 32768, 131072,
+                 524288, 1048576, 209715, 262144, 4194304, 2097152, 8388608, 67108864, 536870912,
+                 134217728,]  # power of 2 flags ?
+
+KNOWN_SBC_INFO156_ID = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 15, 17, 18, 19, 20, 21, 22, 23,
+                        24, 25, 26, 27, 28, 29, 31, 30, 32, 33, 35, 34, 37, 307, 308, 309, 310, 311, 500, 501,
+                        502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 4294967295]
 
 KNOWN_SPECIAL_ATTR = [0]
 KNOWN_SURFACE_ATTR = [0]
@@ -23,7 +27,7 @@ def test_parsed_sbc(parsed_sbc_from_arc):
     elif magic[3] == 49:
         sbc_info = [info for info in sbc.sbc_info]
         assert sbc_info[0].start_nodes == sbc.header.num_objects_nodes
-
+        assert info.index_id not in KNOWN_SBC_INFO156_ID
         for i, node in enumerate(sbc.nodes):
             if i < sbc.header.num_objects_nodes:
                 # doesn't pass for s107h_sr1 s109h_scr s205h_eff s205h_scr s304h_scr s312h_scr s316h_eff
@@ -51,6 +55,6 @@ def test_parsed_sbc(parsed_sbc_from_arc):
                     assert node.child_index[1] == sbc_child1
         for face in sbc.faces:
             assert face.runtime_attr in KNOWN_RUNTIME_ATTR
-            assert face.type in KNOWN_TYPE
+            assert face.type in KNOWN_TYPE156
             assert face.special_attr in KNOWN_SPECIAL_ATTR
             assert face.surface_attr in KNOWN_SURFACE_ATTR
