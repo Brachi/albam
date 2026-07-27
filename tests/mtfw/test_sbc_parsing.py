@@ -22,28 +22,33 @@ def test_parsed_sbc(parsed_sbc_from_arc):
         assert sbc.bvh.node_count > 0
     elif magic[3] == 49:
         sbc_info = [info for info in sbc.sbc_info]
-        assert sbc_info[0].start_boxes == sbc.header.num_groups_nodes
+        assert sbc_info[0].start_nodes == sbc.header.num_objects_nodes
 
         for i, node in enumerate(sbc.nodes):
-            # if i >= sbc.header.num_groups:
-            #    break
-            if False:
-                # doesn't pass for s107h_sr1.sbc s109h_scr.sbc s205h_eff.sbc ...
-                assert node.aabb_01.min.x == sbc_info[i].min[0].x
-                assert node.aabb_01.min.y == sbc_info[i].min[0].y
-                assert node.aabb_01.min.z == sbc_info[i].min[0].z
+            if i < sbc.header.num_objects_nodes:
+                # doesn't pass for s107h_sr1 s109h_scr s205h_eff s205h_scr s304h_scr s312h_scr s316h_eff
+                # s316h_scr
+                assert node.boxes[0].min[0] == sbc_info[i].vmin[0].x
+                assert node.boxes[0].min[1] == sbc_info[i].vmin[0].y
+                assert node.boxes[0].min[2] == sbc_info[i].vmin[0].z
 
-                assert node.aabb_02.min.x == sbc_info[i].min[1].x
-                assert node.aabb_02.min.y == sbc_info[i].min[1].y
-                assert node.aabb_02.min.z == sbc_info[i].min[1].z
+                assert node.boxes[1].min[0] == sbc_info[i].vmin[1].x
+                assert node.boxes[1].min[1] == sbc_info[i].vmin[1].y
+                assert node.boxes[1].min[2] == sbc_info[i].vmin[1].z
 
-                assert node.aabb_01.max.x == sbc_info[i].max[0].x
-                assert node.aabb_01.max.y == sbc_info[i].max[0].y
-                assert node.aabb_01.max.z == sbc_info[i].max[0].z
+                assert node.boxes[0].max[0] == sbc_info[i].vmax[0].x
+                assert node.boxes[0].max[1] == sbc_info[i].vmax[0].y
+                assert node.boxes[0].max[2] == sbc_info[i].vmax[0].z
 
-                assert node.aabb_02.max.x == sbc_info[i].max[1].x
-                assert node.aabb_02.max.y == sbc_info[i].max[1].y
-                assert node.aabb_02.max.z == sbc_info[i].max[1].z
+                assert node.boxes[1].max[0] == sbc_info[i].vmax[1].x
+                assert node.boxes[1].max[1] == sbc_info[i].vmax[1].y
+                assert node.boxes[1].max[2] == sbc_info[i].vmax[1].z
+                sbc_child0 = sbc_info[i].child_index[0]
+                sbc_child1 = sbc_info[i].child_index[1]
+                if sbc_child0:
+                    assert node.child_index[0] == sbc_child0
+                if sbc_child1:
+                    assert node.child_index[1] == sbc_child1
         for face in sbc.faces:
             assert face.runtime_attr in KNOWN_RUNTIME_ATTR
             assert face.type in KNOWN_TYPE

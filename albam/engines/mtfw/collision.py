@@ -39,7 +39,7 @@ SBC_VERSION = {
     "dmc4": 18,
 }
 
-DEBUG_DRAW = False
+DEBUG_DRAW = True
 
 KNOWN_RUNTIME_ATTR = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192,
                       11264, 11776, 16384, 17408, 32768, 33280, 33792, 34304, 34816, 35840,
@@ -211,7 +211,7 @@ def load_sbc(file_item, context):
 
     if DEBUG_DRAW:
         for i, node in enumerate(bvh_collection):
-            if i >= sbc.header.num_groups:
+            if i >= sbc.header.num_objects:
                 break
             debug_create_sbcinfo_nodes(node)
 
@@ -1066,7 +1066,10 @@ def _unpack_bbox(min, max):
 
 def _scale_bbox(box):
     scaled = []
-    scaled = (box.x / 100, box.z / -100, box.y / 100)
+    try:
+        scaled = (box.x / 100, box.z / -100, box.y / 100)
+    except AttributeError:
+        scaled = (box[0] / 100, box[2] / -100, box[1] / 100)
     return scaled
 
 
@@ -1153,6 +1156,7 @@ def debug_create_bbox(sbc):
     a_max = sbc.sbcinfo.vmax[0]
     b_max = sbc.sbcinfo.vmax[1]
     boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
+    # boxes = [(bbox_min, bbox_max)]
     parent = None
     for i, b in enumerate(boxes):
         if i <= 0:
