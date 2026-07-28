@@ -428,6 +428,7 @@ class BBVH(QBVH):
         return boxes
 
     def typeMask(self):
+        # `bit` value in BHV, the type of node incoded with 6th and 7th bit
         if not self.isNode():
             raise NotImplementedError(
                 "Empties and Primitives don't have a type mask.")

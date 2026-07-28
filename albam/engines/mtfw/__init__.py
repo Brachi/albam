@@ -610,6 +610,7 @@ FILE_ID_TO_EXTENSION = {
     0x285A13D9: "vzo",
     0x4323D83A: "stex",
     0x6A5CDD23: "occ",
+    0x3900DAD0: "sbc",  # DMC4
 }
 
 EXTENSION_TO_FILE_ID = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION.items()}

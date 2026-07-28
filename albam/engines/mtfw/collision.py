@@ -17,6 +17,7 @@ from ...lib.primitive_geometry import EPS, Tri
 from ...lib import primitive_geometry as geo
 from ...lib import bvh_construction as bvh
 from ...lib import common_op as common
+from ...lib.misc import number_to_color
 
 SBC_CLASS_MAPPER = {
     49: Sbc156,
@@ -39,7 +40,7 @@ SBC_VERSION = {
     "dmc4": 18,
 }
 
-DEBUG_DRAW = True
+DEBUG_DRAW = False
 
 KNOWN_RUNTIME_ATTR = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192,
                       11264, 11776, 16384, 17408, 32768, 33280, 33792, 34304, 34816, 35840,
@@ -303,8 +304,8 @@ def create_sbc_mesh(name, meshpart, app_id):
                 mat.diffuse_color = palette[KNOWN_RUNTIME_ATTR.index(material)]
             else:
                 mat.diffuse_color = palette[material]
-        except IndexError:
-            colorsys.hsv_to_rgb(0, 0, 0)
+        except (IndexError, ValueError):
+            mat.diffuse_color = number_to_color(material)
             print("Unknown colision type: %d" % material)
         bl_mesh.materials.append(mat)
         for face in meshpart["materials"][material]:
@@ -325,6 +326,7 @@ def cycles(verts):
 @blender_registry.register_export_function(app_id="re6", extension="sbc")
 @blender_registry.register_export_function(app_id="re5", extension="sbc")
 @blender_registry.register_export_function(app_id="dd", extension="sbc")
+@blender_registry.register_export_function(app_id="dmc4", extension="sbc")
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
@@ -601,8 +603,8 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
 
     for bvnode in bvhc_raw["AABBArray"]:
         node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
-        node.bit = bvnode['nodeType']
-        node.child_index = bvnode['nodeId']
+        node.bit = bvnode["nodeType"]
+        node.child_index = bvnode["nodeId"]
         boxes = []
         for i in range(2):
             bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
