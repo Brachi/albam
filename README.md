@@ -47,3 +47,4 @@ Note: you need application data to run most useful tests.
 * Henry of Carim
 * AsteriskAmpersand
 * Che
+* Kami

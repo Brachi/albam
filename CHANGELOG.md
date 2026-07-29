@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
 - Error message for the case when there is no mesh to export
+- Support for navigation mesh import-export (Resident Evil 5)
 
 ### Fixed
 
