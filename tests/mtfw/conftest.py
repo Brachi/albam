@@ -37,6 +37,12 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["sbc_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
+    elif ("app_id" in metafunc.fixturenames and
+          "nav_path" in metafunc.fixturenames):
+        argnames = ("app_id", "nav_path")
+        argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
+        metafunc.parametrize(argnames, argvalues, scope="session")
+
     elif "parsed_mod_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("mod", metafunc, "parsed_mod_from_arc")
     elif "parsed_mrl_from_arc" in metafunc.fixturenames:
@@ -49,6 +55,8 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("sbc", metafunc, "parsed_sbc_from_arc")
     elif "parsed_rtex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
+    elif "parsed_nav_from_arc" in metafunc.fixturenames:
+        _generate_tests_from_arcs("nav", metafunc, "parsed_nav_from_arc")
 
 
 @pytest.fixture(scope="session")
@@ -193,6 +201,48 @@ def sbc_exported(sbc_export):
         return sbc
 
 
+@pytest.fixture(scope="session")
+def nav_export(loaded_arcs, app_id, nav_path):
+    if not nav_path:
+        pytest.skip("No nav available")
+    bpy.context.scene.albam.apps.app_selected = app_id
+    vfile_nav = bpy.context.scene.albam.vfs.select_vfile(app_id, nav_path)
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
+    vfile_nav_exported = bpy.context.scene.albam.exported.select_vfile(app_id, nav_path)
+    assert vfile_nav_exported
+    from albam.engines.mtfw.structs.nav_156 import Nav156
+    src_nav = Nav156.from_bytes(vfile_nav.get_bytes())
+    dst_nav = Nav156.from_bytes(vfile_nav_exported.get_bytes())
+    src_nav._read()
+    dst_nav._read()
+    return src_nav, dst_nav
+
+
+@pytest.fixture(scope="session")
+def nav_imported(nav_export):
+    nav = nav_export[0]
+    if not nav:
+        pytest.skip("No imported nav available")
+    else:
+        return nav
+
+
+@pytest.fixture(scope="session")
+def nav_exported(nav_export):
+    nav = nav_export[1]
+    if not nav:
+        pytest.skip("No exported nav available")
+    else:
+        return nav
+
+
 @pytest.fixture
 def parsed_mrl_from_arc(request, scope="session"):
     # test collection before calling register() in pytest_session_start
@@ -310,6 +360,23 @@ def parsed_lmt_from_arc(request):
     src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
 
     parsed = Lmt.from_bytes(src_bytes)
+    parsed._arc_name = os.path.basename(arc.file_path)
+    parsed._file_path = file_entry.file_path
+
+    return parsed
+
+
+@pytest.fixture
+def parsed_nav_from_arc(request):
+    from albam.engines.mtfw.structs.nav_156 import Nav156
+
+    arc = request.param[0]
+    file_entry = request.param[1]
+
+    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
+
+    parsed = Nav156.from_bytes(src_bytes)
+    parsed._read()
     parsed._arc_name = os.path.basename(arc.file_path)
     parsed._file_path = file_entry.file_path
 
