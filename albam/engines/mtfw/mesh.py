@@ -822,6 +822,8 @@ def export_mod(bl_obj):
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
+    msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
+    assert bl_meshes, msg
 
     if export_settings.export_autofix:
         if bpy.data.collections.get("AlbamTemp"):
