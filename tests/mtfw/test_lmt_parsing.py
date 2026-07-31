@@ -6,6 +6,7 @@ ROTATION = [0, 3]
 SCALE = [2, 5]
 BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
 JOINT_TYPES = [0, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 42, 43, 44, 48, 49]
+BONES_WITH_JOINT_TYPES = [16, 11, 20, 6, 254]  # 20: "thigh_l",
 # re0 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 # re1 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 # rev1 [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13]
@@ -84,3 +85,36 @@ def test_lmt(parsed_lmt_from_arc):
                 assert tr.usage in ROTATION
                 assert tr.ofs_bounds != 0
                 assert tr.len_data % 5 == 0
+
+
+def is_strictly_increasing(lst):
+    return all(lst[i] < lst[i+1] for i in range(len(lst)-1))
+
+
+def test_joint(parsed_lmt_from_arc):
+    lmt = parsed_lmt_from_arc
+    anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
+    for ab in anim_blocks:
+        tracks = getattr(ab, "tracks")
+        bones_joint_index = []
+        seq = {}
+        for track in tracks:
+            # looks like 254 is some index for multiple service objects
+            if track.bone_index == 254:
+                # FAILED [fig29.arc::id\\figdata\\fig29\\fig29.lmt]
+                # FAILED [uOma004_Collapse.arc::pawn\\om\\oma004\\motion\\oma004_pf.lmt]
+                assert track.joint_type != 0
+            if track.bone_index not in (254, 255):
+                key = (track.bone_index, track.usage, track.joint_type)
+                # assert key not in bones_joint_index
+                bones_joint_index.append(key)
+                if track.bone_index not in seq:
+                    seq[track.bone_index] = [track.usage]
+                else:
+                    seq[track.bone_index].append(track.usage)
+        for k, v in seq.items():
+            if len(v) > 1:
+                # looks like it's a sequence of usage per bone [0, 1, 2]
+                assert is_strictly_increasing(v)
+
+    # print(bones_joint_index)

@@ -222,6 +222,12 @@ def lmt_export(loaded_arcs, app_id, lmt_path, mod_path):
 
     latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
     bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    # enable serialization of certain action track
+    lmt = bpy.context.scene.albam.exportable.file_list[latest_exported]
+    bl_obj = lmt.bl_object
+    bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    bl_objects[10].albam_custom_properties.re5__lmt_51_anim.generate_new = True
+
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
 

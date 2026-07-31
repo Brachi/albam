@@ -23,12 +23,21 @@ def test_export_anim_block(lmt_imported, lmt_exported):
             assert sab.block_header.init_quaterion == dab.block_header.init_quaterion
             stracks = [tr for _, tr in enumerate(sab.block_header.tracks)]
             dtracks = [tr for _, tr in enumerate(dab.block_header.tracks)]
+            for strack in stracks:
+                bone = strack.bone_index
+                dbone = -1
+                for dtrack in dtracks:
+                    if dtrack.bone_index == bone:
+                        dbone = dtrack.bone_index
+                if dbone == -1:
+                    print(bone)
+            '''
             for str, dtr in zip(stracks, dtracks):
                 str.buffer_type = dtr.buffer_type
                 str.usage == dtr.usage
                 str.joint_type == dtr.joint_type
                 str.bone_index == dtr.bone_index
                 str.weight == dtr.weight
-                str.len_data == dtr.len_data
+                str.len_data == dtr.len_data'''
         else:
             assert sab.offset == dab.offset

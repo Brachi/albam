@@ -13,7 +13,7 @@ from .structs.lmt import Lmt
 HACKY_BONE_INDEX_IK_FOOT_RIGHT = 19
 HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 HACKY_BONE_INDICES_IK_FOOT = {HACKY_BONE_INDEX_IK_FOOT_RIGHT, HACKY_BONE_INDEX_IK_FOOT_LEFT}
-ROOT_UNK_BONE_ID = 254
+ROOT_UNK_BONE_ID = 254  # probably a general index for non-bone objects, same ID with different joint types
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
@@ -44,6 +44,7 @@ APPID_VERSION_MAPPER = {
     "dd": 67,
 }
 
+BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
 KEYFRAME_TYPES_51 = {
     1: Lmt.Vec3Frame12,  # LMTVec3 but tests didn't found it in re games
     2: Lmt.Vec3Frame12,
@@ -59,8 +60,6 @@ KEYFRAME_TYPES_51 = {
     14: Lmt.Quatized11Quat,
     15: Lmt.Quatized9Quat,
 }
-
-BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
 
 KEYFRAME_TYPES_67 = KEYFRAME_TYPES_51.copy()
 KEYFRAME_TYPES_67.update({
@@ -334,7 +333,13 @@ def load_lmt(vfile, context):
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]
+        # Workaround for cases when same bone index has more than 3 anim tracks
+        last_usage = {}
+        duplicated_bids = {}
         for track_index, track in enumerate(block.block_header.tracks):
+            if duplicated_bids.get(track.bone_index, None) is None:
+                duplicated_bids[track.bone_index] = 0
+
             # Custom attributes for a track
             item = tracks.tracks.add()
             item.copy_custom_properties_from(track)
@@ -350,21 +355,37 @@ def load_lmt(vfile, context):
                     bounds = LMTKeyframeBounds(track.bounds)
                     keyframes.bounds = bounds
 
-            bone_index = mapping.get(str(track.bone_index))
+            try:
+                lu = last_usage[track.bone_index][-1]
+                if lu >= track.usage:
+                    duplicated_bids[track.bone_index] += 1
+                    print("Need new bone for:", track.bone_index,
+                          "current:", track.usage,
+                          "previous", last_usage[track.bone_index][-1])
+                last_usage[track.bone_index].append(track.usage)
+            except KeyError:
+                last_usage[track.bone_index] = [track.usage]
 
+            if duplicated_bids[track.bone_index] == 0:
+                key = str(track.bone_index)
+            else:
+                key = str(track.bone_index) + "_" + str(duplicated_bids[track.bone_index])
+            bone_index = mapping.get(key)
+
+            # Set motion root bone
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
                 bone_index = _get_or_create_root_motion_bone(armature, mapping)
 
-            elif bone_index is None and track.bone_index == ROOT_UNK_BONE_ID:
-                # Probably some kind of object tracker bone (weapon?)
-                # TODO: do something with this
-                continue
-            elif bone_index is None:
-                # TODO: better stats
-                print(f"bone_index not found!: [{track.bone_index}]")
-                continue
+            # Restore IK
             if track.bone_index in HACKY_BONE_INDICES_IK_FOOT:
                 bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
+
+            # LMT references service(?) bones absent in the imported armature
+            if bone_index is None:
+                bone_index = _create_missing_bones(armature,
+                                                   track.bone_index,
+                                                   key,
+                                                   mapping)
 
             track_type = USAGE[track.usage]
             keyframes.track_type = USAGE[track.usage]
@@ -392,27 +413,9 @@ def load_lmt(vfile, context):
                 keyframes.decoded_frames = _parent_space_to_local_translation(
                     keyframes.decoded_frames, armature, bone_index)
 
-            group_name = str(bone_index)
-            group = action.groups.get(group_name) or action.groups.new(group_name)
-            data_path = f"pose.bones[\"{bone_index}\"].{track_type}"
-            num_curv = 4 if track_type == "rotation_quaternion" else 3
-            try:
-                curves = [action.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
-                for c in curves:
-                    c.group = group
-            except RuntimeError as err:
-                print('unknown error:', err, "Block index: {0}, Track index:{1}".format(
-                    block_index, track_index))
+            err = _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index)
+            if err:
                 continue
-            # for frame_index, frame_data in enumerate(decoded_frames):
-            for frame_index, frame_data in enumerate(keyframes.decoded_frames):
-                if frame_data is None:
-                    continue
-                for curve_idx, curve in enumerate(curves):
-                    curve.keyframe_points.add(1)
-                    curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])  # frame , value
-                    curve.keyframe_points[-1].interpolation = 'LINEAR'
-
         # building custom attributes of lmt metadata
         custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
@@ -456,17 +459,42 @@ def load_lmt(vfile, context):
     return bl_object
 
 
+def _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index):
+    group_name = str(bone_index)
+    group = action.groups.get(group_name) or action.groups.new(group_name)
+    data_path = f"pose.bones[\"{bone_index}\"].{track_type}"
+    num_curv = 4 if track_type == "rotation_quaternion" else 3
+    try:
+        curves = [action.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
+        for c in curves:
+            c.group = group
+    except RuntimeError as err:
+        print('unknown error:', err, "Block index: {0}, Track index:{1}".format(
+            block_index, track_index))
+        return True
+    # for frame_index, frame_data in enumerate(decoded_frames):
+    for frame_index, frame_data in enumerate(keyframes.decoded_frames):
+        if frame_data is None:
+            continue
+        for curve_idx, curve in enumerate(curves):
+            curve.keyframe_points.add(1)
+            curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])  # frame , value
+            curve.keyframe_points[-1].interpolation = 'LINEAR'
+    return False
+
+
 def _create_bone_mapping(armature_obj):
-    # creates a dictionary: animation bone index(reference_bone_id) -> bone_name
+    """Creates a dictionary: animation bone index(reference_bone_id) -> bone_name"""
     bone_names = {}
-    root_bone_names = [b.name for idx, b in enumerate(
-        armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
+    # find root bones, at least 2 can have the same 0 index
+    root_bone_names = [b.name for idx, b in enumerate(armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
         reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
         if reference_bone_id is None:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
-        if reference_bone_id == 0 and root_bone_names > 1:
+        # ignore possible root_ground bone
+        if reference_bone_id == 0 and len(root_bone_names) > 1:
             if mapped_bone.parent is None:
                 continue
         if reference_bone_id in bone_names:
@@ -475,8 +503,27 @@ def _create_bone_mapping(armature_obj):
     return bone_names
 
 
-def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
+def _create_missing_bones(armature, bone_index, key, mapping):
+    if bpy.context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    # deselect all objects
+    bpy.ops.object.select_all(action='DESELECT')
 
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    bone_name = key
+
+    blender_bone = armature.data.edit_bones.new(bone_name)
+    mapping[key] = blender_bone.name
+    blender_bone.tail[2] += 0.01
+    blender_bone["mtfw.anim_retarget"] = key
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return bone_name
+
+
+def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
     if track_bone_index == HACKY_BONE_INDEX_IK_FOOT_RIGHT:
         postfix = "R"
     else:
@@ -491,15 +538,17 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
     # deselect all objects
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = armature
+
     armature.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
 
     blender_bone = armature.data.edit_bones.new(bone_name)
     blender_bone.head = armature.data.edit_bones[bone_index].head
     blender_bone.tail = armature.data.edit_bones[bone_index].tail
-    blender_bone['mtfw.anim_retarget'] = str(track_bone_index)
+    blender_bone["mtfw.anim_retarget"] = str(track_bone_index) + "_1"
     bpy.ops.object.mode_set(mode='OBJECT')
 
+    # set IK for toes
     pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
     constraint = pose_bone.constraints.new('IK')
     constraint.target = armature
@@ -702,7 +751,7 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, app_id):
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
         item.usage = et.usage
-        item.bone_index = int(et.bone_index)
+        item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
         item.weight = 1.0
         item.raw_data = et.data
 
