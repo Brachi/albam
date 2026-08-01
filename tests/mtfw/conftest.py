@@ -226,7 +226,10 @@ def lmt_export(loaded_arcs, app_id, lmt_path, mod_path):
     lmt = bpy.context.scene.albam.exportable.file_list[latest_exported]
     bl_obj = lmt.bl_object
     bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
-    bl_objects[10].albam_custom_properties.re5__lmt_51_anim.generate_new = True
+    # bl_objects[10].albam_custom_properties.re5__lmt_51_anim.generate_new = True
+    for obj in bl_objects:
+        if obj.albam_custom_properties.re5__lmt_51_anim.ofs_frame != 0:
+            obj.albam_custom_properties.re5__lmt_51_anim.generate_new = True
 
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}

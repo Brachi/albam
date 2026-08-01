@@ -46,7 +46,7 @@ APPID_VERSION_MAPPER = {
 
 BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
 KEYFRAME_TYPES_51 = {
-    1: Lmt.Vec3Frame12,  # LMTVec3 but tests didn't found it in re games
+    1: Lmt.Vec3Frame12,  # LMTVec3 but tests didn't find it in re games
     2: Lmt.Vec3Frame12,
     3: Lmt.Vec3Frame16,
     4: Lmt.Quat3Frame,  # Lmt.Quatized16Vec3 for ver55+
@@ -157,13 +157,13 @@ class LMTKeyFrames:
             last_frame = 0
             for frame, value in track.items():
                 kf = kfcls()
-                if self.track_type == "location":
-                    value = value * 100
-                elif self.track_type == "rotation_quaternion":
+                if self.track_type == "rotation_quaternion":
                     value = self.quantaize(value, kf_type)
                     kf.w = value.w
+                elif self.track_type == "location":
+                    value = value * 100
                 elif self.track_type == "scale":
-                    print("Scale")
+                    print("track type: scale")
                 kf.x = value.x
                 kf.y = value.y
                 kf.z = value.z
@@ -359,9 +359,9 @@ def load_lmt(vfile, context):
                 lu = last_usage[track.bone_index][-1]
                 if lu >= track.usage:
                     duplicated_bids[track.bone_index] += 1
-                    print("Need new bone for:", track.bone_index,
-                          "current:", track.usage,
-                          "previous", last_usage[track.bone_index][-1])
+                    # print("Need new bone for:", track.bone_index,
+                    #      "current:", track.usage,
+                    #      "previous", last_usage[track.bone_index][-1])
                 last_usage[track.bone_index].append(track.usage)
             except KeyError:
                 last_usage[track.bone_index] = [track.usage]
@@ -622,14 +622,14 @@ def _swap_zy(val):
 
 
 def _local_space_to_parent_translation(frame, bone):
+    if bone['mtfw.anim_retarget'].split("_")[0] in ("19", "23"):
+        return frame
     parent = bone.parent
     # v_local = Vector((frame.x, -frame.z, frame.y))
     global_pos = bone.matrix_local @ frame
     if parent is not None:
         parent_pos = parent.matrix_local.inverted() @ global_pos
     else:
-        if bone['mtfw.anim_retarget'] in ("19", "23"):
-            return frame
         parent_pos = global_pos
     # transform global position into parent's local space
     return parent_pos
@@ -719,18 +719,18 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
                 rotation_quaternion[frame] = action_key.rotation_quaternion
             if action_key.scale is not None:
                 scale[frame] = action_key.scale
-        if location:
-            keyframes.track_type = "location"
-            location_sorted = {k: location[k] for k in sorted(location)}
-            usage = _select_kf_usage(bone, "location")
-            kf_type = 2 if len(location_sorted) == 1 else 9
-            keyframes.encode_framedata(kf_type, bone_index, location_sorted, usage)
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
             kf_type = 4 if len(rotation_sorted) == 1 else 6
             usage = _select_kf_usage(bone, "rotation_quaternion")
             keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
+        if location:
+            keyframes.track_type = "location"
+            location_sorted = {k: location[k] for k in sorted(location)}
+            usage = _select_kf_usage(bone, "location")
+            kf_type = 2 if len(location_sorted) == 1 else 9
+            keyframes.encode_framedata(kf_type, bone_index, location_sorted, usage)
         if scale:
             keyframes.track_type = "scale"
             scale_sorted = {k: scale[k] for k in sorted(scale)}
