@@ -811,7 +811,6 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
         sort_hair_cards(source_obj, selected_meshes)
         show_message_box(message=f"{len(selected_meshes)} hair cards were sorted")
-        # merge_hair_cards(selected_meshes)
         return {'FINISHED'}
 
 
@@ -1085,24 +1084,6 @@ def _min_distance_to_target(obj, target_bvh):
     return min_dist
 
 
-# Check overlaping
-def _is_blocked_old(card_ob, v_from, v_to, bvh_list):
-    direction = (v_to - v_from).normalized()
-    length = (v_to - v_from).length
-    hit_objs = set()
-    exclude_obj = []
-    exclude_obj.append(card_ob)
-    # Check if the ray the goes from card to body is blocked by other cards
-    for bvh, target_ob in bvh_list:
-        if target_ob in exclude_obj:
-            continue
-        hit = bvh.ray_cast(v_from, direction, length)
-        if hit[0]:
-            hit_objs.add(target_ob)
-            exclude_obj.append(target_ob)
-    return hit_objs
-
-
 def _get_blocked_objs(card_ob, v_from, v_to, bvh_list):
     '''Returns dictionary: {object: distance_to_hit}'''
     direction = (v_to - v_from).normalized()
@@ -1129,67 +1110,6 @@ def _get_mesh_albam_props(obj):
     app_id = albam_asset.app_id
     custom_props = obj.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
     return custom_props
-
-
-def _join_objects(objects_to_join, aprior=None):
-    """
-    Joins multiple Blender objects into a single new object using bmesh,
-    correctly applying all world transformations.
-    """
-    if not objects_to_join:
-        print("No objects provided for joining.")
-        return None
-
-    # bmesh instance will hold merged geometry
-    bm = bmesh.new()
-    # bmesh data should be stored into the mesh
-    temp_mesh = bpy.data.meshes.new("temp_mesh_data")
-    obj_name = ""
-    target_col = None
-
-    for obj in objects_to_join:
-        if obj.type == 'MESH':
-            if not obj_name:
-                obj_name = obj.name
-            if target_col is None:
-                try:
-                    target_col = obj.users_collection[0]
-                except IndexError:
-                    target_col = bpy.context.collection
-            # Get the object's mesh data and world transformation matrix
-            mesh = obj.data
-            matrix_world = obj.matrix_world
-
-            # Create a temporary bmesh from the object's mesh data
-            # The 'from_mesh' method loads local coordinates
-            temp_bm = bmesh.new()
-            temp_bm.from_mesh(mesh)
-
-            # Apply the object's world matrix to transform vertices to world space
-            # This is crucial for robust joining
-            temp_bm.transform(matrix_world)
-
-            # Add the transformed geometry to the main BMesh instance
-            # bmesh objects are inherently additive
-            # bm.from_mesh(temp_bm.to_mesh(temp_mesh))
-            temp_bm.to_mesh(temp_mesh)
-            bm.from_mesh(temp_mesh)
-            temp_bm.free()
-
-    # Create a new mesh data-block and object
-    obj_name = obj_name.split(".")[0] + "_ap_" + str(aprior) if aprior else obj_name
-    new_mesh = bpy.data.meshes.new(obj_name + "_data")
-    bm.to_mesh(new_mesh)
-    bm.free()
-
-    new_object = bpy.data.objects.new(obj_name, new_mesh)
-    target_col.objects.link(new_object)
-
-    # Remove original objects
-    for obj in objects_to_join:
-        bpy.data.objects.remove(obj, do_unlink=True)
-
-    return new_object
 
 
 def _get_max_alpha_priority(cards_objs):
@@ -1412,16 +1332,3 @@ def sort_hair_cards(body_ob, cards_objs):
     sorting_pass(cards_objs)
     if debug_draw:
         _set_dbg_vtx_colors(cards_objs)
-
-
-def merge_hair_cards(objs):
-    alpha_prior_groups = {}
-    for obj in objs:
-        albam_props = _get_mesh_albam_props(obj)
-        if alpha_prior_groups.get(albam_props.alpha_priority) is None:
-            alpha_prior_groups[albam_props.alpha_priority] = []
-        alpha_prior_groups[albam_props.alpha_priority].append(obj)
-
-    for alpha_idx in alpha_prior_groups.keys():
-        continue
-        _join_objects(alpha_prior_groups[alpha_idx], alpha_idx)
