@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [unreleased]
+
+### Added
+
+- Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
+- Import option to batch import all `.mod` files from a selected folder at once
+- Export option to remove orphaned textures from `.arc` files when using custom texture paths
+- Error message for the case when there is no mesh to export
+- Support for navigation mesh import-export (Resident Evil 5)
+
+### Fixed
+
+- Import of meshes with Nan UVs
+- Triangulation function(now it keeps custom normals)
+- Missed value in .tex `value` enumerator for RE6 render targets
+
+### Changed
+
+### Removed
+
 ## [0.5.0] - 2026-04-03
 
 ### Added
@@ -26,7 +46,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Issue with batch props pasting
 - Tools: minor fixes
 - RE6 import: em5600
-
 
 ### Changed
 
