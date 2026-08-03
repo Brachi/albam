@@ -18,11 +18,13 @@ def get_app_dir_from_config(self, context):
 def set_app_dir_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_dir = context.scene.albam.apps.app_dir
+    if not current_dir:
+        return
 
     config_mgr = AppsUserDataConfigManager()
     app_section = config_mgr.get_app_section(current_app)
     if not app_section:
-        config_mgr.config.add_section(f"app.{current_app}")
+        config_mgr.config.add_section(current_app)
         app_section = config_mgr.get_app_section(current_app)
     app_section["app_dir"] = current_dir
 
@@ -366,7 +368,6 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         row = self.layout.row(heading="App Folder:", align=True)
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
-
 
 
 @blender_registry.register_blender_type

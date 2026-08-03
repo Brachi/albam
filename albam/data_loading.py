@@ -41,8 +41,7 @@ class AppsUserDataConfigManager:
     def get_app_section(self, app_id):
         app_section = None
         for section in self.config.sections():
-            _, _, section_app_id = section.partition(".")
-            if section_app_id == app_id:
+            if section == app_id:
                 app_section = self.config[section]
         return app_section
 
@@ -65,9 +64,7 @@ def _populate_apps_userdata():
     current_app = bpy.context.scene.albam.apps.app_selected
 
     for section in apps_userdata_config.sections():
-        _, _, app_id = section.partition(".")
-        print(section, app_id, current_app)
-        if app_id == current_app:
+        if section == current_app:
             app_dir = apps_userdata_config[section].get("app_dir")
             if app_dir:  # TODO: check validity, convert to system path
                 bpy.context.scene.albam.apps.app_dir = app_dir
