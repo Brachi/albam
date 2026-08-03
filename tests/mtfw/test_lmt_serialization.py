@@ -1,4 +1,4 @@
-from albam.engines.mtfw.animation import KEYFRAME_TYPES_51
+# from albam.engines.mtfw.animation import KEYFRAME_TYPES_51
 
 
 def test_export_header(lmt_imported, lmt_exported):
@@ -40,9 +40,7 @@ def test_export_anim_block(lmt_imported, lmt_exported):
             j = 0
             for str, dtr in zip(stracks, dtracks):
                 # print("amim_block:", i, "track:", j, str.bone_index)
-                # buffert type selection isn't that reliable for static frames
-                # if str.bone_index != 254:
-                #    assert str.buffer_type == dtr.buffer_type
+                # current code buffer type selection isn't that reliable for static frames
                 assert str.usage == dtr.usage
                 # assert str.joint_type == dtr.joint_type
                 assert str.bone_index == dtr.bone_index

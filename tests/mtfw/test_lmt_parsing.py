@@ -88,7 +88,7 @@ def test_lmt(parsed_lmt_from_arc):
 
 
 def is_strictly_increasing(lst):
-    return all(lst[i] < lst[i+1] for i in range(len(lst)-1))
+    return all(lst[i] < lst[i + 1] for i in range(len(lst) - 1))
 
 
 def test_joint(parsed_lmt_from_arc):
@@ -114,7 +114,7 @@ def test_joint(parsed_lmt_from_arc):
                     seq[track.bone_index].append(track.usage)
         for k, v in seq.items():
             if len(v) > 1:
-                # looks like it's a sequence of usage per bone [0, 1, 2]
+                # looks like it's a sequence of usage per bone [rotation, translation, scale]
                 assert is_strictly_increasing(v)
 
     # print(bones_joint_index)
