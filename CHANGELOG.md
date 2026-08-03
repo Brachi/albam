@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Error message for the case when there is no mesh to export
 - Support for navigation mesh import-export (Resident Evil 5)
 - Autosorter tool to automatically set `alpha priority` values ​​for hair cards
+- App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 
 ### Fixed
 
