@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         bpy: [{"bpy-version": "4.5", "python-version": "3.11"},
-              {"bpy-version": "5.0.1", "python-version": "3.11"}
+              {"bpy-version": "5.2.0", "python-version": "3.13"}
              ]
     steps:
     - uses: actions/checkout@v3
