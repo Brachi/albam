@@ -1,4 +1,3 @@
-import io
 import math
 from io import BytesIO
 from ...vfs import VirtualFileData
@@ -119,7 +118,7 @@ class LMTKeyFrames:
         keyframe = kfcls()  # hack to get the size before reading
         for start in range(0, len(data), keyframe.size_):
             chunk = data[start: start + keyframe.size_]
-            frame = kfcls(KaitaiStream(io.BytesIO(chunk)))
+            frame = kfcls(KaitaiStream(BytesIO(chunk)))
             frame._read()
             duration = getattr(frame, "duration", 1)
             dframe = None
@@ -148,6 +147,7 @@ class LMTKeyFrames:
             dst_track.usage = usage
             dst_track.joint_type = 0
             dst_track.bone_index = bone_index
+            dst_track.reference_data = []
             dst_raw_data = bytearray()
 
             kfcls = KEYFRAME_TYPES[self.version].get(kf_type, None)
@@ -158,19 +158,24 @@ class LMTKeyFrames:
             for frame, value in track.items():
                 kf = kfcls()
                 if self.track_type == "rotation_quaternion":
+                    if not dst_track.reference_data:
+                        dst_track.reference_data = [value.x, value.y, value.z, value.w]
                     value = self.quantaize(value, kf_type)
                     kf.w = value.w
                 elif self.track_type == "location":
                     value = value * 100
+                    if not dst_track.reference_data:
+                        dst_track.reference_data = [value.x, value.y, value.z, 1.0]
                 elif self.track_type == "scale":
-                    print("track type: scale")
+                    if not dst_track.reference_data:
+                        dst_track.reference_data = [value.x, value.y, value.z, 1.0]
                 kf.x = value.x
                 kf.y = value.y
                 kf.z = value.z
                 duration = int(frame - last_frame)
                 kf.duration = duration
                 last_frame = frame
-                stream = KaitaiStream(io.BytesIO(bytearray(kf.size_)))
+                stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
                 kf._check()
                 kf._write(stream)
                 dst_raw_data.extend(stream.to_byte_array())
@@ -307,7 +312,7 @@ class LMTKeyframeBounds:
 def load_lmt(vfile, context):
     app_id = vfile.app_id
     lmt_bytes = vfile.get_bytes()
-    lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
+    lmt = Lmt(KaitaiStream(BytesIO(lmt_bytes)))
     lmt._read()
     lmt_ver = lmt.version
     armature = context.scene.albam.import_options_lmt.armature
@@ -339,6 +344,7 @@ def load_lmt(vfile, context):
         for track_index, track in enumerate(block.block_header.tracks):
             if duplicated_bids.get(track.bone_index, None) is None:
                 duplicated_bids[track.bone_index] = 0
+            action[f"joint_index_{track.bone_index}"] = track.joint_type
 
             # Custom attributes for a track
             item = tracks.tracks.add()
@@ -607,6 +613,7 @@ def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
         bone = armature.data.bones[bone_index]
         if bone.parent:
             parent_space = bone.parent.matrix_local.inverted() @ bone.matrix_local
+
         else:
             # XXX Temp hack
             v = bone.matrix_local.to_translation()
@@ -622,17 +629,20 @@ def _swap_zy(val):
 
 
 def _local_space_to_parent_translation(frame, bone):
-    if bone['mtfw.anim_retarget'].split("_")[0] in ("19", "23"):
+    anim_bone_id = bone.get("mtfw.anim_retarget", "").split("_")[0]
+
+    if anim_bone_id == "0" and bone.parent is None:
+        rest = bone.matrix_local.to_translation()
+        lmt_rest = Vector((rest.x, rest.z, -rest.y))
+        return frame + lmt_rest
+
+    if anim_bone_id in ("19", "23"):
         return frame
-    parent = bone.parent
-    # v_local = Vector((frame.x, -frame.z, frame.y))
+
     global_pos = bone.matrix_local @ frame
-    if parent is not None:
-        parent_pos = parent.matrix_local.inverted() @ global_pos
-    else:
-        parent_pos = global_pos
-    # transform global position into parent's local space
-    return parent_pos
+    if bone.parent is not None:
+        return bone.parent.matrix_local.inverted() @ global_pos
+    return global_pos
 
 
 def _parent_space_to_local_rotation(decoded_frames, armature, bone_index):
@@ -722,7 +732,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
-            kf_type = 4 if len(rotation_sorted) == 1 else 6
+            kf_type = 6 #4 if len(rotation_sorted) == 1 else 6
             usage = _select_kf_usage(bone, "rotation_quaternion")
             keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if location:
@@ -740,7 +750,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, num_frames, app_id):
+def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, app_id):
     custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_props.num_frames = num_frames
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
@@ -752,7 +762,9 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, app_id):
         item.buffer_type = et.buffer_type
         item.usage = et.usage
         item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
+        item.joint_type = joint_types.get(str(item.bone_index), 0)
         item.weight = 1.0
+        item.reference_data = et.reference_data
         item.raw_data = et.data
 
 
@@ -761,6 +773,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = {value: key for key, value in mapping.items()}
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
+        joint_types = {}
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
@@ -772,6 +785,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     bone_name = path.split('"')[1]
                     if mapping.get(bone_name, None) is None:
                         continue
+                    joint_types[mapping.get(bone_name)] = action.get(f"joint_index_{mapping.get(bone_name)}")
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
@@ -793,7 +807,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                                     (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
-            _update_track_data(bl_obj, track_attrs, num_frames, app_id)
+            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, app_id)
 
 
 def _calculate_offsets_lmt51(bl_objects, app_id):
