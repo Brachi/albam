@@ -1,17 +1,9 @@
-import os
-
 import bpy
 
 from ..apps import APPS
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
 from ..data_loading import AppsUserDataConfigManager
-
-# FIXME: store in app data
-APP_DIRS_CACHE = {}
-# FIXME: store in app data
-APP_CONFIG_FILE_CACHE = {}
-
 
 
 def get_app_dir_from_config(self, context):
@@ -41,12 +33,8 @@ def set_app_dir_config(self, context):
 class AlbamApps(bpy.types.PropertyGroup):
     app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
     app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
-    app_config_filepath : bpy.props.StringProperty(name="")
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
-
-    def get_app_config_filepath(self, app_id):
-        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
@@ -379,9 +367,6 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
-        row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.apps, "app_config_filepath")
-        row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
 
 
 @blender_registry.register_blender_type
@@ -399,27 +384,6 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
 
     def execute(self, context):
         context.scene.albam.apps.app_dir = self.directory
-        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-        return {"FINISHED"}
-
-    def cancel(self, context):
-        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
-    bl_idname = "albam.app_config_filepath_setter"
-    bl_label = "Select App Config"
-
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # NOQA
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        wm.fileselect_add(self)
-        return {"RUNNING_MODAL"}
-
-    def execute(self, context):
-        context.scene.albam.apps.app_config_filepath = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
