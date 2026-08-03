@@ -332,6 +332,7 @@ class ALBAM_PT_ImportOptionsCustom(bpy.types.Panel):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
+    """App settings"""
     bl_label = ""
     bl_idname = "albam.app_config_popup"
 
