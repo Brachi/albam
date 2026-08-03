@@ -272,9 +272,10 @@ def lmt_export(loaded_arcs, app_id, lmt_path, mod_path):
     bl_obj = lmt.bl_object
     bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
     # bl_objects[10].albam_custom_properties.re5__lmt_51_anim.generate_new = True
-    for obj in bl_objects:
-        if obj.albam_custom_properties.re5__lmt_51_anim.ofs_frame != 0:
-            obj.albam_custom_properties.re5__lmt_51_anim.generate_new = True
+    for bl_obj in bl_objects:
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if custom_props.ofs_frame != 0:
+            custom_props.generate_new = True
 
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
@@ -305,6 +306,7 @@ def lmt_exported(lmt_export):
         pytest.skip("No exported sbc available")
     else:
         return lmt
+
 
 @pytest.fixture
 def parsed_mrl_from_arc(request, scope="session"):

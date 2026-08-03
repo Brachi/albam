@@ -12,7 +12,7 @@ def test_export_header(lmt_imported, lmt_exported):
 def test_export_anim_block(lmt_imported, lmt_exported):
     slmt = lmt_imported
     dlmt = lmt_exported
-    version = slmt.version
+    # version = slmt.version
     samnib = [ab for _, ab in enumerate(slmt.block_offsets)]
     damnib = [ab for _, ab in enumerate(dlmt.block_offsets)]
     i = 0
@@ -39,7 +39,7 @@ def test_export_anim_block(lmt_imported, lmt_exported):
                     print(bone)
             j = 0
             for str, dtr in zip(stracks, dtracks):
-                print("amim_block:", i, "track:", j, str.bone_index)
+                # print("amim_block:", i, "track:", j, str.bone_index)
                 # buffert type selection isn't that reliable for static frames
                 # if str.bone_index != 254:
                 #    assert str.buffer_type == dtr.buffer_type

@@ -383,7 +383,7 @@ def load_lmt(vfile, context):
                 bone_index = _get_or_create_root_motion_bone(armature, mapping)
 
             # Restore IK
-            if track.bone_index in HACKY_BONE_INDICES_IK_FOOT:
+            if track.bone_index in HACKY_BONE_INDICES_IK_FOOT and app_id == "re5":
                 bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
 
             # LMT references service(?) bones absent in the imported armature
@@ -493,7 +493,8 @@ def _create_bone_mapping(armature_obj):
     """Creates a dictionary: animation bone index(reference_bone_id) -> bone_name"""
     bone_names = {}
     # find root bones, at least 2 can have the same 0 index
-    root_bone_names = [b.name for idx, b in enumerate(armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
+    root_bone_names = [b.name for idx, b in enumerate(
+        armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
         reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
         if reference_bone_id is None:
@@ -732,7 +733,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
-            kf_type = 6 #4 if len(rotation_sorted) == 1 else 6
+            kf_type = 6  # 4 if len(rotation_sorted) == 1 else 6 XXX temporary hack to match fig01
             usage = _select_kf_usage(bone, "rotation_quaternion")
             keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if location:
