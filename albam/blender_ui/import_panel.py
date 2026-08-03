@@ -5,6 +5,7 @@ import bpy
 from ..apps import APPS
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
+from ..data_loading import AppsUserDataConfigManager
 
 # FIXME: store in app data
 APP_DIRS_CACHE = {}
@@ -12,35 +13,35 @@ APP_DIRS_CACHE = {}
 APP_CONFIG_FILE_CACHE = {}
 
 
-def update_app_data(self, context):
+
+def get_app_dir_from_config(self, context):
     current_app = context.scene.albam.apps.app_selected
-    cached_dir = APP_DIRS_CACHE.get(current_app)
-    cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
-    if cached_dir:
-        context.scene.albam.apps.app_dir = cached_dir
+    current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
+    if current_app_userdata:
+        context.scene.albam.apps.app_dir = current_app_userdata.get("app_dir", "")
     else:
         context.scene.albam.apps.app_dir = ""
 
-    if cached_file:
-        context.scene.albam.apps.app_config_filepath = cached_file
-    else:
-        context.scene.albam.apps.app_config_filepath = ""
 
-
-def update_app_caches(self, context):
+def set_app_dir_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_dir = context.scene.albam.apps.app_dir
-    current_file = context.scene.albam.apps.app_config_filepath
 
-    APP_DIRS_CACHE[current_app] = current_dir
-    APP_CONFIG_FILE_CACHE[current_app] = current_file
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(f"app.{current_app}")
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["app_dir"] = current_dir
+
+    config_mgr.save()
 
 
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
-    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
+    app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
+    app_config_filepath : bpy.props.StringProperty(name="")
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
 
@@ -269,10 +270,8 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
+        row.operator("albam.app_config_popup", icon="OPTIONS")
         row.prop(context.scene.albam.apps, "app_selected")
-        # Experimental for reengine
-        if os.getenv("ALBAM_ENABLE_REEN"):
-            row.operator("albam.app_config_popup", icon="OPTIONS")
 
 
 @blender_registry.register_blender_type
