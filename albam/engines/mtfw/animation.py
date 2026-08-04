@@ -156,7 +156,8 @@ class LMTKeyFrames:
             if kfcls is None:
                 print("Unknown keyframe type:", kf_type)
                 return
-            last_frame = 0
+            i = 0
+            frames_time = [ft for ft in track.keys()]
             for frame, value in track.items():
                 kf = kfcls()
                 if self.track_type == "rotation_quaternion":
@@ -174,9 +175,12 @@ class LMTKeyFrames:
                 kf.x = value.x
                 kf.y = value.y
                 kf.z = value.z
-                duration = int(frame - last_frame)
-                kf.duration = duration
-                last_frame = frame
+                if i + 1 < len(frames_time):
+                    duration = frames_time[i + 1] - frame
+                else:
+                    duration = 1
+                i += 1
+                kf.duration = int(duration)
                 stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
                 kf._check()
                 kf._write(stream)
@@ -184,9 +188,9 @@ class LMTKeyFrames:
             dst_track.data = bytes(dst_raw_data)
             self.encoded_frames.append(dst_track)
 
-    def dequantaize(self, kf, type):
+    def dequantaize(self, kf, key_type):
         dkf = Quaternion((0.0, 0.0, 0.0, 0.0))
-        if type in (11, 12, 13):
+        if key_type in (11, 12, 13):
             if getattr(kf, "w", None):
                 if self.bounds:
                     dkf.w = kf.w * 0.000061039
@@ -207,12 +211,12 @@ class LMTKeyFrames:
                     dkf.z = kf.z * 0.000061039
                 else:
                     dkf.z = self.clip_and_divide(kf.z, qw=True)
-        elif type == 7:
+        elif key_type == 7:
             dkf.w = (kf.w - 8) * 0.0089285718
             dkf.x = (kf.x - 8) * 0.0089285718
             dkf.y = (kf.y - 8) * 0.0089285718
             dkf.z = (kf.z - 8) * 0.0089285718
-        elif type == 6:
+        elif key_type == 6:
             dkf.w = self.clip_and_divide(kf.w)
             dkf.x = self.clip_and_divide(kf.x)
             dkf.y = self.clip_and_divide(kf.y)
@@ -795,7 +799,8 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     bone_name = path.split('"')[1]
                     if mapping.get(bone_name, None) is None:
                         continue
-                    joint_types[mapping.get(bone_name)] = action.get(f"joint_index_{mapping.get(bone_name)}")
+                    joint_type = action.get(f"joint_index_{mapping.get(bone_name)}", 0)
+                    joint_types[mapping.get(bone_name)] = joint_type
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
