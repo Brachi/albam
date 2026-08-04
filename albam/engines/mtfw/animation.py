@@ -71,6 +71,8 @@ KEYFRAME_TYPES = {
     67: KEYFRAME_TYPES_67
 }
 
+BLENDER_VERSION = bpy.app.version_string
+
 
 # Unused for now but maybe LMTQuadraticVector3 will need it
 class LMTUniKey:
@@ -335,6 +337,19 @@ def load_lmt(vfile, context):
         name = f"{armature.name}.{vfile.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
+        channelbag = None
+
+        if BLENDER_VERSION[0] >= '5':
+            anim_data = armature.animation_data_create()
+            anim_data.action = action
+            slot = action.slots.new(id_type='OBJECT', name=armature.name)
+
+            from bpy_extras.anim_utils import action_ensure_channelbag_for_slot
+
+            channelbag = action_ensure_channelbag_for_slot(
+                action,
+                slot,  # anim_data.action_slot,
+            )
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]
@@ -419,7 +434,8 @@ def load_lmt(vfile, context):
                 keyframes.decoded_frames = _parent_space_to_local_translation(
                     keyframes.decoded_frames, armature, bone_index)
 
-            err = _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index)
+            err = _create_blender_action(
+                action, keyframes, bone_index, track_type, block_index, track_index, channelbag)
             if err:
                 continue
         # building custom attributes of lmt metadata
@@ -465,15 +481,21 @@ def load_lmt(vfile, context):
     return bl_object
 
 
-def _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index):
-    group_name = str(bone_index)
-    group = action.groups.get(group_name) or action.groups.new(group_name)
+def _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index, channelbag):
     data_path = f"pose.bones[\"{bone_index}\"].{track_type}"
     num_curv = 4 if track_type == "rotation_quaternion" else 3
+    group = None
+
+    if BLENDER_VERSION[0] < '5':
+        group_name = str(bone_index)
+        group = action.groups.get(group_name) or action.groups.new(group_name)
+    else:
+        action = channelbag
     try:
         curves = [action.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
-        for c in curves:
-            c.group = group
+        if group is not None:
+            for c in curves:
+                c.group = group
     except RuntimeError as err:
         print('unknown error:', err, "Block index: {0}, Track index:{1}".format(
             block_index, track_index))
@@ -646,23 +668,6 @@ def _local_space_to_parent_translation(frame, bone):
     return global_pos
 
 
-def _parent_space_to_local_rotation(decoded_frames, armature, bone_index):
-    local_space_frame = []
-    for frame in decoded_frames:
-        if frame is None:
-            local_space_frame.append(None)
-            continue
-        bone = armature.data.bones[bone_index]
-        parent_matrix = bone.parent.matrix_local if bone.parent else Matrix.Identity(4)
-        # bone_matrix = bone.matrix_local
-
-        parent_rot = parent_matrix.to_quaternion()
-        bone_rot = frame  # frame (w, x, y, z)
-        local_rot = parent_rot.inverted() @ bone_rot
-        local_space_frame.append(local_rot)
-    return local_space_frame
-
-
 def filter_armatures(self, obj):
     # TODO: filter by custom properties that indicate is
     # a RE5 compatible armature
@@ -779,7 +784,11 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
             num_frames = int(action.frame_range[1])
-            for fcurve in action.fcurves:
+            if int(BLENDER_VERSION[0]) >= 5:
+                fcurves = action.layers[0].strips[0].channelbags[0].fcurves
+            else:
+                fcurves = action.fcurves
+            for fcurve in fcurves:
                 path = fcurve.data_path
                 index = fcurve.array_index
                 if path.startswith('pose.bones["'):
