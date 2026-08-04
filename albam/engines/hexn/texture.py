@@ -1,7 +1,7 @@
 import os
 import bpy
 
-from albam.lib.dds import DDSHeader
+from ...lib.dds import DDSHeader
 
 
 def build_blender_textures(texture_paths, context):

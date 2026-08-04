@@ -1,7 +1,7 @@
 import zlib
 
 from .structs.hexane_ssg import HexaneSsg
-from albam.registry import blender_registry
+from ...registry import blender_registry
 
 
 @blender_registry.register_archive_loader(app_id="reorc", extension="ssg")

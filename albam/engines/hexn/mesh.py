@@ -2,8 +2,8 @@ import struct
 
 import bpy
 
-from albam.lib.misc import chunks
-from albam.registry import blender_registry
+from ...lib.misc import chunks
+from ...registry import blender_registry
 from .structs.hexane_edgemodel import HexaneEdgemodel
 from .material import build_blender_materials
 
