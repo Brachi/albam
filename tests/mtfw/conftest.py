@@ -214,6 +214,11 @@ def nav_export(loaded_arcs, app_id, nav_path):
         pytest.skip("No nav available")
     bpy.context.scene.albam.apps.app_selected = app_id
     vfile_nav = bpy.context.scene.albam.vfs.select_vfile(app_id, nav_path)
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
 
