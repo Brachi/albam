@@ -23,12 +23,21 @@ bl_info = {
     "category": "Import-Export",
 }
 
-ALBAM_DIR = os.path.dirname(__file__)
-VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
+VENV_PATH = None
 
 
 def register():
-    sys.path.insert(0, VENDOR_DIR)
+
+    if os.environ.get("BLENDER_DEV_MODE") == "1":
+        addon_dir = os.path.dirname(os.path.realpath(__file__))
+        venv_path = os.path.abspath(os.path.join(
+            addon_dir, "..", ".venv", "lib",
+            f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages"))
+
+        if os.path.exists(venv_path) and venv_path not in sys.path:
+            VENV_PATH = venv_path
+            sys.path.insert(0, venv_path)
+
     # Load registered functions into the blender_registry
     importlib.import_module(".blender_ui.import_panel", __package__)
     importlib.import_module(".blender_ui.export_panel", __package__)
@@ -76,7 +85,7 @@ def unregister():
 
     for cls in reversed(blender_registry.types):
         bpy.utils.unregister_class(cls)
+    if VENV_PATH:
+        sys.path.remove(VENV_PATH)
 
     bpy.utils.unregister_class(type(bpy.context.scene.albam))
-
-    sys.path.remove(VENDOR_DIR)
