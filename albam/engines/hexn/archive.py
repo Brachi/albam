@@ -41,7 +41,7 @@ class SSGWrapper:
         for file_info in self.parsed.files_info:
             file_bytes = uncompressed_buffer[pos: pos + file_info.size]
             pos += file_info.size + (-file_info.size % self.parsed.size_padding)
-            self._file_entries.append((file_info.name, file_bytes))
+            self._file_entries.append((file_info.name, bytes(file_bytes)))
 
         return self._file_entries
 
