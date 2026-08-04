@@ -6,6 +6,12 @@ from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
 from ..data_loading import AppsUserDataConfigManager
 
 
+PSEUDO_TABS = [
+    ('TAB_A', "File Explorer", "File Explorer View"),
+    ('TAB_B', "Prefabs", "Prefabs View"),
+]
+
+
 def get_app_dir_from_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
@@ -37,6 +43,7 @@ class AlbamApps(bpy.types.PropertyGroup):
     app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
+    explorer_mode: bpy.props.EnumProperty(name="explorer_mode", items=PSEUDO_TABS, default="TAB_A")
 
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
@@ -262,6 +269,12 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
         row = self.layout.row()
         row.operator("albam.app_config_popup", icon="OPTIONS")
         row.prop(context.scene.albam.apps, "app_selected")
+        self.layout.row()
+        self.layout.row()
+        self.layout.row()
+        self.layout.row()
+        row = self.layout.row()
+        row.prop(context.scene.albam.apps, "explorer_mode", expand=True)
 
 
 @blender_registry.register_blender_type
@@ -275,8 +288,8 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
 
     def draw(self, context):
-        self.layout.separator()
-        self.layout.separator()
+        if not context.scene.albam.apps.explorer_mode == "TAB_A":
+            return
         split = self.layout.split(factor=0.1)
         col = split.column()
         col.operator("albam.add_files", icon="FILE_NEW", text="")
@@ -290,6 +303,56 @@ class ALBAM_PT_FileExplorer(bpy.types.Panel):
             context.scene.albam.vfs,
             "file_list",
             context.scene.albam.vfs,
+            "file_list_selected_index",
+            sort_lock=True,
+            rows=8,
+        )
+        self.layout.row()
+        self.layout.row()
+
+
+@blender_registry.register_blender_prop
+class PrefabItem(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty(name="Item Name", default="New Item")
+    description: bpy.props.StringProperty(name="Item Description", default="")
+
+
+@blender_registry.register_blender_prop_albam(name="prefabs")
+class PrefabListData(bpy.types.PropertyGroup):
+    file_list: bpy.props.CollectionProperty(type=PrefabItem)
+    file_list_selected_index: bpy.props.IntProperty()
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_PrefabsList(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row()
+        row.label(text="", icon='OBJECT_DATA')
+        row.prop(item, "name", text="", emboss=False)
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_Prefabs(bpy.types.Panel):
+    bl_category = "Albam [Beta]"
+    bl_idname = "ALBAM_PT_Prefabs"
+    bl_label = "Prefabs"
+    bl_options = {"HIDE_HEADER"}
+    bl_parent_id = "ALBAM_PT_ImportSection"
+    bl_region_type = "UI"
+    bl_space_type = "VIEW_3D"
+
+    def draw(self, context):
+        if not context.scene.albam.apps.explorer_mode == "TAB_B":
+            return
+        self.layout.separator()
+        self.layout.separator()
+        row = self.layout.row()
+        row.template_list(
+            "ALBAM_UL_PrefabsList",
+            "",
+            context.scene.albam.prefabs,
+            "file_list",
+            context.scene.albam.prefabs,
             "file_list_selected_index",
             sort_lock=True,
             rows=8,
