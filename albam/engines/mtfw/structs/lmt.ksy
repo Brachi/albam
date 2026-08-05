@@ -36,7 +36,7 @@ types:
       - {id: ofs_frame, type: u4}
       - {id: num_tracks, type: u4}
       - {id: num_frames, type: u4}
-      - {id: loop_frame, type: u4}
+      - {id: loop_frame, type: s4}
       - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
       - {id: filler, type: u4}
       - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}

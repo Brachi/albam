@@ -95,6 +95,7 @@ def test_joint(parsed_lmt_from_arc):
     lmt = parsed_lmt_from_arc
     anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
     for ab in anim_blocks:
+        assert ab.loop_frame in (-1, 0, 1)
         tracks = getattr(ab, "tracks")
         bones_joint_index = []
         seq = {}

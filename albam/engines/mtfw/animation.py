@@ -178,7 +178,7 @@ class LMTKeyFrames:
                 if i + 1 < len(frames_time):
                     duration = frames_time[i + 1] - frame
                 else:
-                    duration = 1
+                    duration = 0  # not sure why but original files use it
                 i += 1
                 kf.duration = int(duration)
                 stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
