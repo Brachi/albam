@@ -42,7 +42,7 @@ def test_export_anim_block(lmt_imported, lmt_exported):
                 # print("amim_block:", i, "track:", j, str.bone_index)
                 # current code buffer type selection isn't that reliable for static frames
                 assert str.usage == dtr.usage
-                # assert str.joint_type == dtr.joint_type
+                assert str.joint_type == dtr.joint_type
                 assert str.bone_index == dtr.bone_index
                 assert str.weight == dtr.weight
                 # tr.len_data == dtr.len_data

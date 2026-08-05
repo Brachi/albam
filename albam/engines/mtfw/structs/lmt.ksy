@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: lmt
   id: lmt
-  ks-version: 0.11
+  ks-version: "0.11"
   title: MTFramework animation format
 
 

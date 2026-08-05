@@ -363,7 +363,6 @@ def load_lmt(vfile, context):
         for track_index, track in enumerate(block.block_header.tracks):
             if duplicated_bids.get(track.bone_index, None) is None:
                 duplicated_bids[track.bone_index] = 0
-            action[f"joint_index_{track.bone_index}"] = track.joint_type
 
             # Custom attributes for a track
             item = tracks.tracks.add()
@@ -411,6 +410,7 @@ def load_lmt(vfile, context):
                                                    track.bone_index,
                                                    key,
                                                    mapping)
+            action[f"{USAGE.get(track.usage)}_{key}"] = track.joint_type
 
             track_type = USAGE[track.usage]
             keyframes.track_type = USAGE[track.usage]
@@ -422,9 +422,11 @@ def load_lmt(vfile, context):
                 if track_type == "location":
                     frame = Vector((rd[0] / 100, rd[1] / 100, rd[2] / 100))
                     print("default location ", frame)
-                else:
+                elif track_type == "rotation_quaternion":
                     frame = Quaternion((rd[3], rd[1], rd[2], rd[0]))
                     print("default rotation_quaternion")
+                elif track_type == "scale":
+                    frame = Vector((rd[0], rd[1], rd[2]))
                 keyframes.decoded_frames.append(frame)
             if not keyframes.decoded_frames:
                 continue
@@ -516,23 +518,23 @@ def _create_blender_action(action, keyframes, bone_index, track_type, block_inde
 
 
 def _create_bone_mapping(armature_obj):
-    """Creates a dictionary: animation bone index(reference_bone_id) -> bone_name"""
+    """Creates a dictionary: animation bone index -> bone name."""
     bone_names = {}
     # find root bones, at least 2 can have the same 0 index
     root_bone_names = [b.name for idx, b in enumerate(
         armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
-        reference_bone_id = mapped_bone.get('mtfw.anim_retarget')  # TODO: better name
-        if reference_bone_id is None:
+        animation_bone_id = mapped_bone.get('mtfw.anim_retarget')
+        if animation_bone_id is None:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
         # ignore possible root_ground bone
-        if reference_bone_id == 0 and len(root_bone_names) > 1:
+        if animation_bone_id == 0 and len(root_bone_names) > 1:
             if mapped_bone.parent is None:
                 continue
-        if reference_bone_id in bone_names:
+        if animation_bone_id in bone_names:
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
-        bone_names[reference_bone_id] = mapped_bone.name
+        bone_names[animation_bone_id] = mapped_bone.name
     return bone_names
 
 
@@ -772,7 +774,7 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, app_id):
         item.buffer_type = et.buffer_type
         item.usage = et.usage
         item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
-        item.joint_type = joint_types.get(str(item.bone_index), 0)
+        item.joint_type = joint_types.get((USAGE[item.usage], str(et.bone_index)), 0)
         item.weight = 1.0
         item.reference_data = et.reference_data
         item.raw_data = et.data
@@ -799,8 +801,9 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     bone_name = path.split('"')[1]
                     if mapping.get(bone_name, None) is None:
                         continue
-                    joint_type = action.get(f"joint_index_{mapping.get(bone_name)}", 0)
-                    joint_types[mapping.get(bone_name)] = joint_type
+                    track_type = path.split(".")[-1]
+                    joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
+                    joint_types[(track_type, mapping.get(bone_name))] = joint_type
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
