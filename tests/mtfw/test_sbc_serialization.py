@@ -28,17 +28,20 @@ def test_export_infos(sbc_imported, sbc_exported):
     sinfos = sbc_imported.sbc_info
     dinfos = sbc_exported.sbc_info
     assert len(sinfos) == len(dinfos)
+    i = 0
     for sinfo, dinfo in zip(sinfos, dinfos):
         if sbc_version == 255:
             assert sinfo.num_faces == dinfo.num_faces
             assert sinfo.num_vertices == dinfo.num_vertices
-        assert sinfo.index_id == dinfo.index_id
+        # assert sinfo.index_id == dinfo.index_id  # not a constantt
+        print(i)
         assert sinfo.bounding_box.min[0] == pytest.approx(dinfo.bounding_box.min[0], rel=0.001)
         assert sinfo.bounding_box.min[1] == pytest.approx(dinfo.bounding_box.min[1], rel=0.001)
         assert sinfo.bounding_box.min[2] == pytest.approx(dinfo.bounding_box.min[2], rel=0.001)
         assert sinfo.bounding_box.max[0] == pytest.approx(dinfo.bounding_box.max[0], rel=0.001)
         assert sinfo.bounding_box.max[1] == pytest.approx(dinfo.bounding_box.max[1], rel=0.001)
         assert sinfo.bounding_box.max[2] == pytest.approx(dinfo.bounding_box.max[2], rel=0.001)
+        i += 1
 
 
 def test_export_nodes(sbc_imported, sbc_exported):

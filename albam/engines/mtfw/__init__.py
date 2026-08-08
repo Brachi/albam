@@ -612,4 +612,7 @@ FILE_ID_TO_EXTENSION = {
     0x6A5CDD23: "occ",
 }
 
+FILE_ID_DMC4 = {0x3900DAD0: "sbc"}
+
+
 EXTENSION_TO_FILE_ID = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION.items()}

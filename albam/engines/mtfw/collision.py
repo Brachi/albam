@@ -17,6 +17,7 @@ from ...lib.primitive_geometry import EPS, Tri
 from ...lib import primitive_geometry as geo
 from ...lib import bvh_construction as bvh
 from ...lib import common_op as common
+from ...lib.misc import number_to_color
 
 SBC_CLASS_MAPPER = {
     49: Sbc156,
@@ -211,7 +212,7 @@ def load_sbc(file_item, context):
 
     if DEBUG_DRAW:
         for i, node in enumerate(bvh_collection):
-            if i >= sbc.header.num_groups:
+            if i >= sbc.header.num_objects:
                 break
             debug_create_sbcinfo_nodes(node)
 
@@ -303,8 +304,8 @@ def create_sbc_mesh(name, meshpart, app_id):
                 mat.diffuse_color = palette[KNOWN_RUNTIME_ATTR.index(material)]
             else:
                 mat.diffuse_color = palette[material]
-        except IndexError:
-            colorsys.hsv_to_rgb(0, 0, 0)
+        except (IndexError, ValueError):
+            mat.diffuse_color = number_to_color(material)
             print("Unknown colision type: %d" % material)
         bl_mesh.materials.append(mat)
         for face in meshpart["materials"][material]:
@@ -325,6 +326,7 @@ def cycles(verts):
 @blender_registry.register_export_function(app_id="re6", extension="sbc")
 @blender_registry.register_export_function(app_id="re5", extension="sbc")
 @blender_registry.register_export_function(app_id="dd", extension="sbc")
+@blender_registry.register_export_function(app_id="dmc4", extension="sbc")
 def export_sbc(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
@@ -351,7 +353,6 @@ def export_sbc(bl_obj):
                "partition": PARTITION[export_settings.partition],
                "mode": MODE[export_settings.mode]}
     vfiles = []
-    print("Initiate SBC export")
     for mesh in mesh_clones:
         if app_id not in ("re5", "dmc4"):
             custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
@@ -482,11 +483,11 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree)
     dst_sbc.faces = faces
     dst_sbc.vertices = vertices
     final_size = sum((
-        0x30,
-        dst_sbc.header.num_boxes * 0x50,
-        dst_sbc.header.num_objects * 0x60,
-        dst_sbc.header.num_faces * 0x28,
-        dst_sbc.header.num_vertices * 16
+        48,
+        dst_sbc.header.num_boxes * 80,
+        dst_sbc.header.num_objects * 96,
+        dst_sbc.header.num_faces * 28,
+        dst_sbc.header.num_vertices * 16,
     ))
     return final_size
 
@@ -510,7 +511,7 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, num_objects, num_stages, num_pair
         num_vertices=num_vertices,
         nulls=[0, 0, 0, 0],
         bounding_box=bbox,
-        bb_size=0x70 * (aabb_count),
+        bb_size=112 * (aabb_count),  # 0x70
     ))
 
     dst_sbc_header._check()
@@ -597,13 +598,13 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     sbc_info.start_nodes = start_node
     sbc_info.start_faces = start_tri if start_tri >= 0 else 0
     sbc_info.start_vertices = start_vert if start_vert >= 0 else 0
-    sbc_info.child_index = [0, 0]
+    sbc_info.child_index = [0, 0]  # not correct should be index for leaf nodes
     node_list = []
 
     for bvnode in bvhc_raw["AABBArray"]:
         node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
-        node.bit = bvnode['nodeType']
-        node.child_index = bvnode['nodeId']
+        node.bit = bvnode["nodeType"]
+        node.child_index = bvnode["nodeId"]
         boxes = []
         for i in range(2):
             bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
@@ -1066,7 +1067,10 @@ def _unpack_bbox(min, max):
 
 def _scale_bbox(box):
     scaled = []
-    scaled = (box.x / 100, box.z / -100, box.y / 100)
+    try:
+        scaled = (box.x / 100, box.z / -100, box.y / 100)
+    except AttributeError:
+        scaled = (box[0] / 100, box[2] / -100, box[1] / 100)
     return scaled
 
 
@@ -1153,6 +1157,7 @@ def debug_create_bbox(sbc):
     a_max = sbc.sbcinfo.vmax[0]
     b_max = sbc.sbcinfo.vmax[1]
     boxes = [(bbox_min, bbox_max), (a_min, a_max), (b_min, b_max)]
+    # boxes = [(bbox_min, bbox_max)]
     parent = None
     for i, b in enumerate(boxes):
         if i <= 0:

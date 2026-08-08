@@ -428,6 +428,7 @@ class BBVH(QBVH):
         return boxes
 
     def typeMask(self):
+        # `bit` value in BHV, the type of node incoded with 6th and 7th bit
         if not self.isNode():
             raise NotImplementedError(
                 "Empties and Primitives don't have a type mask.")
@@ -807,10 +808,11 @@ def primitive_to_sbc156(primitives, clusteringFunction=spatial_splits, **kwargs)
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
     btree = btree.binary_collapse()
     indexize_ob(btree.subnodes())
-    npairPrimitives = mergerReindex(primitives, btree.subprimitives())
-    nodes, pairPrimitives = btree.separateTraverse()
+    npair_primitives = mergerReindex(primitives, btree.subprimitives())
+    nodes, pair_primitives = btree.separateTraverse()
     indexize_ob(nodes)
-    return npairPrimitives, PrimitiveTree(btree).refine([vert for p in primitives for vert in p.vertices])
+    primitive_tree = PrimitiveTree(btree).refine([vert for p in primitives for vert in p.vertices])
+    return npair_primitives, primitive_tree
 
 
 def trees_to_sbc_col156(tree_list, clusteringFunction=spatial_splits, **kwargs):
