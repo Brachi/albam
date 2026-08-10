@@ -4,6 +4,7 @@ from ...vfs import VirtualFileData
 import bpy
 from kaitaistruct import KaitaiStream
 from mathutils import Matrix, Vector, Quaternion
+import ast
 
 from ...registry import blender_registry
 from .structs.lmt import Lmt
@@ -256,7 +257,7 @@ class LMTKeyFrames:
         """
         Restore a sign from an usigned int value and convert to float
         """
-        RANGE_ALL = 2 ** 14 - 1  # 16383
+        RANGE_ALL = 2 ** 14  # 16384
         RANGE_SPLIT = 2 ** 13 - 1  # 8191
         DIVIDER = 4096 if not qw else 8192
         if num > RANGE_SPLIT:
@@ -264,7 +265,7 @@ class LMTKeyFrames:
         return num / DIVIDER
 
     def unclip_and_multiply(self, val, qw=False):
-        RANGE_ALL = 2 ** 14 - 1
+        RANGE_ALL = 2 ** 14
         # RANGE_SPLIT = 2 ** 13 - 1
         DIVIDER = 8192 if qw else 4096
 
@@ -410,7 +411,10 @@ def load_lmt(vfile, context):
                                                    track.bone_index,
                                                    key,
                                                    mapping)
-            action[f"{USAGE.get(track.usage)}_{key}"] = track.joint_type
+            if track.joint_type != 0:
+                action[f"{USAGE.get(track.usage)}_{key}"] = track.joint_type
+
+            action[f"rd_{USAGE.get(track.usage)}_{key}"] = str(track.reference_data)
 
             track_type = USAGE[track.usage]
             keyframes.track_type = USAGE[track.usage]
@@ -653,17 +657,14 @@ def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
     return local_space_frames
 
 
-def _swap_zy(val):
-    return Vector((val.x, -val.z, val.y))
-
-
 def _local_space_to_parent_translation(frame, bone):
     anim_bone_id = bone.get("mtfw.anim_retarget", "").split("_")[0]
 
-    if anim_bone_id == "0" and bone.parent is None:
-        rest = bone.matrix_local.to_translation()
-        lmt_rest = Vector((rest.x, rest.z, -rest.y))
-        return frame + lmt_rest
+    if bone.parent is None:
+        if anim_bone_id in ("0", "255") or anim_bone_id.startswith("254"):
+            rest = bone.matrix_local.to_translation()
+            lmt_rest = Vector((rest.x, rest.z, -rest.y))
+            return frame + lmt_rest
 
     if anim_bone_id in ("19", "23"):
         return frame
@@ -744,7 +745,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
-            kf_type = 6  # 4 if len(rotation_sorted) == 1 else 6 XXX temporary hack to match fig01
+            kf_type = 4 if len(rotation_sorted) == 1 else 6  # XXX doesn't match logic in og files
             usage = _select_kf_usage(bone, "rotation_quaternion")
             keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if location:
@@ -762,7 +763,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, app_id):
+def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_stored, app_id):
     custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_props.num_frames = num_frames
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
@@ -776,7 +777,11 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, app_id):
         item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
         item.joint_type = joint_types.get((USAGE[item.usage], str(et.bone_index)), 0)
         item.weight = 1.0
-        item.reference_data = et.reference_data
+        ref_data = et.reference_data
+        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.bone_index)), None)
+        if ref_data_stored:  # and ref_data_stored != "[]":
+            ref_data = ast.literal_eval(ref_data_stored)
+        item.reference_data = ref_data
         item.raw_data = et.data
 
 
@@ -786,6 +791,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
         joint_types = {}
+        reference_data = {}
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
@@ -804,6 +810,15 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     track_type = path.split(".")[-1]
                     joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
                     joint_types[(track_type, mapping.get(bone_name))] = joint_type
+
+                    rd_bone_id = mapping.get(bone_name)
+                    if bone_name == "IK_Foot.L":
+                        rd_bone_id = "23"
+                    elif bone_name == "IK_Foot.R":
+                        rd_bone_id = "19"
+                    ref_data = action.get(f"rd_{track_type}_{rd_bone_id}", None)
+                    if ref_data:
+                        reference_data[(track_type, rd_bone_id)] = ref_data
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
@@ -825,7 +840,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                                     (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
-            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, app_id)
+            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
 
 
 def _calculate_offsets_lmt51(bl_objects, app_id):
