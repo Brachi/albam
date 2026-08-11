@@ -605,14 +605,14 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node, me
     sbci_bbox.min = [v for v in bbox_data['minPos'].values()][:3]
     sbci_bbox.max = [v for v in bbox_data['maxPos'].values()][:3]
     sbc_info.bounding_box = sbci_bbox
-    sbc_info.index_id = int(mesh_metadata["indexID"])  # 0xffffffff  # was 0
+    sbc_info.index_id = int(mesh_metadata["indexID"])
     sbc_info.base = 0
     sbc_info.start_nodes = start_node
     sbc_info.start_faces = start_tri if start_tri >= 0 else 0
     sbc_info.start_vertices = start_vert if start_vert >= 0 else 0
-    sbc_info.child_index = [0, 0]  # not correct should be index for leaf nodes
+    sbc_info.child_index = [0, 0]  # set actual values after in _serialize_top_bvh
 
-    # Some single-primitive BVHs collapse to an empty AABBArray during primitiveSerialize().
+    # In case of one tringle primitive BVH collapses to an empty AABBArray during primitiveSerialize().
     # Need to create a dummy AABBArray in this case, otherwise the SBC will be invalid.
     aabb_array = bvhc_raw.get('AABBArray') or []
     if not aabb_array:
@@ -652,11 +652,9 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node, me
         node.nulls = [0] * 10
         node_list.append(node)
 
-    # should be from[top level bvh nodes = num_sbc_info][node_id] if dummy nodes
-    # sbc_info.vmin = [vec4to3(node_list[0].boxes[0].min), vec4to3(node_list[0].boxes[1].min)]
+    # set actual values after in _serialize_top_bvh
     sbc_info.vmin = [write_vec3(node_list[0].boxes[0].min[:3], dst_sbc),
                      write_vec3(node_list[0].boxes[1].min[:3], dst_sbc)]
-    # sbc_info.vmax = [vec4to3(node_list[0].boxes[0].max), vec4to3(node_list[0].boxes[1].max)]
     sbc_info.vmax = [write_vec3(node_list[0].boxes[0].max[:3], dst_sbc),
                      write_vec3(node_list[0].boxes[1].max[:3], dst_sbc)]
     return node_list, sbc_info
@@ -744,27 +742,14 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
             bbox = dst_sbc.Bbox4(_parent=dst_sbc, _root=dst_sbc._root)
             min_aabb = bvnode["minAABB"]
             bbox.min = [min_aabb["xArray"][j], min_aabb["yArray"][j], min_aabb["zArray"][j], 0.0]
-            # box.min.x = min_aabb["xArray"]
-            # box.min.y = min_aabb["yArray"]
-            # box.min.z = min_aabb["zArray"]
-            # bbox.min = write_vec4(
-            #    [min_aabb["xArray"][j], min_aabb["yArray"][j], min_aabb["zArray"][j], 0.0], dst_sbc)
             max_aabb = bvnode["maxAABB"]
-            # box.max.x = max_aabb["xArray"]
-            # box.max.y = max_aabb["yArray"]
-            # box.max.z = max_aabb["zArray"]
             bbox.max = [max_aabb["xArray"][j], max_aabb["yArray"][j], max_aabb["zArray"][j], 0.0]
-            # bbox.max = write_vec4(
-            #    [max_aabb["xArray"][j], max_aabb["yArray"][j], max_aabb["zArray"][j], 0.0], dst_sbc)
-            # box._check()
             boxes.append(bbox)
         node.boxes = boxes
         node.nulls = [0] * 10
         node_list.append(node)
-        # sbc_groups[i].vmin = [vec4to3(node.boxes[0].min), vec4to3(node.boxes[1].min)]
         sbc_groups[i].vmin = [write_vec3(node.boxes[0].min[:3], dst_sbc),
                               write_vec3(node.boxes[1].min[:3], dst_sbc)]
-        # sbc_groups[i].vmax = [vec4to3(node.boxes[0].max), vec4to3(node.boxes[1].max)]
         sbc_groups[i].vmax = [write_vec3(node.boxes[0].max[:3], dst_sbc),
                               write_vec3(node.boxes[1].max[:3], dst_sbc)]
         sbc_groups[i].child_index = children
@@ -783,11 +768,11 @@ def _serialize_col_types(dst_sbc, link_ob, app_id):
     sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
         app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = sbc_link_props.unk_01  # link_ob["unk_01"]
-    coltype.unk_02 = sbc_link_props.unk_02  # link_ob["unk_02"]
-    coltype.unk_03 = sbc_link_props.unk_03  # link_ob["unk_03"]
-    coltype.unk_04 = sbc_link_props.unk_04  # [v for v in link_ob["unk_04"]]
-    coltype.jp_path = sbc_link_props.jp_path  # link_ob["jp_path"]
+    coltype.unk_01 = sbc_link_props.unk_01
+    coltype.unk_02 = sbc_link_props.unk_02
+    coltype.unk_03 = sbc_link_props.unk_03
+    coltype.unk_04 = sbc_link_props.unk_04
+    coltype.jp_path = sbc_link_props.jp_path
     coltype._check()
     return coltype
 
@@ -935,7 +920,6 @@ class SemiTri():
 def mesh_to_tri(mesh):
     """ Get triangulated mesh, return list of Tri objects and vertices"""
     bm = bmesh.new()
-    # bm.from_object(mesh, bpy.context.scene)
     bm.from_mesh(mesh.data)
     vertices = [Vector(v.co) for v in bm.verts]
     # classmethod .getMaterial of SemiTri gets material ID for each faces
