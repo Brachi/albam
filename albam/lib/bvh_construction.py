@@ -8,10 +8,10 @@ import numpy as np
 from functools import reduce
 try:
     from primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
-    from low_level_op import radix_sort
+    # from low_level_op import radix_sort
 except ImportError:
     from .primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
-    from .low_level_op import radix_sort
+    # from .low_level_op import radix_sort
 
 
 def set_remove(poset, val):

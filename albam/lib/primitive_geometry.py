@@ -23,14 +23,15 @@ EPS = 0.0001
 
 
 class BoundingBox():
-    def __init__(self, vectorList):
+    def __init__(self, vectorList, fix_flat_bbox=True):
         self.minPos = Vector([min([v.x for v in vectorList]),
                               min([v.y for v in vectorList]),
                               min([v.z for v in vectorList])])
         self.maxPos = Vector([max([v.x for v in vectorList]),
                               max([v.y for v in vectorList]),
                               max([v.z for v in vectorList])])
-        self.capcom()
+        if fix_flat_bbox:
+            self.capcom()
 
     def capcom(self):
         # Correction for flat bounding boxes
@@ -289,7 +290,7 @@ class PrimitiveTree(GeometryPrimitive):
             return self.refined
 
     def refine(self, vertices):
-        self.refined = BoundingBox(vertices)
+        self.refined = BoundingBox(vertices, False)
         return self
 
     def barycenter(self):

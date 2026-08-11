@@ -40,6 +40,18 @@ SBC_VERSION = {
     "dmc4": 18,
 }
 
+CUSTOM_PROPS_VERSION = {
+    "re0": "sbc_21_mesh",
+    "re1": "sbc_21_mesh",
+    "re5": "sbc_156_mesh",
+    "dmc4": "sbc_156_mesh",
+    "rev1": "sbc_21_mesh",
+    "rev2": "sbc_21_mesh",
+    "re6": "sbc_21_mesh",
+    "dd": "sbc_21_mesh",
+}
+
+
 DEBUG_DRAW = False
 
 KNOWN_RUNTIME_ATTR = [256, 512, 1024, 2048, 3072, 3584, 4096, 4352, 5120, 7168, 9216, 8192,
@@ -222,12 +234,9 @@ def load_sbc(file_item, context):
 def create_collision_mesh(sbc_object, app_id, mesh_name):
     mesh, obj = create_sbc_mesh(mesh_name, decompose_sbc_ob(sbc_object, app_id), app_id)
     # Add custom attributes to an object
-    if app_id not in ("re5", "dmc4"):
-        sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "sbc_21_mesh"]
-    else:
-        sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "sbc_156_mesh"]
+    sbc_mesh_prop = CUSTOM_PROPS_VERSION.get(app_id)
+    sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            sbc_mesh_prop]
     sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
 
@@ -357,12 +366,9 @@ def export_sbc(bl_obj):
                "mode": MODE[export_settings.mode]}
     vfiles = []
     for mesh in mesh_clones:
-        if app_id not in ("re5", "dmc4"):
-            custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-                "sbc_21_mesh"]
-        else:
-            custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-                "sbc_156_mesh"]
+        sbc_mesh_prop = CUSTOM_PROPS_VERSION.get(app_id)
+        custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            sbc_mesh_prop]
         # get list of Tri objects from faces of the mesh and vertices
         try:
             if app_id in ("re5", "dmc4"):
@@ -473,7 +479,8 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree,
     _init_sbc156_header(dst_sbc, version, parent_tree, len(sbcs), tally(
         tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
     for i, sbc in enumerate(sbcs):
-        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num, mesh_metadata[i])
+        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(
+            faces), len(vertices), node_num, mesh_metadata[i])
         nodes.extend(node_list)
         node_num += len(node_list)
         groups.append(sbc_info)
@@ -1025,6 +1032,7 @@ class SBC156CollisionCustomProperties(bpy.types.PropertyGroup):
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     pass
 
+
 @blender_registry.register_custom_properties_object(
     "sbc_21_link",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
@@ -1061,7 +1069,6 @@ class SBC156MeshCustomProperties(BaseSBCProperties):
 
 
 # Code for debug visualization #
-
 def _unpack_bbox(min, max):
     min_x, min_y, min_z = min[0], min[1], min[2]
     max_x, max_y, max_z = max[0], max[1], max[2]
