@@ -33,6 +33,7 @@ def test_parsed_sbc(parsed_sbc_from_arc):
         sbc_info = [info for info in sbc.sbc_info]
         assert sbc_info[0].start_nodes == sbc.header.num_objects_nodes
         for info in sbc_info:
+            assert info.base == 0
             assert info.index_id in KNOWN_SBC_INFO156_ID
         for i, node in enumerate(sbc.nodes):
             if i < sbc.header.num_objects_nodes:
@@ -64,3 +65,4 @@ def test_parsed_sbc(parsed_sbc_from_arc):
             assert face.type in KNOWN_TYPE156
             assert face.special_attr in KNOWN_SPECIAL_ATTR
             assert face.surface_attr in KNOWN_SURFACE_ATTR
+            assert face.unk_02 == 0

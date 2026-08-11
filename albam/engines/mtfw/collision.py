@@ -225,7 +225,10 @@ def create_collision_mesh(sbc_object, app_id, mesh_name):
     if app_id not in ("re5", "dmc4"):
         sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "sbc_21_mesh"]
-        sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
+    else:
+        sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+            "sbc_156_mesh"]
+    sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
 
 
@@ -357,6 +360,9 @@ def export_sbc(bl_obj):
         if app_id not in ("re5", "dmc4"):
             custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
                 "sbc_21_mesh"]
+        else:
+            custom_props = mesh.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
+                "sbc_156_mesh"]
         # get list of Tri objects from faces of the mesh and vertices
         try:
             if app_id in ("re5", "dmc4"):
@@ -375,8 +381,7 @@ def export_sbc(bl_obj):
         trisList.append(tris)  # tris primitive objects not faces
         quadList.append(quads)
         sbcsList.append(sbc)
-        if app_id not in ("re5", "dmc4"):
-            mesh_metadata.append({"indexID": custom_props.index_id})
+        mesh_metadata.append({"indexID": custom_props.index_id})
     for clone in mesh_clones:
         common.delete_ob(clone)
     if errors:
@@ -387,7 +392,7 @@ def export_sbc(bl_obj):
         # version = SBC_VERSION[app_id]
         version = 22 if app_id == "re5" else 18
         final_size = build_sbc156(
-            bl_obj, dst_sbc, version, vertList, trisList, sbcsList, attrList, parent_tree)
+            bl_obj, dst_sbc, version, vertList, trisList, sbcsList, attrList, parent_tree, mesh_metadata)
     else:
         parent_tree = bvh.trees_to_sbc_col(sbcsList, **options)
         final_size = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
@@ -457,7 +462,7 @@ def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_
     return final_size
 
 
-def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree):
+def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree, mesh_metadata):
     def tally(x):
         return sum(map(len, x))
     nodes = []
@@ -468,7 +473,7 @@ def build_sbc156(bl_obj, dst_sbc, version, verts, tris, sbcs, attr, parent_tree)
     _init_sbc156_header(dst_sbc, version, parent_tree, len(sbcs), tally(
         tris) - 1 + len(sbcs) - 1, tally(verts), tally(tris))
     for i, sbc in enumerate(sbcs):
-        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num)
+        node_list, sbc_info = _serialize_bvhc156(dst_sbc, sbc, len(faces), len(vertices), node_num, mesh_metadata[i])
         nodes.extend(node_list)
         node_num += len(node_list)
         groups.append(sbc_info)
@@ -582,7 +587,7 @@ def _serialize_bvhc(dst_sbc, bvhc_data):
 
 
 # sbc_info 156
-def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
+def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node, mesh_metadata):
     def vec4to3(x):
         return write_vec3([x.x, x.y, x.z], dst_sbc)
 
@@ -593,12 +598,35 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
     sbci_bbox.min = [v for v in bbox_data['minPos'].values()][:3]
     sbci_bbox.max = [v for v in bbox_data['maxPos'].values()][:3]
     sbc_info.bounding_box = sbci_bbox
-    sbc_info.index_id = 0xffffffff  # was 0
+    sbc_info.index_id = int(mesh_metadata["indexID"])  # 0xffffffff  # was 0
     sbc_info.base = 0
     sbc_info.start_nodes = start_node
     sbc_info.start_faces = start_tri if start_tri >= 0 else 0
     sbc_info.start_vertices = start_vert if start_vert >= 0 else 0
     sbc_info.child_index = [0, 0]  # not correct should be index for leaf nodes
+
+    # Some single-primitive BVHs collapse to an empty AABBArray during primitiveSerialize().
+    # Need to create a dummy AABBArray in this case, otherwise the SBC will be invalid.
+    aabb_array = bvhc_raw.get('AABBArray') or []
+    if not aabb_array:
+        min_pos = bbox_data['minPos']
+        max_pos = bbox_data['maxPos']
+        aabb_array = [{
+            'nodeType': 0x80,
+            'nodeId': [0, 0],
+            'minAABB': {
+                'xArray': [min_pos['x'], min_pos['x']],
+                'yArray': [min_pos['y'], min_pos['y']],
+                'zArray': [min_pos['z'], min_pos['z']],
+            },
+            'maxAABB': {
+                'xArray': [max_pos['x'], max_pos['x']],
+                'yArray': [max_pos['y'], max_pos['y']],
+                'zArray': [max_pos['z'], max_pos['z']],
+            },
+        }]
+        bvhc_raw['AABBArray'] = aabb_array
+
     node_list = []
 
     for bvnode in bvhc_raw["AABBArray"]:
@@ -609,43 +637,14 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node):
         for i in range(2):
             bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
             min_aabb = bvnode["minAABB"]
-            # box.min.x = min_aabb["xArray"][i]
-            # box.min.y = min_aabb["yArray"][i]
-            # box.min.z = min_aabb["zArray"][i]
-            # bbox.min = write_vec4(
-            #    [min_aabb["xArray"][i], min_aabb["yArray"][i], min_aabb["zArray"][i], 0.0], dst_sbc)
             bbox.min = [min_aabb["xArray"][i], min_aabb["yArray"][i], min_aabb["zArray"][i], 0.0]
             max_aabb = bvnode["maxAABB"]
-            # box.max.x = max_aabb["xArray"][i]
-            # box.max.y = max_aabb["yArray"][i]
-            # box.max.z = max_aabb["zArray"][i]
-            # bbox.max = write_vec4(
-            #    [max_aabb["xArray"][i], max_aabb["yArray"][i], max_aabb["zArray"][i], 0.0], dst_sbc)
             bbox.max = [max_aabb["xArray"][i], max_aabb["yArray"][i], max_aabb["zArray"][i], 0.0]
-            # box._check()
             boxes.append(bbox)
         node.boxes = boxes
         node.nulls = [0] * 10
         node_list.append(node)
-    # if one triangle
-    if not node_list:
-        node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
-        node.bit = 128
-        node.child_index = [0, 0]
-        boxes = []
-        # 2 dummy nodes, first with the junk(-431602080), second should use bbox data
-        for i in range(2):
-            bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
-            if i == 0:
-                bbox.min = [-431602080, -431602080, -431602080, 0.0]
-                bbox.max = [-431602080, -431602080, -431602080, 0.0]
-            else:
-                bbox.min = [v for v in bbox_data['minPos'].values()][:3]
-                bbox.max = [v for v in bbox_data['maxPos'].values()][:3]
-            boxes.append(bbox)
-        node.boxes = boxes
-        node.nulls = [0] * 10
-        node_list.append(node)
+
     # should be from[top level bvh nodes = num_sbc_info][node_id] if dummy nodes
     # sbc_info.vmin = [vec4to3(node_list[0].boxes[0].min), vec4to3(node_list[0].boxes[1].min)]
     sbc_info.vmin = [write_vec3(node_list[0].boxes[0].min[:3], dst_sbc),
@@ -728,6 +727,11 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
     for i, bvnode in enumerate(bvhc_raw["AABBArray"]):
         node = dst_sbc.BvhNode(_parent=dst_sbc, _root=dst_sbc._root)
         node.bit = bvnode['nodeType']
+        children = [0, 0]
+        leaf_left = node.bit & 0x40
+        leaf_right = node.bit & 0x80
+        children[0] = bvnode['nodeId'][0] if leaf_left else 0
+        children[1] = bvnode['nodeId'][1] if leaf_right else 0
         node.child_index = bvnode['nodeId']
         boxes = []
         for j in range(2):
@@ -757,6 +761,7 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
         # sbc_groups[i].vmax = [vec4to3(node.boxes[0].max), vec4to3(node.boxes[1].max)]
         sbc_groups[i].vmax = [write_vec3(node.boxes[0].max[:3], dst_sbc),
                               write_vec3(node.boxes[1].max[:3], dst_sbc)]
+        sbc_groups[i].child_index = children
     return node_list
 
 
@@ -1020,7 +1025,6 @@ class SBC156CollisionCustomProperties(bpy.types.PropertyGroup):
 class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     pass
 
-
 @blender_registry.register_custom_properties_object(
     "sbc_21_link",
     ("re0", "re1", "re6", "rev1", "rev2", "dd",),
@@ -1044,6 +1048,15 @@ class SBC21LinkCustomProperties(BaseSBCProperties):
     is_secondary=True, display_name="SBC Mesh", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21MeshCustomProperties(BaseSBCProperties):
+    index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
+
+
+@blender_registry.register_custom_properties_object(
+    "sbc_156_mesh",
+    ("re5",),
+    is_secondary=True, display_name="SBC Mesh", asset_type="COLLISION")
+@blender_registry.register_blender_prop
+class SBC156MeshCustomProperties(BaseSBCProperties):
     index_id: bpy.props.StringProperty(name="Index Id", default="4294967295", options=set())
 
 

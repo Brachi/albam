@@ -670,9 +670,10 @@ def morton_sort(primitives):
     minima, maxima = unpack(reduce(merge_op, primitiveBoxes, primitiveBoxes[0]))
     # setBounds normalizes(?) bounding boxes towards minima and maxima and
     # encodes them into a single number by morton code then sorts them and returns sorted
-    mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}
-    return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)]
+    # mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}  # <this was originally
+    # return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)] # <this was originally
     # return sorted(primitives,key = lambda x: x.setBounds(minima,maxima).encode())
+    return sorted(primitives, key=lambda primitive: primitive.setBounds(minima, maxima).encode(),)
 
 
 def linear_split(cluster, metric):

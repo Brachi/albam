@@ -33,8 +33,8 @@ def test_export_infos(sbc_imported, sbc_exported):
         if sbc_version == 255:
             assert sinfo.num_faces == dinfo.num_faces
             assert sinfo.num_vertices == dinfo.num_vertices
-        # assert sinfo.index_id == dinfo.index_id  # not a constantt
-        print(i)
+        print("info id:", i)
+        assert sinfo.index_id == dinfo.index_id  # not a constant, probably an id for scripting
         assert sinfo.bounding_box.min[0] == pytest.approx(dinfo.bounding_box.min[0], rel=0.001)
         assert sinfo.bounding_box.min[1] == pytest.approx(dinfo.bounding_box.min[1], rel=0.001)
         assert sinfo.bounding_box.min[2] == pytest.approx(dinfo.bounding_box.min[2], rel=0.001)
@@ -87,3 +87,5 @@ def test_export_vertices(sbc_imported, sbc_exported):
         assert svert.x == pytest.approx(dvert.x, rel=0.001)
         assert svert.y == pytest.approx(dvert.y, rel=0.001)
         assert svert.z == pytest.approx(dvert.z, rel=0.001)
+        assert svert.w == pytest.approx(dvert.w, rel=0.001)
+        assert svert.w == 0
