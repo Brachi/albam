@@ -671,7 +671,6 @@ def build_faces(dst_sbc, tris):
 
 def _serialize_faces(dst_sbc, face_data):
     faces = []
-    print("lenght of face data is {}".format(len(face_data)))
     for f in face_data:
         face = dst_sbc.Face(_parent=dst_sbc, _root=dst_sbc._root)
         face_raw = f.triSerialize()
@@ -832,7 +831,6 @@ def _serialize_infos(dst_sbc, faces, vertices, stages, pairs, sbcs, sbcC, metada
         v0 += len(v)
         p0 += len(p)
         infos.append(info)
-        print("Vertex start {}".format(info.start_vertices))
     return infos
 
 

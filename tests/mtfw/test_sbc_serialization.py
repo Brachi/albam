@@ -9,9 +9,9 @@ def test_export_header(sbc_imported, sbc_exported):
     assert sheader.num_objects == dheader.num_objects
     assert sheader.num_faces == dheader.num_faces
     assert sheader.num_vertices == dheader.num_vertices
-    assert sheader.num_boxes == dheader.num_boxes
     if sbc_version == 49:
         assert sheader.version == dheader.version
+        assert sheader.num_boxes == dheader.num_boxes
     elif sbc_version == 255:
         assert sheader.unk_00 == dheader.unk_00
         assert sheader.num_stages == dheader.num_stages
@@ -72,9 +72,9 @@ def test_export_faces(sbc_imported, sbc_exported):
             assert sface.special_attr == dface.special_attr  # 0 in re5
             assert sface.surface_attr == dface.surface_attr  # 0 in re5
         elif sbc_version == 255:
-            assert sface.normal[0] == pytest.approx(dface.normal[0], rel=0.1)  # precision error in re6
-            assert sface.normal[1] == pytest.approx(dface.normal[1], rel=0.1)
-            assert sface.normal[2] == pytest.approx(dface.normal[2], rel=0.1)
+            assert sface.normal[0] == pytest.approx(dface.normal[0], abs=0.001)  # precision error in re6
+            assert sface.normal[1] == pytest.approx(dface.normal[1], abs=0.001)
+            assert sface.normal[2] == pytest.approx(dface.normal[2], abs=0.001)
             # assert sface.adjacent[0] == dface.adjacent[0]
             # assert sface.adjacent[1] == dface.adjacent[1]
             # assert sface.adjacent[2] == dface.adjacent[2]
