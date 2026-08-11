@@ -1886,6 +1886,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyAlphaClip", "FTransparencyAlphaClip", "", 4),  # noqa: F821
             ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
             ("FColorMaskTransparencyMap", "FColorMaskTransparencyMap", "", 6),  # noqa: F821
+            ("FTransparencyDodgeMap", "FTransparencyDodgeMap", "", 7),  # noqa: F821
         ],
         options=set()
     )

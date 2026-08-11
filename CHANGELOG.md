@@ -10,12 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
 - Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
+- Error message for the case when there is no mesh to export
+- Support for navigation mesh import-export (Resident Evil 5)
+- Autosorter tool to automatically set `alpha priority` values ​​for hair cards
 
 ### Fixed
 
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
+- Missed `FTransparencyDodgeMap` in `FTransparency` enum for RE6 maps
 
 ### Changed
 
