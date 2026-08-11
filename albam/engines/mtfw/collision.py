@@ -236,7 +236,7 @@ def create_collision_mesh(sbc_object, app_id, mesh_name):
     # Add custom attributes to an object
     sbc_mesh_prop = CUSTOM_PROPS_VERSION.get(app_id)
     sbc_mesh_props = obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            sbc_mesh_prop]
+        sbc_mesh_prop]
     sbc_mesh_props.index_id = str(sbc_object.sbcinfo.index_id)
     return mesh, obj
 
