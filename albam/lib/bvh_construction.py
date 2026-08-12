@@ -8,10 +8,10 @@ import numpy as np
 from functools import reduce
 try:
     from primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
-    from low_level_op import radix_sort
+    # from low_level_op import radix_sort
 except ImportError:
     from .primitive_geometry import MORTONLENGHT, QuadPair, PrimitiveTree, BoundingBox
-    from .low_level_op import radix_sort
+    # from .low_level_op import radix_sort
 
 
 def set_remove(poset, val):
@@ -428,6 +428,7 @@ class BBVH(QBVH):
         return boxes
 
     def typeMask(self):
+        # `bit` value in BHV, the type of node incoded with 6th and 7th bit
         if not self.isNode():
             raise NotImplementedError(
                 "Empties and Primitives don't have a type mask.")
@@ -669,9 +670,10 @@ def morton_sort(primitives):
     minima, maxima = unpack(reduce(merge_op, primitiveBoxes, primitiveBoxes[0]))
     # setBounds normalizes(?) bounding boxes towards minima and maxima and
     # encodes them into a single number by morton code then sorts them and returns sorted
-    mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}
-    return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)]
+    # mapping = {p.setBounds(minima, maxima).encode(): p for p in primitives}  # <this was originally
+    # return [mapping[key] for key in radix_sort(list(mapping.keys()), 8)] # <this was originally
     # return sorted(primitives,key = lambda x: x.setBounds(minima,maxima).encode())
+    return sorted(primitives, key=lambda primitive: primitive.setBounds(minima, maxima).encode(),)
 
 
 def linear_split(cluster, metric):
@@ -807,10 +809,11 @@ def primitive_to_sbc156(primitives, clusteringFunction=spatial_splits, **kwargs)
     btree = next(iter(clusteringFunction(primitives, **kwargs)))
     btree = btree.binary_collapse()
     indexize_ob(btree.subnodes())
-    npairPrimitives = mergerReindex(primitives, btree.subprimitives())
-    nodes, pairPrimitives = btree.separateTraverse()
+    npair_primitives = mergerReindex(primitives, btree.subprimitives())
+    nodes, pair_primitives = btree.separateTraverse()
     indexize_ob(nodes)
-    return npairPrimitives, PrimitiveTree(btree).refine([vert for p in primitives for vert in p.vertices])
+    primitive_tree = PrimitiveTree(btree).refine([vert for p in primitives for vert in p.vertices])
+    return npair_primitives, primitive_tree
 
 
 def trees_to_sbc_col156(tree_list, clusteringFunction=spatial_splits, **kwargs):

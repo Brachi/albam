@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
 - Missed `FTransparencyDodgeMap` in `FTransparency` enum for RE6 maps
+- Import SBC for DMC4
+- Issue with SBC generation that broke high collision mesh (eff) and left holes in low collision mesh (scr)
 
 ### Changed
 
