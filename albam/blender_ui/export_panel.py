@@ -2,6 +2,7 @@ import time
 import os
 import bpy
 
+from ..lib import fs_registry
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
@@ -366,11 +367,22 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         # necessary for kaitaistruct unavailable when registering
         # blender types
         from ..engines.mtfw.archive import update_arc
+        from ..engines.mtfw.arc_fs import origin_arc_path
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
         if item_i.is_archive:
-            path_i = item_i.absolute_path
+            if item_i.fs_key:
+                # Resolves correctly whether this root is a single
+                # ArcFS-wrapped .arc (always returns that arc's own path) or
+                # a whole MTFW_FS game-folder root (resolves the specific
+                # .arc this path actually came from) - see origin_arc_path.
+                path_i = origin_arc_path(fs_registry.get(item_i.fs_key), item_i.fs_path)
+                if path_i is None:
+                    self.report({'ERROR'}, "Selected archive isn't backed by a packed .arc file")
+                    return
+            else:
+                path_i = item_i.absolute_path
         else:
             arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
             arc_node = [item for item in vfs_i.file_list
