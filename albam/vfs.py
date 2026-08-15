@@ -454,15 +454,20 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileBase:
         vfiles_to_remove = []
         root_node_index = vfs.file_list_selected_index
         archive_node = vfs.file_list[root_node_index]
+        archive_node_name = archive_node.name
+        archive_node_fs_key = archive_node.fs_key
         for i in range(len(vfs.file_list)):
             parent = vfs.file_list[i].tree_node.root_id
-            if parent == archive_node.name:
+            if parent == archive_node_name:
                 vfiles_to_remove.append(i)
 
         vfiles_to_remove.reverse()
         for i in range(len(vfiles_to_remove)):
             vfs.file_list.remove(vfiles_to_remove[i])
         vfs.file_list.remove(root_node_index)
+
+        if archive_node_fs_key:
+            fs_registry.unregister(archive_node_fs_key)
 
         return {'FINISHED'}
 
