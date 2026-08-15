@@ -144,6 +144,23 @@ def _BytesFile(data):
     return io.BytesIO(data)
 
 
+def origin_arc_path(fs_instance, path):
+    """Which .arc `path` resolves to under `fs_instance`, or None if it's a
+    loose/real file (or `fs_instance` doesn't track archive origins at all).
+
+    `ArcFS` always resolves to its own single arc; `MTFW_FS` may overlay many,
+    so it defers to its own `origin_of()`. Used by callers (e.g. Pack/Patch)
+    that need to write back into the specific archive a file came from,
+    without caring whether the VFS root behind it was a single `.arc` or a
+    whole recursively-scanned game folder.
+    """
+    if isinstance(fs_instance, MTFW_FS):
+        return fs_instance.origin_of(path)
+    if isinstance(fs_instance, ArcFS):
+        return fs_instance.arc_path
+    return None
+
+
 def find_arc_files(game_root):
     """Recursively find every .arc under `game_root`, case-insensitively.
 
