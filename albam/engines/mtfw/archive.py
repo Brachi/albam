@@ -138,7 +138,7 @@ def _sort_arc_entries(entries, vfile=True):
 
 
 def _get_file_entry(vfile):
-    vf_data = vfile.data_bytes
+    vf_data = vfile.get_bytes()
     chunk = zlib.compress(vf_data)
     path = ntpath.normpath(vfile.relative_path)
     file_path = ntpath.splitext(path)[0]
@@ -308,7 +308,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False):
 
     # patch dictionary with imported files
     for vf in vf_sorted:
-        vf_data = vf.data_bytes
+        vf_data = vf.get_bytes()
         chunk = zlib.compress(vf_data)
         path = ntpath.normpath(vf.relative_path)
         file_path = ntpath.splitext(path)[0]
@@ -392,7 +392,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             if name == file_name and vfile.extension == extension:
                 show_message_box("File: {} was found and replaced in the archive".format(file_name))
                 found = True
-                vf_data = vfile.data_bytes
+                vf_data = vfile.get_bytes()
                 chunk = zlib.compress(vf_data)
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)

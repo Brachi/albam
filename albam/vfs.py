@@ -3,6 +3,8 @@ import os
 from pathlib import PureWindowsPath, Path
 
 import bpy
+from fs.memoryfs import MemoryFS
+from fs.path import dirname
 
 from .apps import APPS
 from .lib import fs_registry
@@ -205,32 +207,28 @@ class VirtualFileSystemBase:
         for node in tree.flatten():
             self._add_vf_from_treenode(app_id, root_id, node)
 
-        return vf
+        # Re-fetch: further file_list.add() calls above can invalidate the
+        # `vf` reference taken before the loop (same Blender CollectionProperty
+        # quirk _expand_archive's comment warns about) - look it up fresh by
+        # the plain-string root_id instead of trusting the stale object.
+        return self.file_list[root_id]
 
-    def add_vfile(self, vfile_data):
-        vf = self.file_list.add()
-        vf.vfs_id = self.VFS_ID
-        vf.app_id = vfile_data.app_id
-        vf.name = f"{vfile_data.app_id}::{vfile_data.name}"
-        vf.display_name = vfile_data.name
-        vf.data_bytes = vfile_data.data_bytes or b""
-
-        return vf
-
-    def add_vfiles_as_tree(self, app_id, root_vfile_data, vfiles_data):
-        root_id = f"{app_id}::{root_vfile_data.name}"
-        tree = Tree(root_id, app_id)
-        bl_vf = self.add_vfile(root_vfile_data)
-        bl_vf.is_expandable = True
-        bl_vf.is_root = True
-
+    def add_export_root(self, app_id, display_name, vfiles_data):
+        """
+        Stage freshly-exported bytes (VirtualFileData, as returned by an
+        engine's export function) in a writable in-memory FS and register it
+        as a new root via add_fs_root() - the export-side counterpart of its
+        read-only archive/game-folder roots, sharing the same tree-building
+        and get_bytes() machinery instead of duplicating bytes into
+        data_bytes.
+        """
+        mem_fs = MemoryFS()
         for vfile_data in vfiles_data:
-            tree.add_node_from_path(vfile_data.relative_path, vfile_data)
+            path = "/" + str(vfile_data.relative_path).replace("\\", "/")
+            mem_fs.makedirs(dirname(path), recreate=True)
+            mem_fs.writebytes(path, vfile_data.data_bytes or b"")
 
-        for node in tree.flatten():
-            self._add_vf_from_treenode(bl_vf.app_id, root_id, node)
-
-        return bl_vf
+        return self.add_fs_root(app_id, mem_fs, display_name=display_name)
 
     def _expand_archive(self, archive_loader_func, vf, app_id):
         # Beware of chaning this, it was observed the reference
@@ -277,9 +275,6 @@ class VirtualFileSystemBase:
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
         child_vf.albam_asset_type = blender_registry.albam_asset_types.get((app_id, child_vf.extension), "")
-        vfile = node["vfile"]
-        if vfile:
-            child_vf.data_bytes = vfile.data_bytes
         child_vf.tree_node.depth = node["depth"] + 1
         child_vf.tree_node.root_id = root_id
         for ancestor_id in node["ancestors_ids"]:
@@ -528,7 +523,7 @@ class Tree:
                 break
         return node_found
 
-    def add_node_from_path(self, full_path, vfile=None, absolute_path=""):
+    def add_node_from_path(self, full_path, absolute_path=""):
         p = PureWindowsPath(full_path)
         path_parts = p.parts
         # FIXME: adding a single root node doesn't work
@@ -550,7 +545,6 @@ class Tree:
                     "name": path_part,
                     "children": [],
                     "depth": current_level,
-                    "vfile": vfile,
                     "node_id": self.generate_node_id(path_parts[0 : i + 1], use_prefix=True),
                     "relative_path": self.generate_node_id(path_parts[0 : i + 1], use_prefix=False),
                     "full_path": absolute_path,
@@ -569,7 +563,6 @@ class Tree:
             "name": leaf_name,
             "children": [],
             "depth": current_level,
-            "vfile": vfile,
             "node_id": node_id,
             "relative_path": self.generate_node_id(path_parts, use_prefix=False),
             "full_path": absolute_path,
