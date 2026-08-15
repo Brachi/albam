@@ -8,10 +8,40 @@ from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
+from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
 from ...blender_ui.tools import show_message_box
 
+MTFW_APP_IDS = ("re0", "re1", "re5", "re6", "rev1", "rev2", "dd", "dmc4")
 
+
+@blender_registry.register_fs_root_loader(app_id="re0", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re1", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re5", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re6", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="rev1", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="rev2", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="dd", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="dmc4", extension="arc")
+def arc_fs_root_loader(absolute_path):
+    return ArcFS(absolute_path)
+
+
+@blender_registry.register_fs_root_loader(app_id="re0", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re1", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re5", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re6", extension=None)
+@blender_registry.register_fs_root_loader(app_id="rev1", extension=None)
+@blender_registry.register_fs_root_loader(app_id="rev2", extension=None)
+@blender_registry.register_fs_root_loader(app_id="dd", extension=None)
+@blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
+def game_fs_root_loader(absolute_path):
+    return MTFW_FS(absolute_path)
+
+
+# TODO: superseded by arc_fs_root_loader/game_fs_root_loader above + the
+# fs_key-backed branch of VirtualFile.get_bytes(); remove once vfs.py's
+# add_real_file() consumes fs_root_loader_registry for mtfw app_ids.
 @blender_registry.register_archive_loader(app_id="re0", extension="arc")
 @blender_registry.register_archive_loader(app_id="re1", extension="arc")
 @blender_registry.register_archive_loader(app_id="re5", extension="arc")
