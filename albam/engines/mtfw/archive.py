@@ -12,8 +12,6 @@ from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
 from ...blender_ui.tools import show_message_box
 
-MTFW_APP_IDS = ("re0", "re1", "re5", "re6", "rev1", "rev2", "dd", "dmc4")
-
 
 @blender_registry.register_fs_root_loader(app_id="re0", extension="arc")
 @blender_registry.register_fs_root_loader(app_id="re1", extension="arc")
@@ -37,49 +35,6 @@ def arc_fs_root_loader(absolute_path):
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
 def game_fs_root_loader(absolute_path):
     return MTFW_FS(absolute_path)
-
-
-# TODO: superseded by arc_fs_root_loader/game_fs_root_loader above + the
-# fs_key-backed branch of VirtualFile.get_bytes(); remove once vfs.py's
-# add_real_file() consumes fs_root_loader_registry for mtfw app_ids.
-@blender_registry.register_archive_loader(app_id="re0", extension="arc")
-@blender_registry.register_archive_loader(app_id="re1", extension="arc")
-@blender_registry.register_archive_loader(app_id="re5", extension="arc")
-@blender_registry.register_archive_loader(app_id="re6", extension="arc")
-@blender_registry.register_archive_loader(app_id="rev1", extension="arc")
-@blender_registry.register_archive_loader(app_id="rev2", extension="arc")
-@blender_registry.register_archive_loader(app_id="dd", extension="arc")
-@blender_registry.register_archive_loader(app_id="dmc4", extension="arc")
-def arc_loader(vfile, context=None):  # XXX context DEPRECATED
-    arc = ArcWrapper(file_path=vfile.absolute_path)
-    for file_entry in arc.get_file_entries():
-        yield file_entry.file_path_with_ext
-
-
-@blender_registry.register_archive_accessor(app_id="re0", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re1", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re5", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re6", extension="arc")
-@blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
-@blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
-@blender_registry.register_archive_accessor(app_id="dd", extension="arc")
-@blender_registry.register_archive_accessor(app_id="dmc4", extension="arc")
-def arc_accessor(vfile, context):
-    arc = ArcWrapper(vfile.root_vfile.absolute_path)
-    arc.app_id = vfile.app_id
-
-    path = vfile.relative_path_windows
-    path_no_ext = str(vfile.relative_path_windows_no_ext)
-    ext = path.suffix.replace(".", "")
-
-    # TODO: error handling, e.g. when file_path doesn't exist
-    try:
-        file_type = EXTENSION_TO_FILE_ID[ext]
-    except KeyError:
-        file_type = int(ext)
-    file_bytes = arc.get_file(path_no_ext, file_type)
-
-    return file_bytes
 
 
 class ArcWrapper:

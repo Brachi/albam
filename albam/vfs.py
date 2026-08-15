@@ -5,7 +5,21 @@ from pathlib import PureWindowsPath, Path
 import bpy
 
 from .apps import APPS
+from .lib import fs_registry
 from .registry import blender_registry
+
+
+def _extension_from_name(name):
+    """
+    Same "up to 2 dots" rule as VirtualFile.extension/VirtualFileData.extension,
+    usable before a VirtualFile exists yet (add_real_file's FS-root dispatch).
+    """
+    SEP = "."
+    stem, _, extension = name.rpartition(SEP)
+    if SEP in stem:
+        _, __, extension0 = stem.rpartition(SEP)
+        extension = SEP.join((extension0, extension))
+    return extension
 
 
 @blender_registry.register_blender_prop
@@ -33,6 +47,11 @@ class VirtualFile(bpy.types.PropertyGroup):
     vfs_id: bpy.props.StringProperty()
 
     data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
+    # Set on root nodes created via add_fs_root(): key into fs_registry for
+    # the live fs.base.FS instance backing this root (bpy.types.PropertyGroup
+    # can't hold that object directly). Empty for roots/nodes still going
+    # through the legacy archive_loader/archive_accessor registries.
+    fs_key: bpy.props.StringProperty()
 
     @property
     def relative_path_windows(self):
@@ -63,7 +82,14 @@ class VirtualFile(bpy.types.PropertyGroup):
             extension = SEP.join((extension0, extension))
         return extension
 
+    @property
+    def fs_path(self):
+        return "/" + str(self.relative_path).replace("\\", "/")
+
     def get_bytes(self):
+        root = self.root_vfile
+        if root and root.fs_key:
+            return fs_registry.get(root.fs_key).readbytes(self.fs_path)
         accessor = self.get_accessor()
         return accessor(self, bpy.context)
 
@@ -117,6 +143,20 @@ class VirtualFileSystemBase:
 
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
+        extension = _extension_from_name(path.name)
+
+        # A single archived file (e.g. one .arc) has its own loader keyed by
+        # extension; a folder has none (no meaningful extension), so it falls
+        # through to the whole-folder loader keyed by (app_id, None), if any.
+        fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
+                     blender_registry.fs_root_loader_registry.get((app_id, None)))
+        if fs_loader:
+            self.add_fs_root(
+                app_id, fs_loader(absolute_path), display_name=path.name,
+                is_archive=bool(extension), absolute_path=absolute_path,
+            )
+            return
+
         vf = self.file_list.add()
         vf.is_root = True
         vf.name = f"{app_id}::{path.name}"
@@ -136,6 +176,36 @@ class VirtualFileSystemBase:
             vf.is_expandable = True
             vf.is_archive = False
             self._expand_directory(absolute_path, vf, app_id)
+
+    def add_fs_root(self, app_id, fs_instance, display_name, is_archive=False, absolute_path=""):
+        """
+        Register `fs_instance` (any fs.base.FS) as a new root, sourcing its
+        whole file tree via one fs_instance.walk() pass instead of an
+        engine-specific archive_loader/archive_accessor. Bytes for every node
+        under this root are read on demand straight from `fs_instance`
+        (see VirtualFile.get_bytes()), never duplicated into a bpy property.
+        """
+        fs_key = fs_registry.register(fs_instance)
+
+        root_id = f"{app_id}::{display_name}"
+        vf = self.file_list.add()
+        vf.is_root = True
+        vf.name = root_id
+        vf.vfs_id = self.VFS_ID
+        vf.app_id = app_id
+        vf.display_name = display_name
+        vf.absolute_path = absolute_path
+        vf.fs_key = fs_key
+        vf.is_expandable = True
+        vf.is_archive = is_archive
+
+        tree = Tree(root_id=root_id, app_id=app_id)
+        for file_path in fs_instance.walk.files():
+            tree.add_node_from_path(file_path.lstrip("/"))
+        for node in tree.flatten():
+            self._add_vf_from_treenode(app_id, root_id, node)
+
+        return vf
 
     def add_vfile(self, vfile_data):
         vf = self.file_list.add()
