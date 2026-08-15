@@ -7,6 +7,7 @@ import bpy
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
+from .data_loading import populate_albam_data
 from .registry import blender_registry
 from .__version__ import __version__ as version
 
@@ -68,6 +69,9 @@ def register():
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
+
+    # Load data from user's config files
+    bpy.app.handlers.load_post.append(populate_albam_data)
 
 
 def unregister():
