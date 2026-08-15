@@ -11,6 +11,11 @@ keywords = ["modding", "game-modding", "blender-addon", "import", "export"]
 dependencies = [
   'bpy == 4.2.0; python_version == "3.11.*"',
   'bpy == 5.2.0; python_version == "3.13.*"',
+  # albam.engines.mtfw.arc_fs (ArcFS/MTFW_FS): PyFilesystem2-based VFS over
+  # MTFramework .arc archives + loose files. archive.py imports it
+  # unconditionally (mtfw's VFS reads go through it), so it's a hard
+  # dependency, not just for the optional S3/R2-backed path below.
+  "fs",
 ]
 
 [project.optional-dependencies]
@@ -24,10 +29,9 @@ tests = [
   "python-dotenv",
 ]
 
-# albam.engines.mtfw.arc_fs: PyFilesystem2-based virtual filesystem over
-# MTFramework .arc archives (+ loose files), local or S3/R2-backed.
+# albam.engines.mtfw.arc_fs.MTFW_FS.from_s3: sourcing .arc files from an
+# S3/R2-compatible bucket instead of a local game folder.
 s3 = [
-  "fs",
   "boto3",
   "smart-open[s3]>=7.0.0",
 ]
