@@ -357,13 +357,9 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         layout = self.layout
 
         apps = context.scene.albam.apps
-        try:
-            app_index = apps["app_selected"]
-        except KeyError:
-            # default, before actually selecting
-            app_index = 0
-        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
-        layout.label(text=f"{app_selected_name}")
+        current_app = context.scene.albam.apps.app_selected
+        current_app_name = apps.bl_rna.properties["app_selected"].enum_items[current_app].name
+        layout.label(text=f"{current_app_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
