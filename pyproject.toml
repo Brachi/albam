@@ -20,6 +20,16 @@ tests = [
   "pytest-subtests",
   "coverage[toml]",
   "flake8-pyproject",
+  "moto[s3]>=5.0.0",
+  "python-dotenv",
+]
+
+# albam.engines.mtfw.arc_fs: PyFilesystem2-based virtual filesystem over
+# MTFramework .arc archives (+ loose files), local or S3/R2-backed.
+s3 = [
+  "fs",
+  "boto3",
+  "smart-open[s3]>=7.0.0",
 ]
 
 [build-system]
