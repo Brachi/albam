@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Missed `FTransparencyDodgeMap` in `FTransparency` enum for RE6 maps
 - Import SBC for DMC4
 - Issue with SBC generation that broke high collision mesh (eff) and left holes in low collision mesh (scr)
+- Typo that set wrong name ("name") for the color attribute layer
 
 ### Changed
 
