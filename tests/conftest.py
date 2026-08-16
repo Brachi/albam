@@ -22,3 +22,11 @@ def pytest_addoption(parser):
         action="store",
         help="Path to json file containing files to import. See tests/mtfw/datasets for examples"
     )
+    parser.addoption(
+        "--game-dir",
+        action="append",
+        help="Format: <app-id>::<dir>: Local game install root (recursively scanned for .arc "
+        "files via MTFW_FS, not a flat directory of loose .arc dumps like --arcdir). Used by "
+        "tests/mtfw/test_mod_serialization.py's local round-trip tests. Can be passed multiple "
+        "times.",
+    )

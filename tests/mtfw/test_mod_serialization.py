@@ -1,11 +1,146 @@
+import io
+import json
+import os
+
+import bpy
 import pytest
 
+# Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
+# of tests/mtfw/*.py. This is the single source of truth for what this file
+# tests locally; extend it directly rather than pointing at some other file.
+MOD_SERIALIZATION_DATASET_PATH = os.path.join(
+    os.path.dirname(__file__), "datasets", "mod_serialization_local.json"
+)
+with open(MOD_SERIALIZATION_DATASET_PATH) as f:
+    MOD_SERIALIZATION_DATASET = json.load(f)
 
-def test_export_header(mod_imported, mod_exported):
-    sheader = mod_imported.header
-    dheader = mod_exported.header
+# app_ids that already got an MTFW_FS mounted as a VFS root this session -
+# add_fs_root() must only run once per app_id (it always creates a new root;
+# node ids are app_id::relative_path only, not scoped per-root, so adding
+# the same game folder twice would create ambiguous duplicate entries).
+_GAME_FS_ROOTS_ADDED = set()
 
-    bones_data_error = abs(mod_imported.bones_data.size_ - mod_exported.bones_data.size_)
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_mod_path" in metafunc.fixturenames and
+            "local_mrl_path" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_mod_path", "local_mrl_path")
+        argvalues = [
+            (d["app_id"], d["mod_path"], d.get("mrl_path"))
+            for d in MOD_SERIALIZATION_DATASET
+        ]
+        ids = [f"{d['app_id']}-{d['mod_path']}" for d in MOD_SERIALIZATION_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def _game_dirs(pytestconfig):
+    parsed = {}
+    for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
+        app_id, directory = app_id_and_dir.split("::")
+        parsed[app_id] = directory
+    return parsed
+
+
+@pytest.fixture(scope="session")
+def game_fs_root(pytestconfig, local_app_id):
+    """
+    Mounts --game-dir's folder for local_app_id as a VFS root via MTFW_FS
+    (once per session, cached in _GAME_FS_ROOTS_ADDED) - the same mechanism
+    "Add Folder" uses in the UI for a whole game install, unlike --arcdir's
+    flat directory of loose .arc dumps. Skips cleanly if no matching
+    --game-dir was supplied, or the path doesn't exist.
+
+    Scanning + flattening a full game install's tree can take a while (a
+    real RE5 install has ~1200 archives) - that cost is paid once per
+    app_id per session, not per test, but is still why this is opt-in and
+    local-only rather than something CI runs.
+    """
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+
+    game_dir = _game_dirs(pytestconfig).get(local_app_id)
+    if not game_dir or not os.path.isdir(game_dir):
+        pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
+
+    if local_app_id not in _GAME_FS_ROOTS_ADDED:
+        bpy.context.scene.albam.apps.app_selected = local_app_id
+        vfs = bpy.context.scene.albam.vfs
+        vfs.add_fs_root(local_app_id, MTFW_FS(game_dir), display_name=f"{local_app_id}-local")
+        _GAME_FS_ROOTS_ADDED.add(local_app_id)
+
+    return local_app_id
+
+
+@pytest.fixture(scope="session")
+def mod_export_local(game_fs_root, local_app_id, local_mod_path, local_mrl_path):
+    from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
+    from albam.engines.mtfw.structs.mrl import Mrl
+    from kaitaistruct import KaitaiStream
+
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    if local_app_id == "dd":
+        bpy.context.scene.albam.export_settings.no_vf_grouping = True
+    bpy.context.scene.albam.import_settings.import_only_main_lods = False
+    bpy.context.scene.albam.export_settings.export_bones = True
+
+    vfs = bpy.context.scene.albam.vfs
+    try:
+        vfile_mod = vfs.select_vfile(local_app_id, local_mod_path)
+    except KeyError:
+        pytest.skip(f"{local_mod_path!r} not found under --game-dir for app_id={local_app_id!r}")
+    vfile_mrl = vfs.get_vfile(local_app_id, local_mrl_path) if local_mrl_path else None
+    assert vfile_mod and ((local_mrl_path and vfile_mrl) or (not local_mrl_path and not vfile_mrl))
+
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
+    exported = bpy.context.scene.albam.exported
+    vfile_mod_exported = exported.select_vfile(local_app_id, local_mod_path)
+    mrl_path = local_mrl_path
+    try:
+        vfile_mrl_exported = exported.get_vfile(local_app_id, mrl_path) if mrl_path else None
+    except KeyError:
+        mrl_path = mrl_path.replace("_0.mrl", ".mrl")
+        vfile_mrl_exported = exported.get_vfile(local_app_id, mrl_path) if mrl_path else None
+
+    assert vfile_mod_exported and (
+        (mrl_path and vfile_mrl_exported) or
+        (not mrl_path and not vfile_mrl_exported))
+
+    Mod = APPID_CLASS_MAPPER[local_app_id]
+    src_mod = Mod.from_bytes(vfile_mod.get_bytes())
+    dst_mod = Mod.from_bytes(vfile_mod_exported.get_bytes())
+    src_mod._read()
+    dst_mod._read()
+
+    src_mrl = Mrl(local_app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
+    dst_mrl = (Mrl(local_app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
+               if mrl_path else None)
+    if mrl_path:
+        src_mrl._read()
+        dst_mrl._read()
+    return src_mod, dst_mod, src_mrl, dst_mrl
+
+
+@pytest.fixture(scope="session")
+def mod_imported_local(mod_export_local):
+    return mod_export_local[0]
+
+
+@pytest.fixture(scope="session")
+def mod_exported_local(mod_export_local):
+    return mod_export_local[1]
+
+
+def test_export_header(mod_imported_local, mod_exported_local):
+    sheader = mod_imported_local.header
+    dheader = mod_exported_local.header
+
+    bones_data_error = abs(mod_imported_local.bones_data.size_ - mod_exported_local.bones_data.size_)
     assert (sheader.version in (210, 211, 212) and not bones_data_error) or sheader.version == 156
 
     assert sheader.ident == dheader.ident == b"MOD\x00"
@@ -27,33 +162,33 @@ def test_export_header(mod_imported, mod_exported):
     assert sheader.offset_vertex_buffer == dheader.offset_vertex_buffer - bones_data_error
 
 
-def test_export_top_level(mod_imported, mod_exported):
+def test_export_top_level(mod_imported_local, mod_exported_local):
 
-    # assert mod_imported.bsphere.x == pytest.approx(mod_exported.bsphere.x, rel=0.5)
-    assert mod_imported.bsphere.y == pytest.approx(mod_exported.bsphere.y, rel=0.001)
-    # assert mod_imported.bsphere.z == pytest.approx(mod_exported.bsphere.z, rel=0.001)
-    assert mod_imported.bsphere.w == pytest.approx(mod_exported.bsphere.w, rel=0.001)
+    # assert mod_imported_local.bsphere.x == pytest.approx(mod_exported_local.bsphere.x, rel=0.5)
+    assert mod_imported_local.bsphere.y == pytest.approx(mod_exported_local.bsphere.y, rel=0.001)
+    # assert mod_imported_local.bsphere.z == pytest.approx(mod_exported_local.bsphere.z, rel=0.001)
+    assert mod_imported_local.bsphere.w == pytest.approx(mod_exported_local.bsphere.w, rel=0.001)
 
-    assert mod_imported.bbox_min.x == pytest.approx(mod_exported.bbox_min.x, rel=0.001)
-    assert mod_imported.bbox_min.y == pytest.approx(mod_exported.bbox_min.y, rel=0.001)
-    assert mod_imported.bbox_min.z == pytest.approx(mod_exported.bbox_min.z, rel=0.001)
-    assert mod_imported.bbox_min.w == pytest.approx(mod_exported.bbox_min.w, rel=0.001)
+    assert mod_imported_local.bbox_min.x == pytest.approx(mod_exported_local.bbox_min.x, rel=0.001)
+    assert mod_imported_local.bbox_min.y == pytest.approx(mod_exported_local.bbox_min.y, rel=0.001)
+    assert mod_imported_local.bbox_min.z == pytest.approx(mod_exported_local.bbox_min.z, rel=0.001)
+    assert mod_imported_local.bbox_min.w == pytest.approx(mod_exported_local.bbox_min.w, rel=0.001)
 
-    assert mod_imported.bbox_max.x == pytest.approx(mod_exported.bbox_max.x, rel=0.001)
-    assert mod_imported.bbox_max.y == pytest.approx(mod_exported.bbox_max.y, rel=0.001)
-    assert mod_imported.bbox_max.z == pytest.approx(mod_exported.bbox_max.z, rel=0.001)
-    assert mod_imported.bbox_max.w == pytest.approx(mod_exported.bbox_max.w, rel=0.001)
+    assert mod_imported_local.bbox_max.x == pytest.approx(mod_exported_local.bbox_max.x, rel=0.001)
+    assert mod_imported_local.bbox_max.y == pytest.approx(mod_exported_local.bbox_max.y, rel=0.001)
+    assert mod_imported_local.bbox_max.z == pytest.approx(mod_exported_local.bbox_max.z, rel=0.001)
+    assert mod_imported_local.bbox_max.w == pytest.approx(mod_exported_local.bbox_max.w, rel=0.001)
 
 
-def test_export_bones_data(mod_imported, mod_exported, subtests):
+def test_export_bones_data(mod_imported_local, mod_exported_local, subtests):
     # TODO: matrices
-    sbd = mod_imported.bones_data
-    dbd = mod_exported.bones_data
-    bones_data_error = abs(mod_imported.bones_data.size_ - mod_exported.bones_data.size_)
-    assert ((mod_exported.header.version in (210, 211, 212) and not bones_data_error) or
-            mod_exported.header.version == 156)
+    sbd = mod_imported_local.bones_data
+    dbd = mod_exported_local.bones_data
+    bones_data_error = abs(mod_imported_local.bones_data.size_ - mod_exported_local.bones_data.size_)
+    assert ((mod_exported_local.header.version in (210, 211, 212) and not bones_data_error) or
+            mod_exported_local.header.version == 156)
 
-    assert mod_imported.bones_data_size_ == mod_exported.bones_data_size_ - bones_data_error
+    assert mod_imported_local.bones_data_size_ == mod_exported_local.bones_data_size_ - bones_data_error
 
     for i, src_bone in enumerate(sbd.bones_hierarchy):
         dst_bone = dbd.bones_hierarchy[i]
@@ -112,32 +247,34 @@ def test_export_bones_data(mod_imported, mod_exported, subtests):
     assert sbd.bone_map == dbd.bone_map
 
 
-def test_export_groups(mod_imported, mod_exported):
+def test_export_groups(mod_imported_local, mod_exported_local):
 
-    assert mod_imported.groups_size_ == mod_exported.groups_size_
+    assert mod_imported_local.groups_size_ == mod_exported_local.groups_size_
 
-    assert [g.group_index for g in mod_imported.groups] == [g.group_index for g in mod_exported.groups]
-    assert [g.pos.x for g in mod_imported.groups] == [g.pos.x for g in mod_exported.groups]
-    assert [g.pos.y for g in mod_imported.groups] == [g.pos.y for g in mod_exported.groups]
-    assert [g.pos.z for g in mod_imported.groups] == [g.pos.z for g in mod_exported.groups]
-    assert [g.radius for g in mod_imported.groups] == [g.radius for g in mod_exported.groups]
-
-
-def test_materials_data(mod_imported, mod_exported):
-
-    assert mod_imported.materials_data.size_ == mod_exported.materials_data.size_
-    assert ((mod_imported.header.version in (210, 211, 212) and
-            mod_imported.materials_data.material_names == mod_exported.materials_data.material_names) or
-            mod_imported.header.version == 156)
+    assert ([g.group_index for g in mod_imported_local.groups] ==
+            [g.group_index for g in mod_exported_local.groups])
+    assert [g.pos.x for g in mod_imported_local.groups] == [g.pos.x for g in mod_exported_local.groups]
+    assert [g.pos.y for g in mod_imported_local.groups] == [g.pos.y for g in mod_exported_local.groups]
+    assert [g.pos.z for g in mod_imported_local.groups] == [g.pos.z for g in mod_exported_local.groups]
+    assert [g.radius for g in mod_imported_local.groups] == [g.radius for g in mod_exported_local.groups]
 
 
-def test_meshes_data_21(mod_imported, mod_exported, subtests):
-    if mod_imported.header.version not in (210, 212):
+def test_materials_data(mod_imported_local, mod_exported_local):
+
+    assert mod_imported_local.materials_data.size_ == mod_exported_local.materials_data.size_
+    assert ((mod_imported_local.header.version in (210, 211, 212) and
+            mod_imported_local.materials_data.material_names ==
+            mod_exported_local.materials_data.material_names) or
+            mod_imported_local.header.version == 156)
+
+
+def test_meshes_data_21(mod_imported_local, mod_exported_local, subtests):
+    if mod_imported_local.header.version not in (210, 212):
         pytest.skip()
 
-    for i, mesh in enumerate(mod_imported.meshes_data.meshes):
+    for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
-        dst_mesh = mod_exported.meshes_data.meshes[i]
+        dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(mesh_index=i):
             assert src_mesh.draw_mode == dst_mesh.draw_mode
             assert src_mesh.num_vertices == dst_mesh.num_vertices
@@ -161,17 +298,17 @@ def test_meshes_data_21(mod_imported, mod_exported, subtests):
             assert src_mesh.max_index == dst_mesh.max_index
             assert src_mesh.boundary == dst_mesh.boundary
 
-    assert mod_imported.header.version in (210, 212) and (
-        mod_imported.num_weight_bounds == mod_exported.num_weight_bounds)
+    assert mod_imported_local.header.version in (210, 212) and (
+        mod_imported_local.num_weight_bounds == mod_exported_local.num_weight_bounds)
 
 
-def test_vertices(mod_imported, mod_exported, subtests):
-    if mod_imported.header.version not in (210, 212):  # RE5 has some mess with in hands files
+def test_vertices(mod_imported_local, mod_exported_local, subtests):
+    if mod_imported_local.header.version not in (210, 212):  # RE5 has some mess with in hands files
         pytest.skip()
-    assert len(mod_imported.meshes_data.meshes) == len(mod_exported.meshes_data.meshes)
-    for mi, mesh in enumerate(mod_imported.meshes_data.meshes):
+    assert len(mod_imported_local.meshes_data.meshes) == len(mod_exported_local.meshes_data.meshes)
+    for mi, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
-        dst_mesh = mod_exported.meshes_data.meshes[mi]
+        dst_mesh = mod_exported_local.meshes_data.meshes[mi]
         with subtests.test(mesh_index=mi):
             assert src_mesh.num_vertices == dst_mesh.num_vertices
             # disable for now, some normals don't match
@@ -204,12 +341,13 @@ def test_header_xfail(pl0000_roundtrip):
 
 
 @pytest.mark.xfail(reason="WIP")
-def test_meshes_data_xfail(mod_imported, mod_exported, subtests):
+def test_meshes_data_xfail(mod_imported_local, mod_exported_local, subtests):
 
-    assert mod_imported.meshes_data.num_weight_bounds == mod_exported.meshes_data.num_weight_bounds
-    for i, mesh in enumerate(mod_imported.meshes_data.meshes):
+    assert (mod_imported_local.meshes_data.num_weight_bounds ==
+            mod_exported_local.meshes_data.num_weight_bounds)
+    for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
-        dst_mesh = mod_exported.meshes_data.meshes[i]
+        dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(i=i):
             assert src_mesh.vertex_position == dst_mesh.vertex_position
             assert src_mesh.vertex_offset == dst_mesh.vertex_offset
