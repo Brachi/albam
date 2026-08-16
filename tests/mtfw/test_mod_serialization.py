@@ -35,6 +35,8 @@ def pytest_generate_tests(metafunc):
 
 
 def _game_dirs(pytestconfig):
+    # Already validated (well-formed "<app-id>::<dir>", once, at startup) by
+    # tests/conftest.py's pytest_configure - see there.
     parsed = {}
     for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
         app_id, directory = app_id_and_dir.split("::")
