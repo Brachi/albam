@@ -9,7 +9,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from .collision import mesh_rescale
 from ...lib import common_op as common
-import colorsys
+from ...lib.misc import number_to_color
 
 
 @blender_registry.register_import_function(app_id="re5", extension="nav", albam_asset_type="NAVMESH")
@@ -138,17 +138,6 @@ def export_nav(bl_obj):
     return vfiles
 
 
-def flag_to_color(flags: int):
-    # Knuth hash
-    h = (flags * 2654435761) & 0xFFFFFFFF
-    hue = h / 2**32
-    saturation = 0.45
-    value = 0.90
-    r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
-
-    return (r, g, b, 1.0)
-
-
 def _set_flags_as_mat(mesh, flags):
     unique_flags = []
     for flag in flags.values():
@@ -161,7 +150,7 @@ def _set_flags_as_mat(mesh, flags):
         if not mat:
             mat = bpy.data.materials.new(name="Nav %03d" % uf)
         try:
-            mat.diffuse_color = flag_to_color(uf)
+            mat.diffuse_color = number_to_color(uf)
         except (IndexError, ValueError):
             mat.diffuse_color = (0, 0, 0, 1)
             print("Unknown nav type: %d" % uf)

@@ -1,51 +1,42 @@
-import os
-
 import bpy
 
 from ..apps import APPS
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
-
-# FIXME: store in app data
-APP_DIRS_CACHE = {}
-# FIXME: store in app data
-APP_CONFIG_FILE_CACHE = {}
+from ..data_loading import AppsUserDataConfigManager
 
 
-def update_app_data(self, context):
+def get_app_dir_from_config(self, context):
     current_app = context.scene.albam.apps.app_selected
-    cached_dir = APP_DIRS_CACHE.get(current_app)
-    cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
-    if cached_dir:
-        context.scene.albam.apps.app_dir = cached_dir
+    current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
+    if current_app_userdata:
+        context.scene.albam.apps.app_dir = current_app_userdata.get("app_dir", "")
     else:
         context.scene.albam.apps.app_dir = ""
 
-    if cached_file:
-        context.scene.albam.apps.app_config_filepath = cached_file
-    else:
-        context.scene.albam.apps.app_config_filepath = ""
 
-
-def update_app_caches(self, context):
+def set_app_dir_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_dir = context.scene.albam.apps.app_dir
-    current_file = context.scene.albam.apps.app_config_filepath
+    if not current_dir:
+        return
 
-    APP_DIRS_CACHE[current_app] = current_dir
-    APP_CONFIG_FILE_CACHE[current_app] = current_file
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["app_dir"] = current_dir
+
+    config_mgr.save()
 
 
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
-    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
+    app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
-
-    def get_app_config_filepath(self, app_id):
-        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
@@ -269,10 +260,8 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
+        row.operator("albam.app_config_popup", icon="OPTIONS")
         row.prop(context.scene.albam.apps, "app_selected")
-        # Experimental for reengine
-        if os.getenv("ALBAM_ENABLE_REEN"):
-            row.operator("albam.app_config_popup", icon="OPTIONS")
 
 
 @blender_registry.register_blender_type
@@ -343,6 +332,7 @@ class ALBAM_PT_ImportOptionsCustom(bpy.types.Panel):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
+    """App settings"""
     bl_label = ""
     bl_idname = "albam.app_config_popup"
 
@@ -367,22 +357,14 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         layout = self.layout
 
         apps = context.scene.albam.apps
-        try:
-            app_index = apps["app_selected"]
-        except KeyError:
-            # default, before actually selecting
-            app_index = 0
-        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
-        layout.label(text=f"{app_selected_name}")
+        current_app = context.scene.albam.apps.app_selected
+        current_app_name = apps.bl_rna.properties["app_selected"].enum_items[current_app].name
+        layout.label(text=f"{current_app_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
-
-        row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.apps, "app_config_filepath")
-        row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
 
 
 @blender_registry.register_blender_type
@@ -400,27 +382,6 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
 
     def execute(self, context):
         context.scene.albam.apps.app_dir = self.directory
-        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-        return {"FINISHED"}
-
-    def cancel(self, context):
-        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
-    bl_idname = "albam.app_config_filepath_setter"
-    bl_label = "Select App Config"
-
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # NOQA
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        wm.fileselect_add(self)
-        return {"RUNNING_MODAL"}
-
-    def execute(self, context):
-        context.scene.albam.apps.app_config_filepath = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
