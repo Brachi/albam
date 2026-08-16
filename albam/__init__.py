@@ -7,7 +7,7 @@ import bpy
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
-from .blender_ui.tools import register_workspace_tools, unregister_workspace_tools
+from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
 from .data_loading import populate_albam_data
 from .registry import blender_registry
 from .__version__ import __version__ as version

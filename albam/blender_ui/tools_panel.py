@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ..registry import blender_registry
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
-from ..lib.handshaker import handshake, dump_frames, frames_path
+from ..lib.tools.handshaker import handshake, dump_frames, frames_path
+from ..lib.tools.bake_of_light import _bake_light
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -111,6 +112,17 @@ class ToolsSettings(bpy.types.PropertyGroup):
     )
     face_preset: face_preset_enum
     overwrite_tex_path: bpy.props.BoolProperty(default=False)
+    lm_res_enum: bpy.props.EnumProperty(
+        name="Lightmap Resolution",
+        description="Set the side of the baked lightmap",
+        items=[
+            ('512', "512", ""),
+            ('1024', "1024", ""),
+            ('2048', "2048", ""),
+            ('4096', "4096", ""),
+        ]
+    )
+    tool_status: bpy.props.StringProperty(default="")  # noqa: F821
 
 
 @blender_registry.register_blender_type
@@ -298,37 +310,6 @@ class ALBAM_PT_FACE_PROP(bpy.types.Panel):
         ob = context.edit_object
         if ob:
             return True
-        else:
-            return False
-
-
-# @blender_registry.register_blender_type
-class ALBAM_PT_VGMerger(bpy.types.Panel):
-    '''UI Tool for merging vertex'''
-    bl_label = "Vertex Groups Merger"
-    bl_idname = "ALBAM_PT_VGMerger"
-    bl_parent_id = "ALBAM_PT_ToolsPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        scn = context.scene.albam.tools_settings
-        row = layout.row()
-        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
-        row = layout.row()
-        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
-        row = layout.row()
-        row.operator("albam.vg_merge")
-
-    @classmethod
-    def poll(cls, context):
-        selection = bpy.context.selected_objects
-        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
-        if selection:
-            if selected_meshes:
-                return True
         else:
             return False
 
@@ -829,6 +810,36 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         return {'FINISHED'}
 
 
+@blender_registry.register_blender_type
+class ALBAM_OT_BakeLighting(bpy.types.Operator):
+    bl_idname = "mesh.bake_lighting"
+    bl_label = "Bake Lighting"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        custom_props = context.scene.albam.tools_settings
+        lm_size = int(custom_props.lm_res_enum)
+        app_id = context.scene.albam.apps.app_selected
+        _bake_light(selected_objects, lm_size, app_id)
+
+        for ob in selected_objects:
+            ob.select_set(True)
+        self.report({'INFO'}, "Baking completed")
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        light = [ob for ob in context.scene.objects if ob.type == 'LIGHT']
+        if selected_objects and light:
+            return True
+        else:
+            return False
+
+
 class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
     bl_space_type = 'VIEW_3D'
     bl_context_mode = 'OBJECT'
@@ -836,7 +847,7 @@ class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
     bl_label = "Handshaker"
     bl_description = "Apply animation frames to a mesh"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_handshake")
+        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_handshake")
     after = "albam.vg_merger"
 
     @classmethod
@@ -865,7 +876,7 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
     bl_label = "Face properties"
     bl_description = "Edit mesh face properties"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_props")
+        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_face_props")
     after = ""
 
     @classmethod
@@ -889,7 +900,7 @@ class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
     bl_label = "Vertex groups merger"
     bl_description = "Merge selected vertex groups"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_vgmerge"
+        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_vgmerge"
     )
     after = ""
 
@@ -905,11 +916,37 @@ class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
             row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
             row = layout.row()
             row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
+        else:
+            row = layout.row()
+            row.label(text="No active object selected")
+
+
+class ALBAM_WT_BakeOfLight(bpy.types.WorkSpaceTool):
+    bl_space_type = 'VIEW_3D'
+    bl_context_mode = 'OBJECT'
+    bl_idname = "albam.bake_of_light"
+    bl_label = "Bake of Light"
+    bl_description = "Simplifies baking the light for"
+    bl_icon = str(
+        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_bake_of_light"
+    )
+    after = "albam.vg_merger"
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        scene_objects = context.scene.objects
+        scene_objects = [ob for ob in scene_objects if ob.type == 'LIGHT']
+        layout.operator('mesh.bake_lighting', text="Bake Lighting")
+        layout.prop(context.scene.albam.tools_settings, "lm_res_enum", text="",)
+        if not scene_objects:
+            row = layout.row()
+            row.label(text="No light source in the scene")
 
 
 WORKSPACE_TOOLS.extend([
     ALBAM_WT_VGMerger,
     ALBAM_WT_Handshaker,
+    ALBAM_WT_BakeOfLight,
     ALBAM_WT_FacePropEdit,
 ])
 
