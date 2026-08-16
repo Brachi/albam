@@ -2,6 +2,7 @@ import bmesh
 import bpy
 import re
 from mathutils import Vector, bvhtree
+from pathlib import Path
 
 
 from ..registry import blender_registry
@@ -14,6 +15,21 @@ BONE_NAMES = {
 }
 
 DEV_MODE = False
+WORKSPACE_TOOLS = []
+
+
+def register_workspace_tools():
+    for tool_cls in WORKSPACE_TOOLS:
+        bpy.utils.register_tool(
+            tool_cls,
+            after=tool_cls.after if tool_cls.after != "" else None,
+            group=(tool_cls.after == ""),
+        )
+
+
+def unregister_workspace_tools():
+    for tool_cls in reversed(WORKSPACE_TOOLS):
+        bpy.utils.unregister_tool(tool_cls)
 
 
 def show_message_box(message="", title="Message Box", icon='INFO'):
@@ -223,7 +239,7 @@ class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
         return {'FINISHED'}
 
 
-@blender_registry.register_blender_type
+# @blender_registry.register_blender_type
 class ALBAM_PT_FACE_PROP_EDIT(bpy.types.Panel):
     '''UI Tool subpanel in Mesh Object Data'''
     bl_label = "Face Properties Edit"
@@ -248,7 +264,7 @@ class ALBAM_PT_FACE_PROP_EDIT(bpy.types.Panel):
         row.operator("albam.apply_face_props")
 
 
-@blender_registry.register_blender_type
+# @blender_registry.register_blender_type
 class ALBAM_PT_FACE_PROP(bpy.types.Panel):
     '''UI Tool subpanel in Mesh Object Data'''
     bl_label = "Face properties"
@@ -286,7 +302,7 @@ class ALBAM_PT_FACE_PROP(bpy.types.Panel):
             return False
 
 
-@blender_registry.register_blender_type
+# @blender_registry.register_blender_type
 class ALBAM_PT_VGMerger(bpy.types.Panel):
     '''UI Tool for merging vertex'''
     bl_label = "Vertex Groups Merger"
@@ -298,7 +314,6 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-
         scn = context.scene.albam.tools_settings
         row = layout.row()
         row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
@@ -318,7 +333,7 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
             return False
 
 
-@blender_registry.register_blender_type
+# @blender_registry.register_blender_type
 class ALBAM_PT_Handshaker(bpy.types.Panel):
     '''UI Tool for creating posed hands'''
     bl_label = "Handshaker"
@@ -812,6 +827,91 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         sort_hair_cards(source_obj, selected_meshes)
         show_message_box(message=f"{len(selected_meshes)} hair cards were sorted")
         return {'FINISHED'}
+
+
+class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
+    bl_space_type = 'VIEW_3D'
+    bl_context_mode = 'OBJECT'
+    bl_idname = "albam.handshaker"
+    bl_label = "Handshaker"
+    bl_description = "Apply animation frames to a mesh"
+    bl_icon = str(
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_handshake")
+    after = "albam.vg_merger"
+
+    @classmethod
+    def poll(cls, context):
+        selection = context.selected_objects
+        return any(obj.type == 'ARMATURE' for obj in selection)
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        row = layout.row()
+        op = row.operator("albam.handshake", text="Apply animation frames")
+        op.filepath = frames_path
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        if DEV_MODE:
+            row = layout.row()
+            row.label(text="Dump frames to json files")
+            row = layout.row()
+            row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
+            row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
+
+
+class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
+    bl_space_type = 'VIEW_3D'
+    bl_context_mode = 'EDIT_MESH'
+    bl_idname = "albam.face_prop_edit"
+    bl_label = "Face properties"
+    bl_description = "Edit mesh face properties"
+    bl_icon = str(
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_props")
+    after = ""
+
+    @classmethod
+    def poll(cls, context):
+        return context.edit_object is not None
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        scn = context.scene.albam.tools_settings
+        layout.prop(scn, 'face_preset')
+        layout.prop(scn, 'face_group')
+        layout.prop(scn, 'surface_attr')
+        layout.prop(scn, 'special_attr')
+        layout.operator("albam.apply_face_props")
+
+
+class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
+    bl_space_type = 'VIEW_3D'
+    bl_context_mode = 'OBJECT'
+    bl_idname = "albam.vg_merger"
+    bl_label = "Vertex groups merger"
+    bl_description = "Merge selected vertex groups"
+    bl_icon = str(
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_vgmerge"
+    )
+    after = ""
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        scn = context.scene.albam.tools_settings
+        obj = context.active_object
+
+        row = layout.row()
+        row.operator("albam.vg_merge")
+        if obj:
+            row = layout.row()
+            row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
+            row = layout.row()
+            row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
+
+
+WORKSPACE_TOOLS.extend([
+    ALBAM_WT_VGMerger,
+    ALBAM_WT_Handshaker,
+    ALBAM_WT_FacePropEdit,
+])
 
 
 def split_seams(me):
