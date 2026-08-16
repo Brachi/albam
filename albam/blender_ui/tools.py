@@ -157,12 +157,14 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="Use clones for separation",
         )
         row = layout.row()
-        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row = layout.row()
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
         row = layout.row()
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        row = layout.row()
+        row.operator('albam.vf_guesser', text="Guess vertex format")
         layout.separator()
         row = layout.row()
         row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
@@ -811,6 +813,55 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
         selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
         sort_hair_cards(source_obj, selected_meshes)
         show_message_box(message=f"{len(selected_meshes)} hair cards were sorted")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_VFGuesser(bpy.types.Operator):
+    '''Guess vertex format for selected meshes'''
+    bl_idname = "albam.vf_guesser"
+    bl_label = "guess vertex format"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        if selected_objects:
+            return True
+        else:
+            return False
+
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        for ob in selected_objects:
+            albam_props = _get_mesh_albam_props(ob)
+            if not albam_props:
+                print(f"The object {ob.name} has no Albam properties")
+                continue
+            albam_asset = ob.data.albam_custom_properties.get_parent_albam_asset()
+            app_id = albam_asset.app_id
+            if app_id in ("re0", "re1" "re6", "rev1", "rev2", "dd"):
+                max_bones = 0
+
+                for v in ob.data.vertices:
+                    cur_bones = sum(1 for g in v.groups if g.weight > 0)
+                    if cur_bones > max_bones:
+                        max_bones = cur_bones
+
+                if max_bones == 1:
+                    vf = "0xa8fab018"  # "SkinTB1wt"
+                elif max_bones == 2:
+                    vf = "0xc31f201c"  # "SkinTB2wt"
+                elif max_bones <= 4:
+                    vf = "0x14d40020"  # "SkinTB4wt"
+                elif max_bones > 4:
+                    vf = "0xbb424024"  # "SkinTB8wt"
+                else:
+                    raise RuntimeError(f"Something is wrong with {ob.name}")
+                albam_props.vertex_format = vf
+        show_message_box(message=f"Vertex format was set for {len(selected_objects)} meshes")
         return {'FINISHED'}
 
 
