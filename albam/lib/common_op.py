@@ -228,3 +228,12 @@ def move_to_collection(bl_objects, col_name):
         for col in ob.users_collection:
             col.objects.unlink(ob)
         collection.objects.link(ob)
+
+
+def _get_mesh_albam_props(obj):
+    albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+    if not albam_asset:
+        return None
+    app_id = albam_asset.app_id
+    custom_props = obj.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return custom_props
