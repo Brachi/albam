@@ -424,6 +424,7 @@ class MTFW_FS(MultiFS):
         packed copy.
         """
         import boto3
+        from botocore.config import Config
 
         client = boto3.client(
             "s3",
@@ -432,6 +433,15 @@ class MTFW_FS(MultiFS):
             aws_session_token=aws_session_token,
             endpoint_url=endpoint_url,
             region_name=region_name,
+            # botocore >=1.36 defaults to sending flexible-checksum headers
+            # (e.g. x-amz-checksum-crc32) on S3 requests - a documented
+            # source of SignatureDoesNotMatch against non-AWS S3-compatible
+            # providers like R2, which don't handle them the same way AWS
+            # does. Opting back out to the pre-1.36 behavior.
+            config=Config(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
         )
 
         self = cls.__new__(cls)
