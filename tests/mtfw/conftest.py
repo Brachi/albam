@@ -43,8 +43,6 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "parsed_mod_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("mod", metafunc, "parsed_mod_from_arc")
     elif "parsed_mrl_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("mrl", metafunc, "parsed_mrl_from_arc")
     elif "parsed_lmt_from_arc" in metafunc.fixturenames:
@@ -57,6 +55,82 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
     elif "parsed_nav_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("nav", metafunc, "parsed_nav_from_arc")
+
+
+# --- MTFW_FS-based fixtures (shared across the hash-driven, --game-dir/R2
+# tests migrating off the --arcdir/ArcWrapper fixtures below) ---
+
+R2_PROTOCOL_PREFIX = "r2://"
+
+# app_id -> the MTFW_FS instance already mounted as a VFS root this session -
+# add_fs_root() must only run once per app_id (it always creates a new root;
+# node ids are app_id::relative_path only, not scoped per-root, so adding
+# the same game folder twice would create ambiguous duplicate entries).
+_GAME_FS_INSTANCES = {}
+
+
+def _game_dirs(pytestconfig):
+    # Already validated (well-formed "<app-id>::<value>", once, at startup)
+    # by tests/conftest.py's pytest_configure - see there. <value> is either
+    # a local directory path, or the literal "r2://" sentinel selecting the
+    # R2 backend explicitly (see tests.mtfw.r2_config.r2_kwargs_for_app) -
+    # never inferred from whether a local path happens to exist.
+    parsed = {}
+    for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
+        app_id, value = app_id_and_dir.split("::")
+        parsed[app_id] = value
+    return parsed
+
+
+@pytest.fixture(scope="session")
+def game_fs_root(pytestconfig, local_app_id):
+    """
+    Mounts a VFS root for local_app_id via MTFW_FS (once per session, cached
+    in _GAME_FS_INSTANCES) - the same mechanism "Add Folder" uses in the UI
+    for a whole game install, unlike --arcdir's flat directory of loose .arc
+    dumps. Returns the MTFW_FS instance itself, so callers can
+    resolve_hashes() against the exact same tree that got mounted into the
+    VFS.
+
+    The source is explicit in --game-dir's value, never inferred: a plain
+    path mounts a local install (skips if it doesn't exist); the literal
+    "r2://" mounts R2 instead, resolving bucket/prefix/credentials from env
+    vars (see tests.mtfw.r2_config.r2_kwargs_for_app - this is what lets CI
+    exercise these tests without a full local game install, passing
+    --game-dir=<app>::r2:// with credentials supplied separately via
+    secrets, never on the command line). No --game-dir at all for this
+    app_id skips outright - no implicit fallback either way.
+
+    Scanning + flattening a full local game install's tree can take a while
+    (a real RE5 install has ~1200 archives) - that cost is paid once per
+    app_id per session, not per test.
+    """
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+    from tests.mtfw.r2_config import r2_kwargs_for_app
+
+    if local_app_id not in _GAME_FS_INSTANCES:
+        value = _game_dirs(pytestconfig).get(local_app_id)
+        if not value:
+            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
+        elif value == R2_PROTOCOL_PREFIX:
+            r2_kwargs = r2_kwargs_for_app(local_app_id)
+            if r2_kwargs is None:
+                pytest.skip(
+                    f"--game-dir={local_app_id}::r2:// requested but R2 isn't configured "
+                    f"(missing s3 extras or credentials - see .env.example)"
+                )
+            game_fs = MTFW_FS.from_s3(**r2_kwargs)
+        elif not os.path.isdir(value):
+            pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
+        else:
+            game_fs = MTFW_FS(value)
+
+        bpy.context.scene.albam.apps.app_selected = local_app_id
+        vfs = bpy.context.scene.albam.vfs
+        vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")
+        _GAME_FS_INSTANCES[local_app_id] = game_fs
+
+    return _GAME_FS_INSTANCES[local_app_id]
 
 
 @pytest.fixture(scope="session")
@@ -265,29 +339,6 @@ def parsed_mrl_from_arc(request, scope="session"):
     parsed_mrl._num_bytes = len(mrl_bytes)
 
     return parsed_mrl
-
-
-@pytest.fixture
-def parsed_mod_from_arc(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-    mod_version = src_bytes[4]
-    ModCls = MOD_CLASS_MAPPER[mod_version]
-
-    parsed = ModCls.from_bytes(src_bytes)
-    parsed._read()
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._src_bytes = src_bytes
-    parsed._file_path = file_entry.file_path
-
-    return parsed
 
 
 @pytest.fixture
