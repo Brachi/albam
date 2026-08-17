@@ -27,13 +27,20 @@ def r2_kwargs_for_app(app_id):
     load_dotenv(os.path.join(repo_root, ".env"))
 
     required = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME")
-    if any(not os.environ.get(k) for k in required):
+    # .strip(): a trailing newline in a GitHub Actions secret's value (an
+    # easy copy-paste artifact) silently pollutes every signed request built
+    # from it - botocore doesn't strip these itself, and the failure mode is
+    # an opaque SignatureDoesNotMatch with no hint the credential itself is
+    # the problem. Confirmed via a real CI traceback showing
+    # api_params={'Bucket': '***\n', ...}.
+    values = {k: os.environ.get(k, "").strip() for k in required}
+    if not all(values.values()):
         return None
 
     return dict(
-        bucket=os.environ["R2_BUCKET_NAME"],
+        bucket=values["R2_BUCKET_NAME"],
         prefix=app_id,
-        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        endpoint_url=f"https://{values['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+        aws_access_key_id=values["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=values["R2_SECRET_ACCESS_KEY"],
     )
