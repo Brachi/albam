@@ -4,10 +4,6 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-env:
-  ALBAM_RE1_ARC_DIR: "tests/data/re1"
-  ALBAM_RE5_ARC_DIR: "tests/data/re5"
-  ALBAM_DD_ARC_DIR: "tests/data/dd"
 
 jobs:
   tests:
@@ -46,7 +42,7 @@ jobs:
         R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
       run: |
         set +e
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --mtfw-dataset=tests/mtfw/datasets/ci.json --arcdir=re1::${ALBAM_RE1_ARC_DIR} --arcdir=re5::${ALBAM_RE5_ARC_DIR} --arcdir=dd::${ALBAM_DD_ARC_DIR} --game-dir=re5::r2:// --game-dir=re1::r2://
+          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2:// --game-dir=re1::r2://
         exitcode="$?"
         # Ignore segfault in bpy==4.1.0; there's no way around it yet.
         if  [ $exitcode == 139 ];then exitcode=0;
