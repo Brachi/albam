@@ -43,8 +43,6 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "parsed_tex_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
     elif "parsed_rtex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
 
@@ -307,27 +305,6 @@ def nav_exported(nav_export):
         pytest.skip("No exported nav available")
     else:
         return nav
-
-
-@pytest.fixture
-def parsed_tex_from_arc(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.texture import APPID_TEXCLS_MAP
-    arc = request.param[0]
-    tex_file_entry = request.param[1]
-    app_id = request.param[2]
-    Tex = APPID_TEXCLS_MAP[app_id]
-
-    tex_bytes = arc.get_file(tex_file_entry.file_path, tex_file_entry.file_type)
-    parsed_tex = Tex.from_bytes(tex_bytes)
-    parsed_tex._read()
-    parsed_tex._arc_name = os.path.basename(arc.file_path)
-    parsed_tex._mrl_path = tex_file_entry.file_path
-    parsed_tex._num_bytes = len(tex_bytes)
-
-    return parsed_tex
 
 
 @pytest.fixture
