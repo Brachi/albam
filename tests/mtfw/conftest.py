@@ -43,8 +43,6 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "parsed_lmt_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("lmt", metafunc, "parsed_lmt_from_arc")
     elif "parsed_tex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
     elif "parsed_rtex_from_arc" in metafunc.fixturenames:
@@ -351,25 +349,6 @@ def parsed_rtex_from_arc(request):
     parsed_rtex._num_bytes = len(rtex_bytes)
 
     return parsed_rtex
-
-
-@pytest.fixture
-def parsed_lmt_from_arc(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.structs.lmt import Lmt
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-
-    parsed = Lmt.from_bytes(src_bytes)
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._file_path = file_entry.file_path
-
-    return parsed
 
 
 ARC_DIRS = None
