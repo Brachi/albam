@@ -49,8 +49,6 @@ def pytest_generate_tests(metafunc):
         _generate_tests_from_arcs("tex", metafunc, "parsed_tex_from_arc")
     elif "parsed_rtex_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
-    elif "parsed_nav_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("nav", metafunc, "parsed_nav_from_arc")
 
 
 # --- MTFW_FS-based fixtures (shared across the hash-driven, --game-dir/R2
@@ -368,23 +366,6 @@ def parsed_lmt_from_arc(request):
     src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
 
     parsed = Lmt.from_bytes(src_bytes)
-    parsed._arc_name = os.path.basename(arc.file_path)
-    parsed._file_path = file_entry.file_path
-
-    return parsed
-
-
-@pytest.fixture
-def parsed_nav_from_arc(request):
-    from albam.engines.mtfw.structs.nav_156 import Nav156
-
-    arc = request.param[0]
-    file_entry = request.param[1]
-
-    src_bytes = arc.get_file(file_entry.file_path, file_entry.file_type)
-
-    parsed = Nav156.from_bytes(src_bytes)
-    parsed._read()
     parsed._arc_name = os.path.basename(arc.file_path)
     parsed._file_path = file_entry.file_path
 
