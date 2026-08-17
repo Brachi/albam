@@ -38,7 +38,7 @@ tests = [
 # albam.engines.mtfw.arc_fs.MTFW_FS.from_s3: sourcing .arc files from an
 # S3/R2-compatible bucket instead of a local game folder.
 s3 = [
-  "boto3",
+  "boto3==1.43.72",
   "smart-open[s3]>=7.0.0",
 ]
 
