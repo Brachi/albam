@@ -23,8 +23,7 @@ pytestmark = pytest.mark.skipif(
 
 # known to live in the real bucket under the "re5" prefix, mirroring the real
 # game's own folder structure from there down (nativePC_MT/Image/Archive/...)
-# - the same sample content as the committed tests/data/re5/uPl00ChrisNormal.arc
-# fixture (see test_origin_arc_path.py's PACKED_PATH).
+# - the same real content test_origin_arc_path.py's PACKED_PATH resolves to.
 SAMPLE_PATH = "/pawn/pl/pl00/model/pl0000.mod"
 SAMPLE_ARC_SUFFIX = "uPl00ChrisNormal.arc"
 

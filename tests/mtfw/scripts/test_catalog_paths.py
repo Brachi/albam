@@ -3,6 +3,7 @@ import os
 import pytest
 
 from albam.engines.mtfw.arc_fs import MTFW_FS
+from tests.mtfw.r2_config import r2_kwargs_for_app
 from tests.mtfw.scripts.catalog_paths import (
     HASH_LENGTH,
     hash_identity,
@@ -13,10 +14,13 @@ from tests.mtfw.scripts.catalog_paths import (
     to_portable_relative_path,
 )
 
-DATA_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "re5"
-)
-# Known to live inside these two committed sample .arc's - see
+# resolve_hashes() tests below are sourced from the real R2 bucket (see
+# tests/mtfw/r2_config.py), not a local game install or committed sample
+# data - tests/data/ is deliberately gitignored (never commit real game
+# asset bytes, even small ones), so there's no local fixture to fall back
+# to.
+R2_KWARGS = r2_kwargs_for_app("re5")
+# Known to live inside uPl00ChrisNormal.arc in the real bucket - see
 # tests/mtfw/test_origin_arc_path.py, which uses the same fixture data.
 PACKED_PATH = "/pawn/pl/pl00/model/pl0000.mod"
 
@@ -104,8 +108,9 @@ def test_hash_relative_path_matches_across_install_locations():
     assert h1 == h2
 
 
+@pytest.mark.skipif(R2_KWARGS is None, reason="R2 not configured for app_id='re5' (see .env.example)")
 def test_resolve_hashes_finds_known_path():
-    game_fs = MTFW_FS(DATA_DIR)
+    game_fs = MTFW_FS.from_s3(**R2_KWARGS)
     target = hash_virtual_path(PACKED_PATH)
 
     found = resolve_hashes(game_fs, {target})
@@ -113,8 +118,9 @@ def test_resolve_hashes_finds_known_path():
     assert found == {target: PACKED_PATH}
 
 
+@pytest.mark.skipif(R2_KWARGS is None, reason="R2 not configured for app_id='re5' (see .env.example)")
 def test_resolve_hashes_raises_for_unmatched_hash():
-    game_fs = MTFW_FS(DATA_DIR)
+    game_fs = MTFW_FS.from_s3(**R2_KWARGS)
     bogus = hash_identity("nope/does/not/exist.foo")
 
     with pytest.raises(KeyError):
