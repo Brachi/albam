@@ -43,9 +43,6 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "parsed_rtex_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("rtex", metafunc, "parsed_rtex_from_arc")
-
 
 # --- MTFW_FS-based fixtures (shared across the hash-driven, --game-dir/R2
 # tests migrating off the --arcdir/ArcWrapper fixtures below) ---
@@ -305,27 +302,6 @@ def nav_exported(nav_export):
         pytest.skip("No exported nav available")
     else:
         return nav
-
-
-@pytest.fixture
-def parsed_rtex_from_arc(request):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-    from albam.engines.mtfw.texture import APPID_RTEXCLS_MAP
-    arc = request.param[0]
-    rtex_file_entry = request.param[1]
-    app_id = request.param[2]
-    Rtex = APPID_RTEXCLS_MAP[app_id]
-
-    rtex_bytes = arc.get_file(rtex_file_entry.file_path, rtex_file_entry.file_type)
-    parsed_rtex = Rtex.from_bytes(rtex_bytes)
-    parsed_rtex._read()
-    parsed_rtex._arc_name = os.path.basename(arc.file_path)
-    parsed_rtex._mrl_path = rtex_file_entry.file_path
-    parsed_rtex._num_bytes = len(rtex_bytes)
-
-    return parsed_rtex
 
 
 ARC_DIRS = None
