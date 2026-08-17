@@ -43,8 +43,6 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["nav_path"]) for d in MTFW_DATASET]
         metafunc.parametrize(argnames, argvalues, scope="session")
 
-    elif "parsed_mrl_from_arc" in metafunc.fixturenames:
-        _generate_tests_from_arcs("mrl", metafunc, "parsed_mrl_from_arc")
     elif "parsed_lmt_from_arc" in metafunc.fixturenames:
         _generate_tests_from_arcs("lmt", metafunc, "parsed_lmt_from_arc")
     elif "parsed_tex_from_arc" in metafunc.fixturenames:
@@ -313,30 +311,6 @@ def nav_exported(nav_export):
         pytest.skip("No exported nav available")
     else:
         return nav
-
-
-@pytest.fixture
-def parsed_mrl_from_arc(request, scope="session"):
-    # test collection before calling register() in pytest_session_start
-    # doesn't have sys.path modified for albam_vendor, so kaitaistruct
-    # not found
-
-    # TODO: cache, avoid duplicating mrls for each test
-    from albam.engines.mtfw.structs.mrl import Mrl
-    from kaitaistruct import KaitaiStream
-    arc = request.param[0]
-    mrl_file_entry = request.param[1]
-    app_id = request.param[2]
-
-    mrl_bytes = arc.get_file(mrl_file_entry.file_path, mrl_file_entry.file_type)
-    parsed_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
-    parsed_mrl.app_id = app_id
-    parsed_mrl._read()
-    parsed_mrl._arc_name = os.path.basename(arc.file_path)
-    parsed_mrl._mrl_path = mrl_file_entry.file_path
-    parsed_mrl._num_bytes = len(mrl_bytes)
-
-    return parsed_mrl
 
 
 @pytest.fixture
