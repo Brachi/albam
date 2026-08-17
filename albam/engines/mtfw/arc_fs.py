@@ -141,16 +141,18 @@ def _BytesFile(data):
 
 
 def origin_arc_path(fs_instance, path):
-    """Which .arc `path` resolves to under `fs_instance`, or None if it's a
-    loose/real file (or `fs_instance` doesn't track archive origins).
+    """The real, directly-openable .arc path `path` resolves to under
+    `fs_instance`, or None if it's a loose/real file (or `fs_instance`
+    doesn't track archive origins).
 
     `ArcFS` always resolves to its own single arc; `MTFW_FS` defers to its
-    own `origin_of()`. Lets callers (e.g. Pack/Patch) write back into the
-    right archive without caring whether the VFS root was a single `.arc` or
-    a whole game folder.
+    own `origin_absolute_path()` (not `origin_of()`, which returns a
+    game-root-relative identity meant for display/hashing, not I/O). Lets
+    callers (e.g. Pack/Patch) write back into the right archive without
+    caring whether the VFS root was a single `.arc` or a whole game folder.
     """
     if isinstance(fs_instance, MTFW_FS):
-        return fs_instance.origin_of(path)
+        return fs_instance.origin_absolute_path(path)
     if isinstance(fs_instance, ArcFS):
         return fs_instance.arc_path
     return None
@@ -510,9 +512,9 @@ class MTFW_FS(MultiFS):
             child_path = join(_path, info.name)
             yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
 
-    def origin_of(self, path):
-        """The .arc path `path` resolves to, or None if it's a loose/real
-        file. Uses the lazy index (O(1)) if already built by a prior
+    def _owning_arc_fs(self, path):
+        """The ArcFS `path` resolves to, or None if it's a loose/real file.
+        Uses the lazy index (O(1)) if already built by a prior
         listdir/scandir/walk; otherwise falls back to MultiFS.which()'s
         linear scan rather than forcing an index build, keeping point
         lookups index-free.
@@ -523,4 +525,29 @@ class MTFW_FS(MultiFS):
             owner_fs = self._owner.get(_path)
         else:
             _name, owner_fs = self.which(_path)
-        return owner_fs.arc_path if isinstance(owner_fs, ArcFS) else None
+        return owner_fs if isinstance(owner_fs, ArcFS) else None
+
+    def origin_of(self, path):
+        """Portable identity of the .arc `path` resolves to - its own path
+        relative to game_root (forward slashes, original casing preserved)
+        - or None if it's a loose/real file (or doesn't resolve at all).
+
+        This is meant for display/hashing (see tests/mtfw/scripts/
+        catalog_paths.py): it deliberately doesn't leak where game_root
+        happens to sit on this disk. It is NOT directly openable - use
+        origin_absolute_path() for that.
+        """
+        owner_fs = self._owning_arc_fs(path)
+        if owner_fs is None:
+            return None
+        return os.path.relpath(owner_fs.arc_path, self.game_root).replace(os.sep, "/")
+
+    def origin_absolute_path(self, path):
+        """The real, directly-openable identifier (ArcFS.arc_path - a local
+        filesystem path for a local MTFW_FS, or an S3 key for
+        MTFW_FS.from_s3) of the .arc `path` resolves to, or None. Use this
+        (not origin_of()) when the caller actually needs to open/write the
+        archive - e.g. Pack/Patch, via origin_arc_path() below.
+        """
+        owner_fs = self._owning_arc_fs(path)
+        return owner_fs.arc_path if owner_fs is not None else None

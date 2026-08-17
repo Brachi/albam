@@ -3,24 +3,26 @@ Portable path identities for the hashed dataset catalog (see the design
 discussion this branch started from - no plain-text game asset paths get
 committed, only hashes of them).
 
-The only thing that *isn't* already portable is an .arc's own on-disk
-identity: MTFW_FS.origin_of() returns ArcFS.arc_path, which for a local
-MTFW_FS(game_root) is an absolute filesystem path (built from os.walk() -
-see arc_fs.find_arc_files()), so it necessarily bakes in wherever the game
-happens to sit on *this* disk. Two legitimate owners of the same game would
-get different absolute paths, and therefore different hashes, unless that
-gets normalized to something relative to game_root first.
+MTFW_FS.origin_of() already returns an .arc's identity relative to
+game_root (see arc_fs.py) - it never bakes in wherever the game happens to
+sit on *this* disk. The remaining normalization for hashing is the same one
+every other identity here needs: case-folding, since a real filesystem
+entry's casing can vary between two legitimate installs of the same game
+(e.g. across Windows/Linux, or a case-insensitive filesystem) even though
+the underlying game data is identical. hash_virtual_path() covers that for
+any already-relative identity, origin_of()'s included.
 
-File paths themselves (both archived and loose) don't have this problem:
-MTFW_FS's own virtual path space is already relative to itself, never to a
-host filesystem location - an archived file's path comes straight from the
-.arc's internal file table (game data, not a filesystem artifact), and a
-loose file's path is already relative to game_root because OSFS(game_root)
-is rooted there. Both still go through normalize_virtual_path() first
-though: a loose file's *name* is a real filesystem entry, so its casing can
-still vary the same way an .arc's own filename can (see
-to_portable_relative_path) - lowercasing uniformly avoids having to treat
-archived and loose paths differently.
+to_portable_relative_path()/hash_relative_path() are kept for the one case
+that still starts from an absolute path: hashing MTFW_FS.origin_absolute_path()'s
+result directly, without going through origin_of() first.
+
+File paths themselves (both archived and loose) don't have the absolute-path
+problem either: MTFW_FS's own virtual path space is already relative to
+itself, never to a host filesystem location - an archived file's path comes
+straight from the .arc's internal file table (game data, not a filesystem
+artifact), and a loose file's path is already relative to game_root because
+OSFS(game_root) is rooted there. Both still go through
+normalize_virtual_path() for the same case-folding reason as above.
 """
 import hashlib
 import os

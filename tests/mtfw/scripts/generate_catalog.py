@@ -32,7 +32,7 @@ sys.path.insert(0, _VENDOR_DIR)
 sys.path.insert(0, _REPO_ROOT)
 
 from albam.engines.mtfw.arc_fs import MTFW_FS  # noqa: E402
-from tests.mtfw.scripts.catalog_paths import hash_relative_path, hash_virtual_path  # noqa: E402
+from tests.mtfw.scripts.catalog_paths import hash_virtual_path  # noqa: E402
 
 # extension -> tag name. Extension-only for this iteration - trusting a
 # renamed/misidentified file's extension over its actual content. Reading
@@ -62,11 +62,15 @@ def generate_catalog(game_root, progress_every=5000):
         if progress_every and i and i % progress_every == 0:
             print(f"  ...{i}/{len(paths)}", file=sys.stderr)
 
+        # origin_of() already returns a game-root-relative identity (see
+        # arc_fs.py) - only case-normalization is left to do, same as any
+        # other portable identity here, hence hash_virtual_path over
+        # hash_relative_path (which expects an absolute path).
         origin = game_fs.origin_of(path)
         entries.append({
             "path_hash": hash_virtual_path(path),
             "archived": origin is not None,
-            "archive_hash": hash_relative_path(origin, game_root) if origin else None,
+            "archive_hash": hash_virtual_path(origin) if origin else None,
             "tags": detect_tags(path),
         })
 

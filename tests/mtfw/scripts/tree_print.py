@@ -1,11 +1,9 @@
 """
 Debug-only ASCII tree printer for an fs.base.FS instance (MTFW_FS in
 particular) - lets a human eyeball what the current tree representation
-actually looks like, including today's absolute-path leak in origin_of()
-for archived files, before/after changing it.
+actually looks like. origin_of() already returns a game-root-relative
+identity, so no extra path processing is needed here.
 """
-import os
-
 from fs.path import join
 
 
@@ -45,20 +43,8 @@ def _format_tree(fs_instance, path, max_depth, max_entries_per_dir, show_origin,
             tag = ""
             if show_origin and hasattr(fs_instance, "origin_of"):
                 origin = fs_instance.origin_of(child_path)
-                tag = f"  [archived: {_relative_origin(origin, fs_instance)}]" if origin else "  [loose]"
+                tag = f"  [archived: {origin}]" if origin else "  [loose]"
             lines.append(prefix + connector + info.name + tag)
 
     if remainder > 0:
         lines.append(prefix + f"└── ... {remainder} more")
-
-
-def _relative_origin(origin, fs_instance):
-    game_root = getattr(fs_instance, "game_root", None)
-    if not game_root:
-        return origin
-    try:
-        return os.path.relpath(origin, game_root).replace(os.sep, "/")
-    except ValueError:
-        # e.g. game_root is an s3:// URI (MTFW_FS.from_s3) - relpath doesn't
-        # apply, fall back to showing the raw origin as-is.
-        return origin

@@ -62,6 +62,7 @@ def test_origin_of_before_index_built(game_fs):
 
     origin = game_fs.origin_of(PACKED_PATH)
     assert origin is not None and origin.endswith(".arc")
+    assert not os.path.isabs(origin), "origin_of() should return a game-root-relative path"
     assert game_fs._owner is None, "origin_of() should not trigger the lazy index"
 
     assert game_fs.origin_of(LOOSE_PATH) is None
@@ -120,6 +121,16 @@ def test_missing_path_raises(game_fs):
 def test_origin_of_after_index_built_matches_pre_index_result(game_fs):
     assert game_fs._owner is not None  # built by earlier tests in this module
 
-    assert game_fs.origin_of(PACKED_PATH) == game_fs._owner[game_fs.validatepath(PACKED_PATH)].arc_path
+    owner_arc_path = game_fs._owner[game_fs.validatepath(PACKED_PATH)].arc_path
+    expected = os.path.relpath(owner_arc_path, game_fs.game_root).replace(os.sep, "/")
+    assert game_fs.origin_of(PACKED_PATH) == expected
     assert game_fs.origin_of(LOOSE_PATH) is None
     assert game_fs.origin_of("nope/does/not/exist.foo") is None
+
+
+def test_origin_absolute_path_is_openable_on_disk(game_fs):
+    absolute = game_fs.origin_absolute_path(PACKED_PATH)
+    assert os.path.isabs(absolute)
+    assert os.path.isfile(absolute)
+    assert absolute == os.path.join(game_fs.game_root, game_fs.origin_of(PACKED_PATH))
+    assert game_fs.origin_absolute_path(LOOSE_PATH) is None
