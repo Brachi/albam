@@ -81,3 +81,27 @@ def hash_relative_path(absolute_path, game_root):
 
 def hash_virtual_path(path):
     return hash_identity(normalize_virtual_path(path))
+
+
+def resolve_hashes(game_fs, target_hashes):
+    """
+    Walk game_fs once, hashing every virtual path, and return {hash: path}
+    for exactly the requested target_hashes. Forward match only - a hash is
+    never turned back into a path any other way (see module docstring/
+    generate_catalog.py, which uses the same technique). Raises KeyError
+    naming whichever target hashes weren't found (missing/moved locally, or
+    just the wrong hash/app_id) rather than returning a partial map silently -
+    tests resolving a committed hash should fail loudly, not skip quietly.
+    """
+    target_hashes = set(target_hashes)
+    found = {}
+    for path in game_fs.walk.files():
+        h = hash_virtual_path(path)
+        if h in target_hashes:
+            found[h] = path
+            if len(found) == len(target_hashes):
+                break
+    missing = target_hashes - found.keys()
+    if missing:
+        raise KeyError(f"hash(es) not found in this game install: {sorted(missing)}")
+    return found

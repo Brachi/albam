@@ -1,37 +1,54 @@
-import io
 import json
 import os
 
 import bpy
 import pytest
 
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
 # tests locally; extend it directly rather than pointing at some other file.
+# Every mod_path_hash here must be a subset of that app_id's committed
+# tests/mtfw/datasets/<app_id>_catalog.json - see test_dataset_hashes_are_in_catalog
+# below, which enforces it.
 MOD_SERIALIZATION_DATASET_PATH = os.path.join(
-    os.path.dirname(__file__), "datasets", "mod_serialization_local.json"
+    os.path.dirname(__file__), "datasets", "mod_serialization_hashes.json"
 )
 with open(MOD_SERIALIZATION_DATASET_PATH) as f:
     MOD_SERIALIZATION_DATASET = json.load(f)
 
-# app_ids that already got an MTFW_FS mounted as a VFS root this session -
+# app_id -> the MTFW_FS instance already mounted as a VFS root this session -
 # add_fs_root() must only run once per app_id (it always creates a new root;
 # node ids are app_id::relative_path only, not scoped per-root, so adding
 # the same game folder twice would create ambiguous duplicate entries).
-_GAME_FS_ROOTS_ADDED = set()
+_GAME_FS_INSTANCES = {}
 
 
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
-            "local_mod_path" in metafunc.fixturenames and
-            "local_mrl_path" in metafunc.fixturenames):
-        argnames = ("local_app_id", "local_mod_path", "local_mrl_path")
-        argvalues = [
-            (d["app_id"], d["mod_path"], d.get("mrl_path"))
-            for d in MOD_SERIALIZATION_DATASET
-        ]
-        ids = [f"{d['app_id']}-{d['mod_path']}" for d in MOD_SERIALIZATION_DATASET]
+            "local_mod_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_mod_path_hash")
+        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_SERIALIZATION_DATASET]
+        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_SERIALIZATION_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by MOD_SERIALIZATION_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in MOD_SERIALIZATION_DATASET:
+        catalog_path = os.path.join(
+            os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json"
+        )
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["mod_path_hash"] in catalog_hashes, (
+            f"{entry['mod_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
 
 
 def _game_dirs(pytestconfig):
@@ -48,10 +65,12 @@ def _game_dirs(pytestconfig):
 def game_fs_root(pytestconfig, local_app_id):
     """
     Mounts --game-dir's folder for local_app_id as a VFS root via MTFW_FS
-    (once per session, cached in _GAME_FS_ROOTS_ADDED) - the same mechanism
+    (once per session, cached in _GAME_FS_INSTANCES) - the same mechanism
     "Add Folder" uses in the UI for a whole game install, unlike --arcdir's
     flat directory of loose .arc dumps. Skips cleanly if no matching
-    --game-dir was supplied, or the path doesn't exist.
+    --game-dir was supplied, or the path doesn't exist. Returns the MTFW_FS
+    instance itself, so callers can resolve_hashes() against the exact same
+    tree that got mounted into the VFS.
 
     Scanning + flattening a full game install's tree can take a while (a
     real RE5 install has ~1200 archives) - that cost is paid once per
@@ -64,20 +83,19 @@ def game_fs_root(pytestconfig, local_app_id):
     if not game_dir or not os.path.isdir(game_dir):
         pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
 
-    if local_app_id not in _GAME_FS_ROOTS_ADDED:
+    if local_app_id not in _GAME_FS_INSTANCES:
         bpy.context.scene.albam.apps.app_selected = local_app_id
         vfs = bpy.context.scene.albam.vfs
-        vfs.add_fs_root(local_app_id, MTFW_FS(game_dir), display_name=f"{local_app_id}-local")
-        _GAME_FS_ROOTS_ADDED.add(local_app_id)
+        game_fs = MTFW_FS(game_dir)
+        vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")
+        _GAME_FS_INSTANCES[local_app_id] = game_fs
 
-    return local_app_id
+    return _GAME_FS_INSTANCES[local_app_id]
 
 
 @pytest.fixture(scope="session")
-def mod_export_local(game_fs_root, local_app_id, local_mod_path, local_mrl_path):
+def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
-    from albam.engines.mtfw.structs.mrl import Mrl
-    from kaitaistruct import KaitaiStream
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
     if local_app_id == "dd":
@@ -85,13 +103,18 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path, local_mrl_path)
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
     bpy.context.scene.albam.export_settings.export_bones = True
 
+    # resolve_hashes() returns MTFW_FS's own canonical form (leading "/"),
+    # but vfs.add_fs_root() builds its tree with that stripped (see
+    # albam.vfs.VirtualFileSystemBase.add_fs_root) - select_vfile()/
+    # get_vfile() expect the stripped form.
+    local_mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
+
     vfs = bpy.context.scene.albam.vfs
     try:
         vfile_mod = vfs.select_vfile(local_app_id, local_mod_path)
     except KeyError:
         pytest.skip(f"{local_mod_path!r} not found under --game-dir for app_id={local_app_id!r}")
-    vfile_mrl = vfs.get_vfile(local_app_id, local_mrl_path) if local_mrl_path else None
-    assert vfile_mod and ((local_mrl_path and vfile_mrl) or (not local_mrl_path and not vfile_mrl))
+    assert vfile_mod
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
@@ -102,16 +125,7 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path, local_mrl_path)
 
     exported = bpy.context.scene.albam.exported
     vfile_mod_exported = exported.select_vfile(local_app_id, local_mod_path)
-    mrl_path = local_mrl_path
-    try:
-        vfile_mrl_exported = exported.get_vfile(local_app_id, mrl_path) if mrl_path else None
-    except KeyError:
-        mrl_path = mrl_path.replace("_0.mrl", ".mrl")
-        vfile_mrl_exported = exported.get_vfile(local_app_id, mrl_path) if mrl_path else None
-
-    assert vfile_mod_exported and (
-        (mrl_path and vfile_mrl_exported) or
-        (not mrl_path and not vfile_mrl_exported))
+    assert vfile_mod_exported
 
     Mod = APPID_CLASS_MAPPER[local_app_id]
     src_mod = Mod.from_bytes(vfile_mod.get_bytes())
@@ -119,13 +133,7 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path, local_mrl_path)
     src_mod._read()
     dst_mod._read()
 
-    src_mrl = Mrl(local_app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
-    dst_mrl = (Mrl(local_app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes())))
-               if mrl_path else None)
-    if mrl_path:
-        src_mrl._read()
-        dst_mrl._read()
-    return src_mod, dst_mod, src_mrl, dst_mrl
+    return src_mod, dst_mod
 
 
 @pytest.fixture(scope="session")

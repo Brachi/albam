@@ -2,14 +2,23 @@ import os
 
 import pytest
 
+from albam.engines.mtfw.arc_fs import MTFW_FS
 from tests.mtfw.scripts.catalog_paths import (
     HASH_LENGTH,
     hash_identity,
     hash_relative_path,
     hash_virtual_path,
     normalize_virtual_path,
+    resolve_hashes,
     to_portable_relative_path,
 )
+
+DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "re5"
+)
+# Known to live inside these two committed sample .arc's - see
+# tests/mtfw/test_origin_arc_path.py, which uses the same fixture data.
+PACKED_PATH = "/pawn/pl/pl00/model/pl0000.mod"
 
 
 def test_to_portable_relative_path_strips_game_root():
@@ -93,3 +102,20 @@ def test_hash_relative_path_matches_across_install_locations():
         "/mnt/d/SteamLibrary/steamapps/common/Resident Evil 5",
     )
     assert h1 == h2
+
+
+def test_resolve_hashes_finds_known_path():
+    game_fs = MTFW_FS(DATA_DIR)
+    target = hash_virtual_path(PACKED_PATH)
+
+    found = resolve_hashes(game_fs, {target})
+
+    assert found == {target: PACKED_PATH}
+
+
+def test_resolve_hashes_raises_for_unmatched_hash():
+    game_fs = MTFW_FS(DATA_DIR)
+    bogus = hash_identity("nope/does/not/exist.foo")
+
+    with pytest.raises(KeyError):
+        resolve_hashes(game_fs, {hash_virtual_path(PACKED_PATH), bogus})
