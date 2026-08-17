@@ -668,7 +668,7 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
     if len(vertex_colors) > 0:
         # As import-export works with 1byte colors, no need to use full float for that
-        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='BYTE_COLOR')
+        color_layer = bl_mesh.color_attributes.new(name=name, domain='CORNER', type='BYTE_COLOR')
         # color_layer = bl_mesh.data.color_attributes[name]
         for poly in bl_mesh.polygons:
             for loop_index in poly.loop_indices:
