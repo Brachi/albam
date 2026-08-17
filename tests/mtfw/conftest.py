@@ -1,5 +1,4 @@
 import os
-import io
 import json
 
 import bpy
@@ -120,6 +119,31 @@ def game_fs_root(pytestconfig, local_app_id):
     return _GAME_FS_INSTANCES[local_app_id]
 
 
+def import_export(local_app_id, local_path):
+    """Select local_path (already resolved from a committed hash, and
+    already mounted into the VFS via game_fs_root) and run it through the
+    real Blender import_vfile()/export() operators - the shared
+    "select, import, export" step every *_local round-trip fixture needs.
+    Returns the source vfile; callers fetch whatever exported vfile(s) they
+    need afterward from bpy.context.scene.albam.exported, since what comes
+    out varies (a straight copy for a standalone file, but also an
+    accompanying .mrl alongside a mod).
+    """
+    vfs = bpy.context.scene.albam.vfs
+    try:
+        vfile = vfs.select_vfile(local_app_id, local_path)
+    except KeyError:
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+    return vfile
+
+
 @pytest.fixture(scope="session")
 def loaded_arcs(pytestconfig):
     """
@@ -139,84 +163,6 @@ def loaded_arcs(pytestconfig):
         bpy.context.scene.albam.apps.app_selected = app_id
         files = [{'name': name} for name in os.listdir(arc_dir) if name.endswith(".arc")]
         bpy.ops.albam.add_files(directory=arc_dir, files=files)
-
-
-@pytest.fixture(scope="session")
-def mod_export(loaded_arcs, app_id, mod_path, mrl_path):
-    from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
-    from albam.engines.mtfw.structs.mrl import Mrl
-    from kaitaistruct import KaitaiStream
-
-    bpy.context.scene.albam.apps.app_selected = app_id
-    if app_id == "dd":
-        bpy.context.scene.albam.export_settings.no_vf_grouping = True
-    bpy.context.scene.albam.import_settings.import_only_main_lods = False
-    bpy.context.scene.albam.export_settings.export_bones = True
-
-    vfile_mod = bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
-    vfile_mrl = bpy.context.scene.albam.vfs.get_vfile(app_id, mrl_path) if mrl_path else None
-    assert vfile_mod and ((mrl_path and vfile_mrl) or (not mrl_path and not vfile_mrl))
-
-    result = bpy.ops.albam.import_vfile()
-    assert result == {"FINISHED"}
-    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
-    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
-    result = bpy.ops.albam.export()  # FIXME: won't capture failures
-    assert result == {"FINISHED"}
-
-    vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(app_id, mod_path)
-    try:
-        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
-                              if mrl_path else None)
-    except KeyError:
-        mrl_path = mrl_path.replace("_0.mrl", ".mrl")
-        vfile_mrl_exported = (bpy.context.scene.albam.exported.get_vfile(app_id, mrl_path)
-                              if mrl_path else None)
-
-    assert vfile_mod_exported and (
-        (mrl_path and vfile_mrl_exported) or
-        (not mrl_path and not vfile_mrl_exported))
-
-    Mod = APPID_CLASS_MAPPER[app_id]
-    src_mod = Mod.from_bytes(vfile_mod.get_bytes())
-    dst_mod = Mod.from_bytes(vfile_mod_exported.get_bytes())
-    src_mod._read()
-    dst_mod._read()
-
-    src_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl.get_bytes()))) if mrl_path else None
-    dst_mrl = Mrl(app_id, KaitaiStream(io.BytesIO(vfile_mrl_exported.get_bytes()))) if mrl_path else None
-    if mrl_path:
-        src_mrl._read()
-        dst_mrl._read()
-    return src_mod, dst_mod, src_mrl, dst_mrl
-
-
-@pytest.fixture(scope="session")
-def mod_imported(mod_export):
-    return mod_export[0]
-
-
-@pytest.fixture(scope="session")
-def mod_exported(mod_export):
-    return mod_export[1]
-
-
-@pytest.fixture(scope="session")
-def mrl_imported(mod_export):
-    mrl = mod_export[2]
-    if not mrl:
-        pytest.skip("No mrl available")
-    else:
-        return mrl
-
-
-@pytest.fixture(scope="session")
-def mrl_exported(mod_export):
-    mrl = mod_export[3]
-    if not mrl:
-        pytest.skip("No mrl available")
-    else:
-        return mrl
 
 
 @pytest.fixture(scope="session")

@@ -4,6 +4,7 @@ import os
 import bpy
 import pytest
 
+from tests.mtfw.conftest import import_export
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -61,22 +62,8 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     # get_vfile() expect the stripped form.
     local_mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
 
-    vfs = bpy.context.scene.albam.vfs
-    try:
-        vfile_mod = vfs.select_vfile(local_app_id, local_mod_path)
-    except KeyError:
-        pytest.skip(f"{local_mod_path!r} not found under --game-dir for app_id={local_app_id!r}")
-    assert vfile_mod
-
-    result = bpy.ops.albam.import_vfile()
-    assert result == {"FINISHED"}
-    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
-    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
-    result = bpy.ops.albam.export()  # FIXME: won't capture failures
-    assert result == {"FINISHED"}
-
-    exported = bpy.context.scene.albam.exported
-    vfile_mod_exported = exported.select_vfile(local_app_id, local_mod_path)
+    vfile_mod = import_export(local_app_id, local_mod_path)
+    vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_mod_path)
     assert vfile_mod_exported
 
     Mod = APPID_CLASS_MAPPER[local_app_id]
