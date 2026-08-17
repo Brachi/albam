@@ -4,6 +4,7 @@ import os
 import bpy
 import pytest
 
+from tests.mtfw.r2_config import r2_kwargs_for_app
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -51,42 +52,66 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
+R2_PROTOCOL_PREFIX = "r2://"
+
+
 def _game_dirs(pytestconfig):
-    # Already validated (well-formed "<app-id>::<dir>", once, at startup) by
-    # tests/conftest.py's pytest_configure - see there.
+    # Already validated (well-formed "<app-id>::<value>", once, at startup)
+    # by tests/conftest.py's pytest_configure - see there. <value> is either
+    # a local directory path, or the literal "r2://" sentinel selecting the
+    # R2 backend explicitly (see r2_kwargs_for_app) - never inferred from
+    # whether a local path happens to exist.
     parsed = {}
     for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
-        app_id, directory = app_id_and_dir.split("::")
-        parsed[app_id] = directory
+        app_id, value = app_id_and_dir.split("::")
+        parsed[app_id] = value
     return parsed
 
 
 @pytest.fixture(scope="session")
 def game_fs_root(pytestconfig, local_app_id):
     """
-    Mounts --game-dir's folder for local_app_id as a VFS root via MTFW_FS
-    (once per session, cached in _GAME_FS_INSTANCES) - the same mechanism
-    "Add Folder" uses in the UI for a whole game install, unlike --arcdir's
-    flat directory of loose .arc dumps. Skips cleanly if no matching
-    --game-dir was supplied, or the path doesn't exist. Returns the MTFW_FS
-    instance itself, so callers can resolve_hashes() against the exact same
-    tree that got mounted into the VFS.
+    Mounts a VFS root for local_app_id via MTFW_FS (once per session, cached
+    in _GAME_FS_INSTANCES) - the same mechanism "Add Folder" uses in the UI
+    for a whole game install, unlike --arcdir's flat directory of loose .arc
+    dumps. Returns the MTFW_FS instance itself, so callers can
+    resolve_hashes() against the exact same tree that got mounted into the
+    VFS.
 
-    Scanning + flattening a full game install's tree can take a while (a
-    real RE5 install has ~1200 archives) - that cost is paid once per
-    app_id per session, not per test, but is still why this is opt-in and
-    local-only rather than something CI runs.
+    The source is explicit in --game-dir's value, never inferred: a plain
+    path mounts a local install (skips if it doesn't exist); the literal
+    "r2://" mounts R2 instead, resolving bucket/prefix/credentials from env
+    vars (see r2_kwargs_for_app - this is what lets CI exercise these tests
+    without a full local game install, passing --game-dir=<app>::r2:// with
+    credentials supplied separately via secrets, never on the command line).
+    No --game-dir at all for this app_id skips outright - no implicit
+    fallback either way.
+
+    Scanning + flattening a full local game install's tree can take a while
+    (a real RE5 install has ~1200 archives) - that cost is paid once per
+    app_id per session, not per test.
     """
     from albam.engines.mtfw.arc_fs import MTFW_FS
 
-    game_dir = _game_dirs(pytestconfig).get(local_app_id)
-    if not game_dir or not os.path.isdir(game_dir):
-        pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
-
     if local_app_id not in _GAME_FS_INSTANCES:
+        value = _game_dirs(pytestconfig).get(local_app_id)
+        if not value:
+            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
+        elif value == R2_PROTOCOL_PREFIX:
+            r2_kwargs = r2_kwargs_for_app(local_app_id)
+            if r2_kwargs is None:
+                pytest.skip(
+                    f"--game-dir={local_app_id}::r2:// requested but R2 isn't configured "
+                    f"(missing s3 extras or credentials - see .env.example)"
+                )
+            game_fs = MTFW_FS.from_s3(**r2_kwargs)
+        elif not os.path.isdir(value):
+            pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
+        else:
+            game_fs = MTFW_FS(value)
+
         bpy.context.scene.albam.apps.app_selected = local_app_id
         vfs = bpy.context.scene.albam.vfs
-        game_fs = MTFW_FS(game_dir)
         vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")
         _GAME_FS_INSTANCES[local_app_id] = game_fs
 

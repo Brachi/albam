@@ -438,6 +438,11 @@ class MTFW_FS(MultiFS):
         MultiFS.__init__(self, auto_close=auto_close)
         self._init_common()
         self.game_root = f"s3://{bucket}/{prefix}"
+        # keys come back from find_arc_keys_s3 already rooted under prefix
+        # (e.g. "game/nativePC_MT/.../foo.arc") - origin_of() strips this
+        # against the key directly, not game_root (an "s3://bucket/prefix"
+        # sentinel, not a real path os.path.relpath could use meaningfully).
+        self._s3_prefix = prefix.strip("/")
 
         opener = _s3_opener(client, bucket)
         arc_specs = ((key, opener) for key in sorted(find_arc_keys_s3(client, bucket, prefix)))
@@ -456,6 +461,8 @@ class MTFW_FS(MultiFS):
         # lazily built - see _ensure_index()
         self._owner = None
         self._topology = None
+        # None for a local instance; set by from_s3() - see origin_of()
+        self._s3_prefix = None
 
     def _load_arcs(self, arc_specs):
         for arc_path, opener in arc_specs:
@@ -529,18 +536,25 @@ class MTFW_FS(MultiFS):
 
     def origin_of(self, path):
         """Portable identity of the .arc `path` resolves to - its own path
-        relative to game_root (forward slashes, original casing preserved)
-        - or None if it's a loose/real file (or doesn't resolve at all).
+        relative to game_root for a local instance, or relative to `prefix`
+        for an MTFW_FS.from_s3() instance (forward slashes either way,
+        original casing preserved) - or None if it's a loose/real file (or
+        doesn't resolve at all).
 
         This is meant for display/hashing (see tests/mtfw/scripts/
         catalog_paths.py): it deliberately doesn't leak where game_root
-        happens to sit on this disk. It is NOT directly openable - use
-        origin_absolute_path() for that.
+        happens to sit on this disk (or which bucket, for S3/R2). It is NOT
+        directly openable - use origin_absolute_path() for that.
         """
         owner_fs = self._owning_arc_fs(path)
         if owner_fs is None:
             return None
-        return os.path.relpath(owner_fs.arc_path, self.game_root).replace(os.sep, "/")
+        arc_path = owner_fs.arc_path
+        if self._s3_prefix is not None:
+            if self._s3_prefix and arc_path.startswith(self._s3_prefix + "/"):
+                return arc_path[len(self._s3_prefix) + 1:]
+            return arc_path
+        return os.path.relpath(arc_path, self.game_root).replace(os.sep, "/")
 
     def origin_absolute_path(self, path):
         """The real, directly-openable identifier (ArcFS.arc_path - a local

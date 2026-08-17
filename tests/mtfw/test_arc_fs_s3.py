@@ -22,15 +22,16 @@ from albam.engines.mtfw.structs.arc import Arc  # noqa: E402
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FIXTURE_ARCS = ("s400.arc", "uPl00ChrisNormal.arc")
 BUCKET = "re5-assets"
-# where arcs actually sit, nested a few levels down - realistic layout, but
-# NOT what gets passed as `prefix=` to from_s3(). `prefix` has to be the
-# common root covering *both* where arcs live (searched recursively beneath
-# it, like local find_arc_files()/os.walk) and where loose files' exposed
-# paths are rooted - narrowing it to ARC_DIR would silently break loose
-# resolution and the arc-itself-via-loose-layer parity below. Here that
-# common root is the bucket root itself, hence GAME_ROOT_PREFIX = "".
+# GAME_ROOT_PREFIX mirrors the real bucket layout (see tests/mtfw/r2_config.py/
+# .env.example): one shared bucket, each app_id's game root under its own
+# prefix (here "re5", matching the app_id) - NOT the folder arcs happen to
+# live in. `prefix` has to be the common root covering *both* where arcs live
+# (searched recursively beneath it, like local find_arc_files()/os.walk) and
+# where loose files' exposed paths are rooted - narrowing it to ARC_DIR would
+# silently break loose resolution and the arc-itself-via-loose-layer parity
+# below.
 ARC_DIR = "nativePC_MT/Image/Archive/"
-GAME_ROOT_PREFIX = ""
+GAME_ROOT_PREFIX = "re5"
 SAMPLE_PATH = "pawn/pl/pl00/model/pl0000.mod"
 
 # from_s3() builds its own client internally now (no client= param), so
@@ -59,7 +60,7 @@ def s3_client():
         client.create_bucket(Bucket=BUCKET)
         for name in FIXTURE_ARCS:
             with open(_local_fixture_path(name), "rb") as f:
-                client.put_object(Bucket=BUCKET, Key=ARC_DIR + name, Body=f.read())
+                client.put_object(Bucket=BUCKET, Key=f"{GAME_ROOT_PREFIX}/{ARC_DIR}{name}", Body=f.read())
         yield client
 
 
@@ -104,7 +105,7 @@ def test_from_s3_includes_loose_layer_by_default(s3_client):
 
 def test_from_s3_include_loose_false_disables_loose_layer(s3_client):
     loose_override = b"MOD\x00LOOSE-OVERRIDE-CONTENT"
-    s3_client.put_object(Bucket=BUCKET, Key=SAMPLE_PATH, Body=loose_override)
+    s3_client.put_object(Bucket=BUCKET, Key=f"{GAME_ROOT_PREFIX}/{SAMPLE_PATH}", Body=loose_override)
 
     game_fs = _from_s3(include_loose=False)
     # with no loose layer, the packed copy is all there is - loose_override
@@ -151,14 +152,31 @@ def test_from_s3_read_matches_local_reference(get_object_calls):
 
 def test_from_s3_origin_of(s3_client):
     game_fs = _from_s3()
+    # relative to prefix (GAME_ROOT_PREFIX="re5" here), not the bucket key
+    # verbatim - see MTFW_FS.origin_of()'s docstring.
     assert game_fs.origin_of(SAMPLE_PATH) == ARC_DIR + "uPl00ChrisNormal.arc"
+    assert game_fs.origin_absolute_path(SAMPLE_PATH) == f"{GAME_ROOT_PREFIX}/{ARC_DIR}uPl00ChrisNormal.arc"
+
+
+def test_from_s3_origin_of_strips_a_deeper_prefix(s3_client):
+    # reuses the same uploaded keys, rooted one level deeper than the app_id
+    # convention above - proves origin_of() genuinely strips whatever
+    # `prefix` it was given, not just the app_id-length case.
+    prefix = f"{GAME_ROOT_PREFIX}/nativePC_MT"
+    game_fs = MTFW_FS.from_s3(bucket=BUCKET, prefix=prefix, include_loose=False, **DUMMY_CREDS)
+
+    origin = game_fs.origin_of("pawn/pl/pl00/model/pl0000.mod")
+
+    assert origin == "Image/Archive/uPl00ChrisNormal.arc"
+    assert (game_fs.origin_absolute_path("pawn/pl/pl00/model/pl0000.mod") ==
+            f"{GAME_ROOT_PREFIX}/{ARC_DIR}uPl00ChrisNormal.arc")
 
 
 def test_from_s3_loose_file_overrides_packed_content(s3_client):
     # a loose override lives at the path itself, not under the arcs' prefix -
     # same convention as a local unpacked/modded file under game_root.
     loose_override = b"MOD\x00LOOSE-OVERRIDE-CONTENT"
-    s3_client.put_object(Bucket=BUCKET, Key=SAMPLE_PATH, Body=loose_override)
+    s3_client.put_object(Bucket=BUCKET, Key=f"{GAME_ROOT_PREFIX}/{SAMPLE_PATH}", Body=loose_override)
 
     game_fs = _from_s3()
 

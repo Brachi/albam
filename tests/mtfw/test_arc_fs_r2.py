@@ -1,52 +1,37 @@
 """
 MTFW_FS.from_s3() against a real Cloudflare R2 bucket, using credentials
-from a local .env file (see arc_fs prototyping session / README for the
-expected keys: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
-R2_BUCKET_NAME, optionally R2_PREFIX). Skipped entirely if that .env isn't
-present/complete, so this never runs (or needs credentials) on another
-machine or in CI.
+from a local .env file (see .env.example for the expected keys). Skipped
+entirely if R2 isn't configured for the "re5" app_id, so this never runs (or
+needs credentials) on another machine, or in CI until the R2_* secrets are
+added there (see .github/workflows/tests.yml).
 """
-import os
-
 import pytest
 
 boto3 = pytest.importorskip("boto3")
 pytest.importorskip("dotenv")
 pytest.importorskip("smart_open")
 
-from dotenv import load_dotenv  # noqa: E402
-
 from albam.engines.mtfw.arc_fs import MTFW_FS  # noqa: E402
+from tests.mtfw.r2_config import r2_kwargs_for_app  # noqa: E402
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-load_dotenv(os.path.join(REPO, ".env"))
-
-REQUIRED_ENV = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME")
-_missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
+APP_ID = "re5"
+_r2_kwargs = r2_kwargs_for_app(APP_ID)
 
 pytestmark = pytest.mark.skipif(
-    bool(_missing), reason=f"real R2 .env not configured (missing: {_missing})"
+    _r2_kwargs is None, reason=f"real R2 not configured for app_id={APP_ID!r} (see .env.example)"
 )
 
-# known to exist in this account's bucket as of the arc_fs prototyping
-# session - adjust here if the bucket's contents change.
-SAMPLE_PATH = "/effect/tex/0011/tx0011_BM.tex"
-SAMPLE_ARC_SUFFIX = "uPl02JillCos3.arc"
-
-
-def _r2_kwargs():
-    return dict(
-        bucket=os.environ["R2_BUCKET_NAME"],
-        prefix=os.environ.get("R2_PREFIX", ""),
-        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-    )
+# known to live in the real bucket under the "re5" prefix, mirroring the real
+# game's own folder structure from there down (nativePC_MT/Image/Archive/...)
+# - the same sample content as the committed tests/data/re5/uPl00ChrisNormal.arc
+# fixture (see test_origin_arc_path.py's PACKED_PATH).
+SAMPLE_PATH = "/pawn/pl/pl00/model/pl0000.mod"
+SAMPLE_ARC_SUFFIX = "uPl00ChrisNormal.arc"
 
 
 @pytest.fixture(scope="module")
 def game_fs():
-    return MTFW_FS.from_s3(**_r2_kwargs())
+    return MTFW_FS.from_s3(**_r2_kwargs)
 
 
 @pytest.fixture
@@ -81,14 +66,14 @@ def test_real_r2_finds_arcs_without_errors(game_fs):
 
 def test_real_r2_reads_real_content(game_fs):
     data = game_fs.readbytes(SAMPLE_PATH)
-    assert data[:3] == b"TEX"
+    assert data[:3] == b"MOD"
 
     origin = game_fs.origin_of(SAMPLE_PATH)
     assert origin is not None and origin.endswith(SAMPLE_ARC_SUFFIX)
 
 
 def test_real_r2_reads_are_bounded_not_full_downloads(get_object_calls):
-    game_fs = MTFW_FS.from_s3(**_r2_kwargs())
+    game_fs = MTFW_FS.from_s3(**_r2_kwargs)
 
     # every request so far (construction: one header+table fetch per arc)
     # must be a bounded range, never open-ended to EOF
@@ -96,7 +81,7 @@ def test_real_r2_reads_are_bounded_not_full_downloads(get_object_calls):
 
     get_object_calls.clear()  # isolate the read below from construction's calls
     data = game_fs.readbytes(SAMPLE_PATH)
-    assert data[:3] == b"TEX"
+    assert data[:3] == b"MOD"
 
     assert all(_range and not _range.endswith("-") for _range, _ in get_object_calls)
     # sanity: total fetched shouldn't be wildly larger than what was read
