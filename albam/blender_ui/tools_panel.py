@@ -7,7 +7,7 @@ from pathlib import Path
 from ..registry import blender_registry
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
-from ..lib.tools.bake_of_light import _bake_light
+from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
 
 BONE_NAMES = {
@@ -112,15 +112,25 @@ class ToolsSettings(bpy.types.PropertyGroup):
     )
     face_preset: face_preset_enum
     overwrite_tex_path: bpy.props.BoolProperty(default=False)
-    lm_res_enum: bpy.props.EnumProperty(
+    lm_resolution: bpy.props.EnumProperty(
         name="Lightmap Resolution",
         description="Set the side of the baked lightmap",
         items=[
-            ('512', "512", ""),
-            ('1024', "1024", ""),
-            ('2048', "2048", ""),
-            ('4096', "4096", ""),
+            ('512', "512", "", 1),
+            ('1024', "1024", "", 2),
+            ('2048', "2048", "", 3),
+            ('4096', "4096", "", 4),
         ]
+    )
+    lm_mode: bpy.props.EnumProperty(
+        name="Mode",
+        description="The method of adding lightmaps to the material",
+        items=[
+            ("0", "One per .mod file", "One lightmap for all meshes in the .mod file", 1),
+            ("1", "Update exsting", "Update existing lightmaps in the material", 2),
+            ("2", "One for selected", "One lightmap for all selected meshes", 3),
+        ],
+        default = "0"
     )
 
 
@@ -312,38 +322,6 @@ class ALBAM_PT_FACE_PROP(bpy.types.Panel):
         else:
             return False
 
-
-# @blender_registry.register_blender_type
-class ALBAM_PT_Handshaker(bpy.types.Panel):
-    '''UI Tool for creating posed hands'''
-    bl_label = "Handshaker"
-    bl_idname = "ALBAM_PT_Handshaker"
-    bl_parent_id = "ALBAM_PT_ToolsPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        row.operator("albam.handshake").filepath = frames_path
-        row.prop(context.scene.albam.meshes, "all_meshes", text="")
-        if DEV_MODE:
-            row = layout.row()
-            row.label(text="Dump frames to json files")
-            row = layout.row()
-            row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
-            row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
-
-    @classmethod
-    def poll(cls, context):
-        selection = bpy.context.selected_objects
-        selected_meshes = [obj for obj in selection if obj.type == 'ARMATURE']
-        if selection:
-            if selected_meshes:
-                return True
-        else:
-            return False
 
 
 @blender_registry.register_blender_type
@@ -828,9 +806,10 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
         selected_objects = context.selected_objects
         selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
         custom_props = context.scene.albam.tools_settings
-        lm_size = int(custom_props.lm_res_enum)
+        lm_size = int(custom_props.lm_resolution)
+        lm_mode = int(custom_props.lm_mode)
         app_id = context.scene.albam.apps.app_selected
-        _bake_light(selected_objects, lm_size, app_id)
+        bake_light(selected_objects, lm_size, lm_mode, app_id)
 
         for ob in selected_objects:
             ob.select_set(True)
@@ -945,7 +924,8 @@ class ALBAM_WT_BakeOfLight(bpy.types.WorkSpaceTool):
         scene_objects = context.scene.objects
         scene_objects = [ob for ob in scene_objects if ob.type == 'LIGHT']
         layout.operator('mesh.bake_lighting', text="Bake Lighting")
-        layout.prop(context.scene.albam.tools_settings, "lm_res_enum", text="",)
+        layout.prop(context.scene.albam.tools_settings, "lm_resolution", text="Resolution",)
+        layout.prop(context.scene.albam.tools_settings, "lm_mode", text="How to update")
         if not scene_objects:
             row = layout.row()
             row.label(text="No light source in the scene")

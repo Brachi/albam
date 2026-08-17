@@ -230,10 +230,23 @@ def move_to_collection(bl_objects, col_name):
         collection.objects.link(ob)
 
 
-def _get_mesh_albam_props(obj):
-    albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+def _get_mesh_albam_props(bl_ob):
+    albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
     if not albam_asset:
         return None
     app_id = albam_asset.app_id
-    custom_props = obj.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_props = bl_ob.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
     return custom_props
+
+
+def _get_albam_mat_props(bl_ob, app_id):
+    try:
+        bl_mat = bl_ob.data.materials[0]
+    except IndexError:
+        print(f"Material not found for object: {bl_ob.name}")
+        return None
+    try:
+        custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    except AttributeError:
+        print(f"That isn't albam material:{bl_ob.name}")
+    return custom_properties
