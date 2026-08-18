@@ -126,12 +126,13 @@ class ToolsSettings(bpy.types.PropertyGroup):
         name="Mode",
         description="The method of adding lightmaps to the material",
         items=[
-            ("0", "One per .mod file", "One lightmap for all meshes in the .mod file", 1),
+            ("0", "Single lightmap per .mod file", "One lightmap for all meshes in the .mod file", 1),
             ("1", "Update exsting", "Update existing lightmaps in the material", 2),
             ("2", "One for selected", "One lightmap for all selected meshes", 3),
         ],
         default = "0"
     )
+    lm_name: bpy.props.StringProperty(default='generic_LM')
 
 
 @blender_registry.register_blender_type
@@ -321,7 +322,6 @@ class ALBAM_PT_FACE_PROP(bpy.types.Panel):
             return True
         else:
             return False
-
 
 
 @blender_registry.register_blender_type
@@ -807,7 +807,7 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
         selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
         custom_props = context.scene.albam.tools_settings
         lm_size = int(custom_props.lm_resolution)
-        lm_mode = int(custom_props.lm_mode)
+        lm_mode = custom_props.lm_mode
         app_id = context.scene.albam.apps.app_selected
         bake_light(selected_objects, lm_size, lm_mode, app_id)
 
@@ -921,14 +921,22 @@ class ALBAM_WT_BakeOfLight(bpy.types.WorkSpaceTool):
 
     @staticmethod
     def draw_settings(context, layout, tool):
-        scene_objects = context.scene.objects
-        scene_objects = [ob for ob in scene_objects if ob.type == 'LIGHT']
+        light_objects = [ob for ob in context.scene.objects if ob.type == 'LIGHT']
+        selected_objects = [ob for ob in context.selected_objects if ob.type == 'MESH']
+        lm_mode = context.scene.albam.tools_settings.lm_mode
+        settings = context.scene.albam.tools_settings
         layout.operator('mesh.bake_lighting', text="Bake Lighting")
-        layout.prop(context.scene.albam.tools_settings, "lm_resolution", text="Resolution",)
-        layout.prop(context.scene.albam.tools_settings, "lm_mode", text="How to update")
-        if not scene_objects:
+        layout.prop(settings, "lm_resolution", text="Resolution",)
+        layout.prop(settings, "lm_mode", text="How to update")
+        row = layout.row()
+        row.enabled = True if lm_mode == "2" else False
+        row.prop(settings, "lm_name", text="Lightmap name")
+        if not light_objects:
             row = layout.row()
             row.label(text="No light source in the scene")
+        if not selected_objects:
+            row = layout.row()
+            row.label(text="No mesh selected")
 
 
 WORKSPACE_TOOLS.extend([
