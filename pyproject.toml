@@ -11,35 +11,27 @@ keywords = ["modding", "game-modding", "blender-addon", "import", "export"]
 dependencies = [
   'bpy == 4.2.0; python_version == "3.11.*"',
   'bpy == 5.2.0; python_version == "3.13.*"',
-  # albam.engines.mtfw.arc_fs (ArcFS/MTFW_FS): PyFilesystem2-based VFS over
-  # MTFramework .arc archives + loose files. archive.py imports it
-  # unconditionally (mtfw's VFS reads go through it), so it's a hard
-  # dependency, not just for the optional S3/R2-backed path below.
-  "fs",
-  # `fs` (last released 2021, unmaintained) unconditionally does
-  # `pkg_resources.declare_namespace(...)` at import time - setuptools 81+
-  # removed pkg_resources entirely, breaking `import fs` outright (confirmed:
-  # ModuleNotFoundError: No module named 'pkg_resources'). No newer `fs`
-  # release exists to fix this on their side, so pin setuptools here instead.
-  "setuptools<81",
+  "fs==2.4.16",
+  # `fs` breaks under setuptools 81+ (drops pkg_resources).
+  "setuptools==80.10.2",
 ]
 
 [project.optional-dependencies]
 
 tests = [
-  "pytest",
-  "pytest-subtests",
-  "coverage[toml]",
-  "flake8-pyproject",
-  "moto[s3]>=5.0.0",
-  "python-dotenv",
+  "pytest==9.1.1",
+  "pytest-subtests==0.15.0",
+  "coverage[toml]==7.15.4",
+  "flake8-pyproject==1.2.4",
+  "moto[s3]==5.2.2",
+  "python-dotenv==1.2.3",
 ]
 
 # albam.engines.mtfw.arc_fs.MTFW_FS.from_s3: sourcing .arc files from an
 # S3/R2-compatible bucket instead of a local game folder.
 s3 = [
   "boto3==1.43.72",
-  "smart-open[s3]>=7.0.0",
+  "smart-open[s3]==8.0.1",
 ]
 
 # albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
