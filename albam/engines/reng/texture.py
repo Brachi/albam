@@ -3,7 +3,7 @@ import struct
 
 import bpy
 from kaitaistruct import KaitaiStream
-from pybc7 import unpack_dds
+from bc7enc import unpack_dds
 
 from ...registry import blender_registry
 from .apps import APPS_TODO
