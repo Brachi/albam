@@ -22,7 +22,7 @@ KNOWN_TEXTURE_TYPES = {
 
 
 @blender_registry.register_import_function("re2_non_rt", extension="tex.10", albam_asset_type="TEXTURE")
-@blender_registry.register_import_function("re2", extension="tex.34")
+@blender_registry.register_import_function("re2", extension="tex.34", albam_asset_type="TEXTURE")
 @blender_registry.register_import_function("re3_non_rt", extension="tex.190820018",
                                            albam_asset_type="TEXTURE")
 @blender_registry.register_import_function("re3", extension="tex.34", albam_asset_type="TEXTURE")
