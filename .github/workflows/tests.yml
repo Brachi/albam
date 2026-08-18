@@ -2,6 +2,7 @@ name: Test
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -102,4 +103,103 @@ jobs:
           minColorRange: 50
           maxColorRange: 90
           valColorRange: ${{ env.total }}
-
+  publish-latest-main:
+    # Rebuilds the extension zip on every successful merge to main and
+    # publishes it as a rolling pre-release ("latest-main") - a stable,
+    # no-login download of the current tip of main, distinct from the real
+    # tagged Releases (e.g. v0.5.0) which are still cut by hand. Never runs
+    # on pull_request (only push to main), and needs: tests so a build that
+    # fails CI never gets published.
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git describe`/`rev-list --count` below need full history and
+          # tags to compute the commit-count-since-last-release suffix -
+          # actions/checkout defaults to a shallow, tag-less clone.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Compute dev version (base version + commits since last tag + branch)
+        id: version
+        run: |
+          set -e
+          base_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          last_tag="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -n "$last_tag" ]; then
+            commit_count="$(git rev-list "${last_tag}..HEAD" --count)"
+          else
+            commit_count="$(git rev-list --count HEAD)"
+          fi
+          # SemVer build-metadata only allows [0-9a-zA-Z-] - safe here since
+          # this job is gated to refs/heads/main, so GITHUB_REF_NAME is
+          # always literally "main" (never a slash-containing branch name).
+          echo "value=${base_version}+${commit_count}.${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Build extension zip
+        run: python scripts/build_extension.py --version "${{ steps.version.outputs.value }}"
+      - name: Publish rolling "latest main" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          gh release delete latest-main --yes --cleanup-tag || true
+          gh release create latest-main dist/albam-*.zip \
+            --title "Latest main build (${{ steps.version.outputs.value }})" \
+            --notes "Automated build of the latest main branch ($GITHUB_SHA). Not a stable release - see the Releases page for tagged versions." \
+            --prerelease \
+            --latest=false \
+            --target "$GITHUB_SHA"
+  publish-release:
+    # Publishes the official GitHub Release when a version tag (vX.Y.Z) is
+    # pushed: verifies the tag matches pyproject.toml's version (catches a
+    # forgotten version bump before it ships), builds the zip via the
+    # default `build_extension.py` (no --version override - the manifest's
+    # own version should already equal the tag), and publishes with release
+    # notes pulled straight from CHANGELOG.md's matching dated section.
+    # Auto-published (not a draft) since the changelog is already
+    # maintainer-written by the time a release is tagged.
+    runs-on: ubuntu-latest
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          set -e
+          tag_version="${GITHUB_REF_NAME#v}"
+          pyproject_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [ "$tag_version" != "$pyproject_version" ]; then
+            echo "Tag $GITHUB_REF_NAME (version $tag_version) doesn't match pyproject.toml's version ($pyproject_version)" >&2
+            exit 1
+          fi
+      - name: Build extension zip
+        run: python scripts/build_extension.py
+      - name: Extract release notes from CHANGELOG.md
+        run: python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" > release_notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/albam-*.zip \
+            --title "Albam $GITHUB_REF_NAME" \
+            --notes-file release_notes.md
