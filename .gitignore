@@ -7,6 +7,7 @@ __pycache__/
 tests/data/
 Albam.egg-info/
 build/
+dist/
 
 # local-only debug dumps (real, plain-text game asset paths - never commit)
 *_tree_dump.txt
