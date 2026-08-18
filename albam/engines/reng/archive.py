@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 import struct
 
 import bpy
@@ -8,11 +9,23 @@ import zlib
 import zstd
 
 from ...registry import blender_registry
+from .pak_fs import PakFS
 from .structs.pak import Pak
+
+# TODO: temporary - re3-only, hardcoded, until apps.app_config_filepath (or
+# an equivalent per-app setting) is restored (removed in a23c773, see
+# tests/mtfw/... equivalent doesn't exist yet for reng). tests/data/ is
+# gitignored - this is a plaintext community path list, never real game
+# bytes, and never committed itself; only this path *string* is.
+RE3_PATH_LIST = Path(__file__).resolve().parents[3] / "tests" / "data" / "re3" / "RE3Z_RT_STM_Release.list"
+
+
+@blender_registry.register_fs_root_loader(app_id="re3", extension="pak")
+def pak_fs_root_loader(absolute_path):
+    return PakFS(absolute_path, RE3_PATH_LIST)
 
 
 @blender_registry.register_archive_loader(app_id="re2", extension='pak')
-@blender_registry.register_archive_loader(app_id="re3", extension='pak')
 @blender_registry.register_archive_loader(app_id="re8", extension='pak')
 @blender_registry.register_archive_loader(app_id="re2_non_rt", extension='pak')
 @blender_registry.register_archive_loader(app_id="re3_non_rt", extension='pak')
@@ -30,7 +43,6 @@ def pak_loader(file_item):
 
 @blender_registry.register_archive_accessor(app_id="re2", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re2_non_rt", extension="pak")
-@blender_registry.register_archive_accessor(app_id="re3", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re3_non_rt", extension="pak")
 @blender_registry.register_archive_accessor(app_id="re8", extension="pak")
 def pak_accessor(vfile, context):
