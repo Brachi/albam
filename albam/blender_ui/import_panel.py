@@ -1,9 +1,13 @@
 import bpy
 
-from ..apps import APPS
+from ..apps import APPS, REENGINE_APPS
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
 from ..data_loading import AppsUserDataConfigManager
+
+# REENGINE_APPS[0] is a stray None (pre-existing, unrelated) - filtered out
+# before unpacking, not after (unpacking None itself raises TypeError).
+REENGINE_APP_IDS = {entry[0] for entry in REENGINE_APPS if entry}
 
 
 def get_app_dir_from_config(self, context):
@@ -11,8 +15,10 @@ def get_app_dir_from_config(self, context):
     current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
     if current_app_userdata:
         context.scene.albam.apps.app_dir = current_app_userdata.get("app_dir", "")
+        context.scene.albam.apps.path_list_file = current_app_userdata.get("path_list_file", "")
     else:
         context.scene.albam.apps.app_dir = ""
+        context.scene.albam.apps.path_list_file = ""
 
 
 def set_app_dir_config(self, context):
@@ -31,10 +37,30 @@ def set_app_dir_config(self, context):
     config_mgr.save()
 
 
+def set_path_list_file_config(self, context):
+    current_app = context.scene.albam.apps.app_selected
+    current_path = context.scene.albam.apps.path_list_file
+    if not current_path:
+        return
+
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["path_list_file"] = current_path
+
+    config_mgr.save()
+
+
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
     app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
     app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
+    # RE Engine only (see REENGINE_APP_IDS): a .pak's file entries carry only
+    # hashes, not paths, so reng needs an external plaintext candidate-path
+    # list to resolve anything at all (see albam.engines.reng.pak_fs).
+    path_list_file : bpy.props.StringProperty(name="", description="", update=set_path_list_file_config)
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
 
@@ -366,6 +392,11 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
+        if current_app in REENGINE_APP_IDS:
+            row = self.layout.row(heading="Path List:", align=True)
+            row.prop(context.scene.albam.apps, "path_list_file")
+            row.operator("albam.path_list_file_setter", text="", icon="FILEBROWSER")
+
 
 @blender_registry.register_blender_type
 class ALBAM_OT_AppDirSetter(bpy.types.Operator):
@@ -382,6 +413,27 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
 
     def execute(self, context):
         context.scene.albam.apps.app_dir = self.directory
+        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
+        return {"FINISHED"}
+
+    def cancel(self, context):
+        bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_PathListFileSetter(bpy.types.Operator):
+    bl_idname = "albam.path_list_file_setter"
+    bl_label = "Select Path List"
+
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # noqa: F821
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        context.scene.albam.apps.path_list_file = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
