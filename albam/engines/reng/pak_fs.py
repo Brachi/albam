@@ -1,22 +1,17 @@
 """
 PyFilesystem2 adapter for RE Engine .pak archives.
 
-Unlike MT Framework's .arc (paths stored plaintext in the header - see
-../mtfw/arc_fs.py), a .pak's file entries carry only murmurhash3 hashes of
-their virtual path (see structs/pak.ksy) - there is no way to enumerate a
-pak's contents from the file alone. `PakFS` is built from a .pak plus an
-external plaintext list of *candidate* paths (one per line, forward-slash,
-no leading "/") - typically a community-maintained file list for the game.
-Each candidate is hashed and kept only if it matches an actual entry in this
-specific pak, so paths absent from this pak never show up as browsable
-(unlike the old PakWrapper-based archive_loader it replaces, which listed
-every candidate from the list unconditionally, regardless of whether this
-particular pak actually contained it).
+A .pak's file entries carry only murmurhash3 hashes of their virtual path
+(see structs/pak.ksy) - there's no way to enumerate a pak's contents from
+the file alone. `PakFS` is built from a .pak plus an external plaintext
+list of *candidate* paths (one per line, forward-slash, no leading "/") -
+typically a community-maintained file list for the game. Each candidate is
+hashed and kept only if it matches an actual entry in this specific pak,
+so paths absent from this pak never show up as browsable.
 
-A real .pak can be tens of GB; __init__ only ever reads the header + the
-fixed-size file-entry table (like the old PakWrapper did), and openbin()
-seeks straight to one entry's offset - the file's bulk data is never read
-except for the single entry being opened.
+A real .pak can be tens of GB; __init__ only reads the header + the
+fixed-size file-entry table, and openbin() seeks straight to one entry's
+offset - the bulk data is never read except for the entry being opened.
 """
 import io
 import os
@@ -125,22 +120,12 @@ class PakFS(FS):
         region_name="auto",
     ):
         """Alternate constructor: source the .pak from an S3-compatible
-        bucket (R2 works as-is, just pass R2's account-specific
-        endpoint_url and an R2 API token as access key/secret) instead of a
-        local file. `key` is the .pak's own key in the bucket (e.g.
-        "re3/re_chunk_000.pak") - unlike MTFW_FS.from_s3, there's only ever
-        one file here, so no key discovery/listing is needed, just the
-        exact key.
-
-        `path_list_path` still always reads from a real local file - it's a
-        small (few-MB) plaintext community path list, not worth fetching
-        over the network the way the (possibly tens-of-GB) .pak itself is.
-
-        Reads are real HTTP Range requests (via smart_open, see
-        albam.lib.s3.s3_opener) - constructing this and reading individual
-        files never downloads the whole .pak. __init__ already only reads
-        the header + fixed-size file-entry table regardless of source; over
-        S3 that's one small bounded GET, not the whole file.
+        bucket (R2 works as-is - pass R2's endpoint_url + API token as
+        access key/secret). `key` is the .pak's own key in the bucket
+        (e.g. "re3/re_chunk_000.pak"). `path_list_path` always reads from
+        a real local file - too small to be worth streaming over the
+        network. Reads are real HTTP Range requests (via smart_open) -
+        never downloads the whole .pak.
         """
         client = build_s3_client(
             aws_access_key_id=aws_access_key_id,
@@ -324,22 +309,12 @@ class ReenFS(MultiFS):
         include_loose=True,
     ):
         """Alternate constructor: source a whole RE Engine install from an
-        S3-compatible bucket (R2 works as-is, just pass R2's
-        account-specific endpoint_url and an R2 API token as access
-        key/secret) instead of a local game root - same pak-patch discovery
-        and highest-patch-first layering as __init__, just against S3 key
-        listing (find_pak_keys_s3) instead of os.listdir (find_pak_files).
-
-        path_list_path is required and keyword-only (Python syntax: prefix
-        already has a default) - it still always reads from a real local
-        file regardless of where the .pak layers come from, same as
-        PakFS.from_s3 (see its docstring for why: a small, few-MB file,
-        not worth the network-streaming complexity the possibly-tens-of-GB
-        .pak itself needs).
-
-        include_loose=True (default) layers an S3LooseFS over bucket/prefix
-        on top, same as MTFW_FS.from_s3 - shares the internally-built
-        client, so no separate credentials are needed for it.
+        S3-compatible bucket (R2 works as-is) instead of a local game root -
+        same pak-patch discovery/layering as __init__, via S3 key listing.
+        path_list_path is required (keyword-only, since prefix has a
+        default) and always reads from a real local file - too small to be
+        worth streaming. include_loose=True (default) layers an S3LooseFS
+        on top, same as MTFW_FS.from_s3.
         """
         client = build_s3_client(
             aws_access_key_id=aws_access_key_id,

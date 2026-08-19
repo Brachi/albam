@@ -226,40 +226,27 @@ class MTFW_FS(MultiFS):
         include_loose=True,
     ):
         """Alternate constructor: source .arc files from an S3-compatible
-        bucket instead of a local game install. Works against Cloudflare R2
-        as-is - pass R2's account-specific endpoint_url and an R2 API token
-        as access key/secret:
+        bucket (R2 works as-is - pass R2's endpoint_url + API token as
+        access key/secret). Credential params fall back to boto3's normal
+        resolution (env vars, etc.) when unset. Reads are real HTTP Range
+        requests (via smart_open) - never downloads a whole .arc.
+
+        `prefix` must be the game *root*, not the .arc folder: it's used
+        both to find arcs (recursive key listing) and, when `include_loose`
+        is on, as the root loose paths resolve relative to. Narrowing it to
+        just the archive folder silently breaks loose resolution. Exposed
+        paths come from each arc's own file table, independent of `prefix`.
+
+        `include_loose=True` (default) layers an S3LooseFS on top, same
+        highest-priority-wins semantics as the local OSFS layer - assumes
+        the bucket mirrors a real game root exactly. An override loose file
+        needs its own key equal to the exposed path itself.
 
             game_fs = MTFW_FS.from_s3(
                 bucket="my-bucket",
                 endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
-                aws_access_key_id=...,
-                aws_secret_access_key=...,
+                aws_access_key_id=..., aws_secret_access_key=...,
             )
-
-        Credential params forward straight to boto3.client("s3", ...) -
-        leave unset to fall back to boto3's normal credential resolution.
-        One client is built internally and reused for both the arc and
-        loose layers.
-
-        Reads are real HTTP Range requests (via smart_open) - never a full
-        .arc download.
-
-        IMPORTANT: `prefix` must be the game *root*, not the archive folder.
-        It's used both to find arcs (recursive key listing, so arcs nested
-        under `prefix` are found fine) and, when `include_loose` is on, as
-        the root loose paths resolve relative to - narrowing it to just the
-        archive folder silently breaks loose resolution. `prefix=""` if
-        your bucket mirrors the whole game root, same as `game_root`
-        locally. The paths MTFW_FS exposes for arc content come entirely
-        from the arc's own internal file table, independent of `prefix`.
-
-        `include_loose=True` (default) layers an S3LooseFS over `bucket`/
-        `prefix`, same highest-priority-wins semantics as the local OSFS
-        layer (see S3LooseFS's docstring for what it assumes about the
-        bucket). An override loose file needs its own key equal to the
-        exposed path itself (not inside the Archive/ prefix) to shadow the
-        packed copy.
         """
         client = build_s3_client(
             aws_access_key_id=aws_access_key_id,

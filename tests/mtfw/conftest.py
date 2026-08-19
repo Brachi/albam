@@ -37,18 +37,10 @@ def game_fs_root(pytestconfig, local_app_id):
     callers can resolve_hashes() against the exact same tree that got
     mounted into the VFS.
 
-    The source is explicit in --game-dir's value, never inferred: a plain
-    path mounts a local install (skips if it doesn't exist); an explicit
-    "r2://<bucket>/<prefix>" mounts R2 instead - e.g.
-    --game-dir=re5::r2://albam/re5 (credentials always from env - see
-    tests.mtfw.r2_config.resolve_r2_source; there is no bare "r2://" that
-    derives bucket/prefix from env/app_id anymore). CI gets the same
-    explicitness by interpolating a secret directly into the workflow's
-    --game-dir value (${{ secrets.R2_BUCKET_NAME }}) rather than this
-    fixture reading a bucket name from env itself - an empty interpolated
-    bucket (secret not configured) resolves the same as any other
-    R2-unavailable case: skip cleanly, not a hard failure. No --game-dir at
-    all for this app_id skips outright too - no implicit fallback either way.
+    Source is explicit in --game-dir's value, never inferred: a local path,
+    or an explicit "r2://<bucket>/<prefix>" (see
+    tests.mtfw.r2_config.resolve_r2_source for the R2/CI details). No
+    --game-dir for this app_id skips outright.
 
     Scanning + flattening a full local game install's tree can take a while
     (a real RE5 install has ~1200 archives) - that cost is paid once per

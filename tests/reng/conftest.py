@@ -28,21 +28,13 @@ def _reen_game_dirs(pytestconfig):
 
 def _resolve_path_list(path_list_source, game_r2_kwargs):
     """A real local path for path_list_source - downloaded from R2 to a
-    temp file first if it starts with "r2://", e.g.
-    "r2://RE3Z_RT_STM_Release.list" (the key it was uploaded under, relative
-    to the game root's own R2 bucket/prefix - explicit, not a fixed/assumed
-    filename, since there's no single real-world naming convention for
-    these community-published lists to rely on). Path-lists are small (a
-    few MB): a plain full GET, not the Range-request machinery
-    PakFS.from_s3/ReenFS.from_s3 use for the (possibly tens-of-GB) pak
-    itself.
+    temp file if it starts with "r2://<key>" (a plain full GET, not
+    Range requests - path-lists are only a few MB).
 
     game_r2_kwargs is the game root's own already-resolved R2 bucket/
-    prefix/credentials (see resolve_r2_source) - reused as-is for the
-    path-list too, since a key is only meaningful relative to a specific
-    bucket/prefix. If the game root wasn't R2-sourced at all (None here),
-    an "r2://" path-list source can't resolve either - r2:// is always
-    explicit now, there's no env-derived bucket to fall back to.
+    prefix/credentials (see resolve_r2_source), reused as-is: a key is
+    only meaningful relative to a specific bucket/prefix, and there's no
+    env-derived fallback if the game root wasn't R2-sourced (None here).
 
     Returns None if unresolvable - callers should skip.
     """
@@ -78,18 +70,13 @@ def _resolve_path_list(path_list_source, game_r2_kwargs):
 def pak_fs_root(pytestconfig, local_app_id):
     """
     Builds (once per session, cached) a ReenFS for local_app_id - the same
-    mechanism "Add Folder" uses in the UI for a whole RE Engine install -
-    from --game-dir=<app-id>::<game-root>::<path-list-source>: the same
-    --game-dir option MTFW uses (tests/conftest.py), extended with reng's
-    required third segment. <game-root> is either a local path or an
-    explicit "r2://<bucket>/<prefix>" value (see
-    tests.mtfw.r2_config.resolve_r2_source - no bare "r2://" anymore);
-    <path-list-source> is either a local path or "r2://<key>" - the key it
-    was uploaded under, resolved against the game root's own R2
-    bucket/prefix, which means path-list r2:// only works when the game
-    root is R2-sourced too (see _resolve_path_list). Any combination
-    otherwise works (e.g. pak from R2, path-list local, or vice versa).
-    Skips cleanly when no --game-dir was given for this app_id, the third
+    mechanism "Add Folder" uses in the UI - from
+    --game-dir=<app-id>::<game-root>::<path-list-source> (reng's required
+    third segment on top of MTFW's --game-dir). Each of <game-root>/
+    <path-list-source> is a local path or "r2://..." (see
+    tests.mtfw.r2_config.resolve_r2_source and _resolve_path_list for the
+    R2 details - path-list r2:// only works when the game root is
+    R2-sourced too). Skips cleanly when no --game-dir was given, the third
     segment is missing, or anything fails to resolve.
     """
     from albam.engines.reng.pak_fs import ReenFS
