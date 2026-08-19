@@ -16,6 +16,12 @@ dependencies = [
   # unconditionally (mtfw's VFS reads go through it), so it's a hard
   # dependency, not just for the optional S3/R2-backed path below.
   "fs",
+  # `fs` (last released 2021, unmaintained) unconditionally does
+  # `pkg_resources.declare_namespace(...)` at import time - setuptools 81+
+  # removed pkg_resources entirely, breaking `import fs` outright (confirmed:
+  # ModuleNotFoundError: No module named 'pkg_resources'). No newer `fs`
+  # release exists to fix this on their side, so pin setuptools here instead.
+  "setuptools<81",
 ]
 
 [project.optional-dependencies]
