@@ -24,6 +24,7 @@ from kaitaistruct import KaitaiStream
 
 from . import FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
+from ...lib.s3 import build_s3_client, s3_opener
 
 
 def _entry_path(file_entry):
@@ -179,35 +180,6 @@ def find_arc_keys_s3(client, bucket, prefix=""):
             key = obj["Key"]
             if key.lower().endswith(".arc"):
                 yield key
-
-
-def _s3_opener(client, bucket, range_chunk_size=1024 * 1024):
-    """Build an ArcFS `opener` backed by an S3-compatible bucket (R2 too -
-    just point `client` at R2's endpoint, see MTFW_FS.from_s3). Uses
-    smart_open so seek()/read() become bounded HTTP Range requests instead
-    of downloading the whole archive; `defer_seek=True` avoids a request
-    until the first read.
-
-    range_chunk_size matters: smart_open's default issues an *open-ended*
-    Range request (`bytes=N-`), so reading 8 bytes from a 40MB archive would
-    otherwise fetch the full remaining 40MB (confirmed against real fixture
-    files). 1MiB keeps a typical header+file-table in one request while
-    keeping a single compressed entry's read to a handful of bounded ones.
-    """
-    import smart_open
-
-    def opener(key):
-        return smart_open.open(
-            f"s3://{bucket}/{key}",
-            "rb",
-            transport_params={
-                "client": client,
-                "defer_seek": True,
-                "range_chunk_size": range_chunk_size,
-            },
-        )
-
-    return opener
 
 
 class S3LooseFS(FS):
@@ -423,25 +395,12 @@ class MTFW_FS(MultiFS):
         exposed path itself (not inside the Archive/ prefix) to shadow the
         packed copy.
         """
-        import boto3
-        from botocore.config import Config
-
-        client = boto3.client(
-            "s3",
+        client = build_s3_client(
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
             aws_session_token=aws_session_token,
             endpoint_url=endpoint_url,
             region_name=region_name,
-            # botocore >=1.36 defaults to sending flexible-checksum headers
-            # (e.g. x-amz-checksum-crc32) on S3 requests - a documented
-            # source of SignatureDoesNotMatch against non-AWS S3-compatible
-            # providers like R2, which don't handle them the same way AWS
-            # does. Opting back out to the pre-1.36 behavior.
-            config=Config(
-                request_checksum_calculation="when_required",
-                response_checksum_validation="when_required",
-            ),
         )
 
         self = cls.__new__(cls)
@@ -454,7 +413,7 @@ class MTFW_FS(MultiFS):
         # sentinel, not a real path os.path.relpath could use meaningfully).
         self._s3_prefix = prefix.strip("/")
 
-        opener = _s3_opener(client, bucket)
+        opener = s3_opener(client, bucket)
         arc_specs = ((key, opener) for key in sorted(find_arc_keys_s3(client, bucket, prefix)))
         self._load_arcs(arc_specs)
 
