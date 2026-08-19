@@ -46,7 +46,7 @@ class ArcFS(FS):
     """
 
     _meta = {
-        "case_insensitive": False,  # TODO: arc paths are effectively case-insensitive
+        "case_insensitive": False,
         "network": False,
         "read_only": True,
         "supports_rename": False,
