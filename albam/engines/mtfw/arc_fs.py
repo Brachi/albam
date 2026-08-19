@@ -1,14 +1,13 @@
 """
-Prototype: PyFilesystem2 adapter for MTFramework .arc archives.
+PyFilesystem2 adapter for MTFramework .arc archives.
 
-An .arc is a flat, zip-like container (see structs/arc.ksy): a header followed
-by fixed-size file entries (path, type-hash, sizes, offset), each pointing to
-a zlib-compressed blob later in the file. `ArcFS` exposes a single .arc as a
-read-only PyFilesystem2 filesystem; `MTFW_FS` represents one game install:
-given the game's root folder, it finds every .arc recursively and overlays
-them - plus the loose files sitting directly on disk - into a single `MultiFS`,
-so callers can ask for a relative path without knowing which archive (or
-whether an unpacked/modded loose file) it actually comes from.
+An .arc is a flat, zip-like container (see structs/arc.ksy): a header
+followed by fixed-size file entries (path, type-hash, sizes, offset), each
+pointing to a zlib-compressed blob later in the file. `ArcFS` exposes a
+single .arc as a read-only PyFilesystem2 filesystem; `MTFW_FS` overlays every
+.arc under a game root - plus its loose files - into one `MultiFS`, so
+callers can ask for a relative path without knowing which archive (or loose
+file) it comes from.
 """
 import os
 import zlib
@@ -40,10 +39,10 @@ def _local_opener(path):
 class ArcFS(FS):
     """Read-only PyFilesystem2 view of a single .arc file.
 
-    `arc_path` is just an opaque identifier passed to `opener(arc_path)` to
-    get a seekable, readable file-like object - it doesn't have to be a local
-    filesystem path. Defaults to plain `open()`, so local usage is unchanged;
-    `MTFW_FS.from_s3()` passes an S3/R2-backed opener instead (see there).
+    `arc_path` is an opaque identifier passed to `opener(arc_path)` to get a
+    seekable, readable file-like object - not necessarily a local path.
+    Defaults to plain `open()`; `MTFW_FS.from_s3()` passes an S3/R2-backed
+    opener instead.
     """
 
     _meta = {
@@ -61,14 +60,11 @@ class ArcFS(FS):
         self.arc_path = str(arc_path)
         self._opener = opener or _local_opener
 
-        # entries indexed the same way they're exposed as paths, so getinfo/
-        # openbin don't need to recompute _entry_path or re-scan file_entries.
-        # Only the plain fields read below (offset/zsize/size) are kept -
-        # openbin() re-opens/re-fetches per read (see there) rather than
-        # holding a persistent handle. Locally that avoids exhausting the
-        # process's file descriptor limit when a game install layers ~1200 of
-        # these at once; over S3/R2 it means __init__ only ever fetches the
-        # small header+table region, never the whole (possibly huge) archive.
+        # entries indexed by their exposed path, so getinfo/openbin don't
+        # rescan file_entries. openbin() re-opens/re-fetches per read rather
+        # than holding a persistent handle - avoids exhausting fd limits
+        # locally (~1200 arcs in a full game install) and, over S3/R2, keeps
+        # __init__ to just the small header+table region.
         f = self._opener(self.arc_path)
         try:
             arc = Arc(KaitaiStream(f))
@@ -146,13 +142,12 @@ def _BytesFile(data):
 
 def origin_arc_path(fs_instance, path):
     """Which .arc `path` resolves to under `fs_instance`, or None if it's a
-    loose/real file (or `fs_instance` doesn't track archive origins at all).
+    loose/real file (or `fs_instance` doesn't track archive origins).
 
-    `ArcFS` always resolves to its own single arc; `MTFW_FS` may overlay many,
-    so it defers to its own `origin_of()`. Used by callers (e.g. Pack/Patch)
-    that need to write back into the specific archive a file came from,
-    without caring whether the VFS root behind it was a single `.arc` or a
-    whole recursively-scanned game folder.
+    `ArcFS` always resolves to its own single arc; `MTFW_FS` defers to its
+    own `origin_of()`. Lets callers (e.g. Pack/Patch) write back into the
+    right archive without caring whether the VFS root was a single `.arc` or
+    a whole game folder.
     """
     if isinstance(fs_instance, MTFW_FS):
         return fs_instance.origin_of(path)
@@ -185,23 +180,17 @@ def find_arc_keys_s3(client, bucket, prefix=""):
 
 
 def _s3_opener(client, bucket, range_chunk_size=1024 * 1024):
-    """Build an ArcFS `opener` backed by an S3-compatible bucket (R2 works
-    here too - just point `client` at R2's endpoint, see MTFW_FS.from_s3).
-    Uses smart_open so seek()/read() become real HTTP Range requests instead
-    of downloading the whole (possibly huge) archive: `defer_seek=True` means
-    opening the file doesn't even issue a request until the first read.
+    """Build an ArcFS `opener` backed by an S3-compatible bucket (R2 too -
+    just point `client` at R2's endpoint, see MTFW_FS.from_s3). Uses
+    smart_open so seek()/read() become bounded HTTP Range requests instead
+    of downloading the whole archive; `defer_seek=True` avoids a request
+    until the first read.
 
-    range_chunk_size matters more than it looks: smart_open's default
-    (`None`) issues an *open-ended* Range request (`bytes=N-`) whose
-    Content-Length covers everything from N to EOF - i.e. reading 8 bytes
-    from the start of a 40MB archive asks the server for the full remaining
-    40MB (confirmed against real fixture .arc files, not just guessed).
-    Setting range_chunk_size bounds every underlying GET to that span;
-    reads larger than one chunk transparently issue more (still bounded)
-    requests. 1MiB is a reasonable default for this format - large enough
-    that a typical archive's whole header+file-table fits in one request,
-    small enough that reading one compressed entry only costs a handful of
-    requests instead of one that could be tens of MB.
+    range_chunk_size matters: smart_open's default issues an *open-ended*
+    Range request (`bytes=N-`), so reading 8 bytes from a 40MB archive would
+    otherwise fetch the full remaining 40MB (confirmed against real fixture
+    files). 1MiB keeps a typical header+file-table in one request while
+    keeping a single compressed entry's read to a handful of bounded ones.
     """
     import smart_open
 
@@ -224,22 +213,16 @@ class S3LooseFS(FS):
     local OSFS(game_root) layer, reusing the same boto3 `client` as the arc
     layer (no separate credentials needed, unlike fs_s3fs.S3FS).
 
-    Deliberately matches local MTFW_FS behavior in one easy-to-miss way:
-    .arc keys are NOT filtered out here. A game install's .arc files remain
-    reachable as raw whole blobs at their own key, same as they are locally
-    through OSFS - alongside, and independent from, their unpacked content
-    exposed through the arc layer at completely different paths. This is
-    harmless (the two views never collide - see MTFW_FS.from_s3's docstring
-    for why) and is what makes e.g. re-uploading/backing up an archive
-    unchanged possible through this same filesystem.
+    Matches local MTFW_FS behavior in one easy-to-miss way: .arc keys are
+    NOT filtered out here, so they stay reachable as raw blobs at their own
+    key alongside their unpacked content exposed through the arc layer -
+    harmless since the two views never collide (see MTFW_FS.from_s3).
 
-    Reads fetch whole objects, not ranges - unlike ArcFS, a loose file's
-    entire content is needed anyway, there's no "one entry out of a huge
-    archive" situation to be careful about.
+    Reads fetch whole objects, not ranges - a loose file's entire content is
+    needed anyway, unlike one entry out of a huge archive.
 
-    Assumes a plain folder-sync-style bucket (a straight upload/mirror of a
-    real directory tree): "directories" are inferred purely from key
-    prefixes via list_objects_v2's Delimiter, not from explicit zero-byte
+    Assumes a plain folder-sync-style bucket: "directories" come from key
+    prefixes via list_objects_v2's Delimiter, not explicit zero-byte
     directory-marker objects some other S3 tooling creates.
     """
 
@@ -403,9 +386,9 @@ class MTFW_FS(MultiFS):
         include_loose=True,
     ):
         """Alternate constructor: source .arc files from an S3-compatible
-        bucket instead of a local game install - tested against a mocked S3
-        (moto); works against Cloudflare R2 as-is, just pass R2's
-        account-specific endpoint_url and an R2 API token as access key/secret:
+        bucket instead of a local game install. Works against Cloudflare R2
+        as-is - pass R2's account-specific endpoint_url and an R2 API token
+        as access key/secret:
 
             game_fs = MTFW_FS.from_s3(
                 bucket="my-bucket",
@@ -414,45 +397,29 @@ class MTFW_FS(MultiFS):
                 aws_secret_access_key=...,
             )
 
-        Credential params default to None/"auto" and are forwarded straight
-        to boto3.client("s3", ...) - leave them unset to fall back to
-        boto3's normal credential resolution (env vars, ~/.aws/credentials,
-        etc.) instead of passing secrets explicitly. One client gets built
-        internally and reused for both the arc layer and (when enabled) the
-        loose layer, so there's only one place credentials are handled.
+        Credential params forward straight to boto3.client("s3", ...) -
+        leave unset to fall back to boto3's normal credential resolution.
+        One client is built internally and reused for both the arc and
+        loose layers.
 
-        Reads are real HTTP Range requests (via smart_open) - constructing
-        this and reading individual files never downloads a whole .arc.
+        Reads are real HTTP Range requests (via smart_open) - never a full
+        .arc download.
 
-        IMPORTANT: `prefix` must be the game *root*, not the folder your
-        .arc files happen to live in. It's used both to find arcs (recursive
-        key listing, like local find_arc_files()/os.walk - arcs nested a few
-        levels down under `prefix`, e.g. "nativePC_MT/Image/Archive/*.arc",
-        are found fine) and, when `include_loose` is on, as the root loose
-        file paths are resolved relative to. Narrowing `prefix` down to just
-        the archive folder (an easy mistake - it looks like a reasonable
-        "scope arc discovery tighter" optimization) silently breaks loose
-        resolution instead: every loose lookup gets `prefix` prepended twice
-        or resolves under the wrong root and just won't be found. If your
-        bucket mirrors the whole game root exactly, `prefix=""` is what you
-        want, exactly like `game_root` locally.
-
-        Separately: the paths MTFW_FS *exposes* for content inside an arc
-        (e.g. "/pawn/pl/pl00/model/pl0000.mod") come entirely from the arc's
-        own internal file table - nothing to do with the arc's own key or
-        `prefix` at all.
+        IMPORTANT: `prefix` must be the game *root*, not the archive folder.
+        It's used both to find arcs (recursive key listing, so arcs nested
+        under `prefix` are found fine) and, when `include_loose` is on, as
+        the root loose paths resolve relative to - narrowing it to just the
+        archive folder silently breaks loose resolution. `prefix=""` if
+        your bucket mirrors the whole game root, same as `game_root`
+        locally. The paths MTFW_FS exposes for arc content come entirely
+        from the arc's own internal file table, independent of `prefix`.
 
         `include_loose=True` (default) layers an S3LooseFS over `bucket`/
-        `prefix` on top, with the same highest-priority-wins semantics the
-        local OSFS layer has - assumes the bucket mirrors a real game root
-        exactly (see S3LooseFS's docstring for what that assumes away: no
-        explicit directory-marker objects, and everything under `prefix`,
-        including .arc files themselves, is legitimately part of the game
-        data). Uses the same internally-built client as the arc layer, so
-        no separate credentials are needed for it. An unpacked/override
-        loose file needs its own key equal to the exposed path itself (e.g.
-        a key literally named "pawn/pl/pl00/model/pl0000.mod", not inside
-        the Archive/ prefix) to actually shadow the packed copy of that path.
+        `prefix`, same highest-priority-wins semantics as the local OSFS
+        layer (see S3LooseFS's docstring for what it assumes about the
+        bucket). An override loose file needs its own key equal to the
+        exposed path itself (not inside the Archive/ prefix) to shadow the
+        packed copy.
         """
         import boto3
 
@@ -500,13 +467,11 @@ class MTFW_FS(MultiFS):
     def _ensure_index(self):
         """Build a flat path->owner index plus a directory-topology-only
         MemoryFS, on first use. MultiFS's own listdir/scandir ask every
-        layered filesystem per directory it visits - O(directories x
+        layered filesystem per directory visited - O(directories x
         filesystems), ~9.5M calls / ~70s for a full RE5 walk over ~1200
-        archives. This replaces that with one upfront O(total entries) pass
-        (a few seconds) and O(1) lookups after, for listdir/scandir/walk only.
-        Point lookups (openbin/getinfo on a known path) already go through
-        MultiFS's own _delegate and stay fast without this, so they don't
-        trigger it.
+        archives. Replaced with one upfront O(total entries) pass and O(1)
+        lookups after, for listdir/scandir/walk only - point lookups already
+        go through MultiFS's own _delegate and stay fast without this.
         """
         if self._owner is not None:
             return
@@ -547,10 +512,10 @@ class MTFW_FS(MultiFS):
 
     def origin_of(self, path):
         """The .arc path `path` resolves to, or None if it's a loose/real
-        file (or doesn't resolve at all). Uses the lazy index (O(1)) if it's
-        already been built by a prior listdir/scandir/walk call; otherwise
-        falls back to MultiFS.which()'s linear scan rather than forcing the
-        index build itself, keeping point lookups index-free.
+        file. Uses the lazy index (O(1)) if already built by a prior
+        listdir/scandir/walk; otherwise falls back to MultiFS.which()'s
+        linear scan rather than forcing an index build, keeping point
+        lookups index-free.
         """
         self.check()
         _path = self.validatepath(path)
