@@ -14,14 +14,16 @@ _GAME_FS_INSTANCES = {}
 
 
 def _game_dirs(pytestconfig):
-    # Already validated (well-formed "<app-id>::<value>", once, at startup)
-    # by tests/conftest.py's pytest_configure - see there. <value> is either
-    # a local directory path, or the literal "r2://" sentinel selecting the
-    # R2 backend explicitly (see tests.mtfw.r2_config.r2_kwargs_for_app) -
-    # never inferred from whether a local path happens to exist.
+    # Already validated (well-formed "<app-id>::<value>[::<extra>]", once, at
+    # startup) by tests/conftest.py's pytest_configure - see there. <value>
+    # is either a local directory path, or the literal "r2://" sentinel
+    # selecting the R2 backend explicitly (see
+    # tests.mtfw.r2_config.r2_kwargs_for_app) - never inferred from whether
+    # a local path happens to exist. A third segment is reng-only (its own
+    # path-list - see tests/reng/conftest.py) and simply ignored here.
     parsed = {}
     for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
-        app_id, value = app_id_and_dir.split("::")
+        app_id, value, *_reng_only = app_id_and_dir.split("::")
         parsed[app_id] = value
     return parsed
 

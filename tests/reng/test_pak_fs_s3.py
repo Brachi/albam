@@ -1,8 +1,9 @@
 """
-PakFS.from_s3() against a mocked S3 (moto) - no real bucket/credentials or
-real .pak needed to validate the mechanism. Real Cloudflare R2 usage differs
-only in which endpoint_url/credentials get passed to from_s3() (see its
-docstring, and albam.lib.s3 which it shares with MTFW_FS.from_s3).
+PakFS.from_s3() and ReenFS.from_s3() against a mocked S3 (moto) - no real
+bucket/credentials or real .pak needed to validate the mechanism. Real
+Cloudflare R2 usage differs only in which endpoint_url/credentials get
+passed to from_s3() (see its docstring, and albam.lib.s3 which it shares
+with MTFW_FS.from_s3).
 
 Fixture pak bytes are built synthetically (see _build_pak_bytes) rather than
 read from a local file: tests/data/ is deliberately gitignored (never
@@ -26,7 +27,7 @@ pytest.importorskip("smart_open")
 
 from moto import mock_aws  # noqa: E402
 
-from albam.engines.reng.pak_fs import PakFS, HASH_SEED  # noqa: E402
+from albam.engines.reng.pak_fs import PakFS, ReenFS, HASH_SEED  # noqa: E402
 
 import pymmh3 as mmh3  # noqa: E402
 
@@ -179,3 +180,77 @@ def test_from_s3_read_matches_local_reference(get_object_calls, path_list_file):
     assert all(_range and not _range.endswith("-") for _range, _ in get_object_calls)
     fetched = sum(cl for _r, cl in get_object_calls)
     assert fetched < len(FIXTURE_PAK_BYTES)
+
+
+# --- ReenFS.from_s3() -------------------------------------------------
+
+REEN_PREFIX = "re3"
+REEN_BASE_KEY = f"{REEN_PREFIX}/re_chunk_000.pak"
+REEN_PATCH_KEY = f"{REEN_PREFIX}/re_chunk_000.pak.patch_001.pak"
+REEN_LOOSE_KEY = f"{REEN_PREFIX}/re3_config.ini"
+
+OVERLAP_PATH = SAMPLE_PATH  # present in both base and patch, different content
+# BASE_ONLY_CONTENT reuses SAMPLE_CONTENT (deliberately >1MiB, see its own
+# comment above) so the construction-doesn't-download-bulk-data test below
+# has a meaningful size to compare against - a tiny placeholder here would
+# make that assertion pass for the wrong reason, same lesson as PakFS's own
+# from-s3 test.
+BASE_ONLY_CONTENT = SAMPLE_CONTENT
+PATCH_OVERLAP_CONTENT = b"MESH-PATCHED-VERSION"
+LOOSE_CONTENT = b"[Render]\nMainMenu=False\n"
+
+REEN_BASE_PAK_BYTES = _build_pak_bytes([(OVERLAP_PATH, BASE_ONLY_CONTENT), (OTHER_PATH, OTHER_CONTENT)])
+REEN_PATCH_PAK_BYTES = _build_pak_bytes([(OVERLAP_PATH, PATCH_OVERLAP_CONTENT)])
+
+
+@pytest.fixture
+def reen_s3_client():
+    with mock_aws():
+        client = boto3.client("s3", region_name="us-east-1")
+        client.create_bucket(Bucket=BUCKET)
+        client.put_object(Bucket=BUCKET, Key=REEN_BASE_KEY, Body=REEN_BASE_PAK_BYTES)
+        client.put_object(Bucket=BUCKET, Key=REEN_PATCH_KEY, Body=REEN_PATCH_PAK_BYTES)
+        client.put_object(Bucket=BUCKET, Key=REEN_LOOSE_KEY, Body=LOOSE_CONTENT)
+        yield client
+
+
+def _reen_from_s3(path_list_file, **kwargs):
+    kwargs = {**DUMMY_CREDS, **kwargs}
+    return ReenFS.from_s3(bucket=BUCKET, prefix=REEN_PREFIX, path_list_path=path_list_file, **kwargs)
+
+
+def test_reen_from_s3_patch_wins_over_base(reen_s3_client, path_list_file):
+    reen_fs = _reen_from_s3(path_list_file)
+    assert reen_fs.readbytes("/" + OVERLAP_PATH) == PATCH_OVERLAP_CONTENT
+    name, _owner = reen_fs.which("/" + OVERLAP_PATH)
+    assert name == REEN_PATCH_KEY
+
+
+def test_reen_from_s3_falls_through_to_base_for_base_only_path(reen_s3_client, path_list_file):
+    reen_fs = _reen_from_s3(path_list_file)
+    assert reen_fs.readbytes("/" + OTHER_PATH) == OTHER_CONTENT
+    name, _owner = reen_fs.which("/" + OTHER_PATH)
+    assert name == REEN_BASE_KEY
+
+
+def test_reen_from_s3_includes_loose_layer_by_default(reen_s3_client, path_list_file):
+    reen_fs = _reen_from_s3(path_list_file)
+    assert reen_fs.readbytes("/re3_config.ini") == LOOSE_CONTENT
+
+
+def test_reen_from_s3_include_loose_false_disables_loose_layer(reen_s3_client, path_list_file):
+    reen_fs = _reen_from_s3(path_list_file, include_loose=False)
+    assert not reen_fs.exists("/re3_config.ini")
+
+
+def test_reen_from_s3_construction_does_not_download_whole_paks(
+    get_object_calls, path_list_file, reen_s3_client
+):
+    _reen_from_s3(path_list_file)
+
+    # bounded by header+table size across both pak layers, never by content -
+    # comparing against BASE_ONLY_CONTENT's size (not the whole fixture),
+    # same reasoning as PakFS's own equivalent test.
+    total_fetched = sum(content_length for _range, content_length in get_object_calls)
+    assert total_fetched < len(BASE_ONLY_CONTENT)
+    assert all(_range and not _range.endswith("-") for _range, _ in get_object_calls)

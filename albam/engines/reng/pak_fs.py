@@ -37,7 +37,7 @@ from fs.path import dirname
 from kaitaistruct import KaitaiStream
 
 from .structs.pak import Pak
-from ...lib.s3 import build_s3_client, s3_opener
+from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 HEADER_SIZE = 16
 NUM_FILES_OFFSET = 8
@@ -241,6 +241,37 @@ def find_pak_files(game_root, pak_stem="re_chunk_000.pak"):
     return paths
 
 
+def find_pak_keys_s3(client, bucket, prefix, pak_stem):
+    """S3/R2 equivalent of find_pak_files(): a non-recursive (Delimiter="/")
+    key listing directly under `prefix` - RE Engine's own patches sit right
+    in the install root, not nested, matching find_pak_files()'s local
+    non-recursive os.listdir(). Returns keys in the same ascending-priority
+    order find_pak_files() does (base first, highest patch number last).
+    """
+    prefix = prefix.strip("/")
+    key_prefix = f"{prefix}/" if prefix else ""
+    base_key = f"{key_prefix}{pak_stem}"
+
+    found_base = False
+    patches = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=key_prefix, Delimiter="/"):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key == base_key:
+                found_base = True
+                continue
+            name = key[len(key_prefix):]
+            match = PATCH_PAK_RE.match(name)
+            if match and match.group(1).lower() == pak_stem.lower():
+                patches.append((int(match.group(2)), key))
+    patches.sort(key=lambda entry: entry[0])
+
+    keys = ([base_key] if found_base else [])
+    keys.extend(key for _patch_num, key in patches)
+    return keys
+
+
 class ReenFS(MultiFS):
     """One RE Engine game install: `pak_stem` (default "re_chunk_000.pak")
     plus every `<pak_stem>.patch_NNN.pak` sibling found directly under
@@ -275,3 +306,61 @@ class ReenFS(MultiFS):
         # added last -> highest default priority, same convention as
         # MTFW_FS's own loose OSFS layer
         self.add_fs("<loose>", OSFS(game_root))
+
+    @classmethod
+    def from_s3(
+        cls,
+        bucket,
+        prefix="",
+        *,
+        path_list_path,
+        aws_access_key_id=None,
+        aws_secret_access_key=None,
+        aws_session_token=None,
+        endpoint_url=None,
+        region_name="auto",
+        pak_stem="re_chunk_000.pak",
+        auto_close=True,
+        include_loose=True,
+    ):
+        """Alternate constructor: source a whole RE Engine install from an
+        S3-compatible bucket (R2 works as-is, just pass R2's
+        account-specific endpoint_url and an R2 API token as access
+        key/secret) instead of a local game root - same pak-patch discovery
+        and highest-patch-first layering as __init__, just against S3 key
+        listing (find_pak_keys_s3) instead of os.listdir (find_pak_files).
+
+        path_list_path is required and keyword-only (Python syntax: prefix
+        already has a default) - it still always reads from a real local
+        file regardless of where the .pak layers come from, same as
+        PakFS.from_s3 (see its docstring for why: a small, few-MB file,
+        not worth the network-streaming complexity the possibly-tens-of-GB
+        .pak itself needs).
+
+        include_loose=True (default) layers an S3LooseFS over bucket/prefix
+        on top, same as MTFW_FS.from_s3 - shares the internally-built
+        client, so no separate credentials are needed for it.
+        """
+        client = build_s3_client(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_session_token=aws_session_token,
+            endpoint_url=endpoint_url,
+            region_name=region_name,
+        )
+
+        self = cls.__new__(cls)
+        MultiFS.__init__(self, auto_close=auto_close)
+        self.game_root = f"s3://{bucket}/{prefix}"
+
+        opener = s3_opener(client, bucket)
+        pak_keys = find_pak_keys_s3(client, bucket, prefix, pak_stem)
+        if not pak_keys:
+            raise CreateFailed(f"no {pak_stem!r} (or patches) found under s3://{bucket}/{prefix}")
+        for pak_key in pak_keys:
+            self.add_fs(pak_key, PakFS(pak_key, path_list_path, opener=opener))
+
+        if include_loose:
+            # added last -> highest default priority, same convention as __init__
+            self.add_fs("<loose>", S3LooseFS(client, bucket, prefix))
+        return self

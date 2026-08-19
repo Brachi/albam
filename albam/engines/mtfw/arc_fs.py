@@ -14,17 +14,17 @@ import zlib
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import CreateFailed, DirectoryExpected, ResourceNotFound, ResourceReadOnly
+from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import basename, dirname, join
+from fs.path import dirname, join
 from kaitaistruct import KaitaiStream
 
 from . import FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
-from ...lib.s3 import build_s3_client, s3_opener
+from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 
 def _entry_path(file_entry):
@@ -180,140 +180,6 @@ def find_arc_keys_s3(client, bucket, prefix=""):
             key = obj["Key"]
             if key.lower().endswith(".arc"):
                 yield key
-
-
-class S3LooseFS(FS):
-    """Loose-file layer for MTFW_FS.from_s3 - the remote equivalent of the
-    local OSFS(game_root) layer, reusing the same boto3 `client` as the arc
-    layer (no separate credentials needed, unlike fs_s3fs.S3FS).
-
-    Matches local MTFW_FS behavior in one easy-to-miss way: .arc keys are
-    NOT filtered out here, so they stay reachable as raw blobs at their own
-    key alongside their unpacked content exposed through the arc layer -
-    harmless since the two views never collide (see MTFW_FS.from_s3).
-
-    Reads fetch whole objects, not ranges - a loose file's entire content is
-    needed anyway, unlike one entry out of a huge archive.
-
-    Assumes a plain folder-sync-style bucket: "directories" come from key
-    prefixes via list_objects_v2's Delimiter, not explicit zero-byte
-    directory-marker objects some other S3 tooling creates.
-    """
-
-    _meta = {
-        "case_insensitive": False,
-        "network": True,
-        "read_only": True,
-        "supports_rename": False,
-        "thread_safe": True,
-        "unicode_paths": True,
-        "virtual": False,
-    }
-
-    def __init__(self, client, bucket, prefix=""):
-        super().__init__()
-        self.client = client
-        self.bucket = bucket
-        self.prefix = prefix.strip("/")
-
-    def __repr__(self):
-        return f"S3LooseFS({self.bucket!r}, prefix={self.prefix!r})"
-
-    def _key(self, path):
-        _path = self.validatepath(path).strip("/")
-        if self.prefix:
-            return f"{self.prefix}/{_path}" if _path else self.prefix
-        return _path
-
-    def getinfo(self, path, namespaces=None):
-        self.check()
-        _path = self.validatepath(path)
-        namespaces = namespaces or ()
-
-        if _path == "/":
-            return Info({"basic": {"name": "", "is_dir": True}})
-
-        key = self._key(_path)
-        try:
-            head = self.client.head_object(Bucket=self.bucket, Key=key)
-        except Exception:
-            head = None
-
-        if head is not None:
-            raw_info = {"basic": {"name": basename(_path), "is_dir": False}}
-            if "details" in namespaces:
-                raw_info["details"] = {"type": int(ResourceType.file), "size": head["ContentLength"]}
-            return Info(raw_info)
-
-        # not a real object at this exact key - does anything live "under" it?
-        resp = self.client.list_objects_v2(Bucket=self.bucket, Prefix=key + "/", MaxKeys=1)
-        if resp.get("KeyCount", 0) > 0:
-            raw_info = {"basic": {"name": basename(_path), "is_dir": True}}
-            if "details" in namespaces:
-                raw_info["details"] = {"type": int(ResourceType.directory), "size": 0}
-            return Info(raw_info)
-
-        raise ResourceNotFound(path)
-
-    def listdir(self, path):
-        return [info.name for info in self.scandir(path)]
-
-    def scandir(self, path, namespaces=None, page=None):
-        self.check()
-        _path = self.validatepath(path)
-        namespaces = namespaces or ()
-
-        if not self.getinfo(_path).is_dir:
-            raise DirectoryExpected(path)
-
-        key_prefix = self._key(_path)
-        if key_prefix and not key_prefix.endswith("/"):
-            key_prefix += "/"
-
-        entries = []
-        paginator = self.client.get_paginator("list_objects_v2")
-        for result in paginator.paginate(Bucket=self.bucket, Prefix=key_prefix, Delimiter="/"):
-            for common_prefix in result.get("CommonPrefixes", ()):
-                name = common_prefix["Prefix"][len(key_prefix):].rstrip("/")
-                if name:
-                    entries.append(Info({"basic": {"name": name, "is_dir": True}}))
-            for obj in result.get("Contents", ()):
-                name = obj["Key"][len(key_prefix):]
-                if name:
-                    raw_info = {"basic": {"name": name, "is_dir": False}}
-                    if "details" in namespaces:
-                        raw_info["details"] = {"type": int(ResourceType.file), "size": obj["Size"]}
-                    entries.append(Info(raw_info))
-
-        if page is not None:
-            start, end = page
-            entries = entries[start:end]
-        return iter(entries)
-
-    def openbin(self, path, mode="r", buffering=-1, **options):
-        self.check()
-        if "w" in mode or "+" in mode or "a" in mode:
-            raise ResourceReadOnly(path)
-
-        _path = self.validatepath(path)
-        key = self._key(_path)
-        try:
-            response = self.client.get_object(Bucket=self.bucket, Key=key)
-        except Exception:
-            raise ResourceNotFound(path)
-        return _BytesFile(response["Body"].read())
-
-    def makedir(self, path, permissions=None, recreate=False):
-        raise ResourceReadOnly(path)
-
-    def remove(self, path):
-        raise ResourceReadOnly(path)
-
-    def removedir(self, path):
-        raise ResourceReadOnly(path)
-
-    def setinfo(self, path, info):
-        raise ResourceReadOnly(path)
 
 
 class MTFW_FS(MultiFS):
