@@ -87,6 +87,12 @@ def resolve_r2_source(value):
     assert value.startswith(R2_PROTOCOL_PREFIX)
     suffix = value[len(R2_PROTOCOL_PREFIX):]
     bucket, _sep, prefix = suffix.partition("/")
+    # .strip(): same trailing-newline-in-a-secret defense as r2_credentials -
+    # belt and suspenders on top of the CI-side stripping (see
+    # .github/workflows/tests.yml), in case bucket ever reaches here
+    # unstripped from some other caller.
+    bucket = bucket.strip()
+    prefix = prefix.strip()
     if not bucket:
         return None
 
