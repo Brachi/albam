@@ -43,9 +43,11 @@ s3 = [
 ]
 
 # albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
-# of a default install): BC7 DDS texture decode for .tex import.
+# of a default install): bc7enc-py for BC7 DDS texture decode (.tex
+# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries.
 reen = [
   "bc7enc-py==0.1.0a1",
+  "zstd==1.5.7.2",
 ]
 
 [build-system]
