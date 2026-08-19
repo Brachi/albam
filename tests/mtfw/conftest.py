@@ -16,11 +16,11 @@ _GAME_FS_INSTANCES = {}
 def _game_dirs(pytestconfig):
     # Already validated (well-formed "<app-id>::<value>[::<extra>]", once, at
     # startup) by tests/conftest.py's pytest_configure - see there. <value>
-    # is either a local directory path, or the literal "r2://" sentinel
-    # selecting the R2 backend explicitly (see
-    # tests.mtfw.r2_config.r2_kwargs_for_app) - never inferred from whether
-    # a local path happens to exist. A third segment is reng-only (its own
-    # path-list - see tests/reng/conftest.py) and simply ignored here.
+    # is either a local directory path, or an explicit
+    # "r2://<bucket>/<prefix>" value (see tests.mtfw.r2_config.resolve_r2_source)
+    # selecting the R2 backend - never inferred from whether a local path
+    # happens to exist. A third segment is reng-only (its own path-list -
+    # see tests/reng/conftest.py) and simply ignored here.
     parsed = {}
     for app_id_and_dir in pytestconfig.getoption("game_dir") or []:
         app_id, value, *_reng_only = app_id_and_dir.split("::")
@@ -38,31 +38,36 @@ def game_fs_root(pytestconfig, local_app_id):
     mounted into the VFS.
 
     The source is explicit in --game-dir's value, never inferred: a plain
-    path mounts a local install (skips if it doesn't exist); the literal
-    "r2://" mounts R2 instead, resolving bucket/prefix/credentials from env
-    vars (see tests.mtfw.r2_config.r2_kwargs_for_app - this is what lets CI
-    exercise these tests without a full local game install, passing
-    --game-dir=<app>::r2:// with credentials supplied separately via
-    secrets, never on the command line). No --game-dir at all for this
-    app_id skips outright - no implicit fallback either way.
+    path mounts a local install (skips if it doesn't exist); an explicit
+    "r2://<bucket>/<prefix>" mounts R2 instead - e.g.
+    --game-dir=re5::r2://albam/re5 (credentials always from env - see
+    tests.mtfw.r2_config.resolve_r2_source; there is no bare "r2://" that
+    derives bucket/prefix from env/app_id anymore). CI gets the same
+    explicitness by interpolating a secret directly into the workflow's
+    --game-dir value (${{ secrets.R2_BUCKET_NAME }}) rather than this
+    fixture reading a bucket name from env itself - an empty interpolated
+    bucket (secret not configured) resolves the same as any other
+    R2-unavailable case: skip cleanly, not a hard failure. No --game-dir at
+    all for this app_id skips outright too - no implicit fallback either way.
 
     Scanning + flattening a full local game install's tree can take a while
     (a real RE5 install has ~1200 archives) - that cost is paid once per
     app_id per session, not per test.
     """
     from albam.engines.mtfw.arc_fs import MTFW_FS
-    from tests.mtfw.r2_config import r2_kwargs_for_app
+    from tests.mtfw.r2_config import resolve_r2_source
 
     if local_app_id not in _GAME_FS_INSTANCES:
         value = _game_dirs(pytestconfig).get(local_app_id)
         if not value:
             pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
-        elif value == R2_PROTOCOL_PREFIX:
-            r2_kwargs = r2_kwargs_for_app(local_app_id)
+        elif value.startswith(R2_PROTOCOL_PREFIX):
+            r2_kwargs = resolve_r2_source(value)
             if r2_kwargs is None:
                 pytest.skip(
-                    f"--game-dir={local_app_id}::r2:// requested but R2 isn't configured "
-                    f"(missing s3 extras or credentials - see .env.example)"
+                    f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
+                    f"(empty bucket, missing s3 extras, or missing credentials - see "
+                    f".env.example)"
                 )
             game_fs = MTFW_FS.from_s3(**r2_kwargs)
         elif not os.path.isdir(value):

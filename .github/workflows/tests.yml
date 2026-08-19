@@ -32,17 +32,22 @@ jobs:
         flake8 . --count --show-source --statistics
     - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
       env:
-        # Credentials for --game-dir=<app>::r2:// below (see .env.example
-        # and tests/mtfw/r2_config.py). Resolve to empty strings until these
-        # secrets are added to the repo, which just keeps those tests
-        # skipping cleanly.
+        # Credentials for --game-dir=<app>::r2://<bucket>/<prefix> below
+        # (see .env.example and tests/mtfw/r2_config.py). Resolve to empty
+        # strings until these secrets are added to the repo, which just
+        # keeps those tests skipping cleanly. The bucket name itself is
+        # interpolated directly into --game-dir below
+        # (${{ secrets.R2_BUCKET_NAME }}) instead of read from an env var -
+        # r2:// is always explicit, there's no bare-r2://-derives-
+        # bucket-from-env fallback (a genuinely bare r2:// is a hard
+        # error; an empty interpolated bucket, like here when the secret
+        # isn't configured, still skips cleanly).
         R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
         R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
         R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
       run: |
         set +e
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2:// --game-dir=re1::r2://
+          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://${{ secrets.R2_BUCKET_NAME }}/re5 --game-dir=re1::r2://${{ secrets.R2_BUCKET_NAME }}/re1
         exitcode="$?"
         # Ignore segfault in bpy==4.1.0; there's no way around it yet.
         if  [ $exitcode == 139 ];then exitcode=0;
