@@ -141,16 +141,18 @@ def _BytesFile(data):
 
 
 def origin_arc_path(fs_instance, path):
-    """Which .arc `path` resolves to under `fs_instance`, or None if it's a
-    loose/real file (or `fs_instance` doesn't track archive origins).
+    """The real, directly-openable .arc path `path` resolves to under
+    `fs_instance`, or None if it's a loose/real file (or `fs_instance`
+    doesn't track archive origins).
 
     `ArcFS` always resolves to its own single arc; `MTFW_FS` defers to its
-    own `origin_of()`. Lets callers (e.g. Pack/Patch) write back into the
-    right archive without caring whether the VFS root was a single `.arc` or
-    a whole game folder.
+    own `origin_absolute_path()` (not `origin_of()`, which returns a
+    game-root-relative identity meant for display/hashing, not I/O). Lets
+    callers (e.g. Pack/Patch) write back into the right archive without
+    caring whether the VFS root was a single `.arc` or a whole game folder.
     """
     if isinstance(fs_instance, MTFW_FS):
-        return fs_instance.origin_of(path)
+        return fs_instance.origin_absolute_path(path)
     if isinstance(fs_instance, ArcFS):
         return fs_instance.arc_path
     return None
@@ -422,6 +424,7 @@ class MTFW_FS(MultiFS):
         packed copy.
         """
         import boto3
+        from botocore.config import Config
 
         client = boto3.client(
             "s3",
@@ -430,12 +433,26 @@ class MTFW_FS(MultiFS):
             aws_session_token=aws_session_token,
             endpoint_url=endpoint_url,
             region_name=region_name,
+            # botocore >=1.36 defaults to sending flexible-checksum headers
+            # (e.g. x-amz-checksum-crc32) on S3 requests - a documented
+            # source of SignatureDoesNotMatch against non-AWS S3-compatible
+            # providers like R2, which don't handle them the same way AWS
+            # does. Opting back out to the pre-1.36 behavior.
+            config=Config(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
         )
 
         self = cls.__new__(cls)
         MultiFS.__init__(self, auto_close=auto_close)
         self._init_common()
         self.game_root = f"s3://{bucket}/{prefix}"
+        # keys come back from find_arc_keys_s3 already rooted under prefix
+        # (e.g. "game/nativePC_MT/.../foo.arc") - origin_of() strips this
+        # against the key directly, not game_root (an "s3://bucket/prefix"
+        # sentinel, not a real path os.path.relpath could use meaningfully).
+        self._s3_prefix = prefix.strip("/")
 
         opener = _s3_opener(client, bucket)
         arc_specs = ((key, opener) for key in sorted(find_arc_keys_s3(client, bucket, prefix)))
@@ -454,6 +471,8 @@ class MTFW_FS(MultiFS):
         # lazily built - see _ensure_index()
         self._owner = None
         self._topology = None
+        # None for a local instance; set by from_s3() - see origin_of()
+        self._s3_prefix = None
 
     def _load_arcs(self, arc_specs):
         for arc_path, opener in arc_specs:
@@ -510,9 +529,9 @@ class MTFW_FS(MultiFS):
             child_path = join(_path, info.name)
             yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
 
-    def origin_of(self, path):
-        """The .arc path `path` resolves to, or None if it's a loose/real
-        file. Uses the lazy index (O(1)) if already built by a prior
+    def _owning_arc_fs(self, path):
+        """The ArcFS `path` resolves to, or None if it's a loose/real file.
+        Uses the lazy index (O(1)) if already built by a prior
         listdir/scandir/walk; otherwise falls back to MultiFS.which()'s
         linear scan rather than forcing an index build, keeping point
         lookups index-free.
@@ -523,4 +542,36 @@ class MTFW_FS(MultiFS):
             owner_fs = self._owner.get(_path)
         else:
             _name, owner_fs = self.which(_path)
-        return owner_fs.arc_path if isinstance(owner_fs, ArcFS) else None
+        return owner_fs if isinstance(owner_fs, ArcFS) else None
+
+    def origin_of(self, path):
+        """Portable identity of the .arc `path` resolves to - its own path
+        relative to game_root for a local instance, or relative to `prefix`
+        for an MTFW_FS.from_s3() instance (forward slashes either way,
+        original casing preserved) - or None if it's a loose/real file (or
+        doesn't resolve at all).
+
+        This is meant for display/hashing (see tests/mtfw/scripts/
+        catalog_paths.py): it deliberately doesn't leak where game_root
+        happens to sit on this disk (or which bucket, for S3/R2). It is NOT
+        directly openable - use origin_absolute_path() for that.
+        """
+        owner_fs = self._owning_arc_fs(path)
+        if owner_fs is None:
+            return None
+        arc_path = owner_fs.arc_path
+        if self._s3_prefix is not None:
+            if self._s3_prefix and arc_path.startswith(self._s3_prefix + "/"):
+                return arc_path[len(self._s3_prefix) + 1:]
+            return arc_path
+        return os.path.relpath(arc_path, self.game_root).replace(os.sep, "/")
+
+    def origin_absolute_path(self, path):
+        """The real, directly-openable identifier (ArcFS.arc_path - a local
+        filesystem path for a local MTFW_FS, or an S3 key for
+        MTFW_FS.from_s3) of the .arc `path` resolves to, or None. Use this
+        (not origin_of()) when the caller actually needs to open/write the
+        archive - e.g. Pack/Patch, via origin_arc_path() below.
+        """
+        owner_fs = self._owning_arc_fs(path)
+        return owner_fs.arc_path if owner_fs is not None else None

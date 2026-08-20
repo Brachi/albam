@@ -1,7 +1,5 @@
 import io
 import ntpath
-import os
-from pathlib import PureWindowsPath, Path
 import zlib
 
 from kaitaistruct import KaitaiStream
@@ -35,80 +33,6 @@ def arc_fs_root_loader(absolute_path):
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
 def game_fs_root_loader(absolute_path):
     return MTFW_FS(absolute_path)
-
-
-class ArcWrapper:
-    PATH_SEPARATOR = "\\"
-
-    def __init__(self, file_path):
-        self.app_id = None
-        self.file_path = file_path
-        self.parsed = Arc.from_file(file_path)
-        self.parsed._read()
-
-    def get_file_entries_by_type(self, file_type):
-        filtered = []
-        for fe in self.parsed.file_entries:
-            if fe.file_type == file_type:
-                filtered.append(fe)
-        return filtered
-
-    def get_file_entries_by_extension(self, extension):
-        try:
-            file_type = EXTENSION_TO_FILE_ID[extension]
-        except KeyError:
-            raise RuntimeError(f"Extension {extension} unknown")
-        return self.get_file_entries_by_type(file_type)
-
-    def get_files_by_extension(self, extension):
-        try:
-            file_type = EXTENSION_TO_FILE_ID[extension]
-        except KeyError:
-            raise RuntimeError(f"Extension {extension} unknown")
-        files = []
-        for file_entry in self.get_file_entries_by_type(file_type):
-            t = (file_entry.file_path, self.get_file(
-                file_entry.file_path, file_type))
-            files.append(t)
-        return files
-
-    def get_file_entries(self):
-        file_entries = []
-        for fe in self.parsed.file_entries:
-            ext = FILE_ID_TO_EXTENSION.get(fe.file_type, fe.file_type)
-            fe.file_path_with_ext = f"{fe.file_path}.{ext}"
-            file_entries.append(fe)
-        return file_entries
-
-    def get_file(self, file_path, file_type):
-        file_ = None
-
-        for fe in self.parsed.file_entries:
-            if fe.file_path == file_path and fe.file_type == file_type:
-                try:
-                    if self.app_id == "dmc4":
-                        raise RuntimeError("The xcompression algoringm for DMC4 is not implemented yet.")
-                    else:
-                        file_ = zlib.decompress(fe.raw_data)
-                    break
-                except EOFError:
-                    print(
-                        f"Requested to read out of bounds. Offset: {fe.offset}")
-                    raise
-        return file_
-
-    def unpack(self, out_path):
-        arc_path = Path(self.file_path)
-        out_path = Path(out_path)
-
-        for fe in self.get_file_entries():
-            file_entry_path = PureWindowsPath(fe.file_path_with_ext)
-            out_file_path = out_path / arc_path.stem / file_entry_path
-            if not out_file_path.parent.exists():
-                os.makedirs(str(out_file_path.parent))
-            with open(str(out_file_path), "wb") as w:
-                data = self.get_file(fe.file_path, fe.file_type)
-                w.write(data)
 
 
 def _sort_arc_entries(entries, vfile=True):

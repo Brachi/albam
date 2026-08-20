@@ -1,3 +1,56 @@
+import json
+import os
+
+import pytest
+
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified files to
+# parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
+# to add more.
+MOD_PARSING_DATASET_PATH = os.path.join(os.path.dirname(__file__), "datasets", "mod_parsing_hashes.json")
+with open(MOD_PARSING_DATASET_PATH) as f:
+    MOD_PARSING_DATASET = json.load(f)
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_mod_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_mod_path_hash")
+        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_PARSING_DATASET]
+        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_PARSING_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by MOD_PARSING_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in MOD_PARSING_DATASET:
+        catalog_path = os.path.join(os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["mod_path_hash"] in catalog_hashes, (
+            f"{entry['mod_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def parsed_mod(game_fs_root, local_mod_path_hash):
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+
+    path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash]
+    src_bytes = game_fs_root.readbytes(path)
+    mod_version = src_bytes[4]
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+
+    parsed = ModCls.from_bytes(src_bytes)
+    parsed._read()
+    return parsed
+
+
 SUPPORTED_MOD_VERSIONS = (156, 210, 211, 212)
 
 KNOWN_CONNECT = {
@@ -125,8 +178,8 @@ KNOWN_TOPOLOGY = {
 }
 
 
-def test_mod(parsed_mod_from_arc):
-    mod = parsed_mod_from_arc
+def test_mod(parsed_mod):
+    mod = parsed_mod
     if mod.header.version == 156:
         materials = [m for m in mod.materials_data.materials]
         for m in mod.meshes_data.meshes:
