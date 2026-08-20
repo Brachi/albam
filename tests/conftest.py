@@ -10,6 +10,20 @@ def pytest_sessionstart():
 def pytest_sessionfinish():
     unregister()
 
+    # bpy (the pip package, not the full Blender application) segfaults
+    # during CPython interpreter finalization whenever any registered
+    # bpy.types.PropertyGroup subclass defines a plain Python method -
+    # unrelated to anything this addon's own teardown can prevent. Harmless:
+    # normal interpreter shutdown already flushes all of pytest's output
+    # before the crash, which is the very last thing that happens. Don't
+    # add an os._exit(int(exitstatus)) shortcut here to dodge the scary
+    # traceback - it skips that flush, and on at least one real run (a
+    # dataset missing an optional key, aborting collection) that silently
+    # discarded pytest's entire output instead of just the exit code. CI's
+    # existing handling (discounting exit code 139 - see
+    # .github/workflows/tests.yml) is the right place to deal with the exit
+    # code, not here.
+
 
 def pytest_addoption(parser):
     parser.addoption(

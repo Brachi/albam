@@ -15,16 +15,6 @@ from .__version__ import __version__ as version
 __version__ = version
 
 
-bl_info = {
-    "name": "Albam",
-    "author": "Sebastian Aguirre Brachi",
-    "version": (0, 5, 0),  # needs to be kept in sync with __version__ manually
-    "blender": (4, 2, 0),
-    "location": "Properties Panel",
-    "description": "Import-Export multiple video-game formats",
-    "category": "Import-Export",
-}
-
 ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 
