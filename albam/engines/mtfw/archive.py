@@ -8,48 +8,33 @@ from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
+from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
 from ...blender_ui.tools import show_message_box
 
 
-@blender_registry.register_archive_loader(app_id="re0", extension="arc")
-@blender_registry.register_archive_loader(app_id="re1", extension="arc")
-@blender_registry.register_archive_loader(app_id="re5", extension="arc")
-@blender_registry.register_archive_loader(app_id="re6", extension="arc")
-@blender_registry.register_archive_loader(app_id="rev1", extension="arc")
-@blender_registry.register_archive_loader(app_id="rev2", extension="arc")
-@blender_registry.register_archive_loader(app_id="dd", extension="arc")
-@blender_registry.register_archive_loader(app_id="dmc4", extension="arc")
-def arc_loader(vfile, context=None):  # XXX context DEPRECATED
-    arc = ArcWrapper(file_path=vfile.absolute_path)
-    for file_entry in arc.get_file_entries():
-        yield file_entry.file_path_with_ext
+@blender_registry.register_fs_root_loader(app_id="re0", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re1", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re5", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="re6", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="rev1", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="rev2", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="dd", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="dmc4", extension="arc")
+def arc_fs_root_loader(absolute_path):
+    return ArcFS(absolute_path)
 
 
-@blender_registry.register_archive_accessor(app_id="re0", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re1", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re5", extension="arc")
-@blender_registry.register_archive_accessor(app_id="re6", extension="arc")
-@blender_registry.register_archive_accessor(app_id="rev1", extension="arc")
-@blender_registry.register_archive_accessor(app_id="rev2", extension="arc")
-@blender_registry.register_archive_accessor(app_id="dd", extension="arc")
-@blender_registry.register_archive_accessor(app_id="dmc4", extension="arc")
-def arc_accessor(vfile, context):
-    arc = ArcWrapper(vfile.root_vfile.absolute_path)
-    arc.app_id = vfile.app_id
-
-    path = vfile.relative_path_windows
-    path_no_ext = str(vfile.relative_path_windows_no_ext)
-    ext = path.suffix.replace(".", "")
-
-    # TODO: error handling, e.g. when file_path doesn't exist
-    try:
-        file_type = EXTENSION_TO_FILE_ID[ext]
-    except KeyError:
-        file_type = int(ext)
-    file_bytes = arc.get_file(path_no_ext, file_type)
-
-    return file_bytes
+@blender_registry.register_fs_root_loader(app_id="re0", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re1", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re5", extension=None)
+@blender_registry.register_fs_root_loader(app_id="re6", extension=None)
+@blender_registry.register_fs_root_loader(app_id="rev1", extension=None)
+@blender_registry.register_fs_root_loader(app_id="rev2", extension=None)
+@blender_registry.register_fs_root_loader(app_id="dd", extension=None)
+@blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
+def game_fs_root_loader(absolute_path):
+    return MTFW_FS(absolute_path)
 
 
 class ArcWrapper:
@@ -153,7 +138,7 @@ def _sort_arc_entries(entries, vfile=True):
 
 
 def _get_file_entry(vfile):
-    vf_data = vfile.data_bytes
+    vf_data = vfile.get_bytes()
     chunk = zlib.compress(vf_data)
     path = ntpath.normpath(vfile.relative_path)
     file_path = ntpath.splitext(path)[0]
@@ -323,7 +308,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False):
 
     # patch dictionary with imported files
     for vf in vf_sorted:
-        vf_data = vf.data_bytes
+        vf_data = vf.get_bytes()
         chunk = zlib.compress(vf_data)
         path = ntpath.normpath(vf.relative_path)
         file_path = ntpath.splitext(path)[0]
@@ -407,7 +392,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             if name == file_name and vfile.extension == extension:
                 show_message_box("File: {} was found and replaced in the archive".format(file_name))
                 found = True
-                vf_data = vfile.data_bytes
+                vf_data = vfile.get_bytes()
                 chunk = zlib.compress(vf_data)
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)

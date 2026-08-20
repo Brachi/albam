@@ -28,6 +28,18 @@ pytest
 ```
 Note: you need application data to run most useful tests.
 
+### Running against a real Blender in development mode
+
+Blender's own bundled Python doesn't have this addon's pip-installed dependencies,
+only the `.venv` above does. Launch Blender with
+[`--python-use-system-env`](https://docs.blender.org/manual/en/latest/advanced/command_line/arguments.html)
+with `.venv` active, so Blender's Python resolves imports through it:
+
+```
+source .venv/bin/activate
+blender --python-use-system-env
+```
+
 ## Supported Engines
 
 * [MT Framework](https://en.wikipedia.org/wiki/MT_Framework)

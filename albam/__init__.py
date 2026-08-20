@@ -8,6 +8,7 @@ from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
 from .data_loading import populate_albam_data
+from .lib import fs_registry
 from .registry import blender_registry
 from .__version__ import __version__ as version
 
@@ -75,6 +76,8 @@ def register():
 
 
 def unregister():
+    fs_registry.clear()
+
     for _, cls in reversed(blender_registry.props):
         bpy.utils.unregister_class(cls)
 
