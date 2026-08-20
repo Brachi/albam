@@ -14,16 +14,17 @@ import zlib
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import CreateFailed, DirectoryExpected, ResourceNotFound, ResourceReadOnly
+from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import basename, dirname, join
+from fs.path import dirname, join
 from kaitaistruct import KaitaiStream
 
 from . import FILE_ID_TO_EXTENSION
 from .structs.arc import Arc
+from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 
 def _entry_path(file_entry):
@@ -181,169 +182,6 @@ def find_arc_keys_s3(client, bucket, prefix=""):
                 yield key
 
 
-def _s3_opener(client, bucket, range_chunk_size=1024 * 1024):
-    """Build an ArcFS `opener` backed by an S3-compatible bucket (R2 too -
-    just point `client` at R2's endpoint, see MTFW_FS.from_s3). Uses
-    smart_open so seek()/read() become bounded HTTP Range requests instead
-    of downloading the whole archive; `defer_seek=True` avoids a request
-    until the first read.
-
-    range_chunk_size matters: smart_open's default issues an *open-ended*
-    Range request (`bytes=N-`), so reading 8 bytes from a 40MB archive would
-    otherwise fetch the full remaining 40MB (confirmed against real fixture
-    files). 1MiB keeps a typical header+file-table in one request while
-    keeping a single compressed entry's read to a handful of bounded ones.
-    """
-    import smart_open
-
-    def opener(key):
-        return smart_open.open(
-            f"s3://{bucket}/{key}",
-            "rb",
-            transport_params={
-                "client": client,
-                "defer_seek": True,
-                "range_chunk_size": range_chunk_size,
-            },
-        )
-
-    return opener
-
-
-class S3LooseFS(FS):
-    """Loose-file layer for MTFW_FS.from_s3 - the remote equivalent of the
-    local OSFS(game_root) layer, reusing the same boto3 `client` as the arc
-    layer (no separate credentials needed, unlike fs_s3fs.S3FS).
-
-    Matches local MTFW_FS behavior in one easy-to-miss way: .arc keys are
-    NOT filtered out here, so they stay reachable as raw blobs at their own
-    key alongside their unpacked content exposed through the arc layer -
-    harmless since the two views never collide (see MTFW_FS.from_s3).
-
-    Reads fetch whole objects, not ranges - a loose file's entire content is
-    needed anyway, unlike one entry out of a huge archive.
-
-    Assumes a plain folder-sync-style bucket: "directories" come from key
-    prefixes via list_objects_v2's Delimiter, not explicit zero-byte
-    directory-marker objects some other S3 tooling creates.
-    """
-
-    _meta = {
-        "case_insensitive": False,
-        "network": True,
-        "read_only": True,
-        "supports_rename": False,
-        "thread_safe": True,
-        "unicode_paths": True,
-        "virtual": False,
-    }
-
-    def __init__(self, client, bucket, prefix=""):
-        super().__init__()
-        self.client = client
-        self.bucket = bucket
-        self.prefix = prefix.strip("/")
-
-    def __repr__(self):
-        return f"S3LooseFS({self.bucket!r}, prefix={self.prefix!r})"
-
-    def _key(self, path):
-        _path = self.validatepath(path).strip("/")
-        if self.prefix:
-            return f"{self.prefix}/{_path}" if _path else self.prefix
-        return _path
-
-    def getinfo(self, path, namespaces=None):
-        self.check()
-        _path = self.validatepath(path)
-        namespaces = namespaces or ()
-
-        if _path == "/":
-            return Info({"basic": {"name": "", "is_dir": True}})
-
-        key = self._key(_path)
-        try:
-            head = self.client.head_object(Bucket=self.bucket, Key=key)
-        except Exception:
-            head = None
-
-        if head is not None:
-            raw_info = {"basic": {"name": basename(_path), "is_dir": False}}
-            if "details" in namespaces:
-                raw_info["details"] = {"type": int(ResourceType.file), "size": head["ContentLength"]}
-            return Info(raw_info)
-
-        # not a real object at this exact key - does anything live "under" it?
-        resp = self.client.list_objects_v2(Bucket=self.bucket, Prefix=key + "/", MaxKeys=1)
-        if resp.get("KeyCount", 0) > 0:
-            raw_info = {"basic": {"name": basename(_path), "is_dir": True}}
-            if "details" in namespaces:
-                raw_info["details"] = {"type": int(ResourceType.directory), "size": 0}
-            return Info(raw_info)
-
-        raise ResourceNotFound(path)
-
-    def listdir(self, path):
-        return [info.name for info in self.scandir(path)]
-
-    def scandir(self, path, namespaces=None, page=None):
-        self.check()
-        _path = self.validatepath(path)
-        namespaces = namespaces or ()
-
-        if not self.getinfo(_path).is_dir:
-            raise DirectoryExpected(path)
-
-        key_prefix = self._key(_path)
-        if key_prefix and not key_prefix.endswith("/"):
-            key_prefix += "/"
-
-        entries = []
-        paginator = self.client.get_paginator("list_objects_v2")
-        for result in paginator.paginate(Bucket=self.bucket, Prefix=key_prefix, Delimiter="/"):
-            for common_prefix in result.get("CommonPrefixes", ()):
-                name = common_prefix["Prefix"][len(key_prefix):].rstrip("/")
-                if name:
-                    entries.append(Info({"basic": {"name": name, "is_dir": True}}))
-            for obj in result.get("Contents", ()):
-                name = obj["Key"][len(key_prefix):]
-                if name:
-                    raw_info = {"basic": {"name": name, "is_dir": False}}
-                    if "details" in namespaces:
-                        raw_info["details"] = {"type": int(ResourceType.file), "size": obj["Size"]}
-                    entries.append(Info(raw_info))
-
-        if page is not None:
-            start, end = page
-            entries = entries[start:end]
-        return iter(entries)
-
-    def openbin(self, path, mode="r", buffering=-1, **options):
-        self.check()
-        if "w" in mode or "+" in mode or "a" in mode:
-            raise ResourceReadOnly(path)
-
-        _path = self.validatepath(path)
-        key = self._key(_path)
-        try:
-            response = self.client.get_object(Bucket=self.bucket, Key=key)
-        except Exception:
-            raise ResourceNotFound(path)
-        return _BytesFile(response["Body"].read())
-
-    def makedir(self, path, permissions=None, recreate=False):
-        raise ResourceReadOnly(path)
-
-    def remove(self, path):
-        raise ResourceReadOnly(path)
-
-    def removedir(self, path):
-        raise ResourceReadOnly(path)
-
-    def setinfo(self, path, info):
-        raise ResourceReadOnly(path)
-
-
 class MTFW_FS(MultiFS):
     """Virtual filesystem for one MTFW game install.
 
@@ -388,60 +226,34 @@ class MTFW_FS(MultiFS):
         include_loose=True,
     ):
         """Alternate constructor: source .arc files from an S3-compatible
-        bucket instead of a local game install. Works against Cloudflare R2
-        as-is - pass R2's account-specific endpoint_url and an R2 API token
-        as access key/secret:
+        bucket (R2 works as-is - pass R2's endpoint_url + API token as
+        access key/secret). Credential params fall back to boto3's normal
+        resolution (env vars, etc.) when unset. Reads are real HTTP Range
+        requests (via smart_open) - never downloads a whole .arc.
+
+        `prefix` must be the game *root*, not the .arc folder: it's used
+        both to find arcs (recursive key listing) and, when `include_loose`
+        is on, as the root loose paths resolve relative to. Narrowing it to
+        just the archive folder silently breaks loose resolution. Exposed
+        paths come from each arc's own file table, independent of `prefix`.
+
+        `include_loose=True` (default) layers an S3LooseFS on top, same
+        highest-priority-wins semantics as the local OSFS layer - assumes
+        the bucket mirrors a real game root exactly. An override loose file
+        needs its own key equal to the exposed path itself.
 
             game_fs = MTFW_FS.from_s3(
                 bucket="my-bucket",
                 endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
-                aws_access_key_id=...,
-                aws_secret_access_key=...,
+                aws_access_key_id=..., aws_secret_access_key=...,
             )
-
-        Credential params forward straight to boto3.client("s3", ...) -
-        leave unset to fall back to boto3's normal credential resolution.
-        One client is built internally and reused for both the arc and
-        loose layers.
-
-        Reads are real HTTP Range requests (via smart_open) - never a full
-        .arc download.
-
-        IMPORTANT: `prefix` must be the game *root*, not the archive folder.
-        It's used both to find arcs (recursive key listing, so arcs nested
-        under `prefix` are found fine) and, when `include_loose` is on, as
-        the root loose paths resolve relative to - narrowing it to just the
-        archive folder silently breaks loose resolution. `prefix=""` if
-        your bucket mirrors the whole game root, same as `game_root`
-        locally. The paths MTFW_FS exposes for arc content come entirely
-        from the arc's own internal file table, independent of `prefix`.
-
-        `include_loose=True` (default) layers an S3LooseFS over `bucket`/
-        `prefix`, same highest-priority-wins semantics as the local OSFS
-        layer (see S3LooseFS's docstring for what it assumes about the
-        bucket). An override loose file needs its own key equal to the
-        exposed path itself (not inside the Archive/ prefix) to shadow the
-        packed copy.
         """
-        import boto3
-        from botocore.config import Config
-
-        client = boto3.client(
-            "s3",
+        client = build_s3_client(
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
             aws_session_token=aws_session_token,
             endpoint_url=endpoint_url,
             region_name=region_name,
-            # botocore >=1.36 defaults to sending flexible-checksum headers
-            # (e.g. x-amz-checksum-crc32) on S3 requests - a documented
-            # source of SignatureDoesNotMatch against non-AWS S3-compatible
-            # providers like R2, which don't handle them the same way AWS
-            # does. Opting back out to the pre-1.36 behavior.
-            config=Config(
-                request_checksum_calculation="when_required",
-                response_checksum_validation="when_required",
-            ),
         )
 
         self = cls.__new__(cls)
@@ -454,7 +266,7 @@ class MTFW_FS(MultiFS):
         # sentinel, not a real path os.path.relpath could use meaningfully).
         self._s3_prefix = prefix.strip("/")
 
-        opener = _s3_opener(client, bucket)
+        opener = s3_opener(client, bucket)
         arc_specs = ((key, opener) for key in sorted(find_arc_keys_s3(client, bucket, prefix)))
         self._load_arcs(arc_specs)
 

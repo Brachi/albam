@@ -13,14 +13,26 @@ from .registry import blender_registry
 
 def _extension_from_name(name):
     """
-    Same "up to 2 dots" rule as VirtualFile.extension/VirtualFileData.extension,
-    usable before a VirtualFile exists yet (add_real_file's FS-root dispatch).
+    Allow up to 2 dots as an extension when the naive (single-dot) extension
+    is purely numeric - e.g. "texname.tex.34" -> "tex.34", "pl0000.mesh.2109108288"
+    -> "mesh.2109108288" (RE Engine's own versioned-format naming, where the
+    trailing number alone doesn't identify the format on its own). Otherwise
+    just the naive extension - e.g. "re_chunk_000.pak.patch_999.pak" -> "pak",
+    not "patch_999.pak": a real RE Engine patch pak's ".patch_NNN" segment is
+    the patch number, not a versioned extension, and misreading it as one
+    broke fs_root_loader/archive_loader dispatch for "Add Files" on any real
+    patch pak, not just an oddly-named one.
+
+    Single source of truth for VirtualFile.extension/VirtualFileData.extension
+    too (both just delegate here) - used standalone here since add_real_file's
+    FS-root dispatch needs this before a VirtualFile exists yet.
     """
     SEP = "."
     stem, _, extension = name.rpartition(SEP)
     if SEP in stem:
         _, __, extension0 = stem.rpartition(SEP)
-        extension = SEP.join((extension0, extension))
+        if extension.isdigit():
+            extension = SEP.join((extension0, extension))
     return extension
 
 
@@ -73,16 +85,8 @@ class VirtualFile(bpy.types.PropertyGroup):
 
     @property
     def extension(self):
-        """
-        Allow up to 2 dots as an extension
-        e.g. texname.tex.34 -> tex.34
-        """
-        SEP = "."
-        name, _, extension = self.display_name.rpartition(SEP)
-        if SEP in name:
-            _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
-        return extension
+        """See _extension_from_name()."""
+        return _extension_from_name(self.display_name)
 
     @property
     def fs_path(self):
@@ -498,16 +502,8 @@ class VirtualFileData:
 
     @property
     def extension(self):
-        """
-        Allow up to 2 dots as an extension
-        e.g. texname.tex.34 -> tex.34
-        """
-        SEP = "."
-        name, _, extension = self.relative_path.rpartition(SEP)
-        if SEP in name:
-            _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
-        return extension
+        """See _extension_from_name()."""
+        return _extension_from_name(self.relative_path)
 
 
 class Tree:

@@ -42,6 +42,14 @@ s3 = [
   "smart-open[s3]>=7.0.0",
 ]
 
+# albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
+# of a default install): bc7enc-py for BC7 DDS texture decode (.tex
+# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries.
+reen = [
+  "bc7enc-py==0.1.0a1",
+  "zstd==1.5.7.2",
+]
+
 [build-system]
 requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"

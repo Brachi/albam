@@ -3,7 +3,7 @@ import struct
 
 import bpy
 from kaitaistruct import KaitaiStream
-from pybc7 import unpack_dds
+from bc7enc import unpack_dds
 
 from ...registry import blender_registry
 from .apps import APPS_TODO
@@ -22,7 +22,7 @@ KNOWN_TEXTURE_TYPES = {
 
 
 @blender_registry.register_import_function("re2_non_rt", extension="tex.10", albam_asset_type="TEXTURE")
-@blender_registry.register_import_function("re2", extension="tex.34")
+@blender_registry.register_import_function("re2", extension="tex.34", albam_asset_type="TEXTURE")
 @blender_registry.register_import_function("re3_non_rt", extension="tex.190820018",
                                            albam_asset_type="TEXTURE")
 @blender_registry.register_import_function("re3", extension="tex.34", albam_asset_type="TEXTURE")
