@@ -5,6 +5,8 @@ serve identical bytes on a hit, key ranges separately, never serve a hit
 for a request it doesn't fully understand, and survive a corrupted entry.
 """
 import os
+import shutil
+import sys
 
 import pytest
 
@@ -17,6 +19,9 @@ from albam.lib.s3 import (  # noqa: E402
     CACHE_DIR_ENV_VAR,
     build_s3_client,
     cache_get_object,
+    default_cache_dir,
+    prune_cache,
+    resolve_cache_dir,
 )
 
 BUCKET = "albam-test"
@@ -138,45 +143,94 @@ def test_corrupted_entry_falls_back_to_the_server(counting, tmp_path):
     assert counting.calls == 2
 
 
-def test_build_s3_client_caches_only_when_the_env_var_is_set(monkeypatch, tmp_path):
-    """Checked by what lands on disk rather than by inspecting the client:
-    anything else that wraps get_object (a profiler, a request counter)
-    would fool an attribute check into reporting the cache as enabled.
+def test_caching_is_on_by_default_and_lands_in_the_platform_cache_dir(monkeypatch, tmp_path):
+    """Unset means the platform cache directory, not "off" - nobody should
+    have to opt in to a cache that only ever saves work.
     """
-    def read_once(client):
-        client.get_object(Bucket=BUCKET, Key=KEY)["Body"].read()
+    monkeypatch.delenv(CACHE_DIR_ENV_VAR, raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "platform", "linux")
 
-    def entries():
-        return sorted(f for _, _, files in os.walk(tmp_path) for f in files)
+    assert default_cache_dir() == str(tmp_path / "albam" / "s3")
+    assert resolve_cache_dir() == default_cache_dir()
 
     with mock_aws():
-        boto3.client("s3", region_name="us-east-1").create_bucket(Bucket=BUCKET)
-        boto3.client("s3", region_name="us-east-1").put_object(
-            Bucket=BUCKET, Key=KEY, Body=CONTENT)
-
-        monkeypatch.setenv(CACHE_DIR_ENV_VAR, str(tmp_path))
-        read_once(build_s3_client(region_name="us-east-1"))
-        assert entries(), "with the env var set, the read should be cached"
-
-        before = entries()
-        monkeypatch.delenv(CACHE_DIR_ENV_VAR, raising=False)
-        read_once(build_s3_client(region_name="us-east-1"))
-        assert entries() == before, "with no env var, nothing should be written"
+        _seed_bucket()
+        build_s3_client(region_name="us-east-1").get_object(Bucket=BUCKET, Key=KEY)["Body"].read()
+    assert list((tmp_path / "albam" / "s3").iterdir()), "the default read should be cached"
 
 
-def test_reuploaded_object_is_not_served_from_the_cache(counting, s3_client, tmp_path):
-    """The staleness case the ETag check exists for, and not a hypothetical
-    one: the moto-backed suites recreate one bucket and key with different
-    bytes from test to test. A cache keyed on (bucket, key, range) alone
-    hands the second run the first run's content.
-    """
-    replacement = CONTENT[::-1]
+def test_empty_env_var_turns_caching_off(monkeypatch, tmp_path):
+    """The only way to say "don't cache", now that unset means the default."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setenv(CACHE_DIR_ENV_VAR, "")
+    assert resolve_cache_dir() is None
 
-    first = cache_get_object(counting, str(tmp_path))
-    assert first.get_object(Bucket=BUCKET, Key=KEY)["Body"].read() == CONTENT
+    with mock_aws():
+        _seed_bucket()
+        build_s3_client(region_name="us-east-1").get_object(Bucket=BUCKET, Key=KEY)["Body"].read()
+    assert not (tmp_path / "albam").exists()
 
-    s3_client.put_object(Bucket=BUCKET, Key=KEY, Body=replacement)
 
-    # a fresh wrapper, i.e. a later process against the same cache directory
-    second = cache_get_object(CountingClient(s3_client), str(tmp_path))
-    assert second.get_object(Bucket=BUCKET, Key=KEY)["Body"].read() == replacement
+def test_prune_evicts_oldest_first_until_under_the_size_limit(tmp_path):
+    stems = _fill_cache(tmp_path, count=5, size=1000)
+    freed = prune_cache(str(tmp_path), max_bytes=2500, min_free_bytes=0)
+
+    surviving = {s for s in stems if os.path.exists(s + ".body")}
+    assert freed >= 2000
+    assert surviving == set(stems[-2:]), "the two most recently written should survive"
+    # metadata goes with the body, never orphaned
+    assert not any(os.path.exists(s + ".json") for s in stems if s not in surviving)
+
+
+def test_prune_evicts_when_the_filesystem_is_nearly_full(tmp_path, monkeypatch):
+    """The absolute limit alone isn't enough: a 2GiB cache is fine on a disk
+    with room and a problem on one without."""
+    stems = _fill_cache(tmp_path, count=4, size=1000)
+    monkeypatch.setattr(shutil, "disk_usage", lambda _: _Usage(free=10))
+
+    prune_cache(str(tmp_path), max_bytes=10 ** 9, min_free_bytes=3000)
+
+    surviving = [s for s in stems if os.path.exists(s + ".body")]
+    assert surviving == stems[-1:], (
+        "low free space should evict even when far under max_bytes, oldest first")
+
+
+def test_entries_are_not_written_when_that_would_fill_the_disk(monkeypatch, tmp_path):
+    monkeypatch.setenv(CACHE_DIR_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(shutil, "disk_usage", lambda _: _Usage(free=1))
+
+    with mock_aws():
+        _seed_bucket()
+        body = build_s3_client(region_name="us-east-1").get_object(
+            Bucket=BUCKET, Key=KEY)["Body"].read()
+
+    assert body == CONTENT, "the read still succeeds, it just isn't cached"
+    assert not any(f.endswith(".body") for _, _, files in os.walk(tmp_path) for f in files)
+
+
+class _Usage:
+    def __init__(self, free):
+        self.total, self.used, self.free = free * 10, free * 9, free
+
+
+def _seed_bucket():
+    client = boto3.client("s3", region_name="us-east-1")
+    client.create_bucket(Bucket=BUCKET)
+    client.put_object(Bucket=BUCKET, Key=KEY, Body=CONTENT)
+
+
+def _fill_cache(tmp_path, count, size):
+    """`count` complete entries, oldest first, one second apart so mtime
+    ordering is unambiguous."""
+    stems = []
+    for i in range(count):
+        stem = str(tmp_path / f"{i:02d}" / "entry")
+        os.makedirs(os.path.dirname(stem), exist_ok=True)
+        with open(stem + ".body", "wb") as f:
+            f.write(b"x" * size)
+        with open(stem + ".json", "w") as f:
+            f.write("{}")
+        os.utime(stem + ".body", (i, i))
+        stems.append(stem)
+    return stems

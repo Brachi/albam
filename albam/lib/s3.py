@@ -10,6 +10,8 @@ import hashlib
 import io
 import json
 import os
+import shutil
+import sys
 import tempfile
 
 from fs.base import FS
@@ -20,6 +22,19 @@ from fs.path import basename
 
 
 CACHE_DIR_ENV_VAR = "ALBAM_S3_CACHE_DIR"
+CACHE_MAX_BYTES_ENV_VAR = "ALBAM_S3_CACHE_MAX_BYTES"
+CACHE_MIN_FREE_BYTES_ENV_VAR = "ALBAM_S3_CACHE_MIN_FREE_BYTES"
+
+# A full test suite against two games caches ~200MB, so 2GiB leaves room for
+# several more without the cache ever being the thing that fills a disk.
+DEFAULT_CACHE_MAX_BYTES = 2 * 1024 ** 3
+# Refuse to grow the cache once the filesystem is this close to full,
+# whatever the cache's own size. A convenience cache has no business being
+# the reason a machine runs out of space.
+DEFAULT_CACHE_MIN_FREE_BYTES = 2 * 1024 ** 3
+# How much may be written between prunes. Pruning walks the cache, so it
+# runs once when a client is built and then only after meaningful growth.
+PRUNE_INTERVAL_BYTES = 256 * 1024 ** 2
 
 
 def build_s3_client(
@@ -57,7 +72,7 @@ def build_s3_client(
             response_checksum_validation="when_required",
         ),
     )
-    cache_dir = os.environ.get(CACHE_DIR_ENV_VAR)
+    cache_dir = resolve_cache_dir()
     if cache_dir:
         client = cache_get_object(client, cache_dir)
     return client
@@ -73,6 +88,99 @@ _CACHEABLE_GET_OBJECT_KWARGS = frozenset({"Bucket", "Key", "Range"})
 # rebuilt below), S3LooseFS.openbin only Body. ETag is kept for debugging
 # a cache entry by hand, not used.
 _CACHED_RESPONSE_FIELDS = ("ContentLength", "ContentRange", "ETag", "ContentType")
+
+
+def default_cache_dir():
+    """Where the cache lives when nothing says otherwise: the platform's
+    conventional cache location, which is the right place for data that can
+    be deleted at any time without losing anything.
+    """
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local")
+        return os.path.join(base, "albam", "cache", "s3")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Caches/albam/s3")
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return os.path.join(base, "albam", "s3")
+
+
+def resolve_cache_dir():
+    """The directory to cache into, or None for no caching.
+
+    Unset means the platform default, so nobody has to opt in to get a
+    working cache. Set to a path uses that path. Set to an empty string
+    turns caching off - the one way to say "don't", since with a default in
+    place unsetting the variable no longer means that.
+    """
+    configured = os.environ.get(CACHE_DIR_ENV_VAR)
+    if configured is None:
+        return default_cache_dir()
+    configured = configured.strip()
+    return configured or None
+
+
+def _env_bytes(name, default):
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"{name}={raw!r} is not an integer number of bytes, using {default}")
+        return default
+    return max(0, value)
+
+
+def _cache_entries(cache_dir):
+    """(mtime, size, stem) for every complete entry, oldest first."""
+    entries = []
+    for root, _, files in os.walk(cache_dir):
+        for name in files:
+            if not name.endswith(".body"):
+                continue
+            body = os.path.join(root, name)
+            meta = body[: -len(".body")] + ".json"
+            try:
+                size = os.path.getsize(body) + os.path.getsize(meta)
+                mtime = os.path.getmtime(body)
+            except OSError:
+                continue  # vanished under us, or a half-written pair
+            entries.append((mtime, size, body[: -len(".body")]))
+    entries.sort()
+    return entries
+
+
+def prune_cache(cache_dir, max_bytes=None, min_free_bytes=None):
+    """Evict least recently written entries until the cache fits under
+    `max_bytes` and the filesystem has at least `min_free_bytes` free.
+
+    Returns the number of bytes freed. Both limits matter: the absolute one
+    bounds the cache on a machine with room to spare, and the free space one
+    keeps it from being the last straw on a machine without.
+    """
+    max_bytes = DEFAULT_CACHE_MAX_BYTES if max_bytes is None else max_bytes
+    min_free_bytes = DEFAULT_CACHE_MIN_FREE_BYTES if min_free_bytes is None else min_free_bytes
+
+    entries = _cache_entries(cache_dir)
+    total = sum(size for _, size, _ in entries)
+    try:
+        free = shutil.disk_usage(cache_dir).free
+    except OSError:
+        free = None
+
+    freed = 0
+    for _, size, stem in entries:
+        over_size = total - freed > max_bytes
+        low_disk = free is not None and (free + freed) < min_free_bytes
+        if not (over_size or low_disk):
+            break
+        for path in (stem + ".body", stem + ".json"):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        freed += size
+    return freed
 
 
 def _cache_entry_paths(cache_dir, kwargs):
@@ -126,6 +234,28 @@ def cache_get_object(client, cache_dir):
     """
     real_get_object = client.get_object
     live_etags = {}  # (bucket, key) -> ETag, one head_object per object per process
+    max_bytes = _env_bytes(CACHE_MAX_BYTES_ENV_VAR, DEFAULT_CACHE_MAX_BYTES)
+    min_free_bytes = _env_bytes(CACHE_MIN_FREE_BYTES_ENV_VAR, DEFAULT_CACHE_MIN_FREE_BYTES)
+    written_since_prune = [0]
+
+    def prune(force=False):
+        if not force and written_since_prune[0] < PRUNE_INTERVAL_BYTES:
+            return
+        written_since_prune[0] = 0
+        if os.path.isdir(cache_dir):
+            prune_cache(cache_dir, max_bytes, min_free_bytes)
+
+    def room_to_write(size):
+        """Never write the entry that takes the filesystem below the floor.
+        Checked per write because a single run can fetch hundreds of MB, and
+        an entry refused now is just a cache miss later."""
+        try:
+            free = shutil.disk_usage(cache_dir if os.path.isdir(cache_dir) else ".").free
+        except OSError:
+            return True  # can't tell: behave as before rather than refuse
+        return free - size >= min_free_bytes
+
+    prune(force=True)
 
     def current_etag(bucket, key):
         identity = (bucket, key)
@@ -155,9 +285,12 @@ def cache_get_object(client, cache_dir):
 
         response = real_get_object(**kwargs)
         body = response["Body"].read()
-        meta = {k: response[k] for k in _CACHED_RESPONSE_FIELDS if k in response}
-        _write_atomically(body_path, body)
-        _write_atomically(meta_path, json.dumps(meta).encode("utf-8"))
+        if room_to_write(len(body)):
+            meta = {k: response[k] for k in _CACHED_RESPONSE_FIELDS if k in response}
+            _write_atomically(body_path, body)
+            _write_atomically(meta_path, json.dumps(meta).encode("utf-8"))
+            written_since_prune[0] += len(body)
+            prune()
         response["Body"] = io.BytesIO(body)  # already consumed above
         return response
 
