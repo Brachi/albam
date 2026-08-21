@@ -6,13 +6,20 @@ and RE Engine's PakFS.from_s3/ReenFS.from_s3 (albam/engines/reng/pak_fs.py)
 - nothing engine-specific in any of these, so they live here instead of
 being duplicated (or one engine importing the other's module).
 """
+import hashlib
 import io
+import json
+import os
+import tempfile
 
 from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import DirectoryExpected, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.path import basename
+
+
+CACHE_DIR_ENV_VAR = "ALBAM_S3_CACHE_DIR"
 
 
 def build_s3_client(
@@ -38,7 +45,7 @@ def build_s3_client(
     import boto3
     from botocore.config import Config
 
-    return boto3.client(
+    client = boto3.client(
         "s3",
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
@@ -50,6 +57,124 @@ def build_s3_client(
             response_checksum_validation="when_required",
         ),
     )
+    cache_dir = os.environ.get(CACHE_DIR_ENV_VAR)
+    if cache_dir:
+        client = cache_get_object(client, cache_dir)
+    return client
+
+
+# get_object kwargs the cache knows how to key on. Anything else - a
+# versioned read, a part number, SSE-C headers - bypasses the cache
+# entirely rather than risking a hit that ignores the extra argument.
+_CACHEABLE_GET_OBJECT_KWARGS = frozenset({"Bucket", "Key", "Range"})
+
+# The only response fields anything downstream reads back: smart_open's
+# Reader uses ContentLength/ContentRange/Body (plus ResponseMetadata,
+# rebuilt below), S3LooseFS.openbin only Body. ETag is kept for debugging
+# a cache entry by hand, not used.
+_CACHED_RESPONSE_FIELDS = ("ContentLength", "ContentRange", "ETag", "ContentType")
+
+
+def _cache_entry_paths(cache_dir, kwargs):
+    identity = json.dumps({k: kwargs[k] for k in sorted(kwargs)}, separators=(",", ":"))
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    # two-level fanout: a full game root is tens of thousands of entries,
+    # and a single flat directory that size is miserable to work with
+    directory = os.path.join(cache_dir, digest[:2])
+    return os.path.join(directory, digest[2:] + ".body"), os.path.join(directory, digest[2:] + ".json")
+
+
+def _write_atomically(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp_path, path)  # atomic, so a torn write is never read back
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def cache_get_object(client, cache_dir):
+    """Wrap `client.get_object` with a content-addressed disk cache under
+    `cache_dir`, keyed by (Bucket, Key, Range).
+
+    This exists for development and test iteration, where the same handful
+    of archives get re-fetched from scratch on every run - a full
+    tests/mtfw/test_mod_serialization.py run pulls ~112MB in ~112 ranged
+    requests, all of it identical to the run before. Nothing here helps end
+    users, whose VFS reads local .arc files.
+
+    Entries are validated by ETag before being served, once per object per
+    process: the first cached range of a given key costs a head_object, and
+    every other range of that same object rides on that answer. If the ETag
+    moved, every cached range of that key is stale by definition, so the
+    read falls through to the server and re-populates. That is worth the
+    request - not caching at all is the only alternative that's also
+    correct, and an object being re-uploaded under a name already in the
+    cache is not hypothetical: the moto-backed tests recreate one bucket
+    and key with different synthetic bytes in test after test, and without
+    validation they get served each other's content.
+
+    Ranges are cached as themselves rather than assembled into whole
+    objects, so this stays correct for smart_open's chunked reads without
+    ever materializing a 40MB archive to serve an 8 byte header read.
+    """
+    real_get_object = client.get_object
+    live_etags = {}  # (bucket, key) -> ETag, one head_object per object per process
+
+    def current_etag(bucket, key):
+        identity = (bucket, key)
+        if identity not in live_etags:
+            try:
+                live_etags[identity] = client.head_object(Bucket=bucket, Key=key).get("ETag")
+            except Exception:
+                live_etags[identity] = None  # can't tell: treat every entry as stale
+        return live_etags[identity]
+
+    def get_object(**kwargs):
+        if not _CACHEABLE_GET_OBJECT_KWARGS.issuperset(kwargs):
+            return real_get_object(**kwargs)
+
+        body_path, meta_path = _cache_entry_paths(cache_dir, kwargs)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            with open(body_path, "rb") as f:
+                body = f.read()
+        except (OSError, ValueError):
+            pass  # miss, or an unreadable/half-written entry: just re-fetch
+        else:
+            etag = meta.get("ETag")
+            if etag is not None and etag == current_etag(kwargs["Bucket"], kwargs["Key"]):
+                return _cached_response(meta, body)
+
+        response = real_get_object(**kwargs)
+        body = response["Body"].read()
+        meta = {k: response[k] for k in _CACHED_RESPONSE_FIELDS if k in response}
+        _write_atomically(body_path, body)
+        _write_atomically(meta_path, json.dumps(meta).encode("utf-8"))
+        response["Body"] = io.BytesIO(body)  # already consumed above
+        return response
+
+    client.get_object = get_object
+    return client
+
+
+def _cached_response(meta, body):
+    return {
+        **meta,
+        "Body": io.BytesIO(body),
+        # smart_open reads both of these off every response
+        "ResponseMetadata": {
+            "HTTPStatusCode": 206 if "ContentRange" in meta else 200,
+            "RetryAttempts": 0,
+        },
+    }
 
 
 def s3_opener(client, bucket, range_chunk_size=1024 * 1024):
