@@ -3,6 +3,7 @@ import os
 import bpy
 
 from ..lib import fs_registry
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
@@ -286,8 +287,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
         try:
             self._execute(context, item)
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Export failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
@@ -359,7 +359,8 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Pack failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):  # pragma: no cover
@@ -451,7 +452,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Patch failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):

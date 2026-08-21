@@ -1,6 +1,7 @@
 import bpy
 
 from ..apps import APPS, REENGINE_APPS
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
 from ..data_loading import AppsUserDataConfigManager
@@ -96,8 +97,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 self._make_exportable(vfile, bl_object, context)
 
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Import failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
         return {"FINISHED"}
