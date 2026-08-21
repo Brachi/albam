@@ -522,8 +522,8 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 def _process_vertex_colors(mod_version, vertex, rgba_out):
     if not hasattr(vertex, "rgba"):
         return
-    b = vertex.rgba.x / 225
-    g = vertex.rgba.y / 225
+    b = vertex.rgba.x / 255
+    g = vertex.rgba.y / 255
     r = vertex.rgba.z / 255
     a = vertex.rgba.w / 255
     rgba_out.append((r, g, b, a))
