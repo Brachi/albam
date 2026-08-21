@@ -1,9 +1,20 @@
+import os
+
 import pytest
 
 from albam import register, unregister
+from albam.blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR
 
 
 def pytest_sessionstart():
+    # Operator error handlers turn any exception into an {'ERROR'} report,
+    # which Blender re-raises as a bare RuntimeError carrying only the
+    # handler's own message - no traceback, no exception type. Useless for a
+    # test: a broken export reported as "RuntimeError: Export failed"
+    # pointing at conftest says nothing about what actually broke. With this
+    # set, the handlers re-raise instead, so failures land on the line that
+    # caused them (see albam/blender_ui/error_handling.py).
+    os.environ[RERAISE_ERRORS_ENV_VAR] = "1"
     register()
 
 
