@@ -857,7 +857,14 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    dst_mod.bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    if bones_data is not None:
+        # Only assign when there is one. Assigning None still *creates* the
+        # attribute, and the generated _fetch_instances() guards optional
+        # instances with hasattr(), which is true for an attribute holding
+        # None - so a model with no armature would crash on write instead of
+        # skipping the section it doesn't have.
+        dst_mod.bones_data = bones_data
     dst_mod.groups = _serialize_groups(src_mod, dst_mod)
     materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
