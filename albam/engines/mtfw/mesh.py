@@ -1384,9 +1384,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
-        mesh.indices__to_write = False
-        mesh.vertices__to_write = False
-        mesh.vertices2__to_write = False
+        mesh.indices__enabled = False
+        mesh.vertices__enabled = False
+        mesh.vertices2__enabled = False
         mesh_bone_palette = None
         mesh_bone_palette_index = None
         if bone_palettes:

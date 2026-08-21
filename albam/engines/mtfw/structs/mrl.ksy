@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mrl
   id: mrl
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework material format
 
 params:

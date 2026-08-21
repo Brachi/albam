@@ -29,6 +29,7 @@ def build_blender_materials(mesh_vfile, context):
     mdf_version = int(mdf_virtual_path.rpartition(".")[2])
 
     mdf = ReengineMdf(mdf_version, KaitaiStream(io.BytesIO(mdf_bytes)))
+    mdf._read()
     images_to_build = {texture_header for mat in mdf.materials for texture_header in mat.textures}
     blender_images = build_blender_images(app_id, images_to_build, context)
 

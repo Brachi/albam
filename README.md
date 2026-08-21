@@ -55,6 +55,22 @@ PYTHONPATH="$VIRTUAL_ENV/lib/python3.13/site-packages" blender --python-use-syst
 ```
 
 
+### Regenerating the Kaitai Struct parsers
+
+Binary formats are described by `.ksy` files under each engine's `structs/` directory and compiled
+to the `*.py` next to them with [Kaitai Struct](https://kaitai.io/) (currently 0.11):
+
+```
+kaitai-struct-compiler --target python -w --outdir . <file>.ksy
+```
+
+`-w`/`--read-write` applies to every parser, including formats albam only reads today, so there is
+one command rather than a per-file split that nothing in a `.ksy` records. It implies
+`--no-auto-read`, which is the one thing callers have to know: constructing a parser (or calling
+`from_bytes()`) no longer parses anything on its own, so every call site follows it with an
+explicit `_read()`.
+
+
 ## Supported Engines
 
 * [MT Framework](https://en.wikipedia.org/wiki/MT_Framework)

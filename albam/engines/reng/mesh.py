@@ -25,6 +25,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
 
     mesh_bytes = file_list_item.get_bytes()
     re_mesh = ReengineMesh(KaitaiStream(io.BytesIO(mesh_bytes)))
+    re_mesh._read()
 
     bl_object_name = file_list_item.display_name
     skeleton = None if not re_mesh.header.offset_bones else build_blender_armature(re_mesh, bl_object_name)

@@ -4,7 +4,7 @@ meta:
   title: RE Engine archive format
   file-extension: pak
   license: CC0-1.0
-  ks-version: 0.8
+  ks-version: '0.11'
 
 
 seq:

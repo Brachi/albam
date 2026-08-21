@@ -3,7 +3,7 @@ meta:
     endian: le
     title: RE Engine material info format
     license: CCO-1.0
-    ks-version: 0.8
+    ks-version: '0.11'
 
 params:
   - {id: mdf_version, type: u4}

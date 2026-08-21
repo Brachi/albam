@@ -4,7 +4,7 @@ meta:
   title: Hexane Engine Archive format
   file-extension: ssg
   license: CC0-1.0
-  ks-version: 0.8
+  ks-version: '0.11'
 
 seq:
   - {id: id_magic, contents: [0x06, 0x00, 0x00, 0x00]}

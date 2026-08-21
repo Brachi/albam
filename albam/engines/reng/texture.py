@@ -31,6 +31,7 @@ def import_texture(file_list_item, context):
 
     tex_bytes = file_list_item.get_bytes()
     tex = ReengineTex(KaitaiStream(io.BytesIO(tex_bytes)))
+    tex._read()
 
     dds_data = tex.mipmaps[0].dds_data
     pixel_bytes = unpack_dds(io.BytesIO(dds_data), tex.width, tex.height, 'BC7', 0)
@@ -69,6 +70,7 @@ def build_blender_images(app_id, texture_headers, context):
         try:
             tex_bytes = tex_virtual_file.get_bytes()
             tex = ReengineTex(KaitaiStream(io.BytesIO(tex_bytes)))
+            tex._read()
 
             if tex.format == 98 or tex.format == 99:
                 tex_format = "BC7"
