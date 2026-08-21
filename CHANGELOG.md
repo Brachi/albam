@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Issue with SBC generation that broke high collision mesh (eff) and left holes in low collision mesh (scr)
 - Typo that set wrong name ("name") for the color attribute layer
 - Typo that brightened vertex colors on every import-export round trip
+- Vertex colors losing precision on every import-export round trip
 
 ### Changed
 

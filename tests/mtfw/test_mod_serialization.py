@@ -1,3 +1,4 @@
+from collections import Counter
 import json
 import os
 
@@ -46,6 +47,16 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
+def _bones_data_error(src_mod, dst_mod):
+    """Difference in bones_data section size, or 0 for a model with no
+    armature at all (stage geometry), where neither side has the section.
+    """
+    if src_mod.bones_data is None or dst_mod.bones_data is None:
+        assert src_mod.bones_data is None and dst_mod.bones_data is None
+        return 0
+    return abs(src_mod.bones_data.size_ - dst_mod.bones_data.size_)
+
+
 @pytest.fixture(scope="session")
 def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
@@ -89,7 +100,7 @@ def test_export_header(mod_imported_local, mod_exported_local):
     sheader = mod_imported_local.header
     dheader = mod_exported_local.header
 
-    bones_data_error = abs(mod_imported_local.bones_data.size_ - mod_exported_local.bones_data.size_)
+    bones_data_error = _bones_data_error(mod_imported_local, mod_exported_local)
     assert (sheader.version in (210, 211, 212) and not bones_data_error) or sheader.version == 156
 
     assert sheader.ident == dheader.ident == b"MOD\x00"
@@ -121,19 +132,21 @@ def test_export_top_level(mod_imported_local, mod_exported_local):
     assert mod_imported_local.bbox_min.x == pytest.approx(mod_exported_local.bbox_min.x, rel=0.001)
     assert mod_imported_local.bbox_min.y == pytest.approx(mod_exported_local.bbox_min.y, rel=0.001)
     assert mod_imported_local.bbox_min.z == pytest.approx(mod_exported_local.bbox_min.z, rel=0.001)
-    assert mod_imported_local.bbox_min.w == pytest.approx(mod_exported_local.bbox_min.w, rel=0.001)
+    # .w is padding, not a coordinate: real files carry uninitialized garbage
+    # there (seen on stage models), while export always writes 0.0
 
     assert mod_imported_local.bbox_max.x == pytest.approx(mod_exported_local.bbox_max.x, rel=0.001)
     assert mod_imported_local.bbox_max.y == pytest.approx(mod_exported_local.bbox_max.y, rel=0.001)
     assert mod_imported_local.bbox_max.z == pytest.approx(mod_exported_local.bbox_max.z, rel=0.001)
-    assert mod_imported_local.bbox_max.w == pytest.approx(mod_exported_local.bbox_max.w, rel=0.001)
 
 
 def test_export_bones_data(mod_imported_local, mod_exported_local, subtests):
     # TODO: matrices
+    if mod_imported_local.bones_data is None:
+        pytest.skip("model has no armature")
     sbd = mod_imported_local.bones_data
     dbd = mod_exported_local.bones_data
-    bones_data_error = abs(mod_imported_local.bones_data.size_ - mod_exported_local.bones_data.size_)
+    bones_data_error = _bones_data_error(mod_imported_local, mod_exported_local)
     assert ((mod_exported_local.header.version in (210, 211, 212) and not bones_data_error) or
             mod_exported_local.header.version == 156)
 
@@ -269,6 +282,50 @@ def test_vertices(mod_imported_local, mod_exported_local, subtests):
                         src_vertex.normal.x == (dst_vertex.normal.x + 2) or \
                         src_vertex.normal.x == (dst_vertex.normal.x - 2) or \
                         src_vertex.normal.x == dst_vertex.normal.x'''
+
+
+def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
+    """
+    Vertex colors must survive a round trip byte for byte, compared as a
+    multiset of (uv, rgba) per mesh rather than per vertex index: the
+    exporter is free to hand two vertices with identical attributes a
+    different pair of buffer slots than the original file used, which is
+    invisible to the GPU since only the index buffer says which slot a
+    triangle corner reads from.
+
+    uv rather than position identifies the vertex here because position is
+    not bit stable across a round trip: import scales cm to m and export
+    scales back, and that pair of float32 multiplications lands ~1 ULP away
+    for a small fraction of vertices (~3% of one mesh in this dataset).
+    That has nothing to do with colors, so it has no business failing this
+    test.
+
+    A mesh whose vertex count/format doesn't match the original is a
+    separate, already tracked gap (see test_meshes_data_xfail), so it's
+    skipped rather than failed.
+    """
+    def colored(mesh):
+        return Counter(
+            (getattr(v, "uv", None) and (v.uv.u, v.uv.v),
+             (v.rgba.x, v.rgba.y, v.rgba.z, v.rgba.w))
+            for v in mesh.vertices if hasattr(v, "rgba")
+        )
+
+    src_meshes = mod_imported_local.meshes_data.meshes
+    dst_meshes = mod_exported_local.meshes_data.meshes
+    checked = 0
+    for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
+        if (src_mesh.num_vertices, src_mesh.vertex_stride) != (
+                dst_mesh.num_vertices, dst_mesh.vertex_stride):
+            continue
+        src_colors = colored(src_mesh)
+        if not src_colors:
+            continue
+        checked += 1
+        with subtests.test(mesh_index=mi):
+            assert src_colors == colored(dst_mesh)
+    if not checked:
+        pytest.skip("no mesh in this model carries vertex colors")
 
 
 @pytest.mark.xfail(reason="WIP")
