@@ -70,15 +70,6 @@ one command rather than a per-file split that nothing in a `.ksy` records. It im
 `from_bytes()`) no longer parses anything on its own, so every call site follows it with an
 explicit `_read()`.
 
-`tests/test_generated_structs.py` keeps all of this honest: every `.ksy` has to compile, every
-parser has to be generated read-write, and the generated `Mesh` classes have to keep the lazy-write
-attributes `albam/engines/mtfw/mesh.py` assigns to by hand (`<field>__enabled`). Those were named
-`<field>__to_write` before the 0.11 release; since assigning an attribute a class doesn't define is
-legal Python, that rename would otherwise have left exporting running while silently writing the
-vertex and index buffers twice.
-
-The vendored runtime in `albam/albam_vendor/kaitaistruct.py` reports `0.11.dev1` and satisfies the
-`API_VERSION >= (0, 11)` check the generated code makes.
 
 ## Supported Engines
 
