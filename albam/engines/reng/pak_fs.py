@@ -81,6 +81,7 @@ class PakFS(FS):
             f.seek(0)
             read_size = HEADER_SIZE + FILE_ENTRY_SIZE * num_file_entries
             parsed = Pak(KaitaiStream(io.BytesIO(f.read(read_size))))
+            parsed._read()
         finally:
             f.close()
 

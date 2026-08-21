@@ -44,7 +44,9 @@ def parsed_lmt(game_fs_root, local_lmt_path_hash):
     path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash]
     src_bytes = game_fs_root.readbytes(path)
 
-    return Lmt.from_bytes(src_bytes)
+    lmt = Lmt.from_bytes(src_bytes)
+    lmt._read()
+    return lmt
 
 
 SUPPORTED_LMT_VERSIONS = (51, 67)

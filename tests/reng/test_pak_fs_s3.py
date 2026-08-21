@@ -11,8 +11,9 @@ commit real game asset bytes, even small ones), a real .pak is tens of GB
 anyway, and this file is meant to stay fully self-contained/network-free -
 same rationale as tests/mtfw/test_arc_fs_s3.py, which this mirrors.
 
-Pak.FileEntry (structs/pak.py) has no generated _write() (unlike Arc), so
-the bytes are packed by hand via struct - the layout (see pak_fs.py's
+The bytes are packed by hand via struct rather than through Pak's own
+generated writer: building a fixture with the same parser the test is
+exercising would make it agree with itself. The layout (see pak_fs.py's
 HEADER_SIZE/FILE_ENTRY_SIZE) is simple enough that isn't a real burden.
 """
 import os

@@ -3,7 +3,7 @@ meta:
   endian: le
   file-extension: arc
   id: arc
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework archive format
 
 

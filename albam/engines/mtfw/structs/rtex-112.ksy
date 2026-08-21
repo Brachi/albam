@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: rtex
   id: rtex_112
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework texture format version 112
 
 seq:

@@ -47,6 +47,7 @@ def parsed_mesh(pak_fs_root, local_mesh_path_hash):
     src_bytes = pak_fs_root.readbytes(path)
 
     parsed = ReengineMesh(KaitaiStream(io.BytesIO(src_bytes)))
+    parsed._read()
     return parsed, src_bytes
 
 

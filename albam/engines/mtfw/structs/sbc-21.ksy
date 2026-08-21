@@ -2,7 +2,7 @@ meta:
   endian: le
   file-extension: sbc
   id: sbc_21
-  ks-version: 0.11
+  ks-version: '0.11'
   title: MTFramework collision format version 210
   
 seq:

@@ -4,7 +4,7 @@ meta:
   title: Hexane Engine Material Format
   file-extension: matb
   license: CC0-1.0
-  ks-version: 0.8
+  ks-version: '0.11'
 
 
 seq:
