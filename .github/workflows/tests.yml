@@ -21,12 +21,33 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.bpy.python-version }}
-        cache: 'pip'
+        # No `cache: pip` - uv caches instead, below. setup-python's pip cache
+        # was keyed on a glob that matched nothing (this repo has no
+        # requirements.txt), so the key never changed and the cache only ever
+        # grew: 946MB for 3.11 against 461MB for 3.13, same dependencies.
+    - name: Set up uv
+      # v6 is the newest floating major tag astral-sh publishes; 10.x exists
+      # but only as exact versions (there is no v10 tag to track).
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        # Both files pin what gets installed - pyproject.toml for these jobs,
+        # pylock.toml for the extension build - so either changing has to
+        # start a fresh cache.
+        cache-dependency-glob: |
+          pyproject.toml
+          pylock.toml
     - name: Install dependencies
+      # uv rather than pip for the install: it keeps its cache unpacked and
+      # hardlinks into the environment instead of extracting, which matters
+      # here because bpy is a 400MB wheel. Measured locally against a warm
+      # cache: 25s with pip, 2s with uv.
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install bpy==${{ matrix.bpy.bpy-version }} --extra-index-url https://download.blender.org/pypi/
-        python -m pip install .[tests,s3,reen]
+        uv venv --python "${{ matrix.bpy.python-version }}" .venv
+        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+        uv pip install --python .venv/bin/python \
+          "bpy==${{ matrix.bpy.bpy-version }}" --extra-index-url https://download.blender.org/pypi/ \
+          ".[tests,s3,reen]"
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
@@ -79,8 +100,8 @@ jobs:
         uses: "actions/setup-python@v5"
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: 'requirements/*.txt'
+          # No pip cache here: this job installs one small package, and the
+          # key it used pointed at requirements/*.txt, which does not exist.
       - name: "Install dependencies"
         run: |
           python -m pip install coverage
