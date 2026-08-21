@@ -1,5 +1,6 @@
 from collections import Counter
 import json
+import math
 import os
 
 import bpy
@@ -326,6 +327,89 @@ def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
             assert src_colors == colored(dst_mesh)
     if not checked:
         pytest.skip("no mesh in this model carries vertex colors")
+
+
+def _position(vertex):
+    """(x, y, z) as stored - ints for the quantized formats (vec4_s2), floats
+    for the rest (vec3)."""
+    p = vertex.position
+    return (p.x, p.y, p.z)
+
+
+def _uv_bytes(vertex):
+    """The primary UV exactly as encoded. Unlike position this does survive a
+    round trip bit for bit, so it identifies a vertex reliably."""
+    uv = getattr(vertex, "uv", None)
+    return (uv.u, uv.v) if uv is not None else None
+
+
+def _positions_match(src, dst):
+    """Same coordinate, re-encoded - not the same bits.
+
+    Import scales cm to m and export scales back, and that pair of float32
+    multiplications lands ~1 ULP away for a small fraction of vertices (275
+    of 13037 on one model in this dataset). The quantized formats have the
+    same problem one step coarser, where a rounding difference is +-1 in an
+    int16. Neither says anything is wrong, so neither should fail this.
+    """
+    for a, b in zip(src, dst):
+        if isinstance(a, int) and isinstance(b, int):
+            if abs(a - b) > 1:
+                return False
+        elif not math.isclose(a, b, rel_tol=1e-5, abs_tol=1e-5):
+            return False
+    return True
+
+
+def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
+    """
+    Compare the original file's vertices against the exported ones, mesh by
+    mesh, on the two attributes that are meaningful to compare: the primary
+    UV (exactly, since it round trips bit for bit) and the position (within
+    a tolerance, see _positions_match).
+
+    Both sides are sorted before comparing rather than matched by index: the
+    exporter is free to hand two vertices with identical attributes a
+    different pair of buffer slots than the original file used, which is
+    invisible to the GPU since only the index buffer says which slot a
+    triangle corner reads from. Sorting on the UV, which is stable, gives
+    both sides the same canonical order.
+
+    Deliberately not compared: normals and tangents, which Blender
+    recomputes - and which are outright garbage for any vertex that only
+    belongs to a zero-area triangle, since Blender has no normal space for
+    one and returns a non-unit vector (about 10% of vertices on a strip
+    based model, and strips are what produce those triangles). uv2 is an
+    unused channel holding placeholder bytes on both sides, and
+    bone_indices padding follows a "repeat the first bone" convention that
+    doesn't always match the source file's own choice.
+
+    A mesh whose vertex count/format doesn't match the original is a
+    separate, already tracked gap (see test_meshes_data_xfail), so it is
+    skipped rather than failed.
+    """
+    src_meshes = mod_imported_local.meshes_data.meshes
+    dst_meshes = mod_exported_local.meshes_data.meshes
+    assert len(src_meshes) == len(dst_meshes)
+
+    for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
+        with subtests.test(mesh_index=mi):
+            if (src_mesh.num_vertices, src_mesh.vertex_stride) != (
+                    dst_mesh.num_vertices, dst_mesh.vertex_stride):
+                pytest.skip("vertex count/format doesn't match the original for this mesh")
+
+            def described(mesh):
+                return sorted(
+                    (_uv_bytes(v), _position(v)) for v in mesh.vertices
+                    if hasattr(v, "position")
+                )
+
+            src, dst = described(src_mesh), described(dst_mesh)
+            assert len(src) == len(dst)
+            for vi, ((src_uv, src_pos), (dst_uv, dst_pos)) in enumerate(zip(src, dst)):
+                assert src_uv == dst_uv, f"vertex {vi}: uv changed"
+                assert _positions_match(src_pos, dst_pos), (
+                    f"vertex {vi}: position {src_pos} became {dst_pos}")
 
 
 @pytest.mark.xfail(reason="WIP")
