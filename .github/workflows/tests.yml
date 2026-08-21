@@ -47,10 +47,18 @@ jobs:
       run: |
         set +e
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
+          export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
+          rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
           coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1
         exitcode="$?"
-        # Ignore segfault in bpy==4.1.0; there's no way around it yet.
-        if  [ $exitcode == 139 ];then exitcode=0;
+        # bpy segfaults during interpreter finalization, so a 139 here says
+        # nothing about whether the run passed - it is what this job sees on
+        # every run, failing or not. Fall back to the status pytest recorded
+        # itself before that happened (tests/conftest.py). Discounting 139
+        # outright, which this used to do, reported 8 errors as a green build.
+        # No file means pytest died before finishing: keep 139 as a failure.
+        if [ "$exitcode" == 139 ]; then
+          exitcode="$(cat "$ALBAM_PYTEST_EXIT_STATUS_FILE" 2>/dev/null || echo 139)"
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
