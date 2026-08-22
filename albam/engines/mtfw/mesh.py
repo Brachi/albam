@@ -18,19 +18,19 @@ import numpy as np
 from ...apps import get_app_description
 from ...lib.blender import (
     get_bone_indices_and_weights_per_vertex,
+    get_colors_per_loop,
     get_mesh_vertex_groups,
     get_model_bounding_box,
     get_model_bounding_sphere,
-    get_normals_per_vertex,
-    get_tangents_per_vertex,
-    get_uvs_per_vertex,
+    get_normals_per_loop,
+    get_tangents_per_loop,
+    get_uvs_per_loop,
     strip_triangles_to_triangles_list,
     triangles_list_to_triangles_strip,
 )
 from ...lib.misc import chunks
 from ...lib.common_op import (
     apply_transform,
-    triangulate_meshes,
     delete_ob,
     move_to_collection
 )
@@ -845,13 +845,19 @@ def export_mod(bl_obj):
     assert bl_meshes, msg
 
     if export_settings.export_autofix:
+        # Vertex splitting (one exported vertex per unique attribute
+        # combination, see _build_export_vertex_table) and triangulation
+        # (see mesh.calc_loop_triangles() in that same function) happen
+        # unconditionally at buffer-build time without touching the
+        # Blender mesh, so the only "mistake" left to autofix here is an
+        # un-applied object transform - which does need a throwaway copy,
+        # since applying it is a real mutation.
         if bpy.data.collections.get("AlbamTemp"):
             for ob in bpy.data.collections["AlbamTemp"].objects:
                 delete_ob(ob)
-        bl_meshes = [_duplicate_vtx_by_attr(mesh) for mesh in bl_meshes]
+        bl_meshes = [_duplicate_mesh_object(mesh) for mesh in bl_meshes]
         move_to_collection(bl_meshes, "AlbamTemp")
         apply_transform(bl_meshes)
-        triangulate_meshes(bl_meshes)
 
     _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
     _init_mod_header(bl_obj, src_mod, dst_mod)
@@ -1261,25 +1267,6 @@ def _normalize_uv(uv_x, uv_y):
     return uv_x, uv_y
 
 
-def _get_vertex_colors(blender_mesh):
-    mesh = blender_mesh.data
-    colors = {}
-    try:
-        color_layer = mesh.color_attributes[0]
-    except IndexError:
-        return colors
-    mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
-    vtx_colors = {mesh_loops[li]: data.color for li,
-                  data in color_layer.data.items()}
-    for idx, color in vtx_colors.items():
-        b = round(color[0] * 255)
-        g = round(color[1] * 255)
-        r = round(color[2] * 255)
-        a = round(color[3] * 255)
-        colors[idx] = (r, g, b, a)
-    return colors
-
-
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
     if src_mod.header.version not in (153, 156):
         return {}
@@ -1407,9 +1394,10 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                 raise ValueError(
                     f"Mesh {mesh_index} doesn't have a bone_palette")
 
+        vertex_table = _build_export_vertex_table(bl_mesh)
         vertices, vertices2, vertex_format, vertex_stride, vertex_stride_2, max_bones_per_vertex = (
             _export_vertices(app_id, bl_mesh, mesh,
-                             mesh_bone_palette, dst_mod, bbox_data)
+                             mesh_bone_palette, dst_mod, bbox_data, vertex_table)
         )
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
@@ -1421,10 +1409,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
             current_vertex_format = vertex_format
 
         if use_strips:
-            triangles = triangles_list_to_triangles_strip(bl_mesh)
+            triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
         else:
-            triangles = list(chain.from_iterable(
-                p.vertices for p in bl_mesh.data.polygons))
+            triangles = list(chain.from_iterable(vertex_table.triangles))
 
         triangles = [e + current_vertex_position for e in triangles]
         num_indices = len(triangles)
@@ -1438,7 +1425,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
-        num_vertices = len(bl_mesh.data.vertices)
+        num_vertices = vertex_table.count
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1501,17 +1488,150 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     return meshes_data, vertex_buffer, vertex_buffer_2, index_buffer
 
 
-def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data):
+ExportVertexTable = namedtuple(
+    "ExportVertexTable",
+    ("count", "source_vertex", "normal", "tangent", "uv", "color", "triangles"),
+)
+
+
+def _build_export_vertex_table(bl_mesh, uv_layer_count=4):
+    """
+    Build a deduplicated, per-corner ("loop") vertex table for exporting
+    `bl_mesh`, without creating or mutating any Blender mesh/object.
+
+    The vertex/index buffer formats used by MOD files need one physical
+    vertex per unique combination of attributes, same as glTF: GPUs (and
+    these formats) require normals/UVs/vertex colors to be constant across a
+    vertex, so a Blender vertex shared by two UV islands or a hard edge has
+    to become two (or more) exported vertices - otherwise all but one of its
+    loops silently lose their attribute values, which is what causes visual
+    artifacts around UV seams.
+
+    This mirrors the approach the official glTF exporter uses
+    (`primitive_extract.py`): collect one "dot" per mesh loop (its source
+    vertex index plus its per-corner attributes), deduplicate identical
+    dots, and use the deduplicated dot index as the exported vertex index
+    everywhere; only position/weights get looked back up through the dot's
+    source vertex index, since those are per-vertex, not per-corner.
+
+    The key deliberately excludes the loop normal: Blender recomputes
+    per-loop normals on every `calc_normals_split()`, and even on a
+    perfectly smooth surface adjacent loops can come back ~1e-4 apart -
+    noise, not an authored discontinuity, but with a normal in the key it's
+    enough to force a split on nearly every loop (verified against real game
+    data: including normal roughly tripled the vertex count; dropping it
+    exactly reproduced the original file's vertex count). That
+    noise floor is also well under the 1-byte-per-axis precision the MOD
+    normal format itself stores, so it wouldn't be visually meaningful
+    even if it were real. UV/vertex-color discontinuities - the actual
+    seams this table exists to preserve - don't have this problem.
+
+    `mesh.calc_loop_triangles()` is a read-only, cached triangulation - it
+    doesn't touch `mesh.polygons`, so n-gons/quads don't need pre-
+    triangulating, and the source mesh is never modified.
+
+    Normals and tangents are taken from the loop that first creates a dot,
+    except that a zero-area triangle never gets the last word: Blender has
+    no valid normal space for one, so `loop.normal` there is a non-unit
+    vector like (0, 0, -0.0039). Source files are full of them - strips are
+    stitched with degenerate triangles built from distinct but coincident
+    vertices, which survive `strip_triangles_to_triangles_list`'s
+    `a != b != c` guard - and a dot shared with a real triangle would
+    otherwise inherit whichever garbage came first in loop_triangles order.
+    They still count as dots and stay in `triangles`, since dropping them
+    changes the vertex count the file expects.
+    """
+    mesh = bl_mesh.data
+    mesh.calc_loop_triangles()
+
+    normals_per_loop = get_normals_per_loop(mesh)
+    tangents_per_loop = get_tangents_per_loop(mesh)
+    uvs_per_loop = [get_uvs_per_loop(bl_mesh, i) for i in range(uv_layer_count)]
+    colors_per_loop = get_colors_per_loop(mesh)
+
+    def dot_key(loop_index):
+        vertex_index = mesh.loops[loop_index].vertex_index
+        uv_key = tuple(
+            tuple(round(x, 6) for x in _fix_nan_uv(*uvs.get(loop_index, (0.0, 0.0))))
+            for uvs in uvs_per_loop
+        )
+        color = tuple(round(x, 6) for x in colors_per_loop.get(loop_index, (0.0, 0.0, 0.0, 0.0)))
+        return (vertex_index, uv_key, color)
+
+    dot_index_by_key = {}
+    source_vertex = []
+    normal = {}
+    tangent = {}
+    uv = [{} for _ in range(uv_layer_count)]
+    color = {}
+    triangles = []
+
+    # Dots whose normal/tangent came from a zero-area triangle, and can be
+    # replaced by a real one if some other triangle turns out to share them.
+    from_degenerate = set()
+
+    for tri in mesh.loop_triangles:
+        degenerate = tri.area == 0.0
+        tri_dots = []
+        for loop_index in tri.loops:
+            key = dot_key(loop_index)
+            dot_index = dot_index_by_key.get(key)
+            if dot_index is None:
+                dot_index = len(source_vertex)
+                dot_index_by_key[key] = dot_index
+                source_vertex.append(key[0])
+                normal[dot_index] = normals_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                tangent[dot_index] = tangents_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                if degenerate:
+                    from_degenerate.add(dot_index)
+                for i, uvs in enumerate(uvs_per_loop):
+                    if loop_index in uvs:
+                        uv[i][dot_index] = _fix_nan_uv(*uvs[loop_index])
+                if loop_index in colors_per_loop:
+                    color[dot_index] = colors_per_loop[loop_index]
+            elif not degenerate and dot_index in from_degenerate:
+                normal[dot_index] = normals_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                tangent[dot_index] = tangents_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                from_degenerate.discard(dot_index)
+            tri_dots.append(dot_index)
+        triangles.append(tuple(tri_dots))
+
+    # A vertex no triangle references has no loops, so the pass above never
+    # sees it. Real files contain them - one mesh of a real model has 344
+    # vertices of which 342 are referenced - and dropping them would quietly
+    # change the vertex count the file declares. Nothing indexes these, so
+    # their attributes don't matter, only that they exist.
+    referenced = set(source_vertex)
+    for vertex in mesh.vertices:
+        if vertex.index in referenced:
+            continue
+        dot_index = len(source_vertex)
+        source_vertex.append(vertex.index)
+        normal[dot_index] = tuple(vertex.normal)
+        tangent[dot_index] = (0.0, 0.0, 0.0)
+
+    return ExportVertexTable(
+        count=len(source_vertex),
+        source_vertex=source_vertex,
+        normal=normal,
+        tangent=tangent,
+        uv=uv,
+        color=color,
+        triangles=triangles,
+    )
+
+
+def _color_to_rgba_bytes(color):
+    # source is (unusually) stored/expected as b, g, r, a - preserved from
+    # the pre-existing behavior of the function this replaced
+    b, g, r, a = color
+    return (round(r * 255), round(g * 255), round(b * 255), round(a * 255))
+
+
+def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data, vertex_table):
     SCALE = 100
-    uvs_per_vertex = get_uvs_per_vertex(bl_mesh, 0)
-    uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
-    uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
-    uvs_per_vertex_4 = get_uvs_per_vertex(bl_mesh, 3)
-    color_per_vertex = _get_vertex_colors(bl_mesh)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
-    normals = get_normals_per_vertex(bl_mesh.data)
-    tangents = get_tangents_per_vertex(bl_mesh.data)
     vtx_stream_2 = None
     vtx_stride_2 = 0
     has_vertex_buffer_2 = False
@@ -1520,7 +1640,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     albam_custom_props = bl_mesh.material_slots[0].material.albam_custom_properties
     mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
 
-    vertex_count = len(bl_mesh.data.vertices)
+    vertex_count = vertex_table.count
     if dst_mod.header.version in (153, 156):
         vertex_format = int(mod_156_material_props.vtype, 16)
         skin_function = int(mod_156_material_props.func_skin, 16)
@@ -1559,7 +1679,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stream_2 = KaitaiStream(
             BytesIO(bytearray(8 * vertex_count)))
     bytes_empty = b'\x00\x00'
-    for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
+    for dot_index in range(vertex_table.count):
+        vertex = bl_mesh.data.vertices[vertex_table.source_vertex[dot_index]]
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
         if has_vertex_buffer_2:
             vertex_struct_2 = VertexBuff2Cls(_parent=mesh, _root=mesh._root)
@@ -1573,7 +1694,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct_2.occlusion.w = 255
 
             # Tangents
-            t = tangents.get(vertex_index, (0, 0, 0))
+            t = vertex_table.tangent.get(dot_index, (0, 0, 0))
             try:
                 vertex_struct_2.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
                 vertex_struct_2.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
@@ -1608,7 +1729,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.tangent = dst_mod.Vec4U1(
                 _parent=vertex_struct, _root=vertex_struct._root)
             # Tangents
-            t = tangents.get(vertex_index, (0, 0, 0))
+            t = vertex_table.tangent.get(dot_index, (0, 0, 0))
             try:
                 vertex_struct.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
                 vertex_struct.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
@@ -1623,7 +1744,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format not in VERTEX_FORMATS_BRIDGE:
             vertex_struct.uv = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
+            uv_x, uv_y = vertex_table.uv[0].get(dot_index, (0, 0))
             uv_x, uv_y = _normalize_uv(uv_x, uv_y)
             vertex_struct.uv.u = pack('e', uv_x)
             vertex_struct.uv.v = pack('e', uv_y)
@@ -1631,8 +1752,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV2:
             vertex_struct.uv2 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_2:
-                uv_x, uv_y = uvs_per_vertex_2.get(vertex_index, (0, 0))
+            if vertex_table.uv[1]:
+                uv_x, uv_y = vertex_table.uv[1].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv2.u = pack('e', uv_x)
                 vertex_struct.uv2.v = pack('e', uv_y)
@@ -1643,8 +1764,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV3:
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_3:
-                uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
+            if vertex_table.uv[2]:
+                uv_x, uv_y = vertex_table.uv[2].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv3.u = pack('e', uv_x)
                 vertex_struct.uv3.v = pack('e', uv_y)
@@ -1655,8 +1776,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV4:
             vertex_struct.uv4 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_4:
-                uv_x, uv_y = uvs_per_vertex_4.get(vertex_index, (0, 0))
+            if vertex_table.uv[3]:
+                uv_x, uv_y = vertex_table.uv[3].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv4.u = pack('e', uv_x)
                 vertex_struct.uv4.v = pack('e', uv_y)
@@ -1666,7 +1787,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         # Vertex colors
         if vertex_format in VERTEX_FORMATS_RGBA:
             vertex_struct.rgba = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-            c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
+            c = _color_to_rgba_bytes(vertex_table.color.get(dot_index, (0, 0, 0, 0)))
             vertex_struct.rgba.x = c[0]
             vertex_struct.rgba.y = c[1]
             vertex_struct.rgba.z = c[2]
@@ -1684,7 +1805,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.z = xyz[2]
         vertex_struct.position.w = 32767  # might be changed later
         # Set Normals
-        norms = normals.get(vertex_index, (0, 0, 0))
+        norms = vertex_table.normal.get(dot_index, (0, 0, 0))
         try:
             # from [-1, 1] to [0, 255], and clipping bad blender normals
             vertex_struct.normal.x = max(
@@ -1711,7 +1832,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     solution="Please add Armature modifier and set imported skeleton as Object"
                 )
             # applying bounding box constraints
-            weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
+            source_vertex_index = vertex_table.source_vertex[dot_index]
+            weights_data = weights_per_vertex.get(source_vertex_index, [])  # bone index, weight value hfloat
             weight_values = [w for _, w in weights_data]
             if not weight_values:
                 raise AlbamCheckFailure(
@@ -2073,147 +2195,15 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-def _convert_vtx_col_layer(mesh, src_layer):
+def _duplicate_mesh_object(src_obj):
     """
-    Blender changed the way vertex colors work, now there are per vertex and per loop layers
-    This funciton convert vertex colors into loop colors with float values as exporter expects
+    A plain, independent copy of `src_obj` (own object + own mesh
+    datablock), so autofix's apply_transform can mutate it without touching
+    the user's original object.
     """
-    if src_layer.domain == 'CORNER':
-        return src_layer
-    else:
-        scr_col_layer_name = src_layer.name
-        # FLOAT_COLOR to match _build_vertex_colors: routing colors through a
-        # byte layer here would re-introduce the precision loss it avoids
-        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='FLOAT_COLOR')
-
-        src_data = src_layer.data
-        dst_data = dst_col_layer.data
-        # Transfer from vertices to loops
-        if src_layer.domain == 'POINT':
-            for i, loop in enumerate(mesh.loops):
-                dst_data[i].color = src_data[loop.vertex_index].color
-
-        mesh.color_attributes.remove(src_layer)
-        dst_col_layer.name = scr_col_layer_name
-        return dst_col_layer
-
-
-def _duplicate_vtx_by_attr(src_obj):
-    mesh = src_obj.data
-    uv_layers = mesh.uv_layers
-    color_layers = mesh.color_attributes
-    groups = src_obj.vertex_groups
-
-    new_vertices = []
-    new_normals = []
-    new_uvs_layers = [[] for _ in uv_layers]
-    new_col_layers = [[] for _ in color_layers]
-    new_groups = []
-    new_faces = []
-    comparison_vtx_map = {}
-
-    for poly in mesh.polygons:
-        new_face = []
-        for loop_idx in poly.loop_indices:
-            loop = mesh.loops[loop_idx]
-            v = mesh.vertices[loop.vertex_index]
-            n = loop.normal
-
-            # UVs
-            uv_tuple = []
-            for uv_layer in uv_layers:
-                uv = uv_layer.data[loop_idx].uv
-                # NaN in UV data affected later comparison
-                if not (uv.x != uv.x or uv.y != uv.y):
-                    uv_tuple.append(tuple(round(x, 6) for x in uv))
-                else:
-                    uv_tuple.append(tuple((0.0, 0.0)))
-
-            # Colors
-            col_tuple = []
-            for col_layer in color_layers:
-                col_layer = _convert_vtx_col_layer(mesh, col_layer)
-                col = col_layer.data[loop_idx].color
-                col_tuple.append(tuple(round(x, 6) for x in col))
-
-            # Vertex group weights
-            group_tuple = []
-            for g in v.groups:
-                group_tuple.append((groups[g.group].name, round(g.weight, 6)))
-
-            # Split normal attribute, duplicate in case of Blender's hard edges
-            normal_tuple = tuple(round(x, 6) for x in n)
-
-            # compare by vtx index, uv[(u1,v1),(u2,v2),...] + split normals
-            comparison_key = (loop.vertex_index, *uv_tuple, normal_tuple)
-
-            if comparison_key not in comparison_vtx_map:
-                idx = len(new_vertices)
-                comparison_vtx_map[comparison_key] = idx
-                new_vertices.append(v.co.copy())
-                new_normals.append(n.copy())
-                for i, uv_layer in enumerate(uv_layers):
-                    new_uvs_layers[i].append(uv_layer.data[loop_idx].uv.copy())
-                for i, col_layer in enumerate(color_layers):
-                    new_col_layers[i].append(col_layer.data[loop_idx].color)
-                new_groups.append(group_tuple)
-
-            # new_face.append(vertex_map[key])
-            new_face.append(comparison_vtx_map[comparison_key])
-        new_faces.append(new_face)
-
-    # Set new mesh with duplicated vertices
-    dst_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
-    dst_mesh.from_pydata(new_vertices, [], new_faces)
-    dst_mesh.update()
-
-    # Set UV-layers
-    for i, uv_layer in enumerate(uv_layers):
-        uv_layer_new = dst_mesh.uv_layers.new(name=uv_layer.name)
-        for poly in dst_mesh.polygons:
-            for loop_idx in poly.loop_indices:
-                uv_layer_new.data[loop_idx].uv = new_uvs_layers[i][dst_mesh.loops[loop_idx].vertex_index]
-
-    # Set vertex colors
-    for i, col_layer in enumerate(color_layers):
-        col_layer_new = dst_mesh.color_attributes.new(
-            name=col_layer.name, domain='CORNER', type='FLOAT_COLOR')
-        for poly in dst_mesh.polygons:
-            for loop_idx in poly.loop_indices:
-                col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]
-
-    # Set Normals
-    dst_mesh.normals_split_custom_set_from_vertices(new_normals)
-
-    # Create new obj for exporting
-    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, dst_mesh)
+    dst_obj = src_obj.copy()
+    dst_obj.data = src_obj.data.copy()
     bpy.context.collection.objects.link(dst_obj)
-
-    # Set Vertex groups
-    for g in groups:
-        vg = dst_obj.vertex_groups.new(name=g.name)
-    for i, group_tuple in enumerate(new_groups):
-        for gname, weight in group_tuple:
-            vg = dst_obj.vertex_groups[gname]
-            vg.add([i], weight, 'REPLACE')
-
-    for modifier in src_obj.modifiers:
-        if modifier.type == 'ARMATURE' and modifier.object:
-            new_arm_modifier = dst_obj.modifiers.new(name="Armature", type='ARMATURE')
-            new_arm_modifier.object = modifier.object
-            break
-
-    # TODO replace this ducktaped solution
-    for app_id in APPID_CLASS_MAPPER.keys():
-        src_albam_props = src_obj.data.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
-        dst_albam_props = dst_obj.data.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
-
-        dst_albam_props.copy_custom_properties_from(src_albam_props)
-
-    dst_obj.data.materials.append(src_obj.data.materials[0])
-
     return dst_obj
 
 

@@ -26,10 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Typo that set wrong name ("name") for the color attribute layer
 - Typo that brightened vertex colors on every import-export round trip
 - Vertex colors losing precision on every import-export round trip
+- Vertices export with multiple attributes, causing artifacts around UV seams
 
 ### Changed
 
 ### Removed
+
+- Split UV Seams tool, no longer needed now that export splits vertices automatically
 
 ## [0.5.0] - 2026-04-03
 
