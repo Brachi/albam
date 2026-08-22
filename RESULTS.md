@@ -269,3 +269,83 @@ Verified against the dataset and fixed:
   by name-string lookup, appropriately out of scope for the format
   itself. `texture_header`'s `unk_01` (`>=13`) is genuinely still unknown
   in both tools - confirmed same size/gate, no further identity found.
+
+# tex.ksy parsing/serialization sweep — RE3
+
+Same methodology as the two sweeps above, for `albam/engines/reng/structs/tex.ksy`
+(RE Engine's `.tex` texture format - a material's texture bindings, in
+`.mdf2`, point to `.tex` files; see `albam/engines/reng/texture.py`).
+
+## Dataset and test
+
+14 files in `tests/reng/datasets/tex_serialization_hashes.json` (player/
+enemy/boss characters, weapon, building/environment, and prop textures),
+all hash-verified against the committed catalog. Unlike the mesh/mdf
+sweeps, this one is a **byte-exact round-trip** test
+(`test_tex_serialization.py`), not just structural parsing assertions:
+read a real file, re-serialize it with the same `.ksy`-generated
+read-write parser into a freshly allocated buffer, and assert the output
+matches the source bytes exactly. This is deliberately stricter than a
+plain parse - it fails if `.ksy` doesn't account for every byte of the
+real file (a gap/padding region nothing writes to), independent of
+manually reading the format. Result: **14/14 passed**, both before and
+after every fix below - `.tex`'s declared fields already fully account
+for every byte in this sample.
+
+## Cross-reference against RE-Mesh-Editor
+
+Same "wide field is secretly packed narrow fields" pattern the mesh.ksy/
+mdf.ksy passes found repeatedly:
+
+- `mipmap_data`'s `ofs_data`/`unk_01` (2× `u4`) merged into one real `u8`
+  offset - harmless today only because no real file is anywhere near
+  4GB, so the high 32 bits were always 0.
+- `unk_04` (`u4`) split into its 2 real `u1` sub-fields + a null `u2`;
+  `unk_05` (`u8`, version-gated) split into its 5 real sub-fields
+  (swizzle metadata, unused on PC, + two upstream-unexplained "seven"/
+  "one" markers). Both still unnamed/unexplained upstream too - split
+  for byte-accuracy, not because their meaning is now known.
+
+**Version thresholds generalized**: the mipmap-header layout choice and
+`unk_05`'s presence were both hardcoded as literal version-number lists
+(`10`/`190820018` → layout A, `30`/`34` → layout B; a separate exact-match
+gate for `unk_05`). The real underlying conditions are `version > 11 and
+version != 190820018` (mipmap header) and `version > 27 and version !=
+190820018` (`unk_05`) - two genuinely independent thresholds, confirmed
+upstream, not the same condition reused. Every version albam currently
+supports resolves identically either way - this only matters for
+correctly extrapolating to a future version instead of guessing which
+literal list it belongs in.
+
+**Identified and renamed**: `unk_00` → `depth` (3D/volume-texture depth -
+mip level *N*'s depth is `max(depth >> N, 1)`); root `unk_02`/`unk_03` →
+`swizzle_control` (now correctly signed - `-1` = no swizzle, which is
+every case albam handles, PC only) / `cubemap_marker`; `mipmap_data`'s
+`unk_02` → `scanline_length` (row pitch in bytes, used upstream to strip
+per-row padding - **not** a per-mip width/height as first hypothesized
+when briefing the investigation).
+
+**`format` enum added** (`dxgi_format` - RE Engine's values are confirmed
+1:1 with the real, standard DXGI_FORMAT enum). Checked against real data
+before assuming this mattered: `texture.py` only special-cases 4 raw
+values today (`98`/`99`→BC7, `71`/`72`→DXT1, else a warn-and-guess-BC7
+fallback), and the initial concern was that `NormalRoughnessMap` textures
+(BC5 is the industry-standard normal-map compression) might be silently
+misdecoding. Verified directly: every texture across the whole dataset,
+including all `_NRMR`/`NormalRoughnessMap` ones, is actually `format=98`
+(BC7) or `format=72` (BC1/DXT1 `srgb`) - values `texture.py` already
+handles correctly. So the enum is documentation/future-proofing, not a
+fix for an observed live bug in this game.
+
+**Not modeled** (out of scope - no supported version or sample file
+exercises either): per-image mip-chain looping for cubemap/texture-array
+files (`num_images` is real and distinct from `depth`, but albam's `.ksy`
+only ever reads one image's mip chain regardless of its value - harmless
+for every ordinary single-image texture, which is everything tested, but
+an incomplete model for a real cubemap/array file); the newest titles'
+(MHWilds/RE9/MHS3) GDeflate-compressed mip-payload section, which doesn't
+exist at all for any version albam currently supports.
+
+Verified via the round-trip serialization test (still 14/14 after every
+change) and the full suite, including the mesh-import test (exercises
+the real image-decode pipeline end-to-end).
