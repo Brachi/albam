@@ -18,7 +18,11 @@ seq:
   - {id: files_info, type: file_info, repeat: expr, repeat-expr: size_files_info / 32}
   - {id: chunk_sizes, type: u4, repeat: expr, repeat-expr: size_chunks_info / 4}
   - {id: file_names, size: size_file_names}
-  - {id: buffer_chunks, size: size_chunks_buffer}
+
+instances:
+  buffer_chunks:
+    pos: 32 + size_files_info + size_chunks_info + size_file_names
+    size: size_chunks_buffer
 
 types:
   file_info:

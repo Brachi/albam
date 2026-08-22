@@ -13,6 +13,8 @@ class HexaneSsg(ReadWriteKaitaiStruct):
         super(HexaneSsg, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self._should_write_buffer_chunks = False
+        self.buffer_chunks__enabled = True
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -38,7 +40,6 @@ class HexaneSsg(ReadWriteKaitaiStruct):
             self.chunk_sizes.append(self._io.read_u4le())
 
         self.file_names = self._io.read_bytes(self.size_file_names)
-        self.buffer_chunks = self._io.read_bytes(self.size_chunks_buffer)
         self._dirty = False
 
 
@@ -51,10 +52,15 @@ class HexaneSsg(ReadWriteKaitaiStruct):
         for i in range(len(self.chunk_sizes)):
             pass
 
+        _ = self.buffer_chunks
+        if hasattr(self, '_m_buffer_chunks'):
+            pass
+
 
 
     def _write__seq(self, io=None):
         super(HexaneSsg, self)._write__seq(io)
+        self._should_write_buffer_chunks = self.buffer_chunks__enabled
         self._io.write_bytes(self.id_magic)
         self._io.write_u4le(self.reserved_01)
         self._io.write_u4le(self.size_files_info)
@@ -72,7 +78,6 @@ class HexaneSsg(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.chunk_sizes[i])
 
         self._io.write_bytes(self.file_names)
-        self._io.write_bytes(self.buffer_chunks)
 
 
     def _check(self):
@@ -96,8 +101,11 @@ class HexaneSsg(ReadWriteKaitaiStruct):
 
         if len(self.file_names) != self.size_file_names:
             raise kaitaistruct.ConsistencyError(u"file_names", self.size_file_names, len(self.file_names))
-        if len(self.buffer_chunks) != self.size_chunks_buffer:
-            raise kaitaistruct.ConsistencyError(u"buffer_chunks", self.size_chunks_buffer, len(self.buffer_chunks))
+        if self.buffer_chunks__enabled:
+            pass
+            if len(self._m_buffer_chunks) != self.size_chunks_buffer:
+                raise kaitaistruct.ConsistencyError(u"buffer_chunks", self.size_chunks_buffer, len(self._m_buffer_chunks))
+
         self._dirty = False
 
     class FileInfo(ReadWriteKaitaiStruct):
@@ -178,5 +186,33 @@ class HexaneSsg(ReadWriteKaitaiStruct):
             self._io.write_u1(0)
             self._io.seek(_pos)
 
+
+    @property
+    def buffer_chunks(self):
+        if self._should_write_buffer_chunks:
+            self._write_buffer_chunks()
+        if hasattr(self, '_m_buffer_chunks'):
+            return self._m_buffer_chunks
+
+        if not self.buffer_chunks__enabled:
+            return None
+
+        _pos = self._io.pos()
+        self._io.seek(((32 + self.size_files_info) + self.size_chunks_info) + self.size_file_names)
+        self._m_buffer_chunks = self._io.read_bytes(self.size_chunks_buffer)
+        self._io.seek(_pos)
+        return getattr(self, '_m_buffer_chunks', None)
+
+    @buffer_chunks.setter
+    def buffer_chunks(self, v):
+        self._dirty = True
+        self._m_buffer_chunks = v
+
+    def _write_buffer_chunks(self):
+        self._should_write_buffer_chunks = False
+        _pos = self._io.pos()
+        self._io.seek(((32 + self.size_files_info) + self.size_chunks_info) + self.size_file_names)
+        self._io.write_bytes(self._m_buffer_chunks)
+        self._io.seek(_pos)
 
 
