@@ -1,5 +1,6 @@
 import ctypes
 import io
+import re
 import struct
 import time
 
@@ -358,6 +359,9 @@ def _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot):
     struct.pack_into(f"<{len(indices)}H", data, ib_off, *indices)
 
 
+_BLENDER_DEDUP_SUFFIX_RE = re.compile(r"\.\d{3}$")
+
+
 def _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_index):
     materials = bl_mesh_ob.data.materials
     if not materials or materials[0] is None:
@@ -368,12 +372,21 @@ def _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_inde
         )
     material_name = materials[0].name
     if material_name not in material_name_to_index:
-        raise AlbamCheckFailure(
-            "Mesh material isn't one of this file's materials",
-            f"'{material_name}' isn't in this .mesh file's material name table.",
-            "Only referencing one of the file's existing materials is supported - "
-            ".mdf2 export isn't implemented yet.",
-        )
+        # bpy.data.materials disambiguates same-named materials within one
+        # Blender session (e.g. importing the same file's materials twice)
+        # by appending ".001" etc. - strip that back off before giving up,
+        # since it's a Blender-side rename, not evidence of a genuinely
+        # different/new material.
+        deduped = _BLENDER_DEDUP_SUFFIX_RE.sub("", material_name)
+        if deduped in material_name_to_index:
+            material_name = deduped
+        else:
+            raise AlbamCheckFailure(
+                "Mesh material isn't one of this file's materials",
+                f"'{material_name}' isn't in this .mesh file's material name table.",
+                "Only referencing one of the file's existing materials is supported - "
+                ".mdf2 export isn't implemented yet.",
+            )
     struct.pack_into("<B", data, entry_offset, material_name_to_index[material_name])
 
 
