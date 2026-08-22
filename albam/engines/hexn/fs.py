@@ -19,10 +19,11 @@ MultiFS, mirroring `albam.engines.mtfw.arc_fs.MTFW_FS`.
 import io
 import os
 import zlib
+from collections import OrderedDict
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
+from fs.errors import CreateFailed, DirectoryExpected, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
@@ -282,3 +283,49 @@ class HexnFS(MultiFS):
                 return ssg_path[len(self._s3_prefix) + 1:]
             return ssg_path
         return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
+
+    # listdir()/scandir(): MultiFS's own versions (see fs.multifs.MultiFS)
+    # aggregate every overlaid sub-filesystem's listing for `path` and only
+    # guard against `ResourceNotFound` per sub-fs - if any one of them
+    # raises `DirectoryExpected` (because it has `path` as a plain file
+    # instead), the whole aggregate call crashes instead of just skipping
+    # that sub-fs. That's reachable with real, unmodified game data: a real
+    # RE:ORC install has at least one .ssg packing a bare file entry named
+    # "abilities" while the loose files also have a real "abilities/"
+    # directory - same name, different type, in two different overlaid
+    # filesystems. Both overrides below catch that too, so a sub-fs that
+    # disagrees about a path's type is just skipped for that path (its
+    # entries never contributed) rather than aborting the whole call -
+    # consistent with "loosely layered on top, archives underneath" already
+    # meaning a name can be shadowed outright, not just re-typed.
+    def listdir(self, path):
+        self.check()
+        directory = []
+        exists = False
+        for _name, sub_fs in self.iterate_fs():
+            try:
+                directory.extend(sub_fs.listdir(path))
+            except (ResourceNotFound, DirectoryExpected):
+                pass
+            else:
+                exists = True
+        if not exists:
+            raise ResourceNotFound(path)
+        return list(OrderedDict.fromkeys(directory))
+
+    def scandir(self, path, namespaces=None, page=None):
+        self.check()
+        seen = set()
+        exists = False
+        for _name, sub_fs in self.iterate_fs():
+            try:
+                for info in sub_fs.scandir(path, namespaces=namespaces, page=page):
+                    if info.name not in seen:
+                        yield info
+                        seen.add(info.name)
+            except (ResourceNotFound, DirectoryExpected):
+                pass
+            else:
+                exists = True
+        if not exists:
+            raise ResourceNotFound(path)
