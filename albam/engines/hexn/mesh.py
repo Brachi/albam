@@ -1,4 +1,5 @@
 import struct
+from itertools import chain
 
 import bpy
 
@@ -29,6 +30,8 @@ def build_blender_model(vfile, context):
 
 def build_blender_mesh(mesh_header, bl_materials):
     vertices = []
+    normals = []
+    tangents = []
     uvs = []
     edge_mesh = mesh_header.mesh
     # Not a fixed 52 bytes - a full-game sweep found 11 distinct real
@@ -41,6 +44,21 @@ def build_blender_mesh(mesh_header, bl_materials):
     ob = bpy.data.objects.new("MESH-TODO", me_ob)
 
     has_uvs = vertex_stride >= 28  # smallest real stride seen with UV data (12/16/24 don't have any)
+    # Normal is a plain, uncompressed float32 xyz right after position - not
+    # some packed/quantized format, confirmed against real geometry (single-
+    # triangle/quad props spanning strides 24/28/32/52): decoded vector is
+    # unit-length to float32 precision and its face-normal alignment is ~1.0.
+    has_normal = vertex_stride >= 24
+    # Tangent (and a bitangent right after it, not imported - Blender
+    # derives it from normal+tangent+a handedness sign it computes itself)
+    # only confirmed at this exact stride: three float32 triples in a row
+    # (position, normal, tangent) all read back as unit vectors, tangent
+    # orthogonal to normal to 6+ decimal places. Larger strides (56, 60)
+    # do NOT reproduce this at the same offset - real data there fails the
+    # unit-length/orthogonality check, meaning something else (uncomodeled)
+    # is interleaved before tangent for those, so this stays gated to the
+    # one stride it's actually confirmed for rather than guessed at.
+    has_tangent = vertex_stride == 52
     current_offset = 0
     for vi in range(edge_mesh.num_vertices):
         pos_x = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset)[0]
@@ -49,10 +67,19 @@ def build_blender_mesh(mesh_header, bl_materials):
 
         vertices.append((pos_x, -pos_z, pos_y))
 
+        if has_normal:
+            nx, ny, nz = struct.unpack_from('fff', edge_mesh.buffer_vertices, current_offset + 12)
+            normals.append((nx, -nz, ny))
+
         if has_uvs:
             uv_x = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 24)[0]
             uv_y = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 26)[0]
             uvs.extend((uv_x, 1 - uv_y))
+
+        if has_tangent:
+            tx, ty, tz = struct.unpack_from('fff', edge_mesh.buffer_vertices, current_offset + 28)
+            tangents.append((tx, -tz, ty))
+
         current_offset += vertex_stride
 
     indices = struct.unpack_from(f'{edge_mesh.size_buffer_indices // 2}H', edge_mesh.buffer_indices)
@@ -61,6 +88,8 @@ def build_blender_mesh(mesh_header, bl_materials):
     indices = [triplet for triplet in indices
                if (triplet != (0, 0) and triplet != (0, 0, 0) and triplet != (0, ))]
     me_ob.from_pydata(vertices, [], indices)
+    _build_normals(me_ob, normals)
+    _build_tangents(me_ob, tangents)
     _build_uvs(me_ob, uvs)
     _build_weights(ob, edge_mesh)
     mesh_material_path = mesh_header.materials.first_material
@@ -68,6 +97,26 @@ def build_blender_mesh(mesh_header, bl_materials):
         me_ob.materials.append(bl_materials[mesh_material_path])
 
     return ob
+
+
+def _build_normals(bl_mesh, normals):
+    if not normals:
+        return
+    # Blender 4.1+ only (this engine has no older-Blender compat path
+    # anywhere) - custom split normals are automatic once every polygon is
+    # marked smooth, no create_normals_split()/use_auto_smooth needed.
+    bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
+    bl_mesh.normals_split_custom_set_from_vertices(normals)
+
+
+def _build_tangents(bl_mesh, tangents):
+    if not tangents:
+        return
+    # Blender's tangent slot is computed (mesh.calc_tangents()), not
+    # settable, so the imported tangent is stored as a plain custom
+    # attribute instead, for round-trip/inspection purposes only.
+    tangent_attr = bl_mesh.attributes.new(name="tangent", type='FLOAT_VECTOR', domain='POINT')
+    tangent_attr.data.foreach_set("vector", list(chain.from_iterable(tangents)))
 
 
 def _build_weights(bl_obj, edge_mesh):
