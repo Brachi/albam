@@ -115,6 +115,40 @@ def test_add_export_root_defaults_missing_bytes_to_empty():
     assert vfile.get_bytes() == b""
 
 
+def test_reload_blend_file_reconnects_fs_roots(tmp_path):
+    """
+    add_fs_root() stashes the live FS instance in fs_registry - a plain
+    in-process dict (see its module docstring) - and only a string key on
+    the persisted VirtualFile.fs_key. That dict isn't part of the .blend
+    file and doesn't survive a real restart: a fresh Blender process starts
+    with fs_registry empty again, while VirtualFile.fs_key (restored from
+    the file) still points at an entry that no longer exists. Reproduces
+    the KeyError a user hits importing after reopening a saved .blend that
+    had a folder/archive added to the VFS.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model" / "pl" / "pl00").mkdir(parents=True)
+    (game_root / "model" / "pl" / "pl00" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    vfs.add_real_file("re5", str(game_root))
+    vfile = vfs.select_vfile("re5", "model/pl/pl00/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    blend_path = str(tmp_path / "save.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+
+    # Simulate closing and reopening Blender: fs_registry is plain-Python,
+    # in-process state that a fresh process starts up without, unlike
+    # bpy.data (including VirtualFile.fs_key), which is restored from disk.
+    fs_registry.clear()
+    bpy.ops.wm.open_mainfile(filepath=blend_path)
+
+    vfs = bpy.context.scene.albam.vfs
+    vfile = vfs.select_vfile("re5", "model/pl/pl00/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+
 def test_remove_root_unregisters_fs():
     from albam.vfs import ALBAM_OT_VirtualFileSystemRemoveRootVFile
 
