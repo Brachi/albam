@@ -14,6 +14,7 @@ from ...lib.blender import (
     is_blimage_dds,
 )
 from ...lib.dds import DDSHeader
+from ...lib.kaitai_utils import check_recursive
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
@@ -608,7 +609,7 @@ def _serialize_texture_156(app_id, dict_tex):
     tex.padding = 0
     custom_properties.set_to_dest(tex)
 
-    tex._check()
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
@@ -654,7 +655,7 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_data_size = len(tex.dds_data)
 
     custom_properties.set_to_dest(tex)
-    tex._check()
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))

@@ -35,6 +35,7 @@ from ...lib.common_op import (
     move_to_collection
 )
 from ...lib.export_checks import check_all_objects_have_materials
+from ...lib.kaitai_utils import check_recursive
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
@@ -917,7 +918,7 @@ def export_mod(bl_obj):
 
     dst_mod.header.size_file = final_size
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
-    dst_mod._check()
+    check_recursive(dst_mod)
     dst_mod._write(stream)
 
     mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
@@ -1881,9 +1882,9 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             else:
                 vertex_struct.weight_values = weight_values
         if has_vertex_buffer_2:
-            vertex_struct_2._check()
+            check_recursive(vertex_struct_2)
             vertex_struct_2._write(vtx_stream_2)
-        vertex_struct._check()
+        check_recursive(vertex_struct)
         vertex_struct._write(vtx_stream)
 
     return vtx_stream, vtx_stream_2, vertex_format, vtx_stride, vtx_stride_2, max_bones_per_vertex

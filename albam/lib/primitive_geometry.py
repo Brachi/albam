@@ -4,12 +4,12 @@ Created on Thu Nov 28 23:44:04 2019
 
 @author: AsteriskAmpersand
 """
+from pymorton import interleave as morton_encode
+
 try:
-    from albam.albam_vendor.pymorton import interleave as morton_encode
     from rays import Ray
     from vec_op import vect_int, vec_div, vec_unfold
 except ImportError:
-    from ..albam_vendor.pymorton import interleave as morton_encode
     from .rays import Ray
     from .vec_op import vect_int, vec_div, vec_unfold
 

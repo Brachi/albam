@@ -8,6 +8,7 @@ from kaitaistruct import KaitaiStream
 
 from ...exceptions import AlbamCheckFailure
 from ...lib.blender import get_bl_materials, ShaderGroupCompat
+from ...lib.kaitai_utils import check_recursive
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from .defines import get_shader_objects
@@ -474,7 +475,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     for m in mrl.materials:
         m.ofs_cmd += mrl.ofs_resources_calculated
     dst_mod.materials_data._check()
-    mrl._check()
+    check_recursive(mrl)
 
     # TODO: size_todo name it "without_cmd_buffers" and use it here
     padding_1 = -mrl.size_todo_ % MRL_PAD
