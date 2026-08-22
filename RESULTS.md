@@ -476,59 +476,86 @@ import, read back on export, visible/editable in Blender's UI like every
 other albam custom property, not just internal round-trip plumbing.
 `copy_custom_properties_to/from` work generically against the real
 Kaitai `mesh` object with no per-field mapping code, because the
-PropertyGroup's own attribute names were chosen to match Kaitai's. The
-raw `nor_tan` bytes stay a plain Blender mesh attribute
-(`NOR_TAN_LO_ATTR`/`NOR_TAN_HI_ATTR`) rather than being forced into this
-system - it's genuinely per-vertex data, and albam's custom-properties
-mechanism is a one-PropertyGroup-per-datablock model with no per-vertex
-analogue anywhere else in the codebase (checked MTFW's usage before
-concluding this); a real mesh attribute is the correct tool for that
-shape of data, not a workaround.
+PropertyGroup's own attribute names were chosen to match Kaitai's.
+
+**Normal/tangent: reworked to derive from the live mesh, not a stash**.
+An earlier version of this export stashed the raw 8 `nor_tan` bytes per
+vertex into two hidden generic mesh attributes at import time
+(`NOR_TAN_LO_ATTR`/`NOR_TAN_HI_ATTR`) and had export replay them
+verbatim - byte-exact for an untouched round trip, but that meant editing
+or recalculating normals in Blender had **zero** effect on the exported
+file. Rejected outright: this addon exists for modding, so an edit made
+in Blender has to reach the exported file. Reworked to derive normal.xyz
+and tangent.xyz+handedness-sign genuinely from the live mesh on every
+export, the same way position/UV already do - normal via
+`mesh.corner_normals` (per-corner shading normal; `MeshVertex.normal` was
+tried first and rejected, since it's a plain face-area-weighted average
+across every adjacent face that ignores custom-split/auto-smooth shading
+entirely - confirmed on a test cube, `(-1,0,0)` per `corner_normals` vs
+`(-0.577,-0.577,-0.577)` per `vertex.normal`) and tangent via
+`mesh.calc_tangents()` (MikkTSpace - the standard approach serious
+game-engine exporters use, not a bespoke algorithm). The stash and its
+two attributes are deleted entirely. One still-unidentified byte (see
+below) has no Blender-side representation and is genuinely not
+recoverable - that's a real, permanent, documented precision loss, not
+something forced into a hidden attribute.
 
 **Fidelity results** (5-file dataset spanning a skinned character, a
 skinned weapon, a skinned 8-LOD-group enemy, and two bone-less static
 meshes - see `tests/reng/test_mesh_serialization.py`):
 
-- **Whole file, byte-exact**: both bone-less files. Confirmed by comparing
-  the entire exported file against the source, not just specific known
-  regions.
-- **Byte-exact everywhere except one region, for every skinned file**:
-  position, UV, index buffer, normal+tangent (via the stashed raw
-  bytes), header, name tables, bone data (including the newly-modeled
-  local/world matrices), material remap, and all 7 non-LOD-0 levels of
-  the 8-LOD-group enemy file - all byte-identical to source. The *only*
-  remaining difference for any skinned file, confirmed by diffing the
-  entire exported file against source and checking every mismatched byte
-  falls inside a known skin-weight accessor range: **skin weights**. The
-  *values* are exactly preserved (same set of (bone name, quantized
-  weight) pairs per vertex, verified by decoding both sides) - but which
-  of the 8 joint/weight byte-slots a given bone occupies isn't
-  recoverable from a Blender vertex group at all (it's an unordered
-  per-vertex set, not the original primary/secondary split), so export
-  uses a deterministic weight-descending reassignment. This is the one
-  remaining non-reproducible fidelity gap, and it's structural (nothing
-  Blender's vertex-group data model exposes could fix it without a
-  different, non-native way of storing weights) rather than an oversight.
-- Everything not touched (any file with no bones at all; every mesh
-  section this export doesn't set fields on) is exact by construction -
-  either through the real `_write()` mechanism now that gaps are modeled
-  or restored, not just by not being touched. Per-bone AABBs and the
-  shadow-mesh header both moved from the "restored from source" bucket to
-  the "real mechanism" bucket once their layouts were confirmed (above) -
-  the *outward* fidelity claim doesn't change (still byte-exact outside
-  the weight-slot region), only *how* it's achieved for those sections.
-  With both resolved, **all 5 dataset files are now fully byte-exact
-  outside the weight-slot region** - no file has any remaining gap beyond
-  the structural skin-weight one.
+- **Byte-exact for every file**: position, UV, index buffer, header, name
+  tables, bone data (including the local/world matrices and shadow-mesh
+  header modeled this pass), material remap, and all 7 non-LOD-0 levels
+  of the 8-LOD-group enemy file - confirmed both per-region and by a
+  whole-file byte diff that excludes only the two regions below.
+- **Semantically, not byte, exact - two regions, both by design**:
+  - **Normal/tangent**: recomputed from the live mesh on every export
+    (see above) rather than round-tripped, so even a completely
+    unmodified re-export isn't byte-identical here. Measured directly
+    against this dataset (not assumed): normal.xyz differs from source by
+    at most one int8 quantization step across every vertex tested (tight
+    tolerance, quantization-only - both sides derive it from the same
+    quantized source, mediated only by Blender's own storage/rounding).
+    Tangent is looser, for two *measured*, not theoretical, reasons: (1)
+    Blender's MikkTSpace tangent generation is a different algorithm from
+    whatever the original art pipeline used, so even geometrically
+    identical tangents can compute to a different direction or sign,
+    particularly at UV seams/mirrored islands or tiny submeshes where
+    tangent-space generation is inherently under-determined regardless of
+    algorithm - measured per-file pooled tangent alignment (dot product)
+    never dropped below ~0.82, and per-file bitangent-sign agreement
+    never dropped below ~85% even on the single worst (tiny, 32-vertex)
+    submesh; (2) int8 quantization on top of that. The test asserts
+    real thresholds with headroom under those measured worst cases (0.75
+    average alignment, 80% sign agreement), not arbitrary slack.
+  - **Skin weights**: same as before this pass - the *values* are exactly
+    preserved (same set of (bone name, quantized weight) pairs per
+    vertex, verified by decoding both sides), but which of the 8
+    joint/weight byte-slots a bone occupies isn't recoverable from a
+    Blender vertex group at all, so export uses a deterministic
+    weight-descending reassignment. Structural, not an oversight.
+  - One byte of the 8-byte `nor_tan` block (index 3) is a still-
+    unidentified value, nonzero in ~1% of real vertices sampled, with no
+    Blender-side representation whatsoever - not recoverable from live
+    geometry by any means. Written as 0 on export: a real, permanent,
+    documented precision loss for that byte specifically, not silently
+    forced without saying so.
+- **Proven, not just claimed, that an edit reaches the export**: imports
+  a real file, calls Blender's `flip_normals()` (a real mesh edit, not a
+  synthetic bypass), exports, and asserts the exported normals are now
+  ~opposite the source's (average dot product <= -0.9) - i.e. the edit
+  demonstrably propagated through, not a stale copy of the original file.
 
 Verified against real re3 install data via the full test suite (re2's
 export registration is untested - this machine's re2 install is broken,
 see the RE2 dataset section above): structural-field equality, per-region
-byte-exact geometry checks, per-vertex weight-set equality, and a
-whole-file byte-diff assertion (the strongest check - fails if *any*
-unaccounted-for byte differs anywhere in the file, not just the regions
-the other tests happen to look at), each as its own assertion rather than
-one diff, so a real regression in one region can't hide behind an
-unrelated one staying identical - plus a dedicated negative test
-(exporting a mesh with no main model tree raises a clear error instead of
-silently no-op'ing).
+byte-exact geometry checks, per-vertex weight-set equality, the
+normal/tangent semantic-equality check above, a whole-file byte-diff
+assertion excluding only the two lossy-by-design regions (the strongest
+structural check - fails if *any* unaccounted-for byte differs anywhere
+else in the file), each as its own assertion rather than one diff, so a
+real regression in one region can't hide behind an unrelated one staying
+identical - plus the edit-propagation test above and a dedicated negative
+test (exporting a mesh with no main model tree raises a clear error
+instead of silently no-op'ing).
