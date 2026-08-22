@@ -6,13 +6,35 @@ and RE Engine's PakFS.from_s3/ReenFS.from_s3 (albam/engines/reng/pak_fs.py)
 - nothing engine-specific in any of these, so they live here instead of
 being duplicated (or one engine importing the other's module).
 """
+import hashlib
 import io
+import json
+import os
+import shutil
+import sys
+import tempfile
 
 from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import DirectoryExpected, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.path import basename
+
+
+CACHE_DIR_ENV_VAR = "ALBAM_S3_CACHE_DIR"
+CACHE_MAX_BYTES_ENV_VAR = "ALBAM_S3_CACHE_MAX_BYTES"
+CACHE_MIN_FREE_BYTES_ENV_VAR = "ALBAM_S3_CACHE_MIN_FREE_BYTES"
+
+# A full test suite against two games caches ~200MB, so 2GiB leaves room for
+# several more without the cache ever being the thing that fills a disk.
+DEFAULT_CACHE_MAX_BYTES = 2 * 1024 ** 3
+# Refuse to grow the cache once the filesystem is this close to full,
+# whatever the cache's own size. A convenience cache has no business being
+# the reason a machine runs out of space.
+DEFAULT_CACHE_MIN_FREE_BYTES = 2 * 1024 ** 3
+# How much may be written between prunes. Pruning walks the cache, so it
+# runs once when a client is built and then only after meaningful growth.
+PRUNE_INTERVAL_BYTES = 256 * 1024 ** 2
 
 
 def build_s3_client(
@@ -38,7 +60,7 @@ def build_s3_client(
     import boto3
     from botocore.config import Config
 
-    return boto3.client(
+    client = boto3.client(
         "s3",
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
@@ -50,6 +72,242 @@ def build_s3_client(
             response_checksum_validation="when_required",
         ),
     )
+    cache_dir = resolve_cache_dir()
+    if cache_dir:
+        client = cache_get_object(client, cache_dir)
+    return client
+
+
+# get_object kwargs the cache knows how to key on. Anything else - a
+# versioned read, a part number, SSE-C headers - bypasses the cache
+# entirely rather than risking a hit that ignores the extra argument.
+_CACHEABLE_GET_OBJECT_KWARGS = frozenset({"Bucket", "Key", "Range"})
+
+# The only response fields anything downstream reads back: smart_open's
+# Reader uses ContentLength/ContentRange/Body (plus ResponseMetadata,
+# rebuilt below), S3LooseFS.openbin only Body. ETag is kept for debugging
+# a cache entry by hand, not used.
+_CACHED_RESPONSE_FIELDS = ("ContentLength", "ContentRange", "ETag", "ContentType")
+
+
+def default_cache_dir():
+    """Where the cache lives when nothing says otherwise: the platform's
+    conventional cache location, which is the right place for data that can
+    be deleted at any time without losing anything.
+    """
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local")
+        return os.path.join(base, "albam", "cache", "s3")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Caches/albam/s3")
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return os.path.join(base, "albam", "s3")
+
+
+def resolve_cache_dir():
+    """The directory to cache into, or None for no caching.
+
+    Unset means the platform default, so nobody has to opt in to get a
+    working cache. Set to a path uses that path. Set to an empty string
+    turns caching off - the one way to say "don't", since with a default in
+    place unsetting the variable no longer means that.
+    """
+    configured = os.environ.get(CACHE_DIR_ENV_VAR)
+    if configured is None:
+        return default_cache_dir()
+    configured = configured.strip()
+    return configured or None
+
+
+def _env_bytes(name, default):
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"{name}={raw!r} is not an integer number of bytes, using {default}")
+        return default
+    return max(0, value)
+
+
+def _cache_entries(cache_dir):
+    """(mtime, size, stem) for every complete entry, oldest first."""
+    entries = []
+    for root, _, files in os.walk(cache_dir):
+        for name in files:
+            if not name.endswith(".body"):
+                continue
+            body = os.path.join(root, name)
+            meta = body[: -len(".body")] + ".json"
+            try:
+                size = os.path.getsize(body) + os.path.getsize(meta)
+                mtime = os.path.getmtime(body)
+            except OSError:
+                continue  # vanished under us, or a half-written pair
+            entries.append((mtime, size, body[: -len(".body")]))
+    entries.sort()
+    return entries
+
+
+def prune_cache(cache_dir, max_bytes=None, min_free_bytes=None):
+    """Evict least recently written entries until the cache fits under
+    `max_bytes` and the filesystem has at least `min_free_bytes` free.
+
+    Returns the number of bytes freed. Both limits matter: the absolute one
+    bounds the cache on a machine with room to spare, and the free space one
+    keeps it from being the last straw on a machine without.
+    """
+    max_bytes = DEFAULT_CACHE_MAX_BYTES if max_bytes is None else max_bytes
+    min_free_bytes = DEFAULT_CACHE_MIN_FREE_BYTES if min_free_bytes is None else min_free_bytes
+
+    entries = _cache_entries(cache_dir)
+    total = sum(size for _, size, _ in entries)
+    try:
+        free = shutil.disk_usage(cache_dir).free
+    except OSError:
+        free = None
+
+    freed = 0
+    for _, size, stem in entries:
+        over_size = total - freed > max_bytes
+        low_disk = free is not None and (free + freed) < min_free_bytes
+        if not (over_size or low_disk):
+            break
+        for path in (stem + ".body", stem + ".json"):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        freed += size
+    return freed
+
+
+def _cache_entry_paths(cache_dir, kwargs):
+    identity = json.dumps({k: kwargs[k] for k in sorted(kwargs)}, separators=(",", ":"))
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    # two-level fanout: a full game root is tens of thousands of entries,
+    # and a single flat directory that size is miserable to work with
+    directory = os.path.join(cache_dir, digest[:2])
+    return os.path.join(directory, digest[2:] + ".body"), os.path.join(directory, digest[2:] + ".json")
+
+
+def _write_atomically(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp_path, path)  # atomic, so a torn write is never read back
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def cache_get_object(client, cache_dir):
+    """Wrap `client.get_object` with a content-addressed disk cache under
+    `cache_dir`, keyed by (Bucket, Key, Range).
+
+    This exists for development and test iteration, where the same handful
+    of archives get re-fetched from scratch on every run - a full
+    tests/mtfw/test_mod_serialization.py run pulls ~112MB in ~112 ranged
+    requests, all of it identical to the run before. Nothing here helps end
+    users, whose VFS reads local .arc files.
+
+    Entries are validated by ETag before being served, once per object per
+    process: the first cached range of a given key costs a head_object, and
+    every other range of that same object rides on that answer. If the ETag
+    moved, every cached range of that key is stale by definition, so the
+    read falls through to the server and re-populates. That is worth the
+    request - not caching at all is the only alternative that's also
+    correct, and an object being re-uploaded under a name already in the
+    cache is not hypothetical: the moto-backed tests recreate one bucket
+    and key with different synthetic bytes in test after test, and without
+    validation they get served each other's content.
+
+    Ranges are cached as themselves rather than assembled into whole
+    objects, so this stays correct for smart_open's chunked reads without
+    ever materializing a 40MB archive to serve an 8 byte header read.
+    """
+    real_get_object = client.get_object
+    live_etags = {}  # (bucket, key) -> ETag, one head_object per object per process
+    max_bytes = _env_bytes(CACHE_MAX_BYTES_ENV_VAR, DEFAULT_CACHE_MAX_BYTES)
+    min_free_bytes = _env_bytes(CACHE_MIN_FREE_BYTES_ENV_VAR, DEFAULT_CACHE_MIN_FREE_BYTES)
+    written_since_prune = [0]
+
+    def prune(force=False):
+        if not force and written_since_prune[0] < PRUNE_INTERVAL_BYTES:
+            return
+        written_since_prune[0] = 0
+        if os.path.isdir(cache_dir):
+            prune_cache(cache_dir, max_bytes, min_free_bytes)
+
+    def room_to_write(size):
+        """Never write the entry that takes the filesystem below the floor.
+        Checked per write because a single run can fetch hundreds of MB, and
+        an entry refused now is just a cache miss later."""
+        try:
+            free = shutil.disk_usage(cache_dir if os.path.isdir(cache_dir) else ".").free
+        except OSError:
+            return True  # can't tell: behave as before rather than refuse
+        return free - size >= min_free_bytes
+
+    prune(force=True)
+
+    def current_etag(bucket, key):
+        identity = (bucket, key)
+        if identity not in live_etags:
+            try:
+                live_etags[identity] = client.head_object(Bucket=bucket, Key=key).get("ETag")
+            except Exception:
+                live_etags[identity] = None  # can't tell: treat every entry as stale
+        return live_etags[identity]
+
+    def get_object(**kwargs):
+        if not _CACHEABLE_GET_OBJECT_KWARGS.issuperset(kwargs):
+            return real_get_object(**kwargs)
+
+        body_path, meta_path = _cache_entry_paths(cache_dir, kwargs)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            with open(body_path, "rb") as f:
+                body = f.read()
+        except (OSError, ValueError):
+            pass  # miss, or an unreadable/half-written entry: just re-fetch
+        else:
+            etag = meta.get("ETag")
+            if etag is not None and etag == current_etag(kwargs["Bucket"], kwargs["Key"]):
+                return _cached_response(meta, body)
+
+        response = real_get_object(**kwargs)
+        body = response["Body"].read()
+        if room_to_write(len(body)):
+            meta = {k: response[k] for k in _CACHED_RESPONSE_FIELDS if k in response}
+            _write_atomically(body_path, body)
+            _write_atomically(meta_path, json.dumps(meta).encode("utf-8"))
+            written_since_prune[0] += len(body)
+            prune()
+        response["Body"] = io.BytesIO(body)  # already consumed above
+        return response
+
+    client.get_object = get_object
+    return client
+
+
+def _cached_response(meta, body):
+    return {
+        **meta,
+        "Body": io.BytesIO(body),
+        # smart_open reads both of these off every response
+        "ResponseMetadata": {
+            "HTTPStatusCode": 206 if "ContentRange" in meta else 200,
+            "RetryAttempts": 0,
+        },
+    }
 
 
 def s3_opener(client, bucket, range_chunk_size=1024 * 1024):
