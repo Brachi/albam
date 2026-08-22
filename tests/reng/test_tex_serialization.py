@@ -64,16 +64,17 @@ def test_tex_roundtrip(tex_src_bytes):
     parsed = ReengineTex(KaitaiStream(io.BytesIO(src_bytes)))
     parsed._read()
 
-    # dds_data is a Kaitai "instance" (a lazily-computed pos/size substream,
-    # not a regular seq field), so plain _read() never touches it. _write()
-    # reassigns parsed._io to the new destination stream before
-    # _fetch_instances() gets a chance to lazily populate it from the
-    # source - by then it's too late, and it crashes with an AttributeError
-    # instead of comparing bytes. Force it to read (and cache) from the
-    # still-attached source stream now, for every mipmap, so the write path
-    # below has something to write back.
-    for mipmap in parsed.mipmaps:
-        _ = mipmap.dds_data
+    # dds_data (per mipmap) is a Kaitai "instance" - a lazily-computed
+    # pos/size substream, not a regular seq field - so plain _read() never
+    # touches it. _write() reassigns parsed._io to the new destination
+    # stream before its own _fetch_instances() call would otherwise lazily
+    # populate it from the source - by then it's too late (the source bytes
+    # are gone), and it crashes with an AttributeError instead of comparing
+    # bytes. Call the generated _fetch_instances() ourselves first, while
+    # _io still points at the source stream, so every lazy instance - not
+    # just dds_data by name, whatever the current .ksy declares - is
+    # cached and ready for _write() to write back below.
+    parsed._fetch_instances()
 
     out_stream = KaitaiStream(io.BytesIO(bytearray(len(src_bytes))))
     parsed._check()
