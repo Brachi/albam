@@ -67,6 +67,14 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             super(HexaneEdgemodel.EdgeHeader, self).__init__(_io)
             self._parent = _parent
             self._root = _root
+            self._should_write_bones_data = False
+            self.bones_data__enabled = True
+            self._should_write_pre_bones_data = False
+            self.pre_bones_data__enabled = True
+            self._should_write_pre_trailing_footer = False
+            self.pre_trailing_footer__enabled = True
+            self._should_write_trailing_data = False
+            self.trailing_data__enabled = True
 
         def _read(self):
             self.id_magic = self._io.read_bytes(4)
@@ -118,10 +126,30 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             for i in range(len(self.ofs_models_end)):
                 pass
 
+            _ = self.bones_data
+            if hasattr(self, '_m_bones_data'):
+                pass
+
+            _ = self.pre_bones_data
+            if hasattr(self, '_m_pre_bones_data'):
+                pass
+
+            _ = self.pre_trailing_footer
+            if hasattr(self, '_m_pre_trailing_footer'):
+                pass
+
+            _ = self.trailing_data
+            if hasattr(self, '_m_trailing_data'):
+                pass
+
 
 
         def _write__seq(self, io=None):
             super(HexaneEdgemodel.EdgeHeader, self)._write__seq(io)
+            self._should_write_bones_data = self.bones_data__enabled
+            self._should_write_pre_bones_data = self.pre_bones_data__enabled
+            self._should_write_pre_trailing_footer = self.pre_trailing_footer__enabled
+            self._should_write_trailing_data = self.trailing_data__enabled
             self._io.write_bytes(self.id_magic)
             self._io.write_u4le(self.version)
             self._io.write_u4le(self.num_models)
@@ -179,7 +207,265 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             for i in range(len(self.ofs_models_end)):
                 pass
 
+            if self.bones_data__enabled:
+                pass
+                if  ((self.num_bones > 0) and (self.ofs_unk_02 > self.ofs_bones)) :
+                    pass
+                    if len(self._m_bones_data) != self.ofs_unk_02 - self.ofs_bones:
+                        raise kaitaistruct.ConsistencyError(u"bones_data", self.ofs_unk_02 - self.ofs_bones, len(self._m_bones_data))
+
+
+            if self.pre_bones_data__enabled:
+                pass
+                if  ((self.num_meshes > 0) and (self.num_bones > 0) and (self.ofs_bones >= self.pre_bones_data_size)) :
+                    pass
+                    if len(self._m_pre_bones_data) != self.pre_bones_data_size:
+                        raise kaitaistruct.ConsistencyError(u"pre_bones_data", self.pre_bones_data_size, len(self._m_pre_bones_data))
+
+
+            if self.pre_trailing_footer__enabled:
+                pass
+                if  ((self.num_meshes > 0) and (self.num_bones == 0) and (self.ofs_unk_02 > self.pre_trailing_footer_size)) :
+                    pass
+                    if len(self._m_pre_trailing_footer) != self.pre_trailing_footer_size:
+                        raise kaitaistruct.ConsistencyError(u"pre_trailing_footer", self.pre_trailing_footer_size, len(self._m_pre_trailing_footer))
+
+
+            if self.trailing_data__enabled:
+                pass
+                if self.ofs_unk_02 > 0:
+                    pass
+
+
             self._dirty = False
+
+        @property
+        def bones_data(self):
+            if self._should_write_bones_data:
+                self._write_bones_data()
+            if hasattr(self, '_m_bones_data'):
+                return self._m_bones_data
+
+            if not self.bones_data__enabled:
+                return None
+
+            if  ((self.num_bones > 0) and (self.ofs_unk_02 > self.ofs_bones)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bones)
+                self._m_bones_data = self._io.read_bytes(self.ofs_unk_02 - self.ofs_bones)
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_bones_data', None)
+
+        @bones_data.setter
+        def bones_data(self, v):
+            self._dirty = True
+            self._m_bones_data = v
+
+        def _write_bones_data(self):
+            self._should_write_bones_data = False
+            if  ((self.num_bones > 0) and (self.ofs_unk_02 > self.ofs_bones)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bones)
+                self._io.write_bytes(self._m_bones_data)
+                self._io.seek(_pos)
+
+
+        @property
+        def last_mesh_align_padding(self):
+            if hasattr(self, '_m_last_mesh_align_padding'):
+                return self._m_last_mesh_align_padding
+
+            self._m_last_mesh_align_padding = (16 - self.last_mesh_max_end % 16) % 16
+            return getattr(self, '_m_last_mesh_align_padding', None)
+
+        def _invalidate_last_mesh_align_padding(self):
+            del self._m_last_mesh_align_padding
+        @property
+        def last_mesh_header(self):
+            if hasattr(self, '_m_last_mesh_header'):
+                return self._m_last_mesh_header
+
+            self._m_last_mesh_header = self._parent.meshes_header[self.num_meshes - 1]
+            return getattr(self, '_m_last_mesh_header', None)
+
+        def _invalidate_last_mesh_header(self):
+            del self._m_last_mesh_header
+        @property
+        def last_mesh_indices_end(self):
+            if hasattr(self, '_m_last_mesh_indices_end'):
+                return self._m_last_mesh_indices_end
+
+            self._m_last_mesh_indices_end = self.last_mesh_header.mesh.ofs_buffer_indices + self.last_mesh_header.mesh.size_buffer_indices
+            return getattr(self, '_m_last_mesh_indices_end', None)
+
+        def _invalidate_last_mesh_indices_end(self):
+            del self._m_last_mesh_indices_end
+        @property
+        def last_mesh_max_end(self):
+            if hasattr(self, '_m_last_mesh_max_end'):
+                return self._m_last_mesh_max_end
+
+            self._m_last_mesh_max_end = ((self.last_mesh_indices_end if self.last_mesh_indices_end > self.last_mesh_weights_end else self.last_mesh_weights_end) if self.last_mesh_indices_end > self.last_mesh_vertices_end else (self.last_mesh_vertices_end if self.last_mesh_vertices_end > self.last_mesh_weights_end else self.last_mesh_weights_end))
+            return getattr(self, '_m_last_mesh_max_end', None)
+
+        def _invalidate_last_mesh_max_end(self):
+            del self._m_last_mesh_max_end
+        @property
+        def last_mesh_trailer_size(self):
+            if hasattr(self, '_m_last_mesh_trailer_size'):
+                return self._m_last_mesh_trailer_size
+
+            self._m_last_mesh_trailer_size = (36 if self.last_mesh_header.lod == 4 else 68) + 4 * (self.num_material_per_mesh - 1)
+            return getattr(self, '_m_last_mesh_trailer_size', None)
+
+        def _invalidate_last_mesh_trailer_size(self):
+            del self._m_last_mesh_trailer_size
+        @property
+        def last_mesh_vertices_end(self):
+            if hasattr(self, '_m_last_mesh_vertices_end'):
+                return self._m_last_mesh_vertices_end
+
+            self._m_last_mesh_vertices_end = self.last_mesh_header.mesh.ofs_buffer_vertices + self.last_mesh_header.mesh.size_buffer_vertices
+            return getattr(self, '_m_last_mesh_vertices_end', None)
+
+        def _invalidate_last_mesh_vertices_end(self):
+            del self._m_last_mesh_vertices_end
+        @property
+        def last_mesh_weights_end(self):
+            if hasattr(self, '_m_last_mesh_weights_end'):
+                return self._m_last_mesh_weights_end
+
+            self._m_last_mesh_weights_end = self.last_mesh_header.mesh.ofs_buffer_weights + self.last_mesh_header.mesh.size_buffer_weights
+            return getattr(self, '_m_last_mesh_weights_end', None)
+
+        def _invalidate_last_mesh_weights_end(self):
+            del self._m_last_mesh_weights_end
+        @property
+        def pre_bones_data(self):
+            if self._should_write_pre_bones_data:
+                self._write_pre_bones_data()
+            if hasattr(self, '_m_pre_bones_data'):
+                return self._m_pre_bones_data
+
+            if not self.pre_bones_data__enabled:
+                return None
+
+            if  ((self.num_meshes > 0) and (self.num_bones > 0) and (self.ofs_bones >= self.pre_bones_data_size)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bones - self.pre_bones_data_size)
+                self._m_pre_bones_data = self._io.read_bytes(self.pre_bones_data_size)
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_pre_bones_data', None)
+
+        @pre_bones_data.setter
+        def pre_bones_data(self, v):
+            self._dirty = True
+            self._m_pre_bones_data = v
+
+        def _write_pre_bones_data(self):
+            self._should_write_pre_bones_data = False
+            if  ((self.num_meshes > 0) and (self.num_bones > 0) and (self.ofs_bones >= self.pre_bones_data_size)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_bones - self.pre_bones_data_size)
+                self._io.write_bytes(self._m_pre_bones_data)
+                self._io.seek(_pos)
+
+
+        @property
+        def pre_bones_data_size(self):
+            if hasattr(self, '_m_pre_bones_data_size'):
+                return self._m_pre_bones_data_size
+
+            self._m_pre_bones_data_size = (48 if self.last_mesh_header.lod == 4 else 80)
+            return getattr(self, '_m_pre_bones_data_size', None)
+
+        def _invalidate_pre_bones_data_size(self):
+            del self._m_pre_bones_data_size
+        @property
+        def pre_trailing_footer(self):
+            if self._should_write_pre_trailing_footer:
+                self._write_pre_trailing_footer()
+            if hasattr(self, '_m_pre_trailing_footer'):
+                return self._m_pre_trailing_footer
+
+            if not self.pre_trailing_footer__enabled:
+                return None
+
+            if  ((self.num_meshes > 0) and (self.num_bones == 0) and (self.ofs_unk_02 > self.pre_trailing_footer_size)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_unk_02 - self.pre_trailing_footer_size)
+                self._m_pre_trailing_footer = self._io.read_bytes(self.pre_trailing_footer_size)
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_pre_trailing_footer', None)
+
+        @pre_trailing_footer.setter
+        def pre_trailing_footer(self, v):
+            self._dirty = True
+            self._m_pre_trailing_footer = v
+
+        def _write_pre_trailing_footer(self):
+            self._should_write_pre_trailing_footer = False
+            if  ((self.num_meshes > 0) and (self.num_bones == 0) and (self.ofs_unk_02 > self.pre_trailing_footer_size)) :
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_unk_02 - self.pre_trailing_footer_size)
+                self._io.write_bytes(self._m_pre_trailing_footer)
+                self._io.seek(_pos)
+
+
+        @property
+        def pre_trailing_footer_size(self):
+            if hasattr(self, '_m_pre_trailing_footer_size'):
+                return self._m_pre_trailing_footer_size
+
+            self._m_pre_trailing_footer_size = self.last_mesh_align_padding + self.last_mesh_trailer_size
+            return getattr(self, '_m_pre_trailing_footer_size', None)
+
+        def _invalidate_pre_trailing_footer_size(self):
+            del self._m_pre_trailing_footer_size
+        @property
+        def trailing_data(self):
+            if self._should_write_trailing_data:
+                self._write_trailing_data()
+            if hasattr(self, '_m_trailing_data'):
+                return self._m_trailing_data
+
+            if not self.trailing_data__enabled:
+                return None
+
+            if self.ofs_unk_02 > 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_unk_02)
+                self._m_trailing_data = self._io.read_bytes(self._io.size() - self.ofs_unk_02)
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_trailing_data', None)
+
+        @trailing_data.setter
+        def trailing_data(self, v):
+            self._dirty = True
+            self._m_trailing_data = v
+
+        def _write_trailing_data(self):
+            self._should_write_trailing_data = False
+            if self.ofs_unk_02 > 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_unk_02)
+                if len(self._m_trailing_data) != self._io.size() - self.ofs_unk_02:
+                    raise kaitaistruct.ConsistencyError(u"trailing_data", self._io.size() - self.ofs_unk_02, len(self._m_trailing_data))
+                self._io.write_bytes(self._m_trailing_data)
+                self._io.seek(_pos)
+
 
 
     class Edgemesh(ReadWriteKaitaiStruct):
@@ -224,6 +510,10 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self.reserved_16 = self._io.read_u4le()
             self.unk_9_size = self._io.read_u2le()
             self.unk_10_size = self._io.read_u2le()
+            if self._parent.ofs_materials > self._parent.ofs_data + 128:
+                pass
+                self.group_and_flags_data = self._io.read_bytes(self._parent.ofs_materials - (self._parent.ofs_data + 128))
+
             self._dirty = False
 
 
@@ -233,6 +523,9 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 pass
 
             for i in range(len(self.reserved_02)):
+                pass
+
+            if self._parent.ofs_materials > self._parent.ofs_data + 128:
                 pass
 
             _ = self.buffer_indices
@@ -283,6 +576,10 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.reserved_16)
             self._io.write_u2le(self.unk_9_size)
             self._io.write_u2le(self.unk_10_size)
+            if self._parent.ofs_materials > self._parent.ofs_data + 128:
+                pass
+                self._io.write_bytes(self.group_and_flags_data)
+
 
 
         def _check(self):
@@ -295,6 +592,11 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"reserved_02", 9, len(self.reserved_02))
             for i in range(len(self.reserved_02)):
                 pass
+
+            if self._parent.ofs_materials > self._parent.ofs_data + 128:
+                pass
+                if len(self.group_and_flags_data) != self._parent.ofs_materials - (self._parent.ofs_data + 128):
+                    raise kaitaistruct.ConsistencyError(u"group_and_flags_data", self._parent.ofs_materials - (self._parent.ofs_data + 128), len(self.group_and_flags_data))
 
             if self.buffer_indices__enabled:
                 pass
@@ -528,6 +830,8 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self.materials__enabled = True
             self._should_write_mesh = False
             self.mesh__enabled = True
+            self._should_write_pre_mesh_data = False
+            self.pre_mesh_data__enabled = True
 
         def _read(self):
             self.num_groups = self._io.read_u4le()
@@ -567,12 +871,17 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 pass
                 self._m_mesh._fetch_instances()
 
+            _ = self.pre_mesh_data
+            if hasattr(self, '_m_pre_mesh_data'):
+                pass
+
 
 
         def _write__seq(self, io=None):
             super(HexaneEdgemodel.MeshHeader, self)._write__seq(io)
             self._should_write_materials = self.materials__enabled
             self._should_write_mesh = self.mesh__enabled
+            self._should_write_pre_mesh_data = self.pre_mesh_data__enabled
             self._io.write_u4le(self.num_groups)
             self._io.write_u4le(self.ofs_data)
             self._io.write_u4le(self.lod)
@@ -615,6 +924,14 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"mesh", self._root, self._m_mesh._root)
                 if self._m_mesh._parent != self:
                     raise kaitaistruct.ConsistencyError(u"mesh", self, self._m_mesh._parent)
+
+            if self.pre_mesh_data__enabled:
+                pass
+                if self.ofs_data >= 48:
+                    pass
+                    if len(self._m_pre_mesh_data) != 48:
+                        raise kaitaistruct.ConsistencyError(u"pre_mesh_data", 48, len(self._m_pre_mesh_data))
+
 
             self._dirty = False
 
@@ -675,6 +992,40 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self._io.seek(self.ofs_data)
             self._m_mesh._write__seq(self._io)
             self._io.seek(_pos)
+
+        @property
+        def pre_mesh_data(self):
+            if self._should_write_pre_mesh_data:
+                self._write_pre_mesh_data()
+            if hasattr(self, '_m_pre_mesh_data'):
+                return self._m_pre_mesh_data
+
+            if not self.pre_mesh_data__enabled:
+                return None
+
+            if self.ofs_data >= 48:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_data - 48)
+                self._m_pre_mesh_data = self._io.read_bytes(48)
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_pre_mesh_data', None)
+
+        @pre_mesh_data.setter
+        def pre_mesh_data(self, v):
+            self._dirty = True
+            self._m_pre_mesh_data = v
+
+        def _write_pre_mesh_data(self):
+            self._should_write_pre_mesh_data = False
+            if self.ofs_data >= 48:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ofs_data - 48)
+                self._io.write_bytes(self._m_pre_mesh_data)
+                self._io.seek(_pos)
+
 
 
     class Vec3(ReadWriteKaitaiStruct):

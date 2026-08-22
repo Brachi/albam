@@ -35,13 +35,55 @@ types:
       - {id: ofs_models_end, type: u4, repeat: expr, repeat-expr: 5}  # TODO: better name
       - {id: reserved_05, type: u4}
       - {id: reserved_06, type: u4}
-      # num_bones/ofs_bones/ofs_unk_01/ofs_unk_02 point at further sections
-      # (bone data, at least) not modeled here - see
-      # albam/engines/hexn/edgemodel_roundtrip.py for why: their real
-      # extents don't reduce to a clean per-file formula (tried and
-      # reverted - see git history), so round-trip fidelity is handled
-      # generically there (byte-diff against known ranges) instead of by
-      # guessing more fields here.
+    instances:
+      # The data between the last mesh's own buffers and ofs_bones (or
+      # ofs_unk_02, when there's no bones section), derived against a
+      # full-game sweep: align the last mesh's own highest
+      # buffer end up to a 16-byte boundary, then a fixed-per-lod trailer
+      # (+4 bytes per extra material, matching materials_table's own
+      # per-material offsets entry). >99.6% exact for the with-bones case
+      # (a fixed 48 or 80 bytes, no alignment needed - lod 4 vs. not) and
+      # the no-bones lod-4 case; the no-bones lod-0 case has an
+      # unexplained further +/-16 residual on ~18% of files not resolved
+      # here. materials_end is never the true max on any file checked, so
+      # left out of the comparison entirely.
+      last_mesh_header:
+        value: _parent.meshes_header[num_meshes - 1]
+      last_mesh_indices_end:
+        value: last_mesh_header.mesh.ofs_buffer_indices + last_mesh_header.mesh.size_buffer_indices
+      last_mesh_vertices_end:
+        value: last_mesh_header.mesh.ofs_buffer_vertices + last_mesh_header.mesh.size_buffer_vertices
+      last_mesh_weights_end:
+        value: last_mesh_header.mesh.ofs_buffer_weights + last_mesh_header.mesh.size_buffer_weights
+      last_mesh_max_end:
+        value: >-
+          last_mesh_indices_end > last_mesh_vertices_end
+          ? (last_mesh_indices_end > last_mesh_weights_end ? last_mesh_indices_end : last_mesh_weights_end)
+          : (last_mesh_vertices_end > last_mesh_weights_end ? last_mesh_vertices_end : last_mesh_weights_end)
+      last_mesh_align_padding:
+        value: (16 - (last_mesh_max_end % 16)) % 16
+      last_mesh_trailer_size:
+        value: "(last_mesh_header.lod == 4 ? 36 : 68) + 4 * (num_material_per_mesh - 1)"
+      pre_bones_data_size:
+        value: "last_mesh_header.lod == 4 ? 48 : 80"
+      pre_bones_data:
+        pos: ofs_bones - pre_bones_data_size
+        size: pre_bones_data_size
+        if: num_meshes > 0 and num_bones > 0 and ofs_bones >= pre_bones_data_size
+      bones_data:
+        pos: ofs_bones
+        size: ofs_unk_02 - ofs_bones
+        if: num_bones > 0 and ofs_unk_02 > ofs_bones
+      pre_trailing_footer_size:
+        value: last_mesh_align_padding + last_mesh_trailer_size
+      pre_trailing_footer:
+        pos: ofs_unk_02 - pre_trailing_footer_size
+        size: pre_trailing_footer_size
+        if: num_meshes > 0 and num_bones == 0 and ofs_unk_02 > pre_trailing_footer_size
+      trailing_data:
+        pos: ofs_unk_02
+        size: _io.size - ofs_unk_02
+        if: ofs_unk_02 > 0
 
   mesh_header:
     seq:
@@ -60,6 +102,13 @@ types:
       - {id: unk_ofs_6, type: u4}
       - {id: reserved_01, type: u4}
     instances:
+      # Shared/default 48 bytes for every mesh but the first in a file
+      # (identical regardless of the mesh's own content); the first
+      # mesh's own version instead holds real-looking floats/offsets. Not
+      # semantically understood either way - captured only so it round-
+      # trips.
+      pre_mesh_data:
+        {pos: ofs_data - 48, size: 48, if: ofs_data >= 48}
       mesh:
         {pos: ofs_data, type: edgemesh}
       materials:
@@ -129,15 +178,17 @@ types:
       - {id: reserved_16, type: u4}
       - {id: unk_9_size, type: u2}
       - {id: unk_10_size, type: u2}
-      # Real (non-padding) data sits between here and _parent.ofs_materials
-      # on every file checked, partially reverse-engineered as num_groups-
-      # and _parent.unk_flags_1-driven (see git history for the formulas -
-      # >99.6%/99.8% exact across a full-game sample, but not exact: a
-      # weapon LOD/SHADOW sub-variant breaks both, and modeling it as a
-      # mandatory field here turned "one bad mesh" into "whole file fails
-      # to parse" for those - worse than not modeling it. Left opaque;
-      # round-trip fidelity is handled generically instead - see
-      # albam/engines/hexn/edgemodel_roundtrip.py.
+      # Real (non-padding) data between here and _parent.ofs_materials:
+      # 128*(num_groups-1) + 16*num_groups + 80*num_groups bytes, then
+      # sum(20*2^bit for every set bit in _parent.unk_flags_1) bytes -
+      # >99.6%/99.8% exact across a full-game sample. Guarded rather than
+      # unconditional: a weapon LOD/SHADOW sub-variant breaks the formula
+      # (would compute a negative size), and this way that variant just
+      # loses round-trip fidelity for this one section instead of failing
+      # to parse at all.
+      - id: group_and_flags_data
+        size: _parent.ofs_materials - (_parent.ofs_data + 128)
+        if: _parent.ofs_materials > (_parent.ofs_data + 128)
     instances:
       buffer_indices:
         {pos: ofs_buffer_indices, size: size_buffer_indices}
