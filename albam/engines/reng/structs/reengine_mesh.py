@@ -119,10 +119,13 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
         if self.model_info__enabled:
             pass
-            if self._m_model_info._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"model_info", self._root, self._m_model_info._root)
-            if self._m_model_info._parent != self:
-                raise kaitaistruct.ConsistencyError(u"model_info", self, self._m_model_info._parent)
+            if self.header.offset_data != 0:
+                pass
+                if self._m_model_info._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"model_info", self._root, self._m_model_info._root)
+                if self._m_model_info._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"model_info", self, self._m_model_info._parent)
+
 
         if self.named_nodes__enabled:
             pass
@@ -1460,11 +1463,14 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         if not self.model_info__enabled:
             return None
 
-        _pos = self._io.pos()
-        self._io.seek(self.header.offset_data)
-        self._m_model_info = ReengineMesh.ModelInfo(self._io, self, self._root)
-        self._m_model_info._read()
-        self._io.seek(_pos)
+        if self.header.offset_data != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_data)
+            self._m_model_info = ReengineMesh.ModelInfo(self._io, self, self._root)
+            self._m_model_info._read()
+            self._io.seek(_pos)
+
         return getattr(self, '_m_model_info', None)
 
     @model_info.setter
@@ -1474,10 +1480,13 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
     def _write_model_info(self):
         self._should_write_model_info = False
-        _pos = self._io.pos()
-        self._io.seek(self.header.offset_data)
-        self._m_model_info._write__seq(self._io)
-        self._io.seek(_pos)
+        if self.header.offset_data != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_data)
+            self._m_model_info._write__seq(self._io)
+            self._io.seek(_pos)
+
 
     @property
     def named_nodes(self):

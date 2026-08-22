@@ -13,7 +13,7 @@ seq:
 instances:
 
   model_info:
-    {pos: header.offset_data, type: model_info}
+    {pos: header.offset_data, type: model_info, if: header.offset_data != 0}
 
   bones_header:
     {pos: header.offset_bones, type: bone_header, if: header.offset_bones != 0}

@@ -88,12 +88,15 @@ simplified culling proxy rather than a renderable model. This isn't
 corruption; it's a real mesh sub-variant the format supports and the
 `.ksy`/parser don't yet.
 
-**Fix needed** (not applied yet — this pass is just characterizing
-failures): guard `model_info` the same way `bones_header` already is
-(`if: header.offset_data != 0`), and decide how downstream consumers
-(`albam/engines/reng/mesh.py`) should handle a mesh with no model data —
-likely import it as buffers-only / skip mesh-tree-dependent logic rather
-than erroring.
+**Fixed**: guarded `model_info` the same way `bones_header` already is
+(`if: header.offset_data != 0`), regenerated `reengine_mesh.py`. Accessing
+`mesh.model_info` on a buffers-only file now returns `None` instead of
+running off the end of the file, matching the existing `bones_header`
+pattern. `test_mesh_parsing.py::test_mesh` and `build_blender_model`
+(`albam/engines/reng/mesh.py`) both now handle `model_info is None`
+explicitly — the Blender importer skips the mesh-group loop and produces
+an empty object rather than crashing. Full dataset (17 files) and the rest
+of the suite pass.
 
 ## Next
 

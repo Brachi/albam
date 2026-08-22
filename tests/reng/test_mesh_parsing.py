@@ -57,6 +57,13 @@ def test_mesh(parsed_mesh):
     assert mesh.id_magic == b"MESH"
     assert mesh.size_file == len(src_bytes)
 
+    if mesh.model_info is None:
+        # Buffers-only variant (e.g. occlusion-culling meshes): no
+        # model/mesh-group tree, header.offset_data == 0 - see RESULTS.md.
+        assert mesh.header.offset_data == 0
+        assert mesh.buffers_data.size_vertex_buffer > 0
+        return
+
     model = mesh.model_info.model_offsets[0].model
     assert model.num_mesh_groups == len(model.mesh_groups)
     assert model.num_mesh_groups > 0

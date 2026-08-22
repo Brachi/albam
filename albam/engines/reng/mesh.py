@@ -35,7 +35,9 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
     print("materials build took:", time.time() - start)
 
     start = time.time()
-    for mesh_group in re_mesh.model_info.model_offsets[0].model.mesh_groups:
+    model_info = re_mesh.model_info
+    mesh_groups = model_info.model_offsets[0].model.mesh_groups if model_info else []
+    for mesh_group in mesh_groups:
         for sub_mesh in mesh_group.mesh_group.meshes:
             bl_mesh_ob = build_blender_mesh(re_mesh, sub_mesh)
             bl_mesh_ob.parent = bl_object
