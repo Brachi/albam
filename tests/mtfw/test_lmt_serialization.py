@@ -59,8 +59,15 @@ def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_
     assert vfile_mod
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
-    armature = next((obj for obj in bpy.data.objects if obj.type == 'ARMATURE'), None)
-    assert armature
+    # Session-scoped: bpy.data.objects accumulates armatures from every
+    # dataset entry run so far, so grabbing "the first armature" would pick
+    # up a leftover from an earlier (app_id, mod) pair instead of the one
+    # just imported. build_blender_model() returns the armature itself
+    # (mesh.py's `bl_object = skeleton or ...`) and is exposed as the latest
+    # exportable entry's bl_object, same as the lmt lookup just below.
+    latest_mod = len(bpy.context.scene.albam.exportable.file_list) - 1
+    armature = bpy.context.scene.albam.exportable.file_list[latest_mod].bl_object
+    assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
     local_lmt_path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash].lstrip("/")

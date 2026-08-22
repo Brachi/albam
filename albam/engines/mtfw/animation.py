@@ -143,51 +143,79 @@ class LMTKeyFrames:
             if duration:
                 self.decoded_frames.extend([None] * (duration - 1))
 
-    def encode_framedata(self, kf_type, bone_index, track, usage):
-        if self.version == 51:
-            dst_track = Lmt.Track51(_parent=None, _root=None)
-            dst_track.buffer_type = kf_type
-            dst_track.usage = usage
-            dst_track.joint_type = 0
-            dst_track.bone_index = bone_index
-            dst_track.reference_data = []
-            dst_raw_data = bytearray()
+    def encode_framedata(self, kf_type, bone_index, track, usage, static=False):
+        # Track51 and Track67 share every field encode_framedata touches (the
+        # extra ofs_bounds/bounds Track67 carries are filled in later by
+        # export_lmt, not here), so one code path serializes both.
+        track_cls = Lmt.Track51 if self.version == 51 else Lmt.Track67
+        dst_track = track_cls(_parent=None, _root=None)
+        dst_track.buffer_type = kf_type
+        dst_track.usage = usage
+        dst_track.joint_type = 0
+        dst_track.bone_index = bone_index
+        dst_track.reference_data = []
 
-            kfcls = KEYFRAME_TYPES[self.version].get(kf_type, None)
-            if kfcls is None:
-                print("Unknown keyframe type:", kf_type)
-                return
-            i = 0
-            frames_time = [ft for ft in track.keys()]
-            for frame, value in track.items():
-                kf = kfcls()
-                if self.track_type == "rotation_quaternion":
-                    if not dst_track.reference_data:
-                        dst_track.reference_data = [value.x, value.y, value.z, value.w]
-                    value = self.quantaize(value, kf_type)
-                    kf.w = value.w
-                elif self.track_type == "location":
-                    value = value * 100
-                    if not dst_track.reference_data:
-                        dst_track.reference_data = [value.x, value.y, value.z, 1.0]
-                elif self.track_type == "scale":
-                    if not dst_track.reference_data:
-                        dst_track.reference_data = [value.x, value.y, value.z, 1.0]
-                kf.x = value.x
-                kf.y = value.y
-                kf.z = value.z
-                if i + 1 < len(frames_time):
-                    duration = frames_time[i + 1] - frame
-                else:
-                    duration = 0  # not sure why but original files use it
-                i += 1
-                kf.duration = int(duration)
-                stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
-                kf._check()
-                kf._write(stream)
-                dst_raw_data.extend(stream.to_byte_array())
-            dst_track.data = bytes(dst_raw_data)
+        if static:
+            # A single value for the whole block (a non-animating bone).
+            # Real re1/re6/... (v67) files store this with no track data at
+            # all - the value lives purely in reference_data. This matters
+            # because v67 renumbers several buffer_type ids to unrelated
+            # physical layouts (e.g. type 4 is Quat3Frame - a bare
+            # quaternion - in v51 but Quatized16Vec3 - a quantized location
+            # triplet - in v67, see KEYFRAME_TYPES_67), and some of those
+            # ids additionally require bounds data this exporter never
+            # populates for freshly generated tracks. len_data=0 sidesteps
+            # both problems, matching the real on-disk convention (re5/v51
+            # doesn't use this shortcut: every sampled real single-frame v51
+            # rotation track does carry one genuine kf_type 4 record).
+            ((frame, value),) = track.items()
+            if self.track_type == "rotation_quaternion":
+                dst_track.reference_data = [value.x, value.y, value.z, value.w]
+            elif self.track_type == "location":
+                value = value * 100
+                dst_track.reference_data = [value.x, value.y, value.z, 1.0]
+            else:
+                dst_track.reference_data = [value.x, value.y, value.z, 1.0]
+            dst_track.data = b""
             self.encoded_frames.append(dst_track)
+            return
+
+        dst_raw_data = bytearray()
+        kfcls = KEYFRAME_TYPES[self.version].get(kf_type, None)
+        if kfcls is None:
+            print("Unknown keyframe type:", kf_type)
+            return
+        i = 0
+        frames_time = [ft for ft in track.keys()]
+        for frame, value in track.items():
+            kf = kfcls()
+            if self.track_type == "rotation_quaternion":
+                if not dst_track.reference_data:
+                    dst_track.reference_data = [value.x, value.y, value.z, value.w]
+                value = self.quantaize(value, kf_type)
+                kf.w = value.w
+            elif self.track_type == "location":
+                value = value * 100
+                if not dst_track.reference_data:
+                    dst_track.reference_data = [value.x, value.y, value.z, 1.0]
+            elif self.track_type == "scale":
+                if not dst_track.reference_data:
+                    dst_track.reference_data = [value.x, value.y, value.z, 1.0]
+            kf.x = value.x
+            kf.y = value.y
+            kf.z = value.z
+            if i + 1 < len(frames_time):
+                duration = frames_time[i + 1] - frame
+            else:
+                duration = 0  # not sure why but original files use it
+            i += 1
+            kf.duration = int(duration)
+            stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
+            kf._check()
+            kf._write(stream)
+            dst_raw_data.extend(stream.to_byte_array())
+        dst_track.data = bytes(dst_raw_data)
+        self.encoded_frames.append(dst_track)
 
     def dequantaize(self, kf, key_type):
         dkf = Quaternion((0.0, 0.0, 0.0, 0.0))
@@ -745,9 +773,14 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
-            kf_type = 4 if len(rotation_sorted) == 1 else 6  # XXX doesn't match logic in og files
             usage = _select_kf_usage(bone, "rotation_quaternion")
-            keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
+            if len(rotation_sorted) == 1 and keyframes.version != 51:
+                # see encode_framedata(static=True): v67's single-frame quat
+                # type id is taken by an unrelated vec3 format
+                keyframes.encode_framedata(2, bone_index, rotation_sorted, usage, static=True)
+            else:
+                kf_type = 4 if len(rotation_sorted) == 1 else 6
+                keyframes.encode_framedata(kf_type, bone_index, rotation_sorted, usage)
         if location:
             keyframes.track_type = "location"
             location_sorted = {k: location[k] for k in sorted(location)}
