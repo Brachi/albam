@@ -408,6 +408,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
 
     locations = []
     normals = []
+    tangents = []
     uvs_1 = []
     uvs_2 = []
     uvs_3 = []
@@ -418,6 +419,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
         _process_normals(vertex, normals)
+        _process_tangents(vertex, tangents)
         _process_uvs(vertex, uvs_1, uvs_2, uvs_3, uvs_4)
         _process_vertex_colors(mod.header.version, vertex, vertex_colors)
         _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone)
@@ -436,6 +438,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
     _build_normals(me_ob, normals)
+    _build_tangents(me_ob, tangents)
     _build_uvs(me_ob, uvs_1, "uv1")
     _build_uvs(me_ob, uvs_2, "uv2")
     _build_uvs(me_ob, uvs_3, "uv3")
@@ -482,6 +485,17 @@ def _process_normals(vertex, normals_out):
     z = ((vertex.normal.z / 255) * 2) - 1
     # y up to z up
     normals_out.append((x, -z, y))
+
+
+def _process_tangents(vertex, tangents_out):
+    if not hasattr(vertex, "tangent"):
+        return
+    # from [0, 255] o [-1, 1]
+    x = ((vertex.tangent.x / 255) * 2) - 1
+    y = ((vertex.tangent.y / 255) * 2) - 1
+    z = ((vertex.tangent.z / 255) * 2) - 1
+    # y up to z up
+    tangents_out.append((x, -z, y))
 
 
 def _fix_nan_uv(u, v):
@@ -640,7 +654,7 @@ def _build_normals(bl_mesh, normals):
         pass
     bl_mesh.validate(clean_customdata=False)
     bl_mesh.update(calc_edges=True)
-    # bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
+    bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
 
     vert_normals = np.array(normals, dtype=np.float32)
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
@@ -652,6 +666,16 @@ def _build_normals(bl_mesh, normals):
     except AttributeError:
         # blender 4.1+
         pass
+
+
+def _build_tangents(bl_mesh, tangents):
+    if not tangents:
+        return
+    # Blender's tangent slot is computed (mesh.calc_tangents()), not
+    # settable, so the imported tangent is stored as a plain custom
+    # attribute instead, for round-trip/inspection purposes only.
+    tangent_attr = bl_mesh.attributes.new(name="tangent", type='FLOAT_VECTOR', domain='POINT')
+    tangent_attr.data.foreach_set("vector", list(chain.from_iterable(tangents)))
 
 
 def _build_uvs(bl_mesh, uvs, name="uv"):
