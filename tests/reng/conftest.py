@@ -163,8 +163,9 @@ def reng_import(local_app_id, local_path):
     """
     Select local_path (already mounted via reng_vfs_root) and run it
     through the real import_vfile() operator. Import-only counterpart of
-    tests/mtfw/conftest.py's import_export() - reng has no export yet, so
-    there's no export half to run.
+    tests/mtfw/conftest.py's import_export() - only .mesh has an export
+    function registered so far (see albam/engines/reng/mesh.py), nothing
+    else in reng does, so this is what most reng tests still want.
     """
     vfs = bpy.context.scene.albam.vfs
     try:
@@ -172,5 +173,22 @@ def reng_import(local_app_id, local_path):
     except KeyError:
         pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
     result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    return vfile
+
+
+def reng_import_export(local_app_id, local_path):
+    """
+    Same as reng_import(), then also runs the freshly-imported object
+    through the real export() operator - the reng counterpart of
+    tests/mtfw/conftest.py's import_export(), for the one reng format
+    (.mesh) that has an export function registered. Returns the source
+    vfile; callers fetch the exported one from
+    bpy.context.scene.albam.exported afterward, same as mtfw's version.
+    """
+    vfile = reng_import(local_app_id, local_path)
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    result = bpy.ops.albam.export()
     assert result == {"FINISHED"}
     return vfile
