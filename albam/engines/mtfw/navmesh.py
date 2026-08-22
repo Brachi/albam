@@ -9,6 +9,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from .collision import mesh_rescale
 from ...lib import common_op as common
+from ...lib.kaitai_utils import check_recursive
 from ...lib.misc import number_to_color
 
 
@@ -131,7 +132,7 @@ def export_nav(bl_obj):
     dst_nav.lookup_grid = dst_grid
     final_size = sum((24, size_vertices, size_faces, 36, 5, 5460, size_grid))
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
-    dst_nav._check()
+    check_recursive(dst_nav)
     dst_nav._write(stream)
     nav_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(nav_vf)

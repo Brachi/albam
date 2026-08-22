@@ -17,6 +17,7 @@ from ...lib.primitive_geometry import EPS, Tri
 from ...lib import primitive_geometry as geo
 from ...lib import bvh_construction as bvh
 from ...lib import common_op as common
+from ...lib.kaitai_utils import check_recursive
 from ...lib.misc import number_to_color
 
 SBC_CLASS_MAPPER = {
@@ -404,7 +405,7 @@ def export_sbc(bl_obj):
         final_size = build_sbc(bl_obj, src_sbc, dst_sbc, vertList, trisList, quadList, sbcsList,
                                links, parent_tree, mesh_metadata, app_id)
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
-    dst_sbc._check()
+    check_recursive(dst_sbc)
     dst_sbc._write(stream)
     sbc_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(sbc_vf)
@@ -653,10 +654,10 @@ def _serialize_bvhc156(dst_sbc, bvhc_data, start_tri, start_vert, start_node, me
         node_list.append(node)
 
     # set actual values after in _serialize_top_bvh
-    sbc_info.vmin = [write_vec3(node_list[0].boxes[0].min[:3], dst_sbc),
-                     write_vec3(node_list[0].boxes[1].min[:3], dst_sbc)]
-    sbc_info.vmax = [write_vec3(node_list[0].boxes[0].max[:3], dst_sbc),
-                     write_vec3(node_list[0].boxes[1].max[:3], dst_sbc)]
+    sbc_info.vmin = [write_vec3(node_list[0].boxes[0].min[:3], dst_sbc, parent=sbc_info),
+                     write_vec3(node_list[0].boxes[1].min[:3], dst_sbc, parent=sbc_info)]
+    sbc_info.vmax = [write_vec3(node_list[0].boxes[0].max[:3], dst_sbc, parent=sbc_info),
+                     write_vec3(node_list[0].boxes[1].max[:3], dst_sbc, parent=sbc_info)]
     return node_list, sbc_info
 
 
@@ -739,7 +740,7 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
         node.child_index = bvnode['nodeId']
         boxes = []
         for j in range(2):
-            bbox = dst_sbc.Bbox4(_parent=dst_sbc, _root=dst_sbc._root)
+            bbox = dst_sbc.Bbox4(_parent=node, _root=dst_sbc._root)
             min_aabb = bvnode["minAABB"]
             bbox.min = [min_aabb["xArray"][j], min_aabb["yArray"][j], min_aabb["zArray"][j], 0.0]
             max_aabb = bvnode["maxAABB"]
@@ -748,10 +749,10 @@ def _serialize_top_bvh(dst_sbc, tree, sbc_groups):
         node.boxes = boxes
         node.nulls = [0] * 10
         node_list.append(node)
-        sbc_groups[i].vmin = [write_vec3(node.boxes[0].min[:3], dst_sbc),
-                              write_vec3(node.boxes[1].min[:3], dst_sbc)]
-        sbc_groups[i].vmax = [write_vec3(node.boxes[0].max[:3], dst_sbc),
-                              write_vec3(node.boxes[1].max[:3], dst_sbc)]
+        sbc_groups[i].vmin = [write_vec3(node.boxes[0].min[:3], dst_sbc, parent=sbc_groups[i]),
+                              write_vec3(node.boxes[1].min[:3], dst_sbc, parent=sbc_groups[i])]
+        sbc_groups[i].vmax = [write_vec3(node.boxes[0].max[:3], dst_sbc, parent=sbc_groups[i]),
+                              write_vec3(node.boxes[1].max[:3], dst_sbc, parent=sbc_groups[i])]
         sbc_groups[i].child_index = children
     return node_list
 
@@ -971,16 +972,16 @@ def mesh_rescale(ob):
     return ob
 
 
-def write_vec3(data, dst_sbc):
-    vec = dst_sbc.Vec3()
+def write_vec3(data, dst_sbc, parent=None):
+    vec = dst_sbc.Vec3(_parent=parent, _root=dst_sbc._root)
     vec.x = data[0]
     vec.y = data[1]
     vec.z = data[2]
     return vec
 
 
-def write_vec4(data, dst_sbc):
-    vec = dst_sbc.Vec4()
+def write_vec4(data, dst_sbc, parent=None):
+    vec = dst_sbc.Vec4(_parent=parent, _root=dst_sbc._root)
     vec.x = data[0]
     vec.y = data[1]
     vec.z = data[2]
