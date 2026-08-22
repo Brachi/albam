@@ -550,7 +550,27 @@ def _create_blender_action(action, keyframes, bone_index, track_type, block_inde
 
 
 def _create_bone_mapping(armature_obj):
-    """Creates a dictionary: animation bone index -> bone name."""
+    """Creates a dictionary: animation bone index -> bone name.
+
+    The animation bone index isn't something Albam derives - it's
+    .mod's own idx_anim_map field (structs/mod-*.ksy), copied verbatim onto
+    each bone as the 'mtfw.anim_retarget' custom property in
+    mesh.py:build_blender_armature(). MT Framework uses this to decouple a
+    character's own skeleton (bone order/count is per-.mod, e.g. pl00 vs an
+    enemy with a completely different hierarchy) from the numeric bone-id
+    space .lmt tracks are keyed on, which is shared across the whole engine
+    (root=0, root_motion=255, common IK/service ids, etc. - see the
+    HACKY_BONE_INDEX_*/ROOT_*_ID constants above). An .lmt authored against
+    one character's idx_anim_map layout plays back correctly against any
+    other armature as long as this property is populated the same way, since
+    load_lmt()/_generate_track_from_action() only ever address bones through
+    this id, never through .mod's own per-file bone order.
+
+    Note: 'mtfw.anim_retarget' is stored as a str (see the assignments
+    below and in mesh.py), so the `== 0`/`== 0` comparisons just below are
+    always False against the string "0" - the multiple-root-bone special
+    case they guard is currently dead code, not a deliberately-skipped one.
+    """
     bone_names = {}
     # find root bones, at least 2 can have the same 0 index
     root_bone_names = [b.name for idx, b in enumerate(
