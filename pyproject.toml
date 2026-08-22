@@ -14,6 +14,7 @@ dependencies = [
   "fs==2.4.16",
   # `fs` breaks under setuptools 81+ (drops pkg_resources).
   "setuptools==80.10.2",
+  "kaitaistruct==0.11",
 ]
 
 [project.optional-dependencies]
