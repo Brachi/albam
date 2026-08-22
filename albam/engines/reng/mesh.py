@@ -430,16 +430,13 @@ def _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id)
 # writes back) them. This export is geometry-only and never intends to
 # touch any of them, so they're restored byte-for-byte from the source
 # after _write() - not reconstructed, just not silently destroyed.
-# offset_bone_aabb used to be here too - now modeled for real (mesh.ksy's
-# bone_aabb_group), so it round-trips through the real mechanism like
-# everything else and no longer needs restoring.
 _UNMODELED_HEADER_OFFSETS = (
-    "offset_shadow_mesh_group", "offset_normal_recalc", "offset_blend_shapes", "offset_floats",
+    "offset_normal_recalc", "offset_blend_shapes", "offset_floats",
 )
 _ALL_HEADER_OFFSETS = _UNMODELED_HEADER_OFFSETS + (
     "offset_data", "offset_occlusion_mesh_group", "offset_bones", "offset_bone_aabb",
-    "offset_buffers_header", "offset_material_name_remap", "offset_bone_name_remap",
-    "offset_blend_shape_name_remap", "offset_names",
+    "offset_shadow_mesh_group", "offset_buffers_header", "offset_material_name_remap",
+    "offset_bone_name_remap", "offset_blend_shape_name_remap", "offset_names",
 )
 
 
