@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+from albam.engines.mtfw.animation import USAGE
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
@@ -49,7 +50,6 @@ def parsed_lmt(game_fs_root, local_lmt_path_hash):
     return lmt
 
 
-from albam.engines.mtfw.animation import USAGE
 SUPPORTED_LMT_VERSIONS = (51, 67)
 SUPPORTED_BUFFER_TYPES = [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 LOCATION = [1, 4]
