@@ -19,6 +19,9 @@ instances:
   bones_header:
     {pos: header.offset_bones, type: bone_header, if: header.offset_bones != 0}
 
+  bone_aabb_group:
+    {pos: header.offset_bone_aabb, type: bone_aabb_group, if: header.offset_bone_aabb != 0}
+
   # A single lod_group (same type model_info.lod_group_offsets[N] each
   # point to), for occlusion-culling geometry - reached directly, with no
   # wrapping model_info-style array of LOD levels. This is what a mesh
@@ -190,6 +193,36 @@ types:
       - {id: use_secondary_weight, type: s2}
       - {id: padding_0, type: u2}
       - {id: padding_1, type: u2}
+
+  # Confirmed against RE-Mesh-Editor's actual BoneAABBGroup.read()/write()
+  # (modules/mesh/file_re_mesh.py) - not modeled from a name alone this
+  # time. num_entries is its own independent field, NOT num_bones (every
+  # sample file has num_entries < num_bones) - RE-Mesh-Editor's own
+  # export path sets it from skeletonHeader.remapCount, i.e. it's the
+  # bone_header.num_bone_maps count: one AABB per bone actually used for
+  # skinning (bone_maps[i]), not one per bone overall. offset_entries is
+  # self-referential in every sample seen (always == the position right
+  # after this header) and unused for seeking by RE-Mesh-Editor's own
+  # reader either - kept as a real field for byte-fidelity, not trusted
+  # over the header's own two-field-then-array layout.
+  bone_aabb_group:
+    seq:
+      - {id: num_entries, type: u8}
+      # Self-referential in every sample seen (always == the position
+      # right after this header) - RE-Mesh-Editor's own reader doesn't
+      # seek to it either, it just reads `entries` sequentially, same as
+      # here. Kept as a real field for byte-fidelity, not trusted as a
+      # pointer to seek through.
+      - {id: offset_entries, type: u8}
+      - {id: entries, type: aabb, repeat: expr, repeat-expr: num_entries}
+      # Same 16-byte file-absolute alignment pad as lod_group's own
+      # trailing padding field.
+      - {id: padding, size: (16 - (_io.pos % 16)) % 16}
+
+  aabb:
+    seq:
+      - {id: min, type: vec4}
+      - {id: max, type: vec4}
 
   mesh_group_offset:
     seq:

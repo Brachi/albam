@@ -26,6 +26,8 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         self._root = _root or self
         self._should_write_blend_shape_name_remap = False
         self.blend_shape_name_remap__enabled = True
+        self._should_write_bone_aabb_group = False
+        self.bone_aabb_group__enabled = True
         self._should_write_bone_name_remap = False
         self.bone_name_remap__enabled = True
         self._should_write_bones_header = False
@@ -62,6 +64,11 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             for i in range(len(self._m_blend_shape_name_remap)):
                 pass
 
+
+        _ = self.bone_aabb_group
+        if hasattr(self, '_m_bone_aabb_group'):
+            pass
+            self._m_bone_aabb_group._fetch_instances()
 
         _ = self.bone_name_remap
         if hasattr(self, '_m_bone_name_remap'):
@@ -110,6 +117,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
     def _write__seq(self, io=None):
         super(ReengineMesh, self)._write__seq(io)
         self._should_write_blend_shape_name_remap = self.blend_shape_name_remap__enabled
+        self._should_write_bone_aabb_group = self.bone_aabb_group__enabled
         self._should_write_bone_name_remap = self.bone_name_remap__enabled
         self._should_write_bones_header = self.bones_header__enabled
         self._should_write_buffers_data = self.buffers_data__enabled
@@ -140,6 +148,16 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                 for i in range(len(self._m_blend_shape_name_remap)):
                     pass
 
+
+
+        if self.bone_aabb_group__enabled:
+            pass
+            if self.header.offset_bone_aabb != 0:
+                pass
+                if self._m_bone_aabb_group._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"bone_aabb_group", self._root, self._m_bone_aabb_group._root)
+                if self._m_bone_aabb_group._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"bone_aabb_group", self, self._m_bone_aabb_group._parent)
 
 
         if self.bone_name_remap__enabled:
@@ -211,6 +229,44 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
         self._dirty = False
 
+    class Aabb(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.Aabb, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.min = ReengineMesh.Vec4(self._io, self, self._root)
+            self.min._read()
+            self.max = ReengineMesh.Vec4(self._io, self, self._root)
+            self.max._read()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            self.min._fetch_instances()
+            self.max._fetch_instances()
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.Aabb, self)._write__seq(io)
+            self.min._write__seq(self._io)
+            self.max._write__seq(self._io)
+
+
+        def _check(self):
+            if self.min._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"min", self._root, self.min._root)
+            if self.min._parent != self:
+                raise kaitaistruct.ConsistencyError(u"min", self, self.min._parent)
+            if self.max._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"max", self._root, self.max._root)
+            if self.max._parent != self:
+                raise kaitaistruct.ConsistencyError(u"max", self, self.max._parent)
+            self._dirty = False
+
+
     class Bone(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(ReengineMesh.Bone, self).__init__(_io)
@@ -246,6 +302,61 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
 
         def _check(self):
+            self._dirty = False
+
+
+    class BoneAabbGroup(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.BoneAabbGroup, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.num_entries = self._io.read_u8le()
+            self.offset_entries = self._io.read_u8le()
+            self.entries = []
+            for i in range(self.num_entries):
+                _t_entries = ReengineMesh.Aabb(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+
+            self.padding = self._io.read_bytes((16 - self._io.pos() % 16) % 16)
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.BoneAabbGroup, self)._write__seq(io)
+            self._io.write_u8le(self.num_entries)
+            self._io.write_u8le(self.offset_entries)
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._write__seq(self._io)
+
+            if len(self.padding) != (16 - self._io.pos() % 16) % 16:
+                raise kaitaistruct.ConsistencyError(u"padding", (16 - self._io.pos() % 16) % 16, len(self.padding))
+            self._io.write_bytes(self.padding)
+
+
+        def _check(self):
+            if len(self.entries) != self.num_entries:
+                raise kaitaistruct.ConsistencyError(u"entries", self.num_entries, len(self.entries))
+            for i in range(len(self.entries)):
+                pass
+                if self.entries[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"entries", self._root, self.entries[i]._root)
+                if self.entries[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"entries", self, self.entries[i]._parent)
+
             self._dirty = False
 
 
@@ -1465,6 +1576,41 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_u2le(self._m_blend_shape_name_remap[i])
 
+            self._io.seek(_pos)
+
+
+    @property
+    def bone_aabb_group(self):
+        if self._should_write_bone_aabb_group:
+            self._write_bone_aabb_group()
+        if hasattr(self, '_m_bone_aabb_group'):
+            return self._m_bone_aabb_group
+
+        if not self.bone_aabb_group__enabled:
+            return None
+
+        if self.header.offset_bone_aabb != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_bone_aabb)
+            self._m_bone_aabb_group = ReengineMesh.BoneAabbGroup(self._io, self, self._root)
+            self._m_bone_aabb_group._read()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_bone_aabb_group', None)
+
+    @bone_aabb_group.setter
+    def bone_aabb_group(self, v):
+        self._dirty = True
+        self._m_bone_aabb_group = v
+
+    def _write_bone_aabb_group(self):
+        self._should_write_bone_aabb_group = False
+        if self.header.offset_bone_aabb != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_bone_aabb)
+            self._m_bone_aabb_group._write__seq(self._io)
             self._io.seek(_pos)
 
 
