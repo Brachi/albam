@@ -187,3 +187,43 @@ field renamed to `lod_group`/`lod_group_offset`/`lod_group_offsets` (a
 level). `test_name` renamed to `name_offset`, replacing a dead type of the
 same name that was defined but never referenced. `mesh_group_test`
 renamed to `mesh_group_offset`.
+
+# mdf.ksy parsing sweep — RE3
+
+Same exercise as above, for `albam/engines/reng/structs/mdf.ksy` (RE
+Engine's `.mdf2` material-info format - each `.mesh` file has a sibling
+`.mdf2` referenced by heuristic filename match, see
+`albam/engines/reng/material.py`).
+
+## Dataset
+
+13 files in `tests/reng/datasets/mdf_parsing_hashes.json`, each the real
+sibling `.mdf2` of one file already in the mesh-parsing/import datasets -
+same category variety (player/enemy/boss characters, weapon, 2 building
+materials, natural object, furniture, item, gimmick, VFX-library debris),
+all hash-verified against the committed catalog.
+
+## Result: 13/13 passed
+
+No parsing failures, unlike the `.mesh` sweep. Beyond the basic structural
+assertions (`test_mdf_parsing.py`), spot-checked actual decoded values
+across the whole dataset (material names, texture types/paths, property
+names/counts) - all sane and self-consistent with each file's real-world
+content: e.g. `em1000_Body_Mat` with `BaseMetalMap`/`NormalRoughnessMap`/
+`EmissiveMap` textures and `BaseColor`/`Metallic`/`Roughness` properties;
+`em3000`'s (an in-game "Licker") materials named `mat_body`/`mat_skin`/
+`mat_back` referencing `licker_*_ALBM.tex`/`licker_*_NRMR.tex`; the police
+station terrain material (29 sub-materials) including a
+`shading=1` outlier (`st2_AreaBlood02`, a blood-decal material) among an
+otherwise uniform `shading=0` set - real category variation, not noise.
+
+## Cross-reference against RE-Mesh-Editor
+
+A cross-reference pass (same methodology as the `.mesh` investigation
+above) against RE-Mesh-Editor is in progress to resolve `mdf.ksy`'s
+remaining unknowns (root-level `unk_01`/`unk_02`/`unk_03`,
+`material_shading_type`'s real values, the `alpha_flags` bitfield -
+including whether its bit order is even right - `properties_header`'s
+flat `f4` array, and version-gated fields like `ofs_first_material_name`)
+even though this initial pass found no parsing failures - a clean parse
+doesn't mean every field's identity/semantics are actually understood.
