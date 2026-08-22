@@ -430,14 +430,16 @@ def _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id)
 # writes back) them. This export is geometry-only and never intends to
 # touch any of them, so they're restored byte-for-byte from the source
 # after _write() - not reconstructed, just not silently destroyed.
+# offset_bone_aabb used to be here too - now modeled for real (mesh.ksy's
+# bone_aabb_group), so it round-trips through the real mechanism like
+# everything else and no longer needs restoring.
 _UNMODELED_HEADER_OFFSETS = (
-    "offset_shadow_mesh_group", "offset_normal_recalc", "offset_blend_shapes",
-    "offset_bone_aabb", "offset_floats",
+    "offset_shadow_mesh_group", "offset_normal_recalc", "offset_blend_shapes", "offset_floats",
 )
 _ALL_HEADER_OFFSETS = _UNMODELED_HEADER_OFFSETS + (
-    "offset_data", "offset_occlusion_mesh_group", "offset_bones", "offset_buffers_header",
-    "offset_material_name_remap", "offset_bone_name_remap", "offset_blend_shape_name_remap",
-    "offset_names",
+    "offset_data", "offset_occlusion_mesh_group", "offset_bones", "offset_bone_aabb",
+    "offset_buffers_header", "offset_material_name_remap", "offset_bone_name_remap",
+    "offset_blend_shape_name_remap", "offset_names",
 )
 
 
@@ -470,11 +472,12 @@ def export_reengine_mesh(bl_obj):
     _read() populated it, and every LOD level other than LOD 0 (the only
     one ever imported) round-trips untouched through the same mechanism.
 
-    mesh.ksy doesn't model every byte of the real file yet - two header
-    offsets (bone AABBs, and a shadow-mesh LOD tree on some files) are
-    identified but have no instance reading their pointed-to data, so a
-    plain _write() would zero them. _restore_unmodeled_regions patches
-    those specific, known regions back in from the source afterward -
+    mesh.ksy doesn't model every byte of the real file yet - a shadow-mesh
+    LOD tree, on files that have one, is identified but has no instance
+    reading its pointed-to data, so a plain _write() would zero it (bone
+    AABBs used to be in this category too - now properly modeled, see
+    bone_aabb_group). _restore_unmodeled_regions patches this and any
+    other still-unmodeled region back in from the source afterward -
     everything else is reproduced by the real mechanism, not patched.
     """
     asset = bl_obj.albam_asset
