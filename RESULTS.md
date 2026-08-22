@@ -148,13 +148,13 @@ dataset has `offset_blend_shape_name_remap == 0`, including a
 `pl0001_blend.mesh` file that looked like a plausible candidate by name.
 Left as a known gap rather than fabricating verification.
 
-**Not modeled**: `offset_shadow_mesh_group`, `offset_normal_recalc`,
-`offset_blend_shapes`, `offset_bone_aabb`, `offset_floats` are identified
-(named, commented) but their pointed-to struct layouts aren't - only
-partial/uncertain layouts were available even from RE-Mesh-Editor. Left as
-bare `u8` offsets rather than guessing. (`offset_bone_aabb` was resolved
-and properly modeled later, during the `.mesh` export work below, once
-its real struct definition was tracked down - see that section.)
+**Not modeled**: `offset_normal_recalc`, `offset_blend_shapes`,
+`offset_floats` are identified (named, commented) but their pointed-to
+struct layouts aren't - only partial/uncertain layouts were available
+even from RE-Mesh-Editor. Left as bare `u8` offsets rather than guessing.
+(`offset_bone_aabb` and `offset_shadow_mesh_group` were resolved and
+properly modeled later, during the `.mesh` export work below, once their
+real struct definitions were tracked down - see that section.)
 
 **`mesh.normals`'s `repeat-expr: 100` FIXME**: resolved conceptually (real
 count comes from the *next* sibling submesh's `pos_vertex_buffer`, or
@@ -441,19 +441,30 @@ kinds of gap turned up, and both got resolved differently on purpose:
   - Verified: 4 of the 5 dataset files became **fully byte-exact** on a
     plain unmodified `_read()`/`_write()` round trip after this fix (up
     from a modeling gap of several thousand bytes each) - the single
-    remaining file's tiny residual (22 bytes) is entirely
-    `offset_shadow_mesh_group`, below.
-- `header.offset_shadow_mesh_group` (an entire separate shadow-casting
-  LOD/mesh-group tree, present on one file in this dataset) is a
-  materially bigger undertaking than a flat array - a whole parallel
-  tree structure, not a single offset's worth of struct work - and
-  stays unmodeled for now. `_restore_unmodeled_regions` copies this
-  region (and the still-unmodeled `offset_normal_recalc`/
-  `offset_blend_shapes`/`offset_floats`, none of which any current
-  dataset file has nonzero) back from the source file after `_write()` -
-  not reconstructed through the real mechanism, openly not, but not
-  destroyed either. The list is generic (keyed off the actual header
-  offset values present in a given file, not per-file hardcoded).
+    remaining file's tiny residual (22 bytes) was entirely
+    `offset_shadow_mesh_group`, resolved next.
+- `header.offset_shadow_mesh_group` was expected to be a materially
+  bigger undertaking (a whole separate shadow-casting LOD/mesh-group
+  tree) but turned out not to be: confirmed against RE-Mesh-Editor's
+  actual `ShadowHeader.read()`/`write()` and empirically against the one
+  dataset file that has one (`enemy_nemesis`, 8 LOD groups) - its
+  `lod_group_offsets` array is byte-identical to `model_info`'s own
+  `lod_group_offsets`, i.e. shadow LODs always alias the main model's
+  geometry rather than duplicating it (matches RE-Mesh-Editor's own
+  writer-side comment: shadow meshes can't have unique LODs, the game
+  crashes if they do). So the header itself - `lod_group_count`,
+  `material_count`, `uv_count`, `skin_weight_count`, `total_mesh_count`,
+  a version-gated `null_padding` (same `_root.version == 386270720` gate
+  as `model_info`'s own equivalent field), a self-referential
+  `offset_offset` (unused as a real pointer, same as `bone_aabb_group`'s
+  `offset_entries`), 6 reserved `u8`s, and the offset array - is the
+  *entire* region; there's no separate geometry to read. Modeled as
+  `shadow_header` in `mesh.ksy`, dropped from `_restore_unmodeled_regions`
+  the same way `offset_bone_aabb` was. `_restore_unmodeled_regions` still
+  covers the genuinely-unmodeled `offset_normal_recalc`/
+  `offset_blend_shapes`/`offset_floats` (none of which any current
+  dataset file has nonzero) - not reconstructed through the real
+  mechanism, openly not, but not destroyed either.
 
 **Custom properties, not an ad-hoc mesh attribute, for values that fit
 that mechanism**: `is_quad`/`vertex_buffer_index` (per-submesh, real,
@@ -501,14 +512,14 @@ meshes - see `tests/reng/test_mesh_serialization.py`):
 - Everything not touched (any file with no bones at all; every mesh
   section this export doesn't set fields on) is exact by construction -
   either through the real `_write()` mechanism now that gaps are modeled
-  or restored, not just by not being touched. Per-bone AABBs moved from
-  the "restored from source" bucket to the "real mechanism" bucket once
-  their layout was confirmed (above) - the *outward* fidelity claim
-  doesn't change (still byte-exact outside the weight-slot region), only
-  *how* it's achieved for that one section. The one file in this dataset
-  with a shadow-mesh tree (`offset_shadow_mesh_group`) still relies on
-  the restore-from-source fallback for that specific region - the only
-  remaining gap in the "everything except weights" claim above.
+  or restored, not just by not being touched. Per-bone AABBs and the
+  shadow-mesh header both moved from the "restored from source" bucket to
+  the "real mechanism" bucket once their layouts were confirmed (above) -
+  the *outward* fidelity claim doesn't change (still byte-exact outside
+  the weight-slot region), only *how* it's achieved for those sections.
+  With both resolved, **all 5 dataset files are now fully byte-exact
+  outside the weight-slot region** - no file has any remaining gap beyond
+  the structural skin-weight one.
 
 Verified against real re3 install data via the full test suite (re2's
 export registration is untested - this machine's re2 install is broken,
