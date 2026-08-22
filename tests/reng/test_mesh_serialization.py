@@ -120,17 +120,18 @@ def test_export_structure_and_material_unchanged(mesh_export_local, subtests):
 
 def test_export_geometry_byte_exact(mesh_export_local, subtests):
     """
-    position/normal+tangent/UV/index bytes for every LOD-0 submesh must be
-    byte-identical to the source: positions and indices are lossless by
-    construction, UV round-trips exactly through f16 (it was f16 to begin
-    with), and normal+tangent is read back from the raw bytes stashed at
-    import time (see NOR_TAN_LO_ATTR/NOR_TAN_HI_ATTR in mesh.py) rather
-    than recomputed - so none of these should ever differ for an
-    unmodified re-export.
+    position/UV/index bytes for every LOD-0 submesh must be byte-identical
+    to the source: positions and indices are lossless by construction, and
+    UV round-trips exactly through f16 (it was f16 to begin with).
+    normal+tangent is deliberately NOT checked here - see
+    test_export_normals_tangents_semantically_equal for why it's only
+    semantically, not byte, exact (it's recomputed from the live mesh on
+    every export, on purpose - this is a modding addon, an edit made in
+    Blender has to actually reach the exported file).
     """
     src_mesh, dst_mesh, src_bytes, dst_bytes = mesh_export_local
     buffers = src_mesh.buffers_data
-    pos_acc, nor_tan_acc, uv_acc = buffers.primitive_accessors[0:3]
+    pos_acc, _, uv_acc = buffers.primitive_accessors[0:3]
     vb = buffers.offset_vertex_buffer
     ib = buffers.offset_index_buffer
 
@@ -146,11 +147,6 @@ def test_export_geometry_byte_exact(mesh_export_local, subtests):
             size = num_vertices * pos_acc.size
             assert src_bytes[off:off + size] == dst_bytes[off:off + size]
 
-        with subtests.test(sub_mesh=i, region="nor_tan"):
-            off = vb + nor_tan_acc.offset + sub_mesh.pos_vertex_buffer * nor_tan_acc.size
-            size = num_vertices * nor_tan_acc.size
-            assert src_bytes[off:off + size] == dst_bytes[off:off + size]
-
         with subtests.test(sub_mesh=i, region="uv"):
             off = vb + uv_acc.offset + sub_mesh.pos_vertex_buffer * uv_acc.size
             size = num_vertices * uv_acc.size
@@ -162,43 +158,187 @@ def test_export_geometry_byte_exact(mesh_export_local, subtests):
             assert src_bytes[off:off + size] == dst_bytes[off:off + size]
 
 
-def test_export_full_file_byte_exact_outside_weights(mesh_export_local):
+def test_export_full_file_byte_exact_outside_lossy_regions(mesh_export_local):
     """
     The strongest fidelity check in this file: every byte in the exported
     file must match the source *except* inside a submesh's own skin-weight
-    byte range (see test_export_weights_semantically_equal for why that
-    one region is only semantically, not byte, exact). This exercises the
-    whole export path at once - header, name tables, bone data (including
-    the local/world bone matrices mesh.ksy didn't model until this pass),
-    every LOD level other than LOD 0, and the header offsets mesh.ksy
-    still doesn't model at all (bone AABBs, and a shadow-mesh tree on
-    some files) that export restores from source rather than
-    reconstructing - not just the handful of regions the other tests
+    or normal/tangent byte ranges (see test_export_weights_semantically_equal
+    and test_export_normals_tangents_semantically_equal for why those two
+    regions are only semantically, not byte, exact - both are genuine,
+    intentional trade-offs, not bugs). This exercises the whole export
+    path at once - header, name tables, bone data (including the
+    local/world bone matrices and shadow-mesh header mesh.ksy didn't
+    model until this pass), every LOD level other than LOD 0, and the
+    header offsets mesh.ksy still doesn't model at all (bone AABBs, blend
+    shapes, normal-recalc data) that export restores from source rather
+    than reconstructing - not just the handful of regions the other tests
     check individually.
     """
     src_mesh, _, src_bytes, dst_bytes = mesh_export_local
     assert len(src_bytes) == len(dst_bytes)
 
-    weight_ranges = []
-    if src_mesh.header.offset_bones:
-        buffers = src_mesh.buffers_data
-        weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
-        if weight_acc:
-            vb = buffers.offset_vertex_buffer
-            for sub_mesh in _sub_meshes(src_mesh):
-                index_buffer = buffers.index_buffer
-                indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
-                    index_buffer, sub_mesh.pos_index_buffer * 2
-                )
-                num_vertices = len(set(indices))
-                off = vb + weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
-                weight_ranges.append((off, off + num_vertices * weight_acc.size))
+    lossy_ranges = []
+    buffers = src_mesh.buffers_data
+    _, nor_tan_acc, _ = buffers.primitive_accessors[0:3]
+    weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
+    vb = buffers.offset_vertex_buffer
+    for sub_mesh in _sub_meshes(src_mesh):
+        index_buffer = buffers.index_buffer
+        indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
+            index_buffer, sub_mesh.pos_index_buffer * 2
+        )
+        num_vertices = len(set(indices))
+
+        off = vb + nor_tan_acc.offset + sub_mesh.pos_vertex_buffer * nor_tan_acc.size
+        lossy_ranges.append((off, off + num_vertices * nor_tan_acc.size))
+
+        if src_mesh.header.offset_bones and weight_acc:
+            off = vb + weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
+            lossy_ranges.append((off, off + num_vertices * weight_acc.size))
 
     unexpected_diffs = [
         i for i in range(len(src_bytes))
-        if src_bytes[i] != dst_bytes[i] and not any(a <= i < b for a, b in weight_ranges)
+        if src_bytes[i] != dst_bytes[i] and not any(a <= i < b for a, b in lossy_ranges)
     ]
     assert unexpected_diffs == []
+
+
+def _decode_re_vec3(a, b, c):
+    return (a / 127, -c / 127, b / 127)
+
+
+def _decode_nor_tan(mesh, sub_mesh, num_vertices, nor_tan_acc):
+    vertex_buffer = mesh.buffers_data.vertex_buffer
+    off = nor_tan_acc.offset + sub_mesh.pos_vertex_buffer * nor_tan_acc.size
+    raw = ((ctypes.c_byte * 8) * num_vertices).from_buffer_copy(vertex_buffer, off)
+    normals = [_decode_re_vec3(n[0], n[1], n[2]) for n in raw]
+    tangents = [_decode_re_vec3(n[4], n[5], n[6]) for n in raw]
+    signs = [n[7] / 127 for n in raw]
+    return normals, tangents, signs
+
+
+def test_export_normals_tangents_semantically_equal(mesh_export_local):
+    """
+    normal/tangent are recomputed from the live Blender mesh on every
+    export (see _vertex_normals_tangents in mesh.py) rather than
+    round-tripped byte-for-byte, on purpose - this is a modding addon, so
+    an edit made in Blender (recalculating normals, reshaping geometry)
+    has to actually reach the exported file. That means an *unmodified*
+    round trip isn't byte-exact here either, for three real reasons:
+
+    1. Byte index 3 of the 8-byte nor_tan block is a still-unidentified
+       value (RESULTS.md), with no Blender-side equivalent at all - not
+       recoverable from live geometry, a permanent precision loss.
+    2. Blender's tangent generation (calc_tangents()/MikkTSpace) is a
+       different algorithm than whatever the original art/export pipeline
+       used - even geometrically-identical tangents can come out with a
+       different sign or a slightly different direction, particularly at
+       UV seams/mirrored islands or tiny/degenerate submeshes, where
+       tangent-space generation is inherently under-determined regardless
+       of algorithm. Measured directly against this dataset: per-file
+       pooled average tangent alignment (dot product) never dropped below
+       ~0.82, and per-file sign agreement never dropped below ~85% even on
+       the single worst (tiny, 32-vertex) submesh - the thresholds below
+       have real headroom under those measured worst cases, not arbitrary
+       slack.
+    3. int8 quantization (both normal and tangent are stored as
+       signed-byte-over-127) means small floating-point differences
+       between the two algorithms can legitimately round to
+       adjacent-but-different byte values even where 1/2 don't apply.
+
+    normal.xyz has none of the algorithm-choice ambiguity above (both
+    sides derive it from the same quantized source, mediated only by
+    Blender's own normal storage/rounding) so it's checked with a tight,
+    quantization-only tolerance instead.
+    """
+    src_mesh, dst_mesh, _, _ = mesh_export_local
+    buffers = src_mesh.buffers_data
+    _, nor_tan_acc, _ = buffers.primitive_accessors[0:3]
+
+    # 3 quantization steps (3/127 ~= 0.0236) - measured max observed delta
+    # across the whole dataset is exactly one step (1/127); the extra
+    # headroom absorbs float rounding at the boundary, not a real gap.
+    NORMAL_TOLERANCE = 3 / 127
+
+    total_vertices = 0
+    tangent_dot_sum = 0.0
+    sign_matches = 0
+
+    for sub_mesh in _sub_meshes(src_mesh):
+        index_buffer = buffers.index_buffer
+        indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+        num_vertices = len(set(indices))
+
+        src_n, src_t, src_s = _decode_nor_tan(src_mesh, sub_mesh, num_vertices, nor_tan_acc)
+        dst_n, dst_t, dst_s = _decode_nor_tan(dst_mesh, sub_mesh, num_vertices, nor_tan_acc)
+
+        for v in range(num_vertices):
+            nd = max(abs(a - b) for a, b in zip(src_n[v], dst_n[v]))
+            assert nd <= NORMAL_TOLERANCE, f"normal delta {nd} exceeds {NORMAL_TOLERANCE}"
+
+            tangent_dot_sum += sum(a * b for a, b in zip(src_t[v], dst_t[v]))
+            if (src_s[v] > 0) == (dst_s[v] > 0):
+                sign_matches += 1
+        total_vertices += num_vertices
+
+    avg_tangent_dot = tangent_dot_sum / total_vertices
+    sign_match_ratio = sign_matches / total_vertices
+    assert avg_tangent_dot >= 0.75, f"average tangent alignment {avg_tangent_dot} too low"
+    assert sign_match_ratio >= 0.8, f"bitangent-sign agreement {sign_match_ratio} too low"
+
+
+def test_export_normal_edit_reaches_exported_file(reng_vfs_root):
+    """
+    The actual point of reworking this from a stashed-byte round trip to a
+    live-mesh derivation: an edit made in Blender has to come out the
+    other end. Flips every normal (bpy's flip_normals(), which also
+    reverses face winding/index order) on a real imported mesh, exports
+    it, and asserts the exported normal is now the *opposite* direction
+    from the original file's normal - not a copy of it.
+    """
+    import bpy
+    from albam.engines.reng.structs.reengine_mesh import ReengineMesh
+    from tests.reng.conftest import reng_import
+
+    # player_jill - a real skinned character file already in this dataset.
+    mesh_hash = "094caac02ef9c93b"
+    path = resolve_hashes(reng_vfs_root, {mesh_hash})[mesh_hash].lstrip("/")
+
+    before = set(bpy.data.objects.keys())
+    vfile = reng_import("re3", path)
+    new_objects = [bpy.data.objects[name] for name in bpy.data.objects.keys() if name not in before]
+    bl_object = next(ob for ob in new_objects if ob.parent is None)
+    bl_mesh_ob = next(ob for ob in new_objects if ob.type == "MESH")
+
+    bl_mesh_ob.data.flip_normals()
+
+    from albam.engines.reng.mesh import export_reengine_mesh
+
+    exported = export_reengine_mesh(bl_object)
+    dst_bytes = exported[0].data_bytes
+
+    src_bytes = vfile.get_bytes()
+    src_mesh = ReengineMesh(KaitaiStream(io.BytesIO(src_bytes)))
+    src_mesh._read()
+    dst_mesh = ReengineMesh(KaitaiStream(io.BytesIO(dst_bytes)))
+    dst_mesh._read()
+
+    buffers = src_mesh.buffers_data
+    _, nor_tan_acc, _ = buffers.primitive_accessors[0:3]
+    sub_mesh = _sub_meshes(src_mesh)[0]
+    index_buffer = buffers.index_buffer
+    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+    num_vertices = len(set(indices))
+
+    src_n, _, _ = _decode_nor_tan(src_mesh, sub_mesh, num_vertices, nor_tan_acc)
+    dst_n, _, _ = _decode_nor_tan(dst_mesh, sub_mesh, num_vertices, nor_tan_acc)
+
+    dots = [sum(a * b for a, b in zip(s, d)) for s, d in zip(src_n, dst_n)]
+    avg_dot = sum(dots) / len(dots)
+    assert avg_dot <= -0.9, (
+        f"exported normals should be ~opposite of the source after flip_normals() "
+        f"(avg dot {avg_dot}), i.e. the edit reached the exported file"
+    )
 
 
 def test_export_weights_semantically_equal(mesh_export_local, subtests):

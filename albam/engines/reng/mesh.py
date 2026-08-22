@@ -96,20 +96,17 @@ def build_blender_mesh(re_mesh, sub_mesh, app_id):
     uv_layer.data.foreach_set("uv", per_loop_list)
 
     # NORMALS ####
+    # nor_tan packs normal.xyz + an unidentified byte, then tangent.xyz +
+    # a handedness-sign byte (see mesh.ksy's primitive_type enum). Only
+    # normal.xyz is decoded here (for display) - tangent is never imported
+    # into anything, since Blender/export regenerates it live (see
+    # _export_submesh) rather than round-tripping an authored value; this
+    # is a modding addon, so an edit made in Blender (recalculating
+    # normals, reshaping the mesh) has to actually reach the exported
+    # file, which rules out freezing this data at import time.
     normals_accessor = re_mesh.buffers_data.primitive_accessors[1]
     normals_offset = normals_accessor.offset + sub_mesh.pos_vertex_buffer * normals_accessor.size
     nor_tan_raw = ((ctypes.c_byte * 8) * num_vertices).from_buffer_copy(vertex_buffer, normals_offset)
-
-    # nor_tan packs normal.xyz + an unused/padding byte, then tangent.xyz +
-    # a handedness-sign byte (see mesh.ksy's primitive_type enum) - only
-    # the normal.xyz is decoded below (tangent isn't reconstructed from
-    # Blender's own state anywhere), so the raw 8 bytes are stashed here,
-    # verbatim, as export's only way back to them byte-exact. Per-vertex
-    # data has no equivalent in albam's per-datablock custom-properties
-    # system (see ReengineSubMeshCustomProperties below for the kind of
-    # value that system does fit) - a real mesh attribute is the actual
-    # right tool for a value that varies per vertex.
-    _stash_nor_tan_raw(bl_mesh, nor_tan_raw)
 
     vertex_normals = [(n[0] / 127, n[2] / -127, n[1] / 127) for n in nor_tan_raw]
     vert_normals = np.array(vertex_normals, dtype=np.float32)
@@ -129,17 +126,6 @@ def build_blender_mesh(re_mesh, sub_mesh, app_id):
         pass
 
     return ob
-
-
-NOR_TAN_LO_ATTR = "albam_nor_tan_lo"
-NOR_TAN_HI_ATTR = "albam_nor_tan_hi"
-
-
-def _stash_nor_tan_raw(bl_mesh, nor_tan_raw):
-    lo_attr = bl_mesh.attributes.new(NOR_TAN_LO_ATTR, "INT", "POINT")
-    hi_attr = bl_mesh.attributes.new(NOR_TAN_HI_ATTR, "INT", "POINT")
-    lo_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[0:4]))[0] for n in nor_tan_raw])
-    hi_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[4:8]))[0] for n in nor_tan_raw])
 
 
 # albam's per-datablock custom-properties system (see
@@ -290,6 +276,49 @@ def _vertex_uvs(bl_mesh):
     return per_vertex
 
 
+def _encode_re_vec3_i8(bx, by, bz):
+    """
+    Blender (bx, by, bz) -> RE Engine (bx, bz, -by), the same axis
+    convention position export already uses (see _export_submesh) - this
+    happens to be a proper rotation (determinant +1), not a reflection, so
+    it doesn't flip handedness for anything encoded through it (e.g. a
+    tangent-space sign).
+    """
+    return (
+        max(-127, min(127, round(bx * 127))),
+        max(-127, min(127, round(bz * 127))),
+        max(-127, min(127, round(-by * 127))),
+    )
+
+
+def _vertex_normals_tangents(bl_mesh, uv_layer_name):
+    """
+    Both normal and tangent+bitangent-sign are per-loop in Blender (via
+    corner_normals and calc_tangents()/MikkTSpace respectively) - not
+    per-vertex. MeshVertex.normal is NOT the real per-corner shading
+    normal (it's a plain face-area-weighted average across every adjacent
+    face, ignoring custom split/auto-smooth data entirely - confirmed on a
+    cube: (-1,0,0) per corner_normals vs (-0.577,-0.577,-0.577) per
+    vertex.normal), so reading it here would silently produce wrong
+    normals for any shading that isn't perfectly uniform across a vertex.
+
+    This format only has room for one normal+tangent pair per vertex (not
+    per loop), so for a vertex touched by multiple loops (a UV seam, or a
+    hard-shaded edge) this takes whichever loop is encountered first, and
+    always takes the normal and tangent from the *same* loop so they stay
+    a consistent basis. Real per-loop splits at seams aren't representable
+    in this format either way.
+    """
+    bl_mesh.calc_tangents(uvmap=uv_layer_name)
+    corner_normals = bl_mesh.corner_normals
+    per_vertex = [None] * len(bl_mesh.vertices)
+    for loop in bl_mesh.loops:
+        vi = loop.vertex_index
+        if per_vertex[vi] is None:
+            per_vertex[vi] = (corner_normals[loop.index].vector, loop.tangent, loop.bitangent_sign)
+    return per_vertex
+
+
 def _encode_vertex_weights(bl_mesh_ob, vertex_index, bone_name_to_slot):
     pairs = []
     for g in bl_mesh_ob.data.vertices[vertex_index].groups:
@@ -328,14 +357,11 @@ def _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, 
     bl_mesh = bl_mesh_ob.data
     num_vertices = len(bl_mesh.vertices)
 
-    lo_attr = bl_mesh.attributes.get(NOR_TAN_LO_ATTR)
-    hi_attr = bl_mesh.attributes.get(NOR_TAN_HI_ATTR)
-    if lo_attr is None or hi_attr is None:
+    if not bl_mesh.uv_layers:
         raise AlbamCheckFailure(
-            "Mesh is missing normal/tangent data needed for export",
-            f"'{bl_mesh_ob.name}' has no {NOR_TAN_LO_ATTR}/{NOR_TAN_HI_ATTR} custom attributes.",
-            "Only meshes imported by albam, with those attributes still intact, can "
-            "currently be exported.",
+            "Mesh has no UV layer",
+            f"'{bl_mesh_ob.name}' has no UV layer - one is required to compute tangents.",
+            "Add a UV map before exporting.",
         )
 
     bl_mesh.calc_loop_triangles()
@@ -355,6 +381,7 @@ def _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, 
     pos_acc, nor_tan_acc, uv_acc = buffers.primitive_accessors[0:3]
     weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
     vertex_uvs = _vertex_uvs(bl_mesh)
+    vertex_normals_tangents = _vertex_normals_tangents(bl_mesh, bl_mesh.uv_layers[0].name)
 
     pos_off = pos_acc.offset + sub_mesh.pos_vertex_buffer * pos_acc.size
     nor_tan_off = nor_tan_acc.offset + sub_mesh.pos_vertex_buffer * nor_tan_acc.size
@@ -363,10 +390,20 @@ def _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, 
     for i, v in enumerate(bl_mesh.vertices):
         bx, by, bz = v.co
         struct.pack_into("<3f", vertex_buffer, pos_off + i * pos_acc.size, bx, bz, -by)
+
+        normal, tangent, bitangent_sign = vertex_normals_tangents[i]
+        nx, ny, nz = _encode_re_vec3_i8(*normal)
+        tx, ty, tz = _encode_re_vec3_i8(*tangent)
+        sign = max(-127, min(127, round(-bitangent_sign * 127)))
+        # Byte index 3 is a still-unidentified value (RESULTS.md: nonzero
+        # in ~1% of real vertices sampled) with no Blender-side equivalent
+        # at all - not recoverable from live geometry, so this is a real,
+        # permanent precision loss, not an oversight. Written as 0.
         struct.pack_into(
-            "<ii", vertex_buffer, nor_tan_off + i * nor_tan_acc.size,
-            lo_attr.data[i].value, hi_attr.data[i].value,
+            "<8b", vertex_buffer, nor_tan_off + i * nor_tan_acc.size,
+            nx, ny, nz, 0, tx, ty, tz, sign,
         )
+
         u, uv_v = vertex_uvs[i]
         struct.pack_into("<2e", vertex_buffer, uv_off + i * uv_acc.size, u, uv_v)
 
