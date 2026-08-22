@@ -18,6 +18,11 @@ __version__ = version
 ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
 
+# Functions appended to bpy.app.handlers.load_post by register(), tracked here
+# so unregister() can remove exactly what was added - mirrors how
+# blender_registry.props/types already track what to unregister.
+LOAD_POST_HANDLERS = [populate_albam_data]
+
 
 def register():
     sys.path.insert(0, VENDOR_DIR)
@@ -62,10 +67,17 @@ def register():
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
     # Load data from user's config files
-    bpy.app.handlers.load_post.append(populate_albam_data)
+    for handler in LOAD_POST_HANDLERS:
+        bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
+    for handler in LOAD_POST_HANDLERS:
+        try:
+            bpy.app.handlers.load_post.remove(handler)
+        except ValueError:
+            pass  # already removed, e.g. a previous unregister() call
+
     fs_registry.clear()
 
     for _, cls in reversed(blender_registry.props):
