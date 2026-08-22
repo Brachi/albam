@@ -46,7 +46,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
                 modifier.object = skeleton
                 modifier.use_vertex_groups = True
             try:
-                material_name_index = re_mesh.id_to_names_remap[sub_mesh.material_id]
+                material_name_index = re_mesh.id_to_names_remap[sub_mesh.material_index]
                 material_name = re_mesh.named_nodes[material_name_index].value
                 bl_mesh_ob.data.materials.append(materials[material_name])
             except KeyError:
@@ -134,7 +134,7 @@ def build_blender_armature(re_mesh, armature_name):
     for i, bone in enumerate(re_mesh.bones_header.bones):
         bone_name = re_mesh.named_nodes[name_offset + i].value
         blender_bone = armature.edit_bones.new(bone_name)
-        valid_parent = bone.parent_idx != 0xFFFF
+        valid_parent = bone.parent_idx != -1
         blender_bone.parent = blender_bones[bone.parent_idx] if valid_parent else None
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
         head = _name_me(re_mesh.bones_header.inverse_bind_matrices[i])

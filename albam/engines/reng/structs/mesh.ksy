@@ -7,7 +7,8 @@ meta:
 seq:
     - {id: id_magic, contents: [77, 69, 83, 72]}
     - {id: version, type: u4}
-    - {id: size_file, type: u8}
+    - {id: file_size, type: u4}
+    - {id: lod_group_name_hash, type: u4} # hash used to look up LOD-distance scaling by object category; not part of file_size (was misread as one u8 "size_file")
     - {id: header, type: header}
 
 instances:
@@ -24,8 +25,19 @@ instances:
   named_nodes:
     {pos: header.offset_names, type: test_name, repeat: expr, repeat-expr: header.num_named_nodes}
 
+  # Was reading header.num_named_nodes entries unconditionally - that's the
+  # combined size of ALL three name-remap tables (materials+bones+blend
+  # shapes) sharing one string table, not just this one. Only happened to
+  # not crash because the other two tables sit right after this one in the
+  # file. Count is model_info.num_materials; guarded the same way
+  # model_info/bones_header are (both may legitimately be absent, e.g. a
+  # buffers-only occlusion mesh).
   id_to_names_remap:
-    {pos: header.offset_test_remap, type: u2, repeat: expr, repeat-expr: header.num_named_nodes}
+    {
+      pos: header.offset_test_remap, type: u2, repeat: expr,
+      repeat-expr: model_info.num_materials,
+      if: header.offset_test_remap != 0 and header.offset_data != 0,
+    }
 
 types:
   header:
@@ -53,11 +65,12 @@ types:
       - {id: num_materials, type: u1}
       - {id: num_uv_layers, type: u1}
       - {id: num_skin_weights, type: u1}
-      - {id: num_meshes, type: u4}
+      - {id: num_meshes, type: u2} # was read as one u4 with the next 2 bytes
+      - {id: has_32bit_index_buffer, type: u1}
+      - {id: shared_lod_bits, type: u1}
       - {id: reserved_01, type: u8, if: _root.version == 386270720}  # XXX FIXME: enum with versions
-      - {id: box, type: f4, repeat: expr, repeat-expr: 12}
-      - {id: offset_lod_info, type: u4}
-      - {id: reserved_02, type: u4}
+      - {id: box, type: f4, repeat: expr, repeat-expr: 12} # bounding sphere (x,y,z,r) followed by AABB min/max (2 vec4)
+      - {id: offset_lod_info, type: u8} # was split into two bogus u4s (offset_lod_info + "reserved_02") - it's one u8 offset
     instances:
       model_offsets:
         {pos: offset_lod_info, type: model_offset, repeat: expr, repeat-expr: len_offsets_models}
@@ -90,8 +103,11 @@ types:
       - {id: reserved_01, type: u4}
       - {id: unk_2, type: u2}
       - {id: unk_3, type: u2}
-      - {id: unk_00_a, type: u4, if: _root.version == 21041600 and unk_00 == 0}
-      - {id: unk_00_b, type: u4, if: _root.version == 21041600 and unk_00 == 0}
+      # Was gated on "and unk_00 == 0", as if this were an alternative to
+      # unk_00 - it isn't; it's read unconditionally whenever the format
+      # version is past this branch's threshold, regardless of unk_00's
+      # value. Was also split into two u4s instead of one u8.
+      - {id: unk_04, type: u8, if: _root.version == 21041600}
 
     instances:
       vertex_buffer:
@@ -122,8 +138,16 @@ types:
   bone:
     seq:
       - {id: idx, type: u2}
-      - {id: parent_idx, type: u2}
-      - {id: unk_02, type: u2, repeat: expr, repeat-expr: 6}
+      # parent/sibling/child/symmetric/use_secondary_weight are all signed
+      # - -1 is used as a "none" sentinel (e.g. root bones have no parent),
+      # which read as 0xFFFF/65535 when these were unsigned u2.
+      - {id: parent_idx, type: s2}
+      - {id: sibling_idx, type: s2}
+      - {id: child_idx, type: s2}
+      - {id: symmetric_idx, type: s2}
+      - {id: use_secondary_weight, type: s2}
+      - {id: padding_0, type: u2}
+      - {id: padding_1, type: u2}
 
   name_offset: # Thanks: https://github.com/kaitai-io/kaitai_struct/issues/14
     seq:
@@ -148,11 +172,17 @@ types:
 
   model:
     seq:
-      - {id: num_mesh_groups, type: u4}
-      - {id: unk, type: u4}
+      - {id: num_mesh_groups, type: u1} # was read as one u4 with the next 3 bytes
+      - {id: vertex_format, type: u1}
+      - {id: reserved_01, type: u2}
+      - {id: distance, type: f4} # LOD switch distance - was misread as an unknown u4
       - {id: offset_main_mesh_header, type: u8}
       - {id: mesh_groups, type: mesh_group_test, repeat: expr, repeat-expr: num_mesh_groups}
-      - {id: padding, type: u8} # ??
+      # Pad to 16-byte file-absolute alignment - 0 or 8 bytes depending on
+      # whether num_mesh_groups is even/odd. Was hardcoded to a fixed u8,
+      # which only worked because the one sample file it was written
+      # against happened to have an odd num_mesh_groups.
+      - {id: padding, size: (16 - (_io.pos % 16)) % 16}
 
   mesh_group:
     seq:
@@ -166,7 +196,11 @@ types:
 
   mesh:
     seq:
-      - {id: material_id, type: u4}
+      # Was read as one u4 "material_id" - it's 4 packed bytes.
+      - {id: material_index, type: u1}
+      - {id: is_quad, type: u1}
+      - {id: vertex_buffer_index, type: u1}
+      - {id: padding, type: u1}
       - {id: num_indices, type: u4}
       - {id: pos_index_buffer, type: u4}
       - {id: pos_vertex_buffer, type: u4}

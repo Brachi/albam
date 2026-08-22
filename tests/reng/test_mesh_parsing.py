@@ -55,7 +55,7 @@ def test_mesh(parsed_mesh):
     mesh, src_bytes = parsed_mesh
 
     assert mesh.id_magic == b"MESH"
-    assert mesh.size_file == len(src_bytes)
+    assert mesh.file_size == len(src_bytes)
 
     if mesh.model_info is None:
         # Buffers-only variant (e.g. occlusion-culling meshes): no
