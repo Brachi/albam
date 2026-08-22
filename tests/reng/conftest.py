@@ -1,12 +1,16 @@
 import os
 import tempfile
 
+import bpy
 import pytest
 
 R2_PROTOCOL_PREFIX = "r2://"
 
 # app_id -> the ReenFS instance already mounted this session.
 _REEN_FS_INSTANCES = {}
+
+# app_id -> already mounted into bpy's VFS this session (see reng_vfs_root).
+_REEN_VFS_MOUNTED = set()
 
 
 def _reen_game_dirs(pytestconfig):
@@ -121,3 +125,39 @@ def pak_fs_root(pytestconfig, local_app_id):
         _REEN_FS_INSTANCES[local_app_id] = reen_fs
 
     return _REEN_FS_INSTANCES[local_app_id]
+
+
+@pytest.fixture(scope="session")
+def reng_vfs_root(local_app_id, pak_fs_root):
+    """
+    Mount pak_fs_root (this app_id's already-resolved ReenFS/PakFS) into
+    bpy's VFS, once per session per app_id - the same mechanism
+    tests/mtfw/conftest.py's game_fs_root uses for MTFW_FS. Needed for
+    tests that go through the real import_vfile() operator, unlike
+    test_mesh_parsing.py which reads bytes straight off pak_fs_root and
+    never touches the VFS at all.
+    """
+    if local_app_id not in _REEN_VFS_MOUNTED:
+        bpy.context.scene.albam.apps.app_selected = local_app_id
+        bpy.context.scene.albam.vfs.add_fs_root(
+            local_app_id, pak_fs_root, display_name=f"{local_app_id}-local"
+        )
+        _REEN_VFS_MOUNTED.add(local_app_id)
+    return pak_fs_root
+
+
+def reng_import(local_app_id, local_path):
+    """
+    Select local_path (already mounted via reng_vfs_root) and run it
+    through the real import_vfile() operator. Import-only counterpart of
+    tests/mtfw/conftest.py's import_export() - reng has no export yet, so
+    there's no export half to run.
+    """
+    vfs = bpy.context.scene.albam.vfs
+    try:
+        vfile = vfs.select_vfile(local_app_id, local_path)
+    except KeyError:
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    return vfile
