@@ -1,20 +1,118 @@
+import json
+import os
+
+import bpy
+import pytest
+
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from albam.engines.mtfw.animation import KEYFRAME_TYPES
 from kaitaistruct import KaitaiStream
 from io import BytesIO
-import pytest
+
+# Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
+# of tests/mtfw/*.py. This is the single source of truth for what this file
+# tests locally; extend it directly rather than pointing at some other file.
+# Every hash here must be a subset of that app_id's committed
+# tests/mtfw/datasets/<app_id>_catalog.json - see test_dataset_hashes_are_in_catalog
+# below, which enforces it.
+LMT_SERIALIZATION_DATASET_PATH = os.path.join(
+    os.path.dirname(__file__), "datasets", "lmt_serialization_hashes.json"
+)
+with open(LMT_SERIALIZATION_DATASET_PATH) as f:
+    LMT_SERIALIZATION_DATASET = json.load(f)
 
 
-def test_export_header(lmt_imported, lmt_exported):
-    slmt = lmt_imported
-    dlmt = lmt_exported
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_mod_path_hash" in metafunc.fixturenames and
+            "local_lmt_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_mod_path_hash", "local_lmt_path_hash")
+        argvalues = [(d["app_id"], d["mod_path_hash"], d["lmt_path_hash"]) for d in LMT_SERIALIZATION_DATASET]
+        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in LMT_SERIALIZATION_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by LMT_SERIALIZATION_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in LMT_SERIALIZATION_DATASET:
+        catalog_path = os.path.join(os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        for key in ("mod_path_hash", "lmt_path_hash"):
+            assert entry[key] in catalog_hashes, (
+                f"{entry[key]!r} ({entry['app_id']}) is not in {catalog_path!r}"
+            )
+
+
+@pytest.fixture(scope="session")
+def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
+    from albam.engines.mtfw.structs.lmt import Lmt
+
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+
+    local_mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
+    vfile_mod = bpy.context.scene.albam.vfs.select_vfile(local_app_id, local_mod_path)
+    assert vfile_mod
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    armature = next((obj for obj in bpy.data.objects if obj.type == 'ARMATURE'), None)
+    assert armature
+    bpy.context.scene.albam.import_options_lmt.armature = armature
+
+    local_lmt_path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash].lstrip("/")
+    vfile_lmt = bpy.context.scene.albam.vfs.select_vfile(local_app_id, local_lmt_path)
+    assert vfile_lmt
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    # enable serialization of the imported action track
+    lmt = bpy.context.scene.albam.exportable.file_list[latest_exported]
+    bl_obj = lmt.bl_object
+    bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    for bl_obj in bl_objects:
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
+        if custom_props.ofs_frame != 0:
+            custom_props.generate_new = True
+
+    result = bpy.ops.albam.export()  # FIXME: won't capture failures
+    assert result == {"FINISHED"}
+
+    vfile_lmt_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_lmt_path)
+    assert vfile_lmt_exported
+    src_lmt = Lmt.from_bytes(vfile_lmt.get_bytes())
+    dst_lmt = Lmt.from_bytes(vfile_lmt_exported.get_bytes())
+    src_lmt._read()
+    dst_lmt._read()
+    return src_lmt, dst_lmt
+
+
+@pytest.fixture(scope="session")
+def lmt_imported_local(lmt_export_local):
+    return lmt_export_local[0]
+
+
+@pytest.fixture(scope="session")
+def lmt_exported_local(lmt_export_local):
+    return lmt_export_local[1]
+
+
+def test_export_header(lmt_imported_local, lmt_exported_local):
+    slmt = lmt_imported_local
+    dlmt = lmt_exported_local
     slmt.id_magic == dlmt.id_magic
     slmt.version == dlmt.version
     slmt.num_block_offsets == dlmt.num_block_offsets
 
 
-def test_export_anim_block(lmt_imported, lmt_exported):
-    slmt = lmt_imported
-    dlmt = lmt_exported
+def test_export_anim_block(lmt_imported_local, lmt_exported_local):
+    slmt = lmt_imported_local
+    dlmt = lmt_exported_local
     version = slmt.version
 
     samnib = [ab for _, ab in enumerate(slmt.block_offsets)]

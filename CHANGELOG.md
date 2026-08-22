@@ -14,12 +14,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Support for navigation mesh import-export (Resident Evil 5)
 - Autosorter tool to automatically set `alpha priority` values ​​for hair cards
 - Experimental support for LMT export (Resident Evil 5)
+- App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 
 ### Fixed
 
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
+- Missed `FTransparencyDodgeMap` in `FTransparency` enum for RE6 maps
+- Import SBC for DMC4
+- Issue with SBC generation that broke high collision mesh (eff) and left holes in low collision mesh (scr)
+- Typo that set wrong name ("name") for the color attribute layer
+- Typo that brightened vertex colors on every import-export round trip
+- Vertex colors losing precision on every import-export round trip
 
 ### Changed
 

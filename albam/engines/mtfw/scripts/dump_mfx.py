@@ -19,6 +19,7 @@ def dump_mfx(app_id, mfx_filepath):
     from ..structs.mfx import Mfx
 
     mfx = Mfx.from_file(mfx_filepath)
+    mfx._read()
 
     try:
         with open(OUT) as f:

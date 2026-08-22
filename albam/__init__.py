@@ -7,21 +7,13 @@ import bpy
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
+from .data_loading import populate_albam_data
+from .lib import fs_registry
 from .registry import blender_registry
 from .__version__ import __version__ as version
 
 __version__ = version
 
-
-bl_info = {
-    "name": "Albam",
-    "author": "Sebastian Aguirre Brachi",
-    "version": (0, 5, 0),  # needs to be kept in sync with __version__ manually
-    "blender": (4, 2, 0),
-    "location": "Properties Panel",
-    "description": "Import-Export multiple video-game formats",
-    "category": "Import-Export",
-}
 
 ALBAM_DIR = os.path.dirname(__file__)
 VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
@@ -69,8 +61,13 @@ def register():
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
+    # Load data from user's config files
+    bpy.app.handlers.load_post.append(populate_albam_data)
+
 
 def unregister():
+    fs_registry.clear()
+
     for _, cls in reversed(blender_registry.props):
         bpy.utils.unregister_class(cls)
 

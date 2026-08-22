@@ -1,51 +1,69 @@
-import os
-
 import bpy
 
-from ..apps import APPS
+from ..apps import APPS, REENGINE_APPS
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
+from ..data_loading import AppsUserDataConfigManager
 
-# FIXME: store in app data
-APP_DIRS_CACHE = {}
-# FIXME: store in app data
-APP_CONFIG_FILE_CACHE = {}
+# REENGINE_APPS[0] is a stray None (pre-existing, unrelated) - filtered out
+# before unpacking, not after (unpacking None itself raises TypeError).
+REENGINE_APP_IDS = {entry[0] for entry in REENGINE_APPS if entry}
 
 
-def update_app_data(self, context):
+def get_app_dir_from_config(self, context):
     current_app = context.scene.albam.apps.app_selected
-    cached_dir = APP_DIRS_CACHE.get(current_app)
-    cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
-    if cached_dir:
-        context.scene.albam.apps.app_dir = cached_dir
+    current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
+    if current_app_userdata:
+        context.scene.albam.apps.app_dir = current_app_userdata.get("app_dir", "")
+        context.scene.albam.apps.path_list_file = current_app_userdata.get("path_list_file", "")
     else:
         context.scene.albam.apps.app_dir = ""
-
-    if cached_file:
-        context.scene.albam.apps.app_config_filepath = cached_file
-    else:
-        context.scene.albam.apps.app_config_filepath = ""
+        context.scene.albam.apps.path_list_file = ""
 
 
-def update_app_caches(self, context):
+def set_app_dir_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_dir = context.scene.albam.apps.app_dir
-    current_file = context.scene.albam.apps.app_config_filepath
+    if not current_dir:
+        return
 
-    APP_DIRS_CACHE[current_app] = current_dir
-    APP_CONFIG_FILE_CACHE[current_app] = current_file
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["app_dir"] = current_dir
+
+    config_mgr.save()
+
+
+def set_path_list_file_config(self, context):
+    current_app = context.scene.albam.apps.app_selected
+    current_path = context.scene.albam.apps.path_list_file
+    if not current_path:
+        return
+
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["path_list_file"] = current_path
+
+    config_mgr.save()
 
 
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
-    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
+    app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
+    # RE Engine only (see REENGINE_APP_IDS): a .pak's file entries carry only
+    # hashes, not paths, so reng needs an external plaintext candidate-path
+    # list to resolve anything at all (see albam.engines.reng.pak_fs).
+    path_list_file : bpy.props.StringProperty(name="", description="", update=set_path_list_file_config)
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
-
-    def get_app_config_filepath(self, app_id):
-        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
@@ -79,8 +97,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 self._make_exportable(vfile, bl_object, context)
 
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Import failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
         return {"FINISHED"}
@@ -269,10 +286,8 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
+        row.operator("albam.app_config_popup", icon="OPTIONS")
         row.prop(context.scene.albam.apps, "app_selected")
-        # Experimental for reengine
-        if os.getenv("ALBAM_ENABLE_REEN"):
-            row.operator("albam.app_config_popup", icon="OPTIONS")
 
 
 @blender_registry.register_blender_type
@@ -343,6 +358,7 @@ class ALBAM_PT_ImportOptionsCustom(bpy.types.Panel):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
+    """App settings"""
     bl_label = ""
     bl_idname = "albam.app_config_popup"
 
@@ -367,22 +383,19 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         layout = self.layout
 
         apps = context.scene.albam.apps
-        try:
-            app_index = apps["app_selected"]
-        except KeyError:
-            # default, before actually selecting
-            app_index = 0
-        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
-        layout.label(text=f"{app_selected_name}")
+        current_app = context.scene.albam.apps.app_selected
+        current_app_name = apps.bl_rna.properties["app_selected"].enum_items[current_app].name
+        layout.label(text=f"{current_app_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
-        row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.apps, "app_config_filepath")
-        row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
+        if current_app in REENGINE_APP_IDS:
+            row = self.layout.row(heading="Path List:", align=True)
+            row.prop(context.scene.albam.apps, "path_list_file")
+            row.operator("albam.path_list_file_setter", text="", icon="FILEBROWSER")
 
 
 @blender_registry.register_blender_type
@@ -408,11 +421,11 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
-    bl_idname = "albam.app_config_filepath_setter"
-    bl_label = "Select App Config"
+class ALBAM_OT_PathListFileSetter(bpy.types.Operator):
+    bl_idname = "albam.path_list_file_setter"
+    bl_label = "Select Path List"
 
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # NOQA
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # noqa: F821
 
     def invoke(self, context, event):
         wm = context.window_manager
@@ -420,7 +433,7 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.apps.app_config_filepath = self.filepath
+        context.scene.albam.apps.path_list_file = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 

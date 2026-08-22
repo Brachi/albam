@@ -522,8 +522,8 @@ def _process_uvs(vertex, uvs_1_out, uvs_2_out, uvs_3_out, uvs_4_out):
 def _process_vertex_colors(mod_version, vertex, rgba_out):
     if not hasattr(vertex, "rgba"):
         return
-    b = vertex.rgba.x / 225
-    g = vertex.rgba.y / 225
+    b = vertex.rgba.x / 255
+    g = vertex.rgba.y / 255
     r = vertex.rgba.z / 255
     a = vertex.rgba.w / 255
     rgba_out.append((r, g, b, a))
@@ -667,9 +667,28 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
     if len(vertex_colors) > 0:
-        # As import-export works with 1byte colors, no need to use full float for that
-        color_layer = bl_mesh.color_attributes.new(name="name", domain='CORNER', type='BYTE_COLOR')
-        # color_layer = bl_mesh.data.color_attributes[name]
+        # FLOAT_COLOR, not BYTE_COLOR, even though the file's colors are one
+        # byte per channel: Blender stores a BYTE_COLOR attribute as sRGB
+        # bytes and exposes it through `.color` in scene linear, converting
+        # each way, and 73 of 256 byte values do not survive that pair of
+        # conversions. A float attribute holds `byte / 255` exactly, so the
+        # round trip is lossless without reinterpreting what the byte means.
+        #
+        # TODO: verify what the engine actually does with these values. They
+        # are written here as scene linear (`byte / 255`), which is what
+        # Albam has always done, but that is an assumption, not a checked
+        # fact - MT Framework may well treat them as sRGB, in which case
+        # every imported model shades too bright in Blender by roughly the
+        # sRGB curve (byte 128 would be 0.216 linear rather than 0.502).
+        # Nothing here settles it: this is a round trip property, and both
+        # readings round trip exactly. To settle it, compare an in-game
+        # screenshot of stage geometry with strong vertex color variation
+        # against a Blender render of the same model with the attribute
+        # driving base color, or check what an independent MT Framework tool
+        # assumes. If it turns out to be sRGB, write via `.color_srgb` here
+        # and read via `.color_srgb` in _get_vertex_colors - both sides have
+        # to move together, since either alone shifts every color.
+        color_layer = bl_mesh.color_attributes.new(name=name, domain='CORNER', type='FLOAT_COLOR')
         for poly in bl_mesh.polygons:
             for loop_index in poly.loop_indices:
                 loop = bl_mesh.loops[loop_index]
@@ -838,7 +857,14 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    dst_mod.bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    if bones_data is not None:
+        # Only assign when there is one. Assigning None still *creates* the
+        # attribute, and the generated _fetch_instances() guards optional
+        # instances with hasattr(), which is true for an attribute holding
+        # None - so a model with no armature would crash on write instead of
+        # skipping the section it doesn't have.
+        dst_mod.bones_data = bones_data
     dst_mod.groups = _serialize_groups(src_mod, dst_mod)
     materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
@@ -854,7 +880,10 @@ def export_mod(bl_obj):
     dst_mod.index_buffer = index_buffer
 
     offset = dst_mod.size_top_level_
-    dst_mod.header.offset_bones_data = offset
+    # A model with no armature has no bones_data section at all (num_bones is
+    # what gates it, see the .ksy): real files signal that with a 0 offset
+    # rather than an offset pointing at an empty section
+    dst_mod.header.offset_bones_data = offset if dst_mod.header.num_bones else 0
     dst_mod.header.offset_groups = offset + dst_mod.bones_data_size_
     dst_mod.header.offset_materials_data = dst_mod.header.offset_groups + dst_mod.groups_size_
     dst_mod.header.offset_meshes_data = dst_mod.header.offset_materials_data + dst_mod.materials_data.size_
@@ -1362,9 +1391,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
         mesh = dst_mod.Mesh(_parent=meshes_data, _root=meshes_data._root)
-        mesh.indices__to_write = False
-        mesh.vertices__to_write = False
-        mesh.vertices2__to_write = False
+        mesh.indices__enabled = False
+        mesh.vertices__enabled = False
+        mesh.vertices2__enabled = False
         mesh_bone_palette = None
         mesh_bone_palette_index = None
         if bone_palettes:
@@ -2053,7 +2082,9 @@ def _convert_vtx_col_layer(mesh, src_layer):
         return src_layer
     else:
         scr_col_layer_name = src_layer.name
-        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='BYTE_COLOR')
+        # FLOAT_COLOR to match _build_vertex_colors: routing colors through a
+        # byte layer here would re-introduce the precision loss it avoids
+        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='FLOAT_COLOR')
 
         src_data = src_layer.data
         dst_data = dst_col_layer.data
@@ -2146,7 +2177,7 @@ def _duplicate_vtx_by_attr(src_obj):
     # Set vertex colors
     for i, col_layer in enumerate(color_layers):
         col_layer_new = dst_mesh.color_attributes.new(
-            name=col_layer.name, domain='CORNER', type='BYTE_COLOR')
+            name=col_layer.name, domain='CORNER', type='FLOAT_COLOR')
         for poly in dst_mesh.polygons:
             for loop_idx in poly.loop_indices:
                 col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]

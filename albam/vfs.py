@@ -3,9 +3,37 @@ import os
 from pathlib import PureWindowsPath, Path
 
 import bpy
+from fs.memoryfs import MemoryFS
+from fs.path import dirname
 
 from .apps import APPS
+from .lib import fs_registry
 from .registry import blender_registry
+
+
+def _extension_from_name(name):
+    """
+    Allow up to 2 dots as an extension when the naive (single-dot) extension
+    is purely numeric - e.g. "texname.tex.34" -> "tex.34", "pl0000.mesh.2109108288"
+    -> "mesh.2109108288" (RE Engine's own versioned-format naming, where the
+    trailing number alone doesn't identify the format on its own). Otherwise
+    just the naive extension - e.g. "re_chunk_000.pak.patch_999.pak" -> "pak",
+    not "patch_999.pak": a real RE Engine patch pak's ".patch_NNN" segment is
+    the patch number, not a versioned extension, and misreading it as one
+    broke fs_root_loader/archive_loader dispatch for "Add Files" on any real
+    patch pak, not just an oddly-named one.
+
+    Single source of truth for VirtualFile.extension/VirtualFileData.extension
+    too (both just delegate here) - used standalone here since add_real_file's
+    FS-root dispatch needs this before a VirtualFile exists yet.
+    """
+    SEP = "."
+    stem, _, extension = name.rpartition(SEP)
+    if SEP in stem:
+        _, __, extension0 = stem.rpartition(SEP)
+        if extension.isdigit():
+            extension = SEP.join((extension0, extension))
+    return extension
 
 
 @blender_registry.register_blender_prop
@@ -33,6 +61,11 @@ class VirtualFile(bpy.types.PropertyGroup):
     vfs_id: bpy.props.StringProperty()
 
     data_bytes: bpy.props.StringProperty(subtype="BYTE_STRING")  # noqa: F821
+    # Set on root nodes created via add_fs_root(): key into fs_registry for
+    # the live fs.base.FS instance backing this root (bpy.types.PropertyGroup
+    # can't hold that object directly). Empty for roots/nodes still going
+    # through the legacy archive_loader/archive_accessor registries.
+    fs_key: bpy.props.StringProperty()
 
     @property
     def relative_path_windows(self):
@@ -52,18 +85,17 @@ class VirtualFile(bpy.types.PropertyGroup):
 
     @property
     def extension(self):
-        """
-        Allow up to 2 dots as an extension
-        e.g. texname.tex.34 -> tex.34
-        """
-        SEP = "."
-        name, _, extension = self.display_name.rpartition(SEP)
-        if SEP in name:
-            _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
-        return extension
+        """See _extension_from_name()."""
+        return _extension_from_name(self.display_name)
+
+    @property
+    def fs_path(self):
+        return "/" + str(self.relative_path).replace("\\", "/")
 
     def get_bytes(self):
+        root = self.root_vfile
+        if root and root.fs_key:
+            return fs_registry.get(root.fs_key).readbytes(self.fs_path)
         accessor = self.get_accessor()
         return accessor(self, bpy.context)
 
@@ -117,6 +149,20 @@ class VirtualFileSystemBase:
 
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
+        extension = _extension_from_name(path.name)
+
+        # A single archived file (e.g. one .arc) has its own loader keyed by
+        # extension; a folder has none (no meaningful extension), so it falls
+        # through to the whole-folder loader keyed by (app_id, None), if any.
+        fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
+                     blender_registry.fs_root_loader_registry.get((app_id, None)))
+        if fs_loader:
+            self.add_fs_root(
+                app_id, fs_loader(absolute_path), display_name=path.name,
+                is_archive=bool(extension), absolute_path=absolute_path,
+            )
+            return
+
         vf = self.file_list.add()
         vf.is_root = True
         vf.name = f"{app_id}::{path.name}"
@@ -137,30 +183,56 @@ class VirtualFileSystemBase:
             vf.is_archive = False
             self._expand_directory(absolute_path, vf, app_id)
 
-    def add_vfile(self, vfile_data):
+    def add_fs_root(self, app_id, fs_instance, display_name, is_archive=False, absolute_path=""):
+        """
+        Register `fs_instance` (any fs.base.FS) as a new root, sourcing its
+        whole file tree via one fs_instance.walk() pass instead of an
+        engine-specific archive_loader/archive_accessor. Bytes for every node
+        under this root are read on demand straight from `fs_instance`
+        (see VirtualFile.get_bytes()), never duplicated into a bpy property.
+        """
+        fs_key = fs_registry.register(fs_instance)
+
+        root_id = f"{app_id}::{display_name}"
         vf = self.file_list.add()
+        vf.is_root = True
+        vf.name = root_id
         vf.vfs_id = self.VFS_ID
-        vf.app_id = vfile_data.app_id
-        vf.name = f"{vfile_data.app_id}::{vfile_data.name}"
-        vf.display_name = vfile_data.name
-        vf.data_bytes = vfile_data.data_bytes or b""
+        vf.app_id = app_id
+        vf.display_name = display_name
+        vf.absolute_path = absolute_path
+        vf.fs_key = fs_key
+        vf.is_expandable = True
+        vf.is_archive = is_archive
 
-        return vf
-
-    def add_vfiles_as_tree(self, app_id, root_vfile_data, vfiles_data):
-        root_id = f"{app_id}::{root_vfile_data.name}"
-        tree = Tree(root_id, app_id)
-        bl_vf = self.add_vfile(root_vfile_data)
-        bl_vf.is_expandable = True
-        bl_vf.is_root = True
-
-        for vfile_data in vfiles_data:
-            tree.add_node_from_path(vfile_data.relative_path, vfile_data)
-
+        tree = Tree(root_id=root_id, app_id=app_id)
+        for file_path in fs_instance.walk.files():
+            tree.add_node_from_path(file_path.lstrip("/"))
         for node in tree.flatten():
-            self._add_vf_from_treenode(bl_vf.app_id, root_id, node)
+            self._add_vf_from_treenode(app_id, root_id, node)
 
-        return bl_vf
+        # Re-fetch: further file_list.add() calls above can invalidate the
+        # `vf` reference taken before the loop (same Blender CollectionProperty
+        # quirk _expand_archive's comment warns about) - look it up fresh by
+        # the plain-string root_id instead of trusting the stale object.
+        return self.file_list[root_id]
+
+    def add_export_root(self, app_id, display_name, vfiles_data):
+        """
+        Stage freshly-exported bytes (VirtualFileData, as returned by an
+        engine's export function) in a writable in-memory FS and register it
+        as a new root via add_fs_root() - the export-side counterpart of its
+        read-only archive/game-folder roots, sharing the same tree-building
+        and get_bytes() machinery instead of duplicating bytes into
+        data_bytes.
+        """
+        mem_fs = MemoryFS()
+        for vfile_data in vfiles_data:
+            path = "/" + str(vfile_data.relative_path).replace("\\", "/")
+            mem_fs.makedirs(dirname(path), recreate=True)
+            mem_fs.writebytes(path, vfile_data.data_bytes or b"")
+
+        return self.add_fs_root(app_id, mem_fs, display_name=display_name)
 
     def _expand_archive(self, archive_loader_func, vf, app_id):
         # Beware of chaning this, it was observed the reference
@@ -207,9 +279,6 @@ class VirtualFileSystemBase:
         child_vf.display_name = node["name"]
         child_vf.is_expandable = bool(node["children"])
         child_vf.albam_asset_type = blender_registry.albam_asset_types.get((app_id, child_vf.extension), "")
-        vfile = node["vfile"]
-        if vfile:
-            child_vf.data_bytes = vfile.data_bytes
         child_vf.tree_node.depth = node["depth"] + 1
         child_vf.tree_node.root_id = root_id
         for ancestor_id in node["ancestors_ids"]:
@@ -389,15 +458,20 @@ class ALBAM_OT_VirtualFileSystemRemoveRootVFileBase:
         vfiles_to_remove = []
         root_node_index = vfs.file_list_selected_index
         archive_node = vfs.file_list[root_node_index]
+        archive_node_name = archive_node.name
+        archive_node_fs_key = archive_node.fs_key
         for i in range(len(vfs.file_list)):
             parent = vfs.file_list[i].tree_node.root_id
-            if parent == archive_node.name:
+            if parent == archive_node_name:
                 vfiles_to_remove.append(i)
 
         vfiles_to_remove.reverse()
         for i in range(len(vfiles_to_remove)):
             vfs.file_list.remove(vfiles_to_remove[i])
         vfs.file_list.remove(root_node_index)
+
+        if archive_node_fs_key:
+            fs_registry.unregister(archive_node_fs_key)
 
         return {'FINISHED'}
 
@@ -428,16 +502,8 @@ class VirtualFileData:
 
     @property
     def extension(self):
-        """
-        Allow up to 2 dots as an extension
-        e.g. texname.tex.34 -> tex.34
-        """
-        SEP = "."
-        name, _, extension = self.relative_path.rpartition(SEP)
-        if SEP in name:
-            _, __, extension0 = name.rpartition(SEP)
-            extension = SEP.join((extension0, extension))
-        return extension
+        """See _extension_from_name()."""
+        return _extension_from_name(self.relative_path)
 
 
 class Tree:
@@ -458,7 +524,7 @@ class Tree:
                 break
         return node_found
 
-    def add_node_from_path(self, full_path, vfile=None, absolute_path=""):
+    def add_node_from_path(self, full_path, absolute_path=""):
         p = PureWindowsPath(full_path)
         path_parts = p.parts
         # FIXME: adding a single root node doesn't work
@@ -480,7 +546,6 @@ class Tree:
                     "name": path_part,
                     "children": [],
                     "depth": current_level,
-                    "vfile": vfile,
                     "node_id": self.generate_node_id(path_parts[0 : i + 1], use_prefix=True),
                     "relative_path": self.generate_node_id(path_parts[0 : i + 1], use_prefix=False),
                     "full_path": absolute_path,
@@ -499,7 +564,6 @@ class Tree:
             "name": leaf_name,
             "children": [],
             "depth": current_level,
-            "vfile": vfile,
             "node_id": node_id,
             "relative_path": self.generate_node_id(path_parts, use_prefix=False),
             "full_path": absolute_path,

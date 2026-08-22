@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_21
-  ks-version: 0.11
+  ks-version: '0.11'
   title: MTFramework model format 210 and 211
 
 seq:
