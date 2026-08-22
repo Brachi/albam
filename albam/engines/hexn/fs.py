@@ -31,6 +31,7 @@ from fs.path import dirname
 from kaitaistruct import KaitaiStream
 
 from .structs.hexane_ssg import HexaneSsg
+from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 
 def _local_opener(path):
@@ -142,6 +143,18 @@ def find_ssg_files(game_root):
                 yield os.path.join(current_dir, name)
 
 
+def find_ssg_keys_s3(client, bucket, prefix=""):
+    """S3/R2 equivalent of find_ssg_files(): paginated key listing under
+    `prefix`, filtered to .ssg keys, case-insensitively - mirrors
+    albam.engines.mtfw.arc_fs.find_arc_keys_s3()."""
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.lower().endswith(".ssg"):
+                yield key
+
+
 class HexnFS(MultiFS):
     """Virtual filesystem for one RE:ORC game install.
 
@@ -155,6 +168,8 @@ class HexnFS(MultiFS):
     def __init__(self, game_root, auto_close=True):
         super().__init__(auto_close=auto_close)
         self.failed_ssgs = []
+        # None for a local instance; set by from_s3() - see origin_of()
+        self._s3_prefix = None
 
         game_root = str(game_root)
         if not os.path.isdir(game_root):
@@ -172,6 +187,65 @@ class HexnFS(MultiFS):
         # added last -> highest default priority -> wins over packed archives
         self.add_fs("<loose>", OSFS(game_root))
 
+    @classmethod
+    def from_s3(
+        cls,
+        bucket,
+        prefix="",
+        *,
+        aws_access_key_id=None,
+        aws_secret_access_key=None,
+        aws_session_token=None,
+        endpoint_url=None,
+        region_name="auto",
+        auto_close=True,
+        include_loose=True,
+    ):
+        """Alternate constructor: source .ssg files from an S3-compatible
+        bucket (R2 works as-is - pass R2's endpoint_url + API token as
+        access key/secret). Credential params fall back to boto3's normal
+        resolution (env vars, etc.) when unset. Mirrors
+        albam.engines.mtfw.arc_fs.MTFW_FS.from_s3() - see there for the
+        `prefix`/`include_loose` semantics, identical here.
+
+            game_fs = HexnFS.from_s3(
+                bucket="my-bucket",
+                endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+                aws_access_key_id=..., aws_secret_access_key=...,
+            )
+        """
+        client = build_s3_client(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_session_token=aws_session_token,
+            endpoint_url=endpoint_url,
+            region_name=region_name,
+        )
+
+        self = cls.__new__(cls)
+        MultiFS.__init__(self, auto_close=auto_close)
+        self.failed_ssgs = []
+        self.game_root = f"s3://{bucket}/{prefix}"
+        # keys come back from find_ssg_keys_s3 already rooted under prefix -
+        # origin_of() strips this against the key directly, not game_root
+        # (an "s3://bucket/prefix" sentinel, not a real path os.path.relpath
+        # could use meaningfully).
+        self._s3_prefix = prefix.strip("/")
+
+        opener = s3_opener(client, bucket)
+        for ssg_key in sorted(find_ssg_keys_s3(client, bucket, prefix)):
+            try:
+                ssg_fs = SsgFS(ssg_key, opener=opener)
+            except Exception as e:
+                self.failed_ssgs.append((ssg_key, e))
+                continue
+            self.add_fs(ssg_key, ssg_fs)
+
+        if include_loose:
+            # added last -> highest default priority -> wins over packed archives
+            self.add_fs("<loose>", S3LooseFS(client, bucket, prefix))
+        return self
+
     def _owning_ssg_fs(self, path):
         self.check()
         _path = self.validatepath(path)
@@ -179,14 +253,20 @@ class HexnFS(MultiFS):
         return owner_fs if isinstance(owner_fs, SsgFS) else None
 
     def origin_of(self, path):
-        """The .ssg `path` resolves to, as a path relative to game_root (see
-        albam.engines.mtfw.arc_fs.MTFW_FS.origin_of(), which this mirrors),
-        or None if it's a loose/real file (or doesn't resolve at all). No
-        index/caching like MTFW_FS's - a real install here is on the order
-        of hundreds of .ssg files, not ~1000+ .arc, so a linear which() scan
-        per lookup is fine.
+        """The .ssg `path` resolves to - its own path relative to game_root
+        for a local instance, or relative to `prefix` for a
+        HexnFS.from_s3() instance (forward slashes either way) - or None if
+        it's a loose/real file (or doesn't resolve at all). Mirrors
+        albam.engines.mtfw.arc_fs.MTFW_FS.origin_of(). No index/caching like
+        MTFW_FS's - a real install here is on the order of hundreds of .ssg
+        files, not ~1000+ .arc, so a linear which() scan per lookup is fine.
         """
         owner_fs = self._owning_ssg_fs(path)
         if owner_fs is None:
             return None
-        return os.path.relpath(owner_fs.ssg_path, self.game_root).replace(os.sep, "/")
+        ssg_path = owner_fs.ssg_path
+        if self._s3_prefix is not None:
+            if self._s3_prefix and ssg_path.startswith(self._s3_prefix + "/"):
+                return ssg_path[len(self._s3_prefix) + 1:]
+            return ssg_path
+        return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
