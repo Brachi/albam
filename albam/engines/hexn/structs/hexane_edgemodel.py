@@ -409,13 +409,19 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             for i in range(self._parent._parent.header.num_material_per_mesh):
                 self.offsets.append(self._io.read_u4le())
 
-            self.first_material = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
+            self.all_materials = []
+            for i in range(self._parent._parent.header.num_material_per_mesh):
+                self.all_materials.append((self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII"))
+
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
             for i in range(len(self.offsets)):
+                pass
+
+            for i in range(len(self.all_materials)):
                 pass
 
 
@@ -426,8 +432,11 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_u4le(self.offsets[i])
 
-            self._io.write_bytes((self.first_material).encode(u"ASCII"))
-            self._io.write_u1(0)
+            for i in range(len(self.all_materials)):
+                pass
+                self._io.write_bytes((self.all_materials[i]).encode(u"ASCII"))
+                self._io.write_u1(0)
+
 
 
         def _check(self):
@@ -436,10 +445,25 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             for i in range(len(self.offsets)):
                 pass
 
-            if KaitaiStream.byte_array_index_of((self.first_material).encode(u"ASCII"), 0) != -1:
-                raise kaitaistruct.ConsistencyError(u"first_material", -1, KaitaiStream.byte_array_index_of((self.first_material).encode(u"ASCII"), 0))
+            if len(self.all_materials) != self._parent._parent.header.num_material_per_mesh:
+                raise kaitaistruct.ConsistencyError(u"all_materials", self._parent._parent.header.num_material_per_mesh, len(self.all_materials))
+            for i in range(len(self.all_materials)):
+                pass
+                if KaitaiStream.byte_array_index_of((self.all_materials[i]).encode(u"ASCII"), 0) != -1:
+                    raise kaitaistruct.ConsistencyError(u"all_materials", -1, KaitaiStream.byte_array_index_of((self.all_materials[i]).encode(u"ASCII"), 0))
+
             self._dirty = False
 
+        @property
+        def first_material(self):
+            if hasattr(self, '_m_first_material'):
+                return self._m_first_material
+
+            self._m_first_material = self.all_materials[0]
+            return getattr(self, '_m_first_material', None)
+
+        def _invalidate_first_material(self):
+            del self._m_first_material
 
     class Matrix4x4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
