@@ -6,14 +6,13 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 # Reuses test_edgemodel_parsing.py's own committed dataset - same files,
 # same catalog verification, different assertion (byte-exact identity
 # round-trip instead of structural sanity). See
-# albam.engines.hexn.edgemodel_roundtrip's module docstring for why this
-# is the right check here: there's no export function yet (no Blender-
-# driven bytes to compare against), but every well-formed .edgemodel
-# should already come back byte-identical from a plain parse-then-write,
-# since identity_roundtrip() patches every unmodeled gap from the
-# original - this is the standing regression test for that mechanism,
-# verified separately against a 14372-file full-game sweep (see project
-# memory: project_edgemodel_format_sweep).
+# albam.engines.hexn.edgemodel_roundtrip's module docstring: there's no
+# export function yet (no Blender-driven bytes to compare against), but a
+# well-formed .edgemodel should come back byte-identical from a plain
+# parse-then-write - every field these 5 files exercise is modeled
+# directly in the .ksy (not all sections are, for every possible file -
+# see the module docstring for the ~28% of files elsewhere in the game
+# that don't fully round-trip yet, and why).
 EDGEMODEL_PARSING_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "edgemodel_parsing_hashes.json")
 with open(EDGEMODEL_PARSING_DATASET_PATH) as f:
