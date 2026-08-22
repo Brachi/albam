@@ -42,6 +42,8 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         self.named_nodes__enabled = True
         self._should_write_occlusion_mesh_group = False
         self.occlusion_mesh_group__enabled = True
+        self._should_write_shadow_header = False
+        self.shadow_header__enabled = True
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -112,6 +114,11 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             pass
             self._m_occlusion_mesh_group._fetch_instances()
 
+        _ = self.shadow_header
+        if hasattr(self, '_m_shadow_header'):
+            pass
+            self._m_shadow_header._fetch_instances()
+
 
 
     def _write__seq(self, io=None):
@@ -125,6 +132,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         self._should_write_model_info = self.model_info__enabled
         self._should_write_named_nodes = self.named_nodes__enabled
         self._should_write_occlusion_mesh_group = self.occlusion_mesh_group__enabled
+        self._should_write_shadow_header = self.shadow_header__enabled
         self._io.write_bytes(self.id_magic)
         self._io.write_u4le(self.version)
         self._io.write_u4le(self.file_size)
@@ -225,6 +233,16 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"occlusion_mesh_group", self._root, self._m_occlusion_mesh_group._root)
                 if self._m_occlusion_mesh_group._parent != self:
                     raise kaitaistruct.ConsistencyError(u"occlusion_mesh_group", self, self._m_occlusion_mesh_group._parent)
+
+
+        if self.shadow_header__enabled:
+            pass
+            if self.header.offset_shadow_mesh_group != 0:
+                pass
+                if self._m_shadow_header._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"shadow_header", self._root, self._m_shadow_header._root)
+                if self._m_shadow_header._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"shadow_header", self, self._m_shadow_header._parent)
 
 
         self._dirty = False
@@ -1507,6 +1525,90 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
+    class ShadowHeader(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.ShadowHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.lod_group_count = self._io.read_u1()
+            self.material_count = self._io.read_u1()
+            self.uv_count = self._io.read_u1()
+            self.skin_weight_count = self._io.read_u1()
+            self.total_mesh_count = self._io.read_u4le()
+            if self._root.version == 386270720:
+                pass
+                self.null_padding = self._io.read_u8le()
+
+            self.offset_offset = self._io.read_u8le()
+            self.reserved_0 = []
+            for i in range(6):
+                self.reserved_0.append(self._io.read_u8le())
+
+            self.lod_group_offsets = []
+            for i in range(self.lod_group_count):
+                self.lod_group_offsets.append(self._io.read_u8le())
+
+            self.padding = self._io.read_bytes((16 - self._io.pos() % 16) % 16)
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            if self._root.version == 386270720:
+                pass
+
+            for i in range(len(self.reserved_0)):
+                pass
+
+            for i in range(len(self.lod_group_offsets)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.ShadowHeader, self)._write__seq(io)
+            self._io.write_u1(self.lod_group_count)
+            self._io.write_u1(self.material_count)
+            self._io.write_u1(self.uv_count)
+            self._io.write_u1(self.skin_weight_count)
+            self._io.write_u4le(self.total_mesh_count)
+            if self._root.version == 386270720:
+                pass
+                self._io.write_u8le(self.null_padding)
+
+            self._io.write_u8le(self.offset_offset)
+            for i in range(len(self.reserved_0)):
+                pass
+                self._io.write_u8le(self.reserved_0[i])
+
+            for i in range(len(self.lod_group_offsets)):
+                pass
+                self._io.write_u8le(self.lod_group_offsets[i])
+
+            if len(self.padding) != (16 - self._io.pos() % 16) % 16:
+                raise kaitaistruct.ConsistencyError(u"padding", (16 - self._io.pos() % 16) % 16, len(self.padding))
+            self._io.write_bytes(self.padding)
+
+
+        def _check(self):
+            if self._root.version == 386270720:
+                pass
+
+            if len(self.reserved_0) != 6:
+                raise kaitaistruct.ConsistencyError(u"reserved_0", 6, len(self.reserved_0))
+            for i in range(len(self.reserved_0)):
+                pass
+
+            if len(self.lod_group_offsets) != self.lod_group_count:
+                raise kaitaistruct.ConsistencyError(u"lod_group_offsets", self.lod_group_count, len(self.lod_group_offsets))
+            for i in range(len(self.lod_group_offsets)):
+                pass
+
+            self._dirty = False
+
+
     class Vec4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(ReengineMesh.Vec4, self).__init__(_io)
@@ -1867,6 +1969,41 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             _pos = self._io.pos()
             self._io.seek(self.header.offset_occlusion_mesh_group)
             self._m_occlusion_mesh_group._write__seq(self._io)
+            self._io.seek(_pos)
+
+
+    @property
+    def shadow_header(self):
+        if self._should_write_shadow_header:
+            self._write_shadow_header()
+        if hasattr(self, '_m_shadow_header'):
+            return self._m_shadow_header
+
+        if not self.shadow_header__enabled:
+            return None
+
+        if self.header.offset_shadow_mesh_group != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_shadow_mesh_group)
+            self._m_shadow_header = ReengineMesh.ShadowHeader(self._io, self, self._root)
+            self._m_shadow_header._read()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_shadow_header', None)
+
+    @shadow_header.setter
+    def shadow_header(self, v):
+        self._dirty = True
+        self._m_shadow_header = v
+
+    def _write_shadow_header(self):
+        self._should_write_shadow_header = False
+        if self.header.offset_shadow_mesh_group != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_shadow_mesh_group)
+            self._m_shadow_header._write__seq(self._io)
             self._io.seek(_pos)
 
 

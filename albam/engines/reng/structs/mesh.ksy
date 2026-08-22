@@ -22,6 +22,9 @@ instances:
   bone_aabb_group:
     {pos: header.offset_bone_aabb, type: bone_aabb_group, if: header.offset_bone_aabb != 0}
 
+  shadow_header:
+    {pos: header.offset_shadow_mesh_group, type: shadow_header, if: header.offset_shadow_mesh_group != 0}
+
   # A single lod_group (same type model_info.lod_group_offsets[N] each
   # point to), for occlusion-culling geometry - reached directly, with no
   # wrapping model_info-style array of LOD levels. This is what a mesh
@@ -76,7 +79,7 @@ types:
       - {id: num_named_nodes, type: u2}
       - {id: unk_01, type: u4} # real field (not padding), meaning still unknown even in RE-Mesh-Editor
       - {id: offset_data, type: u8} # main LOD/mesh-group tree (-> model_info)
-      - {id: offset_shadow_mesh_group, type: u8} # shadow-casting LOD tree (separate, lower-detail geometry)
+      - {id: offset_shadow_mesh_group, type: u8} # -> shadow_header (metadata only - shadow LODs always alias model_info's own lod_group_offsets, never separate geometry)
       - {id: offset_occlusion_mesh_group, type: u8} # occlusion-culling mesh tree - a single LOD group (-> occlusion_mesh_group), not a full model_info
       - {id: offset_bones, type: u8}
       - {id: offset_normal_recalc, type: u8} # normal-recalculation data block, layout not modeled here
@@ -203,6 +206,29 @@ types:
     seq:
       - {id: min, type: vec4}
       - {id: max, type: vec4}
+
+  # Confirmed against RE-Mesh-Editor's actual ShadowHeader.read()/write()
+  # (modules/mesh/file_re_mesh.py) and empirically: lod_group_offsets here
+  # is byte-identical to model_info's own lod_group_offsets on every real
+  # file with a shadow header - shadow LODs always alias the main model's
+  # geometry (RE-Mesh-Editor's own writer comment: shadow meshes can't
+  # have unique LODs, the game crashes if they do). So this header is the
+  # entire shadow-mesh-group region; there's no separate geometry to read.
+  shadow_header:
+    seq:
+      - {id: lod_group_count, type: u1}
+      - {id: material_count, type: u1}
+      - {id: uv_count, type: u1}
+      - {id: skin_weight_count, type: u1}
+      - {id: total_mesh_count, type: u4}
+      - {id: null_padding, type: u8, if: _root.version == 386270720}
+      # Self-referential in every sample seen (always == the position
+      # right after this field) - not trusted as a pointer to seek
+      # through, same as bone_aabb_group's offset_entries.
+      - {id: offset_offset, type: u8}
+      - {id: reserved_0, type: u8, repeat: expr, repeat-expr: 6}
+      - {id: lod_group_offsets, type: u8, repeat: expr, repeat-expr: lod_group_count}
+      - {id: padding, size: (16 - (_io.pos % 16)) % 16}
 
   mesh_group_offset:
     seq:
