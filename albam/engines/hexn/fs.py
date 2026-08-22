@@ -8,9 +8,11 @@ the whole `buffer_chunks` blob (itself split into independently
 zlib-compressed chunks) decompresses to a stream that files are sliced out
 of sequentially, each padded up to `size_padding`. That solid layout means -
 unlike ArcFS/PakFS, where openbin() seeks straight to one entry's own
-compressed range - an .ssg has to be fully decompressed up front to resolve
-any single file's bytes. Not a large concern: one .ssg is one model's worth
-of embedded assets, not a whole game's archive set.
+compressed range - resolving any single file's bytes means decompressing
+the *whole* archive's `buffer_chunks` together. `SsgFS` defers that to the
+first file actually requested from a given archive rather than doing it in
+__init__ (see `_ensure_decompressed()`) - a real game install has ~2000
+.ssg, and a typical session only ever touches a handful of them.
 
 `SsgFS` exposes a single .ssg as a read-only PyFilesystem2 filesystem;
 `HexnFS` overlays every .ssg under a game root - plus loose files - into one
@@ -40,7 +42,28 @@ def _local_opener(path):
 
 
 class SsgFS(FS):
-    """Read-only PyFilesystem2 view of a single Hexane .ssg archive."""
+    """Read-only PyFilesystem2 view of a single Hexane .ssg archive.
+
+    __init__ only reads the file table (names + sizes, cheap) - mirrors
+    ArcFS.__init__ in spirit. Unlike .arc though, .ssg is a solid archive
+    (every file's bytes are concatenated into one continuous stream before
+    being chunk-compressed, not each independently seekable like .arc's own
+    entries), so a single file's bytes still can't be resolved without
+    decompressing the *whole* archive's `buffer_chunks` together - that
+    work is just deferred to the first file actually requested from this
+    archive instead of happening unconditionally in __init__
+    (_ensure_decompressed(), cached from then on). Real payoff: a game
+    install has ~2000 .ssg, and any one HexnFS session only ever touches a
+    handful of them - constructing one no longer means decompressing every
+    archive in the game up front.
+
+    openbin() re-reads+re-parses the archive fresh on first access rather
+    than __init__ keeping a reference to what it already read - same
+    reasoning as ArcFS's own re-open-per-read (see its docstring): holding
+    every constructed instance's compressed bytes resident "just in case"
+    would give back most of the memory savings for the ~2000 archives that
+    end up never being touched at all.
+    """
 
     _meta = {
         "case_insensitive": False,
@@ -57,6 +80,22 @@ class SsgFS(FS):
         self.ssg_path = str(ssg_path)
         self._opener = opener or _local_opener
 
+        ssg = self._read_and_parse()
+        self._sizes = {}
+        self._offsets = {}
+        self._directory = MemoryFS()
+        offset = 0
+        for file_info in ssg.files_info:
+            path = "/" + file_info.name.replace("\\", "/").lstrip("/")
+            self._sizes[path] = file_info.size
+            self._offsets[path] = offset
+            self._directory.makedirs(dirname(path), recreate=True)
+            self._directory.create(path)
+            offset += file_info.size + (-file_info.size % ssg.size_padding)
+
+        self._data = None  # populated lazily - see _ensure_decompressed()
+
+    def _read_and_parse(self):
         f = self._opener(self.ssg_path)
         try:
             data = f.read()
@@ -68,7 +107,13 @@ class SsgFS(FS):
         # is closed by the time each entry's name gets resolved.
         ssg = HexaneSsg(KaitaiStream(io.BytesIO(data)))
         ssg._read()
+        return ssg
 
+    def _ensure_decompressed(self):
+        if self._data is not None:
+            return
+
+        ssg = self._read_and_parse()
         if ssg.chunk_sizes:
             uncompressed = bytearray()
             compressed_pos = 0
@@ -90,15 +135,10 @@ class SsgFS(FS):
             # exactly, consistent with "no compression happened here".
             uncompressed = ssg.buffer_chunks
 
-        self._data = {}
-        self._directory = MemoryFS()
-        offset = 0
-        for file_info in ssg.files_info:
-            path = "/" + file_info.name.replace("\\", "/").lstrip("/")
-            self._data[path] = bytes(uncompressed[offset:offset + file_info.size])
-            self._directory.makedirs(dirname(path), recreate=True)
-            self._directory.create(path)
-            offset += file_info.size + (-file_info.size % ssg.size_padding)
+        self._data = {
+            path: bytes(uncompressed[offset:offset + self._sizes[path]])
+            for path, offset in self._offsets.items()
+        }
 
     def __repr__(self):
         return f"SsgFS({self.ssg_path!r})"
@@ -111,11 +151,10 @@ class SsgFS(FS):
         raw_info = {"basic": {"name": basic_info.name, "is_dir": basic_info.is_dir}}
 
         if "details" in namespaces:
-            data = self._data.get(_path)
             resource_type = ResourceType.directory if basic_info.is_dir else ResourceType.file
             raw_info["details"] = {
                 "type": int(resource_type),
-                "size": len(data) if data is not None else 0,
+                "size": self._sizes.get(_path, 0),
             }
         return Info(raw_info)
 
@@ -129,10 +168,10 @@ class SsgFS(FS):
             raise ResourceReadOnly(path)
 
         _path = self.validatepath(path)
-        data = self._data.get(_path)
-        if data is None:
+        if _path not in self._sizes:
             raise ResourceNotFound(path)
-        return io.BytesIO(data)
+        self._ensure_decompressed()
+        return io.BytesIO(self._data[_path])
 
     def makedir(self, path, permissions=None, recreate=False):
         raise ResourceReadOnly(path)
