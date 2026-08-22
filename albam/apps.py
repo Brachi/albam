@@ -1,6 +1,3 @@
-import os
-
-
 def get_app_description(app_id):
     app_desc = None
     for stored_app_id, stored_app_desc, _, _ in APPS:
@@ -31,5 +28,4 @@ REENGINE_APPS = [
 ]
 
 
-if os.getenv("ALBAM_ENABLE_REEN"):
-    APPS.extend(REENGINE_APPS)
+APPS.extend(REENGINE_APPS)
