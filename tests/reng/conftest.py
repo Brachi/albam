@@ -13,6 +13,19 @@ _REEN_FS_INSTANCES = {}
 _REEN_VFS_MOUNTED = set()
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--reng-mesh-import-dataset",
+        choices=["full", "quick"],
+        default="full",
+        help="Which tier of tests/reng/datasets/mesh_import_hashes.json to run "
+        "(see test_mesh_import.py) - 'full' (default) is every committed entry; "
+        "'quick' is the small, category-diverse subset marked \"quick\": true in "
+        "that same file, for a fast local dev loop (importing pulls in materials/"
+        "textures per file, so it's much slower than parsing-only tests).",
+    )
+
+
 def _reen_game_dirs(pytestconfig):
     # Reuses the shared --game-dir option (see tests/conftest.py) - reng's
     # values carry an optional extra `::<path-list-source>` segment MTFW's

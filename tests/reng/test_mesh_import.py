@@ -14,6 +14,13 @@ from tests.reng.conftest import reng_import
 # import, same set as test_mesh_parsing.py's dataset (see
 # test_dataset_hashes_are_in_catalog below) but its own file, matching this
 # project's one-dataset-per-test-concern convention (see tests/mtfw/).
+#
+# Full by default (every entry below) - importing pulls in materials/
+# textures per file, so it's much slower than parsing-only tests (~2min for
+# 16 files vs ~20s just parsing them). --reng-mesh-import-dataset=quick runs
+# only the entries marked "quick": true - a small, still category-diverse
+# subset (character+bones, weapon, building terrain, the no-main-model-tree
+# occlusion mesh, a static prop), for a fast local dev loop.
 MESH_IMPORT_DATASET_PATH = os.path.join(os.path.dirname(__file__), "datasets", "mesh_import_hashes.json")
 with open(MESH_IMPORT_DATASET_PATH) as f:
     MESH_IMPORT_DATASET = json.load(f)
@@ -22,9 +29,13 @@ with open(MESH_IMPORT_DATASET_PATH) as f:
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_mesh_path_hash" in metafunc.fixturenames):
+        dataset = MESH_IMPORT_DATASET
+        if metafunc.config.getoption("reng_mesh_import_dataset") == "quick":
+            dataset = [d for d in MESH_IMPORT_DATASET if d.get("quick")]
+
         argnames = ("local_app_id", "local_mesh_path_hash")
-        argvalues = [(d["app_id"], d["mesh_path_hash"]) for d in MESH_IMPORT_DATASET]
-        ids = [f"{d['app_id']}-{d['mesh_path_hash']}" for d in MESH_IMPORT_DATASET]
+        argvalues = [(d["app_id"], d["mesh_path_hash"]) for d in dataset]
+        ids = [f"{d['app_id']}-{d['mesh_path_hash']}" for d in dataset]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 

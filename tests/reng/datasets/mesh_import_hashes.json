@@ -1,7 +1,8 @@
 [
     {
         "app_id": "re3",
-        "mesh_path_hash": "094caac02ef9c93b"
+        "mesh_path_hash": "094caac02ef9c93b",
+        "quick": true
     },
     {
         "app_id": "re3",
@@ -9,7 +10,8 @@
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "c498a87fad0acbcb"
+        "mesh_path_hash": "c498a87fad0acbcb",
+        "quick": true
     },
     {
         "app_id": "re3",
@@ -25,15 +27,18 @@
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "9e28dab100234404"
+        "mesh_path_hash": "9e28dab100234404",
+        "quick": true
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "232a628a72324dee"
+        "mesh_path_hash": "232a628a72324dee",
+        "quick": true
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "ea077b0c68d5007d"
+        "mesh_path_hash": "ea077b0c68d5007d",
+        "quick": true
     },
     {
         "app_id": "re3",
@@ -45,7 +50,8 @@
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "778af66996774db1"
+        "mesh_path_hash": "778af66996774db1",
+        "quick": true
     },
     {
         "app_id": "re3",
