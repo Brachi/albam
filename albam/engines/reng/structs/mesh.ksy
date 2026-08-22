@@ -84,7 +84,7 @@ types:
       - {id: offset_bones, type: u8}
       - {id: offset_normal_recalc, type: u8} # normal-recalculation data block, layout not modeled here
       - {id: offset_blend_shapes, type: u8} # blend shape (morph target) data, layout not modeled here
-      - {id: offset_bone_aabb, type: u8} # per-bone bounding box array, layout not modeled here
+      - {id: offset_bone_aabb, type: u8} # -> bone_aabb_group (one AABB per bone_header.num_bone_maps entry, not per bone overall)
       - {id: offset_buffers_header, type: u8}
       - {id: offset_floats, type: u8} # array of unidentified Vec3 floats - unexplained upstream too
       - {id: offset_material_name_remap, type: u8} # -> material_name_remap (u2 indices into named_nodes, count = model_info.num_materials)
