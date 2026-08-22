@@ -13,6 +13,7 @@ def build_blender_model(vfile, context):
     edgemodel_bytes = vfile.get_bytes()
 
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
+    edgemodel._read()
     skeleton = None
     bl_object = skeleton or bpy.data.objects.new(vfile.display_name, None)
     bl_materials = build_blender_materials(edgemodel, context)

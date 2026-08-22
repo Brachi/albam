@@ -26,6 +26,7 @@ def build_blender_materials(edgemodel, context):
         matb_vfile = vfs.get_vfile("reorc", material_path)
         matb_bytes = matb_vfile.get_bytes()
         matb = HexaneMatb(KaitaiStream(io.BytesIO(matb_bytes)))
+        matb._read()
         matbs.append((matb , material_path))
         if matb.shader.textures:
             tex_diffuse_path = matb.shader.textures[TEX_SLOT_DIFFUSE]
