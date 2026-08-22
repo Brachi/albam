@@ -19,13 +19,18 @@ from albam.engines.hexn.fs import HexnFS, SsgFS
 SIZE_PADDING = 4
 
 
-def _build_ssg_bytes(entries, size_padding=SIZE_PADDING, chunk_size=None):
+def _build_ssg_bytes(entries, size_padding=SIZE_PADDING, chunk_size=None, raw=False):
     """entries: list of (name, content) tuples. Packs `content` for every
     entry into one contiguous buffer (each entry padded up to a
     `size_padding` boundary, matching how SsgFS/the old SSGWrapper slice
     files back out of it), compressed as one or more independently
     zlib-compressed chunks of at most `chunk_size` uncompressed bytes each
     (defaults to the whole buffer in a single chunk).
+
+    raw=True builds the no-chunk-table variant instead (real files exist
+    with size_chunks_info == 0 - see SsgFS.__init__'s comment): the
+    "compressed" blob is just the uncompressed buffer verbatim, and
+    chunk_sizes is empty.
     """
     uncompressed = bytearray()
     file_infos = []  # (name, size)
@@ -36,16 +41,20 @@ def _build_ssg_bytes(entries, size_padding=SIZE_PADDING, chunk_size=None):
         uncompressed.extend(b"\x00" * padding)
         file_infos.append((name, len(content), offset_in_buffer))
 
-    chunk_size = chunk_size or (len(uncompressed) or 1)
-    chunk_sizes = []
-    compressed_chunks = bytearray()
-    for start in range(0, len(uncompressed), chunk_size):
-        raw_chunk = bytes(uncompressed[start:start + chunk_size])
-        compressed = zlib.compress(raw_chunk)
-        chunk_sizes.append(len(compressed))
-        compressed_chunks.extend(compressed)
-    if not uncompressed:
+    if raw:
         chunk_sizes = []
+        compressed_chunks = bytes(uncompressed)
+    else:
+        chunk_size = chunk_size or (len(uncompressed) or 1)
+        chunk_sizes = []
+        compressed_chunks = bytearray()
+        for start in range(0, len(uncompressed), chunk_size):
+            raw_chunk = bytes(uncompressed[start:start + chunk_size])
+            compressed = zlib.compress(raw_chunk)
+            chunk_sizes.append(len(compressed))
+            compressed_chunks.extend(compressed)
+        if not uncompressed:
+            chunk_sizes = []
 
     file_names = bytearray()
     name_offsets = []
@@ -118,6 +127,21 @@ def test_ssg_fs_listdir_reflects_directory_structure(tmp_path, ssg_bytes):
 def test_ssg_fs_multiple_chunks_reassemble_correctly(tmp_path):
     ssg_path = tmp_path / "model.ssg"
     ssg_path.write_bytes(_build_ssg_bytes(ENTRIES, chunk_size=16))
+
+    ssg_fs = SsgFS(str(ssg_path))
+    for name, content in ENTRIES:
+        assert ssg_fs.readbytes("/" + name) == content
+
+
+def test_ssg_fs_no_chunk_table_reads_raw_buffer(tmp_path):
+    """Real .ssg exist with size_chunks_info == 0 - buffer_chunks is the
+    uncompressed data verbatim in that case, not zlib-compressed at all.
+    Confirmed against real game data: treating chunk_sizes as always
+    zlib-compressed silently read back 0 bytes for every entry in such a
+    file instead of raising, since the decompression loop just never ran.
+    """
+    ssg_path = tmp_path / "model.ssg"
+    ssg_path.write_bytes(_build_ssg_bytes(ENTRIES, raw=True))
 
     ssg_fs = SsgFS(str(ssg_path))
     for name, content in ENTRIES:
