@@ -162,6 +162,45 @@ def test_export_geometry_byte_exact(mesh_export_local, subtests):
             assert src_bytes[off:off + size] == dst_bytes[off:off + size]
 
 
+def test_export_full_file_byte_exact_outside_weights(mesh_export_local):
+    """
+    The strongest fidelity check in this file: every byte in the exported
+    file must match the source *except* inside a submesh's own skin-weight
+    byte range (see test_export_weights_semantically_equal for why that
+    one region is only semantically, not byte, exact). This exercises the
+    whole export path at once - header, name tables, bone data (including
+    the local/world bone matrices mesh.ksy didn't model until this pass),
+    every LOD level other than LOD 0, and the header offsets mesh.ksy
+    still doesn't model at all (bone AABBs, and a shadow-mesh tree on
+    some files) that export restores from source rather than
+    reconstructing - not just the handful of regions the other tests
+    check individually.
+    """
+    src_mesh, _, src_bytes, dst_bytes = mesh_export_local
+    assert len(src_bytes) == len(dst_bytes)
+
+    weight_ranges = []
+    if src_mesh.header.offset_bones:
+        buffers = src_mesh.buffers_data
+        weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
+        if weight_acc:
+            vb = buffers.offset_vertex_buffer
+            for sub_mesh in _sub_meshes(src_mesh):
+                index_buffer = buffers.index_buffer
+                indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
+                    index_buffer, sub_mesh.pos_index_buffer * 2
+                )
+                num_vertices = len(set(indices))
+                off = vb + weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
+                weight_ranges.append((off, off + num_vertices * weight_acc.size))
+
+    unexpected_diffs = [
+        i for i in range(len(src_bytes))
+        if src_bytes[i] != dst_bytes[i] and not any(a <= i < b for a, b in weight_ranges)
+    ]
+    assert unexpected_diffs == []
+
+
 def test_export_weights_semantically_equal(mesh_export_local, subtests):
     """
     Which of the 8 joint/weight byte-slots a bone lands in isn't
