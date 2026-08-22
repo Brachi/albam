@@ -8,7 +8,7 @@ seq:
     - {id: id_magic, contents: [77, 69, 83, 72]}
     - {id: version, type: u4}
     - {id: file_size, type: u4}
-    - {id: lod_group_name_hash, type: u4} # hash used to look up LOD-distance scaling by object category; not part of file_size (was misread as one u8 "size_file")
+    - {id: lod_group_name_hash, type: u4} # hash used to look up LOD-distance scaling by object category
     - {id: header, type: header}
 
 instances:
@@ -36,14 +36,11 @@ instances:
   named_nodes:
     {pos: header.offset_names, type: name_offset, repeat: expr, repeat-expr: header.num_named_nodes}
 
-  # Was named id_to_names_remap and read header.num_named_nodes entries
-  # unconditionally - that's the combined size of ALL three name-remap
-  # tables (materials+bones+blend shapes) sharing one string table, not
-  # just this one. Only happened to not crash because the other two
-  # tables sit right after this one in the file. Count is
-  # model_info.num_materials; guarded the same way model_info/bones_header
-  # are (both may legitimately be absent, e.g. a buffers-only occlusion
-  # mesh).
+  # header.num_named_nodes's shared string table is sub-divided into 3
+  # separate name-remap tables (materials/bones/blend shapes) - this one's
+  # count is model_info.num_materials. Guarded the same way model_info/
+  # bones_header are (both may legitimately be absent, e.g. a
+  # buffers-only occlusion mesh).
   material_name_remap:
     {
       pos: header.offset_material_name_remap, type: u2, repeat: expr,
@@ -98,12 +95,12 @@ types:
       - {id: num_materials, type: u1}
       - {id: num_uv_layers, type: u1}
       - {id: num_skin_weights, type: u1}
-      - {id: num_meshes, type: u2} # was read as one u4 with the next 2 bytes
+      - {id: num_meshes, type: u2}
       - {id: has_32bit_index_buffer, type: u1}
       - {id: shared_lod_bits, type: u1}
       - {id: reserved_01, type: u8, if: _root.version == 386270720}  # XXX FIXME: enum with versions
       - {id: box, type: f4, repeat: expr, repeat-expr: 12} # bounding sphere (x,y,z,r) followed by AABB min/max (2 vec4)
-      - {id: offset_lod_group_list, type: u8} # was split into two bogus u4s (offset_lod_info + "reserved_02") - it's one u8 offset
+      - {id: offset_lod_group_list, type: u8}
     instances:
       lod_group_offsets:
         {pos: offset_lod_group_list, type: lod_group_offset, repeat: expr, repeat-expr: num_lod_groups}
@@ -136,10 +133,6 @@ types:
       - {id: reserved_01, type: u4}
       - {id: unk_2, type: u2}
       - {id: unk_3, type: u2}
-      # Was gated on "and unk_00 == 0", as if this were an alternative to
-      # unk_00 - it isn't; it's read unconditionally whenever the format
-      # version is past this branch's threshold, regardless of unk_00's
-      # value. Was also split into two u4s instead of one u8.
       - {id: unk_04, type: u8, if: _root.version == 21041600}
 
     instances:
@@ -165,13 +158,8 @@ types:
     instances:
       bones:
         {pos: offset_parent_bone, type: bone, repeat: expr, repeat-expr: num_bones}
-      # Were bare u8 offsets with no pointed-to data modeled at all - a
-      # byte-exact _read()/_write() round trip left both regions zeroed
-      # (nothing in the .ksy ever read them, so nothing ever wrote them
-      # back). Confirmed as num_bones matrix4x4 entries each by diffing a
-      # real file's round trip against itself: every mismatched byte fell
-      # exactly within [offset_matrix_1, offset_matrix_1 + num_bones*64)
-      # or the same span at offset_matrix_2, with plausible 4x4-matrix
+      # num_bones matrix4x4 entries each - confirmed via byte-range
+      # (diffing a real file's round trip against itself) and plausible
       # float content (diagonal 1.0s at 20-byte strides).
       local_matrices:
         {pos: offset_matrix_1, type: matrix4x4, repeat: expr, repeat-expr: num_bones}
@@ -184,8 +172,7 @@ types:
     seq:
       - {id: idx, type: u2}
       # parent/sibling/child/symmetric/use_secondary_weight are all signed
-      # - -1 is used as a "none" sentinel (e.g. root bones have no parent),
-      # which read as 0xFFFF/65535 when these were unsigned u2.
+      # - -1 is used as a "none" sentinel (e.g. root bones have no parent).
       - {id: parent_idx, type: s2}
       - {id: sibling_idx, type: s2}
       - {id: child_idx, type: s2}
@@ -195,16 +182,9 @@ types:
       - {id: padding_1, type: u2}
 
   # Confirmed against RE-Mesh-Editor's actual BoneAABBGroup.read()/write()
-  # (modules/mesh/file_re_mesh.py) - not modeled from a name alone this
-  # time. num_entries is its own independent field, NOT num_bones (every
-  # sample file has num_entries < num_bones) - RE-Mesh-Editor's own
-  # export path sets it from skeletonHeader.remapCount, i.e. it's the
-  # bone_header.num_bone_maps count: one AABB per bone actually used for
-  # skinning (bone_maps[i]), not one per bone overall. offset_entries is
-  # self-referential in every sample seen (always == the position right
-  # after this header) and unused for seeking by RE-Mesh-Editor's own
-  # reader either - kept as a real field for byte-fidelity, not trusted
-  # over the header's own two-field-then-array layout.
+  # (modules/mesh/file_re_mesh.py). num_entries is bone_header.num_bone_maps's
+  # count (one AABB per bone actually used for skinning, bone_maps[i]),
+  # not num_bones - every sample file has num_entries < num_bones.
   bone_aabb_group:
     seq:
       - {id: num_entries, type: u8}
@@ -238,22 +218,18 @@ types:
       lod_group:
         {pos: offset, type: lod_group}
 
-  # One LOD level's mesh-group tree. Called "model" before this pass, which
-  # collided with the RE Engine sense of "model" (the whole mesh, i.e. what
-  # this file itself is) - this is really just one of model_info's LOD
-  # levels (and what a standalone occlusion_mesh_group is too).
+  # One LOD level's mesh-group tree (also what a standalone
+  # occlusion_mesh_group is).
   lod_group:
     seq:
-      - {id: num_mesh_groups, type: u1} # was read as one u4 with the next 3 bytes
+      - {id: num_mesh_groups, type: u1}
       - {id: vertex_format, type: u1}
       - {id: reserved_01, type: u2}
-      - {id: distance, type: f4} # LOD switch distance - was misread as an unknown u4
+      - {id: distance, type: f4} # LOD switch distance
       - {id: offset_main_mesh_header, type: u8}
       - {id: mesh_groups, type: mesh_group_offset, repeat: expr, repeat-expr: num_mesh_groups}
       # Pad to 16-byte file-absolute alignment - 0 or 8 bytes depending on
-      # whether num_mesh_groups is even/odd. Was hardcoded to a fixed u8,
-      # which only worked because the one sample file it was written
-      # against happened to have an odd num_mesh_groups.
+      # whether num_mesh_groups is even/odd.
       - {id: padding, size: (16 - (_io.pos % 16)) % 16}
 
   mesh_group:
@@ -268,7 +244,6 @@ types:
 
   mesh:
     seq:
-      # Was read as one u4 "material_id" - it's 4 packed bytes.
       - {id: material_index, type: u1}
       - {id: is_quad, type: u1}
       - {id: vertex_buffer_index, type: u1}
@@ -277,15 +252,13 @@ types:
       - {id: pos_index_buffer, type: u4}
       - {id: pos_vertex_buffer, type: u4}
       - {id: unk_01, type: u8, if: _root.version != 386270720}
-    # No normals/vertex-count instance here (removed a `repeat-expr: 100`
-    # placeholder that was never actually 100 - see RESULTS.md). The real
-    # per-submesh vertex count comes from the *next* sibling submesh's
-    # pos_vertex_buffer (or the parent mesh_group's num_vertices for the
-    # last submesh in a group), which Kaitai's Python target can't express
-    # from a lazily-evaluated instance (no working sibling/_index lookup).
-    # The real importer doesn't need this: it derives vertex count from
-    # unique index-buffer values instead (see build_blender_mesh in
-    # albam/engines/reng/mesh.py).
+    # No normals/vertex-count instance here: per-submesh vertex count
+    # comes from the *next* sibling submesh's pos_vertex_buffer (or the
+    # parent mesh_group's num_vertices for the last submesh in a group),
+    # which Kaitai's Python target can't express from a lazily-evaluated
+    # instance (no working sibling/_index lookup). The real importer
+    # derives vertex count from unique index-buffer values instead (see
+    # build_blender_mesh in albam/engines/reng/mesh.py).
 
 
   matrix4x4:
@@ -306,8 +279,7 @@ types:
       - {id: w, type: f4}
 
 enums:
-  # From RE-Mesh-Editor's typeNameMapping (re_mesh_parse.py) - was a TODO
-  # stub guessing 4 values (0 POSITION, 1 NORMAL, 2 TEXCOORD, 4 JOINT_WEIGHT).
+  # From RE-Mesh-Editor's typeNameMapping (re_mesh_parse.py).
   primitive_type:
     0: position
     1: nor_tan # packed signed-byte normal+tangent interleaved, not normal alone

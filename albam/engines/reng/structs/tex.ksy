@@ -12,13 +12,10 @@ seq:
   - {id: version, type: u4}
   - {id: width, type: u2}
   - {id: height, type: u2}
-  - {id: depth, type: u2} # 3D/volume-texture depth (was "unk_00") - mip level N's depth is max(depth >> N, 1)
+  - {id: depth, type: u2} # 3D/volume-texture depth - mip level N's depth is max(depth >> N, 1)
   # Real condition (per RE-Mesh-Editor) is "version > 11 and version != 190820018"
   # -> layout B (mipmap_header_2), else layout A (mipmap_header_1) - not a
-  # fixed per-version list. Every version albam currently supports still
-  # resolves the same way through this expression as the old hardcoded
-  # cases did, but this also gets any future version right without needing
-  # to guess which literal list it belongs in.
+  # fixed per-version list, so this also gets any future version right.
   - id: mipmap_header
     type:
       switch-on: version > 11 and version != 190820018
@@ -28,17 +25,16 @@ seq:
   - {id: format, type: u4, enum: dxgi_format} # real DXGI_FORMAT-compatible enum
   - {id: swizzle_control, type: s4} # console/platform texture-swizzle control; -1 = no swizzle (PC, i.e. every case albam handles)
   - {id: cubemap_marker, type: u4} # cubemap flag/marker
-  # Was one u4 "unk_04" - 3 packed sub-fields, still unnamed/unexplained
-  # upstream too (RE-Mesh-Editor's own names are literally unkn04/unkn05/null0).
+  # 3 packed sub-fields, still unnamed/unexplained upstream too
+  # (RE-Mesh-Editor's own names are literally unkn04/unkn05/null0).
   - {id: unk_04a, type: u1}
   - {id: unk_04b, type: u1}
   - {id: unk_05_null, type: u2}
-  # Was one u8 "unk_05" - 5 packed sub-fields: swizzle metadata (unused on
-  # PC, same as swizzle_control above) plus two fields upstream names
-  # suggest are constant markers ("seven"/"one"), still unexplained.
-  # Real gate is "version > 27 and version != 190820018" (independent from
-  # the mipmap_header threshold above, not the same condition) - again
-  # every currently-supported version still resolves the same way.
+  # 5 packed sub-fields: swizzle metadata (unused on PC, same as
+  # swizzle_control above) plus two fields upstream names suggest are
+  # constant markers ("seven"/"one"), still unexplained. Real gate is
+  # "version > 27 and version != 190820018" (independent from the
+  # mipmap_header threshold above, not the same condition).
   - id: swizzle_height_depth
     type: u1
     if: version > 27 and version != 190820018
@@ -61,12 +57,11 @@ seq:
 types:
   mipmap_data:
     seq:
-      # Was split into two bogus u4s ("ofs_data"/"unk_01") - it's one real
-      # u8 offset. Only harmless today because no real file is anywhere
-      # near 4GB, so the high 32 bits (what used to be read as "unk_01")
-      # are always 0.
+      # Real file offset (u8) - the high 32 bits are always 0 for every
+      # real file today (none anywhere near 4GB), but they'd matter if
+      # one ever were.
       - {id: ofs_data, type: u8}
-      - {id: scanline_length, type: u4} # row pitch in bytes (was "unk_02") - used upstream to strip per-row padding when actual data doesn't match the expected mip size
+      - {id: scanline_length, type: u4} # row pitch in bytes - used upstream to strip per-row padding when actual data doesn't match the expected mip size
       - {id: size_data, type: u4}
     instances:
       dds_data:
