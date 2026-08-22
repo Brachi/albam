@@ -91,8 +91,16 @@ def build_blender_mesh(re_mesh, sub_mesh):
     # NORMALS ####
     normals_accessor = re_mesh.buffers_data.primitive_accessors[1]
     normals_offset = normals_accessor.offset + sub_mesh.pos_vertex_buffer * normals_accessor.size
-    vertex_normals = ((ctypes.c_byte * 8) * num_vertices).from_buffer_copy(vertex_buffer, normals_offset)
-    vertex_normals = [(n[0] / 127, n[2] / -127, n[1] / 127) for n in vertex_normals]
+    nor_tan_raw = ((ctypes.c_byte * 8) * num_vertices).from_buffer_copy(vertex_buffer, normals_offset)
+
+    # nor_tan packs normal.xyz + an unused/padding byte, then tangent.xyz +
+    # a handedness-sign byte (see mesh.ksy's primitive_type enum) - only
+    # the normal.xyz is decoded below (tangent isn't reconstructed from
+    # Blender's own state anywhere), so the raw 8 bytes are stashed here,
+    # verbatim, as export's only way back to them byte-exact.
+    _stash_nor_tan_raw(bl_mesh, nor_tan_raw)
+
+    vertex_normals = [(n[0] / 127, n[2] / -127, n[1] / 127) for n in nor_tan_raw]
     vert_normals = np.array(vertex_normals, dtype=np.float32)
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
     np.divide(vert_normals, norms, out=vert_normals, where=norms != 0)
@@ -110,6 +118,17 @@ def build_blender_mesh(re_mesh, sub_mesh):
         pass
 
     return ob
+
+
+NOR_TAN_LO_ATTR = "albam_nor_tan_lo"
+NOR_TAN_HI_ATTR = "albam_nor_tan_hi"
+
+
+def _stash_nor_tan_raw(bl_mesh, nor_tan_raw):
+    lo_attr = bl_mesh.attributes.new(NOR_TAN_LO_ATTR, "INT", "POINT")
+    hi_attr = bl_mesh.attributes.new(NOR_TAN_HI_ATTR, "INT", "POINT")
+    lo_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[0:4]))[0] for n in nor_tan_raw])
+    hi_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[4:8]))[0] for n in nor_tan_raw])
 
 
 def build_blender_armature(re_mesh, armature_name):
