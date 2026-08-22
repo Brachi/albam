@@ -8,5 +8,15 @@
         "app_id": "re5",
         "mod_path_hash": "5d45d4682b062d49",
         "lmt_path_hash": "1cc34f3b754528ea"
+    },
+    {
+        "app_id": "re1",
+        "mod_path_hash": "a7fc2850b9436b0a",
+        "lmt_path_hash": "7bbdee3ae105e786"
+    },
+    {
+        "app_id": "re1",
+        "mod_path_hash": "d594e05a51fb3443",
+        "lmt_path_hash": "a3d1662f4271d5f9"
     }
 ]
