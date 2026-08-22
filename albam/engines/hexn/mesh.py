@@ -30,22 +30,29 @@ def build_blender_model(vfile, context):
 def build_blender_mesh(mesh_header, bl_materials):
     vertices = []
     uvs = []
-    vertex_stride = 52  # TODO: compute
     edge_mesh = mesh_header.mesh
+    # Not a fixed 52 bytes - a full-game sweep found 11 distinct real
+    # strides (12, 16, 24, 28, 32, 40, 44, 52, 56, 60, 64), 52 being only
+    # ~76% of meshes.
+    vertex_stride = (
+        edge_mesh.size_buffer_vertices // edge_mesh.num_vertices if edge_mesh.num_vertices else 0
+    )
     me_ob = bpy.data.meshes.new("MESH-TODO")
     ob = bpy.data.objects.new("MESH-TODO", me_ob)
 
+    has_uvs = vertex_stride >= 28  # smallest real stride seen with UV data (12/16/24 don't have any)
     current_offset = 0
     for vi in range(edge_mesh.num_vertices):
         pos_x = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset)[0]
         pos_y = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset + 4)[0]
         pos_z = struct.unpack_from('f', edge_mesh.buffer_vertices, current_offset + 8)[0]
 
-        uv_x = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 24)[0]
-        uv_y = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 26)[0]
-
         vertices.append((pos_x, -pos_z, pos_y))
-        uvs.extend((uv_x, 1 - uv_y))
+
+        if has_uvs:
+            uv_x = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 24)[0]
+            uv_y = struct.unpack_from('e', edge_mesh.buffer_vertices, current_offset + 26)[0]
+            uvs.extend((uv_x, 1 - uv_y))
         current_offset += vertex_stride
 
     indices = struct.unpack_from(f'{edge_mesh.size_buffer_indices // 2}H', edge_mesh.buffer_indices)

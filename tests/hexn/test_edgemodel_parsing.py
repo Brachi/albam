@@ -19,6 +19,8 @@ def pytest_generate_tests(metafunc):
         argvalues = [(d["app_id"], d["edgemodel_path_hash"]) for d in EDGEMODEL_PARSING_DATASET]
         ids = [f"{d['app_id']}-{d['edgemodel_path_hash']}" for d in EDGEMODEL_PARSING_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+    elif "local_app_id" in metafunc.fixturenames:
+        metafunc.parametrize("local_app_id", ["reorc"], scope="session")
 
 
 def test_dataset_hashes_are_in_catalog():
@@ -61,3 +63,69 @@ def test_parse_edgemodel(game_fs_root, local_app_id, local_edgemodel_path_hash):
         assert len(mesh.buffer_vertices) == mesh.size_buffer_vertices
         assert len(mesh.buffer_indices) == mesh.size_buffer_indices
         assert mesh_header.materials.first_material
+
+
+# Regression check for the hardcoded vertex_stride=52 bug in
+# build_blender_mesh(): a full-game sweep found 11 distinct real strides
+# (12, 16, 24, 28, 32, 40, 44, 52, 56, 60, 64), only ~76% of meshes
+# actually using 52 - importing the rest with a hardcoded 52 silently
+# misreads every vertex past the first, scrambling positions into an
+# unrecognizable blob (a real example: a small light fixture came out as a
+# 4x4x4 unit mess instead of its actual ~0.15 unit bounding box). Reuses
+# this file's own vector.edgemodel hash (9b51865995033c55) rather than a
+# new one - mesh_index 12 there has a real stride-12 vertex format (no
+# UV/normal/color, just position), a convenient already-verified case.
+VECTOR_EDGEMODEL_HASH = "9b51865995033c55"
+STRIDE_12_MESH_INDEX = 12
+
+
+def test_non_52_stride_produces_a_coherent_mesh(game_fs_root, local_app_id):
+    import struct
+
+    from albam.engines.hexn.mesh import build_blender_mesh
+    from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
+
+    path = resolve_hashes(game_fs_root, {VECTOR_EDGEMODEL_HASH})[VECTOR_EDGEMODEL_HASH]
+    edgemodel = HexaneEdgemodel.from_bytes(game_fs_root.readbytes(path))
+    edgemodel._read()
+
+    mesh_header = edgemodel.meshes_header[STRIDE_12_MESH_INDEX]
+    mesh = mesh_header.mesh
+    correct_stride = mesh.size_buffer_vertices // mesh.num_vertices
+    assert correct_stride == 12
+
+    # Doesn't crash: with the old hardcoded UV read (fixed offset 24/26,
+    # unconditional), this stride (no room for UV data at all) would run
+    # unpack_from() straight past the end of the buffer - see mesh.py's
+    # has_uvs guard, which this exercises (12 < 28).
+    bl_object = build_blender_mesh(mesh_header, {})
+    assert len(bl_object.data.vertices) == mesh.num_vertices
+
+    # "How big is this mesh" isn't a stable thing to assert on (this one's
+    # a real, human-sized body part - not a small prop like the light
+    # fixture that first exposed this bug in practice), but consecutive
+    # vertices in a real mesh's own buffer are typically close together
+    # (shared triangles/strips) regardless of the model's overall size -
+    # reading at the wrong stride destroys that locality by drifting out
+    # of alignment with every vertex read. Compare directly instead of
+    # against an absolute threshold.
+    def mean_neighbor_distance(stride):
+        # The "wrong" (52) stride reads past the real buffer well before
+        # num_vertices - cap to whatever actually fits, at either stride.
+        count = min(mesh.num_vertices, len(mesh.buffer_vertices) // stride)
+        positions = [
+            struct.unpack_from('fff', mesh.buffer_vertices, vi * stride)
+            for vi in range(count)
+        ]
+        deltas = (
+            sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5
+            for p1, p2 in zip(positions, positions[1:])
+        )
+        return sum(deltas) / (count - 1)
+
+    correct_distance = mean_neighbor_distance(correct_stride)
+    wrong_distance = mean_neighbor_distance(52)
+    assert correct_distance < wrong_distance / 10, (
+        f"expected the correct stride ({correct_stride}) to produce much more spatially "
+        f"coherent geometry than the old hardcoded 52 - got {correct_distance} vs {wrong_distance}"
+    )
