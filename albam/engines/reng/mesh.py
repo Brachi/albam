@@ -36,7 +36,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
 
     start = time.time()
     model_info = re_mesh.model_info
-    mesh_groups = model_info.model_offsets[0].model.mesh_groups if model_info else []
+    mesh_groups = model_info.lod_group_offsets[0].lod_group.mesh_groups if model_info else []
     for mesh_group in mesh_groups:
         for sub_mesh in mesh_group.mesh_group.meshes:
             bl_mesh_ob = build_blender_mesh(re_mesh, sub_mesh)
@@ -46,7 +46,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
                 modifier.object = skeleton
                 modifier.use_vertex_groups = True
             try:
-                material_name_index = re_mesh.id_to_names_remap[sub_mesh.material_index]
+                material_name_index = re_mesh.material_name_remap[sub_mesh.material_index]
                 material_name = re_mesh.named_nodes[material_name_index].value
                 bl_mesh_ob.data.materials.append(materials[material_name])
             except KeyError:

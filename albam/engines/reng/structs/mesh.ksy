@@ -19,49 +19,79 @@ instances:
   bones_header:
     {pos: header.offset_bones, type: bone_header, if: header.offset_bones != 0}
 
+  # A single lod_group (same type model_info.lod_group_offsets[N] each
+  # point to), for occlusion-culling geometry - reached directly, with no
+  # wrapping model_info-style array of LOD levels. This is what a mesh
+  # with no main model tree (offset_data == 0, e.g. an "_occ.mesh" file)
+  # actually has instead.
+  occlusion_mesh_group:
+    {pos: header.offset_occlusion_mesh_group, type: lod_group, if: header.offset_occlusion_mesh_group != 0}
+
   buffers_data:
     {pos: header.offset_buffers_header, type: buffers_header}
 
   named_nodes:
-    {pos: header.offset_names, type: test_name, repeat: expr, repeat-expr: header.num_named_nodes}
+    {pos: header.offset_names, type: name_offset, repeat: expr, repeat-expr: header.num_named_nodes}
 
-  # Was reading header.num_named_nodes entries unconditionally - that's the
-  # combined size of ALL three name-remap tables (materials+bones+blend
-  # shapes) sharing one string table, not just this one. Only happened to
-  # not crash because the other two tables sit right after this one in the
-  # file. Count is model_info.num_materials; guarded the same way
-  # model_info/bones_header are (both may legitimately be absent, e.g. a
-  # buffers-only occlusion mesh).
-  id_to_names_remap:
+  # Was named id_to_names_remap and read header.num_named_nodes entries
+  # unconditionally - that's the combined size of ALL three name-remap
+  # tables (materials+bones+blend shapes) sharing one string table, not
+  # just this one. Only happened to not crash because the other two
+  # tables sit right after this one in the file. Count is
+  # model_info.num_materials; guarded the same way model_info/bones_header
+  # are (both may legitimately be absent, e.g. a buffers-only occlusion
+  # mesh).
+  material_name_remap:
     {
-      pos: header.offset_test_remap, type: u2, repeat: expr,
+      pos: header.offset_material_name_remap, type: u2, repeat: expr,
       repeat-expr: model_info.num_materials,
-      if: header.offset_test_remap != 0 and header.offset_data != 0,
+      if: header.offset_material_name_remap != 0 and header.offset_data != 0,
     }
+
+  bone_name_remap:
+    {
+      pos: header.offset_bone_name_remap, type: u2, repeat: expr,
+      repeat-expr: bones_header.num_bones,
+      if: header.offset_bone_name_remap != 0 and header.offset_bones != 0,
+    }
+
+  blend_shape_name_remap:
+    pos: header.offset_blend_shape_name_remap
+    type: u2
+    repeat: expr
+    repeat-expr: >
+      header.num_named_nodes -
+      (header.offset_data != 0 ? model_info.num_materials : 0) -
+      (header.offset_bones != 0 ? bones_header.num_bones : 0)
+    if: header.offset_blend_shape_name_remap != 0
 
 types:
   header:
+    # Field identities cross-referenced against RE-Mesh-Editor (a separate,
+    # more mature, non-Kaitai RE Engine mesh importer/exporter) - see
+    # RESULTS.md. Every offset below is 1:1 with its pre-SF6 FileHeader,
+    # same order.
     seq:
-      - {id: unk1, type: u2}
+      - {id: content_flags, type: u2} # bitflags: bit0 aabb, bit1 skeleton, bit2 blend shapes, bit3 group-pivot, others unidentified
       - {id: num_named_nodes, type: u2}
-      - {id: reserved_02 , type: u4} # padding?
-      - {id: offset_data, type: u8} # 0 ModelPointers
-      - {id: offset_unk_1, type: u8} # 1 BonesDataHeaderPointer
-      - {id: offset_unk_2, type: u8} # 2 UnkPointer01
-      - {id: offset_bones, type: u8} # 3 UnkPointer02
-      - {id: offset_unk_3, type: u8} # 4 UnkPointer03
-      - {id: offset_unk_4, type: u8} # 5 GeometryPointer
-      - {id: offset_unk_5, type: u8} # 6 UnkPointer05
-      - {id: offset_buffers_header, type: u8} # 7 GeometryPointer
-      - {id: offset_unk_6, type: u8} # 8  UnkPointer05
-      - {id: offset_test_remap, type: u8} # 9 MaterialsNamesPointer
-      - {id: offset_unk_8, type: u8} # 10 BonesNamesPointer
-      - {id: offset_unk_9, type: u8} # 11 UnkPointer08
-      - {id: offset_names, type: u8} # 12 StringTablePointer
+      - {id: unk_01, type: u4} # real field (not padding), meaning still unknown even in RE-Mesh-Editor
+      - {id: offset_data, type: u8} # main LOD/mesh-group tree (-> model_info)
+      - {id: offset_shadow_mesh_group, type: u8} # shadow-casting LOD tree (separate, lower-detail geometry)
+      - {id: offset_occlusion_mesh_group, type: u8} # occlusion-culling mesh tree - a single LOD group (-> occlusion_mesh_group), not a full model_info
+      - {id: offset_bones, type: u8}
+      - {id: offset_normal_recalc, type: u8} # normal-recalculation data block, layout not modeled here
+      - {id: offset_blend_shapes, type: u8} # blend shape (morph target) data, layout not modeled here
+      - {id: offset_bone_aabb, type: u8} # per-bone bounding box array, layout not modeled here
+      - {id: offset_buffers_header, type: u8}
+      - {id: offset_floats, type: u8} # array of unidentified Vec3 floats - unexplained upstream too
+      - {id: offset_material_name_remap, type: u8} # -> material_name_remap (u2 indices into named_nodes, count = model_info.num_materials)
+      - {id: offset_bone_name_remap, type: u8} # -> bone_name_remap (u2 indices into named_nodes, count = bones_header.num_bones)
+      - {id: offset_blend_shape_name_remap, type: u8} # -> blend_shape_name_remap (u2 indices into named_nodes, remaining count)
+      - {id: offset_names, type: u8}
 
   model_info:
     seq:
-      - {id: len_offsets_models, type: u1}
+      - {id: num_lod_groups, type: u1}
       - {id: num_materials, type: u1}
       - {id: num_uv_layers, type: u1}
       - {id: num_skin_weights, type: u1}
@@ -70,13 +100,13 @@ types:
       - {id: shared_lod_bits, type: u1}
       - {id: reserved_01, type: u8, if: _root.version == 386270720}  # XXX FIXME: enum with versions
       - {id: box, type: f4, repeat: expr, repeat-expr: 12} # bounding sphere (x,y,z,r) followed by AABB min/max (2 vec4)
-      - {id: offset_lod_info, type: u8} # was split into two bogus u4s (offset_lod_info + "reserved_02") - it's one u8 offset
+      - {id: offset_lod_group_list, type: u8} # was split into two bogus u4s (offset_lod_info + "reserved_02") - it's one u8 offset
     instances:
-      model_offsets:
-        {pos: offset_lod_info, type: model_offset, repeat: expr, repeat-expr: len_offsets_models}
+      lod_group_offsets:
+        {pos: offset_lod_group_list, type: lod_group_offset, repeat: expr, repeat-expr: num_lod_groups}
 
 
-  test_name:
+  name_offset:
     seq:
       - {id: offset, type: u8}
     instances:
@@ -85,7 +115,7 @@ types:
 
   primitive_accessor:
     seq:
-      - {id: primitive_type, type: u2}  # TODO: enum 0: POSITION; 1: NORMAL; 2: TEXCOORD; 4: JOINT_WEIGHT
+      - {id: primitive_type, type: u2, enum: primitive_type}
       - {id: size, type: u2}
       - {id: offset, type: u4}
 
@@ -149,35 +179,32 @@ types:
       - {id: padding_0, type: u2}
       - {id: padding_1, type: u2}
 
-  name_offset: # Thanks: https://github.com/kaitai-io/kaitai_struct/issues/14
-    seq:
-      - {id: offset, type: u8}
-    instances:
-      name:
-        {pos: offset, type: str, terminator: 0, encoding: ascii}
-
-  mesh_group_test:
+  mesh_group_offset:
     seq:
       - {id: offset, type: u8}
     instances:
       mesh_group:
         {pos: offset, type: mesh_group}
 
-  model_offset:
+  lod_group_offset:
     seq:
       - {id: offset, type: u8}
     instances:
-      model:
-        {pos: offset, type: model}
+      lod_group:
+        {pos: offset, type: lod_group}
 
-  model:
+  # One LOD level's mesh-group tree. Called "model" before this pass, which
+  # collided with the RE Engine sense of "model" (the whole mesh, i.e. what
+  # this file itself is) - this is really just one of model_info's LOD
+  # levels (and what a standalone occlusion_mesh_group is too).
+  lod_group:
     seq:
       - {id: num_mesh_groups, type: u1} # was read as one u4 with the next 3 bytes
       - {id: vertex_format, type: u1}
       - {id: reserved_01, type: u2}
       - {id: distance, type: f4} # LOD switch distance - was misread as an unknown u4
       - {id: offset_main_mesh_header, type: u8}
-      - {id: mesh_groups, type: mesh_group_test, repeat: expr, repeat-expr: num_mesh_groups}
+      - {id: mesh_groups, type: mesh_group_offset, repeat: expr, repeat-expr: num_mesh_groups}
       # Pad to 16-byte file-absolute alignment - 0 or 8 bytes depending on
       # whether num_mesh_groups is even/odd. Was hardcoded to a fixed u8,
       # which only worked because the one sample file it was written
@@ -205,16 +232,15 @@ types:
       - {id: pos_index_buffer, type: u4}
       - {id: pos_vertex_buffer, type: u4}
       - {id: unk_01, type: u8, if: _root.version != 386270720}
-
-    instances:
-      normals:
-        pos: >
-          _root.buffers_data.offset_vertex_buffer +
-          _root.buffers_data.primitive_accessors[1].offset +
-          _root.buffers_data.primitive_accessors[1].size * pos_vertex_buffer
-        type: s1
-        repeat: expr
-        repeat-expr: 100  # FIXME: calculate num_vertices
+    # No normals/vertex-count instance here (removed a `repeat-expr: 100`
+    # placeholder that was never actually 100 - see RESULTS.md). The real
+    # per-submesh vertex count comes from the *next* sibling submesh's
+    # pos_vertex_buffer (or the parent mesh_group's num_vertices for the
+    # last submesh in a group), which Kaitai's Python target can't express
+    # from a lazily-evaluated instance (no working sibling/_index lookup).
+    # The real importer doesn't need this: it derives vertex count from
+    # unique index-buffer values instead (see build_blender_mesh in
+    # albam/engines/reng/mesh.py).
 
 
   matrix4x4:
@@ -233,3 +259,16 @@ types:
       - {id: y, type: f4}
       - {id: z, type: f4}
       - {id: w, type: f4}
+
+enums:
+  # From RE-Mesh-Editor's typeNameMapping (re_mesh_parse.py) - was a TODO
+  # stub guessing 4 values (0 POSITION, 1 NORMAL, 2 TEXCOORD, 4 JOINT_WEIGHT).
+  primitive_type:
+    0: position
+    1: nor_tan # packed signed-byte normal+tangent interleaved, not normal alone
+    2: uv
+    3: uv2 # second UV channel - there are 2 separate UV types, not one generic "texcoord"
+    4: weight
+    5: color
+    6: sf6_unknown_vertex_data_type # game-specific, unexplained even upstream
+    7: extra_weight # extra 4 bone weights, for 6-weights-per-vertex setups

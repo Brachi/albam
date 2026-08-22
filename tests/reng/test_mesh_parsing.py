@@ -58,15 +58,19 @@ def test_mesh(parsed_mesh):
     assert mesh.file_size == len(src_bytes)
 
     if mesh.model_info is None:
-        # Buffers-only variant (e.g. occlusion-culling meshes): no
-        # model/mesh-group tree, header.offset_data == 0 - see RESULTS.md.
+        # No main model tree (header.offset_data == 0) - e.g. an
+        # occlusion-culling mesh. It still has real geometry, just reached
+        # through its own separate offset/tree instead - see RESULTS.md.
         assert mesh.header.offset_data == 0
         assert mesh.buffers_data.size_vertex_buffer > 0
+        if mesh.occlusion_mesh_group is not None:
+            total_sub_meshes = sum(len(mg.mesh_group.meshes) for mg in mesh.occlusion_mesh_group.mesh_groups)
+            assert total_sub_meshes > 0
         return
 
-    model = mesh.model_info.model_offsets[0].model
-    assert model.num_mesh_groups == len(model.mesh_groups)
-    assert model.num_mesh_groups > 0
+    lod_group = mesh.model_info.lod_group_offsets[0].lod_group
+    assert lod_group.num_mesh_groups == len(lod_group.mesh_groups)
+    assert lod_group.num_mesh_groups > 0
 
-    total_sub_meshes = sum(len(mg.mesh_group.meshes) for mg in model.mesh_groups)
+    total_sub_meshes = sum(len(mg.mesh_group.meshes) for mg in lod_group.mesh_groups)
     assert total_sub_meshes > 0

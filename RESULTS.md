@@ -98,9 +98,92 @@ explicitly — the Blender importer skips the mesh-group loop and produces
 an empty object rather than crashing. Full dataset (17 files) and the rest
 of the suite pass.
 
-## Next
+## Cross-reference against RE-Mesh-Editor
 
-A separate pass is cross-referencing this `.ksy`'s many `unk_*`/`test_*`/
-`TODO` placeholders against RE-Mesh-Editor (a non-Kaitai RE Engine mesh
-importer that already has much of this figured out) to fill in real field
-names/meanings before further format work.
+A separate pass cross-referenced this `.ksy`'s many `unk_*`/`test_*`/`TODO`
+placeholders against RE-Mesh-Editor (a mature, non-Kaitai RE Engine mesh
+importer/exporter at `/home/seba/Repos/_Ext/RE-Mesh-Editor`) to identify
+real field names/meanings. Two rounds of fixes followed, each verified
+against the full dataset:
+
+**Round 1 - bit-packing bugs.** Several fields were reading 2-4 packed
+sub-fields as one wider int, only "working" because the extra sub-fields
+happened to be zero in the one sample file the `.ksy` was originally
+written against (`file_size`, `model_info.num_meshes`,
+`model_info`'s offset+reserved, `model.num_mesh_groups`, `model.unk`
+(actually a float LOD-distance), `model.padding` (actually a computed
+0-or-8-byte alignment gap, not a fixed size), `mesh.material_id`,
+`buffers_header.unk_00_a/unk_00_b`). Also fixed `id_to_names_remap`
+(renamed `material_name_remap`): it read `header.num_named_nodes` entries
+unconditionally, which is the combined size of three separate name-remap
+tables sharing one string table, not just the material one - it only
+avoided crashing because the other two tables happen to sit right after
+it in the file. Verified every split field reads a small, sane value
+(not garbage) and that LOD distances come out as plausible floats, across
+the whole 17-file dataset.
+
+**Round 2 - identified all 9 previously-unnamed header offsets** (shadow
+mesh, occlusion mesh, normal-recalc, blend shapes, per-bone AABB, unknown
+floats, bone/blend-shape name-remaps) and added two new instances:
+`bone_name_remap` and `blend_shape_name_remap` (the counterparts to
+`material_name_remap`, at their own offsets/counts), plus
+`occlusion_mesh_group`.
+
+**This corrects Round 1's characterization of the failing occlusion mesh
+(`ea077b0c68d5007d`)**: it does *not* lack real geometry. It has no *main*
+model tree (`header.offset_data == 0`), but a distinct
+`header.offset_occlusion_mesh_group` points to its own standalone LOD-group
+tree - for this file, verified as 1 mesh group / 1 mesh, real geometry.
+"Buffers-only, no mesh-group tree" was wrong; "no *main* mesh-group tree,
+but a real occlusion-specific one" is correct.
+
+Also verified `material_name_remap`/`bone_name_remap` resolve to real,
+sane strings for every file with materials/bones (e.g. `pl0000_Skin_Mat`,
+`em1000_Body_Mat`, bone names like `root`/`COG`/`spine_2`/`hips`) - this
+wasn't previously checked at all.
+
+`blend_shape_name_remap` is implemented per RE-Mesh-Editor's identified
+offset/count formula but **unverified** - every file in the current
+dataset has `offset_blend_shape_name_remap == 0`, including a
+`pl0001_blend.mesh` file that looked like a plausible candidate by name.
+Left as a known gap rather than fabricating verification.
+
+**Not modeled**: `offset_shadow_mesh_group`, `offset_normal_recalc`,
+`offset_blend_shapes`, `offset_bone_aabb`, `offset_floats` are identified
+(named, commented) but their pointed-to struct layouts aren't - only
+partial/uncertain layouts were available even from RE-Mesh-Editor. Left as
+bare `u8` offsets rather than guessing.
+
+**`mesh.normals`'s `repeat-expr: 100` FIXME**: resolved conceptually (real
+count comes from the *next* sibling submesh's `pos_vertex_buffer`, or
+`mesh_group.num_vertices` for a group's last submesh) but **not fixable in
+the `.ksy` itself** - Kaitai's Python codegen doesn't correctly support
+`_index`/sibling look-ups from a lazily-evaluated instance on a repeated
+type (confirmed with a minimal reproduction: it emits a reference to a
+loop variable that's out of scope at property-access time, raising
+`NameError`). Real code already doesn't depend on this field: it derives
+per-submesh vertex count from unique index-buffer values instead
+(`albam/engines/reng/mesh.py::build_blender_mesh`). Removed as dead/
+unfixable rather than left with a wrong hardcoded value.
+
+**`primitive_accessor.primitive_type`** TODO enum was wrong/incomplete
+(guessed 4 values: POSITION/NORMAL/TEXCOORD/JOINT_WEIGHT). Real values (8,
+from RE-Mesh-Editor's own enum): `0 position, 1 nor_tan (packed normal+
+tangent, not normal alone), 2 uv, 3 uv2 (there are 2 separate UV-channel
+types, not one generic TEXCOORD), 4 weight, 5 color, 6 sf6_unknown, 7
+extra_weight`. Confirmed against the dataset: every accessor's `size`
+(stride) matches the documented byte layout exactly - `position`=12
+(3xf32), `nor_tan`=8, `uv`/`uv2`=4, `weight`=16 - across all 16 files that
+have them.
+
+**`bone` fields**: `parent_idx` and 4 of its `unk_02` sub-fields
+(`sibling_idx`, `child_idx`, `symmetric_idx`, `use_secondary_weight`) are
+signed, using `-1` as a "none" sentinel (e.g. root bones have no parent) -
+were unsigned, reading as `65535`.
+
+**Naming cleanup**: `model`/`model_offset` types and `model_offsets`
+field renamed to `lod_group`/`lod_group_offset`/`lod_group_offsets` (a
+"model" in the RE Engine sense is the whole mesh; each of these is one LOD
+level). `test_name` renamed to `name_offset`, replacing a dead type of the
+same name that was defined but never referenced. `mesh_group_test`
+renamed to `mesh_group_offset`.

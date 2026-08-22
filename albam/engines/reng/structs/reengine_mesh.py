@@ -3,26 +3,43 @@
 
 import kaitaistruct
 from kaitaistruct import ReadWriteKaitaiStruct, KaitaiStream, BytesIO
+from enum import IntEnum
 
 
 if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class ReengineMesh(ReadWriteKaitaiStruct):
+
+    class PrimitiveType(IntEnum):
+        position = 0
+        nor_tan = 1
+        uv = 2
+        uv2 = 3
+        weight = 4
+        color = 5
+        sf6_unknown_vertex_data_type = 6
+        extra_weight = 7
     def __init__(self, _io=None, _parent=None, _root=None):
         super(ReengineMesh, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self._should_write_blend_shape_name_remap = False
+        self.blend_shape_name_remap__enabled = True
+        self._should_write_bone_name_remap = False
+        self.bone_name_remap__enabled = True
         self._should_write_bones_header = False
         self.bones_header__enabled = True
         self._should_write_buffers_data = False
         self.buffers_data__enabled = True
-        self._should_write_id_to_names_remap = False
-        self.id_to_names_remap__enabled = True
+        self._should_write_material_name_remap = False
+        self.material_name_remap__enabled = True
         self._should_write_model_info = False
         self.model_info__enabled = True
         self._should_write_named_nodes = False
         self.named_nodes__enabled = True
+        self._should_write_occlusion_mesh_group = False
+        self.occlusion_mesh_group__enabled = True
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -39,6 +56,20 @@ class ReengineMesh(ReadWriteKaitaiStruct):
     def _fetch_instances(self):
         pass
         self.header._fetch_instances()
+        _ = self.blend_shape_name_remap
+        if hasattr(self, '_m_blend_shape_name_remap'):
+            pass
+            for i in range(len(self._m_blend_shape_name_remap)):
+                pass
+
+
+        _ = self.bone_name_remap
+        if hasattr(self, '_m_bone_name_remap'):
+            pass
+            for i in range(len(self._m_bone_name_remap)):
+                pass
+
+
         _ = self.bones_header
         if hasattr(self, '_m_bones_header'):
             pass
@@ -49,10 +80,10 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             pass
             self._m_buffers_data._fetch_instances()
 
-        _ = self.id_to_names_remap
-        if hasattr(self, '_m_id_to_names_remap'):
+        _ = self.material_name_remap
+        if hasattr(self, '_m_material_name_remap'):
             pass
-            for i in range(len(self._m_id_to_names_remap)):
+            for i in range(len(self._m_material_name_remap)):
                 pass
 
 
@@ -69,15 +100,23 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                 self._m_named_nodes[i]._fetch_instances()
 
 
+        _ = self.occlusion_mesh_group
+        if hasattr(self, '_m_occlusion_mesh_group'):
+            pass
+            self._m_occlusion_mesh_group._fetch_instances()
+
 
 
     def _write__seq(self, io=None):
         super(ReengineMesh, self)._write__seq(io)
+        self._should_write_blend_shape_name_remap = self.blend_shape_name_remap__enabled
+        self._should_write_bone_name_remap = self.bone_name_remap__enabled
         self._should_write_bones_header = self.bones_header__enabled
         self._should_write_buffers_data = self.buffers_data__enabled
-        self._should_write_id_to_names_remap = self.id_to_names_remap__enabled
+        self._should_write_material_name_remap = self.material_name_remap__enabled
         self._should_write_model_info = self.model_info__enabled
         self._should_write_named_nodes = self.named_nodes__enabled
+        self._should_write_occlusion_mesh_group = self.occlusion_mesh_group__enabled
         self._io.write_bytes(self.id_magic)
         self._io.write_u4le(self.version)
         self._io.write_u4le(self.file_size)
@@ -94,6 +133,24 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"header", self._root, self.header._root)
         if self.header._parent != self:
             raise kaitaistruct.ConsistencyError(u"header", self, self.header._parent)
+        if self.blend_shape_name_remap__enabled:
+            pass
+            if self.header.offset_blend_shape_name_remap != 0:
+                pass
+                for i in range(len(self._m_blend_shape_name_remap)):
+                    pass
+
+
+
+        if self.bone_name_remap__enabled:
+            pass
+            if  ((self.header.offset_bone_name_remap != 0) and (self.header.offset_bones != 0)) :
+                pass
+                for i in range(len(self._m_bone_name_remap)):
+                    pass
+
+
+
         if self.bones_header__enabled:
             pass
             if self.header.offset_bones != 0:
@@ -111,11 +168,11 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             if self._m_buffers_data._parent != self:
                 raise kaitaistruct.ConsistencyError(u"buffers_data", self, self._m_buffers_data._parent)
 
-        if self.id_to_names_remap__enabled:
+        if self.material_name_remap__enabled:
             pass
-            if  ((self.header.offset_test_remap != 0) and (self.header.offset_data != 0)) :
+            if  ((self.header.offset_material_name_remap != 0) and (self.header.offset_data != 0)) :
                 pass
-                for i in range(len(self._m_id_to_names_remap)):
+                for i in range(len(self._m_material_name_remap)):
                     pass
 
 
@@ -140,6 +197,16 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"named_nodes", self._root, self._m_named_nodes[i]._root)
                 if self._m_named_nodes[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"named_nodes", self, self._m_named_nodes[i]._parent)
+
+
+        if self.occlusion_mesh_group__enabled:
+            pass
+            if self.header.offset_occlusion_mesh_group != 0:
+                pass
+                if self._m_occlusion_mesh_group._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"occlusion_mesh_group", self._root, self._m_occlusion_mesh_group._root)
+                if self._m_occlusion_mesh_group._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"occlusion_mesh_group", self, self._m_occlusion_mesh_group._parent)
 
 
         self._dirty = False
@@ -578,21 +645,21 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unk1 = self._io.read_u2le()
+            self.content_flags = self._io.read_u2le()
             self.num_named_nodes = self._io.read_u2le()
-            self.reserved_02 = self._io.read_u4le()
+            self.unk_01 = self._io.read_u4le()
             self.offset_data = self._io.read_u8le()
-            self.offset_unk_1 = self._io.read_u8le()
-            self.offset_unk_2 = self._io.read_u8le()
+            self.offset_shadow_mesh_group = self._io.read_u8le()
+            self.offset_occlusion_mesh_group = self._io.read_u8le()
             self.offset_bones = self._io.read_u8le()
-            self.offset_unk_3 = self._io.read_u8le()
-            self.offset_unk_4 = self._io.read_u8le()
-            self.offset_unk_5 = self._io.read_u8le()
+            self.offset_normal_recalc = self._io.read_u8le()
+            self.offset_blend_shapes = self._io.read_u8le()
+            self.offset_bone_aabb = self._io.read_u8le()
             self.offset_buffers_header = self._io.read_u8le()
-            self.offset_unk_6 = self._io.read_u8le()
-            self.offset_test_remap = self._io.read_u8le()
-            self.offset_unk_8 = self._io.read_u8le()
-            self.offset_unk_9 = self._io.read_u8le()
+            self.offset_floats = self._io.read_u8le()
+            self.offset_material_name_remap = self._io.read_u8le()
+            self.offset_bone_name_remap = self._io.read_u8le()
+            self.offset_blend_shape_name_remap = self._io.read_u8le()
             self.offset_names = self._io.read_u8le()
             self._dirty = False
 
@@ -603,26 +670,155 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(ReengineMesh.Header, self)._write__seq(io)
-            self._io.write_u2le(self.unk1)
+            self._io.write_u2le(self.content_flags)
             self._io.write_u2le(self.num_named_nodes)
-            self._io.write_u4le(self.reserved_02)
+            self._io.write_u4le(self.unk_01)
             self._io.write_u8le(self.offset_data)
-            self._io.write_u8le(self.offset_unk_1)
-            self._io.write_u8le(self.offset_unk_2)
+            self._io.write_u8le(self.offset_shadow_mesh_group)
+            self._io.write_u8le(self.offset_occlusion_mesh_group)
             self._io.write_u8le(self.offset_bones)
-            self._io.write_u8le(self.offset_unk_3)
-            self._io.write_u8le(self.offset_unk_4)
-            self._io.write_u8le(self.offset_unk_5)
+            self._io.write_u8le(self.offset_normal_recalc)
+            self._io.write_u8le(self.offset_blend_shapes)
+            self._io.write_u8le(self.offset_bone_aabb)
             self._io.write_u8le(self.offset_buffers_header)
-            self._io.write_u8le(self.offset_unk_6)
-            self._io.write_u8le(self.offset_test_remap)
-            self._io.write_u8le(self.offset_unk_8)
-            self._io.write_u8le(self.offset_unk_9)
+            self._io.write_u8le(self.offset_floats)
+            self._io.write_u8le(self.offset_material_name_remap)
+            self._io.write_u8le(self.offset_bone_name_remap)
+            self._io.write_u8le(self.offset_blend_shape_name_remap)
             self._io.write_u8le(self.offset_names)
 
 
         def _check(self):
             self._dirty = False
+
+
+    class LodGroup(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.LodGroup, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.num_mesh_groups = self._io.read_u1()
+            self.vertex_format = self._io.read_u1()
+            self.reserved_01 = self._io.read_u2le()
+            self.distance = self._io.read_f4le()
+            self.offset_main_mesh_header = self._io.read_u8le()
+            self.mesh_groups = []
+            for i in range(self.num_mesh_groups):
+                _t_mesh_groups = ReengineMesh.MeshGroupOffset(self._io, self, self._root)
+                try:
+                    _t_mesh_groups._read()
+                finally:
+                    self.mesh_groups.append(_t_mesh_groups)
+
+            self.padding = self._io.read_bytes((16 - self._io.pos() % 16) % 16)
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.mesh_groups)):
+                pass
+                self.mesh_groups[i]._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.LodGroup, self)._write__seq(io)
+            self._io.write_u1(self.num_mesh_groups)
+            self._io.write_u1(self.vertex_format)
+            self._io.write_u2le(self.reserved_01)
+            self._io.write_f4le(self.distance)
+            self._io.write_u8le(self.offset_main_mesh_header)
+            for i in range(len(self.mesh_groups)):
+                pass
+                self.mesh_groups[i]._write__seq(self._io)
+
+            if len(self.padding) != (16 - self._io.pos() % 16) % 16:
+                raise kaitaistruct.ConsistencyError(u"padding", (16 - self._io.pos() % 16) % 16, len(self.padding))
+            self._io.write_bytes(self.padding)
+
+
+        def _check(self):
+            if len(self.mesh_groups) != self.num_mesh_groups:
+                raise kaitaistruct.ConsistencyError(u"mesh_groups", self.num_mesh_groups, len(self.mesh_groups))
+            for i in range(len(self.mesh_groups)):
+                pass
+                if self.mesh_groups[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"mesh_groups", self._root, self.mesh_groups[i]._root)
+                if self.mesh_groups[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"mesh_groups", self, self.mesh_groups[i]._parent)
+
+            self._dirty = False
+
+
+    class LodGroupOffset(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.LodGroupOffset, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._should_write_lod_group = False
+            self.lod_group__enabled = True
+
+        def _read(self):
+            self.offset = self._io.read_u8le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.lod_group
+            if hasattr(self, '_m_lod_group'):
+                pass
+                self._m_lod_group._fetch_instances()
+
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.LodGroupOffset, self)._write__seq(io)
+            self._should_write_lod_group = self.lod_group__enabled
+            self._io.write_u8le(self.offset)
+
+
+        def _check(self):
+            if self.lod_group__enabled:
+                pass
+                if self._m_lod_group._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"lod_group", self._root, self._m_lod_group._root)
+                if self._m_lod_group._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"lod_group", self, self._m_lod_group._parent)
+
+            self._dirty = False
+
+        @property
+        def lod_group(self):
+            if self._should_write_lod_group:
+                self._write_lod_group()
+            if hasattr(self, '_m_lod_group'):
+                return self._m_lod_group
+
+            if not self.lod_group__enabled:
+                return None
+
+            _pos = self._io.pos()
+            self._io.seek(self.offset)
+            self._m_lod_group = ReengineMesh.LodGroup(self._io, self, self._root)
+            self._m_lod_group._read()
+            self._io.seek(_pos)
+            return getattr(self, '_m_lod_group', None)
+
+        @lod_group.setter
+        def lod_group(self, v):
+            self._dirty = True
+            self._m_lod_group = v
+
+        def _write_lod_group(self):
+            self._should_write_lod_group = False
+            _pos = self._io.pos()
+            self._io.seek(self.offset)
+            self._m_lod_group._write__seq(self._io)
+            self._io.seek(_pos)
 
 
     class Matrix4x4(ReadWriteKaitaiStruct):
@@ -684,8 +880,6 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             super(ReengineMesh.Mesh, self).__init__(_io)
             self._parent = _parent
             self._root = _root
-            self._should_write_normals = False
-            self.normals__enabled = True
 
         def _read(self):
             self.material_index = self._io.read_u1()
@@ -707,18 +901,10 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             if self._root.version != 386270720:
                 pass
 
-            _ = self.normals
-            if hasattr(self, '_m_normals'):
-                pass
-                for i in range(len(self._m_normals)):
-                    pass
-
-
 
 
         def _write__seq(self, io=None):
             super(ReengineMesh.Mesh, self)._write__seq(io)
-            self._should_write_normals = self.normals__enabled
             self._io.write_u1(self.material_index)
             self._io.write_u1(self.is_quad)
             self._io.write_u1(self.vertex_buffer_index)
@@ -736,49 +922,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             if self._root.version != 386270720:
                 pass
 
-            if self.normals__enabled:
-                pass
-                if len(self._m_normals) != 100:
-                    raise kaitaistruct.ConsistencyError(u"normals", 100, len(self._m_normals))
-                for i in range(len(self._m_normals)):
-                    pass
-
-
             self._dirty = False
-
-        @property
-        def normals(self):
-            if self._should_write_normals:
-                self._write_normals()
-            if hasattr(self, '_m_normals'):
-                return self._m_normals
-
-            if not self.normals__enabled:
-                return None
-
-            _pos = self._io.pos()
-            self._io.seek((self._root.buffers_data.offset_vertex_buffer + self._root.buffers_data.primitive_accessors[1].offset) + self._root.buffers_data.primitive_accessors[1].size * self.pos_vertex_buffer)
-            self._m_normals = []
-            for i in range(100):
-                self._m_normals.append(self._io.read_s1())
-
-            self._io.seek(_pos)
-            return getattr(self, '_m_normals', None)
-
-        @normals.setter
-        def normals(self, v):
-            self._dirty = True
-            self._m_normals = v
-
-        def _write_normals(self):
-            self._should_write_normals = False
-            _pos = self._io.pos()
-            self._io.seek((self._root.buffers_data.offset_vertex_buffer + self._root.buffers_data.primitive_accessors[1].offset) + self._root.buffers_data.primitive_accessors[1].size * self.pos_vertex_buffer)
-            for i in range(len(self._m_normals)):
-                pass
-                self._io.write_s1(self._m_normals[i])
-
-            self._io.seek(_pos)
 
 
     class MeshGroup(ReadWriteKaitaiStruct):
@@ -840,9 +984,9 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
-    class MeshGroupTest(ReadWriteKaitaiStruct):
+    class MeshGroupOffset(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
-            super(ReengineMesh.MeshGroupTest, self).__init__(_io)
+            super(ReengineMesh.MeshGroupOffset, self).__init__(_io)
             self._parent = _parent
             self._root = _root
             self._should_write_mesh_group = False
@@ -863,7 +1007,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(ReengineMesh.MeshGroupTest, self)._write__seq(io)
+            super(ReengineMesh.MeshGroupOffset, self)._write__seq(io)
             self._should_write_mesh_group = self.mesh_group__enabled
             self._io.write_u8le(self.offset)
 
@@ -908,77 +1052,16 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._io.seek(_pos)
 
 
-    class Model(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(ReengineMesh.Model, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.num_mesh_groups = self._io.read_u1()
-            self.vertex_format = self._io.read_u1()
-            self.reserved_01 = self._io.read_u2le()
-            self.distance = self._io.read_f4le()
-            self.offset_main_mesh_header = self._io.read_u8le()
-            self.mesh_groups = []
-            for i in range(self.num_mesh_groups):
-                _t_mesh_groups = ReengineMesh.MeshGroupTest(self._io, self, self._root)
-                try:
-                    _t_mesh_groups._read()
-                finally:
-                    self.mesh_groups.append(_t_mesh_groups)
-
-            self.padding = self._io.read_bytes((16 - self._io.pos() % 16) % 16)
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.mesh_groups)):
-                pass
-                self.mesh_groups[i]._fetch_instances()
-
-
-
-        def _write__seq(self, io=None):
-            super(ReengineMesh.Model, self)._write__seq(io)
-            self._io.write_u1(self.num_mesh_groups)
-            self._io.write_u1(self.vertex_format)
-            self._io.write_u2le(self.reserved_01)
-            self._io.write_f4le(self.distance)
-            self._io.write_u8le(self.offset_main_mesh_header)
-            for i in range(len(self.mesh_groups)):
-                pass
-                self.mesh_groups[i]._write__seq(self._io)
-
-            if len(self.padding) != (16 - self._io.pos() % 16) % 16:
-                raise kaitaistruct.ConsistencyError(u"padding", (16 - self._io.pos() % 16) % 16, len(self.padding))
-            self._io.write_bytes(self.padding)
-
-
-        def _check(self):
-            if len(self.mesh_groups) != self.num_mesh_groups:
-                raise kaitaistruct.ConsistencyError(u"mesh_groups", self.num_mesh_groups, len(self.mesh_groups))
-            for i in range(len(self.mesh_groups)):
-                pass
-                if self.mesh_groups[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"mesh_groups", self._root, self.mesh_groups[i]._root)
-                if self.mesh_groups[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"mesh_groups", self, self.mesh_groups[i]._parent)
-
-            self._dirty = False
-
-
     class ModelInfo(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(ReengineMesh.ModelInfo, self).__init__(_io)
             self._parent = _parent
             self._root = _root
-            self._should_write_model_offsets = False
-            self.model_offsets__enabled = True
+            self._should_write_lod_group_offsets = False
+            self.lod_group_offsets__enabled = True
 
         def _read(self):
-            self.len_offsets_models = self._io.read_u1()
+            self.num_lod_groups = self._io.read_u1()
             self.num_materials = self._io.read_u1()
             self.num_uv_layers = self._io.read_u1()
             self.num_skin_weights = self._io.read_u1()
@@ -993,7 +1076,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             for i in range(12):
                 self.box.append(self._io.read_f4le())
 
-            self.offset_lod_info = self._io.read_u8le()
+            self.offset_lod_group_list = self._io.read_u8le()
             self._dirty = False
 
 
@@ -1005,20 +1088,20 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             for i in range(len(self.box)):
                 pass
 
-            _ = self.model_offsets
-            if hasattr(self, '_m_model_offsets'):
+            _ = self.lod_group_offsets
+            if hasattr(self, '_m_lod_group_offsets'):
                 pass
-                for i in range(len(self._m_model_offsets)):
+                for i in range(len(self._m_lod_group_offsets)):
                     pass
-                    self._m_model_offsets[i]._fetch_instances()
+                    self._m_lod_group_offsets[i]._fetch_instances()
 
 
 
 
         def _write__seq(self, io=None):
             super(ReengineMesh.ModelInfo, self)._write__seq(io)
-            self._should_write_model_offsets = self.model_offsets__enabled
-            self._io.write_u1(self.len_offsets_models)
+            self._should_write_lod_group_offsets = self.lod_group_offsets__enabled
+            self._io.write_u1(self.num_lod_groups)
             self._io.write_u1(self.num_materials)
             self._io.write_u1(self.num_uv_layers)
             self._io.write_u1(self.num_skin_weights)
@@ -1033,7 +1116,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_f4le(self.box[i])
 
-            self._io.write_u8le(self.offset_lod_info)
+            self._io.write_u8le(self.offset_lod_group_list)
 
 
         def _check(self):
@@ -1045,223 +1128,62 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             for i in range(len(self.box)):
                 pass
 
-            if self.model_offsets__enabled:
+            if self.lod_group_offsets__enabled:
                 pass
-                if len(self._m_model_offsets) != self.len_offsets_models:
-                    raise kaitaistruct.ConsistencyError(u"model_offsets", self.len_offsets_models, len(self._m_model_offsets))
-                for i in range(len(self._m_model_offsets)):
+                if len(self._m_lod_group_offsets) != self.num_lod_groups:
+                    raise kaitaistruct.ConsistencyError(u"lod_group_offsets", self.num_lod_groups, len(self._m_lod_group_offsets))
+                for i in range(len(self._m_lod_group_offsets)):
                     pass
-                    if self._m_model_offsets[i]._root != self._root:
-                        raise kaitaistruct.ConsistencyError(u"model_offsets", self._root, self._m_model_offsets[i]._root)
-                    if self._m_model_offsets[i]._parent != self:
-                        raise kaitaistruct.ConsistencyError(u"model_offsets", self, self._m_model_offsets[i]._parent)
+                    if self._m_lod_group_offsets[i]._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"lod_group_offsets", self._root, self._m_lod_group_offsets[i]._root)
+                    if self._m_lod_group_offsets[i]._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"lod_group_offsets", self, self._m_lod_group_offsets[i]._parent)
 
 
             self._dirty = False
 
         @property
-        def model_offsets(self):
-            if self._should_write_model_offsets:
-                self._write_model_offsets()
-            if hasattr(self, '_m_model_offsets'):
-                return self._m_model_offsets
+        def lod_group_offsets(self):
+            if self._should_write_lod_group_offsets:
+                self._write_lod_group_offsets()
+            if hasattr(self, '_m_lod_group_offsets'):
+                return self._m_lod_group_offsets
 
-            if not self.model_offsets__enabled:
+            if not self.lod_group_offsets__enabled:
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self.offset_lod_info)
-            self._m_model_offsets = []
-            for i in range(self.len_offsets_models):
-                _t__m_model_offsets = ReengineMesh.ModelOffset(self._io, self, self._root)
+            self._io.seek(self.offset_lod_group_list)
+            self._m_lod_group_offsets = []
+            for i in range(self.num_lod_groups):
+                _t__m_lod_group_offsets = ReengineMesh.LodGroupOffset(self._io, self, self._root)
                 try:
-                    _t__m_model_offsets._read()
+                    _t__m_lod_group_offsets._read()
                 finally:
-                    self._m_model_offsets.append(_t__m_model_offsets)
+                    self._m_lod_group_offsets.append(_t__m_lod_group_offsets)
 
             self._io.seek(_pos)
-            return getattr(self, '_m_model_offsets', None)
+            return getattr(self, '_m_lod_group_offsets', None)
 
-        @model_offsets.setter
-        def model_offsets(self, v):
+        @lod_group_offsets.setter
+        def lod_group_offsets(self, v):
             self._dirty = True
-            self._m_model_offsets = v
+            self._m_lod_group_offsets = v
 
-        def _write_model_offsets(self):
-            self._should_write_model_offsets = False
+        def _write_lod_group_offsets(self):
+            self._should_write_lod_group_offsets = False
             _pos = self._io.pos()
-            self._io.seek(self.offset_lod_info)
-            for i in range(len(self._m_model_offsets)):
+            self._io.seek(self.offset_lod_group_list)
+            for i in range(len(self._m_lod_group_offsets)):
                 pass
-                self._m_model_offsets[i]._write__seq(self._io)
+                self._m_lod_group_offsets[i]._write__seq(self._io)
 
-            self._io.seek(_pos)
-
-
-    class ModelOffset(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(ReengineMesh.ModelOffset, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-            self._should_write_model = False
-            self.model__enabled = True
-
-        def _read(self):
-            self.offset = self._io.read_u8le()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            _ = self.model
-            if hasattr(self, '_m_model'):
-                pass
-                self._m_model._fetch_instances()
-
-
-
-        def _write__seq(self, io=None):
-            super(ReengineMesh.ModelOffset, self)._write__seq(io)
-            self._should_write_model = self.model__enabled
-            self._io.write_u8le(self.offset)
-
-
-        def _check(self):
-            if self.model__enabled:
-                pass
-                if self._m_model._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"model", self._root, self._m_model._root)
-                if self._m_model._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"model", self, self._m_model._parent)
-
-            self._dirty = False
-
-        @property
-        def model(self):
-            if self._should_write_model:
-                self._write_model()
-            if hasattr(self, '_m_model'):
-                return self._m_model
-
-            if not self.model__enabled:
-                return None
-
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            self._m_model = ReengineMesh.Model(self._io, self, self._root)
-            self._m_model._read()
-            self._io.seek(_pos)
-            return getattr(self, '_m_model', None)
-
-        @model.setter
-        def model(self, v):
-            self._dirty = True
-            self._m_model = v
-
-        def _write_model(self):
-            self._should_write_model = False
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            self._m_model._write__seq(self._io)
             self._io.seek(_pos)
 
 
     class NameOffset(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(ReengineMesh.NameOffset, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-            self._should_write_name = False
-            self.name__enabled = True
-
-        def _read(self):
-            self.offset = self._io.read_u8le()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            _ = self.name
-            if hasattr(self, '_m_name'):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(ReengineMesh.NameOffset, self)._write__seq(io)
-            self._should_write_name = self.name__enabled
-            self._io.write_u8le(self.offset)
-
-
-        def _check(self):
-            if self.name__enabled:
-                pass
-                if KaitaiStream.byte_array_index_of((self._m_name).encode(u"ASCII"), 0) != -1:
-                    raise kaitaistruct.ConsistencyError(u"name", -1, KaitaiStream.byte_array_index_of((self._m_name).encode(u"ASCII"), 0))
-
-            self._dirty = False
-
-        @property
-        def name(self):
-            if self._should_write_name:
-                self._write_name()
-            if hasattr(self, '_m_name'):
-                return self._m_name
-
-            if not self.name__enabled:
-                return None
-
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
-            self._io.seek(_pos)
-            return getattr(self, '_m_name', None)
-
-        @name.setter
-        def name(self, v):
-            self._dirty = True
-            self._m_name = v
-
-        def _write_name(self):
-            self._should_write_name = False
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            self._io.write_bytes((self._m_name).encode(u"ASCII"))
-            self._io.write_u1(0)
-            self._io.seek(_pos)
-
-
-    class PrimitiveAccessor(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(ReengineMesh.PrimitiveAccessor, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.primitive_type = self._io.read_u2le()
-            self.size = self._io.read_u2le()
-            self.offset = self._io.read_u4le()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(ReengineMesh.PrimitiveAccessor, self)._write__seq(io)
-            self._io.write_u2le(self.primitive_type)
-            self._io.write_u2le(self.size)
-            self._io.write_u4le(self.offset)
-
-
-        def _check(self):
-            self._dirty = False
-
-
-    class TestName(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(ReengineMesh.TestName, self).__init__(_io)
             self._parent = _parent
             self._root = _root
             self._should_write_value = False
@@ -1281,7 +1203,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
 
         def _write__seq(self, io=None):
-            super(ReengineMesh.TestName, self)._write__seq(io)
+            super(ReengineMesh.NameOffset, self)._write__seq(io)
             self._should_write_value = self.value__enabled
             self._io.write_u8le(self.offset)
 
@@ -1324,6 +1246,34 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._io.seek(_pos)
 
 
+    class PrimitiveAccessor(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(ReengineMesh.PrimitiveAccessor, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.primitive_type = KaitaiStream.resolve_enum(ReengineMesh.PrimitiveType, self._io.read_u2le())
+            self.size = self._io.read_u2le()
+            self.offset = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(ReengineMesh.PrimitiveAccessor, self)._write__seq(io)
+            self._io.write_u2le(int(self.primitive_type))
+            self._io.write_u2le(self.size)
+            self._io.write_u4le(self.offset)
+
+
+        def _check(self):
+            self._dirty = False
+
+
     class Vec4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(ReengineMesh.Vec4, self).__init__(_io)
@@ -1352,6 +1302,90 @@ class ReengineMesh(ReadWriteKaitaiStruct):
 
         def _check(self):
             self._dirty = False
+
+
+    @property
+    def blend_shape_name_remap(self):
+        if self._should_write_blend_shape_name_remap:
+            self._write_blend_shape_name_remap()
+        if hasattr(self, '_m_blend_shape_name_remap'):
+            return self._m_blend_shape_name_remap
+
+        if not self.blend_shape_name_remap__enabled:
+            return None
+
+        if self.header.offset_blend_shape_name_remap != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_blend_shape_name_remap)
+            self._m_blend_shape_name_remap = []
+            for i in range((self.header.num_named_nodes - (self.model_info.num_materials if self.header.offset_data != 0 else 0)) - (self.bones_header.num_bones if self.header.offset_bones != 0 else 0)):
+                self._m_blend_shape_name_remap.append(self._io.read_u2le())
+
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_blend_shape_name_remap', None)
+
+    @blend_shape_name_remap.setter
+    def blend_shape_name_remap(self, v):
+        self._dirty = True
+        self._m_blend_shape_name_remap = v
+
+    def _write_blend_shape_name_remap(self):
+        self._should_write_blend_shape_name_remap = False
+        if self.header.offset_blend_shape_name_remap != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_blend_shape_name_remap)
+            if len(self._m_blend_shape_name_remap) != (self.header.num_named_nodes - (self.model_info.num_materials if self.header.offset_data != 0 else 0)) - (self.bones_header.num_bones if self.header.offset_bones != 0 else 0):
+                raise kaitaistruct.ConsistencyError(u"blend_shape_name_remap", (self.header.num_named_nodes - (self.model_info.num_materials if self.header.offset_data != 0 else 0)) - (self.bones_header.num_bones if self.header.offset_bones != 0 else 0), len(self._m_blend_shape_name_remap))
+            for i in range(len(self._m_blend_shape_name_remap)):
+                pass
+                self._io.write_u2le(self._m_blend_shape_name_remap[i])
+
+            self._io.seek(_pos)
+
+
+    @property
+    def bone_name_remap(self):
+        if self._should_write_bone_name_remap:
+            self._write_bone_name_remap()
+        if hasattr(self, '_m_bone_name_remap'):
+            return self._m_bone_name_remap
+
+        if not self.bone_name_remap__enabled:
+            return None
+
+        if  ((self.header.offset_bone_name_remap != 0) and (self.header.offset_bones != 0)) :
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_bone_name_remap)
+            self._m_bone_name_remap = []
+            for i in range(self.bones_header.num_bones):
+                self._m_bone_name_remap.append(self._io.read_u2le())
+
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_bone_name_remap', None)
+
+    @bone_name_remap.setter
+    def bone_name_remap(self, v):
+        self._dirty = True
+        self._m_bone_name_remap = v
+
+    def _write_bone_name_remap(self):
+        self._should_write_bone_name_remap = False
+        if  ((self.header.offset_bone_name_remap != 0) and (self.header.offset_bones != 0)) :
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_bone_name_remap)
+            if len(self._m_bone_name_remap) != self.bones_header.num_bones:
+                raise kaitaistruct.ConsistencyError(u"bone_name_remap", self.bones_header.num_bones, len(self._m_bone_name_remap))
+            for i in range(len(self._m_bone_name_remap)):
+                pass
+                self._io.write_u2le(self._m_bone_name_remap[i])
+
+            self._io.seek(_pos)
 
 
     @property
@@ -1419,43 +1453,43 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         self._io.seek(_pos)
 
     @property
-    def id_to_names_remap(self):
-        if self._should_write_id_to_names_remap:
-            self._write_id_to_names_remap()
-        if hasattr(self, '_m_id_to_names_remap'):
-            return self._m_id_to_names_remap
+    def material_name_remap(self):
+        if self._should_write_material_name_remap:
+            self._write_material_name_remap()
+        if hasattr(self, '_m_material_name_remap'):
+            return self._m_material_name_remap
 
-        if not self.id_to_names_remap__enabled:
+        if not self.material_name_remap__enabled:
             return None
 
-        if  ((self.header.offset_test_remap != 0) and (self.header.offset_data != 0)) :
+        if  ((self.header.offset_material_name_remap != 0) and (self.header.offset_data != 0)) :
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_test_remap)
-            self._m_id_to_names_remap = []
+            self._io.seek(self.header.offset_material_name_remap)
+            self._m_material_name_remap = []
             for i in range(self.model_info.num_materials):
-                self._m_id_to_names_remap.append(self._io.read_u2le())
+                self._m_material_name_remap.append(self._io.read_u2le())
 
             self._io.seek(_pos)
 
-        return getattr(self, '_m_id_to_names_remap', None)
+        return getattr(self, '_m_material_name_remap', None)
 
-    @id_to_names_remap.setter
-    def id_to_names_remap(self, v):
+    @material_name_remap.setter
+    def material_name_remap(self, v):
         self._dirty = True
-        self._m_id_to_names_remap = v
+        self._m_material_name_remap = v
 
-    def _write_id_to_names_remap(self):
-        self._should_write_id_to_names_remap = False
-        if  ((self.header.offset_test_remap != 0) and (self.header.offset_data != 0)) :
+    def _write_material_name_remap(self):
+        self._should_write_material_name_remap = False
+        if  ((self.header.offset_material_name_remap != 0) and (self.header.offset_data != 0)) :
             pass
             _pos = self._io.pos()
-            self._io.seek(self.header.offset_test_remap)
-            if len(self._m_id_to_names_remap) != self.model_info.num_materials:
-                raise kaitaistruct.ConsistencyError(u"id_to_names_remap", self.model_info.num_materials, len(self._m_id_to_names_remap))
-            for i in range(len(self._m_id_to_names_remap)):
+            self._io.seek(self.header.offset_material_name_remap)
+            if len(self._m_material_name_remap) != self.model_info.num_materials:
+                raise kaitaistruct.ConsistencyError(u"material_name_remap", self.model_info.num_materials, len(self._m_material_name_remap))
+            for i in range(len(self._m_material_name_remap)):
                 pass
-                self._io.write_u2le(self._m_id_to_names_remap[i])
+                self._io.write_u2le(self._m_material_name_remap[i])
 
             self._io.seek(_pos)
 
@@ -1509,7 +1543,7 @@ class ReengineMesh(ReadWriteKaitaiStruct):
         self._io.seek(self.header.offset_names)
         self._m_named_nodes = []
         for i in range(self.header.num_named_nodes):
-            _t__m_named_nodes = ReengineMesh.TestName(self._io, self, self._root)
+            _t__m_named_nodes = ReengineMesh.NameOffset(self._io, self, self._root)
             try:
                 _t__m_named_nodes._read()
             finally:
@@ -1532,5 +1566,40 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self._m_named_nodes[i]._write__seq(self._io)
 
         self._io.seek(_pos)
+
+    @property
+    def occlusion_mesh_group(self):
+        if self._should_write_occlusion_mesh_group:
+            self._write_occlusion_mesh_group()
+        if hasattr(self, '_m_occlusion_mesh_group'):
+            return self._m_occlusion_mesh_group
+
+        if not self.occlusion_mesh_group__enabled:
+            return None
+
+        if self.header.offset_occlusion_mesh_group != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_occlusion_mesh_group)
+            self._m_occlusion_mesh_group = ReengineMesh.LodGroup(self._io, self, self._root)
+            self._m_occlusion_mesh_group._read()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_occlusion_mesh_group', None)
+
+    @occlusion_mesh_group.setter
+    def occlusion_mesh_group(self, v):
+        self._dirty = True
+        self._m_occlusion_mesh_group = v
+
+    def _write_occlusion_mesh_group(self):
+        self._should_write_occlusion_mesh_group = False
+        if self.header.offset_occlusion_mesh_group != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_occlusion_mesh_group)
+            self._m_occlusion_mesh_group._write__seq(self._io)
+            self._io.seek(_pos)
+
 
 
