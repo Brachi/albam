@@ -68,14 +68,26 @@ class SsgFS(FS):
         ssg = HexaneSsg(KaitaiStream(io.BytesIO(data)))
         ssg._read()
 
-        uncompressed = bytearray()
-        compressed_pos = 0
-        for chunk_size in ssg.chunk_sizes:
-            if not chunk_size:
-                continue
-            chunk = ssg.buffer_chunks[compressed_pos:compressed_pos + chunk_size]
-            uncompressed.extend(zlib.decompress(chunk))
-            compressed_pos += chunk_size
+        if ssg.chunk_sizes:
+            uncompressed = bytearray()
+            compressed_pos = 0
+            for chunk_size in ssg.chunk_sizes:
+                if not chunk_size:
+                    continue
+                chunk = ssg.buffer_chunks[compressed_pos:compressed_pos + chunk_size]
+                uncompressed.extend(zlib.decompress(chunk))
+                compressed_pos += chunk_size
+        else:
+            # No chunk table (size_chunks_info == 0, seen on some smaller
+            # .ssg) - buffer_chunks is stored raw/uncompressed in this
+            # case, not zlib-compressed
+            # at all. Confirmed by decoding a known entry's expected magic
+            # (b"FM6S") directly out of the raw bytes at its computed
+            # offset - zlib.decompress on the whole blob fails outright
+            # ("incorrect header check"), and the total uncompressed size
+            # every files_info entry needs matches size_chunks_buffer
+            # exactly, consistent with "no compression happened here".
+            uncompressed = ssg.buffer_chunks
 
         self._data = {}
         self._directory = MemoryFS()
