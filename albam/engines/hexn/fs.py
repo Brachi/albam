@@ -80,7 +80,7 @@ class SsgFS(FS):
         self.ssg_path = str(ssg_path)
         self._opener = opener or _local_opener
 
-        ssg = self._read_and_parse()
+        ssg = self._parse_header()
         self._sizes = {}
         self._offsets = {}
         self._directory = MemoryFS()
@@ -95,45 +95,62 @@ class SsgFS(FS):
 
         self._data = None  # populated lazily - see _ensure_decompressed()
 
-    def _read_and_parse(self):
+    def _open_and_parse(self):
+        """Open the archive and read everything up to (not including)
+        `buffer_chunks`, which is a lazily-computed Kaitai instance: it
+        only seeks/reads its own region of the stream when something
+        actually accesses `ssg.buffer_chunks`, and stays untouched
+        otherwise. Returns the still-open file handle along with the
+        parsed struct - the caller owns closing it, and must do so only
+        after it's done touching anything that isn't a plain seq field
+        (buffer_chunks itself, or `file_info.name`, also a lazy instance).
+        """
         f = self._opener(self.ssg_path)
+        ssg = HexaneSsg(KaitaiStream(f))
+        ssg._read()
+        return f, ssg
+
+    def _parse_header(self):
+        """Parse just the header + file table (names + sizes) - cheap even
+        for a large, heavily-compressed .ssg, since `buffer_chunks` (the
+        actual bulk of the archive) is never touched here."""
+        f, ssg = self._open_and_parse()
         try:
-            data = f.read()
+            for file_info in ssg.files_info:
+                file_info.name  # resolve now, while the stream is still open
         finally:
             f.close()
-        # `file_info.name` (below) is a lazily-computed Kaitai instance that
-        # re-seeks/reads the stream on first access, not during _read() -
-        # parse from an in-memory buffer rather than `f` itself, since `f`
-        # is closed by the time each entry's name gets resolved.
-        ssg = HexaneSsg(KaitaiStream(io.BytesIO(data)))
-        ssg._read()
         return ssg
 
     def _ensure_decompressed(self):
         if self._data is not None:
             return
 
-        ssg = self._read_and_parse()
-        if ssg.chunk_sizes:
-            uncompressed = bytearray()
-            compressed_pos = 0
-            for chunk_size in ssg.chunk_sizes:
-                if not chunk_size:
-                    continue
-                chunk = ssg.buffer_chunks[compressed_pos:compressed_pos + chunk_size]
-                uncompressed.extend(zlib.decompress(chunk))
-                compressed_pos += chunk_size
-        else:
-            # No chunk table (size_chunks_info == 0, seen on some smaller
-            # .ssg) - buffer_chunks is stored raw/uncompressed in this
-            # case, not zlib-compressed
-            # at all. Confirmed by decoding a known entry's expected magic
-            # (b"FM6S") directly out of the raw bytes at its computed
-            # offset - zlib.decompress on the whole blob fails outright
-            # ("incorrect header check"), and the total uncompressed size
-            # every files_info entry needs matches size_chunks_buffer
-            # exactly, consistent with "no compression happened here".
-            uncompressed = ssg.buffer_chunks
+        f, ssg = self._open_and_parse()
+        try:
+            buffer_chunks = ssg.buffer_chunks  # triggers the lazy seek+read
+            if ssg.chunk_sizes:
+                uncompressed = bytearray()
+                compressed_pos = 0
+                for chunk_size in ssg.chunk_sizes:
+                    if not chunk_size:
+                        continue
+                    chunk = buffer_chunks[compressed_pos:compressed_pos + chunk_size]
+                    uncompressed.extend(zlib.decompress(chunk))
+                    compressed_pos += chunk_size
+            else:
+                # No chunk table (size_chunks_info == 0, seen on some smaller
+                # .ssg) - buffer_chunks is stored raw/uncompressed in this
+                # case, not zlib-compressed
+                # at all. Confirmed by decoding a known entry's expected magic
+                # (b"FM6S") directly out of the raw bytes at its computed
+                # offset - zlib.decompress on the whole blob fails outright
+                # ("incorrect header check"), and the total uncompressed size
+                # every files_info entry needs matches size_chunks_buffer
+                # exactly, consistent with "no compression happened here".
+                uncompressed = buffer_chunks
+        finally:
+            f.close()
 
         self._data = {
             path: bytes(uncompressed[offset:offset + self._sizes[path]])
