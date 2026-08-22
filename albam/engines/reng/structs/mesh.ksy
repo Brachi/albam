@@ -162,6 +162,18 @@ types:
     instances:
       bones:
         {pos: offset_parent_bone, type: bone, repeat: expr, repeat-expr: num_bones}
+      # Were bare u8 offsets with no pointed-to data modeled at all - a
+      # byte-exact _read()/_write() round trip left both regions zeroed
+      # (nothing in the .ksy ever read them, so nothing ever wrote them
+      # back). Confirmed as num_bones matrix4x4 entries each by diffing a
+      # real file's round trip against itself: every mismatched byte fell
+      # exactly within [offset_matrix_1, offset_matrix_1 + num_bones*64)
+      # or the same span at offset_matrix_2, with plausible 4x4-matrix
+      # float content (diagonal 1.0s at 20-byte strides).
+      local_matrices:
+        {pos: offset_matrix_1, type: matrix4x4, repeat: expr, repeat-expr: num_bones}
+      world_matrices:
+        {pos: offset_matrix_2, type: matrix4x4, repeat: expr, repeat-expr: num_bones}
       inverse_bind_matrices:
         {pos: offset_inverse_bind_matrices, type: matrix4x4, repeat: expr, repeat-expr: num_bones}
 

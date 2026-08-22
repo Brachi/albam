@@ -258,6 +258,10 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             self.bones__enabled = True
             self._should_write_inverse_bind_matrices = False
             self.inverse_bind_matrices__enabled = True
+            self._should_write_local_matrices = False
+            self.local_matrices__enabled = True
+            self._should_write_world_matrices = False
+            self.world_matrices__enabled = True
 
         def _read(self):
             self.num_bones = self._io.read_u4le()
@@ -296,12 +300,30 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                     self._m_inverse_bind_matrices[i]._fetch_instances()
 
 
+            _ = self.local_matrices
+            if hasattr(self, '_m_local_matrices'):
+                pass
+                for i in range(len(self._m_local_matrices)):
+                    pass
+                    self._m_local_matrices[i]._fetch_instances()
+
+
+            _ = self.world_matrices
+            if hasattr(self, '_m_world_matrices'):
+                pass
+                for i in range(len(self._m_world_matrices)):
+                    pass
+                    self._m_world_matrices[i]._fetch_instances()
+
+
 
 
         def _write__seq(self, io=None):
             super(ReengineMesh.BoneHeader, self)._write__seq(io)
             self._should_write_bones = self.bones__enabled
             self._should_write_inverse_bind_matrices = self.inverse_bind_matrices__enabled
+            self._should_write_local_matrices = self.local_matrices__enabled
+            self._should_write_world_matrices = self.world_matrices__enabled
             self._io.write_u4le(self.num_bones)
             self._io.write_u4le(self.num_bone_maps)
             self._io.write_u4le(self.reserved_01)
@@ -344,6 +366,30 @@ class ReengineMesh(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"inverse_bind_matrices", self._root, self._m_inverse_bind_matrices[i]._root)
                     if self._m_inverse_bind_matrices[i]._parent != self:
                         raise kaitaistruct.ConsistencyError(u"inverse_bind_matrices", self, self._m_inverse_bind_matrices[i]._parent)
+
+
+            if self.local_matrices__enabled:
+                pass
+                if len(self._m_local_matrices) != self.num_bones:
+                    raise kaitaistruct.ConsistencyError(u"local_matrices", self.num_bones, len(self._m_local_matrices))
+                for i in range(len(self._m_local_matrices)):
+                    pass
+                    if self._m_local_matrices[i]._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"local_matrices", self._root, self._m_local_matrices[i]._root)
+                    if self._m_local_matrices[i]._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"local_matrices", self, self._m_local_matrices[i]._parent)
+
+
+            if self.world_matrices__enabled:
+                pass
+                if len(self._m_world_matrices) != self.num_bones:
+                    raise kaitaistruct.ConsistencyError(u"world_matrices", self.num_bones, len(self._m_world_matrices))
+                for i in range(len(self._m_world_matrices)):
+                    pass
+                    if self._m_world_matrices[i]._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"world_matrices", self._root, self._m_world_matrices[i]._root)
+                    if self._m_world_matrices[i]._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"world_matrices", self, self._m_world_matrices[i]._parent)
 
 
             self._dirty = False
@@ -421,6 +467,82 @@ class ReengineMesh(ReadWriteKaitaiStruct):
             for i in range(len(self._m_inverse_bind_matrices)):
                 pass
                 self._m_inverse_bind_matrices[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+        @property
+        def local_matrices(self):
+            if self._should_write_local_matrices:
+                self._write_local_matrices()
+            if hasattr(self, '_m_local_matrices'):
+                return self._m_local_matrices
+
+            if not self.local_matrices__enabled:
+                return None
+
+            _pos = self._io.pos()
+            self._io.seek(self.offset_matrix_1)
+            self._m_local_matrices = []
+            for i in range(self.num_bones):
+                _t__m_local_matrices = ReengineMesh.Matrix4x4(self._io, self, self._root)
+                try:
+                    _t__m_local_matrices._read()
+                finally:
+                    self._m_local_matrices.append(_t__m_local_matrices)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_local_matrices', None)
+
+        @local_matrices.setter
+        def local_matrices(self, v):
+            self._dirty = True
+            self._m_local_matrices = v
+
+        def _write_local_matrices(self):
+            self._should_write_local_matrices = False
+            _pos = self._io.pos()
+            self._io.seek(self.offset_matrix_1)
+            for i in range(len(self._m_local_matrices)):
+                pass
+                self._m_local_matrices[i]._write__seq(self._io)
+
+            self._io.seek(_pos)
+
+        @property
+        def world_matrices(self):
+            if self._should_write_world_matrices:
+                self._write_world_matrices()
+            if hasattr(self, '_m_world_matrices'):
+                return self._m_world_matrices
+
+            if not self.world_matrices__enabled:
+                return None
+
+            _pos = self._io.pos()
+            self._io.seek(self.offset_matrix_2)
+            self._m_world_matrices = []
+            for i in range(self.num_bones):
+                _t__m_world_matrices = ReengineMesh.Matrix4x4(self._io, self, self._root)
+                try:
+                    _t__m_world_matrices._read()
+                finally:
+                    self._m_world_matrices.append(_t__m_world_matrices)
+
+            self._io.seek(_pos)
+            return getattr(self, '_m_world_matrices', None)
+
+        @world_matrices.setter
+        def world_matrices(self, v):
+            self._dirty = True
+            self._m_world_matrices = v
+
+        def _write_world_matrices(self):
+            self._should_write_world_matrices = False
+            _pos = self._io.pos()
+            self._io.seek(self.offset_matrix_2)
+            for i in range(len(self._m_world_matrices)):
+                pass
+                self._m_world_matrices[i]._write__seq(self._io)
 
             self._io.seek(_pos)
 
