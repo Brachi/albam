@@ -30,6 +30,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
     re_mesh = ReengineMesh(KaitaiStream(io.BytesIO(mesh_bytes)))
     re_mesh._read()
 
+    app_id = file_list_item.app_id
     bl_object_name = file_list_item.display_name
     skeleton = None if not re_mesh.header.offset_bones else build_blender_armature(re_mesh, bl_object_name)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
@@ -42,7 +43,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
     mesh_groups = model_info.lod_group_offsets[0].lod_group.mesh_groups if model_info else []
     for mesh_group in mesh_groups:
         for sub_mesh in mesh_group.mesh_group.meshes:
-            bl_mesh_ob = build_blender_mesh(re_mesh, sub_mesh)
+            bl_mesh_ob = build_blender_mesh(re_mesh, sub_mesh, app_id)
             bl_mesh_ob.parent = bl_object
             if skeleton:
                 modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
@@ -59,9 +60,12 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
     return bl_object
 
 
-def build_blender_mesh(re_mesh, sub_mesh):
+def build_blender_mesh(re_mesh, sub_mesh, app_id):
     bl_mesh = bpy.data.meshes.new('TMP')
     ob = bpy.data.objects.new('TMP', bl_mesh)
+
+    custom_properties = bl_mesh.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.copy_custom_properties_from(sub_mesh)
 
     index_buffer = re_mesh.buffers_data.index_buffer
     index_offset = sub_mesh.pos_index_buffer * 2
@@ -100,7 +104,11 @@ def build_blender_mesh(re_mesh, sub_mesh):
     # a handedness-sign byte (see mesh.ksy's primitive_type enum) - only
     # the normal.xyz is decoded below (tangent isn't reconstructed from
     # Blender's own state anywhere), so the raw 8 bytes are stashed here,
-    # verbatim, as export's only way back to them byte-exact.
+    # verbatim, as export's only way back to them byte-exact. Per-vertex
+    # data has no equivalent in albam's per-datablock custom-properties
+    # system (see ReengineSubMeshCustomProperties below for the kind of
+    # value that system does fit) - a real mesh attribute is the actual
+    # right tool for a value that varies per vertex.
     _stash_nor_tan_raw(bl_mesh, nor_tan_raw)
 
     vertex_normals = [(n[0] / 127, n[2] / -127, n[1] / 127) for n in nor_tan_raw]
@@ -132,6 +140,33 @@ def _stash_nor_tan_raw(bl_mesh, nor_tan_raw):
     hi_attr = bl_mesh.attributes.new(NOR_TAN_HI_ATTR, "INT", "POINT")
     lo_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[0:4]))[0] for n in nor_tan_raw])
     hi_attr.data.foreach_set("value", [struct.unpack("<i", struct.pack("<4b", *n[4:8]))[0] for n in nor_tan_raw])
+
+
+# albam's per-datablock custom-properties system (see
+# albam/blender_ui/custom_properties.py) is the established, UI-visible
+# way to carry a format-specific scalar value that has no native Blender
+# mesh-object equivalent, across import/export - the same mechanism MTFW
+# uses (e.g. Mod156MeshCustomProperties in albam/engines/mtfw/mesh.py).
+# is_quad/vertex_buffer_index are exactly that kind of value for reng:
+# real, per-submesh, meaningful on their own (not just round-trip
+# plumbing), and small enough to expose directly. copy_custom_properties_
+# from/to (defined below) match Kaitai's own attribute names 1:1, so they
+# work generically against a real `mesh` struct instance with no
+# per-field mapping code, the same trick MTFW's own custom-properties
+# classes use against their own parsed structs.
+@blender_registry.register_custom_properties_mesh("reengine_submesh", ("re2", "re3", "re8"))
+@blender_registry.register_blender_prop
+class ReengineSubMeshCustomProperties(bpy.types.PropertyGroup):
+    is_quad: bpy.props.BoolProperty(name="Quad Topology", default=False, options=set())  # noqa: F821
+    vertex_buffer_index: bpy.props.IntProperty(name="Vertex Buffer Index", default=0, options=set())  # noqa: F821
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            setattr(self, attr_name, getattr(src_obj, attr_name))
 
 
 def build_blender_armature(re_mesh, armature_name):
@@ -226,26 +261,6 @@ def _build_weights(re_mesh, sub_mesh, num_vertices, vertex_buffer, bl_mesh_ob):
             vg.add((vertex_index,), weight_value, "ADD")
 
 
-# mesh_group's own header (type/num_meshes/unk_01/unk_02/num_vertices/
-# num_indices) is 16 bytes, immediately followed by its `meshes` array -
-# see mesh.ksy. Not exposed as an instance/offset anywhere in the parsed
-# struct, so export re-derives each submesh's own absolute file offset
-# from this (needed to patch material_index in place without touching
-# anything else in the entry).
-MESH_GROUP_HEADER_SIZE = 16
-MESH_ENTRY_SIZE = 16
-
-
-def _mesh_entry_offsets(src_mesh, lod_group):
-    entry_size = MESH_ENTRY_SIZE + (8 if src_mesh.version != 386270720 else 0)
-    entries = []
-    for mesh_group_offset in lod_group.mesh_groups:
-        base = mesh_group_offset.offset + MESH_GROUP_HEADER_SIZE
-        for i, sub_mesh in enumerate(mesh_group_offset.mesh_group.meshes):
-            entries.append((sub_mesh, base + i * entry_size))
-    return entries
-
-
 def _original_submesh_vertex_count(buffers, sub_mesh):
     index_buffer = buffers.index_buffer
     indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
@@ -300,7 +315,16 @@ def _encode_vertex_weights(bl_mesh_ob, vertex_index, bone_name_to_slot):
     return joints[0:4] + joints[4:8] + weights[0:4] + weights[4:8]
 
 
-def _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot):
+def _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot):
+    """
+    Writes into vertex_buffer/index_buffer - mutable copies of
+    buffers_data.vertex_buffer/index_buffer's own bytes, local to those
+    buffers (no file-absolute offsets involved) - which the caller then
+    assigns back onto the live, already-parsed ReengineMesh object graph,
+    for _write() to serialize for real. Everything else about the file
+    (header, name tables, bone data, other LOD levels) is never touched
+    here at all - it stays exactly what _read() populated.
+    """
     bl_mesh = bl_mesh_ob.data
     num_vertices = len(bl_mesh.vertices)
 
@@ -332,37 +356,44 @@ def _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot):
     weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
     vertex_uvs = _vertex_uvs(bl_mesh)
 
-    pos_off = buffers.offset_vertex_buffer + pos_acc.offset + sub_mesh.pos_vertex_buffer * pos_acc.size
-    nor_tan_off = (buffers.offset_vertex_buffer + nor_tan_acc.offset +
-                   sub_mesh.pos_vertex_buffer * nor_tan_acc.size)
-    uv_off = buffers.offset_vertex_buffer + uv_acc.offset + sub_mesh.pos_vertex_buffer * uv_acc.size
+    pos_off = pos_acc.offset + sub_mesh.pos_vertex_buffer * pos_acc.size
+    nor_tan_off = nor_tan_acc.offset + sub_mesh.pos_vertex_buffer * nor_tan_acc.size
+    uv_off = uv_acc.offset + sub_mesh.pos_vertex_buffer * uv_acc.size
 
     for i, v in enumerate(bl_mesh.vertices):
         bx, by, bz = v.co
-        struct.pack_into("<3f", data, pos_off + i * pos_acc.size, bx, bz, -by)
+        struct.pack_into("<3f", vertex_buffer, pos_off + i * pos_acc.size, bx, bz, -by)
         struct.pack_into(
-            "<ii", data, nor_tan_off + i * nor_tan_acc.size,
+            "<ii", vertex_buffer, nor_tan_off + i * nor_tan_acc.size,
             lo_attr.data[i].value, hi_attr.data[i].value,
         )
         u, uv_v = vertex_uvs[i]
-        struct.pack_into("<2e", data, uv_off + i * uv_acc.size, u, uv_v)
+        struct.pack_into("<2e", vertex_buffer, uv_off + i * uv_acc.size, u, uv_v)
 
     if weight_acc:
-        weight_off = buffers.offset_vertex_buffer + weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
+        weight_off = weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
         for i in range(num_vertices):
             struct.pack_into(
-                "<16B", data, weight_off + i * weight_acc.size,
+                "<16B", vertex_buffer, weight_off + i * weight_acc.size,
                 *_encode_vertex_weights(bl_mesh_ob, i, bone_name_to_slot),
             )
 
-    ib_off = buffers.offset_index_buffer + sub_mesh.pos_index_buffer * 2
-    struct.pack_into(f"<{len(indices)}H", data, ib_off, *indices)
+    ib_off = sub_mesh.pos_index_buffer * 2
+    struct.pack_into(f"<{len(indices)}H", index_buffer, ib_off, *indices)
 
 
 _BLENDER_DEDUP_SUFFIX_RE = re.compile(r"\.\d{3}$")
 
 
-def _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_index):
+def _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id):
+    """
+    Sets sub_mesh.material_index/is_quad/vertex_buffer_index directly on
+    the live, already-parsed Kaitai object - these are plain attributes on
+    it, not file offsets to compute, so there's no hand-maintained layout
+    math here at all (contrast _mesh_entry_offsets, which this replaced -
+    see git history). _write() picks up whatever's sitting on sub_mesh at
+    call time, same as every other untouched field on it.
+    """
     materials = bl_mesh_ob.data.materials
     if not materials or materials[0] is None:
         raise AlbamCheckFailure(
@@ -387,25 +418,64 @@ def _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_inde
                 "Only referencing one of the file's existing materials is supported - "
                 ".mdf2 export isn't implemented yet.",
             )
-    struct.pack_into("<B", data, entry_offset, material_name_to_index[material_name])
+    sub_mesh.material_index = material_name_to_index[material_name]
+
+    custom_properties = bl_mesh_ob.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.copy_custom_properties_to(sub_mesh)
+
+
+# Offsets header names but has no instance/type modeling the data they
+# point to at all (see RESULTS.md) - a fresh _write() leaves these regions
+# zeroed, since nothing in the object graph ever reads (or therefore
+# writes back) them. This export is geometry-only and never intends to
+# touch any of them, so they're restored byte-for-byte from the source
+# after _write() - not reconstructed, just not silently destroyed.
+_UNMODELED_HEADER_OFFSETS = (
+    "offset_shadow_mesh_group", "offset_normal_recalc", "offset_blend_shapes",
+    "offset_bone_aabb", "offset_floats",
+)
+_ALL_HEADER_OFFSETS = _UNMODELED_HEADER_OFFSETS + (
+    "offset_data", "offset_occlusion_mesh_group", "offset_bones", "offset_buffers_header",
+    "offset_material_name_remap", "offset_bone_name_remap", "offset_blend_shape_name_remap",
+    "offset_names",
+)
+
+
+def _restore_unmodeled_regions(data, src_bytes, header):
+    known_offsets = sorted({getattr(header, name) for name in _ALL_HEADER_OFFSETS if getattr(header, name)})
+    for name in _UNMODELED_HEADER_OFFSETS:
+        start = getattr(header, name)
+        if not start:
+            continue
+        end = next((o for o in known_offsets if o > start), len(data))
+        data[start:end] = src_bytes[start:end]
 
 
 @blender_registry.register_export_function(app_id="re2", extension="mesh.2109108288")
 @blender_registry.register_export_function(app_id="re3", extension="mesh.2109108288")
 def export_reengine_mesh(bl_obj):
     """
-    Patches vertex/index buffer bytes and each submesh's material_index
-    directly into a mutable copy of the original file bytes, rather than
-    rebuilding the whole object graph the way MTFW's exporter does -
-    an unmodified _read()/_write() round trip of mesh.ksy isn't byte-exact
-    (untracked padding/alignment bytes between sections), so a full
-    from-scratch rebuild would already start from a worse baseline than
-    "don't touch what didn't change". This only supports the same
-    vertex/index/submesh counts as the source (see the AlbamCheckFailure
-    messages below) - not general remeshing - which is what makes patching
-    in place safe: every byte outside the touched regions, including any
-    other LOD level's geometry (only LOD 0 is ever imported/re-exported),
-    is guaranteed identical to the source file.
+    Parses the original file into a real ReengineMesh, mutates vertex/
+    index buffer bytes and each submesh's material_index/is_quad/
+    vertex_buffer_index directly on that live object graph, then lets
+    Kaitai's own _write() serialize the whole thing - the same idiom
+    MTFW's real .mod export already uses (see albam/engines/mtfw/mesh.py),
+    rather than hand-computing absolute file offsets into a raw byte copy
+    (the previous approach here - see git history).
+
+    This only supports the same vertex/index/submesh counts as the source
+    (see the AlbamCheckFailure messages below), not general remeshing -
+    every submesh field this doesn't explicitly touch (num_indices,
+    pos_index_buffer, pos_vertex_buffer, unk_01, ...) is left exactly as
+    _read() populated it, and every LOD level other than LOD 0 (the only
+    one ever imported) round-trips untouched through the same mechanism.
+
+    mesh.ksy doesn't model every byte of the real file yet - two header
+    offsets (bone AABBs, and a shadow-mesh LOD tree on some files) are
+    identified but have no instance reading their pointed-to data, so a
+    plain _write() would zero them. _restore_unmodeled_regions patches
+    those specific, known regions back in from the source afterward -
+    everything else is reproduced by the real mechanism, not patched.
     """
     asset = bl_obj.albam_asset
     app_id = asset.app_id
@@ -413,6 +483,14 @@ def export_reengine_mesh(bl_obj):
 
     src_mesh = ReengineMesh(KaitaiStream(io.BytesIO(src_bytes)))
     src_mesh._read()
+    # _write() reassigns src_mesh's _io to the destination stream before
+    # its own _fetch_instances() call would otherwise lazily populate
+    # every not-yet-accessed instance from the source - by then it's too
+    # late (the source bytes are gone). Force every lazy instance in the
+    # whole tree to be read/cached now, while _io still points at the
+    # source (same fix tests/reng/test_tex_serialization.py needed for
+    # the same reason).
+    src_mesh._fetch_instances()
 
     if src_mesh.model_info is None:
         raise AlbamCheckFailure(
@@ -423,14 +501,14 @@ def export_reengine_mesh(bl_obj):
         )
 
     lod_group = src_mesh.model_info.lod_group_offsets[0].lod_group
-    entries = _mesh_entry_offsets(src_mesh, lod_group)
+    sub_meshes = [sm for mg in lod_group.mesh_groups for sm in mg.mesh_group.meshes]
 
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    if len(bl_meshes) != len(entries):
+    if len(bl_meshes) != len(sub_meshes):
         raise AlbamCheckFailure(
             "Number of mesh objects doesn't match the original file",
             f"{len(bl_meshes)} mesh object(s) under '{bl_obj.name}', the original file's "
-            f"LOD 0 has {len(entries)} submesh(es).",
+            f"LOD 0 has {len(sub_meshes)} submesh(es).",
             "Adding or removing submeshes isn't supported yet - only re-exporting an "
             "unmodified (or attribute-only edited) import is.",
         )
@@ -438,10 +516,20 @@ def export_reengine_mesh(bl_obj):
     material_name_to_index = _build_material_name_to_index(src_mesh)
     bone_name_to_slot = _build_bone_name_to_slot(src_mesh) if src_mesh.header.offset_bones else {}
 
-    data = bytearray(src_bytes)
     buffers = src_mesh.buffers_data
-    for bl_mesh_ob, (sub_mesh, entry_offset) in zip(bl_meshes, entries):
-        _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot)
-        _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_index)
+    vertex_buffer = bytearray(buffers.vertex_buffer)
+    index_buffer = bytearray(buffers.index_buffer)
+    for bl_mesh_ob, sub_mesh in zip(bl_meshes, sub_meshes):
+        _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot)
+        _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id)
+    buffers.vertex_buffer = bytes(vertex_buffer)
+    buffers.index_buffer = bytes(index_buffer)
+
+    out_stream = KaitaiStream(io.BytesIO(bytearray(len(src_bytes))))
+    src_mesh._check()
+    src_mesh._write(out_stream)
+    data = bytearray(out_stream.to_byte_array())
+
+    _restore_unmodeled_regions(data, src_bytes, src_mesh.header)
 
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=bytes(data))]
