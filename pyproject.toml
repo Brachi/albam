@@ -13,7 +13,7 @@ dependencies = [
   'bpy == 5.2.0; python_version == "3.13.*"',
   "fs==2.4.16",
   # `fs` breaks under setuptools 81+ (drops pkg_resources).
-  "setuptools==80.10.2",
+  "setuptools==83.0.0",
   "kaitaistruct==0.11",
   "pymorton==1.0.5",
 ]
