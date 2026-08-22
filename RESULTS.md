@@ -361,58 +361,115 @@ no new UI code). Scope, deliberately: `.mesh` geometry only - `.mdf2`
 mesh still correctly references its existing materials by name, it just
 never regenerates the `.mdf2` itself.
 
-**Design**: before writing any Blender-facing code, checked whether an
-unmodified `ReengineMesh._read()` -> `_write()` round trip is already
-byte-exact (it is for `.tex`, per the serialization test above). It
-isn't for `.mesh` - real files mismatch within the first few KB even
-untouched, because `mesh.ksy` doesn't model every padding/alignment byte
-between sections. A from-scratch rebuild (MTFW's approach) would
-therefore start from a *worse* baseline than just not touching bytes
-that didn't change. So export instead **patches vertex/index buffer
-bytes and each submesh's `material_index` directly into a mutable copy
-of the original file**, computing each submesh's absolute file offset
-from `mesh.ksy`'s known fixed layout (mesh_group header = 16 bytes,
-mesh entry = 16 or 24 bytes depending on version) rather than touching
-anything via Kaitai's write-back machinery at all. This only supports
-re-exporting the same vertex/index/submesh counts as the source (a clear
-`AlbamCheckFailure` otherwise) - not general remeshing - which is
-exactly what makes patching in place safe: everything outside the
-touched regions (header, name tables, bone data, material remap, any
-LOD level other than LOD 0 - the only one ever imported) is guaranteed
-byte-identical to the source, by construction, not by verification.
+**Mechanism (reworked from an earlier raw-byte-patching version - see git
+history)**: parses the original file into a real `ReengineMesh`, calls
+`_fetch_instances()` once immediately (same reason `.tex`'s serialization
+test needed it - `_write()` reassigns `_io` to the destination stream
+before its own internal `_fetch_instances()` call would otherwise lazily
+read a not-yet-touched instance from a source stream that's already
+gone), mutates vertex/index buffer bytes and each submesh's
+`material_index`/`is_quad`/`vertex_buffer_index` directly on that live
+object graph, then lets Kaitai's real `_write()` serialize everything -
+the same idiom MTFW's own `.mod` export already uses. This is a genuine
+mechanical change, not cosmetic: every submesh field this doesn't
+explicitly set (`num_indices`, `pos_index_buffer`, `pos_vertex_buffer`,
+`unk_01`, ...) is simply whatever `_read()` already put there, with no
+hand-maintained shadow model of the file's byte layout computing
+absolute offsets (the previous version's `_mesh_entry_offsets`, deleted).
+
+**Confronting what mesh.ksy doesn't model, instead of routing around it**:
+before writing any Blender-facing code, diffed a real file against
+itself through an unmodified `_read()`/`_write()` round trip (script,
+not committed - the technique matches `test_tex_serialization.py`'s). Two
+kinds of gap turned up, and both got resolved differently on purpose:
+
+- `bone_header.offset_matrix_1`/`offset_matrix_2` (bone local/world
+  transform matrices) were bare `u8` offsets with **no instance reading
+  the data they point to at all** - a `_write()` left both regions
+  zeroed, since nothing in the object graph had ever read them. Diffing
+  confirmed the exact byte range of each mismatch fell precisely within
+  `[offset_matrix_N, offset_matrix_N + num_bones*64)`, with plausible
+  4x4-matrix float content (diagonal `1.0`s at 20-byte strides) - i.e.
+  this was fully, confidently modelable with the `matrix4x4` type
+  `inverse_bind_matrices` already uses. **Modeled** (`mesh.ksy`'s
+  `bone_header.local_matrices`/`world_matrices`, new) - this is now a
+  real fix, not a per-export patch, and closed the large majority of the
+  observed gap for every skinned file tested.
+- `header.offset_bone_aabb` (per-bone bounding box array) and, on one
+  file, `header.offset_shadow_mesh_group` (an entire separate shadow-
+  casting LOD/mesh-group tree) are the same kind of gap, but **not**
+  confidently modelable in this pass: `offset_bone_aabb`'s region doesn't
+  divide evenly by `num_bones` at any stride tried, so its real per-bone
+  entry layout isn't nailed down (RESULTS.md's mesh.ksy section already
+  flagged this as one of the offsets RE-Mesh-Editor itself only had
+  partial/uncertain layouts for), and `offset_shadow_mesh_group` is a
+  whole parallel tree structure, a materially bigger undertaking than a
+  flat array. Rather than guess at a layout or let a real geometry-only
+  export silently zero out real per-bone-AABB/shadow-mesh data, export's
+  `_restore_unmodeled_regions` copies these specific, still-unmodeled
+  byte ranges back from the source file after `_write()` - not
+  reconstructed through the real mechanism, openly not, but not
+  destroyed either. This list is generic (keyed off the actual header
+  offset values, not per-file hardcoded) and already covers the other
+  two currently-unmodeled offsets (`offset_normal_recalc`,
+  `offset_blend_shapes`) in case a future dataset file has them nonzero.
+
+**Custom properties, not an ad-hoc mesh attribute, for values that fit
+that mechanism**: `is_quad`/`vertex_buffer_index` (per-submesh, real,
+independently meaningful, small) are now a real
+`ReengineSubMeshCustomProperties` (`register_custom_properties_mesh`),
+following the exact pattern MTFW's own per-format custom properties use
+(e.g. `Mod156MeshCustomProperties`) - populated from the parsed struct on
+import, read back on export, visible/editable in Blender's UI like every
+other albam custom property, not just internal round-trip plumbing.
+`copy_custom_properties_to/from` work generically against the real
+Kaitai `mesh` object with no per-field mapping code, because the
+PropertyGroup's own attribute names were chosen to match Kaitai's. The
+raw `nor_tan` bytes stay a plain Blender mesh attribute
+(`NOR_TAN_LO_ATTR`/`NOR_TAN_HI_ATTR`) rather than being forced into this
+system - it's genuinely per-vertex data, and albam's custom-properties
+mechanism is a one-PropertyGroup-per-datablock model with no per-vertex
+analogue anywhere else in the codebase (checked MTFW's usage before
+concluding this); a real mesh attribute is the correct tool for that
+shape of data, not a workaround.
 
 **Fidelity results** (5-file dataset spanning a skinned character, a
 skinned weapon, a skinned 8-LOD-group enemy, and two bone-less static
 meshes - see `tests/reng/test_mesh_serialization.py`):
 
-- **Byte-exact**: position (lossless transform), UV (round-trips exactly
-  through f16 - it was f16 to begin with), index buffer (straight from
-  `loop_triangles` in build order), and normal+tangent. The last one only
-  works because import now stashes the raw 8 bytes nor_tan actually is
-  (only normal.xyz gets decoded into anything Blender represents;
-  tangent.xyz + a handedness byte + one byte of the normal itself, which
-  is nonzero in ~1% of real vertices sampled, would otherwise be silently
-  lost) as two custom per-vertex int attributes, and export reads those
-  back directly instead of recomputing anything from Blender's own
-  normal state.
-- **Field-equivalent, not byte-exact**: skin weights. The *values* are
-  exactly preserved (same set of (bone name, quantized weight) pairs per
-  vertex, verified by decoding both sides and comparing) - but which of
-  the 8 joint/weight byte-slots a given bone occupies isn't recoverable
-  from a Blender vertex group at all (it's an unordered per-vertex set,
-  not the original primary/secondary split), so export uses a
-  deterministic weight-descending reassignment. This is the one
-  documented, structural fidelity gap.
-- **Untouched, therefore exact by construction**: everything else - all
-  7 non-LOD-0 levels of the 8-LOD-group enemy file, header, name tables,
-  bone data, material remap.
+- **Whole file, byte-exact**: both bone-less files. Confirmed by comparing
+  the entire exported file against the source, not just specific known
+  regions.
+- **Byte-exact everywhere except one region, for every skinned file**:
+  position, UV, index buffer, normal+tangent (via the stashed raw
+  bytes), header, name tables, bone data (including the newly-modeled
+  local/world matrices), material remap, and all 7 non-LOD-0 levels of
+  the 8-LOD-group enemy file - all byte-identical to source. The *only*
+  remaining difference for any skinned file, confirmed by diffing the
+  entire exported file against source and checking every mismatched byte
+  falls inside a known skin-weight accessor range: **skin weights**. The
+  *values* are exactly preserved (same set of (bone name, quantized
+  weight) pairs per vertex, verified by decoding both sides) - but which
+  of the 8 joint/weight byte-slots a given bone occupies isn't
+  recoverable from a Blender vertex group at all (it's an unordered
+  per-vertex set, not the original primary/secondary split), so export
+  uses a deterministic weight-descending reassignment. This is the one
+  remaining non-reproducible fidelity gap, and it's structural (nothing
+  Blender's vertex-group data model exposes could fix it without a
+  different, non-native way of storing weights) rather than an oversight.
+- Everything not touched (any file with no bones at all; every mesh
+  section this export doesn't set fields on) is exact by construction -
+  either through the real `_write()` mechanism now that gaps are modeled
+  or restored, not just by not being touched.
 
 Verified against real re3 install data via the full test suite (re2's
 export registration is untested - this machine's re2 install is broken,
-see the RE2 dataset section above)
-(structural-field equality, per-region byte-exact geometry checks, and
-per-vertex weight-set equality, each as its own assertion rather than one
-whole-file diff, so a real regression in one region can't hide behind an
-unrelated untouched region staying identical) plus a dedicated negative
-test (exporting a mesh with no main model tree raises a clear error
-instead of silently no-op'ing).
+see the RE2 dataset section above): structural-field equality, per-region
+byte-exact geometry checks, per-vertex weight-set equality, and a
+whole-file byte-diff assertion (the strongest check - fails if *any*
+unaccounted-for byte differs anywhere in the file, not just the regions
+the other tests happen to look at), each as its own assertion rather than
+one diff, so a real regression in one region can't hide behind an
+unrelated one staying identical - plus a dedicated negative test
+(exporting a mesh with no main model tree raises a clear error instead of
+silently no-op'ing).
