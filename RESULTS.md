@@ -349,3 +349,68 @@ exist at all for any version albam currently supports.
 Verified via the round-trip serialization test (still 14/14 after every
 change) and the full suite, including the mesh-import test (exercises
 the real image-decode pipeline end-to-end).
+
+# .mesh export (geometry only)
+
+RE Engine had no export at all until now - `albam/engines/reng/mesh.py`'s
+`export_reengine_mesh` (registered for re2/re3, `mesh.2109108288`) adds
+geometry export, following MTFW's established architecture
+(`register_export_function` -> the existing generic `export()` operator,
+no new UI code). Scope, deliberately: `.mesh` geometry only - `.mdf2`
+(material) and `.tex` (texture) export are not implemented; an exported
+mesh still correctly references its existing materials by name, it just
+never regenerates the `.mdf2` itself.
+
+**Design**: before writing any Blender-facing code, checked whether an
+unmodified `ReengineMesh._read()` -> `_write()` round trip is already
+byte-exact (it is for `.tex`, per the serialization test above). It
+isn't for `.mesh` - real files mismatch within the first few KB even
+untouched, because `mesh.ksy` doesn't model every padding/alignment byte
+between sections. A from-scratch rebuild (MTFW's approach) would
+therefore start from a *worse* baseline than just not touching bytes
+that didn't change. So export instead **patches vertex/index buffer
+bytes and each submesh's `material_index` directly into a mutable copy
+of the original file**, computing each submesh's absolute file offset
+from `mesh.ksy`'s known fixed layout (mesh_group header = 16 bytes,
+mesh entry = 16 or 24 bytes depending on version) rather than touching
+anything via Kaitai's write-back machinery at all. This only supports
+re-exporting the same vertex/index/submesh counts as the source (a clear
+`AlbamCheckFailure` otherwise) - not general remeshing - which is
+exactly what makes patching in place safe: everything outside the
+touched regions (header, name tables, bone data, material remap, any
+LOD level other than LOD 0 - the only one ever imported) is guaranteed
+byte-identical to the source, by construction, not by verification.
+
+**Fidelity results** (5-file dataset spanning a skinned character, a
+skinned weapon, a skinned 8-LOD-group enemy, and two bone-less static
+meshes - see `tests/reng/test_mesh_serialization.py`):
+
+- **Byte-exact**: position (lossless transform), UV (round-trips exactly
+  through f16 - it was f16 to begin with), index buffer (straight from
+  `loop_triangles` in build order), and normal+tangent. The last one only
+  works because import now stashes the raw 8 bytes nor_tan actually is
+  (only normal.xyz gets decoded into anything Blender represents;
+  tangent.xyz + a handedness byte + one byte of the normal itself, which
+  is nonzero in ~1% of real vertices sampled, would otherwise be silently
+  lost) as two custom per-vertex int attributes, and export reads those
+  back directly instead of recomputing anything from Blender's own
+  normal state.
+- **Field-equivalent, not byte-exact**: skin weights. The *values* are
+  exactly preserved (same set of (bone name, quantized weight) pairs per
+  vertex, verified by decoding both sides and comparing) - but which of
+  the 8 joint/weight byte-slots a given bone occupies isn't recoverable
+  from a Blender vertex group at all (it's an unordered per-vertex set,
+  not the original primary/secondary split), so export uses a
+  deterministic weight-descending reassignment. This is the one
+  documented, structural fidelity gap.
+- **Untouched, therefore exact by construction**: everything else - all
+  7 non-LOD-0 levels of the 8-LOD-group enemy file, header, name tables,
+  bone data, material remap.
+
+Verified against real re2/re3 install data via the full test suite
+(structural-field equality, per-region byte-exact geometry checks, and
+per-vertex weight-set equality, each as its own assertion rather than one
+whole-file diff, so a real regression in one region can't hide behind an
+unrelated untouched region staying identical) plus a dedicated negative
+test (exporting a mesh with no main model tree raises a clear error
+instead of silently no-op'ing).
