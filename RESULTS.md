@@ -407,7 +407,9 @@ meshes - see `tests/reng/test_mesh_serialization.py`):
   7 non-LOD-0 levels of the 8-LOD-group enemy file, header, name tables,
   bone data, material remap.
 
-Verified against real re2/re3 install data via the full test suite
+Verified against real re3 install data via the full test suite (re2's
+export registration is untested - this machine's re2 install is broken,
+see the RE2 dataset section above)
 (structural-field equality, per-region byte-exact geometry checks, and
 per-vertex weight-set equality, each as its own assertion rather than one
 whole-file diff, so a real regression in one region can't hide behind an
