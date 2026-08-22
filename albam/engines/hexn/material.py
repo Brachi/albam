@@ -6,6 +6,7 @@ from kaitaistruct import KaitaiStream
 
 from .texture import build_blender_textures
 from .structs.hexane_matb import HexaneMatb
+from ...lib.blender import layout_node_chains
 
 # A .matb's texture paths end in a two-character suffix identifying their
 # role (e.g. "..._skel_d.dds", "..._skel_n.dds") - confirmed against a
@@ -62,6 +63,7 @@ def build_blender_materials(edgemodel, context):
         node_tree = bl_material.node_tree
         bsdf = next(node for node in node_tree.nodes if node.type == "BSDF_PRINCIPLED")
         link = node_tree.links.new
+        node_chains = []
 
         for texture_path in matb.shader.textures:
             slot = TEXTURE_SLOTS.get(_texture_suffix(texture_path))
@@ -79,11 +81,14 @@ def build_blender_materials(edgemodel, context):
                 normal_map_node = node_tree.nodes.new("ShaderNodeNormalMap")
                 link(texture_node.outputs["Color"], normal_map_node.inputs["Color"])
                 link(normal_map_node.outputs["Normal"], bsdf.inputs["Normal"])
+                node_chains.append([texture_node, normal_map_node])
             else:
                 link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
                 if socket_name == "Emission Color":
                     bsdf.inputs["Emission Strength"].default_value = 1.0
+                node_chains.append([texture_node])
 
+        layout_node_chains(bsdf, node_chains)
         bl_materials[material_path] = bl_material
 
     return bl_materials

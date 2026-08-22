@@ -366,6 +366,40 @@ def get_dist(point_a, point_b):
     return magnitude
 
 
+def layout_node_chains(sink, chains, x_gap=300.0, y_gap=350.0):
+    """
+    Place upstream node chains left-to-right into an already-positioned `sink`
+    node (e.g. a Principled BSDF), each chain stacked into its own row so
+    parallel inputs (e.g. Base Color, Normal, Specular) don't collide.
+
+    New nodes have no `.location` set by Blender until something positions
+    them, so a loop that does `nodes.new(...)` per texture/input without ever
+    touching `.location` leaves every node stacked at the same default spot.
+    This is a small hand-rolled layered layout rather than a call into some
+    node-arrange operator: stock Blender has no core `bpy.ops.node.*` for it,
+    and the one third-party add-on commonly cited for this (Node Wrangler)
+    isn't enabled by default even though it ships bundled, and its operators
+    require a live NODE_EDITOR context (area/space/pinned node tree) that
+    doesn't exist in the headless `bpy`-as-pip-package environment this
+    importer also has to run under (see CLAUDE.md). For graphs this shallow
+    (a texture, optionally through one converter node, into a fixed sink) a
+    few lines of arithmetic are simpler and more predictable than depending
+    on either.
+
+    `sink`'s own location is the anchor and is left untouched.
+    `chains` is an iterable of node lists ordered from the most upstream node
+    to the one feeding directly into `sink` (e.g. [texture_node,
+    normal_map_node]); a chain with no intermediate nodes is just
+    [texture_node].
+    """
+    for row, chain in enumerate(chains):
+        y = sink.location.y - row * y_gap
+        depth = len(chain)
+        for index, node in enumerate(chain):
+            distance_to_sink = depth - index
+            node.location = (sink.location.x - distance_to_sink * x_gap, y)
+
+
 class ShaderGroupCompat:
 
     def __init__(self, shader_group, compat="NEW"):
