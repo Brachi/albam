@@ -174,3 +174,15 @@ def test_hexn_fs_missing_game_root_raises():
 
     with pytest.raises(CreateFailed):
         HexnFS("/this/does/not/exist/at/all")
+
+
+def test_hexn_fs_origin_of_packed_and_loose(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.ssg").write_bytes(
+        _build_ssg_bytes([("models/a.edgemodel", b"AAAA")]))
+    (tmp_path / "readme.txt").write_bytes(b"loose file")
+
+    game_fs = HexnFS(str(tmp_path))
+    assert game_fs.origin_of("/models/a.edgemodel") == "sub/a.ssg"
+    assert game_fs.origin_of("/readme.txt") is None
+    assert game_fs.origin_of("/nope/does/not/exist.foo") is None

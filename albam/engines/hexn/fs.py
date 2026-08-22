@@ -171,3 +171,22 @@ class HexnFS(MultiFS):
 
         # added last -> highest default priority -> wins over packed archives
         self.add_fs("<loose>", OSFS(game_root))
+
+    def _owning_ssg_fs(self, path):
+        self.check()
+        _path = self.validatepath(path)
+        _name, owner_fs = self.which(_path)
+        return owner_fs if isinstance(owner_fs, SsgFS) else None
+
+    def origin_of(self, path):
+        """The .ssg `path` resolves to, as a path relative to game_root (see
+        albam.engines.mtfw.arc_fs.MTFW_FS.origin_of(), which this mirrors),
+        or None if it's a loose/real file (or doesn't resolve at all). No
+        index/caching like MTFW_FS's - a real install here is on the order
+        of hundreds of .ssg files, not ~1000+ .arc, so a linear which() scan
+        per lookup is fine.
+        """
+        owner_fs = self._owning_ssg_fs(path)
+        if owner_fs is None:
+            return None
+        return os.path.relpath(owner_fs.ssg_path, self.game_root).replace(os.sep, "/")
