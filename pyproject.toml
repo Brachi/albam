@@ -15,6 +15,7 @@ dependencies = [
   # `fs` breaks under setuptools 81+ (drops pkg_resources).
   "setuptools==80.10.2",
   "kaitaistruct==0.11",
+  "pymorton==1.0.5",
 ]
 
 [project.optional-dependencies]
@@ -37,10 +38,12 @@ s3 = [
 
 # albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
 # of a default install): bc7enc-py for BC7 DDS texture decode (.tex
-# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries.
+# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries, pymmh3
+# for PakFS/ReenFS's virtual-path hashing.
 reen = [
   "bc7enc-py==0.1.0a1",
   "zstd==1.5.7.2",
+  "pymmh3==0.0.5",
 ]
 
 [build-system]
@@ -50,12 +53,9 @@ build-backend = "setuptools.build_meta"
 [tool.black]
 line-length = 110
 
-[tool.coverage.run]
-omit = [ "*/albam_vendor/*" ]
-
 [tool.flake8]
 max-line-length = 110
-exclude = ["albam_vendor", ".venv", "structs"]
+exclude = [".venv", "structs"]
 
 # F722: needed for Blender props annotations such as
 # ```
