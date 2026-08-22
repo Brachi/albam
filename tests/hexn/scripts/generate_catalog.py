@@ -12,7 +12,8 @@ runs.
 Usage:
     python tests/hexn/scripts/generate_catalog.py <app-id> <game-root>
 
-Example:
+Example (game-root is the game's install root, not a subfolder - every
+loose file and every .ssg found anywhere under it is included):
     python tests/hexn/scripts/generate_catalog.py reorc \\
         "/path/to/Resident Evil Operation Raccoon City"
 """
@@ -50,19 +51,47 @@ def detect_tags(path):
     return [tag] if tag else []
 
 
+def _resolve_owners(game_fs):
+    """{path: owning sub-fs name} for every virtual path, replicating the
+    same highest-priority-wins resolution MultiFS reads use (iterate_fs()
+    already yields (name, sub_fs) in that exact order - see its docstring)
+    - without ever calling MultiFS's own aggregate scandir()/listdir().
+
+    Works around a real bug: on a real, large RE:ORC install, two overlaid
+    sub-filesystems can disagree about whether the same virtual path is a
+    file or a directory (confirmed: one .ssg packs a bare file entry named
+    "abilities", while the loose files also have a real "abilities/"
+    directory) - MultiFS's own walk/scandir crashes outright
+    (fs.errors.DirectoryExpected) the moment it has to merge listings for
+    that path. Walking each sub-filesystem separately sidesteps this
+    entirely, since within any single one a path is consistently either a
+    file or a directory. Not fixed in HexnFS itself - out of scope here,
+    flagged for follow-up.
+    """
+    owner_of = {}
+    for name, sub_fs in game_fs.iterate_fs():
+        for path in sub_fs.walk.files():
+            if path not in owner_of:
+                owner_of[path] = name
+    return owner_of
+
+
 def generate_catalog(game_root, progress_every=5000):
     game_fs = HexnFS(game_root)
     entries = []
 
-    paths = list(game_fs.walk.files())
+    owner_of = _resolve_owners(game_fs)
+    paths = sorted(owner_of)
     for i, path in enumerate(paths):
         if progress_every and i and i % progress_every == 0:
             print(f"  ...{i}/{len(paths)}", file=sys.stderr)
 
-        origin = game_fs.origin_of(path)
+        owner_name = owner_of[path]
+        archived = owner_name != "<loose>"
+        origin = os.path.relpath(owner_name, game_root).replace(os.sep, "/") if archived else None
         entries.append({
             "path_hash": hash_virtual_path(path),
-            "archived": origin is not None,
+            "archived": archived,
             "archive_hash": hash_virtual_path(origin) if origin else None,
             "tags": detect_tags(path),
         })
