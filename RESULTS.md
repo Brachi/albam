@@ -220,10 +220,52 @@ otherwise uniform `shading=0` set - real category variation, not noise.
 ## Cross-reference against RE-Mesh-Editor
 
 A cross-reference pass (same methodology as the `.mesh` investigation
-above) against RE-Mesh-Editor is in progress to resolve `mdf.ksy`'s
-remaining unknowns (root-level `unk_01`/`unk_02`/`unk_03`,
-`material_shading_type`'s real values, the `alpha_flags` bitfield -
-including whether its bit order is even right - `properties_header`'s
-flat `f4` array, and version-gated fields like `ofs_first_material_name`)
-even though this initial pass found no parsing failures - a clean parse
-doesn't mean every field's identity/semantics are actually understood.
+above) found real bugs despite this initial pass having found no parsing
+failures - a clean parse doesn't mean every field is actually understood.
+Verified against the dataset and fixed:
+
+- **`alpha_flags` bit order was backwards** - Kaitai defaults to MSB-first
+  bit consumption; the real struct this mirrors (RE-Mesh-Editor's ctypes
+  `MDFFlags_bits`) is LSB-first, verified empirically by running the real
+  ctypes struct and a minimal Kaitai repro of both bit orders side by
+  side. Every flag except `no_ray_tracing` was reading the wrong physical
+  bit. Fixed with `bit-endian: le`. Also fixed `phong_factor`, declared as
+  a 1-bit flag ("## empty?") when it's really a full 0-255 value -
+  correcting its size also accounts for a trailing `unk_01` that never
+  existed once `phong_factor` is sized right (10+6+8+8 = 32 bits exactly).
+  Verified post-fix: `base_alpha_test_enable` is now the flag that
+  differs between a same-shape `"_AlphaTest"`- vs `"_Default"`-suffixed
+  material pair - exactly matching their names. Pre-fix, the wrong bit
+  (`base_two_side_enable`) happened to correlate instead, since
+  alpha-tested foliage in this game is typically also double-sided - a
+  coincidence that made the bug easy to miss by spot-checking alone.
+- **Silent bug for RE8**: `properties_headers`' version switch
+  (exact-match `cases: {10, 13, 21}`, no default) produced an empty
+  properties list for any unmatched `mdf_version` - including `19`,
+  RE8's own `.mdf2` version per `apps.py`. Kaitai's `switch-on` silently
+  empties the array on an unmatched case rather than erroring, so this
+  had no visible symptom before. There are only ever two real property-
+  header layouts (`>=13` or `<13`), not a per-version list - switched to
+  a boolean condition.
+- **Packed-field bugs**, same pattern as `.mesh`: root `unk_02`/`unk_03`
+  merged into one real `u8` `material_flags` (mostly 0; RE-Mesh-Editor
+  only ever sets it, to 1, for MHWILDS); `material`'s `unk_01` (`>=19`)
+  split into its 2 real packed `u4` counts (`num_gpbf_buffer_names`/
+  `paths`); `properties_header_13`'s `num_params` (`u4`) split into
+  `num_params`(`u2`) + an unexplained `unk_flag`(`u2`) - currently
+  harmless only because `unk_flag` is 0 in every sampled file.
+- **`ofs_first_material_name` (`>=19`) was misnamed** - unrelated to
+  material names. It's an offset to a "GPBF" name/path table (paired with
+  the counts above); "GPBF" is unexplained upstream too. Renamed to
+  `ofs_gpbf_buffer` - confirmed dead code in albam either way (never read
+  anywhere).
+- **Not changed**: `material_shading_type` has a real enum available
+  upstream, but RE-Mesh-Editor's own comment flags its values as sourced
+  from one specific game version and possibly wrong on others - not
+  modeled here to avoid asserting false confidence across RE2/RE3/RE8.
+  `properties_header`'s `params` is confirmed to always be a flat,
+  untyped `f4` array at the binary level in both tools; per-property
+  typed interpretation (color vs. scalar) happens entirely out-of-band,
+  by name-string lookup, appropriately out of scope for the format
+  itself. `texture_header`'s `unk_01` (`>=13`) is genuinely still unknown
+  in both tools - confirmed same size/gate, no further identity found.
