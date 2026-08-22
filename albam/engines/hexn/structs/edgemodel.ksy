@@ -37,16 +37,16 @@ types:
       - {id: reserved_06, type: u4}
     instances:
       # The data between the last mesh's own buffers and ofs_bones (or
-      # ofs_unk_02, when there's no bones section), derived against a
-      # full-game sweep: align the last mesh's own highest
-      # buffer end up to a 16-byte boundary, then a fixed-per-lod trailer
-      # (+4 bytes per extra material, matching materials_table's own
-      # per-material offsets entry). >99.6% exact for the with-bones case
-      # (a fixed 48 or 80 bytes, no alignment needed - lod 4 vs. not) and
-      # the no-bones lod-4 case; the no-bones lod-0 case has an
-      # unexplained further +/-16 residual on ~18% of files not resolved
-      # here. materials_end is never the true max on any file checked, so
-      # left out of the comparison entirely.
+      # ofs_unk_02, when there's no bones section) derived against a
+      # full-game sweep as: the last mesh's own highest buffer
+      # end (materials_end is never the true max on any file checked, so
+      # left out), aligned up to a 16-byte boundary, then always exactly
+      # 16 more (unexplained, but constant - 100% of files checked), then
+      # a small record whose own first byte drives the rest of the size:
+      # marker_record_byte0. Verified 100% exact (no-bones case, 13711
+      # files) and 99.7% exact (with-bones case, 703 files - 2 known
+      # outliers, same files already flagged elsewhere for a corrupted
+      # size_buffer_indices) across a full-game sweep.
       last_mesh_header:
         value: _parent.meshes_header[num_meshes - 1]
       last_mesh_indices_end:
@@ -62,24 +62,45 @@ types:
           : (last_mesh_vertices_end > last_mesh_weights_end ? last_mesh_vertices_end : last_mesh_weights_end)
       last_mesh_align_padding:
         value: (16 - (last_mesh_max_end % 16)) % 16
-      last_mesh_trailer_size:
-        value: "(last_mesh_header.lod == 4 ? 36 : 68) + 4 * (num_material_per_mesh - 1)"
+      marker_record_pos:
+        value: last_mesh_max_end + last_mesh_align_padding + 16
+      marker_record_byte0:
+        pos: marker_record_pos
+        type: u1
+        if: num_meshes > 0 and marker_record_pos < _io.size
+      # With bones: dist(marker -> ofs_bones) = 32 + 16*(byte0//2), never
+      # scales with num_material_per_mesh (materials_table already
+      # accounts for its own materials independently).
+      marker_record_readable:
+        value: num_meshes > 0 and marker_record_pos < _io.size
       pre_bones_data_size:
-        value: "last_mesh_header.lod == 4 ? 48 : 80"
+        value: >-
+          marker_record_readable
+          ? (last_mesh_align_padding + 16 + 32 + 16 * (marker_record_byte0 / 2))
+          : 0
       pre_bones_data:
         pos: ofs_bones - pre_bones_data_size
         size: pre_bones_data_size
-        if: num_meshes > 0 and num_bones > 0 and ofs_bones >= pre_bones_data_size
+        if: marker_record_readable and num_bones > 0 and ofs_bones > pre_bones_data_size
       bones_data:
         pos: ofs_bones
         size: ofs_unk_02 - ofs_bones
         if: num_bones > 0 and ofs_unk_02 > ofs_bones
+      # No bones: dist(marker -> ofs_unk_02) = 20 + 16*(byte0//2) +
+      # 4*(num_material_per_mesh - 1) - the +4/material matches
+      # materials_table.offsets' own 4-byte stride.
       pre_trailing_footer_size:
-        value: last_mesh_align_padding + last_mesh_trailer_size
+        value: >-
+          marker_record_readable
+          ? (last_mesh_align_padding + 16 + 20 + 16 * (marker_record_byte0 / 2)
+          + 4 * (num_material_per_mesh - 1))
+          : 0
       pre_trailing_footer:
         pos: ofs_unk_02 - pre_trailing_footer_size
         size: pre_trailing_footer_size
-        if: num_meshes > 0 and num_bones == 0 and ofs_unk_02 > pre_trailing_footer_size
+        if: >-
+          marker_record_readable and num_bones == 0
+          and ofs_unk_02 > pre_trailing_footer_size
       trailing_data:
         pos: ofs_unk_02
         size: _io.size - ofs_unk_02
@@ -113,6 +134,54 @@ types:
         {pos: ofs_data, type: edgemesh}
       materials:
         {pos: ofs_materials, type: materials_table}
+      # unk_ofs_3 gap: the region between materials_table's end and this
+      # mesh's own first buffer. Derived against a full-game sweep (7044
+      # meshes with unk_ofs_3 != 0) as: unk_ofs_3 -> count
+      # (u4), unk_ofs_3+4 -> offset_a (u4, stored - not recomputed),
+      # unk_ofs_3+8 -> offset_b (u4, stored). [unk_ofs_3+12, offset_a) is
+      # alignment filler; [offset_a, offset_b) is count*16 bytes of real
+      # (unmodeled) per-entry data; [offset_b, offset_b + count*8) is a
+      # second count*8-byte real block; anything left over up to the
+      # first buffer is alignment-only padding. 99.47% exact - the only
+      # outlier found is a distinct sub-variant where count is always 22
+      # (guarded out below, not this formula misfiring).
+      materials_end:
+        value: materials._io.pos
+      buf_indices_or_sentinel:
+        value: "mesh.ofs_buffer_indices > materials_end ? mesh.ofs_buffer_indices : 2147483647"
+      buf_vertices_or_sentinel:
+        value: "mesh.ofs_buffer_vertices > materials_end ? mesh.ofs_buffer_vertices : 2147483647"
+      buf_weights_or_sentinel:
+        value: "mesh.ofs_buffer_weights > materials_end ? mesh.ofs_buffer_weights : 2147483647"
+      gap_end:
+        value: >-
+          buf_indices_or_sentinel < buf_vertices_or_sentinel
+          ? (buf_indices_or_sentinel < buf_weights_or_sentinel ? buf_indices_or_sentinel : buf_weights_or_sentinel)
+          : (buf_vertices_or_sentinel < buf_weights_or_sentinel ? buf_vertices_or_sentinel : buf_weights_or_sentinel)
+      unk3_count:
+        {pos: unk_ofs_3, type: u4, if: unk_ofs_3 > 0}
+      unk3_offset_a:
+        {pos: unk_ofs_3 + 4, type: u4, if: unk_ofs_3 > 0}
+      unk3_offset_b:
+        {pos: unk_ofs_3 + 8, type: u4, if: unk_ofs_3 > 0}
+      unk3_region1_end:
+        value: unk3_offset_b + 8 * unk3_count
+      unk3_header_gap:
+        pos: unk_ofs_3 + 12
+        size: unk3_offset_a - (unk_ofs_3 + 12)
+        if: unk_ofs_3 > 0 and unk3_offset_a > unk_ofs_3 + 12
+      unk3_region0:
+        pos: unk3_offset_a
+        size: unk3_offset_b - unk3_offset_a
+        if: unk_ofs_3 > 0 and unk3_offset_b > unk3_offset_a
+      unk3_region1:
+        pos: unk3_offset_b
+        size: 8 * unk3_count
+        if: unk_ofs_3 > 0 and unk3_region1_end <= gap_end
+      unk3_trailing:
+        pos: unk3_region1_end
+        size: gap_end - unk3_region1_end
+        if: unk_ofs_3 > 0 and unk3_region1_end <= gap_end and gap_end > unk3_region1_end
 
   materials_table:
     seq:
