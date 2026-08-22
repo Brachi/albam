@@ -34,18 +34,27 @@ def game_fs_root(pytestconfig, local_app_id):
     mounted into the VFS.
 
     Source is explicit in --game-dir's value, never inferred: a local
-    directory path. No --game-dir for this app_id skips outright; HexnFS
-    has no S3/R2 backend (unlike MTFW_FS/ReenFS), so an "r2://" value skips
-    with a clear message instead of failing.
+    directory path, or an explicit "r2://<bucket>/<prefix>" (see
+    tests.mtfw.r2_config.resolve_r2_source for the R2/CI details, shared
+    verbatim with tests/mtfw/conftest.py - nothing mtfw-specific in it). No
+    --game-dir for this app_id skips outright.
     """
     from albam.engines.hexn.fs import HexnFS
+    from tests.mtfw.r2_config import resolve_r2_source
 
     if local_app_id not in _GAME_FS_INSTANCES:
         value = _game_dirs(pytestconfig).get(local_app_id)
         if not value:
             pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
         elif value.startswith(R2_PROTOCOL_PREFIX):
-            pytest.skip(f"--game-dir={local_app_id}::{value}: HexnFS has no S3/R2 backend")
+            r2_kwargs = resolve_r2_source(value)
+            if r2_kwargs is None:
+                pytest.skip(
+                    f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
+                    f"(empty bucket, missing s3 extras, or missing credentials - see "
+                    f".env.example)"
+                )
+            game_fs = HexnFS.from_s3(**r2_kwargs)
         elif not os.path.isdir(value):
             pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
         else:
