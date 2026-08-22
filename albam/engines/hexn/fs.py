@@ -186,6 +186,49 @@ class SsgFS(FS):
         raise ResourceReadOnly(path)
 
 
+# A real RE:ORC install ships two families of info-only .ssg archives -
+# per-pack "ModelInfos.ssg" (4 on a full install) and per-level
+# "<name>.minfo.ssg" (36) - each holding small per-model metadata records
+# (distinct magic "IM6S", ~1-2KB) filed under the *same* virtual paths as
+# the real, full-geometry .edgemodel files (magic "FM6S") that live in
+# separate content archives - e.g. dlc/pack1/Characters/ModelInfos.ssg has
+# an "IM6S" stub at .../vector.edgemodel, while the real ~1.2MB "FM6S"
+# mesh for that same path lives in dlc/pack1/Characters/vector.ssg.
+# Nothing in this codebase parses the "IM6S" format - see _ssg_priority().
+# A random 300-archive sample of the full install found no third pattern
+# of info-only archive beyond these two.
+def _is_info_only_ssg(ssg_path):
+    basename = os.path.basename(ssg_path).lower()
+    return basename == "modelinfos.ssg" or basename.endswith(".minfo.ssg")
+
+
+def _ssg_priority(ssg_path):
+    """MultiFS priority for one discovered .ssg (see HexnFS.__init__).
+
+    All real content archives share the default priority (0), resolved by
+    MultiFS's own reverse-add-order tie-break - fine on its own, except an
+    info-only archive (see _is_info_only_ssg() above) sorts alphabetically
+    after some real content archives too, so with everything at the same
+    priority it can silently shadow them: a lookup for a shared path
+    returns the tiny info stub instead of the real mesh. Confirmed on a
+    real install: across the 4 ModelInfos.ssg archives alone, 103 of 171
+    virtual paths they share with a real content archive resolved to the
+    wrong stub before this fix (the 36 per-level .minfo.ssg archives add
+    more of the same, unquantified).
+
+    Giving info-only archives a strictly lower priority means one only
+    ever resolves a path no other (real-priority) archive already claims -
+    real content always wins on a shared path, while any path that turns
+    out to exist *only* inside an info-only archive still resolves
+    instead of disappearing outright (confirmed real on this install: some
+    weapon .edgemodel paths, e.g. wep_railgun, exist only as an "IM6S"
+    stub with no real-content archive backing them at all).
+    """
+    if _is_info_only_ssg(ssg_path):
+        return -1
+    return 0
+
+
 def find_ssg_files(game_root):
     """Recursively find every .ssg under `game_root`, case-insensitively -
     same shape as albam.engines.mtfw.arc_fs.find_arc_files()."""
@@ -234,7 +277,7 @@ class HexnFS(MultiFS):
             except Exception as e:
                 self.failed_ssgs.append((ssg_path, e))
                 continue
-            self.add_fs(ssg_path, ssg_fs)
+            self.add_fs(ssg_path, ssg_fs, priority=_ssg_priority(ssg_path))
 
         # added last -> highest default priority -> wins over packed archives
         self.add_fs("<loose>", OSFS(game_root))
@@ -291,7 +334,7 @@ class HexnFS(MultiFS):
             except Exception as e:
                 self.failed_ssgs.append((ssg_key, e))
                 continue
-            self.add_fs(ssg_key, ssg_fs)
+            self.add_fs(ssg_key, ssg_fs, priority=_ssg_priority(ssg_key))
 
         if include_loose:
             # added last -> highest default priority -> wins over packed archives
