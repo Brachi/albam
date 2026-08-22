@@ -8,8 +8,10 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
+from ...exceptions import AlbamCheckFailure
 from ...lib.misc import chunks
 from ...registry import blender_registry
+from ...vfs import VirtualFileData
 from .material import build_blender_materials
 from .structs.reengine_mesh import ReengineMesh
 
@@ -221,3 +223,212 @@ def _build_weights(re_mesh, sub_mesh, num_vertices, vertex_buffer, bl_mesh_ob):
         vg = bl_mesh_ob.vertex_groups.new(name=str(bone_index))
         for vertex_index, weight_value in data:
             vg.add((vertex_index,), weight_value, "ADD")
+
+
+# mesh_group's own header (type/num_meshes/unk_01/unk_02/num_vertices/
+# num_indices) is 16 bytes, immediately followed by its `meshes` array -
+# see mesh.ksy. Not exposed as an instance/offset anywhere in the parsed
+# struct, so export re-derives each submesh's own absolute file offset
+# from this (needed to patch material_index in place without touching
+# anything else in the entry).
+MESH_GROUP_HEADER_SIZE = 16
+MESH_ENTRY_SIZE = 16
+
+
+def _mesh_entry_offsets(src_mesh, lod_group):
+    entry_size = MESH_ENTRY_SIZE + (8 if src_mesh.version != 386270720 else 0)
+    entries = []
+    for mesh_group_offset in lod_group.mesh_groups:
+        base = mesh_group_offset.offset + MESH_GROUP_HEADER_SIZE
+        for i, sub_mesh in enumerate(mesh_group_offset.mesh_group.meshes):
+            entries.append((sub_mesh, base + i * entry_size))
+    return entries
+
+
+def _original_submesh_vertex_count(buffers, sub_mesh):
+    index_buffer = buffers.index_buffer
+    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+    return len(set(indices))
+
+
+def _build_material_name_to_index(src_mesh):
+    return {
+        src_mesh.named_nodes[name_index].value: material_index
+        for material_index, name_index in enumerate(src_mesh.material_name_remap)
+    }
+
+
+def _build_bone_name_to_slot(src_mesh):
+    name_offset = src_mesh.model_info.num_materials
+    return {
+        src_mesh.named_nodes[name_offset + real_bone_index].value: slot
+        for slot, real_bone_index in enumerate(src_mesh.bones_header.bone_maps)
+    }
+
+
+def _vertex_uvs(bl_mesh):
+    uv_layer = bl_mesh.uv_layers[0]
+    per_vertex = [None] * len(bl_mesh.vertices)
+    for loop in bl_mesh.loops:
+        per_vertex[loop.vertex_index] = uv_layer.data[loop.index].uv
+    return per_vertex
+
+
+def _encode_vertex_weights(bl_mesh_ob, vertex_index, bone_name_to_slot):
+    pairs = []
+    for g in bl_mesh_ob.data.vertices[vertex_index].groups:
+        if g.weight <= 0:
+            continue
+        slot = bone_name_to_slot.get(bl_mesh_ob.vertex_groups[g.group].name)
+        if slot is None:
+            continue
+        pairs.append((slot, g.weight))
+    # Which of the 8 joint/weight slots a given bone lands in isn't
+    # recoverable from a Blender vertex group (it only knows a flat,
+    # unordered set of (bone, weight) pairs per vertex - the original
+    # file's primary-vs-secondary split isn't preserved anywhere once
+    # imported) - sorted by weight descending is a reasonable, deterministic
+    # convention, but this is a field-equivalent, not byte-exact, guarantee.
+    pairs.sort(key=lambda p: -p[1])
+    pairs = pairs[:8]
+    joints = [0] * 8
+    weights = [0] * 8
+    for i, (slot, w) in enumerate(pairs):
+        joints[i] = slot
+        weights[i] = min(255, round(w * 255))
+    return joints[0:4] + joints[4:8] + weights[0:4] + weights[4:8]
+
+
+def _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot):
+    bl_mesh = bl_mesh_ob.data
+    num_vertices = len(bl_mesh.vertices)
+
+    lo_attr = bl_mesh.attributes.get(NOR_TAN_LO_ATTR)
+    hi_attr = bl_mesh.attributes.get(NOR_TAN_HI_ATTR)
+    if lo_attr is None or hi_attr is None:
+        raise AlbamCheckFailure(
+            "Mesh is missing normal/tangent data needed for export",
+            f"'{bl_mesh_ob.name}' has no {NOR_TAN_LO_ATTR}/{NOR_TAN_HI_ATTR} custom attributes.",
+            "Only meshes imported by albam, with those attributes still intact, can "
+            "currently be exported.",
+        )
+
+    bl_mesh.calc_loop_triangles()
+    indices = [v for lt in bl_mesh.loop_triangles for v in lt.vertices]
+
+    original_num_vertices = _original_submesh_vertex_count(buffers, sub_mesh)
+    if num_vertices != original_num_vertices or len(indices) != sub_mesh.num_indices:
+        raise AlbamCheckFailure(
+            "Mesh vertex/index count doesn't match the original file",
+            f"'{bl_mesh_ob.name}' has {num_vertices} vertices / {len(indices)} indices, "
+            f"the original submesh has {original_num_vertices} / {sub_mesh.num_indices}.",
+            "Exporting a mesh with a different vertex or triangle count than the imported "
+            "file isn't supported yet - only re-exporting an unmodified (or attribute-only "
+            "edited) import is.",
+        )
+
+    pos_acc, nor_tan_acc, uv_acc = buffers.primitive_accessors[0:3]
+    weight_acc = next((a for a in buffers.primitive_accessors if a.primitive_type == 4), None)
+    vertex_uvs = _vertex_uvs(bl_mesh)
+
+    pos_off = buffers.offset_vertex_buffer + pos_acc.offset + sub_mesh.pos_vertex_buffer * pos_acc.size
+    nor_tan_off = (buffers.offset_vertex_buffer + nor_tan_acc.offset +
+                   sub_mesh.pos_vertex_buffer * nor_tan_acc.size)
+    uv_off = buffers.offset_vertex_buffer + uv_acc.offset + sub_mesh.pos_vertex_buffer * uv_acc.size
+
+    for i, v in enumerate(bl_mesh.vertices):
+        bx, by, bz = v.co
+        struct.pack_into("<3f", data, pos_off + i * pos_acc.size, bx, bz, -by)
+        struct.pack_into(
+            "<ii", data, nor_tan_off + i * nor_tan_acc.size,
+            lo_attr.data[i].value, hi_attr.data[i].value,
+        )
+        u, uv_v = vertex_uvs[i]
+        struct.pack_into("<2e", data, uv_off + i * uv_acc.size, u, uv_v)
+
+    if weight_acc:
+        weight_off = buffers.offset_vertex_buffer + weight_acc.offset + sub_mesh.pos_vertex_buffer * weight_acc.size
+        for i in range(num_vertices):
+            struct.pack_into(
+                "<16B", data, weight_off + i * weight_acc.size,
+                *_encode_vertex_weights(bl_mesh_ob, i, bone_name_to_slot),
+            )
+
+    ib_off = buffers.offset_index_buffer + sub_mesh.pos_index_buffer * 2
+    struct.pack_into(f"<{len(indices)}H", data, ib_off, *indices)
+
+
+def _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_index):
+    materials = bl_mesh_ob.data.materials
+    if not materials or materials[0] is None:
+        raise AlbamCheckFailure(
+            "Mesh has no material assigned",
+            f"'{bl_mesh_ob.name}' has no material in its first material slot.",
+            "Assign the material this submesh should reference before exporting.",
+        )
+    material_name = materials[0].name
+    if material_name not in material_name_to_index:
+        raise AlbamCheckFailure(
+            "Mesh material isn't one of this file's materials",
+            f"'{material_name}' isn't in this .mesh file's material name table.",
+            "Only referencing one of the file's existing materials is supported - "
+            ".mdf2 export isn't implemented yet.",
+        )
+    struct.pack_into("<B", data, entry_offset, material_name_to_index[material_name])
+
+
+@blender_registry.register_export_function(app_id="re2", extension="mesh.2109108288")
+@blender_registry.register_export_function(app_id="re3", extension="mesh.2109108288")
+def export_reengine_mesh(bl_obj):
+    """
+    Patches vertex/index buffer bytes and each submesh's material_index
+    directly into a mutable copy of the original file bytes, rather than
+    rebuilding the whole object graph the way MTFW's exporter does -
+    an unmodified _read()/_write() round trip of mesh.ksy isn't byte-exact
+    (untracked padding/alignment bytes between sections), so a full
+    from-scratch rebuild would already start from a worse baseline than
+    "don't touch what didn't change". This only supports the same
+    vertex/index/submesh counts as the source (see the AlbamCheckFailure
+    messages below) - not general remeshing - which is what makes patching
+    in place safe: every byte outside the touched regions, including any
+    other LOD level's geometry (only LOD 0 is ever imported/re-exported),
+    is guaranteed identical to the source file.
+    """
+    asset = bl_obj.albam_asset
+    app_id = asset.app_id
+    src_bytes = asset.original_bytes
+
+    src_mesh = ReengineMesh(KaitaiStream(io.BytesIO(src_bytes)))
+    src_mesh._read()
+
+    if src_mesh.model_info is None:
+        raise AlbamCheckFailure(
+            "This .mesh file has no main model to export",
+            "header.offset_data == 0 - e.g. an occlusion-culling mesh, which has no "
+            "renderable mesh-group tree at all (see RESULTS.md).",
+            "Only meshes with a real model tree can be exported.",
+        )
+
+    lod_group = src_mesh.model_info.lod_group_offsets[0].lod_group
+    entries = _mesh_entry_offsets(src_mesh, lod_group)
+
+    bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
+    if len(bl_meshes) != len(entries):
+        raise AlbamCheckFailure(
+            "Number of mesh objects doesn't match the original file",
+            f"{len(bl_meshes)} mesh object(s) under '{bl_obj.name}', the original file's "
+            f"LOD 0 has {len(entries)} submesh(es).",
+            "Adding or removing submeshes isn't supported yet - only re-exporting an "
+            "unmodified (or attribute-only edited) import is.",
+        )
+
+    material_name_to_index = _build_material_name_to_index(src_mesh)
+    bone_name_to_slot = _build_bone_name_to_slot(src_mesh) if src_mesh.header.offset_bones else {}
+
+    data = bytearray(src_bytes)
+    buffers = src_mesh.buffers_data
+    for bl_mesh_ob, (sub_mesh, entry_offset) in zip(bl_meshes, entries):
+        _export_submesh(data, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot)
+        _export_material_index(data, entry_offset, bl_mesh_ob, material_name_to_index)
+
+    return [VirtualFileData(app_id, asset.relative_path, data_bytes=bytes(data))]
