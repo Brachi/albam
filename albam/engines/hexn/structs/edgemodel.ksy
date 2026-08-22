@@ -35,6 +35,13 @@ types:
       - {id: ofs_models_end, type: u4, repeat: expr, repeat-expr: 5}  # TODO: better name
       - {id: reserved_05, type: u4}
       - {id: reserved_06, type: u4}
+      # num_bones/ofs_bones/ofs_unk_01/ofs_unk_02 point at further sections
+      # (bone data, at least) not modeled here - see
+      # albam/engines/hexn/edgemodel_roundtrip.py for why: their real
+      # extents don't reduce to a clean per-file formula (tried and
+      # reverted - see git history), so round-trip fidelity is handled
+      # generically there (byte-diff against known ranges) instead of by
+      # guessing more fields here.
 
   mesh_header:
     seq:
@@ -60,9 +67,21 @@ types:
 
   materials_table:
     seq:
-      # TODO: rest of materials if needed
       - {id: offsets, type: u4, repeat: expr, repeat-expr: _parent._parent.header.num_material_per_mesh}
-      - {id: first_material, type: str, terminator: 0, encoding: ASCII}
+      # offsets[i] each point to their own separate null-terminated string
+      # (confirmed against real data: 4 distinct .matb paths, one per
+      # offset - not just first_material's) - modeled here as sequential
+      # (offsets[i+1] always equals offsets[i] + len(string) + 1 on every
+      # real file checked, i.e. they're contiguous, not independently
+      # positioned) rather than pos-based per offsets[i]: the Python target
+      # of kaitai-struct-compiler 0.11 generates broken code (references
+      # the repeat loop variable before it's bound) for a `pos:` expression
+      # that depends on `_index` inside a repeated instance.
+      - {id: all_materials, type: str, terminator: 0, encoding: ASCII,
+         repeat: expr, repeat-expr: _parent._parent.header.num_material_per_mesh}
+    instances:
+      first_material:
+        value: all_materials[0]
 
   vec3:
     seq:
@@ -110,6 +129,15 @@ types:
       - {id: reserved_16, type: u4}
       - {id: unk_9_size, type: u2}
       - {id: unk_10_size, type: u2}
+      # Real (non-padding) data sits between here and _parent.ofs_materials
+      # on every file checked, partially reverse-engineered as num_groups-
+      # and _parent.unk_flags_1-driven (see git history for the formulas -
+      # >99.6%/99.8% exact across a full-game sample, but not exact: a
+      # weapon LOD/SHADOW sub-variant breaks both, and modeling it as a
+      # mandatory field here turned "one bad mesh" into "whole file fails
+      # to parse" for those - worse than not modeling it. Left opaque;
+      # round-trip fidelity is handled generically instead - see
+      # albam/engines/hexn/edgemodel_roundtrip.py.
     instances:
       buffer_indices:
         {pos: ofs_buffer_indices, size: size_buffer_indices}
