@@ -21,16 +21,14 @@ MultiFS, mirroring `albam.engines.mtfw.arc_fs.MTFW_FS`.
 import io
 import os
 import zlib
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import CreateFailed, DirectoryExpected, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
-from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import dirname
 from kaitaistruct import KaitaiStream
 
 from .structs.hexane_ssg import HexaneSsg
@@ -83,14 +81,25 @@ class SsgFS(FS):
         ssg = self._parse_header()
         self._sizes = {}
         self._offsets = {}
-        self._directory = MemoryFS()
+        # dir path -> set of immediate child names; built directly instead
+        # of via fs.memoryfs.MemoryFS - its makedirs()/create() per file
+        # dominated SsgFS construction cost by far more than the actual
+        # file read or Kaitai parse.
+        self._dir_children = defaultdict(set)
+        self._known_dirs = {"/"}
         offset = 0
         for file_info in ssg.files_info:
             path = "/" + file_info.name.replace("\\", "/").lstrip("/")
             self._sizes[path] = file_info.size
             self._offsets[path] = offset
-            self._directory.makedirs(dirname(path), recreate=True)
-            self._directory.create(path)
+
+            parts = path.strip("/").split("/")
+            for i in range(len(parts)):
+                parent = "/" + "/".join(parts[:i])
+                self._dir_children[parent].add(parts[i])
+                if i < len(parts) - 1:
+                    self._known_dirs.add(parent.rstrip("/") + "/" + parts[i])
+
             offset += file_info.size + (-file_info.size % ssg.size_padding)
 
         self._data = None  # populated lazily - see _ensure_decompressed()
@@ -103,7 +112,8 @@ class SsgFS(FS):
         otherwise. Returns the still-open file handle along with the
         parsed struct - the caller owns closing it, and must do so only
         after it's done touching anything that isn't a plain seq field
-        (buffer_chunks itself, or `file_info.name`, also a lazy instance).
+        (buffer_chunks itself; file_info.name is also a lazy instance, but
+        _parse_header() below avoids it entirely).
         """
         f = self._opener(self.ssg_path)
         ssg = HexaneSsg(KaitaiStream(f))
@@ -113,13 +123,19 @@ class SsgFS(FS):
     def _parse_header(self):
         """Parse just the header + file table (names + sizes) - cheap even
         for a large, heavily-compressed .ssg, since `buffer_chunks` (the
-        actual bulk of the archive) is never touched here."""
+        actual bulk of the archive) is never touched here.
+
+        Names are sliced directly out of ssg.file_names (already a fully-
+        read bytes value) instead of via file_info.name, a lazy Kaitai
+        instance that would otherwise re-seek the stream per file - a real
+        cost across a real install's ~1300 archives and ~150k+ files.
+        """
         f, ssg = self._open_and_parse()
-        try:
-            for file_info in ssg.files_info:
-                file_info.name  # resolve now, while the stream is still open
-        finally:
-            f.close()
+        f.close()
+        file_names = ssg.file_names
+        for file_info in ssg.files_info:
+            end = file_names.index(b"\x00", file_info.name_offset_rel)
+            file_info.name = file_names[file_info.name_offset_rel:end].decode("ascii")
         return ssg
 
     def _ensure_decompressed(self):
@@ -164,11 +180,14 @@ class SsgFS(FS):
         self.check()
         _path = self.validatepath(path)
         namespaces = namespaces or ()
-        basic_info = self._directory.getinfo(_path)
-        raw_info = {"basic": {"name": basic_info.name, "is_dir": basic_info.is_dir}}
+        is_dir = _path == "/" or _path in self._known_dirs
+        if not is_dir and _path not in self._sizes:
+            raise ResourceNotFound(path)
+        name = _path.rsplit("/", 1)[-1] or "/"
+        raw_info = {"basic": {"name": name, "is_dir": is_dir}}
 
         if "details" in namespaces:
-            resource_type = ResourceType.directory if basic_info.is_dir else ResourceType.file
+            resource_type = ResourceType.directory if is_dir else ResourceType.file
             raw_info["details"] = {
                 "type": int(resource_type),
                 "size": self._sizes.get(_path, 0),
@@ -177,7 +196,10 @@ class SsgFS(FS):
 
     def listdir(self, path):
         self.check()
-        return self._directory.listdir(path)
+        _path = self.validatepath(path)
+        if _path != "/" and _path not in self._known_dirs:
+            raise ResourceNotFound(path)
+        return sorted(self._dir_children.get(_path, ()))
 
     def openbin(self, path, mode="r", buffering=-1, **options):
         self.check()
