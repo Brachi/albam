@@ -1367,6 +1367,7 @@ def export_lmt(bl_obj):
 
             block_offset.block_header = anim_header
         block_offset.offset = ofc_block[i]
+        block_offset._check()
         block_offsets.append(block_offset)
 
     dst_lmt.block_offsets = block_offsets
