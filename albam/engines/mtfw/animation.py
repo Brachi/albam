@@ -1262,6 +1262,7 @@ def export_lmt(bl_obj):
                 for attr in col_events_attr:
                     dst_col_attr = dst_lmt.Attr(_parent=dst_collision_events, _root=dst_lmt)
                     attr.copy_custom_properties_to(dst_col_attr)
+                    dst_col_attr._check()
                     dst_col_event_attr.append(dst_col_attr)
                 dst_collision_events.attributes = dst_col_event_attr
                 anim_header.collision_events = dst_collision_events
@@ -1275,6 +1276,7 @@ def export_lmt(bl_obj):
                 for attr in motion_se_attr:
                     motion_se_attr = dst_lmt.Attr(_parent=motion_sound_effects, _root=dst_lmt)
                     attr.copy_custom_properties_to(motion_se_attr)
+                    motion_se_attr._check()
                     dst_motion_se_attr.append(motion_se_attr)
                 motion_sound_effects.attributes = dst_motion_se_attr
                 motion_sound_effects._check()
@@ -1289,6 +1291,7 @@ def export_lmt(bl_obj):
                     dst_track.len_data = len(track.raw_data)
                     dst_track.ofs_data = track_ofc[j]
                     dst_track.data = track.raw_data
+                    dst_track._check()
                     dst_tracks.append(dst_track)
                 anim_header.tracks = dst_tracks
                 anim_header._check()
@@ -1315,6 +1318,7 @@ def export_lmt(bl_obj):
                     for k, s_info_attr in enumerate(s_attr):
                         dst_si_attr = dst_lmt.SeqInfoAttr(_parent=dst_seq_info, _root=dst_lmt)
                         s_info_attr.copy_custom_properties_to(dst_si_attr)
+                        dst_si_attr._check()
                         si_attrs.append(dst_si_attr)
                     dst_seq_info.attributes = si_attrs
                     dst_seq_info._check()
@@ -1334,6 +1338,7 @@ def export_lmt(bl_obj):
                     for k, kf_info_attr in enumerate(k_blocks):
                         dst_k_attr = dst_lmt.KeyframeBlock(_parent=dst_kf_info, _root=dst_lmt)
                         kf_info_attr.copy_custom_properties_to(dst_k_attr)
+                        dst_k_attr._check()
                         kf_blocks.append(dst_k_attr)
                     dst_kf_info.keyframe_blocks = kf_blocks
                     dst_kf_info._check()
