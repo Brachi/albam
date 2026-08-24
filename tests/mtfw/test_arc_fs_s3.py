@@ -74,6 +74,7 @@ def _build_arc_bytes(entries):
     arc.header.ident = b"ARC\x00"
     arc.header.version = 1
     arc.header.num_files = len(entries)
+    arc.header._check()
 
     table_size = 8 + len(entries) * 80
     padding_size = 32760 - (len(entries) * 80) % 32768
@@ -90,10 +91,12 @@ def _build_arc_bytes(entries):
         fe.flags = 0
         fe.offset = offset
         fe.raw_data = compressed
+        fe._check()
         arc.file_entries.append(fe)
         offset += len(compressed)
 
     arc.padding = b"\x00" * padding_size
+    arc._check()
 
     # KaitaiStream's write mode needs the underlying stream pre-sized to its
     # final length upfront (it snapshots size() once at construction) -

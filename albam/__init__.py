@@ -1,6 +1,5 @@
 import importlib
 import os
-import sys
 
 import bpy
 
@@ -15,12 +14,7 @@ from .__version__ import __version__ as version
 __version__ = version
 
 
-ALBAM_DIR = os.path.dirname(__file__)
-VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
-
-
 def register():
-    sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
     importlib.import_module(".blender_ui.import_panel", __package__)
     importlib.import_module(".blender_ui.export_panel", __package__)
@@ -64,6 +58,11 @@ def register():
     # Load data from user's config files
     bpy.app.handlers.load_post.append(populate_albam_data)
 
+    # Rebuild fs_registry's process-lifetime entries for VFS roots restored
+    # from the loaded .blend file - see albam.vfs.reconnect_fs_roots.
+    from .vfs import reconnect_fs_roots
+    bpy.app.handlers.load_post.append(reconnect_fs_roots)
+
 
 def unregister():
     fs_registry.clear()
@@ -75,5 +74,3 @@ def unregister():
         bpy.utils.unregister_class(cls)
 
     bpy.utils.unregister_class(type(bpy.context.scene.albam))
-
-    sys.path.remove(VENDOR_DIR)

@@ -24,6 +24,28 @@ url = "https://files.pythonhosted.org/packages/b9/5c/a3d95dc1ec6cdeb032d789b552e
 sha256 = "660064febbccda264ae0b6bace80a8d1be9e089e0a5eb2427b7d517f9a91545c"
 
 [[packages]]
+name = "kaitaistruct"
+version = "0.11"
+
+[[packages.wheels]]
+name = "kaitaistruct-0.11-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/4a/4a/cf14bf3b1f5ffb13c69cf5f0ea78031247790558ee88984a8bdd22fae60d/kaitaistruct-0.11-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "5c6ce79177b4e193a577ecd359e26516d1d6d000a0bffd6e1010f2a46a62a561"
+
+[[packages]]
+name = "pymorton"
+version = "1.0.5"
+
+[[packages.wheels]]
+name = "pymorton-1.0.5-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/c6/8d/906ba6d4266d7696547b8b70e08423975243c7339fe1ccf4bdbc42478394/pymorton-1.0.5-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "b2df3ed2ab002f0b6780344485980130a3f959f959aea65301381b11cfe31dce"
+
+[[packages]]
 name = "setuptools"
 version = "80.10.2"
 
