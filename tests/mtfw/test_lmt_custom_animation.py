@@ -57,7 +57,12 @@ def test_edited_keyframe_survives_export(
         custom_props = candidate.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
         if custom_props.ofs_frame == 0 or not custom_props.action:
             continue
-        for fcurve in custom_props.action.fcurves:
+        action = custom_props.action
+        if int(bpy.app.version_string[0]) >= 5:
+            fcurves = action.layers[0].strips[0].channelbags[0].fcurves
+        else:
+            fcurves = action.fcurves
+        for fcurve in fcurves:
             if fcurve.data_path.startswith('pose.bones["') and "location" in fcurve.data_path:
                 target_block = candidate
                 target_fcurve = fcurve
