@@ -15,6 +15,8 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         self._root = _root or self
         self._should_write_hash_array = False
         self.hash_array__enabled = True
+        self._should_write_hierarchy_padding = False
+        self.hierarchy_padding__enabled = True
         self._should_write_local_transforms = False
         self.local_transforms__enabled = True
         self._should_write_name_offsets = False
@@ -87,6 +89,10 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_hash_array'):
             pass
 
+        _ = self.hierarchy_padding
+        if hasattr(self, '_m_hierarchy_padding'):
+            pass
+
         _ = self.local_transforms
         if hasattr(self, '_m_local_transforms'):
             pass
@@ -126,6 +132,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
     def _write__seq(self, io=None):
         super(HexaneSkel, self)._write__seq(io)
         self._should_write_hash_array = self.hash_array__enabled
+        self._should_write_hierarchy_padding = self.hierarchy_padding__enabled
         self._should_write_local_transforms = self.local_transforms__enabled
         self._should_write_name_offsets = self.name_offsets__enabled
         self._should_write_names = self.names__enabled
@@ -197,6 +204,14 @@ class HexaneSkel(ReadWriteKaitaiStruct):
             pass
             if len(self._m_hash_array) != self.hierarchy_size:
                 raise kaitaistruct.ConsistencyError(u"hash_array", self.hierarchy_size, len(self._m_hash_array))
+
+        if self.hierarchy_padding__enabled:
+            pass
+            if self.hierarchy_size > self.node_count * 4:
+                pass
+                if len(self._m_hierarchy_padding) != self.hierarchy_size - self.node_count * 4:
+                    raise kaitaistruct.ConsistencyError(u"hierarchy_padding", self.hierarchy_size - self.node_count * 4, len(self._m_hierarchy_padding))
+
 
         if self.local_transforms__enabled:
             pass
@@ -444,6 +459,42 @@ class HexaneSkel(ReadWriteKaitaiStruct):
 
     def _invalidate_hierarchy_end(self):
         del self._m_hierarchy_end
+    @property
+    def hierarchy_padding(self):
+        """The gap between the real hierarchy entries (node_count * 4 bytes) and hierarchy_end. NOT plain alignment padding - real, non-zero data on most files checked, the same 4-bytes-per-entry shape as `hierarchy` itself (plausible small node-index-like u16 pairs), just not accounted for by node_count. Purpose not identified - captured opaquely, same convention as edgemodel.ksy's own unattributed regions. Modeled as its own field (rather than left to `hierarchy`'s own declared size) so it round-trips at all: a Kaitai `seq` array's write only emits its real repeat-expr entries, never bytes beyond them.
+        """
+        if self._should_write_hierarchy_padding:
+            self._write_hierarchy_padding()
+        if hasattr(self, '_m_hierarchy_padding'):
+            return self._m_hierarchy_padding
+
+        if not self.hierarchy_padding__enabled:
+            return None
+
+        if self.hierarchy_size > self.node_count * 4:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(256 + self.node_count * 4)
+            self._m_hierarchy_padding = self._io.read_bytes(self.hierarchy_size - self.node_count * 4)
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_hierarchy_padding', None)
+
+    @hierarchy_padding.setter
+    def hierarchy_padding(self, v):
+        self._dirty = True
+        self._m_hierarchy_padding = v
+
+    def _write_hierarchy_padding(self):
+        self._should_write_hierarchy_padding = False
+        if self.hierarchy_size > self.node_count * 4:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(256 + self.node_count * 4)
+            self._io.write_bytes(self._m_hierarchy_padding)
+            self._io.seek(_pos)
+
+
     @property
     def local_transforms(self):
         """Per-node bind-pose local transform (relative to the parent named in `hierarchy`), node_count entries of 48 bytes each - confirmed via an automated scan (unit-length quaternion, both trailing homogeneous w's exactly 1.0, verified against the following entry too to rule out a false positive) on the hand-checked samples, and the resulting recursively-composed world positions are a plausible humanoid bind pose (Y-up, confirmed by composing a real sample's full hierarchy - matches mesh.py's own (x, -z, y) game-to-Blender axis convention for vertex positions).

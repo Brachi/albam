@@ -181,14 +181,26 @@ seq:
     repeat-expr: node_count
     doc: >
       Fixed at absolute 0x100 (right after the fields above, always exactly
-      that size). node_count entries, 4 bytes each - real size confirmed
-      exactly hierarchy_size bytes (round_up(node_count * 4, 16); any
-      trailing alignment bytes are part of this array's own declared size,
-      not separately modeled).
+      that size). node_count entries, 4 bytes each.
 
 instances:
   hierarchy_end:
     value: 0x100 + hierarchy_size
+  hierarchy_padding:
+    pos: 0x100 + (node_count * 4)
+    size: hierarchy_size - (node_count * 4)
+    if: hierarchy_size > node_count * 4
+    doc: >
+      The gap between the real hierarchy entries (node_count * 4 bytes) and
+      hierarchy_end. NOT plain alignment padding - real, non-zero data on
+      most files checked, the same 4-bytes-per-entry shape as
+      `hierarchy` itself (plausible small node-index-like u16 pairs), just
+      not accounted for by node_count. Purpose not identified - captured
+      opaquely, same convention as edgemodel.ksy's own unattributed
+      regions. Modeled as its own field (rather than left to `hierarchy`'s
+      own declared size) so it round-trips at all: a Kaitai `seq` array's
+      write only emits its real repeat-expr entries, never bytes beyond
+      them.
   local_transforms_start:
     value: 0xD8 + d8_ofs_local_transforms
   pre_transforms_data:
