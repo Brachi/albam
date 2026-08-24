@@ -53,6 +53,29 @@ def build_blender_skeleton(edgemodel_vfile, context, armature_name):
     if skel_vfile is None:
         return None, None
 
+    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)
+
+
+def build_blender_skeleton_by_stem(context, stem, armature_name):
+    """Same as build_blender_skeleton(), but for a caller that already
+    knows the skeleton's own stem directly - e.g.
+    albam.engines.hexn.animation, which gets it straight from a clip's own
+    "<clip_path>--<skeleton_name>" name, with no .edgemodel vfile at hand
+    to derive it from the way infer_skeleton_vfile() does. Returns
+    (None, None) the same way when dlc/pack1/Characters/skel/<stem>.ssg
+    doesn't exist.
+    """
+    vfs = context.scene.albam.vfs
+    skel_path = f"dlc/pack1/Characters/skel/{stem}.ssg"
+    try:
+        skel_vfile = vfs.get_vfile("reorc", skel_path)
+    except KeyError:
+        return None, None
+
+    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)
+
+
+def _build_blender_skeleton_from_vfile(skel_vfile, armature_name):
     skel_bytes = skel_vfile.get_bytes()
     skel = HexaneSkel.from_bytes(skel_bytes)
     skel._read()

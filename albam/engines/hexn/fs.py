@@ -17,6 +17,23 @@ __init__ (see `_ensure_decompressed()`) - a real game install has ~2000
 `SsgFS` exposes a single .ssg as a read-only PyFilesystem2 filesystem;
 `HexnFS` overlays every .ssg under a game root - plus loose files - into one
 MultiFS, mirroring `albam.engines.mtfw.arc_fs.MTFW_FS`.
+
+`SsgFS` also transparently handles `Animation/Projects/*.anims.ssg` (see
+structs/anims.ksy) - a structurally-similar but big-endian, differently-
+packed container - rather than that getting its own FS class: the
+registry's `fs_root_loader_registry` is keyed by (app_id, extension), and
+`.anims.ssg` shares the literal "ssg" extension with the regular,
+little-endian format already registered here (archive.py), so there's no
+second registry slot to hang a separate `AnimsFS` off of. `_parse_header()`
+tries the regular little-endian `HexaneSsg` first (matches every real
+non-anims .ssg) and only falls back to the big-endian `HexaneAnims` if
+that raises (the two magics don't overlap - the same 4 bytes read as
+`contents: [0x06, 0x00, 0x00, 0x00]` little-endian vs. a big-endian u4
+can't both validate). Each clip entry is exposed as its own virtual leaf
+file, named `<file_info.name>.animclip` - a synthetic extension (no real
+file on disk ever has one) so the import registry can key an
+`albam.engines.hexn.animation` import function off of it, the same way
+every other importable leaf here is dispatched by extension.
 """
 import io
 import os
@@ -31,8 +48,11 @@ from fs.multifs import MultiFS
 from fs.osfs import OSFS
 from kaitaistruct import KaitaiStream
 
+from .structs.hexane_anims import HexaneAnims
 from .structs.hexane_ssg import HexaneSsg
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
+
+ANIM_CLIP_EXTENSION = ".animclip"
 
 
 def _local_opener(path):
@@ -78,7 +98,7 @@ class SsgFS(FS):
         self.ssg_path = str(ssg_path)
         self._opener = opener or _local_opener
 
-        ssg = self._parse_header()
+        ssg, self._struct_cls = self._parse_header()
         self._sizes = {}
         self._offsets = {}
         # dir path -> set of immediate child names; built directly instead
@@ -88,8 +108,21 @@ class SsgFS(FS):
         self._dir_children = defaultdict(set)
         self._known_dirs = {"/"}
         offset = 0
+        # HexaneAnims is the shared big-endian container both .anims.ssg
+        # and the unrelated skel/*.ssg use (see structs/anims.ksy's own
+        # doc) - file_info.file_type (5 for an animation clip, 4 for a
+        # skeleton) is what actually distinguishes a clip entry, not "which
+        # struct class parsed the outer container". Only a real clip entry
+        # gets the synthetic ANIM_CLIP_EXTENSION suffix; a skeleton's own
+        # single entry is exposed under its raw inner name instead (nothing
+        # imports it through this per-entry path today - skeleton.py
+        # resolves a skel file directly from its own real on-disk path via
+        # the VFS's loose-file layer, not through this listing).
+        is_be_container = self._struct_cls is HexaneAnims
         for file_info in ssg.files_info:
-            path = "/" + file_info.name.replace("\\", "/").lstrip("/")
+            name = file_info.name.replace("\\", "/").lstrip("/")
+            is_anim_clip = is_be_container and file_info.file_type == 5
+            path = "/" + (name + ANIM_CLIP_EXTENSION if is_anim_clip else name)
             self._sizes[path] = file_info.size
             self._offsets[path] = offset
 
@@ -100,11 +133,18 @@ class SsgFS(FS):
                 if i < len(parts) - 1:
                     self._known_dirs.add(parent.rstrip("/") + "/" + parts[i])
 
-            offset += file_info.size + (-file_info.size % ssg.size_padding)
+            # Both formats sharing the big-endian container pack their
+            # entries with no padding at all, unlike the regular
+            # little-endian format's size_padding-driven gaps - confirmed
+            # for .anims.ssg against the verified dataset (see
+            # anims_roundtrip.py); skel/*.ssg only ever has one entry, so
+            # padding is moot there either way.
+            padding = 0 if is_be_container else (-file_info.size % ssg.size_padding)
+            offset += file_info.size + padding
 
         self._data = None  # populated lazily - see _ensure_decompressed()
 
-    def _open_and_parse(self):
+    def _open_and_parse(self, struct_cls):
         """Open the archive and read everything up to (not including)
         `buffer_chunks`, which is a lazily-computed Kaitai instance: it
         only seeks/reads its own region of the stream when something
@@ -116,7 +156,7 @@ class SsgFS(FS):
         _parse_header() below avoids it entirely).
         """
         f = self._opener(self.ssg_path)
-        ssg = HexaneSsg(KaitaiStream(f))
+        ssg = struct_cls(KaitaiStream(f))
         ssg._read()
         return f, ssg
 
@@ -129,20 +169,31 @@ class SsgFS(FS):
         read bytes value) instead of via file_info.name, a lazy Kaitai
         instance that would otherwise re-seek the stream per file - a real
         cost across a real install's ~1300 archives and ~150k+ files.
+
+        Tries the regular little-endian HexaneSsg first (every real
+        non-anims .ssg); HexaneAnims (big-endian - see this module's own
+        doc) only on failure, since that's the rare case (a small minority
+        of real .ssg archives). Returns (ssg, struct_cls) - the caller
+        needs struct_cls again for _ensure_decompressed().
         """
-        f, ssg = self._open_and_parse()
+        try:
+            f, ssg = self._open_and_parse(HexaneSsg)
+            struct_cls = HexaneSsg
+        except Exception:
+            f, ssg = self._open_and_parse(HexaneAnims)
+            struct_cls = HexaneAnims
         f.close()
         file_names = ssg.file_names
         for file_info in ssg.files_info:
             end = file_names.index(b"\x00", file_info.name_offset_rel)
             file_info.name = file_names[file_info.name_offset_rel:end].decode("ascii")
-        return ssg
+        return ssg, struct_cls
 
     def _ensure_decompressed(self):
         if self._data is not None:
             return
 
-        f, ssg = self._open_and_parse()
+        f, ssg = self._open_and_parse(self._struct_cls)
         try:
             buffer_chunks = ssg.buffer_chunks  # triggers the lazy seek+read
             if ssg.chunk_sizes:
@@ -155,15 +206,17 @@ class SsgFS(FS):
                     uncompressed.extend(zlib.decompress(chunk))
                     compressed_pos += chunk_size
             else:
-                # No chunk table (size_chunks_info == 0, seen on some smaller
-                # .ssg) - buffer_chunks is stored raw/uncompressed in this
-                # case, not zlib-compressed
-                # at all. Confirmed by decoding a known entry's expected magic
-                # (b"FM6S") directly out of the raw bytes at its computed
-                # offset - zlib.decompress on the whole blob fails outright
-                # ("incorrect header check"), and the total uncompressed size
-                # every files_info entry needs matches size_chunks_buffer
-                # exactly, consistent with "no compression happened here".
+                # No chunk table (size_chunks_info == 0) - buffer_chunks is
+                # stored raw/uncompressed in this case, not zlib-compressed
+                # at all. Confirmed for the regular little-endian format by
+                # decoding a known entry's expected magic (b"FM6S") directly
+                # out of the raw bytes at its computed offset - zlib.decompress
+                # on the whole blob fails outright ("incorrect header
+                # check"), and the total uncompressed size every files_info
+                # entry needs matches size_chunks_buffer exactly, consistent
+                # with "no compression happened here". Also always true for
+                # HexaneAnims - see this module's own doc (size_chunks_info
+                # is always 0 on every real *.anims.ssg found).
                 uncompressed = buffer_chunks
         finally:
             f.close()

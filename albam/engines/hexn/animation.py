@@ -1,11 +1,24 @@
 """
 RE:ORC (.anims.ssg) animation decoding + Blender Action building.
 
-Deliberately self-contained: build_blender_action() takes an *already
-built* armature object (see its own docstring for the exact bone-lookup
-shape it expects) rather than building one itself - the skeleton
-(dlc/pack1/Characters/skel/*.ssg) importer is separate work that wires
-into albam.engines.hexn.mesh.build_blender_model.
+import_anim_clip() is the registered entry point (registered on a
+synthetic ".animclip" extension - see fs.py's own doc for why: the
+registry's (app_id, extension) key for "ssg" is already taken by the
+regular little-endian format, so a clip can't get its own
+register_fs_root_loader; SsgFS itself was made dual-format-aware instead,
+exposing each real clip inside a *.anims.ssg as its own ".animclip"
+virtual leaf). It resolves the clip's referenced skeleton by name (via
+albam.engines.hexn.skeleton.build_blender_skeleton_by_stem), reusing an
+already-imported armature of the same name if one exists in the scene
+rather than building a duplicate - "<skeleton_name>_skeleton" is exactly
+what albam.engines.hexn.mesh.build_blender_model already names one - then
+decodes and applies the clip via decode_clip()/build_blender_action().
+
+build_blender_action() itself stays self-contained per its own docstring
+(takes an already-built armature object rather than building one), so
+import_anim_clip() above is what actually wires the two pieces together
+for the VFS/import-operator UI path; a caller with its own armature can
+still use decode_clip()/build_blender_action() directly.
 
 The per-clip payload past AnimClip.size_header (see structs/anims.ksy) is
 Sony PS3 "Edge" middleware's bit-packed, adaptively-interpolated keyframe
@@ -39,12 +52,54 @@ from math import sqrt
 import bpy
 from mathutils import Quaternion, Vector
 
+from ...registry import blender_registry
+from .fs import ANIM_CLIP_EXTENSION
+from .skeleton import build_blender_skeleton_by_stem
 from .structs.hexane_anims import HexaneAnims
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
 _QUAT_OFFSET = _QUAT_SCALE / sqrt(2)
 _MASK32 = 0xFFFFFFFF
 _MASK128 = (1 << 128) - 1
+
+
+@blender_registry.register_import_function(app_id="reorc", extension="animclip", albam_asset_type="ANIMATION")
+def import_anim_clip(vfile, context):
+    """Imports one animation clip (a ".animclip"-suffixed virtual leaf -
+    see fs.py's SsgFS and this module's own doc) onto its referenced
+    skeleton's armature, building that armature first if it isn't already
+    in the scene. Returns None - same "animations don't return a Blender
+    object" convention albam.engines.mtfw.animation.load_lmt already
+    follows (see blender_ui/import_panel.py's own ALBAM_OT_Import.execute:
+    a falsy return just skips the asset-tracking/export-registration steps
+    that assume a freshly-created object, which would be wrong here for a
+    *reused* armature anyway).
+    """
+    clip_bytes = vfile.get_bytes()
+    raw_name = vfile.display_name
+    if raw_name.endswith(ANIM_CLIP_EXTENSION):
+        raw_name = raw_name[:-len(ANIM_CLIP_EXTENSION)]
+    clip_path, skeleton_name = parse_clip_name(raw_name)
+
+    decoded = decode_clip(clip_bytes, name=clip_path, skeleton_name=skeleton_name)
+
+    armature_name = f"{skeleton_name}_skeleton"
+    armature_object = bpy.data.objects.get(armature_name)
+    if armature_object is not None and armature_object.type == "ARMATURE":
+        bone_names = [pose_bone.name for pose_bone in armature_object.pose.bones]
+    else:
+        armature_object, bone_names = build_blender_skeleton_by_stem(context, skeleton_name, armature_name)
+
+    if armature_object is None:
+        raise ValueError(
+            f"No skeleton found for {clip_path!r} (referenced skeleton: {skeleton_name!r}, expected "
+            f"dlc/pack1/Characters/skel/{skeleton_name}.ssg) - can't import an animation with no "
+            f"armature to apply it to."
+        )
+
+    action_name = f"{skeleton_name}.{clip_path.rsplit('/', 1)[-1]}"
+    build_blender_action(armature_object, decoded, action_name, bone_names)
+    return None
 
 
 def _align(value, to):
