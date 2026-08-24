@@ -20,6 +20,38 @@ from .structs.hexane_skel import HexaneSkel
 TAIL_LENGTH = 0.03
 
 
+def _find_skel_vfile(vfs, stem):
+    """A skel file is addressable in the VFS under two different paths,
+    depending on how it got mounted, and both need trying:
+
+    - dlc/pack1/Characters/skel/<stem>.ssg (capitalized "Characters", with
+      the .ssg extension) - the file's own real on-disk path, exposed when
+      whatever was added covers that whole directory (e.g. "Add Folder" on
+      the game root, or a parent of it): HexnFS's own loose-file layer
+      mirrors real paths directly, case and extension intact.
+    - dlc/pack1/characters/skel/<stem> (lowercase "characters", no
+      extension) - what the *same* file decodes to when it's added on its
+      own (e.g. "Add Files" picking just that one .ssg): a skel/*.ssg is
+      itself a single-payload container sharing anims.ksy's big-endian
+      shape (see structs/skel.ksy's own doc), and SsgFS/HexnFS expose an
+      archive's entries under the name recorded in its own file table, not
+      its real on-disk path - confirmed empirically to be this lowercase,
+      extension-less form for a skel file's own single entry.
+
+    Both forms point at the identical real bytes; only their VFS
+    reachability differs depending on what was added.
+    """
+    for skel_path in (
+        f"dlc/pack1/Characters/skel/{stem}.ssg",
+        f"dlc/pack1/characters/skel/{stem}",
+    ):
+        try:
+            return vfs.get_vfile("reorc", skel_path)
+        except KeyError:
+            continue
+    return None
+
+
 def infer_skeleton_vfile(context, edgemodel_vfile):
     """RE:ORC's skeleton lives in a directory tree entirely separate from
     the mesh that references it: dlc/pack1/Characters/skel/<stem>.ssg (note
@@ -31,15 +63,13 @@ def infer_skeleton_vfile(context, edgemodel_vfile):
     directly under skel/<stem>.ssg - confirmed for every real
     playable-character archive directly under dlc/pack1/Characters in a
     full sweep (the small number of *.ssg there without a same-stem
-    skel/*.ssg are all non-character utility archives).
+    skel/*.ssg are all non-character utility archives). See
+    _find_skel_vfile() for why the stem alone isn't enough to build one
+    single lookup path.
     """
     vfs = context.scene.albam.vfs
     stem = PureWindowsPath(edgemodel_vfile.relative_path).stem
-    skel_path = f"dlc/pack1/Characters/skel/{stem}.ssg"
-    try:
-        return vfs.get_vfile("reorc", skel_path)
-    except KeyError:
-        return None
+    return _find_skel_vfile(vfs, stem)
 
 
 def build_blender_skeleton(edgemodel_vfile, context, armature_name):
@@ -62,14 +92,12 @@ def build_blender_skeleton_by_stem(context, stem, armature_name):
     albam.engines.hexn.animation, which gets it straight from a clip's own
     "<clip_path>--<skeleton_name>" name, with no .edgemodel vfile at hand
     to derive it from the way infer_skeleton_vfile() does. Returns
-    (None, None) the same way when dlc/pack1/Characters/skel/<stem>.ssg
-    doesn't exist.
+    (None, None) the same way when _find_skel_vfile() can't find the
+    skeleton under either of its two addressable paths.
     """
     vfs = context.scene.albam.vfs
-    skel_path = f"dlc/pack1/Characters/skel/{stem}.ssg"
-    try:
-        skel_vfile = vfs.get_vfile("reorc", skel_path)
-    except KeyError:
+    skel_vfile = _find_skel_vfile(vfs, stem)
+    if skel_vfile is None:
         return None, None
 
     return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)

@@ -101,6 +101,9 @@ class SsgFS(FS):
         ssg, self._struct_cls = self._parse_header()
         self._sizes = {}
         self._offsets = {}
+        # Paths whose content is the whole raw file rather than a
+        # buffer_chunks slice - see the file_type == 4 branch below.
+        self._raw_file_paths = set()
         # dir path -> set of immediate child names; built directly instead
         # of via fs.memoryfs.MemoryFS - its makedirs()/create() per file
         # dominated SsgFS construction cost by far more than the actual
@@ -109,20 +112,29 @@ class SsgFS(FS):
         self._known_dirs = {"/"}
         offset = 0
         # HexaneAnims is the shared big-endian container both .anims.ssg
-        # and the unrelated skel/*.ssg use (see structs/anims.ksy's own
-        # doc) - file_info.file_type (5 for an animation clip, 4 for a
-        # skeleton) is what actually distinguishes a clip entry, not "which
-        # struct class parsed the outer container". Only a real clip entry
-        # gets the synthetic ANIM_CLIP_EXTENSION suffix; a skeleton's own
-        # single entry is exposed under its raw inner name instead (nothing
-        # imports it through this per-entry path today - skeleton.py
-        # resolves a skel file directly from its own real on-disk path via
-        # the VFS's loose-file layer, not through this listing).
+        # and the unrelated skel/*.ssg use structurally (same 32-byte
+        # header/file-table/buffer_chunks shape - see structs/anims.ksy's
+        # own doc) - file_info.file_type (5 for an animation clip, 4 for a
+        # skeleton) distinguishes a clip entry from a skeleton one. Only a
+        # real clip entry gets the synthetic ANIM_CLIP_EXTENSION suffix.
+        #
+        # A skeleton entry's own file_info.size/offset bookkeeping in this
+        # outer container doesn't actually delimit skel.ksy's own payload,
+        # though: skel.ksy models its own outer header starting from this
+        # same file's absolute byte 0 (see structs/skel.ksy), overlapping
+        # the very bytes this outer parse just consumed as its own header
+        # - so a skeleton entry's real content is the whole raw file, not
+        # a buffer_chunks slice (confirmed empirically: slicing per
+        # file_info.size/offset here yields bytes that don't even start at
+        # skel.ksy's own magic).
         is_be_container = self._struct_cls is HexaneAnims
         for file_info in ssg.files_info:
             name = file_info.name.replace("\\", "/").lstrip("/")
             is_anim_clip = is_be_container and file_info.file_type == 5
+            is_skeleton = is_be_container and file_info.file_type == 4
             path = "/" + (name + ANIM_CLIP_EXTENSION if is_anim_clip else name)
+            if is_skeleton:
+                self._raw_file_paths.add(path)
             self._sizes[path] = file_info.size
             self._offsets[path] = offset
 
@@ -193,6 +205,25 @@ class SsgFS(FS):
         if self._data is not None:
             return
 
+        self._data = {}
+
+        # A skeleton entry's content is the whole raw file (see __init__'s
+        # own comment on _raw_file_paths) - read it directly rather than
+        # through the outer container's buffer_chunks slicing, which this
+        # file only coincidentally also parses as.
+        for path in self._raw_file_paths:
+            f = self._opener(self.ssg_path)
+            try:
+                raw = f.read()
+            finally:
+                f.close()
+            self._data[path] = raw
+            self._sizes[path] = len(raw)
+
+        remaining = self._offsets.keys() - self._raw_file_paths
+        if not remaining:
+            return
+
         f, ssg = self._open_and_parse(self._struct_cls)
         try:
             buffer_chunks = ssg.buffer_chunks  # triggers the lazy seek+read
@@ -221,10 +252,9 @@ class SsgFS(FS):
         finally:
             f.close()
 
-        self._data = {
-            path: bytes(uncompressed[offset:offset + self._sizes[path]])
-            for path, offset in self._offsets.items()
-        }
+        for path in remaining:
+            offset = self._offsets[path]
+            self._data[path] = bytes(uncompressed[offset:offset + self._sizes[path]])
 
     def __repr__(self):
         return f"SsgFS({self.ssg_path!r})"
