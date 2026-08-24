@@ -5,9 +5,7 @@ import bpy
 import pytest
 
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
-from albam.engines.mtfw.animation import KEYFRAME_TYPES
-from kaitaistruct import KaitaiStream
-from io import BytesIO
+from albam.engines.mtfw.animation import USAGE, LMTKeyFrames, LMTKeyframeBounds
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -159,23 +157,35 @@ def test_export_anim_block(lmt_imported_local, lmt_exported_local):
                 if str.len_data != dtr.len_data:
                     print(f"don't match {str.buffer_type} and {dtr.buffer_type}")
                 else:
-                    kfcls = KEYFRAME_TYPES[version][str.buffer_type]
-                    sdata = str.data
-                    ddata = dtr.data
-                    keyframe = kfcls()  # hack to get the size before reading
-                    k = 0
-                    for start in range(0, len(sdata), keyframe.size_):
-                        schunk = sdata[start: start + keyframe.size_]
-                        sframe = kfcls(KaitaiStream(BytesIO(schunk)))
-                        sframe._read()
-                        dchunk = ddata[start: start + keyframe.size_]
-                        dframe = kfcls(KaitaiStream(BytesIO(dchunk)))
-                        dframe._read()
+                    # Compare fully decoded values (through the same
+                    # dequantaize/to_quat/to_vec3 pipeline import uses), not
+                    # raw struct fields - several buffer types (XwQuat/
+                    # YwQuat/ZwQuat, the Quatized* family) store a quantized
+                    # int subset of components (e.g. YwQuat has only y/w, no
+                    # x/z at all) that only becomes a real x/y/z/w value
+                    # after decoding.
+                    skeyframes = LMTKeyFrames()
+                    skeyframes.track_type = USAGE[str.usage]
+                    if version > 51 and str.bounds:
+                        skeyframes.bounds = LMTKeyframeBounds(str.bounds)
+                    skeyframes.decode_framedata(version, str.buffer_type, str.data)
+
+                    dkeyframes = LMTKeyFrames()
+                    dkeyframes.track_type = USAGE[dtr.usage]
+                    if version > 51 and dtr.bounds:
+                        dkeyframes.bounds = LMTKeyframeBounds(dtr.bounds)
+                    dkeyframes.decode_framedata(version, dtr.buffer_type, dtr.data)
+
+                    for k, (sframe, dframe) in enumerate(
+                            zip(skeyframes.decoded_frames, dkeyframes.decoded_frames)):
                         print("Keyframe is:", k)
+                        if sframe is None or dframe is None:
+                            continue  # duration padding, not a real keyframe
                         assert sframe.x == pytest.approx(dframe.x, rel=0.001)
                         assert sframe.y == pytest.approx(dframe.y, rel=0.001)
                         assert sframe.z == pytest.approx(dframe.z, rel=0.001)
-                        k += 1
+                        if hasattr(sframe, "w"):
+                            assert sframe.w == pytest.approx(dframe.w, rel=0.001)
                 j += 1
         else:
             assert sab.offset == dab.offset
