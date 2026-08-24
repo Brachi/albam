@@ -55,6 +55,7 @@ def build_blender_skeleton(edgemodel_vfile, context, armature_name):
 
     skel_bytes = skel_vfile.get_bytes()
     skel = HexaneSkel.from_bytes(skel_bytes)
+    skel._read()
 
     return _build_blender_armature(skel, armature_name)
 
