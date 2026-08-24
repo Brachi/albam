@@ -3,6 +3,7 @@ import os
 import sys
 
 import bpy
+from .lib.tools import col_attr_editor as overlay
 
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
@@ -72,12 +73,17 @@ def register():
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
     register_workspace_tools()
+    bpy.app.timers.register(overlay.check_active_tool, first_interval=0.1,)
 
     # Load data from user's config files
     bpy.app.handlers.load_post.append(populate_albam_data)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(overlay.check_active_tool):
+        bpy.app.timers.unregister(overlay.check_active_tool)
+
+    overlay.hide()
     for _, cls in reversed(blender_registry.props):
         bpy.utils.unregister_class(cls)
 

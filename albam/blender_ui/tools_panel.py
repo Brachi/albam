@@ -9,6 +9,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
+from ..lib.tools.col_attr_editor import overlay_enable, overlay_disable
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -258,6 +259,20 @@ class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
                     f[special_attr] = new_special_attr
 
         bmesh.update_edit_mesh(ob.data)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_FaceAttrEditor(bpy.types.Operator):
+    bl_idname = "albam.set_face_attr_editor"
+    bl_label = "Enable Face Attribute Editor"
+
+    def execute(self, context):
+        selected = context.active_object
+        region = context.region
+        rv3d = context.space_data.region_3d
+        overlay_enable(selected, region, rv3d)
+
         return {'FINISHED'}
 
 
@@ -798,7 +813,7 @@ class ALBAM_OT_SortHairCards(bpy.types.Operator):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_BakeLighting(bpy.types.Operator):
-    bl_idname = "mesh.bake_lighting"
+    bl_idname = "albam.bake_lighting"
     bl_label = "Bake Lighting"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -837,17 +852,20 @@ class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
         Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_handshake")
     after = "albam.vg_merger"
 
-    @classmethod
-    def poll(cls, context):
-        selection = context.selected_objects
-        return any(obj.type == 'ARMATURE' for obj in selection)
-
     @staticmethod
     def draw_settings(context, layout, tool):
+        selected = [ob for ob in context.selected_objects if ob.type == "ARMATURE"]
+        hand_ob = context.scene.albam.meshes.all_meshes
         row = layout.row()
         op = row.operator("albam.handshake", text="Apply animation frames")
         op.filepath = frames_path
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        if not selected:
+            row = layout.row()
+            row.label(text="No armature selected")
+        if not hand_ob:
+            row = layout.row()
+            row.label(text="No hand mesh selected")
         if DEV_MODE:
             row = layout.row()
             row.label(text="Dump frames to json files")
@@ -871,6 +889,17 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
         return context.edit_object is not None
 
     @staticmethod
+    def setup():
+        selected = bpy.context.active_object
+        region = bpy.context.region
+        rv3d = bpy.context.space_data.region_3d
+        overlay_enable(selected, region, rv3d)
+
+    @staticmethod
+    def teardown():
+        overlay_disable()
+
+    @staticmethod
     def draw_settings(context, layout, tool):
         scn = context.scene.albam.tools_settings
         layout.prop(scn, 'face_preset')
@@ -878,6 +907,7 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
         layout.prop(scn, 'surface_attr')
         layout.prop(scn, 'special_attr')
         layout.operator("albam.apply_face_props")
+        # layout.operator("albam.set_face_attr_editor")
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
@@ -925,7 +955,7 @@ class ALBAM_WT_BakeOfLight(bpy.types.WorkSpaceTool):
         selected_objects = [ob for ob in context.selected_objects if ob.type == 'MESH']
         lm_mode = context.scene.albam.tools_settings.lm_mode
         settings = context.scene.albam.tools_settings
-        layout.operator('mesh.bake_lighting', text="Bake Lighting")
+        layout.operator('albam.bake_lighting', text="Bake Lighting")
         layout.prop(settings, "lm_resolution", text="Resolution",)
         layout.prop(settings, "lm_mode", text="How to update")
         row = layout.row()
