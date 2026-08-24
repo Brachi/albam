@@ -4,7 +4,7 @@ import os
 import bpy
 from kaitaistruct import KaitaiStream
 
-from .texture import build_blender_textures
+from .texture import build_blender_textures, _texture_suffix
 from .structs.hexane_matb import HexaneMatb
 from ...lib.blender import layout_node_chains
 
@@ -22,11 +22,6 @@ TEXTURE_SLOTS = {
     "_s": ("Specular IOR Level", "Non-Color"),
     "_g": ("Emission Color", "sRGB"),
 }
-
-
-def _texture_suffix(texture_path):
-    stem = os.path.basename(texture_path).rsplit(".", 1)[0]
-    return stem[-2:].lower()
 
 
 def build_blender_materials(edgemodel, context):
@@ -60,6 +55,13 @@ def build_blender_materials(edgemodel, context):
 
         bl_material = bpy.data.materials.new(os.path.basename(material_path))
         bl_material.use_nodes = True
+        # Same as MT Framework's own materials (albam.engines.mtfw.material) -
+        # a _d diffuse map's Alpha is wired below whenever the texture has
+        # one (hair cards etc. use it as a cutout mask; solid DXT1 diffuse
+        # maps decode Alpha as a flat 1.0, so this is a no-op for those).
+        # CLIP over the default HASHED/dithered blend gives a clean, stable
+        # cutout edge instead of per-pixel dither noise.
+        bl_material.blend_method = "CLIP"
         node_tree = bl_material.node_tree
         bsdf = next(node for node in node_tree.nodes if node.type == "BSDF_PRINCIPLED")
         link = node_tree.links.new
@@ -79,13 +81,38 @@ def build_blender_materials(edgemodel, context):
 
             if socket_name == "Normal":
                 normal_map_node = node_tree.nodes.new("ShaderNodeNormalMap")
+                # RE:ORC is DirectX9-era (Y-down/green-down normal maps);
+                # Blender's default convention is OpenGL (Y-up). The texture
+                # itself is still the raw, unswizzled DXT5nm data (see
+                # texture.py's _build_unswizzled_normal_image) - this is the
+                # only place the DirectX/OpenGL Y difference gets handled.
+                normal_map_node.convention = "DIRECTX"
                 link(texture_node.outputs["Color"], normal_map_node.inputs["Color"])
                 link(normal_map_node.outputs["Normal"], bsdf.inputs["Normal"])
                 node_chains.append([texture_node, normal_map_node])
+            elif socket_name == "Specular IOR Level":
+                link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
+                # _s is DXT5 (unlike _d's DXT1 - no alpha needed there), and its
+                # Alpha channel carries real per-texel variation distinct from
+                # RGB (checked against real hunk/partygirl textures: alpha
+                # isn't flat, and while it correlates with RGB luminance it
+                # isn't identical to it) - matching the classic DirectX9-era
+                # convention this specular map's format otherwise fits: RGB
+                # specular color/intensity, Alpha specular power/gloss. Invert
+                # because a bright/glossy value means low roughness. Without
+                # this, Roughness stays at the Principled BSDF's flat 0.5
+                # default for every material, regardless of how shiny/matte
+                # the specular map says a surface actually is.
+                invert_node = node_tree.nodes.new("ShaderNodeInvert")
+                link(texture_node.outputs["Alpha"], invert_node.inputs["Color"])
+                link(invert_node.outputs["Color"], bsdf.inputs["Roughness"])
+                node_chains.append([texture_node, invert_node])
             else:
                 link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
                 if socket_name == "Emission Color":
                     bsdf.inputs["Emission Strength"].default_value = 1.0
+                elif socket_name == "Base Color":
+                    link(texture_node.outputs["Alpha"], bsdf.inputs["Alpha"])
                 node_chains.append([texture_node])
 
         layout_node_chains(bsdf, node_chains)
