@@ -11,8 +11,8 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 # included (deduplicated to one entry per unique virtual path - the same
 # real file gets embedded verbatim into many different .ssg archives, and
 # only one copy is ever reachable through the VFS at a time) - see
-# albam/engines/hexn/structs/matb.ksy's own header comment for what that
-# sweep found and fixed.
+# albam/engines/hexn/structs/matb.ksy's own header comment for the format
+# details that sweep established.
 MATB_PARSING_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "matb_parsing_hashes.json")
 with open(MATB_PARSING_DATASET_PATH) as f:

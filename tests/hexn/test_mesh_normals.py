@@ -38,17 +38,16 @@ def test_dataset_hashes_are_in_catalog():
 def test_normals_are_unit_length_and_shading_is_smooth(
         game_fs_root, local_app_id, local_edgemodel_path_hash, subtests):
     """
-    Regression check for build_blender_mesh() leaving imported meshes flat-
-    shaded: normal is a plain float32 xyz at buffer_vertices offset 12 for
-    any vertex_stride >= 24 (confirmed against real geometry - decoded
-    vector is unit-length to float32 precision and aligns with the real
-    triangle's geometric face normal on single-triangle/quad test props;
-    not some packed/quantized format). Without polygons.foreach_set(
-    "use_smooth", ...) before normals_split_custom_set_from_vertices(), the
-    custom normal data is set but every polygon renders flat regardless
-    (same class of bug already found and fixed in the mtfw engine this
-    session). Imports real meshes and asserts both halves: the data is
-    real unit vectors, and Blender is actually set up to use them.
+    Verifies imported meshes render smooth-shaded, not flat: normal is a
+    plain float32 xyz at buffer_vertices offset 12 for any vertex_stride
+    >= 24 (confirmed against real geometry - decoded vector is unit-length
+    to float32 precision and aligns with the real triangle's geometric
+    face normal on single-triangle/quad test props; not some
+    packed/quantized format). Setting the custom normal data via
+    normals_split_custom_set_from_vertices() alone isn't enough - every
+    polygon still renders flat unless polygons.foreach_set("use_smooth",
+    ...) runs first. Imports real meshes and asserts both halves: the data
+    is real unit vectors, and Blender is actually set up to use them.
     """
     from albam.engines.hexn.mesh import build_blender_mesh
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
@@ -92,7 +91,7 @@ def test_normals_are_unit_length_and_shading_is_smooth(
 
 def test_tangent_orthogonal_to_normal(game_fs_root, local_app_id, local_edgemodel_path_hash, subtests):
     """
-    Regression check for the confirmed vertex_stride == 52 tangent layout
+    Verifies the confirmed vertex_stride == 52 tangent layout
     (buffer_vertices offset 28, a third float32 xyz right after position
     and normal - part of a real orthonormal TBN triad together with an
     unimported bitangent at offset 40, confirmed on real geometry: all

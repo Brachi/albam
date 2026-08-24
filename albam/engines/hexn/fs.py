@@ -72,7 +72,7 @@ class SsgFS(FS):
     archive instead of happening unconditionally in __init__
     (_ensure_decompressed(), cached from then on). Real payoff: a game
     install has ~2000 .ssg, and any one HexnFS session only ever touches a
-    handful of them - constructing one no longer means decompressing every
+    handful of them - constructing one doesn't mean decompressing every
     archive in the game up front.
 
     openbin() re-reads+re-parses the archive fresh on first access rather
@@ -303,10 +303,10 @@ def _ssg_priority(ssg_path):
     after some real content archives too, so with everything at the same
     priority it can silently shadow them: a lookup for a shared path
     returns the tiny info stub instead of the real mesh. Confirmed on a
-    real install: across the 4 ModelInfos.ssg archives alone, 103 of 171
-    virtual paths they share with a real content archive resolved to the
-    wrong stub before this fix (the 36 per-level .minfo.ssg archives add
-    more of the same, unquantified).
+    real install: without this priority ordering, across the 4
+    ModelInfos.ssg archives alone, 103 of 171 virtual paths they share
+    with a real content archive would resolve to the wrong stub (the 36
+    per-level .minfo.ssg archives add more of the same, unquantified).
 
     Giving info-only archives a strictly lower priority means one only
     ever resolves a path no other (real-priority) archive already claims -

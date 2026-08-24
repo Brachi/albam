@@ -6,8 +6,8 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 # Reuses test_edgemodel_parsing.py's own committed, catalog-verified dataset
 # (see its test_dataset_hashes_are_in_catalog) - these 5 files already cover
 # a range of real .matb materials (multiple texture slots, including at
-# least one normal map each), which is exactly what a node-layout
-# regression test needs; no new hashes required.
+# least one normal map each), which is exactly what this node-layout test
+# needs; no new hashes required.
 EDGEMODEL_PARSING_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "edgemodel_parsing_hashes.json")
 with open(EDGEMODEL_PARSING_DATASET_PATH) as f:
@@ -47,13 +47,13 @@ def _overlaps(a, b):
 
 
 def test_material_node_layout_has_no_overlaps(game_fs_root, local_app_id, local_edgemodel_path_hash):
-    """Regression check for build_blender_materials() leaving every
-    dynamically created node stacked at the same default location:
-    node_tree.nodes.new(...) never sets .location, so without an explicit
-    layout step every texture/normal-map node an import creates lands on
-    top of the others (and on top of the BSDF), producing an unreadable
-    pile in the Shader Editor. Imports real materials from a real
-    .edgemodel and asserts the resulting node graph is actually laid out:
+    """Verifies build_blender_materials() gives every dynamically created
+    node an explicit position: node_tree.nodes.new(...) never sets
+    .location on its own, so without an explicit layout step every
+    texture/normal-map node an import creates would land on top of the
+    others (and on top of the BSDF), producing an unreadable pile in the
+    Shader Editor. Imports real materials from a real .edgemodel and
+    asserts the resulting node graph is actually laid out:
     no two nodes visually overlap, and every input node sits left of the
     BSDF it feeds (source-to-sink, left-to-right, matching Blender's own
     node-editor convention and the BSDF/Material Output nodes' own
@@ -82,9 +82,9 @@ def test_material_node_layout_has_no_overlaps(game_fs_root, local_app_id, local_
         materials_with_textures += 1
 
         for node in dynamic_nodes:
-            # Regression guard: every dynamically created node must have an
-            # explicit position - (0, 0) is Blender's un-positioned default
-            # and is exactly where the old code left every node stacked.
+            # Every dynamically created node must have an explicit position -
+            # (0, 0) is Blender's un-positioned default, so landing there
+            # means the layout step didn't run.
             assert tuple(node.location) != (0.0, 0.0), (
                 f"{material_path!r}: {node.name!r} was never positioned"
             )

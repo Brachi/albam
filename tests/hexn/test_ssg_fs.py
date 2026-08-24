@@ -135,10 +135,9 @@ def test_ssg_fs_multiple_chunks_reassemble_correctly(tmp_path):
 
 def test_ssg_fs_no_chunk_table_reads_raw_buffer(tmp_path):
     """Real .ssg exist with size_chunks_info == 0 - buffer_chunks is the
-    uncompressed data verbatim in that case, not zlib-compressed at all.
-    Confirmed against real game data: treating chunk_sizes as always
-    zlib-compressed silently read back 0 bytes for every entry in such a
-    file instead of raising, since the decompression loop just never ran.
+    uncompressed data verbatim in that case, not zlib-compressed at all, so
+    SsgFS must read it as raw bytes rather than running it through a
+    chunk-decompression loop that has no chunks to iterate.
     """
     ssg_path = tmp_path / "model.ssg"
     ssg_path.write_bytes(_build_ssg_bytes(ENTRIES, raw=True))
