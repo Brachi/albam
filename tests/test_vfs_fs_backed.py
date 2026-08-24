@@ -105,6 +105,34 @@ def test_add_export_root_writes_and_reads_bytes():
     assert vfile_mrl.get_bytes() == b"exported-mrl"
 
 
+def test_add_export_root_second_export_replaces_stale_entry():
+    """
+    A child file's node id is app_id::relative_path, not scoped by which
+    root added it. Exporting the same identity twice in one session used to
+    leave both the old and new file_list entries around with an identical
+    id - Blender's CollectionProperty name lookup (file_list[id]/.find(id))
+    returns the *first* match, so select_vfile()/get_vfile() kept silently
+    returning the first export's bytes forever after, no matter how many
+    times the same asset was re-exported (#239).
+    """
+    exported = bpy.context.scene.albam.exported
+    path = "model/pl/pl00/pl00.mod"
+
+    exported.add_export_root("re5", "export-root-first", [
+        VirtualFileData("re5", path, data_bytes=b"first-export"),
+    ])
+    exported.add_export_root("re5", "export-root-second", [
+        VirtualFileData("re5", path, data_bytes=b"second-export"),
+    ])
+
+    assert exported.select_vfile("re5", path).get_bytes() == b"second-export"
+    assert exported.get_vfile("re5", path).get_bytes() == b"second-export"
+
+    file_id = "re5::model::pl::pl00::pl00.mod"
+    matches = [vf for vf in exported.file_list if vf.name == file_id]
+    assert len(matches) == 1
+
+
 def test_add_export_root_defaults_missing_bytes_to_empty():
     exported = bpy.context.scene.albam.exported
     exported.add_export_root(
