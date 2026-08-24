@@ -7,6 +7,7 @@ from ...lib.misc import chunks
 from ...registry import blender_registry
 from .structs.hexane_edgemodel import HexaneEdgemodel
 from .material import build_blender_materials
+from .skeleton import build_blender_skeleton
 
 
 @blender_registry.register_import_function(app_id="reorc", extension="edgemodel", albam_asset_type="MODEL")
@@ -15,20 +16,24 @@ def build_blender_model(vfile, context):
 
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()
-    skeleton = None
+    skeleton, bone_names = build_blender_skeleton(vfile, context, f"{vfile.display_name}_skeleton")
     bl_object = skeleton or bpy.data.objects.new(vfile.display_name, None)
     bl_materials = build_blender_materials(edgemodel, context)
 
     for mesh_header in edgemodel.meshes_header:
         if mesh_header.lod != 0:
             continue
-        bl_mesh_ob = build_blender_mesh(mesh_header, bl_materials)
+        bl_mesh_ob = build_blender_mesh(mesh_header, bl_materials, bone_names)
         bl_mesh_ob.parent = bl_object
+        if skeleton:
+            modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
+            modifier.object = skeleton
+            modifier.use_vertex_groups = True
 
     return bl_object
 
 
-def build_blender_mesh(mesh_header, bl_materials):
+def build_blender_mesh(mesh_header, bl_materials, bone_names=None):
     vertices = []
     normals = []
     tangents = []
@@ -91,7 +96,7 @@ def build_blender_mesh(mesh_header, bl_materials):
     _build_normals(me_ob, normals)
     _build_tangents(me_ob, tangents)
     _build_uvs(me_ob, uvs)
-    _build_weights(ob, edge_mesh)
+    _build_weights(ob, edge_mesh, bone_names)
     mesh_material_path = mesh_header.materials.first_material
     if bl_materials.get(mesh_material_path):
         me_ob.materials.append(bl_materials[mesh_material_path])
@@ -119,7 +124,7 @@ def _build_tangents(bl_mesh, tangents):
     tangent_attr.data.foreach_set("vector", list(chain.from_iterable(tangents)))
 
 
-def _build_weights(bl_obj, edge_mesh):
+def _build_weights(bl_obj, edge_mesh, bone_names=None):
     WEIGHT = struct.Struct("8B")
     weights_per_vertex = {}
 
@@ -140,7 +145,17 @@ def _build_weights(bl_obj, edge_mesh):
                 wperbone[bone].append((vertex, value))
 
     for bone_index, data in wperbone.items():
-        vg = bl_obj.vertex_groups.new(name=str(bone_index))
+        # Real vertex weight bone indices range over the skeleton's full
+        # node_count (confirmed against a real sample: max bone index
+        # matches its skel file's node_count - 1 exactly, and edge_header's
+        # own num_bones field independently matches node_count too - see
+        # skel.ksy's node_count doc), so a matching bone_names[bone_index]
+        # is always a real bone name whenever a skeleton was found at all.
+        if bone_names and bone_index < len(bone_names):
+            vg_name = bone_names[bone_index]
+        else:
+            vg_name = str(bone_index)
+        vg = bl_obj.vertex_groups.new(name=vg_name)
         for vertex_index, weight_value in data:
             vg.add((vertex_index,), weight_value, "ADD")
 
