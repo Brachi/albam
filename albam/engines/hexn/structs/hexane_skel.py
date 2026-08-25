@@ -396,7 +396,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_body_end
     @property
     def hash_array(self):
-        """node_count u32 values (hierarchy_size bytes total, same round-up-to-16 formula as `hierarchy`), immediately followed by body_end with no further gap (confirmed across the verified dataset: hash_array_start rounds `names`' real end up to the next 16-byte ABSOLUTE file boundary, not a names-blob-relative one, and hash_array_start + hierarchy_size == body_end exactly on every file). Values don't match fnv1, fnv1a, djb2 or crc32 of the corresponding bone name (all four checked against a real sample's names) - plausibly a per-node hash using some other algorithm, or an unrelated per-node id. Captured opaquely.
+        """One u4 per node, starting at the end of `names` rounded up to the next 16-byte absolute boundary and running exactly to body_end. Not fnv1, fnv1a, djb2 or crc32 of the bone name; a per-node hash or id of some other kind. Captured opaquely.
         """
         if self._should_write_hash_array:
             self._write_hash_array()
@@ -446,7 +446,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_hierarchy_end
     @property
     def hierarchy_padding(self):
-        """The gap between the real hierarchy entries (node_count * 4 bytes) and hierarchy_end. NOT plain alignment padding - real, non-zero data on most files checked, the same 4-bytes-per-entry shape as `hierarchy` itself (plausible small node-index-like u16 pairs), just not accounted for by node_count. Purpose not identified - captured opaquely, same convention as edgemodel.ksy's own unattributed regions. Modeled as its own field (rather than left to `hierarchy`'s own declared size) so it round-trips at all: a Kaitai `seq` array's write only emits its real repeat-expr entries, never bytes beyond them.
+        """The gap between the node_count real entries and hierarchy_end. Not alignment padding - it holds the same 4-bytes-per-entry shape as `hierarchy` itself, just beyond node_count. Purpose not identified; captured opaquely, and as its own field so that it round-trips (a `seq` array only writes back its repeat-expr entries).
         """
         if self._should_write_hierarchy_padding:
             self._write_hierarchy_padding()
@@ -482,7 +482,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
 
     @property
     def local_transforms(self):
-        """Per-node bind-pose local transform (relative to the parent named in `hierarchy`), node_count entries of 48 bytes each - confirmed via an automated scan (unit-length quaternion, both trailing homogeneous w's exactly 1.0, verified against the following entry too to rule out a false positive) on the hand-checked samples, and the resulting recursively-composed world positions are a plausible humanoid bind pose (Y-up, confirmed by composing a real sample's full hierarchy - matches mesh.py's own (x, -z, y) game-to-Blender axis convention for vertex positions).
+        """Per-node bind-pose transform, relative to the node's parent in `parents`. node_count entries of 48 bytes, Y-up (skeleton.py converts to Blender's Z-up on import).
         """
         if self._should_write_local_transforms:
             self._write_local_transforms()
@@ -542,7 +542,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_local_transforms_start
     @property
     def name_offsets(self):
-        """Byte offset of each node's name within `names`, relative to the start of `names` - confirmed exactly cumulative (offsets[i] == sum of len(name)+1 for every earlier name) on all node_count entries across every file in the verified dataset, so `names` below is read directly as a sequential null-terminated array instead of via this table's own per-entry pos (this table is still modeled as real data for round-trip, same reasoning as edgemodel.ksy's materials_table.offsets).
+        """Each node's name offset within `names`. Cumulative (offsets[i] is the total length, terminators included, of every earlier name), so `names` below reads sequentially instead of through this table; it is still modeled as real data for round-trip.
         """
         if self._should_write_name_offsets:
             self._write_name_offsets()
@@ -588,7 +588,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_name_offsets_start
     @property
     def names(self):
-        """node_count null-terminated ASCII bone names, one per `hierarchy`/ `local_transforms` entry in the same order (index 0 is always a root, e.g. a root bone name) - confirmed by cross-referencing name_offsets above exactly, and by real, character-appropriate bone names across both humanoid and creature rigs.
+        """node_count null-terminated ASCII bone names, one per `hierarchy`/ `local_transforms` entry in the same order.
         """
         if self._should_write_names:
             self._write_names()
@@ -635,7 +635,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_names_start
     @property
     def parents(self):
-        """The skeleton's own parent table: node_count u2 entries, one per `hierarchy`/`local_transforms`/`names` node in the same order, each the index of that node's parent in those same arrays. 0xffff marks a root - exactly one root (node 0) on every real character skeleton in the verified dataset, and every other entry is strictly less than its own node index, so world transforms compose in a single forward pass. Composing `local_transforms` through this table yields a coherent bind pose - a standing figure, mirrored left/right, feet at y ~ 0 and head at full character height - and matches the corresponding .edgemodel's own skinned geometry.
+        """The parent table: one entry per node, in the same order as `hierarchy`/`local_transforms`/`names`, holding that node's parent index in those arrays. 0xffff marks a root - node 0 is the only root on a character skeleton. Every other entry is less than its own node index, so world transforms compose in a single forward pass.
         """
         if self._should_write_parents:
             self._write_parents()
@@ -681,7 +681,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         del self._m_parents_end
     @property
     def parents_padding(self):
-        """Zero padding from `parents`' real end up to name_offsets_start (round_up(node_count * 2, 16), confirmed via ec_ofs_u16_array_end / f0_ofs_name_offsets both resolving exactly as documented on those fields, across the verified dataset). Modeled as its own field so the file round-trips - see hierarchy_padding for the same reasoning.
+        """Zero padding from the end of `parents` to name_offsets_start, i.e. up to round_up(node_count * 2, 16). Its own field so that it round-trips - see hierarchy_padding.
         """
         if self._should_write_parents_padding:
             self._write_parents_padding()
@@ -717,7 +717,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
 
     @property
     def pre_transforms_data(self):
-        """Real (non-zero, non-constant) per-file data between the hierarchy array and local_transforms - NOT simply padding (sizes seen: 0, 16, 32, 48, 80, 96, 208, 224 bytes across the sweep, and its bytes decode as plausible small node-index-like u16 pairs on inspection). Purpose not identified; captured opaquely for round-trip, same convention as edgemodel.ksy's own unattributed regions.
+        """Per-file data between `hierarchy` and `local_transforms`, 0 to 224 bytes, continuing `hierarchy`'s u16-pair shape rather than padding it out. Purpose not identified; captured opaquely.
         """
         if self._should_write_pre_transforms_data:
             self._write_pre_transforms_data()
@@ -753,7 +753,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
 
     @property
     def trailing_padding(self):
-        """Zero-filled alignment padding out to the file's own size (see body_size doc)."""
+        """Zero padding out to the file's size - see body_size."""
         if self._should_write_trailing_padding:
             self._write_trailing_padding()
         if hasattr(self, '_m_trailing_padding'):

@@ -173,7 +173,7 @@ class HexaneMatb(ReadWriteKaitaiStruct):
 
 
     class ParamEntry(ReadWriteKaitaiStruct):
-        """A shader-parameter override: hash + a 4-float value. Some params use only x (a scalar, e.g. glow intensity), others use all 4 as an RGBA color (values cluster in 0.0-1.0 with w=1.0 in those cases).
+        """A shader-parameter override: hash plus a 4-float value. Some params use only x, as a scalar (glow intensity and the like); others use all four as an RGBA color, in 0.0-1.0 with w=1.0.
         """
         def __init__(self, _io=None, _parent=None, _root=None):
             super(HexaneMatb.ParamEntry, self).__init__(_io)

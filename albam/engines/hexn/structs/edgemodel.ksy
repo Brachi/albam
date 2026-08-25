@@ -37,16 +37,11 @@ types:
       - {id: reserved_06, type: u4}
     instances:
       # The data between the last mesh's own buffers and ofs_bones (or
-      # ofs_unk_02, when there's no bones section) derived against a
-      # full-game sweep as: the last mesh's own highest buffer
-      # end (materials_end is never the true max on any file checked, so
-      # left out), aligned up to a 16-byte boundary, then always exactly
-      # 16 more (unexplained, but constant - 100% of files checked), then
-      # a small record whose own first byte drives the rest of the size:
-      # marker_record_byte0. Verified 100% exact (no-bones case, 13711
-      # files) and 99.7% exact (with-bones case, 703 files - 2 known
-      # outliers, same files already flagged elsewhere for a corrupted
-      # size_buffer_indices) across a full-game sweep.
+      # ofs_unk_02, when there's no bones section): the last mesh's own
+      # highest buffer end (materials_end is never the maximum, so it is
+      # left out), aligned up to a 16-byte boundary, then 16 more bytes,
+      # then a small record whose own first byte gives the rest of the
+      # size - marker_record_byte0.
       last_mesh_header:
         value: _parent.meshes_header[num_meshes - 1]
       last_mesh_indices_end:
@@ -135,16 +130,13 @@ types:
       materials:
         {pos: ofs_materials, type: materials_table}
       # unk_ofs_3 gap: the region between materials_table's end and this
-      # mesh's own first buffer. Derived against a full-game sweep (7044
-      # meshes with unk_ofs_3 != 0) as: unk_ofs_3 -> count
-      # (u4), unk_ofs_3+4 -> offset_a (u4, stored - not recomputed),
-      # unk_ofs_3+8 -> offset_b (u4, stored). [unk_ofs_3+12, offset_a) is
-      # alignment filler; [offset_a, offset_b) is count*16 bytes of real
-      # (unmodeled) per-entry data; [offset_b, offset_b + count*8) is a
-      # second count*8-byte real block; anything left over up to the
-      # first buffer is alignment-only padding. 99.47% exact - the only
-      # outlier found is a distinct sub-variant where count is always 22
-      # (guarded out below, not this formula misfiring).
+      # mesh's own first buffer. unk_ofs_3 -> count (u4), unk_ofs_3+4 ->
+      # offset_a (u4, stored, not recomputed), unk_ofs_3+8 -> offset_b
+      # (u4, stored). [unk_ofs_3+12, offset_a) is alignment filler;
+      # [offset_a, offset_b) is count*16 bytes of per-entry data, left
+      # unmodeled; [offset_b, offset_b + count*8) is a second real block;
+      # anything up to the first buffer after that is padding. A distinct
+      # sub-variant, where count is always 22, is guarded out below.
       materials_end:
         value: materials._io.pos
       buf_indices_or_sentinel:
@@ -186,15 +178,12 @@ types:
   materials_table:
     seq:
       - {id: offsets, type: u4, repeat: expr, repeat-expr: _parent._parent.header.num_material_per_mesh}
-      # offsets[i] each point to their own separate null-terminated string
-      # (confirmed against real data: 4 distinct .matb paths, one per
-      # offset - not just first_material's) - modeled here as sequential
-      # (offsets[i+1] always equals offsets[i] + len(string) + 1 on every
-      # real file checked, i.e. they're contiguous, not independently
-      # positioned) rather than pos-based per offsets[i]: the Python target
-      # of kaitai-struct-compiler 0.11 generates broken code (references
-      # the repeat loop variable before it's bound) for a `pos:` expression
-      # that depends on `_index` inside a repeated instance.
+      # offsets[i] each point to their own null-terminated .matb path.
+      # The strings are contiguous (offsets[i+1] is offsets[i] plus that
+      # string's length and terminator), so they are read sequentially
+      # rather than through a per-offset `pos:`, which the Python target of
+      # kaitai-struct-compiler 0.11 miscompiles inside a repeated instance
+      # (it references the repeat loop variable before it's bound).
       - {id: all_materials, type: str, terminator: 0, encoding: ASCII,
          repeat: expr, repeat-expr: _parent._parent.header.num_material_per_mesh}
     instances:
@@ -249,12 +238,11 @@ types:
       - {id: unk_10_size, type: u2}
       # Real (non-padding) data between here and _parent.ofs_materials:
       # 128*(num_groups-1) + 16*num_groups + 80*num_groups bytes, then
-      # sum(20*2^bit for every set bit in _parent.unk_flags_1) bytes -
-      # >99.6%/99.8% exact across a full-game sample. Guarded rather than
-      # unconditional: a weapon LOD/SHADOW sub-variant breaks the formula
-      # (would compute a negative size), and this way that variant just
-      # loses round-trip fidelity for this one section instead of failing
-      # to parse at all.
+      # sum(20*2^bit for every set bit in _parent.unk_flags_1) bytes.
+      # Guarded rather than unconditional: a weapon LOD/SHADOW sub-variant
+      # breaks the formula (the size would come out negative), and this way
+      # that variant only loses round-trip fidelity for this one section
+      # instead of failing to parse at all.
       - id: group_and_flags_data
         size: _parent.ofs_materials - (_parent.ofs_data + 128)
         if: _parent.ofs_materials > (_parent.ofs_data + 128)
