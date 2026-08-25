@@ -312,10 +312,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("focclusion", "f_occlusion_param")
     copy_feature("fdistortion", "f_distortion_param")
     copy_float_buffer("globals", "globals")
-    try:
-        copy_float_buffer("cbmaterial", "cb_material")
-    except KeyError:
-        pass  # umvc3
+    copy_float_buffer("cbmaterial", "cb_material")
     copy_float_buffer("cbburncommon", "cb_burn_common")
     copy_float_buffer("cbburnemission", "cb_burn_emission")
     copy_float_buffer("cbappclipplane", "cb_app_clip_plane")
@@ -551,8 +548,7 @@ def _insert_constant_buffers(resources, app_id, mrl_mat, custom_props):
             pos = current_position
             current_position += 1
             cb_used["$Globals"] = [ri + 1, pos]
-        elif (resource.value_cmd.name_hash.name in cb_material_users and
-              not cb_used.get("CBMaterial") and app_id != "umvc3"):  # FIXME
+        elif resource.value_cmd.name_hash.name in cb_material_users and not cb_used.get("CBMaterial"):
             pos = current_position
             current_position += 1
             cb_used["CBMaterial"] = [ri + 1, pos]
@@ -589,7 +585,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
-    # FIXME
     MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
@@ -819,8 +814,7 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
         float_buffer_parent.app_specific = float_buffer
         float_buffer_custom_props = custom_props["globals"]
 
-    # FIXME
-    elif cb_name == "CBMaterial" and app_id != "umvc3":
+    elif cb_name == "CBMaterial":
         float_buffer_parent = Mrl.CbMaterial(_parent=resource, _root=resource._root)
         # Always the same for all apps, no need for map
         float_buffer = Mrl.CbMaterial1(_parent=float_buffer_parent, _root=float_buffer_parent._root)
