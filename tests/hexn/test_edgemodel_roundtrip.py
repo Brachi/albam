@@ -1,16 +1,15 @@
+import io
 import json
 import os
 
 # Reuses test_edgemodel_parsing.py's own committed dataset - same files,
 # same catalog verification, different assertion (byte-exact identity
-# round-trip instead of structural sanity). See
-# albam.engines.hexn.edgemodel_roundtrip's module docstring: there's no
-# export function yet (no Blender-driven bytes to compare against), but a
-# well-formed .edgemodel should come back byte-identical from a plain
-# parse-then-write - every field these 5 files exercise is modeled
-# directly in the .ksy (not all sections are, for every possible file -
-# see the module docstring for the ~28% of files elsewhere in the game
-# that don't fully round-trip yet, and why).
+# round-trip instead of structural sanity). There's no export function yet
+# (no Blender-driven bytes to compare against), but a well-formed
+# .edgemodel comes back byte-identical from a plain parse-then-write.
+# Every section these files exercise is modeled in structs/edgemodel.ksy;
+# not every section of every file in the game is, so this dataset is
+# deliberately curated rather than exhaustive.
 EDGEMODEL_PARSING_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "edgemodel_parsing_hashes.json")
 with open(EDGEMODEL_PARSING_DATASET_PATH) as f:
@@ -26,9 +25,22 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
-def test_edgemodel_identity_roundtrip(game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash):
-    from albam.engines.hexn.edgemodel_roundtrip import identity_roundtrip
+def identity_roundtrip(data):
+    """Parse `data` and write it back out."""
+    from kaitaistruct import KaitaiStream
 
+    from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
+
+    parsed = HexaneEdgemodel.from_bytes(data)
+    parsed._read()
+    parsed._fetch_instances()
+
+    stream = KaitaiStream(io.BytesIO(bytearray(len(data))))
+    parsed._write(stream)
+    return stream.to_byte_array()
+
+
+def test_edgemodel_identity_roundtrip(game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash):
     path = hash_to_path[local_edgemodel_path_hash]
     edgemodel_bytes = game_fs_root.readbytes(path)
 

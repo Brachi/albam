@@ -8,7 +8,7 @@ the resulting Armature: bone count, root/hierarchy shape, and rest-pose
 sanity. Scope note (see the task this was built for): .edgemodel has no
 export function yet, so a full import->edit->export->reimport round trip
 through the mesh pipeline isn't possible - this only exercises the import
-side, plus skel_roundtrip.py's separate raw byte-level format round trip.
+side, plus test_skel_roundtrip.py's separate byte-level format round trip.
 
 Reuses a small quadruped creature's .edgemodel hash from
 test_edgemodel_parsing.py's own dataset rather than adding a new one -

@@ -149,7 +149,7 @@ class SsgFS(FS):
             # entries with no padding at all, unlike the regular
             # little-endian format's size_padding-driven gaps - confirmed
             # for .anims.ssg against the verified dataset (see
-            # anims_roundtrip.py); skel/*.ssg only ever has one entry, so
+            # structs/anims.ksy); skel/*.ssg only ever has one entry, so
             # padding is moot there either way.
             padding = 0 if is_be_container else (-file_info.size % ssg.size_padding)
             offset += file_info.size + padding
