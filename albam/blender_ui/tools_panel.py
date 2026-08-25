@@ -9,7 +9,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.tools.col_attr_editor import overlay_enable, overlay_disable
+from ..lib.tools.face_attr_editor import overlay_enable, overlay_disable
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -274,69 +274,6 @@ class ALBAM_OT_FaceAttrEditor(bpy.types.Operator):
         overlay_enable(selected, region, rv3d)
 
         return {'FINISHED'}
-
-
-# @blender_registry.register_blender_type
-class ALBAM_PT_FACE_PROP_EDIT(bpy.types.Panel):
-    '''UI Tool subpanel in Mesh Object Data'''
-    bl_label = "Face Properties Edit"
-    bl_idname = "ALBAM_PT_FACE_PROP_EDIT"
-    bl_parent_id = "ALBAM_PT_ToolsPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        scn = context.scene.albam.tools_settings
-        row = layout.row()
-        row.prop(scn, 'face_preset')
-        row = layout.row()
-        row.prop(scn, 'face_group')
-        row = layout.row()
-        row.prop(scn, 'surface_attr')
-        row = layout.row()
-        row.prop(scn, 'special_attr')
-        row = layout.row()
-        row.operator("albam.apply_face_props")
-
-
-# @blender_registry.register_blender_type
-class ALBAM_PT_FACE_PROP(bpy.types.Panel):
-    '''UI Tool subpanel in Mesh Object Data'''
-    bl_label = "Face properties"
-    bl_idname = "ALBAM_PT_FACE_PROP"
-    bl_parent_id = "ALBAM_PT_ToolsPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-
-        ob = context.edit_object
-        bm = bmesh.from_edit_mesh(ob.data)
-
-        type = bm.faces.layers.int.get('type', None)
-        surface_attr = bm.faces.layers.int.get('surface_attr', None)
-        special_attr = bm.faces.layers.int.get('special_attr', None)
-
-        if type and surface_attr and special_attr:
-            for f in bm.faces:
-                if f.select:
-                    layout.label(text=f'Index: {f.index}')
-                    layout.label(text=f'Type: {f[type]}')
-                    layout.label(text=f'Surface attribute: {hex(f[surface_attr])}')
-                    layout.label(text=f'Behavior attribute: {hex(f[special_attr])}')
-                    break
-
-    @classmethod
-    def poll(cls, context):
-        ob = context.edit_object
-        if ob:
-            return True
-        else:
-            return False
 
 
 @blender_registry.register_blender_type

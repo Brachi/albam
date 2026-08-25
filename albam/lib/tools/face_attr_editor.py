@@ -11,10 +11,14 @@ _handler = None
 
 
 def get_selected_face_attributes():
+    attrs = ('type', 'surface_attr', 'special_attr')
     obj = bpy.context.object
     if obj is None or obj.type != 'MESH':
         return {}
     bm = bmesh.from_edit_mesh(obj.data)
+    for attr in attrs:
+        if not any(layer.name == attr for layer in bm.faces.layers.int):
+            bm.faces.layers.int.new(attr)
     face = next((f for f in bm.faces if f.select), None)
     if face is None:
         return {}
@@ -26,19 +30,22 @@ def draw_callback():
     font_id = 0
 
     obj = bpy.context.active_object
+    face_attrs = get_selected_face_attributes()
+    ftype = face_attrs['type']
+    fsurface = face_attrs['surface_attr']
+    fbehavior = face_attrs['special_attr']
     if obj and obj.type == 'MESH':
-        mesh = obj.data
 
         text = (
-            f"Object: {obj.name}\n"
-            f"Vertices: {len(mesh.vertices)}\n"
-            f"Faces: {len(mesh.polygons)}"
+            f"Type: {ftype}\n"
+            f"Surface attribute: {fsurface}\n"
+            f"Behavior attribute: {fbehavior }"
         )
 
         y = 100
 
         for line in text.splitlines():
-            blf.position(font_id, 100, y, 0)
+            blf.position(font_id, 80, y, 0)
             blf.size(font_id, 14)
             blf.draw(font_id, line)
             y -= 18
@@ -76,6 +83,8 @@ def hide():
 
 
 def check_active_tool():
+    if not getattr(bpy.context, "workspace", None):
+        return 0.1
     current_mode = bpy.context.mode
     tool = bpy.context.workspace.tools.from_space_view3d_mode(current_mode, create=False)
     tool_id = tool.idname if tool else None
@@ -165,14 +174,10 @@ def draw(bfaces, bwires):
 def draw_text(bl_ob, region, rv3d):
     if bl_ob is None or bl_ob.type != 'MESH':
         return
-
     font_id = 0
-
     for poly in bl_ob.data.polygons:
-
-        # center of polygon
         co = poly.center
-        # to woord coord
+        # to world coord
         world_co = bl_ob.matrix_world @ co
         # 3D -> 2D viewport
         screen_co = location_3d_to_region_2d(
@@ -180,13 +185,10 @@ def draw_text(bl_ob, region, rv3d):
             rv3d,
             world_co,
         )
-
         if screen_co is None:
             continue
-
         x, y = screen_co
-
-        # Текст
+        # draw the text
         blf.position(font_id, x, y, 0)
         blf.size(font_id, 20)
 
