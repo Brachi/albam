@@ -16,14 +16,20 @@ def build_blender_model(vfile, context):
 
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()
-    skeleton, bone_names = build_blender_skeleton(vfile, context, f"{vfile.display_name}_skeleton")
-    bl_object = skeleton or bpy.data.objects.new(vfile.display_name, None)
+    bl_object_name = vfile.display_name
+    skeleton, bone_names = build_blender_skeleton(vfile, context, f"{bl_object_name}_skeleton")
+    bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     bl_materials = build_blender_materials(edgemodel, context)
 
-    for mesh_header in edgemodel.meshes_header:
+    for i, mesh_header in enumerate(edgemodel.meshes_header):
         if mesh_header.lod != 0:
             continue
-        bl_mesh_ob = build_blender_mesh(mesh_header, bl_materials, bone_names)
+        # Same naming as albam.engines.mtfw.mesh.build_blender_model: the
+        # model's own name plus the mesh's index in the file, kept even for
+        # the lod-0-only subset imported here, so a mesh's name still points
+        # at where it came from.
+        name = f"{bl_object_name}_{str(i).zfill(4)}"
+        bl_mesh_ob = build_blender_mesh(mesh_header, name, bl_materials, bone_names)
         bl_mesh_ob.parent = bl_object
         if skeleton:
             modifier = bl_mesh_ob.modifiers.new(type="ARMATURE", name="armature")
@@ -33,7 +39,7 @@ def build_blender_model(vfile, context):
     return bl_object
 
 
-def build_blender_mesh(mesh_header, bl_materials, bone_names=None):
+def build_blender_mesh(mesh_header, name, bl_materials, bone_names=None):
     vertices = []
     normals = []
     tangents = []
@@ -45,8 +51,8 @@ def build_blender_mesh(mesh_header, bl_materials, bone_names=None):
     vertex_stride = (
         edge_mesh.size_buffer_vertices // edge_mesh.num_vertices if edge_mesh.num_vertices else 0
     )
-    me_ob = bpy.data.meshes.new("MESH-TODO")
-    ob = bpy.data.objects.new("MESH-TODO", me_ob)
+    me_ob = bpy.data.meshes.new(name)
+    ob = bpy.data.objects.new(name, me_ob)
 
     has_uvs = vertex_stride >= 28  # smallest real stride seen with UV data (12/16/24 don't have any)
     # Normal is a plain, uncompressed float32 xyz right after position - not

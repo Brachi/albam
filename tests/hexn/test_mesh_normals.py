@@ -66,7 +66,7 @@ def test_normals_are_unit_length_and_shading_is_smooth(
         if stride < 24:
             continue
         with subtests.test(mesh_index=mi):
-            bl_ob = build_blender_mesh(mesh_header, {})
+            bl_ob = build_blender_mesh(mesh_header, f"{local_edgemodel_path_hash}_{mi:04}", {})
             bl_mesh = bl_ob.data
             if not bl_mesh.polygons:
                 continue
@@ -117,7 +117,7 @@ def test_tangent_orthogonal_to_normal(
         if stride != 52:
             continue
         with subtests.test(mesh_index=mi):
-            bl_ob = build_blender_mesh(mesh_header, {})
+            bl_ob = build_blender_mesh(mesh_header, f"{local_edgemodel_path_hash}_{mi:04}", {})
             bl_mesh = bl_ob.data
             assert 'tangent' in bl_mesh.attributes
             checked += 1

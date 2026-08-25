@@ -96,7 +96,7 @@ def test_non_52_stride_produces_a_coherent_mesh(game_fs_root, hash_to_path, loca
     # stride (no room for UV data at all) would otherwise run
     # unpack_from() straight past the end of the buffer. Exercises that
     # guard directly (12 < 28).
-    bl_object = build_blender_mesh(mesh_header, {})
+    bl_object = build_blender_mesh(mesh_header, f"{VECTOR_EDGEMODEL_HASH}_{STRIDE_12_MESH_INDEX:04}", {})
     assert len(bl_object.data.vertices) == mesh.num_vertices
 
     # "How big is this mesh" isn't a stable thing to assert on (this one's
