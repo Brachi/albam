@@ -93,11 +93,12 @@ def _setup_three_point_lighting(key=2.5, fill=0.9, rim=1.4):
 def _setup_camera(bbox_min, bbox_max, fov_deg=40):
     center = (bbox_min + bbox_max) / 2
     dimensions = bbox_max - bbox_min
-    radius = max(dimensions.x, dimensions.y, dimensions.z) / 2
+    # Fit the bounding sphere, not the height: a model that is longer than
+    # it is tall (a quadruped, a vehicle) would otherwise run out of frame.
+    radius = (dimensions.length / 2) or 1.0
 
     fov = math.radians(fov_deg)
-    distance = (dimensions.z / 2) / math.tan(fov / 2) * 1.35  # headroom
-    distance = max(distance, radius * 2.2)
+    distance = radius / math.sin(fov / 2) * 1.1  # a little headroom
 
     # Slightly elevated 3/4 front view - the usual character showcase angle.
     azimuth, elevation = math.radians(-25), math.radians(12)
@@ -179,6 +180,12 @@ def main():
             result = bpy.ops.albam.import_vfile()
             if result != {"FINISHED"}:
                 raise RuntimeError(f"import_vfile returned {result}")
+            # Cel-shaded models are built with inverted-hull outlines: a
+            # black copy of the body, normals pointing inward, drawn with
+            # front faces culled so only the silhouette shows. Rendered
+            # unculled that hull simply swallows the model.
+            for bl_material in bpy.data.materials:
+                bl_material.use_backface_culling = True
             bbox_min, bbox_max = _bounding_box_world()
             _setup_three_point_lighting()
             _setup_camera(bbox_min, bbox_max)
