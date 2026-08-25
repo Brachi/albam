@@ -87,7 +87,7 @@ def _build_unswizzled_normal_image(display_name, texture_bytes, dds_header):
     dds_format = _dds_format(dds_header)
     data_offset = 4 + dds_header.dwSize  # magic + header, no DX10 extension for DXT1/DXT5
     pixel_bytes = unpack_dds(io.BytesIO(texture_bytes), width, height, dds_format, data_offset,
-                              unswizzle="agnm")
+                             unswizzle="agnm")
     png_bytes = _encode_png(width, height, bytes(pixel_bytes))
 
     bl_image = bpy.data.images.new(display_name, width, height, alpha=True)

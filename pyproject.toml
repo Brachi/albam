@@ -58,7 +58,12 @@ line-length = 110
 
 [tool.flake8]
 max-line-length = 110
-exclude = [".venv", "structs"]
+# Neither holds this repo's own source, and linting them buries its real
+# findings: tests/data is local, gitignored working files (real game bytes
+# never get committed, see CLAUDE.md) including reference scripts nobody here
+# wrote or maintains; build/ is a packaging artifact holding a second copy of
+# albam/, vendored code included.
+exclude = [".venv", "structs", "tests/data", "build"]
 
 # F722: needed for Blender props annotations such as
 # ```
