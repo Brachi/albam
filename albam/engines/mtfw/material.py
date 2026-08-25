@@ -62,7 +62,7 @@ MRL_CBGLOBALS_MAP = {
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
     "dd": Mrl.CbGlobals4,
-    "umvc3": Mrl.CbGlobals3,  # FIXME
+    "umvc3": Mrl.CbGlobals5,
 }
 MRL_MATERIAL_TYPE_STR = {
     # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
@@ -2736,7 +2736,7 @@ class GlobalsCustomProperties2(bpy.types.PropertyGroup):
 
 @blender_registry.register_custom_properties_material(
     "globals",
-    ("re6", "umvc3"), is_secondary=True, display_name="$Globals")
+    ("re6",), is_secondary=True, display_name="$Globals")
 @blender_registry.register_blender_prop
 class GlobalsCustomProperties3(bpy.types.PropertyGroup):
     f_albedo_color: bpy.props.FloatVectorProperty(
@@ -2916,6 +2916,106 @@ class GlobalsCustomProperties4(bpy.types.PropertyGroup):
     padding_5: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
     xyzw_sepalate: bpy.props.FloatVectorProperty(
         name="xyzwSepalate", size=16, options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        # TODO: warning of missing attributes
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except AttributeError:
+                print(f"{attr_name} not found on source object {src_obj}")
+
+
+@blender_registry.register_custom_properties_material(
+    "globals",
+    ("umvc3",), is_secondary=True, display_name="$Globals")
+@blender_registry.register_blender_prop
+class GlobalsCustomProperties5(bpy.types.PropertyGroup):
+    f_alpha_clip_threshold: bpy.props.FloatProperty(
+        name="fAlphaClipThreshold", default=0, options=set())  # noqa: F821
+    f_albedo_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_albedo_blend_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoBlendColor", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_detail_normal_power: bpy.props.FloatProperty(
+        name="fDetailNormalPower", default=1, options=set())  # noqa: F821
+    f_detail_normal_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormalUVScale", default=1, options=set())  # noqa: F821
+    f_detail_normal2_power: bpy.props.FloatProperty(
+        name="fDetailNormal2Power", default=1, options=set())  # noqa: F821
+    f_detail_normal2_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormal2UVScale", default=1, options=set())  # noqa: F821
+    f_primary_shift: bpy.props.FloatProperty(
+        name="fPrimaryShift", default=0, options=set())  # noqa: F821
+    f_secondary_shift: bpy.props.FloatProperty(
+        name="fSecondaryShift", default=0.6, options=set())  # noqa: F821
+    f_parallax_factor: bpy.props.FloatProperty(
+        name="fParallaxFactor", default=0.01, options=set())  # noqa: F821
+    f_parallax_self_occlusion: bpy.props.FloatProperty(
+        name="fParallaxSelfOcclusion", default=1, options=set())  # noqa: F821
+    f_parallax_min_sample: bpy.props.FloatProperty(
+        name="fParallaxMinSample", default=4, options=set())  # noqa: F821
+    f_parallax_max_sample: bpy.props.FloatProperty(
+        name="fParallaxMaxSample", default=64, options=set())  # noqa: F821
+    padding_1: bpy.props.FloatVectorProperty(size=2, default=(0, 0), options={"HIDDEN"})  # noqa: F821
+    f_light_map_color: bpy.props.FloatVectorProperty(
+        name="fLightMapColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_2: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_thin_map_color: bpy.props.FloatVectorProperty(
+        name="fThinMapColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_thin_scattering: bpy.props.FloatProperty(
+        name="fThinScattering", default=0.1, options=set())  # noqa: F821
+    f_screen_uv_scale: bpy.props.FloatVectorProperty(
+        name="fScreenUVScale", size=2, default=(1, 1), options=set())  # noqa: F821
+    f_screen_uv_offset: bpy.props.FloatVectorProperty(
+        name="fScreenUVOffset", size=2, default=(0, 0), options=set())  # noqa: F821
+    f_indirect_offset: bpy.props.FloatVectorProperty(
+        name="fIndirectOffset", size=2, default=(0, 0), options=set())  # noqa: F821
+    f_indirect_scale: bpy.props.FloatVectorProperty(
+        name="fIndirectScale", size=2, default=(0.05, 0.05), options=set())  # noqa: F821
+    f_fresnel_schlick: bpy.props.FloatProperty(
+        name="fFresnelSchlick", default=1, options=set())  # noqa: F821
+    f_fresnel_schlick_rgb: bpy.props.FloatVectorProperty(
+        name="fFresnelSchlickRGB", size=3, default=(1, 1, 1), options=set())  # noqa: F821
+    f_specular_color: bpy.props.FloatVectorProperty(
+        name="fSpecularColor", size=3, default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    f_shininess: bpy.props.FloatProperty(
+        name="fShininess", default=30, options=set())  # noqa: F821
+    f_emission_color: bpy.props.FloatVectorProperty(
+        name="fEmissionColor", size=3, default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    padding_3: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_constant_color: bpy.props.FloatVectorProperty(
+        name="fConstantColor", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_roughness: bpy.props.FloatProperty(
+        name="fRoughness", default=1, options=set())  # noqa: F821
+    f_roughness_rgb: bpy.props.FloatVectorProperty(
+        name="fRoughnessRGB", size=3, default=(0.3, 0.3, 0.3), options=set())  # noqa: F821
+    f_anisotoropic_direction: bpy.props.FloatVectorProperty(
+        name="fAnisotoropicDirection", size=3, default=(0, 1, 0), options=set())  # noqa: F821
+    f_smoothness: bpy.props.FloatProperty(
+        name="fSmoothness", default=1, options=set())  # noqa: F821
+    f_anistropic_uv: bpy.props.FloatVectorProperty(
+        name="fAnistropicUV", size=2, default=(0.3333, 1), options=set())  # noqa: F821
+    f_primary_expo: bpy.props.FloatProperty(
+        name="fPrimaryExpo", default=1, options=set())  # noqa: F821
+    f_secondary_expo: bpy.props.FloatProperty(
+        name="fSecondaryExpo", default=0.2, options=set())  # noqa: F821
+    f_primary_color: bpy.props.FloatVectorProperty(
+        name="fPrimaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_4: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_secondary_color: bpy.props.FloatVectorProperty(
+        name="fSecondaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_fresnel_legacy_factor: bpy.props.FloatProperty(
+        name="fFresnelLegacyFactor", default=1, options=set())  # noqa: F821
+    f_fresnel_legacy_bias: bpy.props.FloatProperty(
+        name="fFresnelLegacyBias", default=1, options=set())  # noqa: F821
+    padding_5: bpy.props.FloatVectorProperty(size=3, default=(0, 0, 0), options={"HIDDEN"})  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

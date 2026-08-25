@@ -305,7 +305,7 @@ types:
               '"re0"': cb_globals_1
               '"re1"': cb_globals_1
               '"re6"': cb_globals_3
-              '"umvc3"': cb_globals_3
+              '"umvc3"': cb_globals_5
               '"rev1"': cb_globals_1
               '"rev2"': cb_globals_2
               '"dd"': cb_globals_4
@@ -651,6 +651,54 @@ types:
       - {id: padding_5, type: f4}
       - {id: xyzw_sepalate, type: f4, repeat: expr, repeat-expr: 16} # 64
   
+  cb_globals_5: # 76 floats
+    instances:
+      size_:
+        value: 304
+    seq:
+      - {id: f_alpha_clip_threshold, type: f4} # 0
+      - {id: f_albedo_color, type: f4, repeat: expr, repeat-expr: 3} # 1
+      - {id: f_albedo_blend_color, type: f4, repeat: expr, repeat-expr: 4} # 4
+      - {id: f_detail_normal_power, type: f4} # 8
+      - {id: f_detail_normal_uv_scale, type: f4} # 9
+      - {id: f_detail_normal2_power, type: f4} # 10
+      - {id: f_detail_normal2_uv_scale, type: f4} # 11
+      - {id: f_primary_shift, type: f4} # 12
+      - {id: f_secondary_shift, type: f4} # 13
+      - {id: f_parallax_factor, type: f4} # 14
+      - {id: f_parallax_self_occlusion, type: f4} # 15
+      - {id: f_parallax_min_sample, type: f4} # 16
+      - {id: f_parallax_max_sample, type: f4} # 17
+      - {id: padding_1, type: f4, repeat: expr, repeat-expr: 2} # 18
+      - {id: f_light_map_color, type: f4, repeat: expr, repeat-expr: 3} # 20
+      - {id: padding_2, type: f4} # 23
+      - {id: f_thin_map_color, type: f4, repeat: expr, repeat-expr: 3} # 24
+      - {id: f_thin_scattering, type: f4} # 27
+      - {id: f_screen_uv_scale, type: f4, repeat: expr, repeat-expr: 2} # 28
+      - {id: f_screen_uv_offset, type: f4, repeat: expr, repeat-expr: 2} # 30
+      - {id: f_indirect_offset, type: f4, repeat: expr, repeat-expr: 2} # 32
+      - {id: f_indirect_scale, type: f4, repeat: expr, repeat-expr: 2} # 34
+      - {id: f_fresnel_schlick, type: f4} # 36
+      - {id: f_fresnel_schlick_rgb, type: f4, repeat: expr, repeat-expr: 3} # 37
+      - {id: f_specular_color, type: f4, repeat: expr, repeat-expr: 3} # 40
+      - {id: f_shininess, type: f4} # 43
+      - {id: f_emission_color, type: f4, repeat: expr, repeat-expr: 3} # 44
+      - {id: padding_3, type: f4} # 47
+      - {id: f_constant_color, type: f4, repeat: expr, repeat-expr: 4} # 48
+      - {id: f_roughness, type: f4} # 52
+      - {id: f_roughness_rgb, type: f4, repeat: expr, repeat-expr: 3} # 53
+      - {id: f_anisotoropic_direction, type: f4, repeat: expr, repeat-expr: 3} # 56
+      - {id: f_smoothness, type: f4} # 59
+      - {id: f_anistropic_uv, type: f4, repeat: expr, repeat-expr: 2} # 60
+      - {id: f_primary_expo, type: f4} # 62
+      - {id: f_secondary_expo, type: f4} # 63
+      - {id: f_primary_color, type: f4, repeat: expr, repeat-expr: 3} # 64
+      - {id: padding_4, type: f4} # 67
+      - {id: f_secondary_color, type: f4, repeat: expr, repeat-expr: 3} # 68
+      - {id: f_fresnel_legacy_factor, type: f4} # 71
+      - {id: f_fresnel_legacy_bias, type: f4} # 72
+      - {id: padding_5, type: f4, repeat: expr, repeat-expr: 3} # 73
+
   cb_material_1: #all games 32 floats
     instances:
       size_:

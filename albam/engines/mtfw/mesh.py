@@ -313,7 +313,7 @@ MAIN_LODS = {
     "rev2": [1, 255],
     "dd": [1, 255],
     "dmc4": [1, 255],
-    "umvc3": [1, 255],  # TODO: check
+    "umvc3": [255],  # its models ship a single LOD, always 255
 }
 
 
