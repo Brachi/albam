@@ -125,7 +125,12 @@ def test_export_header(mod_imported_local, mod_exported_local):
 def test_export_top_level(mod_imported_local, mod_exported_local):
 
     # assert mod_imported_local.bsphere.x == pytest.approx(mod_exported_local.bsphere.x, rel=0.5)
-    assert mod_imported_local.bsphere.y == pytest.approx(mod_exported_local.bsphere.y, rel=0.001)
+    # abs as well as rel: a component that happens to sit near zero - this
+    # sphere's centre is at y = -0.0087 on a model 6 units tall - turns a
+    # relative tolerance into a far tighter absolute one than the ~1e-04 a
+    # position round trip through Blender costs.
+    assert mod_imported_local.bsphere.y == pytest.approx(
+        mod_exported_local.bsphere.y, rel=0.001, abs=1e-03)
     # assert mod_imported_local.bsphere.z == pytest.approx(mod_exported_local.bsphere.z, rel=0.001)
     assert mod_imported_local.bsphere.w == pytest.approx(mod_exported_local.bsphere.w, rel=0.001)
 
@@ -233,17 +238,25 @@ def test_export_groups(mod_imported_local, mod_exported_local):
     assert [g.radius for g in mod_imported_local.groups] == [g.radius for g in mod_exported_local.groups]
 
 
-def test_materials_data(mod_imported_local, mod_exported_local):
+def test_materials_data(mod_imported_local, mod_exported_local, local_app_id):
+    src = mod_imported_local.materials_data
+    dst = mod_exported_local.materials_data
 
-    assert mod_imported_local.materials_data.size_ == mod_exported_local.materials_data.size_
-    assert ((mod_imported_local.header.version in (210, 211, 212) and
-            mod_imported_local.materials_data.material_names ==
-            mod_exported_local.materials_data.material_names) or
-            mod_imported_local.header.version == 156)
+    assert src.size_ == dst.size_
+    if mod_imported_local.header.version == 156:
+        return
+    # Version 211 identifies a material by a hash rather than by name, so
+    # material_names doesn't exist on it at all - except for umvc3's own 211,
+    # which carries names the way 210/212 do. See the matching condition in
+    # mod-21.ksy.
+    if mod_imported_local.header.version in (210, 212) or local_app_id == "umvc3":
+        assert src.material_names == dst.material_names
+    else:
+        assert src.material_hashes == dst.material_hashes
 
 
-def test_meshes_data_21(mod_imported_local, mod_exported_local, subtests):
-    if mod_imported_local.header.version not in (210, 212):
+def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, subtests):
+    if mod_imported_local.header.version not in (210, 211, 212):
         pytest.skip()
 
     for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
@@ -268,12 +281,28 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, subtests):
             assert src_mesh.bone_id_start == dst_mesh.bone_id_start
             assert src_mesh.num_weight_bounds == dst_mesh.num_weight_bounds
             assert src_mesh.connect_id == dst_mesh.connect_id
-            assert src_mesh.min_index == dst_mesh.min_index
-            assert src_mesh.max_index == dst_mesh.max_index
             assert src_mesh.boundary == dst_mesh.boundary
+            # min_index/max_index are derived, not independent: in every real
+            # file min_index is the mesh's own vertex_position and max_index
+            # is one less than a full vertex run past it. Comparing them
+            # against the source would just restate the vertex_position gap
+            # test_meshes_data_xfail already tracks, so what is checked here
+            # is that the exported file keeps the invariant internally - a
+            # mesh whose index range disagrees with its vertex range reads
+            # garbage geometry however the buffer got laid out.
+            assert dst_mesh.min_index == dst_mesh.vertex_position
+            assert dst_mesh.max_index == dst_mesh.min_index + dst_mesh.num_vertices - 1
+            assert src_mesh.max_index - src_mesh.min_index == (
+                dst_mesh.max_index - dst_mesh.min_index)
 
-    assert mod_imported_local.header.version in (210, 212) and (
-        mod_imported_local.num_weight_bounds == mod_exported_local.num_weight_bounds)
+    # Version 211 normally carries its weight-bound count inside meshes_data,
+    # but umvc3's own 211 keeps it at the top level like 210/212 do - see the
+    # matching condition in mod-21.ksy.
+    if mod_imported_local.header.version in (210, 212) or local_app_id == "umvc3":
+        assert mod_imported_local.num_weight_bounds == mod_exported_local.num_weight_bounds
+    else:
+        assert (mod_imported_local.meshes_data.num_weight_bounds ==
+                mod_exported_local.meshes_data.num_weight_bounds)
 
 
 def test_vertices(mod_imported_local, mod_exported_local, subtests):
@@ -451,6 +480,9 @@ def test_meshes_data_xfail(mod_imported_local, mod_exported_local, subtests):
         dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(i=i):
             assert src_mesh.vertex_position == dst_mesh.vertex_position
+            # Derived from vertex_position, so they move with it
+            assert src_mesh.min_index == dst_mesh.min_index
+            assert src_mesh.max_index == dst_mesh.max_index
             assert src_mesh.vertex_offset == dst_mesh.vertex_offset
             assert src_mesh.face_position == dst_mesh.face_position
             assert src_mesh.num_indices == dst_mesh.num_indices

@@ -304,6 +304,9 @@ BBOX_AFFECTED = [
 VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
 VERSIONS_USE_TRISTRIPS = {153, 156, 212}
+# Bone weights serialize as u1, so a weight is written as round(w * 255).
+WEIGHT_QUANTIZATION_STEPS = 255
+
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -2130,8 +2133,23 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     return wb
 
 
+def _weight_in_group(bl_vertex, group_index):
+    for group in bl_vertex.groups:
+        if group.group == group_index:
+            return group.weight
+    return 0.0
+
+
 def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data):
-    vertices_in_group = mesh_vertex_groups.get(vertex_group.index)
+    # Only vertices whose weight survives the format's 8 bit quantization
+    # count towards the bound. Normalizing a mesh's weights leaves residuals
+    # far below one step - a bone can end up holding ~2e-05 across every
+    # vertex - and a weight that serializes to 0 influences nothing, so a
+    # bound for it would describe a bone the exported mesh isn't bound to.
+    vertices_in_group = [
+        v for v in mesh_vertex_groups.get(vertex_group.index, ())
+        if round(_weight_in_group(v, vertex_group.index) * WEIGHT_QUANTIZATION_STEPS)
+    ]
     if not vertices_in_group:
         return
 
