@@ -61,6 +61,11 @@ def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
     this file's tests for one model together and rebuilds the fixture when
     the model changes - each model is imported once, not once per test.
     """
+    # Deferred: albam.engines.* pulls in the generated structs, which need
+    # albam_vendor on sys.path - only true once register() has run.
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+    from albam.lib.kaitai_utils import parse
+
     clear_scene()
 
     # resolve_hashes() returns MTFW_FS's own canonical form (leading "/"),
@@ -73,14 +78,23 @@ def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
     vfile = import_vfile(local_app_id, path.lstrip("/"))
     bl_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     bl_armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
-    yield vfile, bl_meshes, bl_armatures
+    mod_bytes = vfile.get_bytes()
+    mod = parse(MOD_CLASS_MAPPER[mod_bytes[4]], mod_bytes, local_app_id)
+    yield mod, bl_meshes, bl_armatures
     clear_scene()
 
 
 def test_mod_import_builds_geometry(imported_mod):
-    _vfile, bl_meshes, _bl_armatures = imported_mod
+    mod, bl_meshes, _bl_armatures = imported_mod
 
     assert bl_meshes, "import produced no mesh objects"
+    # build_blender_model() logs and skips a mesh it fails to build, so a
+    # model can lose most of itself and still look like a clean import -
+    # every remaining assertion here would just pass on what survived.
+    # The fixture turns LOD filtering off, so the counts must match exactly.
+    assert len(bl_meshes) == mod.header.num_meshes, (
+        f"imported {len(bl_meshes)} meshes, the model has {mod.header.num_meshes}"
+    )
     for bl_mesh in bl_meshes:
         assert len(bl_mesh.data.vertices) > 0, f"{bl_mesh.name} has no vertices"
         # A face that repeats a vertex means the index buffer was misread -
@@ -103,7 +117,7 @@ def test_mod_import_builds_materials(imported_mod):
     """
     from albam.engines.mtfw.material import MTFW_SHADER_NODEGROUP_NAME
 
-    _vfile, bl_meshes, _bl_armatures = imported_mod
+    mod, bl_meshes, _bl_armatures = imported_mod
 
     for bl_mesh in bl_meshes:
         assert bl_mesh.data.materials, f"{bl_mesh.name} has no material"
@@ -120,7 +134,7 @@ def test_mod_import_builds_skeleton(imported_mod):
     vertex group must name a real bone - a mismatch there means the bone
     palette was misread and the model would deform into garbage.
     """
-    _vfile, bl_meshes, bl_armatures = imported_mod
+    _mod, bl_meshes, bl_armatures = imported_mod
 
     if not bl_armatures:
         pytest.skip("model has no skeleton")
@@ -148,7 +162,7 @@ def test_mod_import_textures_are_resolved(imported_mod):
     An empty node is how a texture that couldn't be found or decoded shows
     up - the import still "succeeds", but the model arrives untextured.
     """
-    _vfile, bl_meshes, _bl_armatures = imported_mod
+    mod, bl_meshes, _bl_armatures = imported_mod
 
     missing = []
     for bl_mesh in bl_meshes:
