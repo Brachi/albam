@@ -19,6 +19,9 @@ from .structs.hexane_skel import HexaneSkel
 # reasonable without needing per-bone child-distance math.
 TAIL_LENGTH = 0.03
 
+# skel.ksy's `parents` marks a root node with this instead of a real index.
+ROOT_PARENT = 0xffff
+
 
 def _find_skel_vfile(vfs, stem):
     """A skel file is addressable in the VFS under two different paths,
@@ -140,13 +143,12 @@ def _build_blender_armature(skel, armature_name):
     world_matrices = []
     edit_bones = []
     bone_names = []
-    # Every real skel file in the verified dataset has every parent_index <
-    # its own node index (see skel.ksy's hierarchy_entry.parent_index doc) -
-    # safe to resolve world transforms and assign parent bones in one
-    # forward pass.
-    for i, node in enumerate(skel.hierarchy):
+    # Every real skel file in the verified dataset has every parent index <
+    # its own node index (see skel.ksy's `parents` doc) - safe to resolve
+    # world transforms and assign parent bones in one forward pass.
+    for i, parent_raw in enumerate(skel.parents):
         local = _local_matrix(skel.local_transforms[i])
-        parent_index = node.parent_index
+        parent_index = -1 if parent_raw == ROOT_PARENT else parent_raw
         world = local if parent_index == -1 else world_matrices[parent_index] @ local
         world_matrices.append(world)
 

@@ -52,15 +52,18 @@ def test_parse_skel(game_fs_root, hash_to_path, local_app_id, local_skel_path_ha
     assert len(skel.hierarchy) == skel.node_count
     assert len(skel.local_transforms) == skel.node_count
     assert len(skel.names) == skel.node_count
+    assert len(skel.parents) == skel.node_count
 
-    # Every real file in the verified dataset has at least one root, and
-    # every parent_index is strictly less than its own node index (see
-    # skel.ksy's hierarchy_entry.parent_index doc) - both are relied on by
-    # skeleton.py's single-forward-pass world-transform composition.
-    roots = [i for i, node in enumerate(skel.hierarchy) if node.is_root]
-    assert roots
-    for i, node in enumerate(skel.hierarchy):
-        assert node.parent_index < i
+    # `parents` is a well-formed tree: node 0 is its only root, and every
+    # other entry points strictly backwards (see skel.ksy's `parents` doc) -
+    # both relied on by skeleton.py's single-forward-pass world-transform
+    # composition, and the difference between a coherent bind pose and a
+    # scrambled one.
+    roots = [i for i, parent in enumerate(skel.parents) if parent == 0xffff]
+    assert roots == [0]
+    for i, parent in enumerate(skel.parents):
+        if i:
+            assert parent < i
 
     # Names are unique-ish real bone names, not empty/garbage.
     assert all(skel.names)

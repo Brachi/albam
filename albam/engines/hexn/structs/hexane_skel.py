@@ -23,8 +23,10 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         self.name_offsets__enabled = True
         self._should_write_names = False
         self.names__enabled = True
-        self._should_write_post_transforms_data = False
-        self.post_transforms_data__enabled = True
+        self._should_write_parents = False
+        self.parents__enabled = True
+        self._should_write_parents_padding = False
+        self.parents_padding__enabled = True
         self._should_write_pre_transforms_data = False
         self.pre_transforms_data__enabled = True
         self._should_write_trailing_padding = False
@@ -59,7 +61,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         self.node_count = self._io.read_u4le()
         self.second_count = self._io.read_u4le()
         self.d8_ofs_local_transforms = self._io.read_u4le()
-        self.dc_ofs_post_transforms = self._io.read_u4le()
+        self.dc_ofs_parents = self._io.read_u4le()
         self.e0_ofs_hash_array = self._io.read_u4le()
         self.e4_ofs_body_end_a = self._io.read_u4le()
         self.e8_ofs_body_end_b = self._io.read_u4le()
@@ -115,8 +117,15 @@ class HexaneSkel(ReadWriteKaitaiStruct):
                 pass
 
 
-        _ = self.post_transforms_data
-        if hasattr(self, '_m_post_transforms_data'):
+        _ = self.parents
+        if hasattr(self, '_m_parents'):
+            pass
+            for i in range(len(self._m_parents)):
+                pass
+
+
+        _ = self.parents_padding
+        if hasattr(self, '_m_parents_padding'):
             pass
 
         _ = self.pre_transforms_data
@@ -136,7 +145,8 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         self._should_write_local_transforms = self.local_transforms__enabled
         self._should_write_name_offsets = self.name_offsets__enabled
         self._should_write_names = self.names__enabled
-        self._should_write_post_transforms_data = self.post_transforms_data__enabled
+        self._should_write_parents = self.parents__enabled
+        self._should_write_parents_padding = self.parents_padding__enabled
         self._should_write_pre_transforms_data = self.pre_transforms_data__enabled
         self._should_write_trailing_padding = self.trailing_padding__enabled
         self._io.write_bytes(self.magic)
@@ -163,7 +173,7 @@ class HexaneSkel(ReadWriteKaitaiStruct):
         self._io.write_u4le(self.node_count)
         self._io.write_u4le(self.second_count)
         self._io.write_u4le(self.d8_ofs_local_transforms)
-        self._io.write_u4le(self.dc_ofs_post_transforms)
+        self._io.write_u4le(self.dc_ofs_parents)
         self._io.write_u4le(self.e0_ofs_hash_array)
         self._io.write_u4le(self.e4_ofs_body_end_a)
         self._io.write_u4le(self.e8_ofs_body_end_b)
@@ -243,12 +253,20 @@ class HexaneSkel(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"names", -1, KaitaiStream.byte_array_index_of((self._m_names[i]).encode(u"ASCII"), 0))
 
 
-        if self.post_transforms_data__enabled:
+        if self.parents__enabled:
             pass
-            if self.name_offsets_start > self.local_transforms_end:
+            if len(self._m_parents) != self.node_count:
+                raise kaitaistruct.ConsistencyError(u"parents", self.node_count, len(self._m_parents))
+            for i in range(len(self._m_parents)):
                 pass
-                if len(self._m_post_transforms_data) != self.name_offsets_start - self.local_transforms_end:
-                    raise kaitaistruct.ConsistencyError(u"post_transforms_data", self.name_offsets_start - self.local_transforms_end, len(self._m_post_transforms_data))
+
+
+        if self.parents_padding__enabled:
+            pass
+            if self.name_offsets_start > self.parents_end:
+                pass
+                if len(self._m_parents_padding) != self.name_offsets_start - self.parents_end:
+                    raise kaitaistruct.ConsistencyError(u"parents_padding", self.name_offsets_start - self.parents_end, len(self._m_parents_padding))
 
 
         if self.pre_transforms_data__enabled:
@@ -271,8 +289,8 @@ class HexaneSkel(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.sort_key = self._io.read_u2le()
-            self.parent_raw = self._io.read_u2le()
+            self.unk_a = self._io.read_u2le()
+            self.unk_b = self._io.read_u2le()
             self._dirty = False
 
 
@@ -282,46 +300,13 @@ class HexaneSkel(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(HexaneSkel.HierarchyEntry, self)._write__seq(io)
-            self._io.write_u2le(self.sort_key)
-            self._io.write_u2le(self.parent_raw)
+            self._io.write_u2le(self.unk_a)
+            self._io.write_u2le(self.unk_b)
 
 
         def _check(self):
             self._dirty = False
 
-        @property
-        def is_root(self):
-            if hasattr(self, '_m_is_root'):
-                return self._m_is_root
-
-            self._m_is_root = self.parent_raw == 65535
-            return getattr(self, '_m_is_root', None)
-
-        def _invalidate_is_root(self):
-            del self._m_is_root
-        @property
-        def parent_flag(self):
-            """Unattributed - see parent_raw's own doc."""
-            if hasattr(self, '_m_parent_flag'):
-                return self._m_parent_flag
-
-            self._m_parent_flag = self.parent_raw & 32768 != 0
-            return getattr(self, '_m_parent_flag', None)
-
-        def _invalidate_parent_flag(self):
-            del self._m_parent_flag
-        @property
-        def parent_index(self):
-            """Real parent node index into this same hierarchy/local_transforms/ names array, or -1 for a root. Every real file checked has every parent_index < its own node index (safe to resolve/compose world transforms in a single forward pass).
-            """
-            if hasattr(self, '_m_parent_index'):
-                return self._m_parent_index
-
-            self._m_parent_index = (-1 if self.is_root else self.parent_raw & 32767)
-            return getattr(self, '_m_parent_index', None)
-
-        def _invalidate_parent_index(self):
-            del self._m_parent_index
 
     class LocalTrs(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -649,38 +634,84 @@ class HexaneSkel(ReadWriteKaitaiStruct):
     def _invalidate_names_start(self):
         del self._m_names_start
     @property
-    def post_transforms_data(self):
-        """Contains an implicit node_count * 2 byte u16 array right after local_transforms (values loosely increasing but not strictly monotonic per node - possibly a hash-bucket/sort order artifact, not identified), padded with zeros up to name_offsets_start (round_up(node_count * 2, 16), confirmed via ec_ofs_u16_array_end / f0_ofs_name_offsets both resolving exactly as documented on those fields, across the verified dataset). Captured opaquely as one blob rather than split into the u16 array + its padding, since the array's own semantics aren't confirmed.
+    def parents(self):
+        """The skeleton's own parent table: node_count u2 entries, one per `hierarchy`/`local_transforms`/`names` node in the same order, each the index of that node's parent in those same arrays. 0xffff marks a root - exactly one root (node 0) on every real character skeleton in the verified dataset, and every other entry is strictly less than its own node index, so world transforms compose in a single forward pass. Composing `local_transforms` through this table yields a coherent bind pose - a standing figure, mirrored left/right, feet at y ~ 0 and head at full character height - and matches the corresponding .edgemodel's own skinned geometry.
         """
-        if self._should_write_post_transforms_data:
-            self._write_post_transforms_data()
-        if hasattr(self, '_m_post_transforms_data'):
-            return self._m_post_transforms_data
+        if self._should_write_parents:
+            self._write_parents()
+        if hasattr(self, '_m_parents'):
+            return self._m_parents
 
-        if not self.post_transforms_data__enabled:
+        if not self.parents__enabled:
             return None
 
-        if self.name_offsets_start > self.local_transforms_end:
+        _pos = self._io.pos()
+        self._io.seek(self.local_transforms_end)
+        self._m_parents = []
+        for i in range(self.node_count):
+            self._m_parents.append(self._io.read_u2le())
+
+        self._io.seek(_pos)
+        return getattr(self, '_m_parents', None)
+
+    @parents.setter
+    def parents(self, v):
+        self._dirty = True
+        self._m_parents = v
+
+    def _write_parents(self):
+        self._should_write_parents = False
+        _pos = self._io.pos()
+        self._io.seek(self.local_transforms_end)
+        for i in range(len(self._m_parents)):
+            pass
+            self._io.write_u2le(self._m_parents[i])
+
+        self._io.seek(_pos)
+
+    @property
+    def parents_end(self):
+        if hasattr(self, '_m_parents_end'):
+            return self._m_parents_end
+
+        self._m_parents_end = self.local_transforms_end + self.node_count * 2
+        return getattr(self, '_m_parents_end', None)
+
+    def _invalidate_parents_end(self):
+        del self._m_parents_end
+    @property
+    def parents_padding(self):
+        """Zero padding from `parents`' real end up to name_offsets_start (round_up(node_count * 2, 16), confirmed via ec_ofs_u16_array_end / f0_ofs_name_offsets both resolving exactly as documented on those fields, across the verified dataset). Modeled as its own field so the file round-trips - see hierarchy_padding for the same reasoning.
+        """
+        if self._should_write_parents_padding:
+            self._write_parents_padding()
+        if hasattr(self, '_m_parents_padding'):
+            return self._m_parents_padding
+
+        if not self.parents_padding__enabled:
+            return None
+
+        if self.name_offsets_start > self.parents_end:
             pass
             _pos = self._io.pos()
-            self._io.seek(self.local_transforms_end)
-            self._m_post_transforms_data = self._io.read_bytes(self.name_offsets_start - self.local_transforms_end)
+            self._io.seek(self.parents_end)
+            self._m_parents_padding = self._io.read_bytes(self.name_offsets_start - self.parents_end)
             self._io.seek(_pos)
 
-        return getattr(self, '_m_post_transforms_data', None)
+        return getattr(self, '_m_parents_padding', None)
 
-    @post_transforms_data.setter
-    def post_transforms_data(self, v):
+    @parents_padding.setter
+    def parents_padding(self, v):
         self._dirty = True
-        self._m_post_transforms_data = v
+        self._m_parents_padding = v
 
-    def _write_post_transforms_data(self):
-        self._should_write_post_transforms_data = False
-        if self.name_offsets_start > self.local_transforms_end:
+    def _write_parents_padding(self):
+        self._should_write_parents_padding = False
+        if self.name_offsets_start > self.parents_end:
             pass
             _pos = self._io.pos()
-            self._io.seek(self.local_transforms_end)
-            self._io.write_bytes(self._m_post_transforms_data)
+            self._io.seek(self.parents_end)
+            self._io.write_bytes(self._m_parents_padding)
             self._io.seek(_pos)
 
 

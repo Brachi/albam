@@ -37,7 +37,7 @@ meta:
 # reversed, same numeric value.
 #
 # A recurring convention through the inner body (confirmed exact for
-# d8_ofs_local_transforms, dc_ofs_post_transforms, e0_ofs_hash_array,
+# d8_ofs_local_transforms, dc_ofs_parents, e0_ofs_hash_array,
 # e4_ofs_body_end_a, e8_ofs_body_end_b, ec_ofs_u16_array_end and
 # f0_ofs_name_offsets, every file in the verified dataset): each of these u4 fields is a
 # self-relative offset - its own absolute file position (a compile-time
@@ -120,8 +120,8 @@ seq:
     type: u4
     doc: >
       Exact count of entries in `hierarchy`, `local_transforms`,
-      `post_transforms_data`'s implicit per-node array, `name_offsets` and
-      `names` alike (confirmed across the verified dataset). Also matches
+      `parents`, `name_offsets` and `names` alike (confirmed across the
+      verified dataset). Also matches
       the corresponding .edgemodel's own edge_header.num_bones exactly
       (cross-checked against a real sample mesh/skeleton pair) - and real
       vertex weight bone indices in that mesh range up to node_count - 1,
@@ -142,11 +142,11 @@ seq:
   - id: d8_ofs_local_transforms
     type: u4
     doc: Self-relative offset (0xD8 + value) to `local_transforms`. See meta comment.
-  - id: dc_ofs_post_transforms
+  - id: dc_ofs_parents
     type: u4
     doc: >
       Self-relative offset (0xDC + value) to the end of `local_transforms` /
-      start of `post_transforms_data`. See meta comment.
+      start of `parents`. See meta comment.
   - id: e0_ofs_hash_array
     type: u4
     doc: >
@@ -163,10 +163,9 @@ seq:
   - id: ec_ofs_u16_array_end
     type: u4
     doc: >
-      Self-relative offset (0xEC + value) to the unpadded end of
-      `post_transforms_data`'s implicit per-node u16 array (before its own
-      round-up-to-16 padding) - i.e. dc_ofs_post_transforms's target plus
-      exactly node_count * 2 bytes.
+      Self-relative offset (0xEC + value) to the unpadded end of the
+      `parents` array (before its own round-up-to-16 padding) - i.e.
+      dc_ofs_parents's target plus exactly node_count * 2 bytes.
   - id: f0_ofs_name_offsets
     type: u4
     doc: >
@@ -233,20 +232,34 @@ instances:
     value: local_transforms_start + node_count * 48
   name_offsets_start:
     value: 0xF0 + f0_ofs_name_offsets
-  post_transforms_data:
+  parents:
     pos: local_transforms_end
-    size: name_offsets_start - local_transforms_end
-    if: name_offsets_start > local_transforms_end
+    type: u2
+    repeat: expr
+    repeat-expr: node_count
     doc: >
-      Contains an implicit node_count * 2 byte u16 array right after
-      local_transforms (values loosely increasing but not strictly
-      monotonic per node - possibly a hash-bucket/sort order artifact, not
-      identified), padded with zeros up to name_offsets_start
+      The skeleton's own parent table: node_count u2 entries, one per
+      `hierarchy`/`local_transforms`/`names` node in the same order, each
+      the index of that node's parent in those same arrays. 0xffff marks a
+      root - exactly one root (node 0) on every real character skeleton in
+      the verified dataset, and every other entry is strictly less than its
+      own node index, so world transforms compose in a single forward pass.
+      Composing `local_transforms` through this table yields a coherent
+      bind pose - a standing figure, mirrored left/right, feet at y ~ 0 and
+      head at full character height - and matches the corresponding
+      .edgemodel's own skinned geometry.
+  parents_end:
+    value: local_transforms_end + node_count * 2
+  parents_padding:
+    pos: parents_end
+    size: name_offsets_start - parents_end
+    if: name_offsets_start > parents_end
+    doc: >
+      Zero padding from `parents`' real end up to name_offsets_start
       (round_up(node_count * 2, 16), confirmed via ec_ofs_u16_array_end /
       f0_ofs_name_offsets both resolving exactly as documented on those
-      fields, across the verified dataset). Captured opaquely as one blob rather than split into
-      the u16 array + its padding, since the array's own semantics aren't
-      confirmed.
+      fields, across the verified dataset). Modeled as its own field so the
+      file round-trips - see hierarchy_padding for the same reasoning.
   name_offsets:
     pos: name_offsets_start
     type: u4
@@ -300,35 +313,23 @@ instances:
 types:
   hierarchy_entry:
     seq:
-      - id: sort_key
+      - id: unk_a
         type: u2
         doc: >
-          Per-node value, loosely increasing across the array but not
-          strictly monotonic (real local dips seen on real samples) - not
-          a plain running index. Purpose not identified.
-      - id: parent_raw
+          Node-index-like value, loosely increasing across the array but
+          not strictly monotonic (real local dips seen on real samples) -
+          not a plain running index, and its last entry reaches exactly
+          node_count - 1. Purpose not identified.
+      - id: unk_b
         type: u2
         doc: >
-          0xffff marks a root (multiple roots seen on real files). Otherwise
-          the low 15 bits give the real parent node
-          index (see parent_index) - the top bit (0x8000) is set on a
-          sizeable minority of non-root entries and its meaning isn't
-          confirmed (candidates not verified: "has multiple children",
-          "twist/helper bone", "IK-related" - no clean correlation with the
-          "_auto"/"mk_auto" name-suffix convention was found either).
-    instances:
-      is_root:
-        value: parent_raw == 0xffff
-      parent_flag:
-        value: (parent_raw & 0x8000) != 0
-        doc: Unattributed - see parent_raw's own doc.
-      parent_index:
-        value: 'is_root ? -1 : (parent_raw & 0x7fff)'
-        doc: >
-          Real parent node index into this same hierarchy/local_transforms/
-          names array, or -1 for a root. Every real file checked has every
-          parent_index < its own node index (safe to resolve/compose world
-          transforms in a single forward pass).
+          Node-index-like value in the same space as unk_a, 0xffff on the
+          array's first few entries, with the top bit (0x8000) set on a
+          sizeable minority of the rest. Correlates loosely with `parents`
+          (whose entries it reproduces shifted by a few nodes on a third of
+          the files checked, and not at all on the rest) but is NOT the
+          skeleton's parent table - see `parents` for that. Purpose not
+          identified.
 
   local_trs:
     seq:

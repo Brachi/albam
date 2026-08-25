@@ -22,7 +22,10 @@ import bpy
 EDGEMODEL_HASH = "f8716a4c39cf84d2"
 SKEL_HASH = "d9aaf6d76616ee3c"
 EXPECTED_NODE_COUNT = 88
-EXPECTED_ROOT_NAMES = {"skel_root", "hips", "hips_nobind", "leftupleg"}
+EXPECTED_ROOT_NAME = "skel_root"
+# Ceiling for the median distance between a bone's head and the centroid of
+# the vertices it actually deforms - see the assertion that uses it.
+MAX_MEDIAN_BONE_TO_SKIN = 0.15
 
 
 def pytest_generate_tests(metafunc):
@@ -41,8 +44,8 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
     skel = HexaneSkel.from_bytes(skel_bytes)
     skel._read()
     assert skel.node_count == EXPECTED_NODE_COUNT
-    expected_roots = {skel.names[i] for i, node in enumerate(skel.hierarchy) if node.is_root}
-    assert expected_roots == EXPECTED_ROOT_NAMES
+    expected_roots = {skel.names[i] for i, parent in enumerate(skel.parents) if parent == 0xffff}
+    assert expected_roots == {EXPECTED_ROOT_NAME}
 
     vfs = bpy.context.scene.albam.vfs
     # hash_to_path/game_fs.walk.files() return a leading-slash virtual
@@ -65,7 +68,7 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
     assert len(bones) == EXPECTED_NODE_COUNT
 
     root_bones = [b for b in bones if b.parent is None]
-    assert {b.name for b in root_bones} == EXPECTED_ROOT_NAMES
+    assert {b.name for b in root_bones} == {EXPECTED_ROOT_NAME}
 
     # Every non-root bone's parent must itself be one of this armature's own
     # bones (i.e. the whole hierarchy is internally consistent, no dangling
@@ -101,3 +104,37 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
         assert ob.vertex_groups
         for vg in ob.vertex_groups:
             assert vg.name in bone_names, f"vertex group {vg.name!r} doesn't match any real bone name"
+
+    # The armature has to line up with the mesh it deforms, not just be
+    # internally consistent: every bone should sit inside the geometry
+    # weighted to it, so the distance from a bone's head to the weighted
+    # centroid of its own skinned vertices stays small (a few cm for most
+    # bones; long twist/helper bones spanning a whole limb are the tail of
+    # the distribution, hence the median rather than the max). A skeleton
+    # composed through a wrong parent table still passes every check above
+    # while landing bones a metre away from their own vertices.
+    bones_by_name = {b.name: b for b in bones}
+    distances = []
+    for ob in deforming:
+        positions = [ob.matrix_world @ v.co for v in ob.data.vertices]
+        totals = {}
+        for vertex in ob.data.vertices:
+            for group in vertex.groups:
+                if group.weight <= 0:
+                    continue
+                name = ob.vertex_groups[group.group].name
+                weight_sum, accumulated = totals.get(name, (0.0, None))
+                weighted = positions[vertex.index] * group.weight
+                totals[name] = (weight_sum + group.weight,
+                                weighted if accumulated is None else accumulated + weighted)
+        for name, (weight_sum, accumulated) in totals.items():
+            if weight_sum <= 0:
+                continue
+            distances.append((accumulated / weight_sum - bones_by_name[name].head_local).length)
+    assert distances
+    distances.sort()
+    median = distances[len(distances) // 2]
+    assert median < MAX_MEDIAN_BONE_TO_SKIN, (
+        f"bones sit {median:.3f}m from the geometry they deform (median over "
+        f"{len(distances)} vertex groups) - the bind pose doesn't match the mesh"
+    )
