@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_153
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework model format 153
 
 seq:

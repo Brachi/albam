@@ -1,6 +1,5 @@
 import importlib
 import os
-import sys
 
 import bpy
 from .lib.tools import face_attr_editor as overlay
@@ -10,28 +9,14 @@ from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
 from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
 from .data_loading import populate_albam_data
+from .lib import fs_registry
 from .registry import blender_registry
 from .__version__ import __version__ as version
 
 __version__ = version
 
 
-bl_info = {
-    "name": "Albam",
-    "author": "Sebastian Aguirre Brachi",
-    "version": (0, 5, 0),  # needs to be kept in sync with __version__ manually
-    "blender": (4, 2, 0),
-    "location": "Properties Panel",
-    "description": "Import-Export multiple video-game formats",
-    "category": "Import-Export",
-}
-
-ALBAM_DIR = os.path.dirname(__file__)
-VENDOR_DIR = os.path.join(ALBAM_DIR, "albam_vendor")
-
-
 def register():
-    sys.path.insert(0, VENDOR_DIR)
     # Load registered functions into the blender_registry
     importlib.import_module(".blender_ui.import_panel", __package__)
     importlib.import_module(".blender_ui.export_panel", __package__)
@@ -78,12 +63,19 @@ def register():
     # Load data from user's config files
     bpy.app.handlers.load_post.append(populate_albam_data)
 
+    # Rebuild fs_registry's process-lifetime entries for VFS roots restored
+    # from the loaded .blend file - see albam.vfs.reconnect_fs_roots.
+    from .vfs import reconnect_fs_roots
+    bpy.app.handlers.load_post.append(reconnect_fs_roots)
+
 
 def unregister():
     if bpy.app.timers.is_registered(overlay.check_active_tool):
         bpy.app.timers.unregister(overlay.check_active_tool)
 
     overlay.hide()
+    fs_registry.clear()
+
     for _, cls in reversed(blender_registry.props):
         bpy.utils.unregister_class(cls)
 
@@ -93,5 +85,3 @@ def unregister():
     unregister_workspace_tools()
 
     bpy.utils.unregister_class(type(bpy.context.scene.albam))
-
-    sys.path.remove(VENDOR_DIR)

@@ -25,6 +25,7 @@ def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types
 
     mesh_bytes = file_list_item.get_bytes()
     re_mesh = ReengineMesh(KaitaiStream(io.BytesIO(mesh_bytes)))
+    re_mesh._read()
 
     bl_object_name = file_list_item.display_name
     skeleton = None if not re_mesh.header.offset_bones else build_blender_armature(re_mesh, bl_object_name)
@@ -94,9 +95,17 @@ def build_blender_mesh(re_mesh, sub_mesh):
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
     np.divide(vert_normals, norms, out=vert_normals, where=norms != 0)
     bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
-    bl_mesh.create_normals_split()
+    try:
+        bl_mesh.create_normals_split()
+    except AttributeError:
+        # blender 4.1+
+        pass
     bl_mesh.normals_split_custom_set_from_vertices(vert_normals)
-    bl_mesh.use_auto_smooth = True
+    try:
+        bl_mesh.use_auto_smooth = True
+    except AttributeError:
+        # blender 4.1+
+        pass
 
     return ob
 

@@ -11,15 +11,39 @@ keywords = ["modding", "game-modding", "blender-addon", "import", "export"]
 dependencies = [
   'bpy == 4.2.0; python_version == "3.11.*"',
   'bpy == 5.2.0; python_version == "3.13.*"',
+  "fs==2.4.16",
+  # `fs` breaks under setuptools 81+ (drops pkg_resources).
+  "setuptools==80.10.2",
+  "kaitaistruct==0.11",
+  "pymorton==1.0.5",
 ]
 
 [project.optional-dependencies]
 
 tests = [
-  "pytest",
-  "pytest-subtests",
-  "coverage[toml]",
-  "flake8-pyproject",
+  "pytest==9.1.1",
+  "pytest-subtests==0.15.0",
+  "coverage[toml]==7.15.4",
+  "flake8-pyproject==1.2.4",
+  "moto[s3]==5.2.2",
+  "python-dotenv==1.2.3",
+]
+
+# albam.engines.mtfw.arc_fs.MTFW_FS.from_s3: sourcing .arc files from an
+# S3/R2-compatible bucket instead of a local game folder.
+s3 = [
+  "boto3==1.43.72",
+  "smart-open[s3]==8.0.1",
+]
+
+# albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
+# of a default install): bc7enc-py for BC7 DDS texture decode (.tex
+# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries, pymmh3
+# for PakFS/ReenFS's virtual-path hashing.
+reen = [
+  "bc7enc-py==0.1.0a1",
+  "zstd==1.5.7.2",
+  "pymmh3==0.0.5",
 ]
 
 [build-system]
@@ -29,12 +53,9 @@ build-backend = "setuptools.build_meta"
 [tool.black]
 line-length = 110
 
-[tool.coverage.run]
-omit = [ "*/albam_vendor/*" ]
-
 [tool.flake8]
 max-line-length = 110
-exclude = ["albam_vendor", ".venv", "structs"]
+exclude = [".venv", "structs"]
 
 # F722: needed for Blender props annotations such as
 # ```

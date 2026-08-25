@@ -4,7 +4,7 @@ meta:
   title: RE Engine texture format
   file-extension: tex
   license: CC0-1.0
-  ks-version: 0.8
+  ks-version: '0.11'
 
 
 seq:

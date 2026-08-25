@@ -1,4 +1,57 @@
+import json
+import os
+
+import pytest
+
 from albam.engines.mtfw.collision import KNOWN_RUNTIME_ATTR
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified files to
+# parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
+# to add more.
+SBC_PARSING_DATASET_PATH = os.path.join(os.path.dirname(__file__), "datasets", "sbc_parsing_hashes.json")
+with open(SBC_PARSING_DATASET_PATH) as f:
+    SBC_PARSING_DATASET = json.load(f)
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_sbc_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_sbc_path_hash")
+        argvalues = [(d["app_id"], d["sbc_path_hash"]) for d in SBC_PARSING_DATASET]
+        ids = [f"{d['app_id']}-{d['sbc_path_hash']}" for d in SBC_PARSING_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by SBC_PARSING_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in SBC_PARSING_DATASET:
+        catalog_path = os.path.join(os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["sbc_path_hash"] in catalog_hashes, (
+            f"{entry['sbc_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def parsed_sbc(game_fs_root, local_app_id, local_sbc_path_hash):
+    from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
+
+    path = resolve_hashes(game_fs_root, {local_sbc_path_hash})[local_sbc_path_hash]
+    sbc_bytes = game_fs_root.readbytes(path)
+    SBC = APPID_SBC_CLASS_MAPPER[local_app_id]
+
+    parsed_sbc = SBC.from_bytes(sbc_bytes)
+    parsed_sbc._read()
+
+    return parsed_sbc
+
+
 SBC_MAGIC_ID = [49, 255]
 KNOWN_NODE156_BIT = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 15, 17, 19, 20, 21, 23, 29, 30, 31, 33,
                      45, 47, 53, 55, 61, 63, 64, 67, 69, 76, 127, 128, 129, 195,
@@ -20,8 +73,8 @@ SBC21_VERSION = [2011120601,  # rev2
                  ]
 
 
-def test_parsed_sbc(parsed_sbc_from_arc):
-    sbc = parsed_sbc_from_arc
+def test_parsed_sbc(parsed_sbc):
+    sbc = parsed_sbc
     magic = sbc.header.indent
     assert magic[3] in SBC_MAGIC_ID
     if magic[3] == 255:

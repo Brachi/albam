@@ -76,7 +76,6 @@ class AlbamArmatures(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="tools_settings")
 class ToolsSettings(bpy.types.PropertyGroup):
-    split_uv_seams_transfer_normals: bpy.props.BoolProperty(default=True)
     default_path = "path\\to_textures\\"
     relative_path_to_textures: bpy.props.StringProperty(default=default_path)
     bone_names_enum = bpy.props.EnumProperty(
@@ -152,14 +151,6 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row.label(text="Active Mesh")
         row = layout.row()
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
-        row = layout.row()
-        op = row.operator('albam.split_uv_seams', text="Split UV Seams")
-        op.transfer_normals = context.scene.albam.tools_settings.split_uv_seams_transfer_normals
-        row.prop(
-            context.scene.albam.tools_settings,
-            "split_uv_seams_transfer_normals",
-            text="Transfer Normals",
-        )
         layout.separator()
         row = layout.row()
         row.operator('albam.transfer_normals', text="Transfer normals from Active mesh")
@@ -273,36 +264,6 @@ class ALBAM_OT_FaceAttrEditor(bpy.types.Operator):
         rv3d = context.space_data.region_3d
         overlay_enable(selected, region, rv3d)
 
-        return {'FINISHED'}
-
-
-@blender_registry.register_blender_type
-class ALBAM_OT_SplitUVSeams(bpy.types.Operator):
-    '''
-    Split vertices that are part of a UV seam (edges of a UV island).
-    This is a workaround for a bug in the exporter[1] and necessary to avoid
-    artifacts in UV textures displayed in-game.
-    [1] https://github.com/Brachi/albam/issues/78
-    '''
-    bl_idname = "albam.split_uv_seams"
-    bl_label = "Split UV seams"
-
-    transfer_normals: bpy.props.BoolProperty(default=False)
-
-    @classmethod
-    def poll(self, context):
-        if not bpy.context.selected_objects:
-            return False
-        return True
-
-    def execute(self, context):
-        selection = bpy.context.selected_objects
-        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
-        if selected_meshes:
-            split_UV_seams(selected_meshes, self.transfer_normals)
-            show_message_box(message=f"Splitting complete for {len(selected_meshes)} meshes")
-        else:
-            show_message_box(message="There is no mesh in the selection")
         return {'FINISHED'}
 
 
@@ -942,38 +903,6 @@ def transfer_normals(source_obj, target_objs):
             modifier.object = source_obj
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.modifier_apply(modifier=modifier.name)
-
-
-def split_UV_seams(selected_objs, normals=False):
-    for ob in selected_objs:
-        ob.select_set(True)
-        bpy.context.view_layer.objects.active = ob
-        mesh = ob.data
-        if normals:
-            # create temporal mesh for normal transfer
-            temp_list = []
-            temp_data = mesh.copy()
-            temp_mesh = ob.copy()
-            temp_mesh.data = temp_data
-        # in order to select edges, you need to make sure that
-        # previously you deselected everything in the Edit Mode
-        # and set the select_mode to 'EDGE'
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_mode(type='EDGE')
-        bpy.ops.mesh.select_all(action='SELECT')
-        split_seams(mesh)
-        bpy.ops.mesh.select_all(action='DESELECT')
-
-        # we need to return back to the OBJECT mode,
-        # otherwise, the result won't be seen,
-        # see https://blender.stackexchange.com/questions/43127 for info
-        bpy.ops.object.mode_set(mode='OBJECT')
-        if normals:
-            # transfer normals and remove temporal mesh
-            temp_list.append(ob)
-            transfer_normals(temp_mesh, temp_list)
-            objs = bpy.data.objects
-            objs.remove(temp_mesh, do_unlink=True)
 
 
 def blender_texture_to_texture_code(blender_texture_image_node):
