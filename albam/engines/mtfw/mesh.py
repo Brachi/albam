@@ -734,9 +734,11 @@ def build_blender_armature(app_id, mod, armature_name, bbox_data):
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
 
         if app_id == "umvc3":
-            # Can't figure out numbers in this app inverse bind matrices
-            # Probably all apps can safely use this function, needs parsing tests
-            # to confirm their equivalence
+            # umvc3's inverse bind matrices don't survive the bbox transform
+            # every other version-21x app needs: past the first two bones the
+            # positions they produce drift off the skeleton entirely, while
+            # walking the parent-space matrices down the hierarchy lands every
+            # bone where the mesh expects it.
             head = _transform_parent_matrix(mod, i)
         else:
             inverse_bind_matrix = mod.bones_data.inverse_bind_matrices[i]
