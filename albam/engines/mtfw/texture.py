@@ -386,10 +386,14 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
                 print("         Unknown tex type: ", tex_type_mtfw)
                 continue
 
-            if tex_index > 0:
-                texture_target = textures[real_tex_index]
-            else:
-                texture_target = None
+            if tex_index == 0:
+                # Index 0 is the engine's dummy texture: the material is
+                # saying this map is deliberately absent. Leave the socket
+                # on the shader group's own default - an empty image node
+                # would drive it with black, which for a normal map is not
+                # the neutral value. old_assignment() skips these too.
+                continue
+            texture_target = textures[real_tex_index]
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
