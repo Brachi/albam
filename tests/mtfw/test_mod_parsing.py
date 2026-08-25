@@ -169,6 +169,24 @@ KNOWN_DRAW_MODE = {
     65533,
     65534,
     65535,
+    # Values only umvc3 uses so far
+    4096,
+    58563,
+    58592,
+    58593,
+    60609,
+    60659,
+    60919,
+    61179,
+    61437,
+    62657,
+    62705,
+    63227,
+    63437,
+    63487,
+    65259,
+    65275,
+    65503,
 }
 
 KNOWN_TOPOLOGY = {
@@ -177,7 +195,7 @@ KNOWN_TOPOLOGY = {
 }
 
 
-def test_mod(parsed_mod):
+def test_mod(parsed_mod, local_app_id):
     mod = parsed_mod
     if mod.header.version == 156:
         materials = [m for m in mod.materials_data.materials]
@@ -221,11 +239,13 @@ def test_mod(parsed_mod):
         assert not draw_modes.difference(KNOWN_DRAW_MODE)
         assert not topology.difference(KNOWN_TOPOLOGY)
     total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
-    # FIXME: mod.header.version == 211
-    num_weight_bounds = (
-        mod.num_weight_bounds if mod.header.version == 210 or mod.header.version == 212
-        else mod.meshes_data.num_weight_bounds
-    )
+    # Version 211 normally carries its weight-bound count inside meshes_data,
+    # but umvc3's own 211 keeps it at the top level like 210/212 do - see the
+    # matching condition in mod-21.ksy.
+    if mod.header.version in (210, 212) or local_app_id == "umvc3":
+        num_weight_bounds = mod.num_weight_bounds
+    else:
+        num_weight_bounds = mod.meshes_data.num_weight_bounds
 
     assert mod.header.ident == b"MOD\x00"
     assert mod.header.version in SUPPORTED_MOD_VERSIONS
