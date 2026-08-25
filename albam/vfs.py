@@ -148,6 +148,25 @@ class VirtualFileSystemBase:
         self.file_list_selected_index = self.file_list.find(file_id)
         return self.file_list[file_id]
 
+    def _unique_root_name(self, app_id, display_name):
+        """Root nodes are keyed by name in `file_list`, and two roots can
+        easily share a display name - e.g. "Add Files" on both
+        Characters/<name>.ssg and Characters/skel/<name>.ssg, two different
+        archives with the same basename. A CollectionProperty happily holds
+        duplicate names but resolves a lookup to the first match only, so
+        without disambiguating here every child of the second root would
+        resolve its `tree_node.root_id` back to the *first* root - reading
+        its bytes from the wrong FS (ResourceNotFound) and listing its
+        children under the wrong node in the tree UI.
+        """
+        root_name = f"{app_id}{self.SEPARATOR}{display_name}"
+        if root_name not in self.file_list:
+            return root_name
+        suffix = 1
+        while f"{root_name}#{suffix}" in self.file_list:
+            suffix += 1
+        return f"{root_name}#{suffix}"
+
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
         extension = _extension_from_name(path.name)
@@ -166,7 +185,7 @@ class VirtualFileSystemBase:
 
         vf = self.file_list.add()
         vf.is_root = True
-        vf.name = f"{app_id}::{path.name}"
+        vf.name = self._unique_root_name(app_id, path.name)
         vf.vfs_id = self.VFS_ID
         vf.app_id = app_id
         vf.display_name = path.name
@@ -194,7 +213,7 @@ class VirtualFileSystemBase:
         """
         fs_key = fs_registry.register(fs_instance)
 
-        root_id = f"{app_id}::{display_name}"
+        root_id = self._unique_root_name(app_id, display_name)
         vf = self.file_list.add()
         vf.is_root = True
         vf.name = root_id

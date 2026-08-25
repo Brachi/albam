@@ -165,3 +165,32 @@ def test_remove_root_unregisters_fs():
     assert len(vfs.file_list) == 0
     with pytest.raises(KeyError):
         fs_registry.get(key)
+
+
+def test_two_roots_sharing_a_display_name_each_read_their_own_fs():
+    """Adding two same-named archives from different directories (e.g.
+    "Add Files" on both Characters/<name>.ssg and Characters/skel/<name>.ssg)
+    used to give both roots the identical file_list name, so every child of
+    the second one resolved its root - and therefore its FS - back to the
+    first, reading bytes from the wrong archive.
+    """
+    fs_a = MemoryFS()
+    fs_a.makedirs("/only_in_a")
+    fs_a.writebytes("/only_in_a/thing.mod", b"a-bytes")
+    fs_b = MemoryFS()
+    fs_b.makedirs("/only_in_b")
+    fs_b.writebytes("/only_in_b/thing.mod", b"b-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    root_a = vfs.add_fs_root("re5", fs_a, display_name="same.arc", is_archive=True)
+    root_b = vfs.add_fs_root("re5", fs_b, display_name="same.arc", is_archive=True)
+
+    # Distinct keys in file_list, but the same UI label - the disambiguation
+    # is internal, the user still sees what they added.
+    assert root_a.name != root_b.name
+    assert root_a.display_name == root_b.display_name == "same.arc"
+    assert vfs.file_list[root_a.name].fs_key == root_a.fs_key
+    assert vfs.file_list[root_b.name].fs_key == root_b.fs_key
+
+    assert vfs.get_vfile("re5", "only_in_a/thing.mod").get_bytes() == b"a-bytes"
+    assert vfs.get_vfile("re5", "only_in_b/thing.mod").get_bytes() == b"b-bytes"
