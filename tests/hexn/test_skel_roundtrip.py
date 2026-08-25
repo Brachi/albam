@@ -1,8 +1,6 @@
 import json
 import os
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Reuses test_skel_parsing.py's own committed dataset - same files, same
 # catalog verification, different assertion (byte-exact identity
 # round-trip instead of structural sanity). See
@@ -22,10 +20,10 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
-def test_skel_identity_roundtrip(game_fs_root, local_app_id, local_skel_path_hash):
+def test_skel_identity_roundtrip(game_fs_root, hash_to_path, local_app_id, local_skel_path_hash):
     from albam.engines.hexn.skel_roundtrip import identity_roundtrip
 
-    path = resolve_hashes(game_fs_root, {local_skel_path_hash})[local_skel_path_hash]
+    path = hash_to_path[local_skel_path_hash]
     skel_bytes = game_fs_root.readbytes(path)
 
     assert identity_roundtrip(skel_bytes) == skel_bytes

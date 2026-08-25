@@ -105,3 +105,18 @@ def resolve_hashes(game_fs, target_hashes):
     if missing:
         raise KeyError(f"hash(es) not found in this game install: {sorted(missing)}")
     return found
+
+
+def index_by_hash(game_fs):
+    """
+    Walk game_fs once and return {hash: path} for *every* file in it - the
+    whole-tree counterpart of resolve_hashes(), for a caller that resolves
+    hashes repeatedly (e.g. a session-scoped fixture serving many
+    parametrized tests) rather than once for a known set.
+
+    Same forward-match-only rule as resolve_hashes: a hash is never turned
+    back into a path any other way, this just keeps the result of the walk
+    instead of throwing it away. Missing hashes surface as a plain KeyError
+    on lookup, since there's no requested set to name them against here.
+    """
+    return {hash_virtual_path(path): path for path in game_fs.walk.files()}

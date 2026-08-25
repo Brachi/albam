@@ -1,8 +1,6 @@
 import json
 import os
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
 # to add more.
@@ -39,10 +37,10 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-def test_parse_edgemodel(game_fs_root, local_app_id, local_edgemodel_path_hash):
+def test_parse_edgemodel(game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash):
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
 
-    path = resolve_hashes(game_fs_root, {local_edgemodel_path_hash})[local_edgemodel_path_hash]
+    path = hash_to_path[local_edgemodel_path_hash]
     edgemodel_bytes = game_fs_root.readbytes(path)
 
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
@@ -78,13 +76,13 @@ VECTOR_EDGEMODEL_HASH = "9b51865995033c55"
 STRIDE_12_MESH_INDEX = 12
 
 
-def test_non_52_stride_produces_a_coherent_mesh(game_fs_root, local_app_id):
+def test_non_52_stride_produces_a_coherent_mesh(game_fs_root, hash_to_path, local_app_id):
     import struct
 
     from albam.engines.hexn.mesh import build_blender_mesh
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
 
-    path = resolve_hashes(game_fs_root, {VECTOR_EDGEMODEL_HASH})[VECTOR_EDGEMODEL_HASH]
+    path = hash_to_path[VECTOR_EDGEMODEL_HASH]
     edgemodel = HexaneEdgemodel.from_bytes(game_fs_root.readbytes(path))
     edgemodel._read()
 

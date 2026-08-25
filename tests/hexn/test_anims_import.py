@@ -21,7 +21,6 @@ needing its own separate hash).
 """
 import bpy
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 ANIMS_HASH = "0aadc76ea27d6c42"
 
@@ -46,10 +45,10 @@ def _pick_animated_clip(anims):
     raise AssertionError("no clip with real animated channels found in this archive")
 
 
-def test_import_applies_action_to_a_real_armature(game_fs_root, local_app_id):
+def test_import_applies_action_to_a_real_armature(game_fs_root, hash_to_path, local_app_id):
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
-    path = resolve_hashes(game_fs_root, {ANIMS_HASH})[ANIMS_HASH]
+    path = hash_to_path[ANIMS_HASH]
     anims_bytes = game_fs_root.readbytes(path)
     anims = HexaneAnims.from_bytes(anims_bytes)
     anims._read()

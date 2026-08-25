@@ -1,8 +1,6 @@
 import json
 import os
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Reuses test_edgemodel_parsing.py's own committed, catalog-verified dataset
 # (see its test_dataset_hashes_are_in_catalog) - these 5 files already cover
 # a range of real .matb materials (multiple texture slots, including at
@@ -46,7 +44,8 @@ def _overlaps(a, b):
     return ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1
 
 
-def test_material_node_layout_has_no_overlaps(game_fs_root, local_app_id, local_edgemodel_path_hash):
+def test_material_node_layout_has_no_overlaps(
+        game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash):
     """Verifies build_blender_materials() gives every dynamically created
     node an explicit position: node_tree.nodes.new(...) never sets
     .location on its own, so without an explicit layout step every
@@ -64,7 +63,7 @@ def test_material_node_layout_has_no_overlaps(game_fs_root, local_app_id, local_
     from albam.engines.hexn.material import build_blender_materials
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
 
-    path = resolve_hashes(game_fs_root, {local_edgemodel_path_hash})[local_edgemodel_path_hash]
+    path = hash_to_path[local_edgemodel_path_hash]
     edgemodel_bytes = game_fs_root.readbytes(path)
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()

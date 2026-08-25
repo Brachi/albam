@@ -1,8 +1,6 @@
 import json
 import os
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Six *.anims.ssg
 # from Animation/Projects/: an effectively-empty archive (32 bytes, no
@@ -42,7 +40,7 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-def test_parse_anims_container(game_fs_root, local_app_id, local_anims_path_hash):
+def test_parse_anims_container(game_fs_root, hash_to_path, local_app_id, local_anims_path_hash):
     """Container-level structure: same shape as hexane_ssg, just big-endian
     (see structs/anims.ksy). id_magic is 5 or 6 on every real file; every
     entry's name follows the `<clip_path>--<skeleton_name>` convention
@@ -51,7 +49,7 @@ def test_parse_anims_container(game_fs_root, local_app_id, local_anims_path_hash
     """
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
-    path = resolve_hashes(game_fs_root, {local_anims_path_hash})[local_anims_path_hash]
+    path = hash_to_path[local_anims_path_hash]
     data = game_fs_root.readbytes(path)
 
     anims = HexaneAnims.from_bytes(data)
@@ -76,7 +74,7 @@ def test_parse_anims_container(game_fs_root, local_app_id, local_anims_path_hash
         assert clip_bytes[:4] == b"40AE"
 
 
-def test_parse_anims_clip_header(game_fs_root, local_app_id, local_anims_path_hash):
+def test_parse_anims_clip_header(game_fs_root, hash_to_path, local_app_id, local_anims_path_hash):
     """AnimClip's own confirmed EdgeAnimAnimation header fields, spot-checked
     against the relationships confirmed against the committed dataset (see
     structs/anims.ksy's module doc): framerate is always 30, num_frames is
@@ -85,7 +83,7 @@ def test_parse_anims_clip_header(game_fs_root, local_app_id, local_anims_path_ha
     """
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
-    path = resolve_hashes(game_fs_root, {local_anims_path_hash})[local_anims_path_hash]
+    path = hash_to_path[local_anims_path_hash]
     data = game_fs_root.readbytes(path)
 
     anims = HexaneAnims.from_bytes(data)

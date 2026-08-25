@@ -1,10 +1,6 @@
 import json
 import os
 
-import pytest
-
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Every .matb that
 # successfully parsed in a full-game sweep of a real RE:ORC install is
@@ -44,24 +40,10 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-@pytest.fixture(scope="session")
-def matb_hash_to_path(game_fs_root):
-    """Resolves every hash this dataset needs in one single walk, instead of
-    each parametrized test calling resolve_hashes() (and so walking the
-    whole install) on its own - at thousands of entries, one-walk-per-test
-    is prohibitively slow (each walk touches every archived + loose file in
-    the install). resolve_hashes() is built for exactly this batched shape
-    already; test_edgemodel_parsing.py just never needed it at its much
-    smaller (5-entry) scale.
-    """
-    all_hashes = {d["matb_path_hash"] for d in MATB_PARSING_DATASET}
-    return resolve_hashes(game_fs_root, all_hashes)
-
-
-def test_parse_matb(game_fs_root, matb_hash_to_path, local_app_id, local_matb_path_hash):
+def test_parse_matb(game_fs_root, hash_to_path, local_app_id, local_matb_path_hash):
     from albam.engines.hexn.structs.hexane_matb import HexaneMatb
 
-    path = matb_hash_to_path[local_matb_path_hash]
+    path = hash_to_path[local_matb_path_hash]
     matb_bytes = game_fs_root.readbytes(path)
 
     matb = HexaneMatb.from_bytes(matb_bytes)

@@ -12,6 +12,10 @@ R2_PROTOCOL_PREFIX = "r2://"
 # tests/mtfw/conftest.py's game_fs_root, which this mirrors.
 _GAME_FS_INSTANCES = {}
 
+# app_id -> {path_hash: virtual path} for its whole mounted install, built
+# once per session by the hash_to_path fixture below.
+_HASH_INDEXES = {}
+
 
 def _game_dirs(pytestconfig):
     # Reuses the shared --game-dir option (see tests/conftest.py). A third
@@ -66,3 +70,24 @@ def game_fs_root(pytestconfig, local_app_id):
         _GAME_FS_INSTANCES[local_app_id] = game_fs
 
     return _GAME_FS_INSTANCES[local_app_id]
+
+
+@pytest.fixture(scope="session")
+def hash_to_path(game_fs_root, local_app_id):
+    """{path_hash: virtual path} for every file in the mounted install,
+    built from a single walk shared by every test in this directory.
+
+    Each test resolving its own hash on its own used to walk the whole
+    install again (a real RE:ORC install is ~40k archived + loose files,
+    seconds per walk), once per parametrized case - by far the dominant
+    cost of running these tests against real game data. Lookups are plain
+    dict lookups against this index instead; the walk happens once.
+
+    Resolution stays forward-match-only, exactly as resolve_hashes() does
+    it - see tests/mtfw/scripts/catalog_paths.index_by_hash.
+    """
+    from tests.mtfw.scripts.catalog_paths import index_by_hash
+
+    if local_app_id not in _HASH_INDEXES:
+        _HASH_INDEXES[local_app_id] = index_by_hash(game_fs_root)
+    return _HASH_INDEXES[local_app_id]

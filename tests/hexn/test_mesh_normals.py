@@ -3,8 +3,6 @@ import math
 import os
 import struct
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Reuses test_edgemodel_parsing.py's own committed, catalog-verified dataset
 # (see its test_dataset_hashes_are_in_catalog) - same convention already
 # used by test_material_layout.py for the same reason: no new hashes needed
@@ -36,7 +34,7 @@ def test_dataset_hashes_are_in_catalog():
 
 
 def test_normals_are_unit_length_and_shading_is_smooth(
-        game_fs_root, local_app_id, local_edgemodel_path_hash, subtests):
+        game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash, subtests):
     """
     Verifies imported meshes render smooth-shaded, not flat: normal is a
     plain float32 xyz at buffer_vertices offset 12 for any vertex_stride
@@ -52,7 +50,7 @@ def test_normals_are_unit_length_and_shading_is_smooth(
     from albam.engines.hexn.mesh import build_blender_mesh
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
 
-    path = resolve_hashes(game_fs_root, {local_edgemodel_path_hash})[local_edgemodel_path_hash]
+    path = hash_to_path[local_edgemodel_path_hash]
     edgemodel_bytes = game_fs_root.readbytes(path)
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()
@@ -89,7 +87,8 @@ def test_normals_are_unit_length_and_shading_is_smooth(
         pytest.skip("no lod-0 mesh in this model has a vertex_stride >= 24")
 
 
-def test_tangent_orthogonal_to_normal(game_fs_root, local_app_id, local_edgemodel_path_hash, subtests):
+def test_tangent_orthogonal_to_normal(
+        game_fs_root, hash_to_path, local_app_id, local_edgemodel_path_hash, subtests):
     """
     Verifies the confirmed vertex_stride == 52 tangent layout
     (buffer_vertices offset 28, a third float32 xyz right after position
@@ -102,7 +101,7 @@ def test_tangent_orthogonal_to_normal(game_fs_root, local_app_id, local_edgemode
     from albam.engines.hexn.mesh import build_blender_mesh
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
 
-    path = resolve_hashes(game_fs_root, {local_edgemodel_path_hash})[local_edgemodel_path_hash]
+    path = hash_to_path[local_edgemodel_path_hash]
     edgemodel_bytes = game_fs_root.readbytes(path)
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()

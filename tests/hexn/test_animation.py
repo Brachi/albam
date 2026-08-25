@@ -5,8 +5,6 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Reuses test_anims_parsing.py's own committed dataset.
 ANIMS_PARSING_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "anims_parsing_hashes.json")
@@ -34,7 +32,7 @@ def _iter_clips(anims):
         yield file_info, clip_bytes, clip_path, skeleton_name
 
 
-def test_decode_clip_sane_across_dataset(game_fs_root, local_app_id, local_anims_path_hash):
+def test_decode_clip_sane_across_dataset(game_fs_root, hash_to_path, local_app_id, local_anims_path_hash):
     """decode_clip() succeeds on every clip in these files and produces
     unit-length rotation quaternions and a finite, positive-length pose -
     the strongest content-level check available without a real skeleton
@@ -46,7 +44,7 @@ def test_decode_clip_sane_across_dataset(game_fs_root, local_app_id, local_anims
     from albam.engines.hexn.animation import decode_clip
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
-    path = resolve_hashes(game_fs_root, {local_anims_path_hash})[local_anims_path_hash]
+    path = hash_to_path[local_anims_path_hash]
     data = game_fs_root.readbytes(path)
     anims = HexaneAnims.from_bytes(data)
     anims._read()
@@ -98,7 +96,7 @@ def _make_throwaway_armature(name, num_bones):
     return armature_obj
 
 
-def test_build_blender_action(game_fs_root, local_app_id, local_anims_path_hash):
+def test_build_blender_action(game_fs_root, hash_to_path, local_app_id, local_anims_path_hash):
     """build_blender_action() runs end to end against a throwaway armature
     (positional bone_names lookup - see its own docstring for why that's
     documented as an assumption) and produces finite keyframe values on
@@ -107,7 +105,7 @@ def test_build_blender_action(game_fs_root, local_app_id, local_anims_path_hash)
     from albam.engines.hexn.animation import build_blender_action, decode_clip
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
-    path = resolve_hashes(game_fs_root, {local_anims_path_hash})[local_anims_path_hash]
+    path = hash_to_path[local_anims_path_hash]
     data = game_fs_root.readbytes(path)
     anims = HexaneAnims.from_bytes(data)
     anims._read()

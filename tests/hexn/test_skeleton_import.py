@@ -19,8 +19,6 @@ to end, not just a directly-constructed HexaneSkel.
 """
 import bpy
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 EDGEMODEL_HASH = "f8716a4c39cf84d2"
 SKEL_HASH = "d9aaf6d76616ee3c"
 EXPECTED_NODE_COUNT = 88
@@ -32,15 +30,14 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("local_app_id", ["reorc"], scope="session")
 
 
-def test_import_builds_armature_matching_skel_file(game_fs_root, local_app_id):
+def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, local_app_id):
     from albam.engines.hexn.structs.hexane_skel import HexaneSkel
 
     # Independently confirm both hashes resolve under this install/dataset,
     # and that the skel file's own node_count/hierarchy match what the
     # import is expected to produce below - so this test fails loudly if
     # the *fixture* data ever drifts, not just the import code.
-    paths = resolve_hashes(game_fs_root, {EDGEMODEL_HASH, SKEL_HASH})
-    skel_bytes = game_fs_root.readbytes(paths[SKEL_HASH])
+    skel_bytes = game_fs_root.readbytes(hash_to_path[SKEL_HASH])
     skel = HexaneSkel.from_bytes(skel_bytes)
     skel._read()
     assert skel.node_count == EXPECTED_NODE_COUNT
@@ -48,12 +45,12 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, local_app_id):
     assert expected_roots == EXPECTED_ROOT_NAMES
 
     vfs = bpy.context.scene.albam.vfs
-    # resolve_hashes()/game_fs.walk.files() return a leading-slash virtual
+    # hash_to_path/game_fs.walk.files() return a leading-slash virtual
     # path; VirtualFileSystemBase.select_vfile() builds its lookup key via
     # PureWindowsPath(relative_path).parts, where a leading "/" becomes its
     # own bogus "\\" part - strip it first (mirrors how e.g. material.py's
     # own mesh_header.materials.first_material is already leading-slash-free).
-    vfs.select_vfile(local_app_id, paths[EDGEMODEL_HASH].lstrip("/"))
+    vfs.select_vfile(local_app_id, hash_to_path[EDGEMODEL_HASH].lstrip("/"))
     before = set(bpy.data.objects)
 
     result = bpy.ops.albam.import_vfile()

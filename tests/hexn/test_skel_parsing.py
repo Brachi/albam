@@ -1,8 +1,6 @@
 import json
 import os
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
 # Committed, fixed dataset - explicit, hash-only, catalog-verified skel
 # files to parse (see test_dataset_hashes_are_in_catalog below). A mix of
 # humans, a creature, a large-gap outlier, a zombie-type character, and a
@@ -40,10 +38,10 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-def test_parse_skel(game_fs_root, local_app_id, local_skel_path_hash):
+def test_parse_skel(game_fs_root, hash_to_path, local_app_id, local_skel_path_hash):
     from albam.engines.hexn.structs.hexane_skel import HexaneSkel
 
-    path = resolve_hashes(game_fs_root, {local_skel_path_hash})[local_skel_path_hash]
+    path = hash_to_path[local_skel_path_hash]
     skel_bytes = game_fs_root.readbytes(path)
 
     skel = HexaneSkel.from_bytes(skel_bytes)
