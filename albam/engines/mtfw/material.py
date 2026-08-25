@@ -72,13 +72,11 @@ MRL_MATERIAL_TYPE_STR = {
     0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
     0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",  # nDraw::DDMaterialInner
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
-    0x6C468C46: "Unknown",
-    0x21617f54: "Unknown2",
-    0x6ebe0b47: "Unknown3",
-    0x20813bb8: "Unknown4",
-    0x3b5107ca: "Unknown5",
-
-
+    0x21617F54: "TYPE_nDraw__MaterialChar",  # nDraw::MaterialChar
+    0x6C468C46: "TYPE_nDraw__MaterialCharAlpha",  # nDraw::MaterialCharAlpha
+    0x6EBE0B47: "TYPE_nDraw__MaterialStgSimple",  # nDraw::MaterialStgSimple
+    0x20813BB8: "TYPE_nDraw__MaterialStgSimple2",  # nDraw::MaterialStgSimple2
+    0x3B5107CA: "TYPE_nDraw__MaterialUI",  # nDraw::MaterialUI
 }
 
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
@@ -998,6 +996,12 @@ def _create_mtfw_shader():
     sg.new_socket("Hair Shift", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Height Map", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Emission", in_out="INPUT", socket_type="NodeSocketColor", )
+    # Held, not wired into the BSDF: these carry data albam preserves for
+    # export but the preview shader doesn't model - same as Emission,
+    # Height Map and the displacement sockets above.
+    sg.new_socket("Toon Ramp", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Toon Ramp Reverse", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Indirect User", in_out="INPUT", socket_type="NodeSocketColor")
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -1599,11 +1603,11 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("TYPE_nDraw__DDMaterialStd", "DDMaterialStd", "", 4),
             ("TYPE_nDraw__DDMaterialInner", "DDMaterialInne", "", 5),
             ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
-            ("Unknown", "Unknown", "", 7),
-            ("Unknown2", "Unknown2", "", 8),
-            ("Unknown3", "Unknown3", "", 9),
-            ("Unknown4", "Unknown4", "", 10),
-            ("Unknown5", "Unknown5", "", 11),
+            ("TYPE_nDraw__MaterialChar", "MaterialChar", "", 7),
+            ("TYPE_nDraw__MaterialCharAlpha", "MaterialCharAlpha", "", 8),
+            ("TYPE_nDraw__MaterialStgSimple", "MaterialStgSimple", "", 9),
+            ("TYPE_nDraw__MaterialStgSimple2", "MaterialStgSimple2", "", 10),
+            ("TYPE_nDraw__MaterialUI", "MaterialUI", "", 11),
         ],
         default="TYPE_nDraw__MaterialStd",
         options=set()

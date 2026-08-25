@@ -59,6 +59,12 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     NORMAL_DETAIL_2 = 20
     INDIRECT = 21
     SPECULAR_BLEND = 22
+    # UMVC3's cel-shading LUTs: ttoonmap/ttoonrevmap are the lit/unlit
+    # ramps nDraw::MaterialChar samples, tindirectmapuser its user-supplied
+    # indirect map.
+    TOON = 23
+    TOON_REVERSE = 24
+    INDIRECT_USER = 25
 
 
 TEX_TYPE_MAP_2 = {
@@ -91,6 +97,9 @@ TEX_TYPE_MAP_2 = {
     "tspheremap": TextureType.SPHERE,
     "tindirectmap": TextureType.INDIRECT,
     "tspecularblendmap": TextureType.SPECULAR_BLEND,
+    "ttoonmap": TextureType.TOON,
+    "ttoonrevmap": TextureType.TOON_REVERSE,
+    "tindirectmapuser": TextureType.INDIRECT_USER,
 }
 
 
@@ -111,6 +120,9 @@ NODE_NAMES_TO_TYPES = {
     'Hair Shift': TextureType.HAIR_SHIFT,
     'Height Map': TextureType.HEIGHTMAP,
     'Emission': TextureType.EMISSION,
+    'Toon Ramp': TextureType.TOON,
+    'Toon Ramp Reverse': TextureType.TOON_REVERSE,
+    'Indirect User': TextureType.INDIRECT_USER,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -522,6 +534,18 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 20:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 DNM"])
         blender_texture_node.location = (-600, -800)
+
+    elif texture_code == 23:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp"])
+        blender_texture_node.location = (-600, -2000)
+
+    elif texture_code == 24:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp Reverse"])
+        blender_texture_node.location = (-600, -2050)
+
+    elif texture_code == 25:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
+        blender_texture_node.location = (-600, -2100)
 
     else:
         print("texture_code not supported", texture_code)
