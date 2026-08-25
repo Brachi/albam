@@ -23,6 +23,7 @@ ROOT_BONE_NAME = '0'
 def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = Lmt(KaitaiStream(io.BytesIO(lmt_bytes)))
+    lmt._read()
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)
 

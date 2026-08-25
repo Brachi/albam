@@ -2,12 +2,9 @@ name: Test
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
-env:
-  ALBAM_RE1_ARC_DIR: "tests/data/re1"
-  ALBAM_RE5_ARC_DIR: "tests/data/re5"
-  ALBAM_DD_ARC_DIR: "tests/data/dd"
 
 jobs:
   tests:
@@ -15,8 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bpy: [{"bpy-version": "4.5", "python-version": "3.11"},
-              {"bpy-version": "5.0.1", "python-version": "3.11"}
+        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11"},
+              {"bpy-version": "5.2.0", "python-version": "3.13"}
              ]
     steps:
     - uses: actions/checkout@v3
@@ -24,29 +21,65 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.bpy.python-version }}
-        cache: 'pip'
+        # No `cache: pip` - uv caches instead, below. setup-python's pip cache
+        # was keyed on a glob that matched nothing (this repo has no
+        # requirements.txt), so the key never changed and the cache only ever
+        # grew: 946MB for 3.11 against 461MB for 3.13, same dependencies.
+    - name: Set up uv
+      # v6 is the newest floating major tag astral-sh publishes; 10.x exists
+      # but only as exact versions (there is no v10 tag to track).
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        # Both files pin what gets installed - pyproject.toml for these jobs,
+        # pylock.toml for the extension build - so either changing has to
+        # start a fresh cache.
+        cache-dependency-glob: |
+          pyproject.toml
+          pylock.toml
     - name: Install dependencies
+      # uv rather than pip for the install: it keeps its cache unpacked and
+      # hardlinks into the environment instead of extracting, which matters
+      # here because bpy is a 400MB wheel. Measured locally against a warm
+      # cache: 25s with pip, 2s with uv.
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install bpy==${{ matrix.bpy.bpy-version }} --extra-index-url https://download.blender.org/pypi/
-        python -m pip install .[tests]
+        uv venv --python "${{ matrix.bpy.python-version }}" .venv
+        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+        uv pip install --python .venv/bin/python \
+          "bpy==${{ matrix.bpy.bpy-version }}" --extra-index-url https://download.blender.org/pypi/ \
+          ".[tests,s3,reen]"
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --show-source --statistics
-    - name: Download test files
-      run: |
-        mkdir -p $ALBAM_RE1_ARC_DIR $ALBAM_RE5_ARC_DIR $ALBAM_DD_ARC_DIR
-        curl -L -o sample-re1-1.arc --output-dir $ALBAM_RE1_ARC_DIR '${{ secrets.SAMPLE_LINK_RE1_1 }}'
-        curl -L -o sample-re5-1.arc --output-dir $ALBAM_RE5_ARC_DIR '${{ secrets.SAMPLE_LINK_RE5_1 }}'
-        curl -L -o sample-dd-1.arc --output-dir $ALBAM_DD_ARC_DIR '${{ secrets.SAMPLE_LINK_DD_1 }}'
     - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
+      env:
+        # Credentials + bucket for --game-dir=<app>::r2://<bucket>/<prefix>
+        # below (see .env.example). Passed via env, not interpolated
+        # directly into the run: script text - a newline in the secret's
+        # value would otherwise become a literal newline in the script,
+        # breaking the step (confirmed via a real CI failure). Resolve to
+        # empty strings until these secrets exist, which just skips
+        # cleanly.
+        R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
       run: |
         set +e
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --mtfw-dataset=tests/mtfw/datasets/ci.json --arcdir=re1::${ALBAM_RE1_ARC_DIR} --arcdir=re5::${ALBAM_RE5_ARC_DIR} --arcdir=dd::${ALBAM_DD_ARC_DIR}
+          R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
+          export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
+          rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
+          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1
         exitcode="$?"
-        # Ignore segfault in bpy==4.1.0; there's no way around it yet.
-        if  [ $exitcode == 139 ];then exitcode=0;
+        # bpy segfaults during interpreter finalization, so a 139 here says
+        # nothing about whether the run passed - it is what this job sees on
+        # every run, failing or not. Fall back to the status pytest recorded
+        # itself before that happened (tests/conftest.py). Discounting 139
+        # outright, which this used to do, reported 8 errors as a green build.
+        # No file means pytest died before finishing: keep 139 as a failure.
+        if [ "$exitcode" == 139 ]; then
+          exitcode="$(cat "$ALBAM_PYTEST_EXIT_STATUS_FILE" 2>/dev/null || echo 139)"
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
@@ -67,8 +100,8 @@ jobs:
         uses: "actions/setup-python@v5"
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: 'requirements/*.txt'
+          # No pip cache here: this job installs one small package, and the
+          # key it used pointed at requirements/*.txt, which does not exist.
       - name: "Install dependencies"
         run: |
           python -m pip install coverage
@@ -99,4 +132,103 @@ jobs:
           minColorRange: 50
           maxColorRange: 90
           valColorRange: ${{ env.total }}
-
+  publish-latest-main:
+    # Rebuilds the extension zip on every successful merge to main and
+    # publishes it as a rolling pre-release ("latest-main") - a stable,
+    # no-login download of the current tip of main, distinct from the real
+    # tagged Releases (e.g. v0.5.0) which are still cut by hand. Never runs
+    # on pull_request (only push to main), and needs: tests so a build that
+    # fails CI never gets published.
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git describe`/`rev-list --count` below need full history and
+          # tags to compute the commit-count-since-last-release suffix -
+          # actions/checkout defaults to a shallow, tag-less clone.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Compute dev version (base version + commits since last tag + branch)
+        id: version
+        run: |
+          set -e
+          base_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          if [ -n "$last_tag" ]; then
+            commit_count="$(git rev-list "${last_tag}..HEAD" --count)"
+          else
+            commit_count="$(git rev-list --count HEAD)"
+          fi
+          # SemVer build-metadata only allows [0-9a-zA-Z-] - safe here since
+          # this job is gated to refs/heads/main, so GITHUB_REF_NAME is
+          # always literally "main" (never a slash-containing branch name).
+          echo "value=${base_version}+${commit_count}.${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Build extension zip
+        run: python scripts/build_extension.py --version "${{ steps.version.outputs.value }}"
+      - name: Publish rolling "latest main" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          gh release delete latest-main --yes --cleanup-tag || true
+          gh release create latest-main dist/albam-*.zip \
+            --title "Latest main build (${{ steps.version.outputs.value }})" \
+            --notes "Automated build of the latest main branch ($GITHUB_SHA). Not a stable release - see the Releases page for tagged versions." \
+            --prerelease \
+            --latest=false \
+            --target "$GITHUB_SHA"
+  publish-release:
+    # Publishes the official GitHub Release when a version tag (vX.Y.Z) is
+    # pushed: verifies the tag matches pyproject.toml's version (catches a
+    # forgotten version bump before it ships), builds the zip via the
+    # default `build_extension.py` (no --version override - the manifest's
+    # own version should already equal the tag), and publishes with release
+    # notes pulled straight from CHANGELOG.md's matching dated section.
+    # Auto-published (not a draft) since the changelog is already
+    # maintainer-written by the time a release is tagged.
+    runs-on: ubuntu-latest
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          set -e
+          tag_version="${GITHUB_REF_NAME#v}"
+          pyproject_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [ "$tag_version" != "$pyproject_version" ]; then
+            echo "Tag $GITHUB_REF_NAME (version $tag_version) doesn't match pyproject.toml's version ($pyproject_version)" >&2
+            exit 1
+          fi
+      - name: Build extension zip
+        run: python scripts/build_extension.py
+      - name: Extract release notes from CHANGELOG.md
+        run: python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" > release_notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/albam-*.zip \
+            --title "Albam $GITHUB_REF_NAME" \
+            --notes-file release_notes.md

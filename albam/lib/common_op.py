@@ -9,15 +9,16 @@ def unselect():
     except RuntimeError:
         pass
     for ob in bpy.context.selected_objects:
-        ob.select = False
+        # ob.select = False
+        ob.select_set(False)
     bpy.ops.object.select_all(action='DESELECT')
     return
 
 
-def apply_transform():
+def apply_transform(objects):
     unselect()
-    for obj in bpy.context.scene.objects:
-        obj.select = obj.type == "MESH"
+    for obj in objects:  # bpy.context.scene.objects:
+        obj.select_set(obj.type == "MESH")
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     bpy.ops.object.select_all(action='DESELECT')
 
@@ -53,27 +54,23 @@ def get_empties(key=None):
     return get_blender_objects("EMPTY", key)
 
 
-def clone_mesh(original):
+def clone_mesh(original, keep_modifiers=False):
     copy = original.copy()
-    # bpy.context.scene.objects.link(copy)
     bpy.context.collection.objects.link(copy)
-    # bpy.context.scene.objects.active = copy
     bpy.context.view_layer.objects.active = copy
-    # original.select = False
     original.select_set(False)
-    # copy.select = True
     copy.select_set(True)
     bpy.ops.object.make_single_user(
         type='SELECTED_OBJECTS', object=True, obdata=True)
     copy.data.transform(copy.matrix_world)
-    # then reset matrix to identity
 
     copy.matrix_world = Matrix()
-    for mod in copy.modifiers:
-        try:
-            bpy.ops.object.modifier_apply(modifier=mod.name)
-        except RuntimeError:
-            pass
+    if not keep_modifiers:
+        for mod in copy.modifiers:
+            try:
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+            except RuntimeError:
+                pass
     return copy
 
 
@@ -164,3 +161,32 @@ def copy_faces(sourceMesh, targetMesh, numVertices, materialsMap):
         targetFace.use_smooth = sourceFace.use_smooth
         if (len(materialsMap) > 0):
             targetFace.material_index = materialsMap[sourceFace.material_index]
+
+
+# Works but slower ~+ 0.015 seconds for the test mesh
+def triangulate_meshes_modifier(bl_objects):
+    unselect()
+    for ob in bl_objects:
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+
+        tri_mod = ob.modifiers.new(name="Triangulate", type='TRIANGULATE')
+        tri_mod.quad_method = 'BEAUTY'
+        tri_mod.ngon_method = 'BEAUTY'
+        tri_mod.keep_custom_normals = True
+
+        bpy.ops.object.modifier_apply(modifier=tri_mod.name)
+
+        ob.select_set(False)
+
+
+def move_to_collection(bl_objects, col_name):
+    collection = bpy.data.collections.get(col_name)
+    if not collection:
+        collection = bpy.data.collections.new(col_name)
+        # Link the collection to the scene
+        bpy.context.scene.collection.children.link(collection)
+    for ob in bl_objects:
+        for col in ob.users_collection:
+            col.objects.unlink(ob)
+        collection.objects.link(ob)

@@ -4,12 +4,12 @@ Created on Thu Nov 28 23:44:04 2019
 
 @author: AsteriskAmpersand
 """
+from pymorton import interleave as morton_encode
+
 try:
-    from albam.albam_vendor.pymorton import interleave as morton_encode
     from rays import Ray
     from vec_op import vect_int, vec_div, vec_unfold
 except ImportError:
-    from ..albam_vendor.pymorton import interleave as morton_encode
     from .rays import Ray
     from .vec_op import vect_int, vec_div, vec_unfold
 
@@ -23,20 +23,21 @@ EPS = 0.0001
 
 
 class BoundingBox():
-    def __init__(self, vectorList):
+    def __init__(self, vectorList, fix_flat_bbox=True):
         self.minPos = Vector([min([v.x for v in vectorList]),
                               min([v.y for v in vectorList]),
                               min([v.z for v in vectorList])])
         self.maxPos = Vector([max([v.x for v in vectorList]),
                               max([v.y for v in vectorList]),
                               max([v.z for v in vectorList])])
-        self.capcom()
+        if fix_flat_bbox:
+            self.capcom()
 
     def capcom(self):
+        # Correction for flat bounding boxes
         x, y, z = (self.maxPos - self.minPos)
         self.minPos -= Vector([x == 0, y == 0, z == 0])
         self.maxPos += Vector([x == 0, y == 0, z == 0])
-        # Correction for flat bounding boxes
 
     def __contains__(self, bb):
         if isinstance(bb, BoundingBox):
@@ -289,7 +290,7 @@ class PrimitiveTree(GeometryPrimitive):
             return self.refined
 
     def refine(self, vertices):
-        self.refined = BoundingBox(vertices)
+        self.refined = BoundingBox(vertices, False)
         return self
 
     def barycenter(self):
@@ -299,8 +300,9 @@ class PrimitiveTree(GeometryPrimitive):
         return {
             "BVHC": 0x77B17B2443485642,
             "SOH": 0x1,
-            "boundingBox": self.content.boundingBox().serialize(),
             "nodeCount": len(self.content),
+            # was self.content.boundingBox().serialize() and didn't match
+            "boundingBox": self.boundingBox().serialize(),
             "null": [0] * 3,
             "AABBArray": [sn.serialize() for sn in self.content.subnodes()]
         }

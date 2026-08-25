@@ -1,0 +1,68 @@
+lock-version = "1.0"
+created-by = "pip"
+
+[[packages]]
+name = "appdirs"
+version = "1.4.4"
+
+[[packages.wheels]]
+name = "appdirs-1.4.4-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/3b/00/2344469e2084fb287c2e0b57b72910309874c3245463acd6cf5e3db69324/appdirs-1.4.4-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"
+
+[[packages]]
+name = "fs"
+version = "2.4.16"
+
+[[packages.wheels]]
+name = "fs-2.4.16-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/b9/5c/a3d95dc1ec6cdeb032d789b552ecc76effa3557ea9186e1566df6aac18df/fs-2.4.16-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "660064febbccda264ae0b6bace80a8d1be9e089e0a5eb2427b7d517f9a91545c"
+
+[[packages]]
+name = "kaitaistruct"
+version = "0.11"
+
+[[packages.wheels]]
+name = "kaitaistruct-0.11-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/4a/4a/cf14bf3b1f5ffb13c69cf5f0ea78031247790558ee88984a8bdd22fae60d/kaitaistruct-0.11-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "5c6ce79177b4e193a577ecd359e26516d1d6d000a0bffd6e1010f2a46a62a561"
+
+[[packages]]
+name = "pymorton"
+version = "1.0.5"
+
+[[packages.wheels]]
+name = "pymorton-1.0.5-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/c6/8d/906ba6d4266d7696547b8b70e08423975243c7339fe1ccf4bdbc42478394/pymorton-1.0.5-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "b2df3ed2ab002f0b6780344485980130a3f959f959aea65301381b11cfe31dce"
+
+[[packages]]
+name = "setuptools"
+version = "80.10.2"
+
+[[packages.wheels]]
+name = "setuptools-80.10.2-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/94/b8/f1f62a5e3c0ad2ff1d189590bfa4c46b4f3b6e49cef6f26c6ee4e575394d/setuptools-80.10.2-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173"
+
+[[packages]]
+name = "six"
+version = "1.17.0"
+
+[[packages.wheels]]
+name = "six-1.17.0-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"

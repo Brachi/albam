@@ -6,6 +6,7 @@ class BlenderRegistry:
         self.export_registry = {}
         self.archive_loader_registry = {}
         self.archive_accessor_registry = {}
+        self.fs_root_loader_registry = {}
         self.props = []  # order is meaningful for dependencies
         self.types = []  # order is meaningufl for dependencies
         self.import_options_custom_draw_funcs = {}
@@ -78,6 +79,18 @@ class BlenderRegistry:
             self.archive_accessor_registry[(app_id, extension)] = f
             return f
 
+        return decorator
+
+    def register_fs_root_loader(self, app_id, extension=None):
+        """
+        Decorated function must be `absolute_path -> fs.base.FS`.
+        `extension=None` registers a whole-folder loader for app_id
+        (e.g. a recursive game install root); otherwise the loader is
+        keyed to a single file's extension (e.g. one archive file).
+        """
+        def decorator(f):
+            self.fs_root_loader_registry[(app_id, extension)] = f
+            return f
         return decorator
 
     def register_custom_properties_material(self, name, app_ids, is_secondary=False,

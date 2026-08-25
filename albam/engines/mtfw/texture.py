@@ -14,6 +14,7 @@ from ...lib.blender import (
     is_blimage_dds,
 )
 from ...lib.dds import DDSHeader
+from ...lib.kaitai_utils import check_recursive
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
@@ -131,9 +132,11 @@ TEX_FORMAT_MAPPER = {
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
+    37: b"DXT1",  # FIXME: unchecked
     39: b"",  # uncompressed
     40: b"",  # uncompressed
     43: b"DXT1",  # FIXME: unchecked
+    47: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
     "DXT3": b"DXT3",
     "DXT5": b"DXT5",
@@ -615,7 +618,7 @@ def _serialize_texture_156(app_id, dict_tex):
     tex.padding = 0
     custom_properties.set_to_dest(tex)
 
-    tex._check()
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
@@ -661,7 +664,7 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_data_size = len(tex.dds_data)
 
     custom_properties.set_to_dest(tex)
-    tex._check()
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
@@ -822,6 +825,17 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
             setattr(dst, name, hex(src_value))
 
 
+TEX_VERSION = {
+    "0x99": 153,
+    "0x9a": 154,
+    "0x9b": 155,
+    "0x9d": 157,
+    "0x9e": 158,
+}
+
+tex_version_enum_items = [(key, str(label), "", idx) for idx, (key, label) in enumerate(TEX_VERSION.items())]
+
+
 @blender_registry.register_custom_properties_image("tex_157",
                                                    ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
@@ -833,12 +847,7 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     )
     version: bpy.props.EnumProperty(  # noqa: F821
         name="Tex format version",
-        items=[
-            ("0x99", "153", "", 1),
-            ("0x9a", "154", "", 2),
-            ("0x9d", "157", "", 3),
-            ("0x9e", "158", "", 4),
-        ],
+        items=tex_version_enum_items,
         default="0x9d",
         options=set()
     )
