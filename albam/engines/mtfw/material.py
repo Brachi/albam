@@ -8,7 +8,7 @@ from kaitaistruct import KaitaiStream
 
 from ...exceptions import AlbamCheckFailure
 from ...lib.blender import get_bl_materials, ShaderGroupCompat
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from .defines import get_shader_objects
@@ -1175,8 +1175,7 @@ def _infer_mrl(context, mod_vfile, app_id):
         try:
             mrl_vfile = vfs.get_vfile(app_id, base + suffix)
             mrl_bytes = mrl_vfile.get_bytes()
-            mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
-            mrl._read()
+            mrl = parse(Mrl, mrl_bytes, app_id)
             assert mrl.materials and mrl.textures
             break
         except KeyError:

@@ -38,17 +38,16 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_mod(game_fs_root, local_mod_path_hash):
+def parsed_mod(game_fs_root, local_app_id, local_mod_path_hash):
     from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+    from albam.lib.kaitai_utils import parse
 
     path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash]
     src_bytes = game_fs_root.readbytes(path)
     mod_version = src_bytes[4]
     ModCls = MOD_CLASS_MAPPER[mod_version]
 
-    parsed = ModCls.from_bytes(src_bytes)
-    parsed._read()
-    return parsed
+    return parse(ModCls, src_bytes, local_app_id)
 
 
 SUPPORTED_MOD_VERSIONS = (156, 210, 211, 212)

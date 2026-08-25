@@ -36,7 +36,7 @@ from ...lib.common_op import (
     move_to_collection
 )
 from ...lib.export_checks import check_all_objects_have_materials
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
@@ -364,10 +364,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
-    stream = KaitaiStream(BytesIO(mod_bytes))
-    mod_args = [stream] if ModCls is Mod156 else [app_id, stream]
-    mod = ModCls(*mod_args)
-    mod._read()
+    mod = parse(ModCls, mod_bytes, app_id)
 
     import_settings = context.scene.albam.import_settings
 
@@ -883,13 +880,8 @@ def export_mod(bl_obj):
     vfiles = []
 
     ModCls = APPID_CLASS_MAPPER[app_id]
-    src_stream = KaitaiStream(BytesIO(asset.original_bytes))
-    mod_args_src = [src_stream] if ModCls is Mod156 else [app_id, src_stream]
-    mod_args_dst = [] if ModCls is Mod156 else [app_id]
-
-    src_mod = ModCls(*mod_args_src)
-    src_mod._read()
-    dst_mod = ModCls(*mod_args_dst)
+    src_mod = parse(ModCls, asset.original_bytes, app_id)
+    dst_mod = ModCls(app_id)
     # TODO: export options like visibility
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:

@@ -14,7 +14,7 @@ from ...lib.blender import (
     is_blimage_dds,
 )
 from ...lib.dds import DDSHeader
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
@@ -222,11 +222,7 @@ NON_SRGB_IMAGE_TYPE = [2, 8]
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
     app_id = vfile.app_id
     TexCls = APPID_TEXCLS_MAP[app_id]
-    stream = KaitaiStream(io.BytesIO(vfile.get_bytes()))
-    args = [stream] if TexCls is Tex112 else [app_id, stream]
-
-    tex = TexCls(*args)
-    tex._read()
+    tex = parse(TexCls, vfile.get_bytes(), app_id)
     dds = convert_tex_to_dds(tex)
 
     bl_image = bpy.data.images.new(f"{vfile.display_name}.dds", tex.width, tex.height)
@@ -288,14 +284,8 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             textures.append(None)
             # TODO: handle missing texture
             continue
-        if is_rtex:
-            tex = RtexCls.from_bytes(tex_bytes)
-        else:
-            stream = KaitaiStream(io.BytesIO(tex_bytes))
-            args = [stream] if TexCls is Tex112 else [app_id, stream]
-            tex = TexCls(*args)
-
-        tex._read()
+        TexOrRtexCls = RtexCls if is_rtex else TexCls
+        tex = parse(TexOrRtexCls, tex_bytes, app_id)
         if not is_rtex:
             try:
                 compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
@@ -582,7 +572,7 @@ def _serialize_texture_156(app_id, dict_tex):
     _check_is_power_of_two(bl_im)
 
     if is_rtex:
-        tex = Rtex112()
+        tex = Rtex112(app_id)
         tex.id_magic = b"RTX\x00"
         tex.version = 112
         # tex.revision = 514
@@ -595,7 +585,7 @@ def _serialize_texture_156(app_id, dict_tex):
         dds_data_len = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex112()
+        tex = Tex112(app_id)
         tex.id_magic = b"TEX\x00"
         tex.version = 112
         #  revision = 34
@@ -635,7 +625,7 @@ def _serialize_texture_21(app_id, dict_tex):
     # compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
-        tex = Rtex157()
+        tex = Rtex157(app_id)
         tex.id_magic = b"RTX\x00"
         # tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_mipmaps_per_image = 1

@@ -6,6 +6,9 @@ meta:
   ks-version: '0.11'
   title: MTFramework model format 153
 
+params:
+  - {id: app_id, type: str}  # TODO: enum
+
 seq:
   - {id: header, type: mod_header}
   - {id: reserved_01, type: u4}

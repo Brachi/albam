@@ -61,6 +61,7 @@ def _bones_data_error(src_mod, dst_mod):
 @pytest.fixture(scope="session")
 def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
+    from albam.lib.kaitai_utils import parse
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
     if local_app_id == "dd":
@@ -79,10 +80,8 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     assert vfile_mod_exported
 
     Mod = APPID_CLASS_MAPPER[local_app_id]
-    src_mod = Mod.from_bytes(vfile_mod.get_bytes())
-    dst_mod = Mod.from_bytes(vfile_mod_exported.get_bytes())
-    src_mod._read()
-    dst_mod._read()
+    src_mod = parse(Mod, vfile_mod.get_bytes(), local_app_id)
+    dst_mod = parse(Mod, vfile_mod_exported.get_bytes(), local_app_id)
 
     return src_mod, dst_mod
 
