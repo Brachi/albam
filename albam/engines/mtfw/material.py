@@ -1796,6 +1796,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
             ("FUVIndirect", "FUVIndirect", "", 3),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 4),  # noqa: F821
         ],
         options=set()
     )
@@ -1868,6 +1869,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDamageSimpleAlbedoMapBurnMap", "FDamageSimpleAlbedoMapBurnMap", "", 18),  # noqa: F821
             ("FBurnAlbedoMapBurnMap", "FBurnAlbedoMapBurnMap", "", 19),  # noqa: F821
             ("FBlendRateAlbedoMap", "FBlendRateAlbedoMap", "", 20),  # noqa: F821
+            ("FUserAlbedoMapIndirect", "FUserAlbedoMapIndirect", "", 21),  # noqa: F821
+            ("FUserAlbedoMapNoAlpha", "FUserAlbedoMapNoAlpha", "", 22),  # noqa: F821
         ],
         options=set()
     )
@@ -1915,6 +1918,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
             ("FColorMaskTransparencyMap", "FColorMaskTransparencyMap", "", 6),  # noqa: F821
             ("FTransparencyDodgeMap", "FTransparencyDodgeMap", "", 7),  # noqa: F821
+            ("FTransparencyMapClamp", "FTransparencyMapClamp", "", 8),  # noqa: F821
         ],
         options=set()
     )
@@ -1951,6 +1955,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFFur", "FBRDFFur", "", 5),  # noqa: F821
             ("FToonShader", "FToonShader", "", 6),  # noqa: F821
             ("FToonShaderHigh", "FToonShaderHigh", "", 7),  # noqa: F821
+            ("FToonShaderNormal", "FToonShaderNormal", "", 8),  # noqa: F821
+            ("FToonShaderUroko", "FToonShaderUroko", "", 9),  # noqa: F821
         ],
         options=set()
     )
@@ -1966,7 +1972,10 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
             ("FDiffuseThin", "FDiffuseThin", "", 8),  # noqa: F821
             ("FDiffuseColorCorectSimple", "FDiffuseColorCorectSimple", "", 9),  # noqa: F821
-            ("FDiffuseColorCorect", "FDiffuseColorCorect", "", 10)  # noqa: F821
+            ("FDiffuseColorCorect", "FDiffuseColorCorect", "", 10),  # noqa: F821
+            ("FDiffuseConstantSRGB", "FDiffuseConstantSRGB", "", 11),  # noqa: F821
+            ("FUserDiffuseConstantMul", "FUserDiffuseConstantMul", "", 12),  # noqa: F821
+            ("FUserDiffuseStageFloor", "FUserDiffuseStageFloor", "", 13),  # noqa: F821
         ],
         options=set()
     )
@@ -1988,6 +1997,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
             ("FDamageSpecularMap", "FDamageSpecularMap", "", 6),  # noqa: F821
             ("FSpecularMaskToon", "FSpecularMaskToon", "", 7),  # noqa: F821
+            ("FUserSpecularMapIndirect", "FUserSpecularMapIndirect", "", 8),  # noqa: F821
         ],
         options=set(),
     )
@@ -1997,7 +2007,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
-            ("FUVViewNormal", "FUVViewNormal", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
         ],
         options=set()
     )
