@@ -237,7 +237,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
 
-        assign_textures(material, blender_material, textures, mrl=mrl)
+        assign_textures(app_id, material, blender_material, textures, mrl=mrl)
 
         if not bool(mrl):
             materials[idx_material] = blender_material

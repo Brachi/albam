@@ -232,6 +232,13 @@ TEX_TYPE_MAPPER = {
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
 
+# The FTransparency feature value meaning "this material is opaque". Its
+# albedo map's alpha channel is then not opacity - it carries whatever the
+# shader wants there - so wiring that channel to the shader group's alpha
+# renders the mesh away. Every other FTransparency* value does describe some
+# form of transparency, so those keep the alpha link.
+FTRANSPARENCY_OPAQUE = "FTransparency"
+
 
 @blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
@@ -351,10 +358,15 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     return textures
 
 
-def assign_textures(mtfw_material, bl_material, textures, mrl):
+def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
     if not mrl:
         old_assignment(mtfw_material, bl_material, textures)
         return
+    features = (bl_material.albam_custom_properties
+                .get_custom_properties_secondary_for_appid(app_id)
+                .get("features"))
+    link_albedo_alpha = (
+        features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
 
@@ -382,7 +394,8 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material,
+                                            link_albedo_alpha=link_albedo_alpha)
             if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
@@ -427,12 +440,15 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     return tex_index
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material,
+                                    link_albedo_alpha=True):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
     blender_texture_node : image texture node
     blender_material : shader material
+    link_albedo_alpha : whether the albedo map's alpha channel is this
+        material's opacity (see FTRANSPARENCY_OPAQUE)
     """
     # blender_texture_node.use_map_alpha = True
     shader_node_grp = blender_material.node_tree.nodes.get("MTFrameworkGroup")
@@ -441,7 +457,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     if texture_code == 1:
         # Diffuse _BM
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Diffuse BM"])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
+        if link_albedo_alpha:
+            link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
         blender_texture_node.location = (-300, 350)
         # blender_texture_node.use_map_color_diffuse = True
     elif texture_code == 2:
