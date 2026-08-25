@@ -83,12 +83,13 @@ types:
       - {id: num_tracks, type: u4}
       - {id: num_frames, type: u4}
       - {id: loop_frame, type: u4}
-      # Aligns unk_floats below to 16 bytes. Zero in every 64-bit file seen.
+      # Aligns unk_floats below to 16 bytes.
       - {id: unk_01, size: 12, if: _root.use_64bit_ofs}
       # Two 16-byte aligned vectors: unk_floats[0..3] has a zero 4th
       # component, unk_floats[4..7] is a normalized quaternion.
       - {id: unk_floats, type: f4, repeat: expr, repeat-expr: 8}
       - {id: unk_00, type: u4}
+      # Aligns the two offsets below to 8 bytes.
       - {id: unk_02, size: 4, if: _root.use_64bit_ofs}
       - {id: ofs_buffer_1, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: ofs_buffer_2, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
