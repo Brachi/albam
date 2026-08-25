@@ -138,15 +138,18 @@ TEX_FORMAT_MAPPER = {
     14: b"",  # uncompressed
     19: b"DXT1",  # BM/Diffuse without alpha
     20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
+    21: b"DXT5",  # BM/Diffuse, effect textures
     23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
+    30: b"DXT1",  # DM/Damage
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
     37: b"DXT1",  # FIXME: unchecked
     39: b"",  # uncompressed
     40: b"",  # uncompressed
+    42: b"DXT5",  # BM/Diffuse, UI sprites
     43: b"DXT1",  # FIXME: unchecked
     47: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
