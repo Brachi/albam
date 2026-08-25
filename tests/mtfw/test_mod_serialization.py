@@ -306,7 +306,7 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
 
 
 def test_vertices(mod_imported_local, mod_exported_local, subtests):
-    if mod_imported_local.header.version not in (210, 212):  # RE5 has some mess with in hands files
+    if mod_imported_local.header.version not in (210, 211, 212):  # RE5 has some mess with in hands files
         pytest.skip()
     assert len(mod_imported_local.meshes_data.meshes) == len(mod_exported_local.meshes_data.meshes)
     for mi, mesh in enumerate(mod_imported_local.meshes_data.meshes):
