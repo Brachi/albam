@@ -83,12 +83,17 @@ def test_mod_import_builds_geometry(imported_mod):
     assert bl_meshes, "import produced no mesh objects"
     for bl_mesh in bl_meshes:
         assert len(bl_mesh.data.vertices) > 0, f"{bl_mesh.name} has no vertices"
-        assert len(bl_mesh.data.polygons) > 0, f"{bl_mesh.name} has no faces"
-        # A degenerate face means the index buffer was misread - the model
-        # still "imports", it just renders as nothing.
+        # A face that repeats a vertex means the index buffer was misread -
+        # the model still "imports", it just renders as nothing.
         assert all(len(set(p.vertices)) == len(p.vertices) for p in bl_mesh.data.polygons), (
             f"{bl_mesh.name} has faces with repeated vertices"
         )
+    # Per-model rather than per-mesh: a model can legitimately ship a mesh
+    # whose every face is degenerate in the game data itself (e.g. a
+    # four-vertex placeholder indexed as [1,0,1, 1,1,0, 3,2,3, 3,3,2]).
+    # Blender drops those faces, correctly, and the object arrives with
+    # vertices and no polygons.
+    assert sum(len(m.data.polygons) for m in bl_meshes) > 0, "import produced no faces at all"
 
 
 def test_mod_import_builds_materials(imported_mod):
