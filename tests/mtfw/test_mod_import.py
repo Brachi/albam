@@ -32,7 +32,7 @@ def pytest_generate_tests(metafunc):
         argnames = ("local_app_id", "local_mod_path_hash")
         argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_IMPORT_DATASET]
         ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_IMPORT_DATASET]
-        metafunc.parametrize(argnames, argvalues, ids=ids)
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
 def test_dataset_hashes_are_in_catalog():
@@ -51,11 +51,15 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
-    """Function-scoped, unlike the *_serialization fixtures: each model is
-    imported into a scene emptied of the previous one, so every assertion
-    below reads only this model's own data.
+    """One import per model, into a scene emptied of the previous one, so
+    every assertion below reads only this model's own data.
+
+    Module-scoped rather than session-scoped: the parametrization is
+    session-scoped (game_fs_root needs it to be), so pytest runs all of
+    this file's tests for one model together and rebuilds the fixture when
+    the model changes - each model is imported once, not once per test.
     """
     clear_scene()
 
