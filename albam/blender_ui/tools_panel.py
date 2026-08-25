@@ -786,7 +786,7 @@ class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
     bl_label = "Handshaker"
     bl_description = "Apply animation frames to a mesh"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_handshake")
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_handshake")
     after = "albam.vg_merger"
 
     @staticmethod
@@ -818,7 +818,7 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
     bl_label = "Face properties"
     bl_description = "Edit mesh face properties"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_face_props")
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_props")
     after = ""
 
     @classmethod
@@ -854,7 +854,7 @@ class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
     bl_label = "Vertex groups merger"
     bl_description = "Merge selected vertex groups"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_vgmerge"
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_vgmerge"
     )
     after = ""
 
@@ -882,7 +882,7 @@ class ALBAM_WT_BakeOfLight(bpy.types.WorkSpaceTool):
     bl_label = "Bake of Light"
     bl_description = "Simplifies baking the light for"
     bl_icon = str(
-        Path(__file__).parent.parent / "lib" / "icons" / "generic.ops.albam_bake_of_light"
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_bake_of_light"
     )
     after = "albam.vg_merger"
 
