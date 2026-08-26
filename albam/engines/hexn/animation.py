@@ -55,7 +55,7 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
-from .skeleton import armature_name_for, build_blender_skeleton_by_stem
+from .skeleton import armature_name_for, bone_names_from_armature, build_blender_skeleton_by_stem
 from .structs.hexane_anims import HexaneAnims
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
@@ -92,9 +92,13 @@ def import_anim_clip(vfile, context):
     decoded = decode_clip(clip_bytes, name=clip_path, skeleton_name=skeleton_name)
 
     armature_object = bpy.data.objects.get(armature_name_for(skeleton_name))
+    bone_names = None
     if armature_object is not None and armature_object.type == "ARMATURE":
-        bone_names = [pose_bone.name for pose_bone in armature_object.pose.bones]
-    else:
+        # Not armature_object.pose.bones' own order: Blender keeps its
+        # bones in hierarchy order, while a clip indexes them by their
+        # skeleton node number (see skeleton.bone_names_from_armature).
+        bone_names = bone_names_from_armature(armature_object)
+    if bone_names is None:
         armature_object, bone_names = build_blender_skeleton_by_stem(context, skeleton_name)
 
     if armature_object is None:

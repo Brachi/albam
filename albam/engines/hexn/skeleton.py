@@ -28,6 +28,10 @@ MIN_BONE_LENGTH = 0.005
 # skel.ksy's `parents` marks a root node with this instead of a real index.
 ROOT_PARENT = 0xffff
 
+# Per-bone custom property holding that bone's own index in the skel file
+# it came from - see _build_blender_armature and bone_names_from_armature.
+NODE_INDEX_PROPERTY = "albam_node_index"
+
 
 def _find_skel_vfile(vfs, stem):
     """A skel file is addressable in the VFS under two different paths,
@@ -193,7 +197,32 @@ def _build_blender_armature(skel, armature_name):
         edit_bone.tail = _bone_tail(heads[i], parent_head, [heads[c] for c in children[i]])
 
     bpy.ops.object.mode_set(mode="OBJECT")
+
+    # Blender re-sorts an armature's bones into its own hierarchy order the
+    # moment edit mode ends, so a bone's position in armature.bones says
+    # nothing about which skeleton node it came from - and a clip indexes
+    # bones by exactly that node number. Record it per bone so a later
+    # import (see bone_names_from_armature) can recover the mapping from an
+    # armature alone.
+    for node_index, name in enumerate(bone_names):
+        armature.bones[name][NODE_INDEX_PROPERTY] = node_index
+
     return armature_ob, bone_names
+
+
+def bone_names_from_armature(armature_object):
+    """[bone name by skeleton node index] for an armature this module
+    built, or None for one it didn't (nothing to map by - see
+    NODE_INDEX_PROPERTY).
+    """
+    by_index = {}
+    for bone in armature_object.data.bones:
+        node_index = bone.get(NODE_INDEX_PROPERTY)
+        if node_index is not None:
+            by_index[int(node_index)] = bone.name
+    if not by_index:
+        return None
+    return [by_index.get(i) for i in range(max(by_index) + 1)]
 
 
 def _bone_tail(head, parent_head, child_heads):
