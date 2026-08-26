@@ -3,6 +3,7 @@ import contextlib
 import bpy
 import pytest
 
+from tests.mtfw.conftest import action_fcurves
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Same pairs as lmt_serialization_hashes.json's re1/re5 pl00 entries - one
@@ -185,19 +186,20 @@ def imported_lmt_blocks(game_fs_root, local_app_id, local_mod_path_hash, local_l
 
 
 def _first_block_with_location_action(bl_objects, app_id):
+    """Reads fcurves through action_fcurves() rather than walking layers
+    directly: this runs before the tests below decide whether slots apply at
+    all, so it has to work on Blender versions that have no layers.
+    """
     for candidate in bl_objects:
         custom_props = candidate.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame == 0 or not custom_props.action:
             continue
         action = custom_props.action
-        for layer in action.layers:
-            for strip in layer.strips:
-                for channelbag in strip.channelbags:
-                    for fcurve in channelbag.fcurves:
-                        path = fcurve.data_path
-                        if path.startswith('pose.bones["') and "location" in path:
-                            return candidate, action, channelbag, fcurve
-    return None, None, None, None
+        for fcurve in action_fcurves(action):
+            path = fcurve.data_path
+            if path.startswith('pose.bones["') and "location" in path:
+                return candidate, action, fcurve
+    return None, None, None
 
 
 def test_export_reads_the_armatures_channelbag_not_the_first(
@@ -215,9 +217,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
     from albam.engines.mtfw.structs.lmt import Lmt
 
     armature, lmt_path, bl_objects = imported_lmt_blocks
-    target_block, action, channelbag, fcurve = _first_block_with_location_action(
-        bl_objects, local_app_id
-    )
+    target_block, action, fcurve = _first_block_with_location_action(bl_objects, local_app_id)
     if action is None:
         pytest.skip("No block with a location fcurve to rebuild")
     if hasattr(action, "fcurves"):
@@ -236,7 +236,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
     strip = rebuilt.layers.new("Layer").strips.new(type='KEYFRAME')
     strip.channelbag(rebuilt.slots[0], ensure=True)
     armature_channelbag = strip.channelbag(armature_slot, ensure=True)
-    for src in channelbag.fcurves:
+    for src in action_fcurves(action):
         dst = armature_channelbag.fcurves.new(data_path=src.data_path, index=src.array_index)
         for kp in src.keyframe_points:
             dst.keyframe_points.add(1)
@@ -283,9 +283,7 @@ def test_export_action_without_layers_does_not_crash(imported_lmt_blocks, local_
     exporting an empty block.
     """
     armature, _lmt_path, bl_objects = imported_lmt_blocks
-    target_block, action, _channelbag, _fcurve = _first_block_with_location_action(
-        bl_objects, local_app_id
-    )
+    target_block, action, _fcurve = _first_block_with_location_action(bl_objects, local_app_id)
     if action is None:
         pytest.skip("No block with an action to replace")
     if hasattr(action, "fcurves"):
