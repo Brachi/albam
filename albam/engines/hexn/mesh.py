@@ -10,6 +10,9 @@ from .structs.hexane_edgemodel import HexaneEdgemodel
 from .material import build_blender_materials
 from .skeleton import build_blender_skeleton
 
+# One vertex's weight record: four 0-255 weights, then their four bone indices.
+WEIGHT = struct.Struct("8B")
+
 
 @blender_registry.register_import_function(app_id="reorc", extension="edgemodel", albam_asset_type="MODEL")
 def build_blender_model(vfile, context):
@@ -131,8 +134,38 @@ def _build_tangents(bl_mesh, tangents):
     tangent_attr.data.foreach_set("vector", list(chain.from_iterable(tangents)))
 
 
+def _weights_buffer(edge_mesh):
+    """The mesh's weight buffer bytes, or None if it has none.
+
+    Some real meshes store a size_buffer_weights far past the end of the
+    file - low 16 bits 0xffff, the rest noise - which the parser can only
+    read by raising, taking the whole import down with it. The buffer's
+    real length is one record per vertex, so that is what gets read when
+    the stored size doesn't fit in the file.
+    """
+    if not edge_mesh.size_buffer_weights:
+        return None
+
+    stream = edge_mesh._io
+    available = max(stream.size() - edge_mesh.ofs_buffer_weights, 0)
+    if edge_mesh.size_buffer_weights <= available:
+        return edge_mesh.buffer_weights
+
+    size = min(edge_mesh.num_vertices * WEIGHT.size, available)
+    if size <= 0:
+        return None
+    position = stream.pos()
+    try:
+        stream.seek(edge_mesh.ofs_buffer_weights)
+        return stream.read_bytes(size)
+    finally:
+        stream.seek(position)
+
+
 def _build_weights(bl_obj, edge_mesh, bone_names=None):
-    WEIGHT = struct.Struct("8B")
+    buffer_weights = _weights_buffer(edge_mesh)
+    if buffer_weights is None:
+        return
 
     # One 8-byte record per vertex: four weights, then the four bone
     # indices they belong to. A zero weight means the slot is unused; the
@@ -140,8 +173,8 @@ def _build_weights(bl_obj, edge_mesh, bone_names=None):
     # bone that real vertices are weighted to (whole meshes are weighted
     # to it alone).
     weights_per_bone = defaultdict(list)
-    for i in range(0, edge_mesh.size_buffer_weights, WEIGHT.size):
-        record = WEIGHT.unpack_from(edge_mesh.buffer_weights, i)
+    for i in range(0, len(buffer_weights) - WEIGHT.size + 1, WEIGHT.size):
+        record = WEIGHT.unpack_from(buffer_weights, i)
         for bone_index, weight_value in zip(record[4:8], record[0:4]):
             if weight_value:
                 weights_per_bone[bone_index].append((i // WEIGHT.size, weight_value))
