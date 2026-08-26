@@ -13,6 +13,10 @@ from .skeleton import build_blender_skeleton
 # One vertex's weight record: four 0-255 weights, then their four bone indices.
 WEIGHT = struct.Struct("8B")
 
+# Vertex strides whose UV pair is confirmed to sit at offset 24 - see
+# build_blender_mesh.
+UV_STRIDES = (28, 52)
+
 
 @blender_registry.register_import_function(app_id="reorc", extension="edgemodel", albam_asset_type="MODEL")
 def build_blender_model(vfile, context):
@@ -58,7 +62,15 @@ def build_blender_mesh(mesh_header, name, bl_materials, bone_names=None):
     me_ob = bpy.data.meshes.new(name)
     ob = bpy.data.objects.new(name, me_ob)
 
-    has_uvs = vertex_stride >= 28  # smallest real stride seen with UV data (12/16/24 don't have any)
+    # UV is a half2 pair at offset 24, for these two strides. Every other
+    # stride with room for one there decodes to nonsense at that offset -
+    # across a real dataset, 99.6% (28) and 99.4% (52) of decoded pairs
+    # land in a plausible range, against 0% (32), 36% (56) and 27% (60) -
+    # so those meshes keep their UVs somewhere else, or don't have any. A
+    # per-stride offset sweep finds no consistent answer for them (the
+    # best candidate differs per stride, with nothing corroborating it),
+    # so they import without UVs rather than with garbage ones.
+    has_uvs = vertex_stride in UV_STRIDES
     # Normal is a plain, uncompressed float32 xyz right after position - not
     # some packed/quantized format, confirmed against real geometry (single-
     # triangle/quad props spanning strides 24/28/32/52): decoded vector is
