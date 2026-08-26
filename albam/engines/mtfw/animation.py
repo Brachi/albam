@@ -72,6 +72,10 @@ KEYFRAME_TYPES = {
     67: KEYFRAME_TYPES_67
 }
 
+# Rotation buffer types that store x, y and z but no w, leaving decoding to
+# rebuild it with LMTKeyFrames.restore_w().
+W_REBUILT_FROM_XYZ_TYPES = {4}
+
 
 # Unused for now but maybe LMTQuadraticVector3 will need it
 class LMTUniKey:
@@ -188,6 +192,7 @@ class LMTKeyFrames:
         for frame, value in track.items():
             kf = kfcls()
             if self.track_type == "rotation_quaternion":
+                value = self.canonicalize(value, kf_type)
                 if not dst_track.reference_data:
                     dst_track.reference_data = [value.x, value.y, value.z, value.w]
                 value = self.quantaize(value, kf_type)
@@ -250,7 +255,21 @@ class LMTKeyFrames:
             dkf.z = self.clip_and_divide(kf.z)
         return dkf
 
+    def canonicalize(self, kf, key_type):
+        """The w >= 0 form of a rotation, for buffer types that drop w.
+
+        restore_w() rebuilds w as a positive square root, so a quaternion
+        stored with w < 0 decodes to a different rotation. Negating all four
+        components names the same rotation with w >= 0, which does survive.
+        Types that store w keep whichever sign they were given.
+        """
+        if key_type not in W_REBUILT_FROM_XYZ_TYPES or kf.w >= 0:
+            return kf
+        return Quaternion((-kf.w, -kf.x, -kf.y, -kf.z))
+
     def restore_w(self, kf):
+        # Always the positive root: see canonicalize(), which is what keeps
+        # that from silently changing the rotation.
         w = math.sqrt(1.0 - kf.x**2 - kf.y**2 - kf.z**2)
         frame = Quaternion((w, kf.x, kf.y, kf.z))
         return frame
