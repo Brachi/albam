@@ -61,13 +61,19 @@ def referenced_paths(game_fs, index, virtual_paths):
 
     References are resolved through `index` by hash rather than used as
     paths directly, since a reference's casing doesn't have to match the
-    file table's.
+    file table's. Returns (paths found, references that resolved to
+    nothing).
     """
     from albam.engines.hexn.structs.hexane_edgemodel import HexaneEdgemodel
     from albam.engines.hexn.structs.hexane_matb import HexaneMatb
 
     def resolve(reference):
         return index.get(hash_virtual_path(reference))
+
+    # References that don't resolve are reported rather than passed over:
+    # the stand-in install would still build, and the tests using it would
+    # fail later for a reason that looks nothing like "a file is missing".
+    unresolved = set()
 
     extra = set()
     for virtual_path in virtual_paths:
@@ -86,6 +92,7 @@ def referenced_paths(game_fs, index, virtual_paths):
         for mesh_header in edgemodel.meshes_header:
             material = resolve(mesh_header.materials.first_material)
             if material is None:
+                unresolved.add(mesh_header.materials.first_material)
                 continue
             extra.add(material)
             matb = HexaneMatb.from_bytes(game_fs.readbytes(material))
@@ -94,7 +101,9 @@ def referenced_paths(game_fs, index, virtual_paths):
                 resolved = resolve(texture)
                 if resolved:
                     extra.add(resolved)
-    return extra
+                else:
+                    unresolved.add(texture)
+    return extra, unresolved
 
 
 def sources_for(game_fs, game_root, virtual_paths):
@@ -128,7 +137,11 @@ def main(argv=None):
         parser.error(f"{len(missing)} dataset hash(es) not in this install: {sorted(missing)[:5]}")
 
     needed = {index[h] for h in hashes}
-    needed |= referenced_paths(game_fs, index, needed)
+    referenced, unresolved_references = referenced_paths(game_fs, index, needed)
+    needed |= referenced
+    if unresolved_references:
+        print(f"warning: {len(unresolved_references)} referenced file(s) not in this install, "
+              f"so the stand-in won't have them either")
     sources = sources_for(game_fs, args.game_root, needed)
     total = 0
     for relative, source in sorted(sources.items()):
