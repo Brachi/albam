@@ -98,7 +98,12 @@ def resolve_hashes(game_fs, target_hashes):
     for path in game_fs.walk.files():
         h = hash_virtual_path(path)
         if h in target_hashes:
-            found[h] = path
+            # First hit wins - a real install ships the same tree under
+            # several casings, and the hash is over the lowercased path,
+            # so a hash can match more than one file. Overwriting would
+            # make the answer depend on how many other hashes were asked
+            # for in the same call (the walk stops once they're all found).
+            found.setdefault(h, path)
             if len(found) == len(target_hashes):
                 break
     missing = target_hashes - found.keys()
@@ -118,5 +123,15 @@ def index_by_hash(game_fs):
     back into a path any other way, this just keeps the result of the walk
     instead of throwing it away. Missing hashes surface as a plain KeyError
     on lookup, since there's no requested set to name them against here.
+
+    First hit wins, exactly as resolve_hashes' own early exit does. That
+    is not academic: a hash is over the lowercased path, and a real
+    install ships the same tree under several casings - on one, 1937
+    hashes cover more than one path, and some of those pairs are files of
+    genuinely different sizes. Letting the last hit win would hand a test
+    a different file than the one its hash was catalogued from.
     """
-    return {hash_virtual_path(path): path for path in game_fs.walk.files()}
+    index = {}
+    for path in game_fs.walk.files():
+        index.setdefault(hash_virtual_path(path), path)
+    return index
