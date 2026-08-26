@@ -21,7 +21,8 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
+from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -69,9 +70,8 @@ def test_dataset_hashes_are_in_catalog():
 def local_game_fs(pytestconfig, local_app_id):
     """
     A bare MTFW_FS, used only to resolve this file's committed hashes to
-    real virtual paths and each path's containing .arc's real absolute
-    location on disk (via origin_absolute_path()) - never mounted into the
-    VFS itself (see module docstring for why).
+    real virtual paths and to each path's containing .arc - never mounted
+    into the VFS itself (see module docstring for why).
     """
     from albam.engines.mtfw.arc_fs import MTFW_FS
 
@@ -79,10 +79,10 @@ def local_game_fs(pytestconfig, local_app_id):
     if not value:
         pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
     elif value.startswith(R2_PROTOCOL_PREFIX):
-        pytest.skip(
-            "test_lmt_single_arc_import needs a local game root - ArcFS opens a plain "
-            "local file path, not an S3/R2 key"
-        )
+        r2_kwargs = resolve_r2_source(value)
+        if r2_kwargs is None:
+            pytest.skip(f"--game-dir={local_app_id}::{value} requested but R2 isn't configured")
+        return MTFW_FS.from_s3(**r2_kwargs)
     elif not os.path.isdir(value):
         pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
     return MTFW_FS(value)
@@ -90,22 +90,23 @@ def local_game_fs(pytestconfig, local_app_id):
 
 @pytest.fixture(scope="session")
 def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, local_lmt_path_hash):
-    from albam.engines.mtfw.arc_fs import ArcFS
-
     bpy.context.scene.albam.apps.app_selected = local_app_id
     vfs = bpy.context.scene.albam.vfs
 
     resolved = resolve_hashes(local_game_fs, {local_mod_path_hash, local_lmt_path_hash})
     mod_virtual_path = resolved[local_mod_path_hash]
     lmt_virtual_path = resolved[local_lmt_path_hash]
-    mod_arc_abs_path = local_game_fs.origin_absolute_path(mod_virtual_path)
-    lmt_arc_abs_path = local_game_fs.origin_absolute_path(lmt_virtual_path)
-    assert mod_arc_abs_path, "expected the .mod to live packed inside an .arc, not loose on disk"
-    assert lmt_arc_abs_path, "expected the .lmt to live packed inside an .arc, not loose on disk"
+    # The ArcFS each file already lives in, rather than building a new one
+    # from an absolute path: MTFW_FS opens its archives with an opener that
+    # matches whichever backend it was mounted from, so reusing the instance
+    # keeps this working over S3/R2 as well as local disk.
+    mod_arc_fs = local_game_fs._owning_arc_fs(mod_virtual_path)
+    lmt_arc_fs = local_game_fs._owning_arc_fs(lmt_virtual_path)
+    assert mod_arc_fs, "expected the .mod to live packed inside an .arc, not loose"
+    assert lmt_arc_fs, "expected the .lmt to live packed inside an .arc, not loose"
 
     # Two separate single-.arc roots under the same app_id - safe because
-    # their internal paths (pawn/... vs id/figdata/...) don't collide.
-    mod_arc_fs = ArcFS(mod_arc_abs_path)
+    # their internal paths don't collide.
     vfs.add_fs_root(local_app_id, mod_arc_fs, display_name="single-arc-mod")
     vfile_mod = vfs.select_vfile(local_app_id, mod_virtual_path.lstrip("/"))
     assert vfile_mod
@@ -118,7 +119,6 @@ def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, lo
     assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
-    lmt_arc_fs = ArcFS(lmt_arc_abs_path)
     vfs.add_fs_root(local_app_id, lmt_arc_fs, display_name="single-arc-lmt")
     vfile_lmt = vfs.select_vfile(local_app_id, lmt_virtual_path.lstrip("/"))
     assert vfile_lmt
@@ -127,7 +127,21 @@ def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, lo
 
     latest_lmt = len(bpy.context.scene.albam.exportable.file_list) - 1
     lmt_entry = bpy.context.scene.albam.exportable.file_list[latest_lmt]
-    return armature, lmt_entry
+    yield armature, lmt_entry
+
+    # Unmount both roots again. The VFS lives in Blender's scene data, which
+    # is process-global and outlives this fixture, while local_game_fs (and
+    # with it the .arcs mounted above) is dropped when this param group tears
+    # down. Node ids are app_id::relative_path only, so a later test
+    # selecting these same paths would resolve to one of those dead roots and
+    # fail with fs.errors.FilesystemClosed.
+    for display_name in ("single-arc-lmt", "single-arc-mod"):
+        root_id = f"{local_app_id}::{display_name}"
+        index = vfs.file_list.find(root_id)
+        if index == -1:
+            continue
+        vfs.file_list_selected_index = index
+        bpy.ops.albam.remove_imported()
 
 
 def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id):
@@ -138,11 +152,10 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
     fcurves holding exactly one keyframe at frame 1 (_create_blender_action
     keys at frame_index + 1).
 
-    load_lmt() only wires the action up as armature.animation_data.action
-    for Blender 5+ (via _get_action_channels()) - on
-    Blender 4.x it stops at animation_data_create() and leaves assigning
-    the action up to the caller (see custom_props.action below), which is
-    exactly what applying this pose for a render requires doing by hand.
+    load_lmt() stops at animation_data_create() and never assigns the action
+    to the armature on any Blender version, leaving that to the caller (see
+    custom_props.action below) - exactly what applying this pose for a
+    render requires doing by hand.
     """
     armature, lmt_entry = single_arc_import_local
     bl_object = lmt_entry.bl_object
@@ -165,11 +178,12 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
     assert custom_props.num_frames == 1
 
     action = custom_props.action
-    assert action.fcurves
-    for fcurve in action.fcurves:
+    fcurves = action_fcurves(action)
+    assert fcurves
+    for fcurve in fcurves:
         assert len(fcurve.keyframe_points) == 1
         assert fcurve.keyframe_points[0].co[0] == 1
 
     # animation_data_create() is always called for a populated block (see
-    # load_lmt()), independent of the channel container above.
+    # load_lmt()), independent of the channel container the fcurves sit in.
     assert armature.animation_data is not None

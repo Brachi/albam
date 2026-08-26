@@ -98,3 +98,21 @@ def import_export(local_app_id, local_path):
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
     return vfile
+
+
+def action_fcurves(action):
+    """Every fcurve an action holds, whichever Blender version made it.
+
+    The flat Action.fcurves shortcut is gone from 5.0 on - the same removal
+    the LMT import tests exist to catch - so reading it directly here would
+    break the tests exactly where it broke the code.
+    """
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [
+        fcurve
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+        for fcurve in channelbag.fcurves
+    ]

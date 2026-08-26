@@ -25,7 +25,7 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
@@ -67,24 +67,6 @@ def test_dataset_hashes_are_in_catalog():
             assert entry[key] in catalog_hashes, (
                 f"{entry[key]!r} ({entry['app_id']}) is not in {catalog_path!r}"
             )
-
-
-def action_fcurves(action):
-    """Every fcurve an action holds, whichever Blender version made it.
-
-    The flat Action.fcurves shortcut is gone from 5.0 on - the same removal
-    this file exists to catch - so reading it directly here would break the
-    test exactly where it broke the code.
-    """
-    if hasattr(action, "fcurves"):
-        return list(action.fcurves)
-    return [
-        fcurve
-        for layer in action.layers
-        for strip in layer.strips
-        for channelbag in strip.channelbags
-        for fcurve in channelbag.fcurves
-    ]
 
 
 @pytest.fixture(scope="session")
