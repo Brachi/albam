@@ -10,6 +10,12 @@ def get_app_description(app_id):
     return app_desc
 
 
+# The fourth element is the EnumProperty's numeric value, and Blender
+# stores *that*, not the app id, in a saved .blend - scene.albam.vfs rows
+# and every imported asset carry it. So a value belongs to its app for
+# good: a new app is appended with a new number, never inserted, or every
+# file saved by an earlier version silently comes back naming a different
+# game.
 APPS = [
     ("re0", "Resident Evil 0", "", 0),
     ("re1", "Resident Evil 1", "", 1),
@@ -17,18 +23,18 @@ APPS = [
     ("re6", "Resident Evil 6", "", 3),
     ("rev1", "Resident Evil: Revelations 1", "", 4),
     ("rev2", "Resident Evil: Revelations 2", "", 5),
-    ("reorc", "Resident Evil: ORC", "", 6),
-    ("dd", "Dragon's Dogma", "", 12),
-    ("dmc4", "Devil May Cry 4", "", 13)
+    ("dd", "Dragon's Dogma", "", 11),
+    ("dmc4", "Devil May Cry 4", "", 12),
+    ("reorc", "Resident Evil: ORC", "", 13),
 ]
 
 REENGINE_APPS = [
     None,
-    ("re2", "Resident Evil 2", "", 7),
-    ("re2_non_rt", "Resident Evil 2 (dx11 non rt)", "", 8),
-    ("re3", "Resident Evil 3", "", 9),
-    ("re3_non_rt", "Resident Evil 3 (dx11 non rt)", "", 10),
-    ("re8", "Resident Evil 8", "", 11),
+    ("re2", "Resident Evil 2", "", 6),
+    ("re2_non_rt", "Resident Evil 2 (dx11 non rt)", "", 7),
+    ("re3", "Resident Evil 3", "", 8),
+    ("re3_non_rt", "Resident Evil 3 (dx11 non rt)", "", 9),
+    ("re8", "Resident Evil 8", "", 10),
 ]
 
 
