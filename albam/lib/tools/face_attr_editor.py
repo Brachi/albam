@@ -13,6 +13,9 @@ _handler = None
 def get_selected_face_attributes():
     attrs = ('type', 'surface_attr', 'special_attr')
     obj = bpy.context.object
+    mode = bpy.context.mode
+    if mode != 'EDIT_MESH':
+        return {}
     if obj is None or obj.type != 'MESH':
         return {}
     bm = bmesh.from_edit_mesh(obj.data)
@@ -31,9 +34,9 @@ def draw_callback():
 
     obj = bpy.context.active_object
     face_attrs = get_selected_face_attributes()
-    ftype = face_attrs['type']
-    fsurface = face_attrs['surface_attr']
-    fbehavior = face_attrs['special_attr']
+    ftype = face_attrs.get('type', 'N/A')
+    fsurface = face_attrs.get('surface_attr', 'N/A')
+    fbehavior = face_attrs.get('special_attr', 'N/A')
     if obj and obj.type == 'MESH':
 
         text = (
