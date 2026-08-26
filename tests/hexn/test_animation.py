@@ -141,15 +141,23 @@ def test_build_blender_action(game_fs_root, hash_to_path, local_app_id, local_an
     anims = HexaneAnims.from_bytes(data)
     anims._read()
 
+    decoded_clips = [
+        decode_clip(clip_bytes, name=file_info.name, skeleton_name=skeleton_name)
+        for file_info, clip_bytes, _clip_path, skeleton_name in _iter_clips(anims)
+    ]
     armature_obj = None
     bone_names = None
+    if decoded_clips:
+        # Wide enough for every clip in the archive, not just the first:
+        # build_blender_action skips any bone index past the end of
+        # bone_names, so a narrower armature would silently drop the extra
+        # bones of a later clip instead of exercising them.
+        armature_obj = _make_throwaway_armature(
+            f"test-{local_anims_path_hash}", max(d.num_bones for d in decoded_clips))
+        bone_names = [b.name for b in armature_obj.pose.bones]
+
     n_actions = 0
-    for file_info, clip_bytes, clip_path, skeleton_name in _iter_clips(anims):
-        decoded = decode_clip(clip_bytes, name=file_info.name, skeleton_name=skeleton_name)
-        if armature_obj is None:
-            armature_obj = _make_throwaway_armature(
-                f"test-{local_anims_path_hash}", decoded.num_bones)
-            bone_names = [b.name for b in armature_obj.pose.bones]
+    for file_info, decoded in zip((fi for fi, *_ in _iter_clips(anims)), decoded_clips):
 
         action = build_blender_action(armature_obj, decoded, file_info.name, bone_names)
         n_actions += 1

@@ -115,8 +115,12 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
     # while landing bones a metre away from their own vertices.
     bones_by_name = {b.name: b for b in bones}
     distances = []
+    # Both sides in the armature's own space: head_local is armature-local,
+    # so comparing it against world-space vertices only happens to work
+    # while the armature sits at the origin.
+    to_armature = armature_ob.matrix_world.inverted()
     for ob in deforming:
-        positions = [ob.matrix_world @ v.co for v in ob.data.vertices]
+        positions = [to_armature @ ob.matrix_world @ v.co for v in ob.data.vertices]
         totals = {}
         for vertex in ob.data.vertices:
             for group in vertex.groups:
