@@ -2,7 +2,6 @@ import time
 import os
 import bpy
 
-from ..lib import fs_registry
 from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import (
@@ -10,6 +9,7 @@ from ..vfs import (
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
+    root_fs,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 
@@ -378,7 +378,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 # ArcFS-wrapped .arc (always returns that arc's own path) or
                 # a whole MTFW_FS game-folder root (resolves the specific
                 # .arc this path actually came from) - see origin_arc_path.
-                path_i = origin_arc_path(fs_registry.get(item_i.fs_key), item_i.fs_path)
+                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path)
                 if path_i is None:
                     self.report({'ERROR'}, "Selected archive isn't backed by a packed .arc file")
                     return
