@@ -76,11 +76,12 @@ def referenced_paths(game_fs, index, virtual_paths):
         edgemodel = HexaneEdgemodel.from_bytes(game_fs.readbytes(virtual_path))
         edgemodel._read()
 
-        stem = os.path.splitext(os.path.basename(virtual_path))[0]
-        for candidate in (f"dlc/pack1/Characters/skel/{stem}.ssg", f"dlc/pack1/characters/skel/{stem}"):
-            skeleton = resolve(candidate)
-            if skeleton:
-                extra.add(skeleton)
+        # Same tails albam.engines.hexn.skeleton._find_skel_vfile looks
+        # for - every pack has its own skel directory, so only the tail is
+        # predictable, not the directory or the extension.
+        stem = os.path.splitext(os.path.basename(virtual_path))[0].lower()
+        tails = (f"/skel/{stem}.ssg", f"/skel/{stem}")
+        extra |= {p for p in index.values() if p.lower().endswith(tails)}
 
         for mesh_header in edgemodel.meshes_header:
             material = resolve(mesh_header.materials.first_material)

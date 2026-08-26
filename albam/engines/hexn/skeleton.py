@@ -34,51 +34,40 @@ NODE_INDEX_PROPERTY = "albam_node_index"
 
 
 def _find_skel_vfile(vfs, stem):
-    """A skel file is addressable in the VFS under two different paths,
-    depending on how it got mounted, and both need trying:
+    """The VFS entry for the skeleton named `stem`, or None.
 
-    - dlc/pack1/Characters/skel/<stem>.ssg (capitalized "Characters", with
-      the .ssg extension) - the file's own real on-disk path, exposed when
-      whatever was added covers that whole directory (e.g. "Add Folder" on
-      the game root, or a parent of it): HexnFS's own loose-file layer
-      mirrors real paths directly, case and extension intact.
-    - dlc/pack1/characters/skel/<stem> (lowercase "characters", no
-      extension) - what the *same* file decodes to when it's added on its
-      own (e.g. "Add Files" picking just that one .ssg): a skel/*.ssg is
-      itself a single-payload container sharing anims.ksy's big-endian
-      shape (see structs/skel.ksy's own doc), and SsgFS/HexnFS expose an
-      archive's entries under the name recorded in its own file table, not
-      its real on-disk path - confirmed empirically to be this lowercase,
-      extension-less form for a skel file's own single entry.
+    A skeleton is filed as `<somewhere>/skel/<stem>.ssg`, and every pack
+    and level has its own skel directory - dlc/pack1/Characters/skel and
+    dlc/pack3/characters/skel both hold playable characters, weapons and
+    world objects have their own. So the directory can't be assumed, only
+    the `skel/<stem>` tail.
 
-    Both forms point at the identical real bytes; only their VFS
-    reachability differs depending on what was added.
+    The extension can't be assumed either, because the same file is
+    addressable two ways depending on how it was mounted: as
+    `skel/<stem>.ssg`, its real on-disk name, when a whole folder is added
+    (HexnFS's loose-file layer mirrors real paths), or as `skel/<stem>`,
+    with no extension, when the .ssg itself is added through "Add Files"
+    (SsgFS exposes an archive's entries under the names in its own file
+    table, and a skel archive's single entry is the extension-less form).
+    Both point at the same bytes.
     """
-    for skel_path in (
-        f"dlc/pack1/Characters/skel/{stem}.ssg",
-        f"dlc/pack1/characters/skel/{stem}",
-    ):
-        try:
-            return vfs.get_vfile("reorc", skel_path)
-        except KeyError:
+    tails = (f"/skel/{stem}.ssg".lower(), f"/skel/{stem}".lower())
+    for vfile in vfs.file_list:
+        if vfile.is_expandable:  # a directory node, not the file itself
             continue
+        path = "/" + str(vfile.relative_path).replace("\\", "/").lower()
+        if path.endswith(tails):
+            return vfile
     return None
 
 
 def infer_skeleton_vfile(context, edgemodel_vfile):
-    """RE:ORC's skeleton lives in a directory tree entirely separate from
-    the mesh that references it: dlc/pack1/Characters/skel/<stem>.ssg (note
-    the capitalized "Characters", unlike the lowercase "characters" tree
-    the .edgemodel itself is filed under - both confirmed against real
-    files). The stem matches the .edgemodel's own filename, not its
-    containing directory - a character's .edgemodel can live several
-    directories deeper under its own subfolder while its skeleton stays
-    directly under skel/<stem>.ssg - confirmed for every real
-    playable-character archive directly under dlc/pack1/Characters in a
-    full sweep (the small number of *.ssg there without a same-stem
-    skel/*.ssg are all non-character utility archives). See
-    _find_skel_vfile() for why the stem alone isn't enough to build one
-    single lookup path.
+    """The skel file for an .edgemodel, found by the model's own stem: a
+    character's mesh at <pack>/characters/<name>/models/<name>.edgemodel is
+    rigged by <pack>/characters/skel/<name>.ssg. The stem is the model's
+    file name, not its directory - a mesh can sit several directories
+    deeper than its own skeleton. Returns None when there's no such file
+    (a prop or weapon mesh with no skeleton at all).
     """
     vfs = context.scene.albam.vfs
     stem = PureWindowsPath(edgemodel_vfile.relative_path).stem
