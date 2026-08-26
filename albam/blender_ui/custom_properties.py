@@ -99,6 +99,19 @@ def AlbamCustomPropertiesFactory(kind: str):
                 "bl_options": {"DEFAULT_CLOSED"},
             }
         )
+        # This factory runs fresh on every register() call (unlike the classes
+        # collected via the @blender_registry decorators, which only run once
+        # at module import time), so a second register()/unregister() cycle
+        # would otherwise create a brand-new class object with the same
+        # bl_idname and just append it, leaving the previous cycle's now-dead
+        # class (Blender unregisters it via bl_idname collision below, but
+        # never removes it from this list) to crash the next unregister().
+        # Drop any such stale entry first so the list only ever holds the
+        # currently-live class for this bl_idname.
+        blender_registry.types[:] = [
+            cls for cls in blender_registry.types if getattr(cls, "bl_idname", None) != bl_idname
+        ]
+
         # Since these factories are created at the end, we need to register manually
         # the window where they are registered in albam/__init__.py was lost
         bpy.utils.register_class(SubPanel)

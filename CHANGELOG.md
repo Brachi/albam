@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Typo that brightened vertex colors on every import-export round trip
 - Vertex colors losing precision on every import-export round trip
 - Vertices export with multiple attributes, causing artifacts around UV seams
+- Crash when disabling and re-enabling the addon within the same Blender session
+- Duplicate file-load handlers left behind after disabling and re-enabling the addon
 
 ### Changed
 
