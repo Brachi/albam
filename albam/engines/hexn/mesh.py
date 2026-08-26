@@ -115,9 +115,15 @@ def build_blender_mesh(mesh_header, name, bl_materials, bone_names=None):
     assert not indices or max(indices) < edge_mesh.num_vertices, (
         f"face index {max(indices)} outside this mesh's {edge_mesh.num_vertices} vertices"
     )
-    indices = chunks(indices, 3)
-    indices = [triplet for triplet in indices
-               if (triplet != (0, 0) and triplet != (0, 0, 0) and triplet != (0, ))]
+    # Whole triangles of three distinct vertices only. What gets dropped:
+    # the zero-padding at the end of a buffer whose index count isn't a
+    # multiple of three, and degenerate triangles that name the same vertex
+    # twice. A degenerate one has no area and draws nothing, but it makes
+    # normals_split_custom_set_from_vertices() below *segfault* Blender
+    # outright - one real character mesh carries 8 of them, and importing
+    # it took the whole process down.
+    indices = [triplet for triplet in chunks(indices, 3)
+               if len(triplet) == 3 and len(set(triplet)) == 3]
     me_ob.from_pydata(vertices, [], indices)
     _build_normals(me_ob, normals)
     _build_tangents(me_ob, tangents)
