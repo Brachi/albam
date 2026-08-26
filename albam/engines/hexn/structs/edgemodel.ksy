@@ -137,8 +137,13 @@ types:
       # unmodeled; [offset_b, offset_b + count*8) is a second real block;
       # anything up to the first buffer after that is padding. A distinct
       # sub-variant, where count is always 22, is guarded out below.
+      # The materials table's own end: its name offsets are absolute file
+      # positions, so the last one plus that name's own length (and its
+      # terminator) is where the table stops.
       materials_end:
-        value: materials._io.pos
+        value: >-
+          materials.offsets[_parent.header.num_material_per_mesh - 1]
+          + materials.all_materials[_parent.header.num_material_per_mesh - 1].length + 1
       buf_indices_or_sentinel:
         value: "mesh.ofs_buffer_indices > materials_end ? mesh.ofs_buffer_indices : 2147483647"
       buf_vertices_or_sentinel:

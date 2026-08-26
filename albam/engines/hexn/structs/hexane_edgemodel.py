@@ -1136,7 +1136,7 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_materials_end'):
                 return self._m_materials_end
 
-            self._m_materials_end = self.materials._io.pos()
+            self._m_materials_end = (self.materials.offsets[self._parent.header.num_material_per_mesh - 1] + len(self.materials.all_materials[self._parent.header.num_material_per_mesh - 1])) + 1
             return getattr(self, '_m_materials_end', None)
 
         def _invalidate_materials_end(self):
