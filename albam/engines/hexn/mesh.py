@@ -163,7 +163,10 @@ def _build_weights(bl_obj, edge_mesh, bone_names=None):
             vg_name = str(bone_index)
         vg = bl_obj.vertex_groups.new(name=vg_name)
         for vertex_index, weight_value in data:
-            vg.add((vertex_index,), weight_value, "ADD")
+            # Stored as 0-255 fixed point (a vertex's four weights sum to
+            # 255); Blender's are 0.0-1.0 and it clamps anything above,
+            # which would flatten every real weight to a full 1.0.
+            vg.add((vertex_index,), weight_value / 255, "ADD")
 
 
 def _build_uvs(bl_mesh, uvs, name="uv"):
