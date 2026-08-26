@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from math import sqrt
 
 import bpy
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
@@ -62,6 +62,13 @@ _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
 _QUAT_OFFSET = _QUAT_SCALE / sqrt(2)
 _MASK32 = 0xFFFFFFFF
 _MASK128 = (1 << 128) - 1
+
+# Game (x, y, z) Y-up -> Blender (x, -z, y) Z-up, as a change of basis: the
+# same convention skeleton.py and mesh.py apply to bind-pose and vertex
+# positions. A clip's values are whole transforms, not points, so they are
+# conjugated by it (M -> S @ M @ S-1) rather than just multiplied.
+GAME_TO_BLENDER = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
+GAME_TO_BLENDER_INVERTED = GAME_TO_BLENDER.inverted()
 
 
 @blender_registry.register_import_function(app_id="reorc", extension="animclip", albam_asset_type="ANIMATION")
@@ -204,6 +211,12 @@ class DecodedClip:
     # armature already has, i.e. its bind pose for an otherwise-untouched
     # armature).
     bones: dict = field(default_factory=dict)
+    # Which of those bones carry a real rotation / translation channel. A
+    # bone can have one without the other, and the missing half is not
+    # zero - it stays at the skeleton's own bind value, which is what
+    # build_blender_action falls back to.
+    bones_with_rotation: set = field(default_factory=set)
+    bones_with_translation: set = field(default_factory=set)
 
 
 def parse_clip_name(file_info_name):
@@ -236,11 +249,6 @@ def decode_clip(clip_bytes, name="", skeleton_name=""):
         name=name, skeleton_name=skeleton_name, duration_seconds=clip.duration_seconds,
         framerate=clip.framerate, num_frames=clip.num_frames, num_bones=clip.num_bones,
     )
-    bones = {
-        i: ([Vector((0, 0, 0))] * clip.num_frames, [Quaternion((1, 0, 0, 0))] * clip.num_frames)
-        for i in range(clip.num_bones)
-    }
-
     pos = 96  # AnimClip's own confirmed header ends here - see structs/anims.ksy
     (num_const_r, num_const_t, num_const_s, num_const_user,
      num_anim_r, num_anim_t, num_anim_s, num_anim_user) = (
@@ -263,6 +271,16 @@ def decode_clip(clip_bytes, name="", skeleton_name=""):
     anim_s_idx, pos = read_u2_array(pos, num_anim_s, 4)
     anim_user_idx, pos = read_u2_array(pos, num_anim_user, 4)
     pos = _align(pos, 16)
+
+    # Only bones with a channel of their own get an entry: a bone the clip
+    # says nothing about has to stay at its bind pose, and keying it to
+    # zero instead would drag it onto its parent's origin.
+    result.bones_with_rotation = set(const_r_idx) | set(anim_r_idx)
+    result.bones_with_translation = set(const_t_idx) | set(anim_t_idx)
+    bones = {
+        i: ([Vector((0, 0, 0))] * clip.num_frames, [Quaternion((1, 0, 0, 0))] * clip.num_frames)
+        for i in result.bones_with_rotation | result.bones_with_translation
+    }
 
     for i, bone_idx in enumerate(const_r_idx):
         rot = _decompress_rotation(clip_bytes[pos + i * 6:pos + i * 6 + 6])
@@ -395,7 +413,11 @@ def decode_clip(clip_bytes, name="", skeleton_name=""):
             of += 12
 
     if clip.offset_custom_data > 0:
+        # Root motion replaces bone 0's channels outright, whether or not
+        # it had any of its own.
         _decode_root_motion(clip, clip_bytes, bones)
+        result.bones_with_rotation.add(0)
+        result.bones_with_translation.add(0)
 
     result.bones = bones
     return result
@@ -490,26 +512,27 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
     """Builds a bpy.types.Action from a DecodedClip (see decode_clip()) and
     assigns it to `armature_object.animation_data.action`.
 
-    `armature_object`: a bpy.types.Object of type 'ARMATURE', already
-    built by a real skeleton importer - each pose bone's own
-    `.bone.matrix_local` (Blender's local-to-armature bind transform) must
-    already reflect the skeleton this clip was authored against, since the
-    decoded position/rotation values are parent-bone-local deltas measured
-    against that same bind pose (see the community reference's own
-    `pose_bone.location = bone.position[i] - bind_matrix.to_translation()`
-    - ported the same way here).
+    `armature_object`: a bpy.types.Object of type 'ARMATURE' built by
+    albam.engines.hexn.skeleton from the skeleton this clip references, so
+    that each pose bone's `.bone.matrix_local` is the bind pose the clip's
+    own values are measured against.
 
-    `bone_names`: a sequence indexable 0..decoded_clip.num_bones-1 (a
-    plain list, or anything supporting `bone_names[i]`) giving the pose
-    bone name for each clip-internal bone index, or None to skip that
-    index. THIS INDEX ORDER IS AN ASSUMPTION, NOT CONFIRMED: it assumes
-    the skeleton importer preserves the skeleton file's own bone order
-    1:1 into armature_object.pose.bones (e.g. `bone_names =
-    [b.name for b in armature_object.pose.bones]` if so) - the skeleton
-    side of this work was not available to verify this against when this
-    was written. If the real importer instead needs a name-hash or
-    explicit remapping, build `bone_names` from that instead; nothing
-    else here depends on how it was produced.
+    `bone_names`: a sequence indexable 0..decoded_clip.num_bones-1 giving
+    the pose bone name for each clip-internal bone index, or None to skip
+    that index. THIS INDEX ORDER IS AN ASSUMPTION, NOT CONFIRMED: it
+    assumes the skeleton importer preserves the skeleton file's own bone
+    order 1:1 into armature_object.pose.bones.
+
+    A clip stores each bone's transform in the game's own Y-up space,
+    relative to the bone's parent - the same thing the skel file stores
+    for the bind pose. What Blender wants in pose.bones[].location /
+    .rotation_quaternion is neither of those: it's the bone's own basis,
+    i.e. what to apply *on top of* its rest transform, in Blender's Z-up
+    space. So each frame's value is converted into Blender space and then
+    expressed against the rest pose (`rest.inverted() @ blender_local`),
+    which makes the result independent of how the skeleton importer chose
+    to orient its bones, and exact: feeding a skeleton's own bind pose
+    back in as a clip reproduces the rest pose to within 1e-6.
     """
     armature_object.animation_data_create()
     action = bpy.data.actions.new(action_name)
@@ -524,11 +547,19 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
         if bone_name is None or bone_name not in pose_bones:
             continue
         pose_bone = pose_bones[bone_name]
-        bind_matrix = pose_bone.bone.matrix_local
+
+        rest = pose_bone.bone.matrix_local
         if pose_bone.parent is not None:
-            bind_matrix = pose_bone.parent.bone.matrix_local.inverted() @ bind_matrix
-        bind_translation = bind_matrix.to_translation()
-        bind_rotation = bind_matrix.to_quaternion()
+            rest = pose_bone.parent.bone.matrix_local.inverted() @ rest
+        rest_inverted = rest.inverted()
+        # The bind pose back in the game's own space, for whichever half of
+        # the transform this bone has no channel for.
+        rest_in_game_space = GAME_TO_BLENDER_INVERTED @ rest @ GAME_TO_BLENDER
+        rest_position = rest_in_game_space.to_translation()
+        rest_rotation = rest_in_game_space.to_quaternion()
+
+        has_translation = bone_idx in decoded_clip.bones_with_translation
+        has_rotation = bone_idx in decoded_clip.bones_with_rotation
 
         # Blender 5.x's layered Action data model has no direct
         # action.fcurves/action.groups anymore (see mtfw.animation's own
@@ -540,18 +571,23 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
             action.fcurve_ensure_for_datablock(
                 armature_object, f'pose.bones["{bone_name}"].location', index=i, group_name=bone_name)
             for i in range(3)
-        ]
+        ] if has_translation else []
         rot_curves = [
             action.fcurve_ensure_for_datablock(
                 armature_object, f'pose.bones["{bone_name}"].rotation_quaternion', index=i,
                 group_name=bone_name)
             for i in range(4)
-        ]
+        ] if has_rotation else []
 
         prev_rotation = None
         for frame in range(decoded_clip.num_frames):
-            local_pos = positions[frame] - bind_translation
-            local_rot = bind_rotation.rotation_difference(rotations[frame])
+            position = positions[frame] if has_translation else rest_position
+            rotation = rotations[frame] if has_rotation else rest_rotation
+            game_local = Matrix.Translation(position) @ rotation.to_matrix().to_4x4()
+            basis = rest_inverted @ GAME_TO_BLENDER @ game_local @ GAME_TO_BLENDER_INVERTED
+
+            local_pos = basis.to_translation()
+            local_rot = basis.to_quaternion()
             # Baked quaternions have no inherent sign - flip to the same
             # hemisphere as the previous frame so interpolation takes the
             # shortest path instead of an arbitrary per-frame sign flip.
