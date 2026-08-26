@@ -1,4 +1,7 @@
+import contextlib
+
 import bpy
+import pytest
 
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
@@ -130,3 +133,168 @@ def test_edited_keyframe_survives_export(
         f"axis {axis_index}) were found in the exported LMT's decoded location tracks - "
         f"the hand-edit did not survive export"
     )
+
+
+@contextlib.contextmanager
+def _block_action_swapped(custom_props, action):
+    """Export `action` for this block, then put the block back as it was.
+
+    Blender's scene is process-global and outlives a test, so a block left
+    pointing at one of the deliberately malformed actions below would follow
+    into every later test that exports the same .lmt.
+    """
+    original_action = custom_props.action
+    original_generate_new = custom_props.generate_new
+    custom_props.action = action
+    custom_props.generate_new = True
+    try:
+        yield
+    finally:
+        custom_props.action = original_action
+        custom_props.generate_new = original_generate_new
+
+
+@pytest.fixture(scope="module")
+def imported_lmt_blocks(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
+    """Import the .mod and its .lmt once, and hand back the per-block empties
+    export reads its actions from (the same setup the test above opens with).
+
+    Module-scoped deliberately: every import adds another armature and
+    another set of blocks to the process-global scene, and enough of those
+    accumulating changes what a later whole-file export round trip produces.
+    """
+    app_id, mod_path_hash, lmt_path_hash = local_app_id, local_mod_path_hash, local_lmt_path_hash
+    bpy.context.scene.albam.apps.app_selected = app_id
+
+    mod_path = resolve_hashes(game_fs_root, {mod_path_hash})[mod_path_hash].lstrip("/")
+    assert bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
+    assert bpy.ops.albam.import_vfile() == {"FINISHED"}
+    latest_mod = len(bpy.context.scene.albam.exportable.file_list) - 1
+    armature = bpy.context.scene.albam.exportable.file_list[latest_mod].bl_object
+    assert armature and armature.type == 'ARMATURE'
+    bpy.context.scene.albam.import_options_lmt.armature = armature
+
+    lmt_path = resolve_hashes(game_fs_root, {lmt_path_hash})[lmt_path_hash].lstrip("/")
+    assert bpy.context.scene.albam.vfs.select_vfile(app_id, lmt_path)
+    assert bpy.ops.albam.import_vfile() == {"FINISHED"}
+
+    latest_exported = len(bpy.context.scene.albam.exportable.file_list) - 1
+    bpy.context.scene.albam.exportable.file_list_selected_index = latest_exported
+    bl_obj = bpy.context.scene.albam.exportable.file_list[latest_exported].bl_object
+    return armature, lmt_path, [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+
+
+def _first_block_with_location_action(bl_objects, app_id):
+    for candidate in bl_objects:
+        custom_props = candidate.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if custom_props.ofs_frame == 0 or not custom_props.action:
+            continue
+        action = custom_props.action
+        for layer in action.layers:
+            for strip in layer.strips:
+                for channelbag in strip.channelbags:
+                    for fcurve in channelbag.fcurves:
+                        path = fcurve.data_path
+                        if path.startswith('pose.bones["') and "location" in path:
+                            return candidate, action, channelbag, fcurve
+    return None, None, None, None
+
+
+def test_export_reads_the_armatures_channelbag_not_the_first(
+    imported_lmt_blocks, local_app_id
+):
+    """An action can hold one channelbag per slot, in creation order, and the
+    armature's is not necessarily the first.
+
+    Export reaches its fcurves through a fixed layers[0].strips[0].channelbags[0],
+    so for such an action it reads some other ID's channels - or, as here, an
+    empty decoy - and silently writes an animation with none of the armature's
+    keyframes in it. Silent, because nothing raises: the exported .lmt is
+    well-formed and simply missing the animation.
+    """
+    from albam.engines.mtfw.structs.lmt import Lmt
+
+    armature, lmt_path, bl_objects = imported_lmt_blocks
+    target_block, action, channelbag, fcurve = _first_block_with_location_action(
+        bl_objects, local_app_id
+    )
+    if action is None:
+        pytest.skip("No block with a location fcurve to rebuild")
+    if hasattr(action, "fcurves"):
+        pytest.skip("Blender exposes flat Action.fcurves here - slots don't apply")
+
+    axis_index = fcurve.array_index
+    expected_values = [kp.co[1] for kp in fcurve.keyframe_points]
+    assert expected_values, "Location fcurve had no keyframes"
+
+    # Same channels, but with an unrelated slot claiming index 0 - what you
+    # get whenever the action was keyed on something else before the armature.
+    rebuilt = bpy.data.actions.new(f"{action.name}.rebuilt")
+    rebuilt.use_fake_user = True
+    rebuilt.slots.new(id_type='OBJECT', name="Decoy")
+    armature_slot = rebuilt.slots.new(id_type='OBJECT', name=armature.name)
+    strip = rebuilt.layers.new("Layer").strips.new(type='KEYFRAME')
+    strip.channelbag(rebuilt.slots[0], ensure=True)
+    armature_channelbag = strip.channelbag(armature_slot, ensure=True)
+    for src in channelbag.fcurves:
+        dst = armature_channelbag.fcurves.new(data_path=src.data_path, index=src.array_index)
+        for kp in src.keyframe_points:
+            dst.keyframe_points.add(1)
+            dst.keyframe_points[-1].co = (kp.co[0], kp.co[1])
+            dst.keyframe_points[-1].interpolation = 'LINEAR'
+    assert strip.channelbags[0] != armature_channelbag, "decoy did not take index 0"
+
+    custom_props = target_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
+    with _block_action_swapped(custom_props, rebuilt):
+        assert bpy.ops.albam.export() == {"FINISHED"}
+
+    vfile_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, lmt_path)
+    assert vfile_exported
+    dst_lmt = Lmt.from_bytes(vfile_exported.get_bytes())
+    dst_lmt._read()
+
+    dst_block = dst_lmt.block_offsets[bl_objects.index(target_block)]
+    assert dst_block.offset != 0
+    matching = [t for t in dst_block.block_header.tracks if t.usage in {1, 4}]
+    assert matching, "No location-usage track in the exported block"
+
+    from albam.engines.mtfw.animation import LMTKeyFrames
+
+    found = False
+    for track in matching:
+        kf = LMTKeyFrames()
+        kf.version = dst_lmt.version
+        kf.track_type = "location"
+        kf.decode_framedata(dst_lmt.version, track.buffer_type, track.data)
+        decoded = [f[axis_index] for f in kf.decoded_frames if f is not None]
+        if any(any(abs(v - e) < 0.01 for v in decoded) for e in expected_values):
+            found = True
+            break
+
+    assert found, (
+        "None of the armature's location keyframes reached the exported .lmt - "
+        "export read the channelbag at index 0 instead of the armature's"
+    )
+
+
+def test_export_action_without_layers_does_not_crash(imported_lmt_blocks, local_app_id):
+    """A brand-new action has no layers at all, so the fixed
+    layers[0].strips[0].channelbags[0] lookup raises IndexError instead of
+    exporting an empty block.
+    """
+    armature, _lmt_path, bl_objects = imported_lmt_blocks
+    target_block, action, _channelbag, _fcurve = _first_block_with_location_action(
+        bl_objects, local_app_id
+    )
+    if action is None:
+        pytest.skip("No block with an action to replace")
+    if hasattr(action, "fcurves"):
+        pytest.skip("Blender exposes flat Action.fcurves here - layers don't apply")
+
+    empty_action = bpy.data.actions.new(f"{action.name}.empty")
+    empty_action.use_fake_user = True
+    assert len(empty_action.layers) == 0
+
+    custom_props = target_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
+    with _block_action_swapped(custom_props, empty_action):
+        assert bpy.ops.albam.export() == {"FINISHED"}
