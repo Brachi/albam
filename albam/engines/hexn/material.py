@@ -38,7 +38,16 @@ def build_blender_materials(edgemodel, context):
     vfs = context.scene.albam.vfs
 
     for material_path in material_paths:
-        matb_vfile = vfs.get_vfile("reorc", material_path)
+        # A .matb a mesh names doesn't have to be reachable: shared
+        # surfaces live in their own archives, so mounting a single .ssg
+        # (the UI's "Add Files") legitimately leaves some unresolvable.
+        # Import what's there rather than failing outright - same
+        # tolerate-absence convention as skeleton._find_skel_vfile.
+        try:
+            matb_vfile = vfs.get_vfile("reorc", material_path)
+        except KeyError:
+            print(f"[{material_path}] material not found, skipping")
+            continue
         matb_bytes = matb_vfile.get_bytes()
         matb = HexaneMatb(KaitaiStream(io.BytesIO(matb_bytes)))
         matb._read()
@@ -72,7 +81,9 @@ def build_blender_materials(edgemodel, context):
             if slot is None:
                 continue
             socket_name, color_space = slot
-            bl_image = tex_mapping[texture_path]
+            bl_image = tex_mapping.get(texture_path)
+            if bl_image is None:  # unreachable texture, already reported
+                continue
             bl_image.colorspace_settings.name = color_space
 
             texture_node = node_tree.nodes.new("ShaderNodeTexImage")

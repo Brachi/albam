@@ -100,7 +100,13 @@ def build_blender_textures(texture_paths, context):
     vfs = context.scene.albam.vfs
     tex_mapping = {}
     for path in texture_paths:
-        texture_vfile = vfs.get_vfile("reorc", path)
+        # Unreachable textures are skipped, not fatal - see
+        # material.build_blender_materials for when that happens.
+        try:
+            texture_vfile = vfs.get_vfile("reorc", path)
+        except KeyError:
+            print(f"[{path}] texture not found, skipping")
+            continue
         texture_bytes = texture_vfile.get_bytes()
         dds_header = DDSHeader()
         io.BytesIO(texture_bytes).readinto(dds_header)
