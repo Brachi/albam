@@ -3,23 +3,15 @@ Tests for albam/__init__.py's register()/unregister() - the addon's Blender-
 facing enable/disable entry points. Real Blender calls these whenever the
 user (or Blender itself, e.g. on an addon update) disables and re-enables
 the addon within a single session, so unregister() must undo everything
-register() did to shared, session-lived state - not just the bpy classes -
-or repeated enable/disable cycles leak state that keeps growing.
+register() did - both the bpy classes it registered and the shared,
+session-lived state it touched - or repeated enable/disable cycles crash
+outright or leak state that keeps growing.
 
 These tests drive register()/unregister() from a subprocess rather than the
-live pytest process. This session's own register() already ran once (see
-tests/conftest.py's pytest_sessionstart), and a second in-process
-register()/unregister()/register() cycle collides with a separate,
-pre-existing bug: AlbamCustomPropertiesFactory (albam/blender_ui/
-custom_properties.py) appends freshly-generated dynamic Panel classes to
-blender_registry.types on every register() call without ever clearing the
-previous cycle's entries, so a later unregister() call trips over stale,
-already-invalidated bl_rna and raises RuntimeError - unrelated to the
-load_post handler bug these tests target, but real, and out of scope here.
-Running each scenario in its own fresh subprocess (a single unregister()
-call per process, so that latent bug never gets a chance to fire) sidesteps
-it entirely while still exercising the real register()/unregister()
-functions end to end, and can't corrupt this session's shared bpy state.
+live pytest process: this session already called register() once of its own
+(see tests/conftest.py's pytest_sessionstart), so cycling it again in-process
+would corrupt that shared session instead of just failing cleanly. Each
+scenario gets its own fresh subprocess.
 """
 import ast
 import subprocess
@@ -53,6 +45,35 @@ def _run(script):
         f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
     )
     return result.stdout.strip().splitlines()[-1]
+
+
+def test_register_unregister_survives_a_second_cycle():
+    """
+    AlbamCustomPropertiesFactory() (albam/blender_ui/custom_properties.py)
+    rebuilds its dynamic PropertyGroup/Panel classes from scratch on every
+    register() call, unlike the classes collected via the
+    @blender_registry.register_blender_prop/register_blender_type decorators,
+    which only run once per process (at module import time). A second
+    register() therefore used to leave stale, already-unregistered class
+    objects with reused bl_idnames sitting in blender_registry.types, and the
+    following unregister() crashed on the first one it hit with:
+
+        RuntimeError: unregister_class(...):, missing bl_rna attribute from
+        '_RNAMeta' instance (may not be registered)
+    """
+    output = _run(
+        """
+        import bpy
+        from albam import register, unregister
+
+        register()
+        unregister()
+        register()
+        unregister()
+        print("cycles ok")
+        """
+    )
+    assert output == "cycles ok"
 
 
 def test_unregister_removes_load_post_handlers_it_added():
