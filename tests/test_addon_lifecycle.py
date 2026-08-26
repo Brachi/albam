@@ -21,6 +21,7 @@ call per process, so that latent bug never gets a chance to fire) sidesteps
 it entirely while still exercising the real register()/unregister()
 functions end to end, and can't corrupt this session's shared bpy state.
 """
+import ast
 import subprocess
 import sys
 import textwrap
@@ -55,34 +56,37 @@ def _run(script):
 
 
 def test_unregister_removes_load_post_handlers_it_added():
-    # register() appends its own handler function(s) to
+    # register() appends its own handler functions to
     # bpy.app.handlers.load_post - a plain list Blender calls in full on
     # every .blend load. unregister() must remove exactly what register()
     # added, so a register()/unregister()/register() cycle (an addon
-    # disable followed by a re-enable) doesn't leave a duplicate behind
-    # that fires twice on every future load.
+    # disable followed by a re-enable) doesn't leave duplicates behind
+    # that fire twice on every future load.
     output = _run(
         """
         import bpy
-        from albam import register, unregister
-        from albam.data_loading import populate_albam_data
+        from albam import LOAD_POST_HANDLERS, register, unregister
+
+        def counts():
+            return [bpy.app.handlers.load_post.count(h) for h in LOAD_POST_HANDLERS]
 
         register()  # simulates the addon already being enabled
-        before = bpy.app.handlers.load_post.count(populate_albam_data)
+        before = counts()
 
         unregister()  # disable
-        after_unregister = bpy.app.handlers.load_post.count(populate_albam_data)
+        after_unregister = counts()
 
         register()  # re-enable
-        after_reregister = bpy.app.handlers.load_post.count(populate_albam_data)
+        after_reregister = counts()
 
-        print(before, after_unregister, after_reregister)
+        print((len(LOAD_POST_HANDLERS), before, after_unregister, after_reregister))
         """
     )
-    before, after_unregister, after_reregister = (int(x) for x in output.split())
-    assert before == 1
-    assert after_unregister == 0, "unregister() left its load_post handler registered"
-    assert after_reregister == 1, "re-registering after unregister() produced a duplicate handler"
+    num_handlers, before, after_unregister, after_reregister = ast.literal_eval(output)
+    assert num_handlers, "register() no longer tracks any load_post handler"
+    assert before == [1] * num_handlers
+    assert after_unregister == [0] * num_handlers, "unregister() left a load_post handler registered"
+    assert after_reregister == [1] * num_handlers, "re-registering produced duplicate handlers"
 
 
 def test_unregister_tolerates_an_already_removed_load_post_handler():
@@ -93,11 +97,10 @@ def test_unregister_tolerates_an_already_removed_load_post_handler():
     output = _run(
         """
         import bpy
-        from albam import register, unregister
-        from albam.data_loading import populate_albam_data
+        from albam import LOAD_POST_HANDLERS, register, unregister
 
         register()
-        bpy.app.handlers.load_post.remove(populate_albam_data)
+        bpy.app.handlers.load_post.remove(LOAD_POST_HANDLERS[0])
 
         unregister()  # must not raise
         print("ok")

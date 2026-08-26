@@ -5,6 +5,7 @@ import zlib
 from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
+from ...lib.kaitai_utils import check_recursive
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
@@ -87,7 +88,6 @@ def _serialize_arc(exported):
     header.ident = b"ARC\00"
     header.version = 7
     header.num_files = len(exported)
-    header._check()
     arc.header = header
     file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
 
@@ -101,12 +101,11 @@ def _serialize_arc(exported):
         file_entry.flags = 2
         file_entry.offset = file_offset
         file_entry.raw_data = fe.raw_data
-        file_entry._check()
         arc.file_entries.append(file_entry)
         file_offset += file_entry.zsize
 
     arc.padding = bytearray(32760 - (header.num_files * 80) % 32768)
-    arc._check()
+    check_recursive(arc)
 
     stream = KaitaiStream(io.BytesIO(bytearray(file_offset)))
     arc._write(stream)
