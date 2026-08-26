@@ -338,6 +338,19 @@ class LMTKeyframeBounds:
         ))
 
 
+def _get_action_channels(action, armature):
+    """The container an action keeps its fcurves and groups in.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=armature.name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 @blender_registry.register_import_function(app_id="re0", extension='lmt', albam_asset_type="ANIMATION")
 @blender_registry.register_import_function(app_id="re1", extension='lmt', albam_asset_type="ANIMATION")
 @blender_registry.register_import_function(app_id="re5", extension='lmt', albam_asset_type="ANIMATION")
@@ -370,19 +383,7 @@ def load_lmt(vfile, context):
         name = f"{armature.name}.{vfile.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
-        channelbag = None
-
-        if BLENDER_VERSION[0] >= '5':
-            anim_data = armature.animation_data_create()
-            anim_data.action = action
-            slot = action.slots.new(id_type='OBJECT', name=armature.name)
-
-            from bpy_extras.anim_utils import action_ensure_channelbag_for_slot
-
-            channelbag = action_ensure_channelbag_for_slot(
-                action,
-                slot,  # anim_data.action_slot,
-            )
+        channels = _get_action_channels(action, armature)
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]
@@ -473,7 +474,7 @@ def load_lmt(vfile, context):
                     keyframes.decoded_frames, armature, bone_index)
 
             err = _create_blender_action(
-                action, keyframes, bone_index, track_type, block_index, track_index, channelbag)
+                action, keyframes, bone_index, track_type, block_index, track_index, channels)
             if err:
                 continue
         # building custom attributes of lmt metadata
@@ -519,21 +520,16 @@ def load_lmt(vfile, context):
     return bl_object
 
 
-def _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index, channelbag):
+def _create_blender_action(action, keyframes, bone_index, track_type, block_index, track_index, channels):
     data_path = f"pose.bones[\"{bone_index}\"].{track_type}"
     num_curv = 4 if track_type == "rotation_quaternion" else 3
-    group = None
 
-    if BLENDER_VERSION[0] < '5':
-        group_name = str(bone_index)
-        group = action.groups.get(group_name) or action.groups.new(group_name)
-    else:
-        action = channelbag
+    group_name = str(bone_index)
+    group = channels.groups.get(group_name) or channels.groups.new(group_name)
     try:
-        curves = [action.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
-        if group is not None:
-            for c in curves:
-                c.group = group
+        curves = [channels.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
+        for c in curves:
+            c.group = group
     except RuntimeError as err:
         print('unknown error:', err, "Block index: {0}, Track index:{1}".format(
             block_index, track_index))
