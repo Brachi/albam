@@ -10,9 +10,10 @@ exposing each real clip inside a *.anims.ssg as its own ".animclip"
 virtual leaf). It resolves the clip's referenced skeleton by name (via
 albam.engines.hexn.skeleton.build_blender_skeleton_by_stem), reusing an
 already-imported armature of the same name if one exists in the scene
-rather than building a duplicate - "<skeleton_name>_skeleton" is exactly
-what albam.engines.hexn.mesh.build_blender_model already names one - then
-decodes and applies the clip via decode_clip()/build_blender_action().
+rather than building a duplicate: both this and
+albam.engines.hexn.mesh.build_blender_model name an armature through
+skeleton.armature_name_for(), so they agree by construction - then decodes
+and applies the clip via decode_clip()/build_blender_action().
 
 build_blender_action() itself stays self-contained per its own docstring
 (takes an already-built armature object rather than building one), so
@@ -54,7 +55,7 @@ from mathutils import Quaternion, Vector
 
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
-from .skeleton import build_blender_skeleton_by_stem
+from .skeleton import armature_name_for, build_blender_skeleton_by_stem
 from .structs.hexane_anims import HexaneAnims
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
@@ -83,12 +84,11 @@ def import_anim_clip(vfile, context):
 
     decoded = decode_clip(clip_bytes, name=clip_path, skeleton_name=skeleton_name)
 
-    armature_name = f"{skeleton_name}_skeleton"
-    armature_object = bpy.data.objects.get(armature_name)
+    armature_object = bpy.data.objects.get(armature_name_for(skeleton_name))
     if armature_object is not None and armature_object.type == "ARMATURE":
         bone_names = [pose_bone.name for pose_bone in armature_object.pose.bones]
     else:
-        armature_object, bone_names = build_blender_skeleton_by_stem(context, skeleton_name, armature_name)
+        armature_object, bone_names = build_blender_skeleton_by_stem(context, skeleton_name)
 
     if armature_object is None:
         raise ValueError(

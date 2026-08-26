@@ -21,7 +21,7 @@ def build_blender_model(vfile, context):
     edgemodel = HexaneEdgemodel.from_bytes(edgemodel_bytes)
     edgemodel._read()
     bl_object_name = vfile.display_name
-    skeleton, bone_names = build_blender_skeleton(vfile, context, f"{bl_object_name}_skeleton")
+    skeleton, bone_names = build_blender_skeleton(vfile, context)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     bl_materials = build_blender_materials(edgemodel, context)
 

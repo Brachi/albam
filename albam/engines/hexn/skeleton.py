@@ -81,35 +81,43 @@ def infer_skeleton_vfile(context, edgemodel_vfile):
     return _find_skel_vfile(vfs, stem)
 
 
-def build_blender_skeleton(edgemodel_vfile, context, armature_name):
+def armature_name_for(stem):
+    """The armature name a skeleton gets, from its own stem.
+
+    Both entry points below go through this, and so does
+    albam.engines.hexn.animation when it looks for an armature already in
+    the scene: a mesh import and a clip import of the same character have
+    to land on the same name, or importing a clip after its model builds a
+    second armature and animates that one instead.
+    """
+    return f"{stem}_skeleton"
+
+
+def build_blender_skeleton(edgemodel_vfile, context):
     """Returns (armature_ob, bone_names) for the .edgemodel's matching skel
     file, or (None, None) when there isn't one (e.g. a weapon/prop
     .edgemodel with no skeleton at all) - tolerate-absence convention
     mirrors albam.engines.mtfw.material._infer_mrl() and
     albam.engines.reng.material._get_heuristic_mdf_names().
     """
-    skel_vfile = infer_skeleton_vfile(context, edgemodel_vfile)
-    if skel_vfile is None:
-        return None, None
-
-    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)
+    stem = PureWindowsPath(edgemodel_vfile.relative_path).stem
+    return build_blender_skeleton_by_stem(context, stem)
 
 
-def build_blender_skeleton_by_stem(context, stem, armature_name):
-    """Same as build_blender_skeleton(), but for a caller that already
-    knows the skeleton's own stem directly - e.g.
-    albam.engines.hexn.animation, which gets it straight from a clip's own
-    "<clip_path>--<skeleton_name>" name, with no .edgemodel vfile at hand
-    to derive it from the way infer_skeleton_vfile() does. Returns
-    (None, None) the same way when _find_skel_vfile() can't find the
-    skeleton under either of its two addressable paths.
+def build_blender_skeleton_by_stem(context, stem):
+    """Same as build_blender_skeleton(), for a caller that already knows
+    the skeleton's own stem - e.g. albam.engines.hexn.animation, which
+    gets it straight from a clip's own "<clip_path>--<skeleton_name>"
+    name, with no .edgemodel vfile to derive it from. Returns (None, None)
+    the same way when _find_skel_vfile() can't find the skeleton under
+    either of its two addressable paths.
     """
     vfs = context.scene.albam.vfs
     skel_vfile = _find_skel_vfile(vfs, stem)
     if skel_vfile is None:
         return None, None
 
-    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)
+    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name_for(stem))
 
 
 def _build_blender_skeleton_from_vfile(skel_vfile, armature_name):
