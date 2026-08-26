@@ -11,7 +11,15 @@ import subprocess
 import sys
 
 
+# bpy segfaults during interpreter finalization once register() has run
+# (reproducible under 4.2 with a single register() and no unregister() at
+# all), so the subprocess ends with os._exit() to skip finalization
+# altogether - otherwise its exit status says nothing about the cycles.
+# .github/workflows/tests.yml works around the same thing for pytest itself.
 REGISTER_TWICE = """
+import os
+import sys
+
 import bpy
 from albam import register, unregister
 
@@ -20,6 +28,8 @@ unregister()
 register()
 unregister()
 print("cycles ok")
+sys.stdout.flush()
+os._exit(0)
 """
 
 
