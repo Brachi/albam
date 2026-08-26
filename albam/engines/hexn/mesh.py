@@ -1,4 +1,5 @@
 import struct
+from collections import defaultdict
 from itertools import chain
 
 import bpy
@@ -132,31 +133,23 @@ def _build_tangents(bl_mesh, tangents):
 
 def _build_weights(bl_obj, edge_mesh, bone_names=None):
     WEIGHT = struct.Struct("8B")
-    weights_per_vertex = {}
 
+    # One 8-byte record per vertex: four weights, then the four bone
+    # indices they belong to. A zero weight means the slot is unused; the
+    # bone index alone says nothing - 0 is the skeleton's root, a real
+    # bone that real vertices are weighted to (whole meshes are weighted
+    # to it alone).
+    weights_per_bone = defaultdict(list)
     for i in range(0, edge_mesh.size_buffer_weights, WEIGHT.size):
-        wv_and_bi = WEIGHT.unpack_from(edge_mesh.buffer_weights, i)
-        weightsval = wv_and_bi[0:4]
-        boneindices = wv_and_bi[4:8]
-        test = zip(boneindices, weightsval)
-        weights_per_vertex[i // 8] = tuple(test)
+        record = WEIGHT.unpack_from(edge_mesh.buffer_weights, i)
+        for bone_index, weight_value in zip(record[4:8], record[0:4]):
+            if weight_value:
+                weights_per_bone[bone_index].append((i // WEIGHT.size, weight_value))
 
-    wperbone = {}
-    for vertex, tuples in weights_per_vertex.items():
-        for bone, value in tuples:
-            if value != 0 and bone != 0 and bone not in wperbone:
-                wperbone[bone] = []
-                wperbone[bone].append((vertex, value))
-            elif value != 0 and bone != 0 and bone in wperbone:
-                wperbone[bone].append((vertex, value))
-
-    for bone_index, data in wperbone.items():
-        # Real vertex weight bone indices range over the skeleton's full
-        # node_count (confirmed against a real sample: max bone index
-        # matches its skel file's node_count - 1 exactly, and edge_header's
-        # own num_bones field independently matches node_count too - see
-        # skel.ksy's node_count doc), so a matching bone_names[bone_index]
-        # is always a real bone name whenever a skeleton was found at all.
+    for bone_index, data in weights_per_bone.items():
+        # Bone indices range over the skeleton's full node_count (see
+        # skel.ksy's node_count), so bone_names[bone_index] is a real bone
+        # name whenever a skeleton was found at all.
         if bone_names and bone_index < len(bone_names):
             vg_name = bone_names[bone_index]
         else:
