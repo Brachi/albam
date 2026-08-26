@@ -99,7 +99,7 @@ class SsgFS(FS):
         self.ssg_path = str(ssg_path)
         self._opener = opener or _local_opener
 
-        ssg, self._struct_cls = self._parse_header()
+        ssg, self._struct_cls, archive_size = self._parse_header()
         self._sizes = {}
         self._offsets = {}
         # Paths whose content is the whole raw file rather than a
@@ -136,7 +136,12 @@ class SsgFS(FS):
             path = "/" + (name + ANIM_CLIP_EXTENSION if is_anim_clip else name)
             if is_skeleton:
                 self._raw_file_paths.add(path)
-            self._sizes[path] = file_info.size
+            # A raw entry's content is the whole archive (see the comment
+            # above), so that is its size from the start - reporting
+            # file_info.size until the first read and the real size after
+            # would make getinfo() answer differently depending on whether
+            # anything had been read yet.
+            self._sizes[path] = archive_size if is_skeleton else file_info.size
             self._offsets[path] = offset
 
             parts = path.strip("/").split("/")
@@ -186,7 +191,7 @@ class SsgFS(FS):
         Names are sliced directly out of ssg.file_names (already a fully-
         read bytes value) instead of via file_info.name, a lazy Kaitai
         instance that would otherwise re-seek the stream per file - a real
-        cost across a real install's ~1300 archives and ~150k+ files.
+        cost across a real install's ~2000 archives and ~40k files.
 
         Tries the regular little-endian HexaneSsg first (every real
         non-anims .ssg); HexaneAnims (big-endian - see this module's own
@@ -200,12 +205,14 @@ class SsgFS(FS):
         except Exception:
             f, ssg = self._open_and_parse(HexaneAnims)
             struct_cls = HexaneAnims
+        f.seek(0, os.SEEK_END)
+        archive_size = f.tell()
         f.close()
         file_names = ssg.file_names
         for file_info in ssg.files_info:
             end = file_names.index(b"\x00", file_info.name_offset_rel)
             file_info.name = file_names[file_info.name_offset_rel:end].decode("ascii")
-        return ssg, struct_cls
+        return ssg, struct_cls, archive_size
 
     def _ensure_decompressed(self):
         """Decompress the whole archive once, on the first read of any file
@@ -230,7 +237,6 @@ class SsgFS(FS):
             if self._data is not None:
                 return
             data = {}
-            sizes = {}
 
             # A skeleton entry's content is the whole raw file (see
             # __init__'s own comment on _raw_file_paths) - read it directly
@@ -243,7 +249,6 @@ class SsgFS(FS):
                 finally:
                     f.close()
                 data[path] = raw
-                sizes[path] = len(raw)
 
             remaining = self._offsets.keys() - self._raw_file_paths
             if remaining:
@@ -275,7 +280,6 @@ class SsgFS(FS):
                     offset = self._offsets[path]
                     data[path] = bytes(uncompressed[offset:offset + self._sizes[path]])
 
-            self._sizes.update(sizes)
             self._data = data
 
     def close(self):
@@ -502,8 +506,8 @@ class HexnFS(MultiFS):
         HexnFS.from_s3() instance (forward slashes either way) - or None if
         it's a loose/real file (or doesn't resolve at all). Mirrors
         albam.engines.mtfw.arc_fs.MTFW_FS.origin_of(). No index/caching like
-        MTFW_FS's - a real install here is on the order of hundreds of .ssg
-        files, not ~1000+ .arc, so a linear which() scan per lookup is fine.
+        MTFW_FS's - a real install here has ~2000 .ssg, so a linear which()
+        scan per lookup is fine.
         """
         owner_fs = self._owning_ssg_fs(path)
         if owner_fs is None:
