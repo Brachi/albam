@@ -19,6 +19,19 @@ ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
 
 
+def _get_action_channels(action, armature):
+    """The container an action keeps its fcurves and groups in.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=armature.name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 @blender_registry.register_import_function(app_id="re5", extension='lmt', albam_asset_type="ANIMATION")
 def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
@@ -39,6 +52,7 @@ def load_lmt(file_item, context):
         name = f"{armature.name}.{file_item.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
+        channels = _get_action_channels(action, armature)
 
         for track_index, track in enumerate(block.block_header.tracks):
             bone_index = mapping.get(str(track.bone_index))
@@ -75,11 +89,12 @@ def load_lmt(file_item, context):
                 continue
 
             group_name = str(bone_index)
-            group = action.groups.get(group_name) or action.groups.new(group_name)
+            group = channels.groups.get(group_name) or channels.groups.new(group_name)
             data_path = f"pose.bones[\"{bone_index}\"].{TRACK_MODE}"
             num_curv = len(decoded_frames[0])
             try:
-                curves = [action.fcurves.new(data_path=data_path, index=i) for i in range(num_curv)]
+                curves = [channels.fcurves.new(data_path=data_path, index=i)
+                          for i in range(num_curv)]
                 for c in curves:
                     c.group = group
             except RuntimeError as err:
