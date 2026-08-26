@@ -70,6 +70,10 @@ _MASK128 = (1 << 128) - 1
 GAME_TO_BLENDER = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 GAME_TO_BLENDER_INVERTED = GAME_TO_BLENDER.inverted()
 
+# bpy.types.Keyframe.interpolation's own enum value for 'LINEAR', for
+# foreach_set (which takes the number, not the name).
+LINEAR_INTERPOLATION = 1
+
 
 @blender_registry.register_import_function(app_id="reorc", extension="animclip", albam_asset_type="ANIMATION")
 def import_anim_clip(vfile, context):
@@ -103,9 +107,9 @@ def import_anim_clip(vfile, context):
 
     if armature_object is None:
         raise ValueError(
-            f"No skeleton found for {clip_path!r} (referenced skeleton: {skeleton_name!r}, expected "
-            f"dlc/pack1/Characters/skel/{skeleton_name}.ssg) - can't import an animation with no "
-            f"armature to apply it to."
+            f"No skeleton found for {clip_path!r}: nothing in the VFS is filed as "
+            f"skel/{skeleton_name} (see skeleton._find_skel_vfile), and an animation needs an "
+            f"armature to apply it to. Add the archive holding that skeleton and try again."
         )
 
     action_name = f"{skeleton_name}.{clip_path.rsplit('/', 1)[-1]}"
@@ -591,6 +595,8 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
         ] if has_rotation else []
 
         prev_rotation = None
+        loc_values = [[] for _ in loc_curves]
+        rot_values = [[] for _ in rot_curves]
         for frame in range(decoded_clip.num_frames):
             position = positions[frame] if has_translation else rest_position
             rotation = rotations[frame] if has_rotation else rest_rotation
@@ -606,13 +612,32 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
                 local_rot = -local_rot
             prev_rotation = local_rot
 
-            for i, curve in enumerate(loc_curves):
-                curve.keyframe_points.add(1)
-                curve.keyframe_points[-1].co = (frame, local_pos[i])
-                curve.keyframe_points[-1].interpolation = 'LINEAR'
-            for i, curve in enumerate(rot_curves):
-                curve.keyframe_points.add(1)
-                curve.keyframe_points[-1].co = (frame, local_rot[i])
-                curve.keyframe_points[-1].interpolation = 'LINEAR'
+            for i, values in enumerate(loc_values):
+                values.append(local_pos[i])
+            for i, values in enumerate(rot_values):
+                values.append(local_rot[i])
+
+        for curve, values in zip(loc_curves + rot_curves, loc_values + rot_values):
+            _write_keyframes(curve, values)
 
     return action
+
+
+def _write_keyframes(fcurve, values):
+    """Write one value per frame onto `fcurve`, frame 0 upwards.
+
+    In bulk: adding and filling points one at a time costs an order of
+    magnitude more for the same result (a 105-bone, 201-frame clip is
+    ~147k points). fcurve.update() at the end is what sorts the points and
+    computes their handles - without it they stay at (0, 0), which is
+    invisible while the keys interpolate linearly and garbage the moment
+    anything switches a curve to Bezier.
+    """
+    keyframe_points = fcurve.keyframe_points
+    keyframe_points.add(len(values))
+    coordinates = []
+    for frame, value in enumerate(values):
+        coordinates += [frame, value]
+    keyframe_points.foreach_set("co", coordinates)
+    keyframe_points.foreach_set("interpolation", [LINEAR_INTERPOLATION] * len(values))
+    fcurve.update()
