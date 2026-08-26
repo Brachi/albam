@@ -139,7 +139,7 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
     keys at frame_index + 1).
 
     load_lmt() only wires the action up as armature.animation_data.action
-    for Blender 5+ (its `if BLENDER_VERSION[0] >= '5':` branch) - on
+    for Blender 5+ (via _get_action_channels()) - on
     Blender 4.x it stops at animation_data_create() and leaves assigning
     the action up to the caller (see custom_props.action below), which is
     exactly what applying this pose for a render requires doing by hand.
@@ -171,5 +171,5 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
         assert fcurve.keyframe_points[0].co[0] == 1
 
     # animation_data_create() is always called for a populated block (see
-    # load_lmt()), independent of the BLENDER_VERSION branch above.
+    # load_lmt()), independent of the channel container above.
     assert armature.animation_data is not None

@@ -72,8 +72,6 @@ KEYFRAME_TYPES = {
     67: KEYFRAME_TYPES_67
 }
 
-BLENDER_VERSION = bpy.app.version_string
-
 
 # Unused for now but maybe LMTQuadraticVector3 will need it
 class LMTUniKey:
@@ -834,6 +832,27 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_store
         item.raw_data = et.data
 
 
+def _get_action_fcurves(action, armature):
+    """Every fcurve `action` holds, whichever container it keeps them in.
+
+    Blender 4.4 moved fcurves into one channelbag per slot and 5.0 removed
+    the flat Action.fcurves shortcut. Slots are ordered by creation, so the
+    armature's channelbag is not necessarily the first, and an action that
+    has never been keyed has no layers at all - hence walking them all
+    rather than indexing. Callers filter by data_path anyway, so channels
+    belonging to another slot are ignored rather than mistaken for bones.
+    """
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [
+        fcurve
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+        for fcurve in channelbag.fcurves
+    ]
+
+
 def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = _create_bone_mapping(armature)
     mapping = {value: key for key, value in mapping.items()}
@@ -845,10 +864,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
             num_frames = int(action.frame_range[1])
-            if int(BLENDER_VERSION[0]) >= 5:
-                fcurves = action.layers[0].strips[0].channelbags[0].fcurves
-            else:
-                fcurves = action.fcurves
+            fcurves = _get_action_fcurves(action, armature)
             for fcurve in fcurves:
                 path = fcurve.data_path
                 index = fcurve.array_index
