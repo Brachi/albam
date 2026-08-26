@@ -158,6 +158,12 @@ class VirtualFileSystemBase:
         resolve its `tree_node.root_id` back to the *first* root - reading
         its bytes from the wrong FS (ResourceNotFound) and listing its
         children under the wrong node in the tree UI.
+
+        Node ids themselves are still `app_id::<path parts>` with no root
+        in them (see Tree), so two roots holding the *same* internal path
+        still give get_vfile()/select_vfile() only the first root's copy.
+        Reading either one's bytes works; addressing the second by path
+        does not.
         """
         root_name = f"{app_id}{self.SEPARATOR}{display_name}"
         if root_name not in self.file_list:

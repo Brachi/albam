@@ -68,8 +68,10 @@ def build_blender_materials(edgemodel, context):
         # a _d diffuse map's Alpha is wired below whenever the texture has
         # one (hair cards etc. use it as a cutout mask; solid DXT1 diffuse
         # maps decode Alpha as a flat 1.0, so this is a no-op for those).
-        # CLIP over the default HASHED/dithered blend gives a clean, stable
-        # cutout edge instead of per-pixel dither noise.
+        # Blender 5.x accepts "CLIP" here but stores HASHED - the
+        # per-material control it kept is alpha_threshold, with dithered
+        # vs blended now living on the material's render method. Set the
+        # same way albam.engines.mtfw.material does.
         bl_material.blend_method = "CLIP"
         node_tree = bl_material.node_tree
         bsdf = next(node for node in node_tree.nodes if node.type == "BSDF_PRINCIPLED")

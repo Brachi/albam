@@ -110,7 +110,11 @@ def build_blender_mesh(mesh_header, name, bl_materials, bone_names=None):
         current_offset += vertex_stride
 
     indices = struct.unpack_from(f'{edge_mesh.size_buffer_indices // 2}H', edge_mesh.buffer_indices)
-    assert min(indices) >= 0, "Bad face indices"
+    # They're unsigned, so the only way they can be bad is by pointing
+    # past the vertex buffer - from_pydata would build a broken mesh.
+    assert not indices or max(indices) < edge_mesh.num_vertices, (
+        f"face index {max(indices)} outside this mesh's {edge_mesh.num_vertices} vertices"
+    )
     indices = chunks(indices, 3)
     indices = [triplet for triplet in indices
                if (triplet != (0, 0) and triplet != (0, 0, 0) and triplet != (0, ))]
