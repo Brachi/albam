@@ -37,6 +37,7 @@ every other importable leaf here is dispatched by extension.
 """
 import io
 import os
+import threading
 import zlib
 from collections import OrderedDict, defaultdict
 
@@ -155,6 +156,7 @@ class SsgFS(FS):
             offset += file_info.size + padding
 
         self._data = None  # populated lazily - see _ensure_decompressed()
+        self._decompress_lock = threading.Lock()
 
     def _open_and_parse(self, struct_cls):
         """Open the archive and read everything up to (not including)
@@ -168,8 +170,12 @@ class SsgFS(FS):
         _parse_header() below avoids it entirely).
         """
         f = self._opener(self.ssg_path)
-        ssg = struct_cls(KaitaiStream(f))
-        ssg._read()
+        try:
+            ssg = struct_cls(KaitaiStream(f))
+            ssg._read()
+        except Exception:
+            f.close()  # the caller only owns the handle once it gets one
+            raise
         return f, ssg
 
     def _parse_header(self):
@@ -202,59 +208,82 @@ class SsgFS(FS):
         return ssg, struct_cls
 
     def _ensure_decompressed(self):
-        if self._data is not None:
-            return
+        """Decompress the whole archive once, on the first read of any file
+        in it, and keep the result for the life of this instance.
 
-        self._data = {}
+        The cache is built locally and published at the end: a failure
+        part-way through (a corrupt chunk, a truncated read) would
+        otherwise leave a non-None, half-filled cache behind, and every
+        later read of this archive would raise KeyError for a file that is
+        perfectly readable rather than retrying or reporting the real
+        error. The lock keeps two threads from doing the work twice or
+        from seeing the cache mid-build, which is what this class's own
+        _meta["thread_safe"] promises.
 
-        # A skeleton entry's content is the whole raw file (see __init__'s
-        # own comment on _raw_file_paths) - read it directly rather than
-        # through the outer container's buffer_chunks slicing, which this
-        # file only coincidentally also parses as.
-        for path in self._raw_file_paths:
-            f = self._opener(self.ssg_path)
-            try:
-                raw = f.read()
-            finally:
-                f.close()
-            self._data[path] = raw
-            self._sizes[path] = len(raw)
+        Memory: the archives here decompress to 8.7 GB across a whole
+        install, hundreds of MB for the largest single one, and nothing
+        evicts. Reading one small file out of a big archive therefore
+        holds that archive's whole uncompressed size until the FS instance
+        goes away - close() drops it.
+        """
+        with self._decompress_lock:
+            if self._data is not None:
+                return
+            data = {}
+            sizes = {}
 
-        remaining = self._offsets.keys() - self._raw_file_paths
-        if not remaining:
-            return
+            # A skeleton entry's content is the whole raw file (see
+            # __init__'s own comment on _raw_file_paths) - read it directly
+            # rather than through the outer container's buffer_chunks
+            # slicing, which this file only coincidentally also parses as.
+            for path in self._raw_file_paths:
+                f = self._opener(self.ssg_path)
+                try:
+                    raw = f.read()
+                finally:
+                    f.close()
+                data[path] = raw
+                sizes[path] = len(raw)
 
-        f, ssg = self._open_and_parse(self._struct_cls)
-        try:
-            buffer_chunks = ssg.buffer_chunks  # triggers the lazy seek+read
-            if ssg.chunk_sizes:
-                uncompressed = bytearray()
-                compressed_pos = 0
-                for chunk_size in ssg.chunk_sizes:
-                    if not chunk_size:
-                        continue
-                    chunk = buffer_chunks[compressed_pos:compressed_pos + chunk_size]
-                    uncompressed.extend(zlib.decompress(chunk))
-                    compressed_pos += chunk_size
-            else:
-                # No chunk table (size_chunks_info == 0) - buffer_chunks is
-                # stored raw/uncompressed in this case, not zlib-compressed
-                # at all. Confirmed for the regular little-endian format by
-                # decoding a known entry's expected magic (b"FM6S") directly
-                # out of the raw bytes at its computed offset - zlib.decompress
-                # on the whole blob fails outright ("incorrect header
-                # check"), and the total uncompressed size every files_info
-                # entry needs matches size_chunks_buffer exactly, consistent
-                # with "no compression happened here". Also always true for
-                # HexaneAnims - see this module's own doc (size_chunks_info
-                # is always 0 on every real *.anims.ssg found).
-                uncompressed = buffer_chunks
-        finally:
-            f.close()
+            remaining = self._offsets.keys() - self._raw_file_paths
+            if remaining:
+                f, ssg = self._open_and_parse(self._struct_cls)
+                try:
+                    buffer_chunks = ssg.buffer_chunks  # triggers the lazy seek+read
+                    if ssg.chunk_sizes:
+                        uncompressed = bytearray()
+                        compressed_pos = 0
+                        for chunk_size in ssg.chunk_sizes:
+                            if not chunk_size:
+                                continue
+                            chunk = buffer_chunks[compressed_pos:compressed_pos + chunk_size]
+                            uncompressed.extend(zlib.decompress(chunk))
+                            compressed_pos += chunk_size
+                    else:
+                        # No chunk table (size_chunks_info == 0): buffer_chunks
+                        # is stored raw, not zlib-compressed - zlib.decompress
+                        # on it fails outright, an entry's expected magic reads
+                        # correctly straight out of it at its computed offset,
+                        # and the total size every files_info entry needs
+                        # matches size_chunks_buffer exactly. Always the case
+                        # for HexaneAnims too (see this module's own doc).
+                        uncompressed = buffer_chunks
+                finally:
+                    f.close()
 
-        for path in remaining:
-            offset = self._offsets[path]
-            self._data[path] = bytes(uncompressed[offset:offset + self._sizes[path]])
+                for path in remaining:
+                    offset = self._offsets[path]
+                    data[path] = bytes(uncompressed[offset:offset + self._sizes[path]])
+
+            self._sizes.update(sizes)
+            self._data = data
+
+    def close(self):
+        """Drop the decompressed archive (see _ensure_decompressed) along
+        with the usual fs.base.FS teardown, so a caller done with an
+        archive isn't holding its uncompressed bytes."""
+        self._data = None
+        super().close()
 
     def __repr__(self):
         return f"SsgFS({self.ssg_path!r})"
