@@ -147,11 +147,11 @@ class SsgFS(FS):
 
             # Both formats sharing the big-endian container pack their
             # entries with no padding at all, unlike the regular
-            # little-endian format's size_padding-driven gaps - confirmed
-            # for .anims.ssg against the verified dataset (see
-            # structs/anims.ksy); skel/*.ssg only ever has one entry, so
-            # padding is moot there either way.
-            padding = 0 if is_be_container else (-file_info.size % ssg.size_padding)
+            # little-endian format's size_padding-driven gaps (see
+            # structs/anims.ksy). id_magic 5 archives are unpadded too -
+            # they carry size_padding == 0.
+            padding = (0 if is_be_container or not ssg.size_padding
+                       else -file_info.size % ssg.size_padding)
             offset += file_info.size + padding
 
         self._data = None  # populated lazily - see _ensure_decompressed()
@@ -342,9 +342,7 @@ def _ssg_priority(ssg_path):
     ever resolves a path no other (real-priority) archive already claims -
     real content always wins on a shared path, while any path that turns
     out to exist *only* inside an info-only archive still resolves
-    instead of disappearing outright (confirmed real on this install: some
-    weapon .edgemodel paths, e.g. wep_railgun, exist only as an "IM6S"
-    stub with no real-content archive backing them at all).
+    instead of disappearing outright.
     """
     if _is_info_only_ssg(ssg_path):
         return -1
