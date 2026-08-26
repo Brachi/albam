@@ -172,11 +172,11 @@ def _first_set_bit(v, width):
 
 
 def _last_set_bit(v, width):
-    """Position (0 = MSB) of the lowest set bit in a `width`-bit value, or
-    `width - 1` (matching the reference's uint32(-1) sentinel wrapping
-    back to -1 under the width-bit arithmetic it's always combined with -
-    see _bracketing_keyframes) if v == 0. Ported from
-    anim_get_last_set_bit_32/128 (v & -v isolates the lowest set bit)."""
+    """Position (0 = MSB) of the lowest set bit in a `width`-bit value,
+    or -1 if there is none - the sentinel _bracketing_keyframes expects,
+    where it means "no earlier key" under the width-bit arithmetic it is
+    combined with. Ported from anim_get_last_set_bit_32/128 (v & -v
+    isolates the lowest set bit)."""
     if v == 0:
         return -1
     return _first_set_bit(v & -v, width)
@@ -227,7 +227,12 @@ def parse_clip_name(file_info_name):
     """Splits a file_info.name ("<clip_path>--<skeleton_name>") into
     (clip_path, skeleton_name). See structs/anims.ksy's module doc for how
     this convention was confirmed."""
-    clip_path, _, skeleton_name = file_info_name.rpartition("--")
+    clip_path, separator, skeleton_name = file_info_name.rpartition("--")
+    if not separator:
+        # No "--" at all: the whole name is the clip's own path, and there
+        # is no skeleton to resolve. rpartition would otherwise hand the
+        # entire path back as the skeleton name.
+        return file_info_name, ""
     return clip_path, skeleton_name
 
 
@@ -457,7 +462,9 @@ def _decode_root_motion(clip, clip_bytes, bones):
 
 
 def _frame_set_index(frame_sets, frame):
-    left, right = 0, len(frame_sets) - 1
+    """Index of the frameset `frame` falls in: the last one whose
+    base_frame is at or before it."""
+    left, right = 0, len(frame_sets)
     while left + 1 < right:
         mid = (left + right) >> 1
         if frame < frame_sets[mid].base_frame:

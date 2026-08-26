@@ -192,14 +192,14 @@ BASELINE_TRANSLATION_CHANNELS = 25
 BASELINE_ROTATIONS = {
     (2, 0): (-0.167481, 0.698822, -0.398817, -0.569686),
     (2, 100): (-0.167488, 0.698843, -0.399321, -0.569305),
-    (2, 200): (-0.167488, 0.698829, -0.399141, -0.569449),
+    (2, 200): (-0.167481, 0.698822, -0.398817, -0.569686),
     (101, 0): (0.015775, -0.000237, 0.000281, 0.999875),
 }
 # (bone index, frame) -> (x, y, z)
 BASELINE_POSITIONS = {
     (1, 0): (0.0, 0.366452, 0.0),
     (1, 100): (0.0, 0.366889, 0.0),
-    (1, 200): (0.0, 0.366729, 0.0),
+    (1, 200): (0.0, 0.366452, 0.0),
 }
 
 
@@ -241,6 +241,14 @@ def test_decoded_values_match_the_recorded_baseline(game_fs_root, hash_to_path, 
     for (bone_index, frame), expected in BASELINE_POSITIONS.items():
         actual = decoded.bones[bone_index][0][frame]
         assert tuple(round(c, 6) for c in actual) == expected, f"bone {bone_index} frame {frame}"
+
+    # This clip is a looping idle, and it closes its loop: its last frame
+    # is its first, exactly. That only holds if the final frame resolves
+    # through the frameset that actually covers it.
+    last = decoded.num_frames - 1
+    for bone_index in (1, 2):
+        assert decoded.bones[bone_index][0][last] == decoded.bones[bone_index][0][0]
+        assert decoded.bones[bone_index][1][last] == decoded.bones[bone_index][1][0]
 
 
 def test_a_skeletons_own_bind_pose_poses_it_back_to_rest(game_fs_root, hash_to_path, local_app_id):
