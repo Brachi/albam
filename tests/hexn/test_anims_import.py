@@ -121,5 +121,11 @@ def test_import_applies_action_to_a_real_armature(game_fs_root, hash_to_path, lo
         "second import should have created its own new Action, not reused the first clip's"
     )
 
-    new_imported = [ob for ob in bpy.data.objects if ob not in before]
-    assert armature_ob in new_imported
+    # Not "the armature is new since `before`": whether this import is the
+    # one that creates it depends on whether an earlier test in the session
+    # already imported something for this same character. What matters here
+    # is that a clip import produces no *extra* objects beyond the armature
+    # it needs - asserted by the single-armature check above, plus no stray
+    # meshes or empties appearing.
+    added = [ob for ob in bpy.data.objects if ob not in before and ob is not armature_ob]
+    assert not added, f"a clip import should not create anything besides its armature, got {added}"

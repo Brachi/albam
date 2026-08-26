@@ -55,7 +55,8 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
-from .skeleton import armature_name_for, bone_names_from_armature, build_blender_skeleton_by_stem
+from .skeleton import (ROOT_PARENT, armature_name_for, bone_names_from_armature,
+                       build_blender_skeleton_by_stem, find_skel)
 from .structs.hexane_anims import HexaneAnims
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
@@ -112,8 +113,12 @@ def import_anim_clip(vfile, context):
             f"armature to apply it to. Add the archive holding that skeleton and try again."
         )
 
+    # The clip only describes the bones it moves; the rest have to hold
+    # their bind transform, which lives in the skel file (see
+    # build_blender_action).
+    skeleton = find_skel(context, skeleton_name)
     action_name = f"{skeleton_name}.{clip_path.rsplit('/', 1)[-1]}"
-    build_blender_action(armature_object, decoded, action_name, bone_names)
+    build_blender_action(armature_object, decoded, action_name, bone_names, skeleton=skeleton)
     return None
 
 
@@ -523,31 +528,46 @@ def _bracketing_keyframes(
     return key_a, key_b, num_bits, alpha
 
 
-def build_blender_action(armature_object, decoded_clip, action_name, bone_names):
+def build_blender_action(armature_object, decoded_clip, action_name, bone_names, skeleton=None):
     """Builds a bpy.types.Action from a DecodedClip (see decode_clip()) and
     assigns it to `armature_object.animation_data.action`.
 
     `armature_object`: a bpy.types.Object of type 'ARMATURE' built by
-    albam.engines.hexn.skeleton from the skeleton this clip references, so
-    that each pose bone's `.bone.matrix_local` is the bind pose the clip's
-    own values are measured against.
+    albam.engines.hexn.skeleton from the skeleton this clip references.
 
     `bone_names`: a sequence indexable 0..decoded_clip.num_bones-1 giving
     the pose bone name for each clip-internal bone index, or None to skip
-    that index. THIS INDEX ORDER IS AN ASSUMPTION, NOT CONFIRMED: it
-    assumes the skeleton importer preserves the skeleton file's own bone
-    order 1:1 into armature_object.pose.bones.
+    that index - see skeleton.bone_names_from_armature, which is where a
+    caller gets one that is actually in the file's own node order.
 
-    A clip stores each bone's transform in the game's own Y-up space,
-    relative to the bone's parent - the same thing the skel file stores
-    for the bind pose. What Blender wants in pose.bones[].location /
-    .rotation_quaternion is neither of those: it's the bone's own basis,
-    i.e. what to apply *on top of* its rest transform, in Blender's Z-up
-    space. So each frame's value is converted into Blender space and then
-    expressed against the rest pose (`rest.inverted() @ blender_local`),
-    which makes the result independent of how the skeleton importer chose
-    to orient its bones, and exact: feeding a skeleton's own bind pose
-    back in as a clip reproduces the rest pose to within 1e-6.
+    `skeleton`: the HexaneSkel the clip animates, needed because a clip
+    only describes the bones it moves, and what a bone *should* do when it
+    isn't described is "hold its bind transform" - which is in the skel
+    file, not recoverable from the armature (see below).
+
+    The three spaces involved, and why the naive route doesn't work: a
+    clip stores each bone's transform parent-relative in the game's Y-up
+    space, and so does the skel's own bind pose. The armature's rest pose
+    has the bind *positions* but not the bind orientations - skeleton.py
+    aims each bone at its own child so the rig reads as a skeleton, which
+    is a different frame per bone. Writing the game's transform straight
+    into a pose channel therefore poses the bones correctly in space while
+    rotating every vertex about the wrong axis, and leaves bones the clip
+    never mentions sitting in that invented frame, which their animated
+    children then compose on top of.
+
+    So what goes into a pose channel here is the *delta* from bind to
+    animated, both composed in the game's own space and then converted:
+
+        delta = S @ (animated_world @ bind_world.inverted()) @ S.inverted()
+        pose_world = delta @ rest_world
+        basis = rest_relative.inverted() @ parent_pose_world.inverted() @ pose_world
+
+    Skinning uses exactly that delta (`pose @ rest.inverted()`), so the
+    mesh deforms the way the game does it, whatever frame the importer
+    chose for its bones. A bone the clip doesn't mention has delta equal
+    to its parent's, which makes its basis the identity - Blender's own
+    hierarchy carries the motion down, and no keyframes are needed for it.
     """
     armature_object.animation_data_create()
     action = bpy.data.actions.new(action_name)
@@ -555,72 +575,149 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names)
     armature_object.animation_data.action = action
 
     pose_bones = armature_object.pose.bones
-    for bone_idx, (positions, rotations) in decoded_clip.bones.items():
+    bones = armature_object.data.bones
+    animated = {}
+    for bone_idx in sorted(decoded_clip.bones):
         if bone_idx >= len(bone_names):
             continue
-        bone_name = bone_names[bone_idx]
-        if bone_name is None or bone_name not in pose_bones:
-            continue
-        pose_bone = pose_bones[bone_name]
+        name = bone_names[bone_idx]
+        if name is not None and name in pose_bones:
+            animated[bone_idx] = name
 
-        rest = pose_bone.bone.matrix_local
-        if pose_bone.parent is not None:
-            rest = pose_bone.parent.bone.matrix_local.inverted() @ rest
-        rest_inverted = rest.inverted()
-        # The bind pose back in the game's own space, for whichever half of
-        # the transform this bone has no channel for.
-        rest_in_game_space = GAME_TO_BLENDER_INVERTED @ rest @ GAME_TO_BLENDER
-        rest_position = rest_in_game_space.to_translation()
-        rest_rotation = rest_in_game_space.to_quaternion()
+    if not animated:
+        return action
 
-        has_translation = bone_idx in decoded_clip.bones_with_translation
-        has_rotation = bone_idx in decoded_clip.bones_with_rotation
+    if skeleton is not None:
+        parents = [-1 if parent == ROOT_PARENT else parent for parent in skeleton.parents]
+        bind_local = [_game_matrix(transform) for transform in skeleton.local_transforms]
+    else:
+        # No skel file to hand: treat the armature's own rest pose as the
+        # bind pose. Self-consistent - a clip holding the bind transforms
+        # still poses the armature back to rest - but it cannot reproduce
+        # the game's skinning, because the rest orientations are the
+        # importer's, not the file's. Real imports always pass the skel.
+        parents, bind_local = _rest_as_bind(armature_object, bone_names)
+    bind_world = _compose(bind_local, parents)
+    bind_world_inverted = [matrix.inverted() for matrix in bind_world]
 
-        # Blender 5.x's layered Action data model has no direct
-        # action.fcurves/action.groups anymore (see mtfw.animation's own
-        # load_lmt for the pre-5.x direct-fcurves idiom this replaces) -
-        # fcurve_ensure_for_datablock() creates the layer/strip/slot the
-        # new model needs, assigns the slot to armature_object, and groups
-        # by group_name in one call.
-        loc_curves = [
-            action.fcurve_ensure_for_datablock(
-                armature_object, f'pose.bones["{bone_name}"].location', index=i, group_name=bone_name)
-            for i in range(3)
-        ] if has_translation else []
-        rot_curves = [
-            action.fcurve_ensure_for_datablock(
-                armature_object, f'pose.bones["{bone_name}"].rotation_quaternion', index=i,
-                group_name=bone_name)
-            for i in range(4)
-        ] if has_rotation else []
+    # Blender's own rest matrices, and each bone's rest relative to its
+    # parent - the frame a pose channel is expressed against.
+    rest_world, rest_relative = {}, {}
+    for bone_idx, name in animated.items():
+        bone = bones[name]
+        rest_world[bone_idx] = bone.matrix_local
+        parent_bone = bone.parent
+        rest_relative[bone_idx] = (parent_bone.matrix_local.inverted() @ bone.matrix_local
+                                   if parent_bone else bone.matrix_local.copy())
 
-        prev_rotation = None
-        loc_values = [[] for _ in loc_curves]
-        rot_values = [[] for _ in rot_curves]
-        for frame in range(decoded_clip.num_frames):
-            position = positions[frame] if has_translation else rest_position
-            rotation = rotations[frame] if has_rotation else rest_rotation
-            game_local = Matrix.Translation(position) @ rotation.to_matrix().to_4x4()
-            basis = rest_inverted @ GAME_TO_BLENDER @ game_local @ GAME_TO_BLENDER_INVERTED
+    curves = {}
+    for bone_idx, name in animated.items():
+        curves[bone_idx] = (
+            [action.fcurve_ensure_for_datablock(
+                armature_object, f'pose.bones["{name}"].location', index=i, group_name=name)
+             for i in range(3)],
+            [action.fcurve_ensure_for_datablock(
+                armature_object, f'pose.bones["{name}"].rotation_quaternion', index=i, group_name=name)
+             for i in range(4)],
+        )
+    values = {bone_idx: ([[] for _ in range(3)], [[] for _ in range(4)]) for bone_idx in animated}
+    previous_rotation = {}
 
-            local_pos = basis.to_translation()
-            local_rot = basis.to_quaternion()
+    for frame in range(decoded_clip.num_frames):
+        frame_local = [
+            _clip_matrix(decoded_clip, bone_idx, frame, bind_local[bone_idx])
+            for bone_idx in range(len(bind_local))
+        ]
+        frame_world = _compose(frame_local, parents)
+        delta = [GAME_TO_BLENDER @ (frame_world[i] @ bind_world_inverted[i]) @ GAME_TO_BLENDER_INVERTED
+                 for i in range(len(frame_world))]
+
+        for bone_idx, name in animated.items():
+            pose_world = delta[bone_idx] @ rest_world[bone_idx]
+            parent_index = parents[bone_idx]
+            if parent_index != -1:
+                parent_pose = delta[parent_index] @ bones[bone_names[parent_index]].matrix_local
+                basis = rest_relative[bone_idx].inverted() @ parent_pose.inverted() @ pose_world
+            else:
+                basis = rest_relative[bone_idx].inverted() @ pose_world
+
+            location = basis.to_translation()
+            rotation = basis.to_quaternion()
             # Baked quaternions have no inherent sign - flip to the same
             # hemisphere as the previous frame so interpolation takes the
             # shortest path instead of an arbitrary per-frame sign flip.
-            if prev_rotation is not None and local_rot.dot(prev_rotation) < 0:
-                local_rot = -local_rot
-            prev_rotation = local_rot
+            earlier = previous_rotation.get(bone_idx)
+            if earlier is not None and rotation.dot(earlier) < 0:
+                rotation = -rotation
+            previous_rotation[bone_idx] = rotation
 
-            for i, values in enumerate(loc_values):
-                values.append(local_pos[i])
-            for i, values in enumerate(rot_values):
-                values.append(local_rot[i])
+            location_values, rotation_values = values[bone_idx]
+            for i, series in enumerate(location_values):
+                series.append(location[i])
+            for i, series in enumerate(rotation_values):
+                series.append(rotation[i])
 
-        for curve, values in zip(loc_curves + rot_curves, loc_values + rot_values):
-            _write_keyframes(curve, values)
+    for bone_idx in animated:
+        location_curves, rotation_curves = curves[bone_idx]
+        location_values, rotation_values = values[bone_idx]
+        for curve, series in zip(location_curves + rotation_curves, location_values + rotation_values):
+            _write_keyframes(curve, series)
 
     return action
+
+
+def _rest_as_bind(armature_object, bone_names):
+    """(parents, parent-relative bind transforms in the game's space) taken
+    from the armature's own rest pose - see build_blender_action's
+    `skeleton=None` case."""
+    index_of = {name: i for i, name in enumerate(bone_names) if name is not None}
+    parents, bind_local = [], []
+    for name in bone_names:
+        bone = armature_object.data.bones.get(name) if name else None
+        if bone is None:
+            parents.append(-1)
+            bind_local.append(Matrix.Identity(4))
+            continue
+        parent = bone.parent
+        parents.append(index_of.get(parent.name, -1) if parent else -1)
+        rest_relative = (parent.matrix_local.inverted() @ bone.matrix_local
+                         if parent else bone.matrix_local.copy())
+        bind_local.append(GAME_TO_BLENDER_INVERTED @ rest_relative @ GAME_TO_BLENDER)
+    return parents, bind_local
+
+
+def _game_matrix(transform):
+    """A skel local_trs as a matrix, in the game's own space."""
+    rotation = Quaternion((transform.rotation.w, transform.rotation.x,
+                           transform.rotation.y, transform.rotation.z))
+    position = Vector((transform.position.x, transform.position.y, transform.position.z))
+    return Matrix.Translation(position) @ rotation.to_matrix().to_4x4()
+
+
+def _clip_matrix(decoded_clip, bone_index, frame, bind):
+    """One bone's transform at `frame`, in the game's own space, falling
+    back to its bind transform for whichever half the clip doesn't
+    animate."""
+    channels = decoded_clip.bones.get(bone_index)
+    if channels is None:
+        return bind
+    positions, rotations = channels
+    position = (positions[frame] if bone_index in decoded_clip.bones_with_translation
+                else bind.to_translation())
+    rotation = (rotations[frame] if bone_index in decoded_clip.bones_with_rotation
+                else bind.to_quaternion())
+    return Matrix.Translation(position) @ rotation.to_matrix().to_4x4()
+
+
+def _compose(locals_, parents):
+    """Parent-relative transforms composed into world transforms, in the
+    order the skel file numbers its nodes (every parent index is lower
+    than its own, so one forward pass is enough - see skel.ksy)."""
+    world = []
+    for index, local in enumerate(locals_):
+        parent = parents[index]
+        world.append(local if parent == -1 else world[parent] @ local)
+    return world
 
 
 def _write_keyframes(fcurve, values):

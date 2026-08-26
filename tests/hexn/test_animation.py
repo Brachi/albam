@@ -290,10 +290,62 @@ def test_a_skeletons_own_bind_pose_poses_it_back_to_rest(game_fs_root, hash_to_p
     clip.bones_with_rotation = set(clip.bones)
     clip.bones_with_translation = set(clip.bones)
 
-    build_blender_action(armature_ob, clip, "bind-pose-identity", bone_names)
+    build_blender_action(armature_ob, clip, "bind-pose-identity", bone_names, skeleton=skel)
     bpy.context.scene.frame_set(0)
     evaluated = armature_ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
 
     worst = max((pose_bone.matrix.translation - pose_bone.bone.matrix_local.translation).length
                 for pose_bone in evaluated.pose.bones)
     assert worst < 1e-4, f"posed bind pose is {worst:.3f} away from the rest pose"
+
+
+def test_a_clip_poses_the_armature_the_way_the_game_composes_it(game_fs_root, hash_to_path, local_app_id):
+    """Import a real clip through the operator and compare every posed bone
+    against the clip composed in the game's own space.
+
+    A clip only describes the bones it moves, and the armature's rest pose
+    carries the bind positions but not the bind orientations (the importer
+    aims each bone at its child). Writing a clip's transforms straight into
+    pose channels therefore leaves untouched bones in that invented frame
+    for their animated children to compose on top of, and rotates skinned
+    vertices about the wrong axis - a character folded over itself, out of
+    values that are all finite and all unit-length.
+    """
+    from albam.engines.hexn.animation import (GAME_TO_BLENDER, GAME_TO_BLENDER_INVERTED, _clip_matrix,
+                                              _compose, _game_matrix, decode_clip)
+    from albam.engines.hexn.skeleton import bone_names_from_armature, find_skel
+    from albam.engines.hexn.structs.hexane_anims import HexaneAnims
+
+    anims = HexaneAnims.from_bytes(game_fs_root.readbytes(hash_to_path[ANIMS_BASELINE_HASH]))
+    anims._read()
+    file_info, clip_bytes = _first_fully_animated_clip(anims)
+    clip_path, skeleton_name = file_info.name.rsplit("--", 1)
+
+    vfs = bpy.context.scene.albam.vfs
+    vfs.select_vfile(local_app_id, file_info.name.replace("\\", "/").lstrip("/") + ".animclip")
+    assert bpy.ops.albam.import_vfile() == {"FINISHED"}
+    armature_ob = bpy.data.objects[f"{skeleton_name}_skeleton"]
+
+    skel = find_skel(bpy.context, skeleton_name)
+    assert skel is not None
+    decoded = decode_clip(clip_bytes, name=file_info.name)
+    bone_names = bone_names_from_armature(armature_ob)
+    parents = [-1 if parent == 0xffff else parent for parent in skel.parents]
+    bind_local = [_game_matrix(transform) for transform in skel.local_transforms]
+    bind_world = _compose(bind_local, parents)
+
+    worst = 0.0
+    for frame in (0, decoded.num_frames // 2, decoded.num_frames - 1):
+        bpy.context.scene.frame_set(frame)
+        evaluated = armature_ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        frame_world = _compose(
+            [_clip_matrix(decoded, i, frame, bind_local[i]) for i in range(len(bind_local))], parents)
+        for bone_index, name in enumerate(bone_names):
+            if name is None or name not in evaluated.pose.bones:
+                continue
+            delta = (GAME_TO_BLENDER @ (frame_world[bone_index] @ bind_world[bone_index].inverted())
+                     @ GAME_TO_BLENDER_INVERTED)
+            expected = delta @ armature_ob.data.bones[name].matrix_local
+            posed = evaluated.pose.bones[name].matrix
+            worst = max(worst, max(abs(a - b) for rows in zip(expected, posed) for a, b in zip(*rows)))
+    assert worst < 1e-3, f"posed skeleton is {worst:.4f} away from the game's own composition"

@@ -74,6 +74,18 @@ def infer_skeleton_vfile(context, edgemodel_vfile):
     return _find_skel_vfile(vfs, stem)
 
 
+def find_skel(context, stem):
+    """The parsed HexaneSkel for `stem`, or None when it isn't reachable -
+    the bind pose albam.engines.hexn.animation needs to fill in whatever a
+    clip doesn't animate."""
+    skel_vfile = _find_skel_vfile(context.scene.albam.vfs, stem)
+    if skel_vfile is None:
+        return None
+    skel = HexaneSkel.from_bytes(skel_vfile.get_bytes())
+    skel._read()
+    return skel
+
+
 def armature_name_for(stem):
     """The armature name a skeleton gets, from its own stem.
 
