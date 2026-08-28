@@ -77,6 +77,27 @@ KEYFRAME_TYPES = {
 W_REBUILT_FROM_XYZ_TYPES = {4}
 
 
+# The widest duration each buffer type can carry, for the types that carry one
+# at all. A track is walked by accumulating these until they pass the requested
+# time, so a gap wider than the field can hold cannot be expressed in a single
+# record.
+KEYFRAME_DURATION_MAX = {
+    3: 0xFFFFFFFF,  # Vec3Frame16, u4
+    6: 0xFF,        # QuatFramev14, 8 bits
+    9: 0xFFFFFFFF,  # Vec3Frame16, u4
+}
+
+# Which buffer types the engine decodes for a track, keyed by the channel whose
+# usage selects the evaluator. A buffer type its evaluator does not handle falls
+# through to a default that yields zeros, so the pose comes out wrong silently
+# rather than failing.
+EVALUATOR_BUFFER_TYPES_51 = {
+    "rotation_quaternion": {3, 4, 6, 7},
+    "location": {1, 2, 9},
+    "scale": {1, 2, 9},
+}
+
+
 # Unused for now but maybe LMTQuadraticVector3 will need it
 class LMTUniKey:
     def __init__(self):
@@ -187,6 +208,8 @@ class LMTKeyFrames:
         if kfcls is None:
             print("Unknown keyframe type:", kf_type)
             return
+        self._check_buffer_type(kf_type)
+        duration_max = KEYFRAME_DURATION_MAX.get(kf_type)
         i = 0
         frames_time = [ft for ft in track.keys()]
         for frame, value in track.items():
@@ -207,10 +230,25 @@ class LMTKeyFrames:
             kf.x = value.x
             kf.y = value.y
             kf.z = value.z
-            if i + 1 < len(frames_time):
-                duration = frames_time[i + 1] - frame
+            is_last = i + 1 >= len(frames_time)
+            if is_last:
+                # A zero duration is what ends the track. The engine walks
+                # records by accumulating durations and stops on the first
+                # zero, with no bound from len_data, so a last record that
+                # carried a real duration would let it read past the track
+                # and, for the last track in a file, past the buffer.
+                duration = 0
             else:
-                duration = 0  # not sure why but original files use it
+                # Clamped to at least one: a zero here would terminate the
+                # walk early and silently truncate the track, which is what
+                # two keyframes sharing a frame number would otherwise
+                # produce.
+                duration = max(1, int(frames_time[i + 1] - frame))
+                if duration_max is not None and duration > duration_max:
+                    print(f"albam: keyframe gap of {duration} frames on bone "
+                          f"{bone_index} exceeds what buffer type {kf_type} can "
+                          f"store; clamped to {duration_max}")
+                    duration = duration_max
             i += 1
             kf.duration = int(duration)
             stream = KaitaiStream(BytesIO(bytearray(kf.size_)))
@@ -219,6 +257,23 @@ class LMTKeyFrames:
             dst_raw_data.extend(stream.to_byte_array())
         dst_track.data = bytes(dst_raw_data)
         self.encoded_frames.append(dst_track)
+
+    def _check_buffer_type(self, kf_type):
+        """Refuse a buffer type the channel's evaluator does not decode.
+
+        Getting this wrong produces a file that loads and plays, with the
+        affected bones simply frozen at zero - the evaluator falls through to
+        a default rather than complaining - so it is worth failing loudly here
+        instead.
+        """
+        if self.version != 51:
+            return
+        allowed = EVALUATOR_BUFFER_TYPES_51.get(self.track_type)
+        if allowed is not None and kf_type not in allowed:
+            raise ValueError(
+                f"buffer type {kf_type} is not decoded for {self.track_type} "
+                f"tracks; version 51 accepts {sorted(allowed)}"
+            )
 
     def dequantaize(self, kf, key_type):
         dkf = Quaternion((0.0, 0.0, 0.0, 0.0))
@@ -927,12 +982,20 @@ def _generate_track_from_action(armature, bl_objects, app_id):
             _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
 
 
+def _align(value, alignment):
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
 def _calculate_offsets_lmt51(bl_objects, app_id):
     HEADER_SIZE = 8
     BLOCK_OFFSET_SIZE = 4
     MOTION_HEADER_SIZE = 192
     ATTR_SIZE = 8
     TRACK_SIZE = 32
+    # The engine pads to this before each block header. Every header is 192
+    # bytes, a multiple of it, so only the first one moves - the rest inherit
+    # the alignment. The bytes skipped are already zero in the output buffer.
+    BLOCK_HEADER_ALIGNMENT = 16
 
     num_blocks = len(bl_objects)
     block_offsets_table_size = num_blocks * BLOCK_OFFSET_SIZE
@@ -951,7 +1014,8 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
     motion_se_attr_sizes = []
     tracks_raw_data_sizes = []
 
-    cur_ofc_bloc_offsets = HEADER_SIZE + block_offsets_table_size
+    headers_start = _align(HEADER_SIZE + block_offsets_table_size, BLOCK_HEADER_ALIGNMENT)
+    cur_ofc_bloc_offsets = headers_start
     for bl_obj in bl_objects:
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.ofs_frame != 0:
@@ -987,7 +1051,7 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
             motion_body_sizes.append(0)
             block_offsets.append(0)
 
-    motion_body_start = HEADER_SIZE + block_offsets_table_size + total_headers_size
+    motion_body_start = headers_start + total_headers_size
     cur_frame_offset = motion_body_start
 
     for i in range(num_blocks):
@@ -1012,12 +1076,7 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
             motion_se_attr_offsets.append(0)
             track_data_offsets.append([])
 
-    final_size = (
-        HEADER_SIZE +
-        block_offsets_table_size +
-        total_headers_size +
-        sum(motion_body_sizes)
-    )
+    final_size = headers_start + total_headers_size + sum(motion_body_sizes)
     return {
         "block_offsets": block_offsets,
         "frame_offsets": frame_offsets,

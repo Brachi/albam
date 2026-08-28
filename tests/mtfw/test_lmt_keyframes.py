@@ -67,3 +67,74 @@ def test_negative_w_rotation_round_trips():
     assert _same_rotation(source, decoded), (
         f"{list(source)} came back as {list(decoded)} - a different rotation"
     )
+
+
+# Buffer type 6 packs four 14-bit components and an 8-bit duration into eight
+# bytes, so a record's duration is its last byte.
+QUAT14_KF_TYPE = 6
+QUAT14_RECORD_SIZE = 8
+
+
+def _encode_rotation_track(frames, kf_type=QUAT14_KF_TYPE, version=VERSION_51):
+    from albam.engines.mtfw.animation import LMTKeyFrames
+
+    encoder = LMTKeyFrames()
+    encoder.version = version
+    encoder.track_type = "rotation_quaternion"
+    encoder.encode_framedata(kf_type, 0, frames, usage=0)
+    (track,) = encoder.encoded_frames
+    return track
+
+
+def _durations(track):
+    data = track.data
+    return [data[i + QUAT14_RECORD_SIZE - 1]
+            for i in range(0, len(data), QUAT14_RECORD_SIZE)]
+
+
+def _spin(angle_deg):
+    return Quaternion((0.0, 0.0, 1.0), math.radians(angle_deg))
+
+
+def test_the_last_record_terminates_the_track():
+    """A zero duration is the only thing that stops the engine walking.
+
+    Records are walked by accumulating durations with no bound from len_data,
+    so a final record carrying a real duration lets the read continue past the
+    track - and past the buffer, for the last track in a file.
+    """
+    track = _encode_rotation_track({0.0: _spin(10), 4.0: _spin(20), 9.0: _spin(30)})
+
+    assert _durations(track)[-1] == 0
+
+
+def test_frames_sharing_a_number_do_not_truncate_the_track():
+    """A zero duration before the end would silently cut the track short."""
+    track = _encode_rotation_track({0.0: _spin(10), 4.0: _spin(20),
+                                    4.0000001: _spin(25), 9.0: _spin(30)})
+    durations = _durations(track)
+
+    assert all(d > 0 for d in durations[:-1]), durations
+
+
+def test_a_gap_wider_than_the_field_is_clamped_not_wrapped():
+    """Eight bits cannot express a 300-frame gap.
+
+    Letting it wrap would put a small duration - or a zero, ending the track -
+    where a long hold was meant.
+    """
+    track = _encode_rotation_track({0.0: _spin(10), 300.0: _spin(20)})
+    durations = _durations(track)
+
+    assert durations[0] == 0xFF
+    assert durations[-1] == 0
+
+
+def test_a_buffer_type_the_evaluator_ignores_is_refused():
+    """Type 9 is decoded for translation and scale, never for rotation.
+
+    The engine would fall through to a default and freeze the bone at zero
+    rather than fail, so this has to be caught on the way out.
+    """
+    with pytest.raises(ValueError, match="not decoded for rotation_quaternion"):
+        _encode_rotation_track({0.0: _spin(10), 4.0: _spin(20)}, kf_type=9)
