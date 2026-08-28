@@ -44,7 +44,7 @@ def draw_callback():
         text = (
             f"Type: {ftype}\n"
             f"Surface attribute: {fsurface}\n"
-            f"Behavior attribute: {fbehavior }"
+            f"Behavior attribute: {fbehavior}"
         )
 
         y = 100
