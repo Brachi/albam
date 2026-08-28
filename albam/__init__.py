@@ -80,13 +80,8 @@ def register():
     register_workspace_tools()
     bpy.app.timers.register(overlay.check_active_tool, first_interval=0.1, persistent=True)
 
-    # Load data from user's config files
-    bpy.app.handlers.load_post.append(populate_albam_data)
-
-    # Rebuild fs_registry's process-lifetime entries for VFS roots restored
-    # from the loaded .blend file - see albam.vfs.reconnect_fs_roots.
-    from .vfs import reconnect_fs_roots
-    bpy.app.handlers.load_post.append(reconnect_fs_roots)
+    for handler in LOAD_POST_HANDLERS:
+        bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
