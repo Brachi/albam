@@ -112,7 +112,7 @@ class ToolsSettings(bpy.types.PropertyGroup):
     )
     face_preset: face_preset_enum
     overwrite_tex_path: bpy.props.BoolProperty(default=False)
-    lm_resolution: bpy.props.EnumProperty(
+    lm_resolution_enum = bpy.props.EnumProperty(
         name="Lightmap Resolution",
         description="Set the side of the baked lightmap",
         items=[
@@ -122,7 +122,8 @@ class ToolsSettings(bpy.types.PropertyGroup):
             ('4096', "4096", "", 4),
         ]
     )
-    lm_mode: bpy.props.EnumProperty(
+    lm_resolution: lm_resolution_enum
+    lm_mode_enum = bpy.props.EnumProperty(
         name="Mode",
         description="The method of adding lightmaps to the material",
         items=[
@@ -130,9 +131,10 @@ class ToolsSettings(bpy.types.PropertyGroup):
             ("1", "Update exsting", "Update existing lightmaps in the material", 2),
             ("2", "One for selected", "One lightmap for all selected meshes", 3),
         ],
-        default = "0"
+        default="0"
     )
-    lm_name: bpy.props.StringProperty(default='generic_LM')
+    lm_mode: lm_mode_enum
+    lm_name: bpy.props.StringProperty(default='generic_LM')  # noqa: F821
 
 
 @blender_registry.register_blender_type
