@@ -1,7 +1,9 @@
 import bpy
+import xml.etree.ElementTree as ET
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 
+from ...lib.xml_parser import from_sdl, to_sdl, from_xfs, to_xfs
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
 
@@ -14,6 +16,8 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     sdl._read()
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
+    xml = from_sdl(sdl)
+    ET.indent(xml, space="\t", level=0)
     print(sdl.header.version)
     return bl_object
 
