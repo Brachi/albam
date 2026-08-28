@@ -8,6 +8,8 @@ from ..misc import number_to_color
 
 TARGET_TOOL = "albam.face_prop_edit"
 _handler = None
+# shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+shader = None
 
 
 def get_selected_face_attributes():
@@ -98,9 +100,6 @@ def check_active_tool():
         hide()
 
     return 0.1
-
-
-shader = gpu.shader.from_builtin("UNIFORM_COLOR")
 
 
 def build_batches(bl_obj):
