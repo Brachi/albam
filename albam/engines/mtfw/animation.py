@@ -13,6 +13,17 @@ from .structs.lmt import Lmt
 HACKY_BONE_INDEX_IK_FOOT_RIGHT = 19
 HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 HACKY_BONE_INDICES_IK_FOOT = {HACKY_BONE_INDEX_IK_FOOT_RIGHT, HACKY_BONE_INDEX_IK_FOOT_LEFT}
+
+# A limb is not stored as a finished pose. A track whose joint_type is one of
+# these marks the root of a chain: the joint at root+1 is keyed by no track at
+# all, and the joint this many places past the root carries a position channel
+# which is the goal the chain is solved towards. The value says how long the
+# chain is, not which limb it is - 42 is a biped's leg and 49 its arm, but a
+# quadruped marks fore limbs 43 and hind limbs 42 - so neither the joint_type
+# nor the bone id names a body part. Verified over every re5 character: 35422
+# chains, none of them keying the joint at root+1.
+CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
+CHAIN_TARGET_PROP = "mtfw.chain_target"
 ROOT_UNK_BONE_ID = 254  # probably a general index for non-bone objects, same ID with different joint types
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
@@ -33,6 +44,9 @@ USAGE = {
     4: "location",  # Absolute Position
     5: "scale",  # Unknown
 }
+# the only channels of an action that are a bone's transform, and so the only
+# ones an exported track can come from
+BONE_TRACK_TYPES = set(USAGE.values())
 
 APPID_VERSION_MAPPER = {
     "re0": 67,
@@ -442,6 +456,11 @@ def load_lmt(vfile, context):
     DEBUG_BLOCK = None
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
+    # A chain is declared per block, but the constraint that serves it lives on
+    # the rig for good. Remember both so every action can say whether its chains
+    # are active - see _key_chain_influence.
+    chain_constraints = {}
+    block_chains = []
 
     for block_index, block in enumerate(lmt.block_offsets):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
@@ -459,6 +478,7 @@ def load_lmt(vfile, context):
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]
+        chains = _find_chains(block.block_header.tracks)
         # Workaround for cases when same bone index has more than 3 anim tracks
         last_usage = {}
         duplicated_bids = {}
@@ -502,9 +522,13 @@ def load_lmt(vfile, context):
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
                 bone_index = _get_or_create_root_motion_bone(armature, mapping)
 
-            # Restore IK
-            if track.bone_index in HACKY_BONE_INDICES_IK_FOOT and app_id == "re5":
-                bone_index = _get_or_create_ik_bone(armature, track.bone_index, bone_index, mapping)
+            # Restore IK. Driven by the chain the block declares, not by a
+            # fixed pair of bone ids: an arm, and every limb of a quadruped,
+            # needs exactly the same treatment as a biped's feet.
+            if track.bone_index in chains and bone_index is not None:
+                bone_index = _get_or_create_ik_bone(
+                    armature, track.bone_index, bone_index, mapping, chains[track.bone_index],
+                    chain_constraints)
 
             # LMT references service(?) bones absent in the imported armature
             if bone_index is None:
@@ -549,6 +573,8 @@ def load_lmt(vfile, context):
                 action, keyframes, bone_index, track_type, block_index, track_index, channels)
             if err:
                 continue
+        block_chains.append((channels, set(chains)))
+
         # building custom attributes of lmt metadata
         custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
@@ -589,6 +615,8 @@ def load_lmt(vfile, context):
                     for kb_index, k_block in enumerate(k_info.keyframe_blocks):
                         k_item = item.keyframe_blocks.add()
                         k_item.copy_custom_properties_from(k_block)
+
+    _key_chain_influence(block_chains, chain_constraints)
     return bl_object
 
 
@@ -615,6 +643,40 @@ def _create_blender_action(action, keyframes, bone_index, track_type, block_inde
             curve.keyframe_points[-1].co = (frame_index + 1, frame_data[curve_idx])  # frame , value
             curve.keyframe_points[-1].interpolation = 'LINEAR'
     return False
+
+
+def _key_chain_influence(block_chains, chain_constraints):
+    """Switch each chain's constraint off in the blocks that do not declare it.
+
+    The constraint is part of the rig and the chain is part of a block, so a
+    constraint left at full influence keeps solving towards a control bone the
+    current block never keys - it sits at its rest position and drags the limb
+    to it. Keying influence per action makes the rig follow the data.
+    """
+    for channels, declared in block_chains:
+        for target_bone_index, (owner, constraint_name) in chain_constraints.items():
+            data_path = f'pose.bones["{owner}"].constraints["{constraint_name}"].influence'
+            try:
+                curve = channels.fcurves.new(data_path=data_path)
+            except RuntimeError:
+                continue
+            curve.keyframe_points.add(1)
+            curve.keyframe_points[-1].co = (1, 1.0 if target_bone_index in declared else 0.0)
+            curve.keyframe_points[-1].interpolation = 'CONSTANT'
+
+
+def _find_chains(tracks):
+    """{target bone id: how many joints the solver owns}, for one block.
+
+    Read from the root track's joint_type rather than matched against bone ids,
+    because the same value marks different limbs on different skeletons.
+    """
+    chains = {}
+    for track in tracks:
+        offset = CHAIN_TARGET_OFFSET.get(track.joint_type)
+        if offset is not None:
+            chains[track.bone_index + offset] = offset
+    return chains
 
 
 def _create_bone_mapping(armature_obj):
@@ -678,13 +740,21 @@ def _create_missing_bones(armature, bone_index, key, mapping):
     return bone_name
 
 
-def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
-    if track_bone_index == HACKY_BONE_INDEX_IK_FOOT_RIGHT:
-        postfix = "R"
-    else:
-        postfix = "L"
+def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chain_count,
+                           chain_constraints):
+    """A control bone carrying a chain's goal, with the chain constrained to it.
 
-    bone_name = f"IK_Foot.{postfix}"
+    The goal is a point in space rather than a rotation of the bone it belongs
+    to, so it cannot live on the target bone itself: put there, it translates
+    that bone away from its parent and drags the limb with it. `chain_count`
+    reaches from the target back to the joint the file never keys.
+    """
+    if track_bone_index == HACKY_BONE_INDEX_IK_FOOT_RIGHT:
+        bone_name = "IK_Foot.R"
+    elif track_bone_index == HACKY_BONE_INDEX_IK_FOOT_LEFT:
+        bone_name = "IK_Foot.L"
+    else:
+        bone_name = f"IK_Target.{track_bone_index}"
     if bone_name in armature.data.bones:
         return bone_name
 
@@ -701,15 +771,20 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping):
     blender_bone.head = armature.data.edit_bones[bone_index].head
     blender_bone.tail = armature.data.edit_bones[bone_index].tail
     blender_bone["mtfw.anim_retarget"] = str(track_bone_index) + "_1"
+    # marks the bone as carrying a goal rather than a joint's own transform, so
+    # export leaves its position channel alone exactly as import did
+    blender_bone[CHAIN_TARGET_PROP] = True
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # set IK for toes
+    # constrain the chain to the goal
     pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
     constraint = pose_bone.constraints.new('IK')
+    constraint.name = f"chain.{track_bone_index}"
     constraint.target = armature
     constraint.subtarget = bone_name
-    constraint.chain_count = 3
+    constraint.chain_count = chain_count
     constraint.use_rotation = True
+    chain_constraints[track_bone_index] = (pose_bone.name, constraint.name)
 
     root_motion_bone = _get_or_create_root_motion_bone(armature, mapping)
     pose_bone = armature.pose.bones[bone_name]
@@ -782,7 +857,10 @@ def _local_space_to_parent_translation(frame, bone):
             lmt_rest = Vector((rest.x, rest.z, -rest.y))
             return frame + lmt_rest
 
-    if anim_bone_id in ("19", "23"):
+    # A chain's goal was imported without a parent-space conversion, so it must
+    # leave the same way. HACKY_BONE_INDICES_IK_FOOT is the fallback for rigs
+    # built before the control bones were marked.
+    if bone.get(CHAIN_TARGET_PROP) or anim_bone_id in ("19", "23"):
         return frame
 
     global_pos = bone.matrix_local @ frame
@@ -947,11 +1025,21 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     if mapping.get(bone_name, None) is None:
                         continue
                     track_type = path.split(".")[-1]
+                    if track_type not in BONE_TRACK_TYPES:
+                        # an action also carries channels that are not a bone's
+                        # transform - a chain constraint's influence, say - and
+                        # none of them is a track
+                        continue
                     joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
                     joint_types[(track_type, mapping.get(bone_name))] = joint_type
 
+                    # A chain's control bone is retargeted "<id>_1", but its
+                    # reference data was stored under the plain id the track
+                    # came from, so ask for it under that.
                     rd_bone_id = mapping.get(bone_name)
-                    if bone_name == "IK_Foot.L":
+                    if armature.data.bones[bone_name].get(CHAIN_TARGET_PROP):
+                        rd_bone_id = rd_bone_id.split("_")[0]
+                    elif bone_name == "IK_Foot.L":
                         rd_bone_id = "23"
                     elif bone_name == "IK_Foot.R":
                         rd_bone_id = "19"
