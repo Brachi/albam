@@ -665,6 +665,16 @@ def _key_chain_influence(block_chains, chain_constraints):
             curve.keyframe_points[-1].interpolation = 'CONSTANT'
 
 
+def to_signed_32(value):
+    """The same 32 bits, as a value Blender's signed IntProperty can hold."""
+    return value - 0x100000000 if value > 0x7FFFFFFF else value
+
+
+def to_unsigned_32(value):
+    """Undo to_signed_32, for a field the format declares as u4."""
+    return value + 0x100000000 if value < 0 else value
+
+
 def _find_chains(tracks):
     """{target bone id: how many joints the solver owns}, for one block.
 
@@ -1636,8 +1646,37 @@ class LMT67AnimationCustomProperties(CustomPropsBase):
 
 @blender_registry.register_blender_prop
 class LMT51Attribute(CustomPropsBase):
+    """One event attribute: the group it belongs to, and the frame it fires on.
+
+    Both are `u4` in the file, and the game's own files do set bit 31 of
+    `group` - 0x80000000, 0x80000001, 0x88010000 - clearly a flag rather than a
+    large number. Blender's IntProperty is signed, so storing that raises and
+    aborts the whole import rather than degrading. Keep the same 32 bits folded
+    into the signed range and fold them back on the way out, so the value
+    round-trips bit for bit.
+    """
+
+    UNSIGNED_FIELDS = ("group", "frame")
+
     group: bpy.props.IntProperty(name="Group", default=0, options=set())  # noqa: F821
     frame: bpy.props.IntProperty(name="Frame", default=0, options=set())  # noqa: F821
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                value = getattr(src_obj, attr_name)
+            except AttributeError:
+                continue
+            if attr_name in self.UNSIGNED_FIELDS:
+                value = to_signed_32(value)
+            setattr(self, attr_name, value)
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            value = getattr(self, attr_name)
+            if attr_name in self.UNSIGNED_FIELDS:
+                value = to_unsigned_32(value)
+            setattr(dst_obj, attr_name, value)
 
 
 @blender_registry.register_custom_properties_object(

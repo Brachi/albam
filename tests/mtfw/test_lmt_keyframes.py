@@ -138,3 +138,30 @@ def test_a_buffer_type_the_evaluator_ignores_is_refused():
     """
     with pytest.raises(ValueError, match="not decoded for rotation_quaternion"):
         _encode_rotation_track({0.0: _spin(10), 4.0: _spin(20)}, kf_type=9)
+
+
+# The event attribute's `group` is a u4 in the file and the game's own files
+# set bit 31 of it, but Blender's IntProperty is signed. These two guard the
+# fold that lets the value survive the trip through Blender unchanged.
+@pytest.mark.parametrize("unsigned", [
+    0,
+    1,
+    0x7FFFFFFF,
+    0x80000000,      # the smallest value that overflows a signed IntProperty
+    0x80000001,
+    0x88010000,      # the largest seen in a real re5 file
+    0xFFFFFFFF,
+])
+def test_unsigned_32_survives_the_fold_into_a_signed_property(unsigned):
+    from albam.engines.mtfw.animation import to_signed_32, to_unsigned_32
+
+    signed = to_signed_32(unsigned)
+    assert -0x80000000 <= signed <= 0x7FFFFFFF, "must fit a Blender IntProperty"
+    assert to_unsigned_32(signed) == unsigned
+
+
+def test_fold_leaves_values_a_signed_property_already_holds_alone():
+    from albam.engines.mtfw.animation import to_signed_32
+
+    for already_fine in (0, 1, 900, 0x7FFFFFFF):
+        assert to_signed_32(already_fine) == already_fine
