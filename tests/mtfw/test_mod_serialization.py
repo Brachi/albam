@@ -484,8 +484,22 @@ def test_export_header_sizes(mod_imported_local, mod_exported_local, local_app_i
         assert sheader.size_vertex_buffer == dheader.size_vertex_buffer
 
 
-@pytest.mark.xfail(reason="num_faces is miscounted on export, num_edges is never written")
+def _exported_index_counts_match(src_mod, dst_mod):
+    """Whether export reproduced the source's geometry index-for-index.
+
+    num_faces, num_edges and size_file are all computed from the index
+    buffer, so on a model whose meshes export a different number of indices
+    they cannot match however correctly they are derived - the defect is
+    upstream, in the geometry. Checking it directly is what lets the
+    assertions below stay strict for every model that does round-trip.
+    """
+    return (sum(m.num_indices for m in src_mod.meshes_data.meshes) ==
+            sum(m.num_indices for m in dst_mod.meshes_data.meshes))
+
+
 def test_export_header_face_counts(mod_imported_local, mod_exported_local):
+    if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
+        pytest.xfail("meshes exported a different index count, so counts derived from it differ")
     sheader = mod_imported_local.header
     dheader = mod_exported_local.header
 
@@ -493,13 +507,14 @@ def test_export_header_face_counts(mod_imported_local, mod_exported_local):
     assert sheader.num_faces == dheader.num_faces
 
 
-@pytest.mark.xfail(reason="size_file is not recomputed to match the exported buffers")
 def test_export_header_size_file(mod_imported_local, mod_exported_local):
-    # Version-gated before the assertion, not inside the xfail: only 21x has
-    # a size_file field, and letting an AttributeError land under the marker
-    # is how the test this replaced went unnoticed for its whole life.
+    # Version-gated before anything else: only 21x has a size_file field,
+    # and letting an AttributeError land under a marker is how the test this
+    # replaced went unnoticed for its whole life.
     if mod_imported_local.header.version not in (210, 211, 212):
         pytest.skip("no size_file on this version")
+    if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
+        pytest.xfail("meshes exported a different index count, so the file size differs")
     assert mod_imported_local.header.size_file == mod_exported_local.header.size_file
 
 

@@ -304,6 +304,9 @@ BBOX_AFFECTED = [
 VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
 VERSIONS_USE_TRISTRIPS = {153, 156, 212}
+# The versions mod-21.ksy covers, which size their index buffer as
+# num_faces * 2 rather than (num_faces * 2) - 2.
+VERSIONS_MOD_21 = {210, 211, 212}
 # Bone weights serialize as u1, so a weight is written as round(w * 255).
 WEIGHT_QUANTIZATION_STEPS = 255
 
@@ -950,8 +953,20 @@ def export_mod(bl_obj):
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
-    # TODO: revise, name accordingly
-    dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+    # num_faces is the index count, not a face count (see num_edges below,
+    # which is the actual triangle count on a triangle-list version).
+    #
+    # The 21 formats size their index buffer as num_faces * 2, so num_faces
+    # is exactly the number of indices. mod-153 and mod-156 size theirs as
+    # (num_faces * 2) - 2, so there it is the index count plus one, and the
+    # trailing entry the +1 accounts for is the padding appended below.
+    # Applying the +1 everywhere wrote one index too many on 21: measured
+    # against real umvc3 files, num_faces equals the summed mesh index count
+    # exactly, and export was producing 205 against 204, 42847 against 42846.
+    if dst_mod.header.version in VERSIONS_MOD_21:
+        dst_mod.header.num_faces = len(index_buffer) // 2
+    else:
+        dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
     if dst_mod.header.version not in VERSIONS_USE_TRISTRIPS:
         # num_edges was initialised to 0 and never assigned, so every export
         # wrote 0 for it. On a version that indexes triangles as a plain
@@ -967,7 +982,10 @@ def export_mod(bl_obj):
         # a real file, and recovering the triangle count needs the strip
         # decomposition rather than arithmetic.
         dst_mod.header.num_edges = dst_mod.header.num_faces // 3
-    if app_id not in ["re5"]:
+    if app_id not in ["re5"] and dst_mod.header.version not in VERSIONS_MOD_21:
+        # The trailing index the (num_faces * 2) - 2 sizing leaves room for.
+        # A 21 file has no such entry: its meshes tile the index buffer
+        # exactly, the last one ending on num_faces.
         index_buffer.extend((0, 0))
 
     final_size = sum((
@@ -978,11 +996,20 @@ def export_mod(bl_obj):
         dst_mod.meshes_data.size_,
         dst_mod.header.size_vertex_buffer,
         dst_mod.header.size_vertex_buffer_2,
-        len(index_buffer) + 4,
+        # No + 4: a real file's size_file stops at the end of the index
+        # buffer and does not count the four trailing bytes after it.
+        # Measured on umvc3 - a 2056 byte file carries size_file 2052, and a
+        # 542808 byte one carries 542804 - while export was writing the full
+        # length. size_file only exists on the 21 formats.
+        len(index_buffer),
     ))
 
     dst_mod.header.size_file = final_size
-    stream = KaitaiStream(BytesIO(bytearray(final_size)))
+    # The file itself is four bytes longer than size_file: real ones carry a
+    # zero trailer past it (2056/2052, 542808/542804, 1027148/1027144 on the
+    # umvc3 models in the dataset). The + 4 used to live inside final_size,
+    # which made the length right and the header wrong.
+    stream = KaitaiStream(BytesIO(bytearray(final_size + 4)))
     check_recursive(dst_mod)
     dst_mod._write(stream)
 
