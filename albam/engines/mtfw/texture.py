@@ -239,6 +239,23 @@ NON_SRGB_IMAGE_TYPE = [2, 8]
 # form of transparency, so those keep the alpha link.
 FTRANSPARENCY_OPAQUE = "FTransparency"
 
+# The engine's placeholder textures. A material binding one of these is
+# saying the map is deliberately absent - the same thing tex_idx 0 says, but
+# spelled as a path at a real index instead, so the tex_index == 0 check in
+# assign_textures() never sees it. They exist in no .arc, so they resolve to
+# None like a genuinely missing texture does; matching on the path is what
+# tells the two apart. Anything else that fails to resolve keeps building an
+# empty image node, so a real gap still surfaces (see
+# test_mod_import_textures_are_resolved) instead of being skipped silently
+# alongside the placeholders.
+DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
+
+
+def is_dummy_texture_path(texture_path):
+    if not texture_path:
+        return False
+    return texture_path.replace("\\", "/").lower().startswith(DUMMY_TEXTURE_PATH_PREFIX)
+
 
 @blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
@@ -302,9 +319,11 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             except KeyError:
                 tex_bytes = None
         if not tex_bytes:
-            print(f"texture_path {texture_path} not found in arc")
+            # Both cases append None - assign_textures() tells them apart by
+            # the path, and only the placeholder is skipped there.
+            if not is_dummy_texture_path(texture_path):
+                print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
-            # TODO: handle missing texture
             continue
         TexOrRtexCls = RtexCls if is_rtex else TexCls
         tex = parse(TexOrRtexCls, tex_bytes, app_id)
@@ -394,6 +413,12 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
                 # the neutral value. old_assignment() skips these too.
                 continue
             texture_target = textures[real_tex_index]
+            if texture_target is None and is_dummy_texture_path(
+                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                # Same case as tex_index == 0 above, just spelled as a path:
+                # leave the socket on the shader group's default rather than
+                # driving it with an empty image node.
+                continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
