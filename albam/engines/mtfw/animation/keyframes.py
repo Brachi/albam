@@ -61,6 +61,9 @@ KEYFRAME_TYPES_51 = {
     15: Lmt.Quatized9Quat,
 }
 
+# Version 67's two extra buffer types. Still reached by the parsing tests,
+# which read a .lmt without importing it, but not by import or export -
+# both are registered for re5 alone.
 KEYFRAME_TYPES_67 = KEYFRAME_TYPES_51.copy()
 KEYFRAME_TYPES_67.update({
     4: Lmt.Quatized16Vec3,

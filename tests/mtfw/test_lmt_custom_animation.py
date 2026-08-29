@@ -6,11 +6,10 @@ import pytest
 from tests.mtfw.conftest import action_fcurves
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
-# Same pairs as lmt_serialization_hashes.json's re1/re5 pl00 entries - one
-# per LMT version (re1=v67, re5=v51), since encode_framedata's static/normal
-# paths differ by version and both need this probed independently.
+# The same pl00 pair lmt_serialization_hashes.json uses. Only re5: writing a
+# .lmt is registered for re5 alone, so a version 67 entry here would drive an
+# export that no longer exists.
 DATASET = [
-    {"app_id": "re1", "mod_path_hash": "d7e6d66be56bf3d3", "lmt_path_hash": "c0b58c74de2134de"},
     {"app_id": "re5", "mod_path_hash": "5d45d4682b062d49", "lmt_path_hash": "1cc34f3b754528ea"},
 ]
 

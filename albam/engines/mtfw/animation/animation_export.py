@@ -317,6 +317,12 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
 
 
 def _calculate_offsets_lmt67(bl_objects, app_id):
+    """Where every part of a version 67 .lmt lands.
+
+    Unreachable while .lmt registration is re5 only (see load_lmt and
+    export_lmt). Kept because the parser still reads version 67 and the
+    tests still parse it - only importing and exporting it are parked.
+    """
     HEADER_SIZE = 8
     BLOCK_OFFSET_SIZE = 4
     MOTION_HEADER_SIZE = 64  # 4 bytes of padding, last one doesn't have it
@@ -512,6 +518,7 @@ def _calculate_offsets(bl_objects, app_id):
     if app_id == "re5":
         return _calculate_offsets_lmt51(bl_objects, app_id)
     else:
+        # only re5 can reach export_lmt, so this arm never runs today
         return _calculate_offsets_lmt67(bl_objects, app_id)
 
 
@@ -531,12 +538,13 @@ def _lmt_blocks(bl_obj):
     return sorted(blocks, key=lambda block: block.get(BLOCK_INDEX_PROP, 0))
 
 
-@blender_registry.register_export_function(app_id="re0", extension="lmt")
-@blender_registry.register_export_function(app_id="re1", extension="lmt")
+# re5 only, deliberately. Writing a .lmt was built and measured against
+# version 51, and nothing here has ever been checked against a version 67 game:
+# 67 does not use the joint_type field at all, puts position channels where 51
+# never does, and lays its blocks out differently. Offering an export that has
+# never round-tripped is worse than offering none, since what it produces is a
+# file the game will load.
 @blender_registry.register_export_function(app_id="re5", extension="lmt")
-@blender_registry.register_export_function(app_id="re6", extension="lmt")
-@blender_registry.register_export_function(app_id="rev1", extension="lmt")
-@blender_registry.register_export_function(app_id="rev2", extension="lmt")
 def export_lmt(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id

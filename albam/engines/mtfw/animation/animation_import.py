@@ -49,12 +49,13 @@ def _get_action_channels(action, armature):
     return strip.channelbag(slot, ensure=True)
 
 
-@blender_registry.register_import_function(app_id="re0", extension='lmt', albam_asset_type="ANIMATION")
-@blender_registry.register_import_function(app_id="re1", extension='lmt', albam_asset_type="ANIMATION")
+# re5 only, which is what main registered before any of this. Version 67 - re0,
+# re1, re6, rev1, rev2, dd - reads without complaint and was briefly seen to
+# work, but nothing has ever covered it, and 67 differs from 51 everywhere it
+# was measured: joint_type is 0 on all 168607 of re1's tracks, position
+# channels sit on 82 child bones where 51 uses two, and the blocks are laid out
+# differently. Parked rather than rejected.
 @blender_registry.register_import_function(app_id="re5", extension='lmt', albam_asset_type="ANIMATION")
-@blender_registry.register_import_function(app_id="re6", extension='lmt', albam_asset_type="ANIMATION")
-@blender_registry.register_import_function(app_id="rev1", extension='lmt', albam_asset_type="ANIMATION")
-@blender_registry.register_import_function(app_id="rev2", extension='lmt', albam_asset_type="ANIMATION")
 def load_lmt(vfile, context):
     app_id = vfile.app_id
     lmt_bytes = vfile.get_bytes()
@@ -94,7 +95,7 @@ def load_lmt(vfile, context):
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]
-        chains = _find_chains(block.block_header.tracks)
+        chains = _find_chains(block.block_header.tracks, lmt_ver)
         # Workaround for cases when same bone index has more than 3 anim tracks
         last_usage = {}
         duplicated_bids = {}
@@ -108,7 +109,7 @@ def load_lmt(vfile, context):
             item.raw_data = track.data
             bounds = None
             keyframes = LMTKeyFrames()
-            if lmt_ver > 51:
+            if lmt_ver > 51:  # parked with version 67 import; see load_lmt
                 bounds_body = track.bounds
                 if bounds_body:
                     b_item = item.track_bounds.add()
@@ -295,13 +296,22 @@ def _rest_head_in_bone_space(armature, bone_name):
     return Vector((rest.x, rest.z, -rest.y))
 
 
-def _find_chains(tracks):
+def _find_chains(tracks, version):
     """{target bone id: how many joints the solver owns}, for one block.
+
+    Only for version 51, where the chain convention was measured. Every one of
+    re1's 168607 tracks carries joint_type 0, so version 67 either does not use
+    the field or uses it for something else, and it puts position channels on
+    82 different child bones where 51 uses them on two - so the reading that a
+    position channel marks a chain's goal does not carry over either. Applying
+    51's table there would be guessing.
 
     Read from the root track's joint_type rather than matched against bone ids,
     because the same value marks different limbs on different skeletons.
     """
     chains = {}
+    if version != 51:
+        return chains
     for track in tracks:
         offset = CHAIN_TARGET_OFFSET.get(track.joint_type)
         if offset is not None:
@@ -472,30 +482,3 @@ def _parent_space_to_local_translation(decoded_frames, armature, bone_index):
         local_space_frame = (parent_space.inverted() @ Matrix.Translation(frame)).to_translation()
         local_space_frames.append(local_space_frame)
     return local_space_frames
-
-
-def filter_armatures(self, obj):
-    # TODO: filter by custom properties that indicate is
-    # a RE5 compatible armature
-    return obj.type == 'ARMATURE'
-
-
-@blender_registry.register_blender_prop_albam(name='import_options_lmt')
-class ImportOptionsLMT(bpy.types.PropertyGroup):
-    armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=filter_armatures)
-
-
-@blender_registry.register_import_options_custom_draw_func(extension='lmt')
-def draw_lmt_options(panel_instance, context):
-    panel_instance.bl_label = "LMT Options"
-    panel_instance.layout.prop(context.scene.albam.import_options_lmt, 'armature')
-
-
-@blender_registry.register_import_options_custom_poll_func(extension='lmt')
-def poll_lmt_options(panel_instance, context):
-    return True
-
-
-@blender_registry.register_import_operator_poll_func(extension='lmt')
-def poll_import_operator_for_lmt(panel_class, context):
-    return bool(context.scene.albam.import_options_lmt.armature)
