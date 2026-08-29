@@ -135,19 +135,6 @@ def load_lmt(file_item, context):
                     curve.keyframe_points[-1].interpolation = 'LINEAR'
 
 
-def _get_action_channels(action, armature):
-    """The container an action keeps its fcurves and groups in.
-
-    Blender 4.4 moved both behind an action's layers and slots, and 5.0
-    dropped the flat lists that used to sit on the action itself.
-    """
-    if hasattr(action, "fcurves"):
-        return action
-    slot = action.slots.new(id_type='OBJECT', name=armature.name)
-    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
-    return strip.channelbag(slot, ensure=True)
-
-
 def _create_bone_mapping(armature_obj):
     bone_names = {}
     for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
