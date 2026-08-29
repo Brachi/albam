@@ -24,6 +24,7 @@ HACKY_BONE_INDICES_IK_FOOT = {HACKY_BONE_INDEX_IK_FOOT_RIGHT, HACKY_BONE_INDEX_I
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
 CHAIN_TARGET_PROP = "mtfw.chain_target"
+BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
 CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
 # usages that carry a position rather than a rotation or a scale
 TRANSLATION_USAGES = {1, 4}
@@ -469,6 +470,10 @@ def load_lmt(vfile, context):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
+        # Which slot of the file this block is. The name carries it too, but
+        # Blender renumbers duplicate names, so it stops matching as soon as
+        # the same .lmt is imported twice in one session - see _lmt_blocks.
+        anim_object[BLOCK_INDEX_PROP] = block_index
         if block.offset == 0:
             continue
         if DEBUG_BLOCK is not None and DEBUG_BLOCK != block_index:
@@ -1410,6 +1415,22 @@ def _calculate_offsets(bl_objects, app_id):
         return _calculate_offsets_lmt67(bl_objects, app_id)
 
 
+def _lmt_blocks(bl_obj):
+    """This .lmt's blocks, in the order the file stores them.
+
+    A block's position is what gives it its identity - an empty slot has to
+    stay empty, and every offset in the header is written by position - but
+    Blender's children are not kept in the order they were created, and the
+    names that used to stand in for the index get renumbered as soon as the
+    same .lmt is imported twice in one session. Sorting on the index recorded
+    at import is the only thing that survives that. Objects from before it was
+    recorded all sort equal, which a stable sort leaves exactly as it found
+    them.
+    """
+    blocks = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    return sorted(blocks, key=lambda block: block.get(BLOCK_INDEX_PROP, 0))
+
+
 @blender_registry.register_export_function(app_id="re0", extension="lmt")
 @blender_registry.register_export_function(app_id="re1", extension="lmt")
 @blender_registry.register_export_function(app_id="re5", extension="lmt")
@@ -1421,7 +1442,7 @@ def export_lmt(bl_obj):
     app_id = asset.app_id
     vfiles = []
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
-    bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    bl_objects = _lmt_blocks(bl_obj)
     armature = bpy.context.scene.albam.import_options_lmt.armature
     dst_lmt = Lmt()
     dst_lmt.id_magic = b"LMT\x00"

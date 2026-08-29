@@ -133,7 +133,9 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     # load_lmt() names every action it creates after the armature it was
     # applied to, and never assigns them, so that prefix is the only handle.
     actions = [a for a in bpy.data.actions if a.name.startswith(f"{armature.name}.")]
-    yield result, armature, actions
+    latest = len(bpy.context.scene.albam.exportable.file_list) - 1
+    lmt_bl_object = bpy.context.scene.albam.exportable.file_list[latest].bl_object
+    yield result, armature, actions, lmt_bl_object
 
     # Unmount both roots again. The VFS lives in Blender's scene data, which
     # is process-global and outlives this fixture, while local_game_fs (and
@@ -152,12 +154,12 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
 
 
 def test_lmt_import_succeeds(lmt_imported_local):
-    result, _armature, _actions = lmt_imported_local
+    result, _armature, _actions, _lmt_object = lmt_imported_local
     assert result == {"FINISHED"}
 
 
 def test_lmt_import_creates_actions(lmt_imported_local):
-    _result, armature, actions = lmt_imported_local
+    _result, armature, actions, _lmt_object = lmt_imported_local
     assert actions, "importing the .lmt created no actions"
     assert armature.animation_data is not None
 
@@ -166,9 +168,44 @@ def test_lmt_import_actions_have_keyframes(lmt_imported_local):
     """Without this, an import that swallowed the error and produced empty
     actions would still pass the two tests above.
     """
-    _result, _armature, actions = lmt_imported_local
+    _result, _armature, actions, _lmt_object = lmt_imported_local
     for action in actions:
         fcurves = action_fcurves(action)
         assert fcurves, f"{action.name} has no fcurves"
         for fcurve in fcurves:
             assert len(fcurve.keyframe_points), f"{action.name}/{fcurve.data_path} has no keyframes"
+
+
+def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
+    """Which slot of the file a block sits in is its identity.
+
+    An empty slot has to stay empty and every offset in the header is written
+    by position, so getting the order wrong does not produce a slightly wrong
+    file - it produces one whose blocks are all in the wrong place. Export used
+    to take that order from `children_recursive`, which matches only because a
+    first import happens to name the objects in block order; import the same
+    .lmt again in one session and Blender renumbers the duplicates, the names
+    stop lining up, and the order silently changes.
+    """
+    from albam.engines.mtfw.animation import BLOCK_INDEX_PROP, _lmt_blocks
+
+    _result, _armature, _actions, lmt_object = lmt_imported_local
+    blocks = _lmt_blocks(lmt_object)
+    assert blocks, "the .lmt produced no blocks"
+
+    recorded = [block.get(BLOCK_INDEX_PROP) for block in blocks]
+    assert None not in recorded, "a block carries no index to order it by"
+    assert recorded == list(range(len(blocks))), (
+        f"blocks are not in file order: {recorded[:8]}...")
+
+    # The names are what used to carry the order, so breaking them must not
+    # change it. Reversed, so name order and block order disagree everywhere.
+    original_names = [block.name for block in blocks]
+    try:
+        for position, block in enumerate(blocks):
+            block.name = f"scrambled.{len(blocks) - position:04d}"
+        after = [block.get(BLOCK_INDEX_PROP) for block in _lmt_blocks(lmt_object)]
+        assert after == recorded, "renaming the objects reordered the blocks"
+    finally:
+        for block, name in zip(blocks, original_names):
+            block.name = name
