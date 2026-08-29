@@ -171,7 +171,13 @@ types:
       size_:
         value: '_root.app_id == "umvc3" ? 56 : 48'
       indices:
-        pos: _root.header.offset_index_buffer + face_offset * 2 + face_position * 2
+        # face_offset is an index base (see its own comment), added to the
+        # index values rather than to the buffer position - meshes tile
+        # contiguously by face_position alone, and the last one ends exactly
+        # at header.num_faces, so there is no room for it to shift anything.
+        # It is 0 in all but 9 of umvc3's 2702 .mod, which is why including
+        # it here read past end of file on precisely those 9.
+        pos: _root.header.offset_index_buffer + face_position * 2
         repeat: expr
         repeat-expr: num_indices
         type: u2
