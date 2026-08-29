@@ -19,6 +19,7 @@ mounted under would create ambiguous duplicate entries for the very same
 paths. local_game_fs below builds its own private MTFW_FS purely to
 resolve hashes to real paths - it is never itself added to the VFS.
 """
+import contextlib
 import json
 import os
 
@@ -209,3 +210,171 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
     finally:
         for block, name in zip(blocks, original_names):
             block.name = name
+
+
+@contextlib.contextmanager
+def _pose_restored(armature):
+    """Put the armature's pose back exactly as it was found.
+
+    Assigning an action makes Blender write the evaluated values into the pose
+    bones themselves, and taking the action away again does not undo that - the
+    armature keeps the last frame it was on. Root motion moves a character
+    metres from the origin, so a test that animates one and walks away leaves
+    every later test measuring that pose instead of the rest one.
+    """
+    from mathutils import Matrix
+
+    animation_data = armature.animation_data
+    previous_action = animation_data and animation_data.action
+    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
+    previous_frame = bpy.context.scene.frame_current
+    try:
+        yield
+    finally:
+        if armature.animation_data is not None:
+            armature.animation_data.action = previous_action
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
+        bpy.context.scene.frame_set(previous_frame)
+
+
+def _root_motion_track_angle(action, armature):
+    """Degrees the root motion bone turns over an action, from its own keys."""
+    import math
+
+    from mathutils import Quaternion
+
+    from albam.engines.mtfw.animation import ROOT_MOTION_BONE_NAME
+
+    components = {}
+    for fcurve in action_fcurves(action):
+        if not fcurve.data_path.endswith("].rotation_quaternion"):
+            continue
+        if fcurve.data_path.split('"')[1] != ROOT_MOTION_BONE_NAME:
+            continue
+        components[fcurve.array_index] = fcurve
+    if len(components) != 4:
+        return None, None
+    frames = sorted({key.co[0] for key in components[0].keyframe_points})
+    if len(frames) < 2:
+        return None, None
+    first, last = (
+        Quaternion([components[i].evaluate(f) for i in range(4)]).normalized()
+        for f in (frames[0], frames[-1])
+    )
+    angle = math.degrees((last @ first.inverted()).angle)
+    return (360 - angle if angle > 180 else angle), (int(frames[0]), int(frames[-1]))
+
+
+def _skeleton_root_bone(armature):
+    for bone in armature.data.bones:
+        if str(bone.get("mtfw.anim_retarget")) == "0":
+            return bone.name
+    raise AssertionError("the armature carries no bone mapped to anim id 0")
+
+
+def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
+    """Root motion is a whole-character transform, rotation included.
+
+    Two ways this has gone wrong, and one measurement rules out both. Bind the
+    rotation to nothing and a block that spins the character around plays as a
+    twist in place - the character ends the block facing the way he started.
+    Bind it in the wrong frame and he turns about a horizontal axis instead,
+    and ends the block on his face.
+
+    Both are only visible in armature space. The bone the track is keyed on is
+    created pointing +Z, so its own rest orientation already carries the
+    engine's Y-up axes into Blender's Z-up ones - which makes the raw
+    components correct there, and makes the value read straight off the fcurve
+    the one space where neither mistake shows up.
+    """
+    import math
+
+    _result, armature, actions, _lmt_object = lmt_imported_local
+    root_bone = _skeleton_root_bone(armature)
+
+    turning = []
+    for action in actions:
+        angle, frames = _root_motion_track_angle(action, armature)
+        if angle is not None and angle > 5:
+            turning.append((action, angle, frames))
+    if not turning:
+        pytest.skip("no block of this .lmt turns the root motion bone")
+
+    with _pose_restored(armature):
+        for action, expected, (first, last) in turning:
+            if armature.animation_data is None:
+                armature.animation_data_create()
+            armature.animation_data.action = action
+            slots = getattr(action, "slots", None)
+            if slots:
+                armature.animation_data.action_slot = slots[0]
+
+            poses = []
+            for frame in (first, last):
+                bpy.context.scene.frame_set(frame)
+                depsgraph = bpy.context.evaluated_depsgraph_get()
+                evaluated = armature.evaluated_get(depsgraph)
+                poses.append(evaluated.pose.bones[root_bone].matrix.to_quaternion())
+
+            net = poses[1] @ poses[0].inverted()
+            angle = math.degrees(net.angle)
+            angle = 360 - angle if angle > 180 else angle
+            axis = net.axis.normalized()
+            tilt = math.degrees(math.acos(min(1.0, abs(axis.z))))
+
+            assert abs(angle - expected) < 1.0, (
+                f"{action.name}: the root motion track turns {expected:.1f} deg but the "
+                f"character turns {angle:.1f} deg"
+            )
+            assert tilt < 1.0, (
+                f"{action.name}: the character turns about "
+                f"({axis.x:+.3f}, {axis.y:+.3f}, {axis.z:+.3f}), {tilt:.1f} deg off vertical"
+            )
+
+
+def test_root_motion_constraints_are_identities_at_rest(lmt_imported_local):
+    """Adding the constraint must not move the rig on its own.
+
+    CHILD_OF applies the target's transform relative to the inverse matrix it
+    stores, so getting that matrix wrong doesn't fail loudly - it silently
+    bakes the root motion bone's own rest orientation into every rig the
+    moment the .lmt is imported, animated or not.
+    """
+    _result, armature, _actions, _lmt_object = lmt_imported_local
+
+    constraints = [
+        constraint
+        for pose_bone in armature.pose.bones
+        for constraint in pose_bone.constraints
+        if constraint.type == "CHILD_OF"
+    ]
+    assert constraints, "nothing binds the rig to the root motion bone"
+
+    from mathutils import Matrix
+
+    with _pose_restored(armature):
+        # Whatever the tests before this one left posed, measure from rest.
+        if armature.animation_data is not None:
+            armature.animation_data.action = None
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = Matrix.Identity(4)
+
+        def evaluate():
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            depsgraph.update()
+            evaluated = armature.evaluated_get(depsgraph)
+            return {pb.name: pb.matrix.copy() for pb in evaluated.pose.bones}
+
+        live = evaluate()
+        for constraint in constraints:
+            constraint.mute = True
+        try:
+            muted = evaluate()
+        finally:
+            for constraint in constraints:
+                constraint.mute = False
+
+        worst = max((live[name].to_translation() - matrix.to_translation()).length
+                    for name, matrix in muted.items())
+        assert worst < 1e-5, f"the constraints move the rest pose by {worst * 100:.4f} cm"
