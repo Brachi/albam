@@ -25,5 +25,6 @@ from .animation_import import (  # noqa: F401  re-exported
     BLOCK_INDEX_PROP,
     CHAIN_LENGTH_PROP,
     CHAIN_TARGET_PROP,
+    ROOT_MOTION_BONE_NAME,
 )
 from .animation_export import _lmt_blocks  # noqa: F401  re-exported

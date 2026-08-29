@@ -392,6 +392,33 @@ def _create_missing_bones(armature, bone_index, key, mapping):
     return bone_name
 
 
+def _follow_root_motion(armature, bone_name, root_motion_bone):
+    """Make one bone ride the root motion bone, rotation included.
+
+    Root motion is a whole-character transform, so a bone that only copies its
+    position turns nowhere: a block that spins the character around plays as a
+    twist in place, and a chain's goal keeps reaching for the point it would
+    have reached before the turn.
+
+    CHILD_OF rather than a copy pair, for two reasons. It applies the target's
+    transform as a delta from the target's own rest, which a world-space
+    COPY_ROTATION does not - that copies the absolute rotation, root motion's
+    90 degree rest orientation and all, and lays the character on its face.
+    And it does it without making anything an actual child, which matters
+    because both import and export decide how to convert a translation by
+    asking whether a bone has a parent.
+
+    The inverse matrix is what makes the delta a delta: at rest the constraint
+    has to be an identity, or every rig gains root motion's rest orientation
+    the moment the constraint is added.
+    """
+    pose_bone = armature.pose.bones[bone_name]
+    constraint = pose_bone.constraints.new('CHILD_OF')
+    constraint.target = armature
+    constraint.subtarget = root_motion_bone
+    constraint.inverse_matrix = armature.data.bones[root_motion_bone].matrix_local.inverted()
+
+
 def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chain_count,
                            chain_constraints):
     """A control bone carrying a chain's goal, with the chain constrained to it.
@@ -431,11 +458,7 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
     chain_constraints[track_bone_index] = (pose_bone.name, constraint.name)
 
     root_motion_bone = _get_or_create_root_motion_bone(armature, mapping)
-    pose_bone = armature.pose.bones[bone_name]
-    constraint = pose_bone.constraints.new('COPY_LOCATION')
-    constraint.target = armature
-    constraint.subtarget = root_motion_bone
-    constraint.use_offset = True
+    _follow_root_motion(armature, bone_name, root_motion_bone)
 
     return bone_name
 
@@ -450,12 +473,7 @@ def _get_or_create_root_motion_bone(armature, mapping):
         blender_bone.tail[2] += 0.01
         blender_bone["mtfw.anim_retarget"] = "255"
 
-    # set constrain for the root bone->root_motion
-    pose_bone = armature.pose.bones[mapping.get(ROOT_BONE_NAME)]
-    constraint = pose_bone.constraints.new('COPY_LOCATION')
-    constraint.target = armature
-    constraint.subtarget = bone_name
-    constraint.use_offset = True
+    _follow_root_motion(armature, mapping.get(ROOT_BONE_NAME), bone_name)
 
     return bone_name
 
