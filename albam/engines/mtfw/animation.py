@@ -1,3 +1,4 @@
+import contextlib
 import math
 from io import BytesIO
 from ...vfs import VirtualFileData
@@ -12,7 +13,6 @@ from .structs.lmt import Lmt
 
 HACKY_BONE_INDEX_IK_FOOT_RIGHT = 19
 HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
-HACKY_BONE_INDICES_IK_FOOT = {HACKY_BONE_INDEX_IK_FOOT_RIGHT, HACKY_BONE_INDEX_IK_FOOT_LEFT}
 
 # A limb is not stored as a finished pose. A track whose joint_type is one of
 # these marks the root of a chain: the joint at root+1 is keyed by no track at
@@ -28,7 +28,6 @@ BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
 CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
 # usages that carry a position rather than a rotation or a scale
 TRANSLATION_USAGES = {1, 4}
-ROOT_UNK_BONE_ID = 254  # probably a general index for non-bone objects, same ID with different joint types
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
@@ -62,7 +61,6 @@ APPID_VERSION_MAPPER = {
     "dd": 67,
 }
 
-BOUNDS_BUFF_TYPES = [4, 5, 7, 11, 12, 13, 14, 15]
 KEYFRAME_TYPES_51 = {
     1: Lmt.Vec3Frame12,  # LMTVec3 but tests didn't find it in re games
     2: Lmt.Vec3Frame12,
@@ -117,19 +115,6 @@ EVALUATOR_BUFFER_TYPES_51 = {
 
 
 # Unused for now but maybe LMTQuadraticVector3 will need it
-class LMTUniKey:
-    def __init__(self):
-        self.value = {
-            "vector": Vector((0.0, 0.0, 0.0)),
-            "quaternion": Quaternion((1.0, 0.0, 0.0, 0.0)),
-        }
-        # tangets used only for LMTQuadraticVector3
-        self.intangenttype = "custom"
-        self.outtangenttype = "custom"
-        self.intangent = [0.0, 0.0, 0.0]
-        self.outtangent = [0.0, 0.0, 0.0]
-
-
 class ActionKey:
     def __init__(self):
         self.location = None  # Vector((0.0, 0.0, 0.0))
@@ -498,7 +483,6 @@ def load_lmt(vfile, context):
             item = tracks.tracks.add()
             item.copy_custom_properties_from(track)
             item.raw_data = track.data
-            # print("Buffer type: ", track.buffer_type, "Usage:", USAGE[track.usage])
             bounds = None
             keyframes = LMTKeyFrames()
             if lmt_ver > 51:
@@ -513,9 +497,6 @@ def load_lmt(vfile, context):
                 lu = last_usage[track.bone_index][-1]
                 if lu >= track.usage:
                     duplicated_bids[track.bone_index] += 1
-                    # print("Need new bone for:", track.bone_index,
-                    #      "current:", track.usage,
-                    #      "previous", last_usage[track.bone_index][-1])
                 last_usage[track.bone_index].append(track.usage)
             except KeyError:
                 last_usage[track.bone_index] = [track.usage]
@@ -559,10 +540,8 @@ def load_lmt(vfile, context):
                 rd = track.reference_data
                 if track_type == "location":
                     frame = Vector((rd[0] / 100, rd[1] / 100, rd[2] / 100))
-                    print("default location ", frame)
                 elif track_type == "rotation_quaternion":
                     frame = Quaternion((rd[3], rd[1], rd[2], rd[0]))
-                    print("default rotation_quaternion")
                 elif track_type == "scale":
                     frame = Vector((rd[0], rd[1], rd[2]))
                 keyframes.decoded_frames.append(frame)
@@ -649,7 +628,6 @@ def _create_blender_action(action, keyframes, bone_index, track_type, block_inde
         print('unknown error:', err, "Block index: {0}, Track index:{1}".format(
             block_index, track_index))
         return True
-    # for frame_index, frame_data in enumerate(decoded_frames):
     for frame_index, frame_data in enumerate(keyframes.decoded_frames):
         if frame_data is None:
             continue
@@ -759,23 +737,35 @@ def _create_bone_mapping(armature_obj):
     return bone_names
 
 
-def _create_missing_bones(armature, bone_index, key, mapping):
+@contextlib.contextmanager
+def _armature_in_edit_mode(armature):
+    """Edit mode on `armature`, and object mode again however the block ends.
+
+    A bone can only be created in edit mode, which is modal and global - it
+    acts on whatever happens to be active - so the armature has to be made
+    active first. Restoring the mode in a finally matters: a raise in the
+    middle would otherwise leave Blender in edit mode, where every later
+    operator here fails.
+    """
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
-    # deselect all objects
     bpy.ops.object.select_all(action='DESELECT')
-
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
+    try:
+        yield armature.data.edit_bones
+    finally:
+        bpy.ops.object.mode_set(mode='OBJECT')
 
+
+def _create_missing_bones(armature, bone_index, key, mapping):
     bone_name = key
-
-    blender_bone = armature.data.edit_bones.new(bone_name)
-    mapping[key] = blender_bone.name
-    blender_bone.tail[2] += 0.01
-    blender_bone["mtfw.anim_retarget"] = key
-    bpy.ops.object.mode_set(mode='OBJECT')
+    with _armature_in_edit_mode(armature) as edit_bones:
+        blender_bone = edit_bones.new(bone_name)
+        mapping[key] = blender_bone.name
+        blender_bone.tail[2] += 0.01
+        blender_bone["mtfw.anim_retarget"] = key
     return bone_name
 
 
@@ -797,24 +787,15 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
     if bone_name in armature.data.bones:
         return bone_name
 
-    if bpy.context.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-    # deselect all objects
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.context.view_layer.objects.active = armature
-
-    armature.select_set(True)
-    bpy.ops.object.mode_set(mode='EDIT')
-
-    blender_bone = armature.data.edit_bones.new(bone_name)
-    blender_bone.head = armature.data.edit_bones[bone_index].head
-    blender_bone.tail = armature.data.edit_bones[bone_index].tail
-    blender_bone["mtfw.anim_retarget"] = str(track_bone_index) + "_1"
-    # marks the bone as carrying a goal rather than a joint's own transform, so
-    # export leaves its position channel alone exactly as import did
-    blender_bone[CHAIN_TARGET_PROP] = True
-    blender_bone[CHAIN_LENGTH_PROP] = chain_count
-    bpy.ops.object.mode_set(mode='OBJECT')
+    with _armature_in_edit_mode(armature) as edit_bones:
+        blender_bone = edit_bones.new(bone_name)
+        blender_bone.head = edit_bones[bone_index].head
+        blender_bone.tail = edit_bones[bone_index].tail
+        blender_bone["mtfw.anim_retarget"] = str(track_bone_index) + "_1"
+        # marks the bone as carrying a goal rather than a joint's own transform,
+        # so export leaves its position channel alone exactly as import did
+        blender_bone[CHAIN_TARGET_PROP] = True
+        blender_bone[CHAIN_LENGTH_PROP] = chain_count
 
     # constrain the chain to the goal
     pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
@@ -841,18 +822,10 @@ def _get_or_create_root_motion_bone(armature, mapping):
     if bone_name in armature.data.bones:
         return bone_name
 
-    if bpy.context.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-    # deselect all objects
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.context.view_layer.objects.active = armature
-    armature.select_set(True)
-    bpy.ops.object.mode_set(mode='EDIT')
-
-    blender_bone = armature.data.edit_bones.new(bone_name)
-    blender_bone.tail[2] += 0.01
-    blender_bone["mtfw.anim_retarget"] = "255"
-    bpy.ops.object.mode_set(mode='OBJECT')
+    with _armature_in_edit_mode(armature) as edit_bones:
+        blender_bone = edit_bones.new(bone_name)
+        blender_bone.tail[2] += 0.01
+        blender_bone["mtfw.anim_retarget"] = "255"
 
     # set constrain for the root bone->root_motion
     pose_bone = armature.pose.bones[mapping.get(ROOT_BONE_NAME)]
@@ -898,8 +871,8 @@ def _local_space_to_parent_translation(frame, bone):
             return frame + lmt_rest
 
     # A chain's goal was imported without a parent-space conversion, so it must
-    # leave the same way. HACKY_BONE_INDICES_IK_FOOT is the fallback for rigs
-    # built before the control bones were marked.
+    # leave the same way. The bare ids are the fallback for rigs built before
+    # the control bones were marked.
     if bone.get(CHAIN_TARGET_PROP) or anim_bone_id in ("19", "23"):
         rest = bone.matrix_local.to_translation()
         return frame + Vector((rest.x, rest.z, -rest.y))
@@ -937,14 +910,6 @@ def poll_import_operator_for_lmt(panel_class, context):
     return bool(context.scene.albam.import_options_lmt.armature)
 
 
-def _pre_serialize_offset(dst_lmt, num_anim_blocks):
-    block_offsets = []
-    for i in range(num_anim_blocks):
-        block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
-        block_offset.offset = 0
-    return block_offsets
-
-
 def _select_kf_usage(bone, track_type):
     is_mroot = bone.get('mtfw.anim_retarget', "-1") == "255"
     match track_type:
@@ -966,7 +931,6 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         rotation_quaternion = {}
         scale = {}
         bone = armature.data.bones.get(bone_name)
-        # parent_bone = bone.parent
         bone_index = mapping.get(bone_name)
         for frame, action_key in bone_tracks.items():
             if action_key.location is not None:
@@ -1009,7 +973,6 @@ def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_store
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
-    # tracks = []
     for et in encoded_tracks:
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
@@ -1448,7 +1411,7 @@ def export_lmt(bl_obj):
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)
-    block_offsets = []  # _pre_serialize_offset(dst_lmt, len(bl_objects))
+    block_offsets = []
     _generate_track_from_action(armature, bl_objects, app_id)
     lmt_offsets = _calculate_offsets(bl_objects, app_id)
     ofc_block = lmt_offsets["block_offsets"]
