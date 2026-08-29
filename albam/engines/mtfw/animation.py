@@ -24,6 +24,9 @@ HACKY_BONE_INDICES_IK_FOOT = {HACKY_BONE_INDEX_IK_FOOT_RIGHT, HACKY_BONE_INDEX_I
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
 CHAIN_TARGET_PROP = "mtfw.chain_target"
+CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
+# usages that carry a position rather than a rotation or a scale
+TRANSLATION_USAGES = {1, 4}
 ROOT_UNK_BONE_ID = 254  # probably a general index for non-bone objects, same ID with different joint types
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
@@ -525,7 +528,8 @@ def load_lmt(vfile, context):
             # Restore IK. Driven by the chain the block declares, not by a
             # fixed pair of bone ids: an arm, and every limb of a quadruped,
             # needs exactly the same treatment as a biped's feet.
-            if track.bone_index in chains and bone_index is not None:
+            is_chain_goal = track.bone_index in chains and bone_index is not None
+            if is_chain_goal:
                 bone_index = _get_or_create_ik_bone(
                     armature, track.bone_index, bone_index, mapping, chains[track.bone_index],
                     chain_constraints)
@@ -568,6 +572,12 @@ def load_lmt(vfile, context):
             if track.usage == 1 and track.bone_index == 0 and armature.data.bones[bone_index].parent is None:
                 keyframes.decoded_frames = _parent_space_to_local_translation(
                     keyframes.decoded_frames, armature, bone_index)
+
+            if is_chain_goal and track.usage in TRANSLATION_USAGES:
+                keyframes.decoded_frames = [
+                    None if f is None else f - _rest_head_in_bone_space(armature, bone_index)
+                    for f in keyframes.decoded_frames
+                ]
 
             err = _create_blender_action(
                 action, keyframes, bone_index, track_type, block_index, track_index, channels)
@@ -673,6 +683,20 @@ def to_signed_32(value):
 def to_unsigned_32(value):
     """Undo to_signed_32, for a field the format declares as u4."""
     return value + 0x100000000 if value < 0 else value
+
+
+def _rest_head_in_bone_space(armature, bone_name):
+    """The control bone's own rest position, in the space its location channel
+    is measured in.
+
+    A chain's goal is the joint's position in model space, not an offset from
+    where that joint happens to rest. The control bone sits at the joint so it
+    is usable as a handle, so its rest position has to come back out of the
+    value - and back in again on export. A bone's rest rotation is what turns
+    the file's Y-up vector into Blender's Z-up one, hence the swap.
+    """
+    rest = armature.data.bones[bone_name].matrix_local.to_translation()
+    return Vector((rest.x, rest.z, -rest.y))
 
 
 def _find_chains(tracks):
@@ -784,6 +808,7 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
     # marks the bone as carrying a goal rather than a joint's own transform, so
     # export leaves its position channel alone exactly as import did
     blender_bone[CHAIN_TARGET_PROP] = True
+    blender_bone[CHAIN_LENGTH_PROP] = chain_count
     bpy.ops.object.mode_set(mode='OBJECT')
 
     # constrain the chain to the goal
@@ -871,7 +896,8 @@ def _local_space_to_parent_translation(frame, bone):
     # leave the same way. HACKY_BONE_INDICES_IK_FOOT is the fallback for rigs
     # built before the control bones were marked.
     if bone.get(CHAIN_TARGET_PROP) or anim_bone_id in ("19", "23"):
-        return frame
+        rest = bone.matrix_local.to_translation()
+        return frame + Vector((rest.x, rest.z, -rest.y))
 
     global_pos = bone.matrix_local @ frame
     if bone.parent is not None:
