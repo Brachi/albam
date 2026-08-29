@@ -239,7 +239,11 @@ def _pose_restored(armature):
 
 
 def _root_motion_track_angle(action, armature):
-    """Degrees the root motion bone turns over an action, from its own keys."""
+    """How far and about what the root motion bone turns, from its own keys.
+
+    The axis comes back in the engine's frame, the one the track is written
+    against.
+    """
     import math
 
     from mathutils import Quaternion
@@ -254,16 +258,19 @@ def _root_motion_track_angle(action, armature):
             continue
         components[fcurve.array_index] = fcurve
     if len(components) != 4:
-        return None, None
+        return None, None, None
     frames = sorted({key.co[0] for key in components[0].keyframe_points})
     if len(frames) < 2:
-        return None, None
+        return None, None, None
     first, last = (
         Quaternion([components[i].evaluate(f) for i in range(4)]).normalized()
         for f in (frames[0], frames[-1])
     )
-    angle = math.degrees((last @ first.inverted()).angle)
-    return (360 - angle if angle > 180 else angle), (int(frames[0]), int(frames[-1]))
+    net = last @ first.inverted()
+    angle = math.degrees(net.angle)
+    return (360 - angle if angle > 180 else angle,
+            net.axis.normalized(),
+            (int(frames[0]), int(frames[-1])))
 
 
 def _skeleton_root_bone(armature):
@@ -278,31 +285,40 @@ def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
 
     Two ways this has gone wrong, and one measurement rules out both. Bind the
     rotation to nothing and a block that spins the character around plays as a
-    twist in place - the character ends the block facing the way he started.
-    Bind it in the wrong frame and he turns about a horizontal axis instead,
-    and ends the block on his face.
+    twist in place - he ends the block facing the way he started. Bind it in
+    the wrong frame and he turns about the wrong axis, and a block that should
+    turn him on the spot lays him on his face instead.
 
-    Both are only visible in armature space. The bone the track is keyed on is
-    created pointing +Z, so its own rest orientation already carries the
-    engine's Y-up axes into Blender's Z-up ones - which makes the raw
-    components correct there, and makes the value read straight off the fcurve
-    the one space where neither mistake shows up.
+    So the character's own rotation is compared against the track's, carried
+    over by the same (x, y, z) -> (x, -z, y) mapping a position takes. Not
+    against vertical: most of these are turns on the spot, but a small number
+    of blocks across the game really do turn the character about a horizontal
+    axis, and a test that assumed otherwise would be asserting something the
+    format does not promise.
+
+    Both mistakes are only visible in armature space. The bone the track is
+    keyed on is created pointing +Z, so its own rest orientation already
+    carries the engine's axes into Blender's - which makes the value read
+    straight off the fcurve the one place where neither shows up.
     """
     import math
+
+    from mathutils import Vector
 
     _result, armature, actions, _lmt_object = lmt_imported_local
     root_bone = _skeleton_root_bone(armature)
 
     turning = []
     for action in actions:
-        angle, frames = _root_motion_track_angle(action, armature)
+        angle, axis, frames = _root_motion_track_angle(action, armature)
         if angle is not None and angle > 5:
-            turning.append((action, angle, frames))
+            # the engine's axes into Blender's, the same mapping a position takes
+            turning.append((action, angle, Vector((axis.x, -axis.z, axis.y)), frames))
     if not turning:
         pytest.skip("no block of this .lmt turns the root motion bone")
 
     with _pose_restored(armature):
-        for action, expected, (first, last) in turning:
+        for action, expected, expected_axis, (first, last) in turning:
             if armature.animation_data is None:
                 armature.animation_data_create()
             armature.animation_data.action = action
@@ -321,15 +337,16 @@ def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
             angle = math.degrees(net.angle)
             angle = 360 - angle if angle > 180 else angle
             axis = net.axis.normalized()
-            tilt = math.degrees(math.acos(min(1.0, abs(axis.z))))
 
             assert abs(angle - expected) < 1.0, (
                 f"{action.name}: the root motion track turns {expected:.1f} deg but the "
                 f"character turns {angle:.1f} deg"
             )
-            assert tilt < 1.0, (
+            # abs(): at exactly 180 degrees the sign of an axis is arbitrary
+            assert abs(axis.dot(expected_axis)) > 0.999, (
                 f"{action.name}: the character turns about "
-                f"({axis.x:+.3f}, {axis.y:+.3f}, {axis.z:+.3f}), {tilt:.1f} deg off vertical"
+                f"({axis.x:+.3f}, {axis.y:+.3f}, {axis.z:+.3f}), but the track names "
+                f"({expected_axis.x:+.3f}, {expected_axis.y:+.3f}, {expected_axis.z:+.3f})"
             )
 
 
