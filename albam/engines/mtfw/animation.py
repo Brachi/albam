@@ -48,6 +48,19 @@ BUFFER_TYPE_LINEAR_QUATERNION_14BIT = 6
 BUFFER_TYPE_BILINEAR_QUATERNION_7BIT = 7
 
 
+def _get_action_channels(action, armature):
+    """The container an action keeps its fcurves and groups in.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=armature.name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 @blender_registry.register_import_function(app_id="re5", extension='lmt', albam_asset_type="ANIMATION")
 @blender_registry.register_import_function(app_id="umvc3", extension='lmt', albam_asset_type="ANIMATION")
 def load_lmt(file_item, context):

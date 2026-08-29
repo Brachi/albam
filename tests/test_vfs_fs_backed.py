@@ -177,6 +177,71 @@ def test_reload_blend_file_reconnects_fs_roots(tmp_path):
     assert vfile.get_bytes() == b"mod-bytes"
 
 
+def test_get_bytes_remounts_a_root_the_registry_lost(tmp_path):
+    """
+    fs_registry is also emptied *without* a file load: unregister() clears
+    it, so Reload Scripts, an extension update or a disable/enable cycle
+    leaves every already-added root pointing at a key that's gone, with no
+    load_post to rebuild it. Reading bytes must mount the root again on
+    demand instead of raising a bare KeyError on a uuid.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model").mkdir(parents=True)
+    (game_root / "model" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    vfs.add_real_file("re5", str(game_root))
+    vfile = vfs.select_vfile("re5", "model/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    fs_registry.clear()
+
+    assert vfile.get_bytes() == b"mod-bytes"
+    # Mounted again under the key the root already carried, not a new one.
+    assert fs_registry.get(vfile.root_vfile.fs_key) is not None
+
+
+def test_get_bytes_on_an_unmountable_root_says_why():
+    """An export root's MemoryFS only ever existed in this process - there's
+    no path to mount it again from, so the error naming it must say that
+    rather than surfacing the internal registry key.
+    """
+    exported = bpy.context.scene.albam.exported
+    exported.add_export_root(
+        "re5", "export-root", [VirtualFileData("re5", "a.mod", data_bytes=b"bytes")]
+    )
+    vfile = exported.select_vfile("re5", "a.mod")
+
+    fs_registry.clear()
+
+    with pytest.raises(RuntimeError, match="export-root"):
+        vfile.get_bytes()
+
+
+def test_reload_blend_file_reconnects_roots_in_every_scene(tmp_path):
+    """The load_post handler used to walk bpy.context.scene only, leaving a
+    root added in any other scene of the same file unmounted.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model").mkdir(parents=True)
+    (game_root / "model" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    extra_scene = bpy.data.scenes.new("extra")
+    extra_scene.albam.vfs.add_real_file("re5", str(game_root))
+
+    blend_path = str(tmp_path / "save.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+    fs_registry.clear()
+    bpy.ops.wm.open_mainfile(filepath=blend_path)
+
+    extra_scene = bpy.data.scenes["extra"]
+    vfile = extra_scene.albam.vfs.select_vfile("re5", "model/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    extra_scene.albam.vfs.file_list.clear()
+    bpy.data.scenes.remove(extra_scene)
+
+
 def test_remove_root_unregisters_fs():
     from albam.vfs import ALBAM_OT_VirtualFileSystemRemoveRootVFile
 
