@@ -55,7 +55,7 @@ line-length = 110
 
 [tool.flake8]
 max-line-length = 110
-exclude = [".venv", "structs"]
+exclude = [".venv", "structs", "build"]
 
 # F722: needed for Blender props annotations such as
 # ```
