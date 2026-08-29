@@ -156,6 +156,64 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
+    class Float3(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.Float3, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
+            self.z = self._io.read_f4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.Float3, self)._write__seq(io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
+            self._io.write_f4le(self.z)
+
+
+        def _check(self):
+            self._dirty = False
+
+
+    class Float4(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.Float4, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
+            self.z = self._io.read_f4le()
+            self.w = self._io.read_f4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.Float4, self)._write__seq(io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
+            self._io.write_f4le(self.z)
+            self._io.write_f4le(self.w)
+
+
+        def _check(self):
+            self._dirty = False
+
+
     class Mat3x3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sdl156.Mat3x3, self).__init__(_io)
@@ -664,7 +722,11 @@ class Sdl156(ReadWriteKaitaiStruct):
                     _on = self.prop_type
                     if _on == 10:
                         pass
+                    elif _on == 11:
+                        pass
                     elif _on == 12:
+                        pass
+                    elif _on == 13:
                         pass
                     elif _on == 14:
                         pass
@@ -684,6 +746,12 @@ class Sdl156(ReadWriteKaitaiStruct):
                     elif _on == 3:
                         pass
                     elif _on == 34:
+                        pass
+                        self._m_data[i]._fetch_instances()
+                    elif _on == 35:
+                        pass
+                        self._m_data[i]._fetch_instances()
+                    elif _on == 36:
                         pass
                         self._m_data[i]._fetch_instances()
                     elif _on == 4:
@@ -747,7 +815,11 @@ class Sdl156(ReadWriteKaitaiStruct):
                         _on = self.prop_type
                         if _on == 10:
                             pass
+                        elif _on == 11:
+                            pass
                         elif _on == 12:
+                            pass
+                        elif _on == 13:
                             pass
                         elif _on == 14:
                             pass
@@ -782,6 +854,18 @@ class Sdl156(ReadWriteKaitaiStruct):
                         elif _on == 3:
                             pass
                         elif _on == 34:
+                            pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
+                        elif _on == 35:
+                            pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
+                        elif _on == 36:
                             pass
                             if self._m_data[i]._root != self._root:
                                 raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
@@ -853,9 +937,15 @@ class Sdl156(ReadWriteKaitaiStruct):
                     if _on == 10:
                         pass
                         self._m_data.append(self._io.read_s4le())
+                    elif _on == 11:
+                        pass
+                        self._m_data.append(self._io.read_s8le())
                     elif _on == 12:
                         pass
                         self._m_data.append(self._io.read_f4le())
+                    elif _on == 13:
+                        pass
+                        self._m_data.append(self._io.read_f8le())
                     elif _on == 14:
                         pass
                         _t__m_data = Sdl156.MtStr(self._io, self, self._root)
@@ -901,6 +991,20 @@ class Sdl156(ReadWriteKaitaiStruct):
                             _t__m_data._read()
                         finally:
                             self._m_data.append(_t__m_data)
+                    elif _on == 35:
+                        pass
+                        _t__m_data = Sdl156.Float3(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
+                    elif _on == 36:
+                        pass
+                        _t__m_data = Sdl156.Float4(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 4:
                         pass
                         self._m_data.append(self._io.read_u1())
@@ -926,13 +1030,13 @@ class Sdl156(ReadWriteKaitaiStruct):
                         self._m_data.append(self._io.read_u4le())
                     elif _on == 7:
                         pass
-                        self._m_data.append(self._io.read_u4le())
+                        self._m_data.append(self._io.read_u8le())
                     elif _on == 8:
                         pass
                         self._m_data.append(self._io.read_s1())
                     elif _on == 9:
                         pass
-                        self._m_data.append(self._io.read_u4le())
+                        self._m_data.append(self._io.read_s2le())
 
                 self._io.seek(_pos)
 
@@ -955,9 +1059,15 @@ class Sdl156(ReadWriteKaitaiStruct):
                     if _on == 10:
                         pass
                         self._io.write_s4le(self._m_data[i])
+                    elif _on == 11:
+                        pass
+                        self._io.write_s8le(self._m_data[i])
                     elif _on == 12:
                         pass
                         self._io.write_f4le(self._m_data[i])
+                    elif _on == 13:
+                        pass
+                        self._io.write_f8le(self._m_data[i])
                     elif _on == 14:
                         pass
                         self._m_data[i]._write__seq(self._io)
@@ -979,6 +1089,12 @@ class Sdl156(ReadWriteKaitaiStruct):
                     elif _on == 34:
                         pass
                         self._m_data[i]._write__seq(self._io)
+                    elif _on == 35:
+                        pass
+                        self._m_data[i]._write__seq(self._io)
+                    elif _on == 36:
+                        pass
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 4:
                         pass
                         self._io.write_u1(self._m_data[i])
@@ -996,13 +1112,13 @@ class Sdl156(ReadWriteKaitaiStruct):
                         self._io.write_u4le(self._m_data[i])
                     elif _on == 7:
                         pass
-                        self._io.write_u4le(self._m_data[i])
+                        self._io.write_u8le(self._m_data[i])
                     elif _on == 8:
                         pass
                         self._io.write_s1(self._m_data[i])
                     elif _on == 9:
                         pass
-                        self._io.write_u4le(self._m_data[i])
+                        self._io.write_s2le(self._m_data[i])
 
                 self._io.seek(_pos)
 

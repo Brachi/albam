@@ -1,4 +1,5 @@
 import bpy
+import io
 import xml.etree.ElementTree as ET
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
@@ -16,9 +17,16 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     sdl._read()
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
+
     xml = from_sdl(sdl)
     ET.indent(xml, space="\t", level=0)
-    print(sdl.header.version)
+    buffer = io.StringIO()
+    xml.write(buffer, encoding="unicode", xml_declaration=True)
+    xml_string = buffer.getvalue()
+    text = bpy.data.texts.new(bl_object_name + ".xml")
+    bl_object["sdl"] = bl_object_name + ".xml"
+    text.from_string(xml_string)
+
     return bl_object
 
 
@@ -30,5 +38,14 @@ def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.type
     xfs._read()
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
-    print(xfs.header.major_ver)
+
+    xml = from_xfs(xfs, "lot")
+    ET.indent(xml, space="\t", level=0)
+    buffer = io.StringIO()
+    xml.write(buffer, encoding="unicode", xml_declaration=True)
+    xml_string = buffer.getvalue()
+    text = bpy.data.texts.new(bl_object_name + ".xml")
+    bl_object["lot"] = bl_object_name + ".xml"
+    text.from_string(xml_string)
+
     return bl_object

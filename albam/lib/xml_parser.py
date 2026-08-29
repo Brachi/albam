@@ -3,8 +3,8 @@ import struct
 import xml.etree.ElementTree as ET
 from ctypes import Structure, Union, c_uint32
 from collections import defaultdict
-from .classes import DTI_HASHES, RV_DTI_HASHES, DTI_FILE_HASHES, RV_DTI_FILE_HASHES
-from .classes import MtPropertyType, RV_MtPropertyType
+from .mt_classes import DTI_HASHES, RV_DTI_HASHES, DTI_FILE_HASHES, RV_DTI_FILE_HASHES
+from .mt_classes import MtPropertyType, RV_MtPropertyType
 from ..engines.mtfw.structs import sdl_156, xfs  # pla
 from . import mt_types as mt
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
@@ -75,6 +75,7 @@ SYMBOL_ORDER = {
     'a': 3,
 }
 
+
 def from_sdl(sdl_file):
     root = ET.Element('root')
     root.attrib['frames'] = str(sdl_file.header.frames)
@@ -83,7 +84,7 @@ def from_sdl(sdl_file):
     # parents = defaultdict(list)
     elements = []
 
-    for i, track in enumerate(sdl_file.tracks[1:]):
+    for i, track in enumerate(sdl_file.tracks[1:]):  # skips Root node
         # parents[track.parent].append(i)
         track_type = SDL_TRACK_ENUM[track.type]
         e = ET.Element(SDL_TRACK_ENUM[track.type], attrib={})
@@ -107,6 +108,7 @@ def from_sdl(sdl_file):
                 if track.type in [6, 8, 9]:
                     value.attrib['value'] = str(track.data[j])
                 if track.type == 7:
+                    print("type:", 7, "name:", track.name, "track num", i + 1, "frame num", j)
                     # if track.prop_type == 0x28:
                     #     value.attrib['vec_type'] = 'mt_easecurve'
                     #     value.attrib['P1'] = str(track.data[j].p1)
@@ -137,10 +139,11 @@ def from_sdl(sdl_file):
                     for k in val.__annotations__:
                         it = ET.SubElement(value, k, attrib={})
                         it.text = str(getattr(val, k))
-                if track.type == 0xB:
+                if track.type == 11:  # 0xb
+                    #print("name:", track.name, "track num", i + 1, "frame num", j)
                     if track.data[j].ref_ofs:
                         value.attrib['ref_path'] = track.data[j].ref_path
-                        value.attrib['ref_dti'] = RV_DTI_HASHES[track.data[j].ref_dti]
+                        value.attrib['ref_dti'] = RV_DTI_HASHES.get(track.data[j].ref_dti, str(track.data[j].ref_dti))
 
         if track.type in [2, 4]:
             root.append(e)
@@ -166,6 +169,7 @@ def flatten_tree(node, node_list, p_index):
         for c in node:
             flatten_tree(c, node_list, 0)
 
+
 def write_name(buf, names):
     name_dict = defaultdict()
     for name in names:
@@ -176,6 +180,7 @@ def write_name(buf, names):
     if buf_size % 4 != 0:
         buf.write(b'\0' * (4 - (buf_size % 4)))
     return name_dict
+
 
 def pack_timeframe(node):
     frame_time = int(node.attrib['timermarker'])
@@ -199,7 +204,8 @@ def pack_timeframe(node):
     frame_union.timeframe = frame
     return struct.pack('I', frame_union.raw)
 
-def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index = 0, offset = 0):
+
+def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index=0, offset=0):
     track = dst_sdl.Track(_parent=dst_sdl, _root=dst_sdl._root)
     track.type = RV_SDL_TRACK_ENUM[node.tag]
     track.prop_type = MtPropertyType[node.attrib['prop_type']]
@@ -215,7 +221,6 @@ def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index = 0
 
     if 'dti' in node.attrib:
         track.dti_ref = DTI_HASHES[node.attrib['dti']]
-
 
     if RV_SDL_TRACK_ENUM[node.tag] > 5:
         if node.tag == 'int_track' or node.tag == 'bool_track':
@@ -335,11 +340,11 @@ def from_pla(pla_file):
     root.attrib['frames'] = str(pla_file.header.frames)
     sorted_tracks = pla_file.tracks.copy()
     sorted_tracks.sort(key=lambda x: x.parent)
-    #parents = defaultdict(list)
+    # parents = defaultdict(list)
     elements = []
 
     for i, track in enumerate(pla_file.tracks[1:]):
-        #parents[track.parent].append(i)
+        # parents[track.parent].append(i)
         track_type = PLA_TRACK_ENUM[track.type]
         e = ET.Element(PLA_TRACK_ENUM[track.type],attrib={})
         e.attrib['prop_type'] = RV_MtPropertyType[track.prop_type]
@@ -388,11 +393,14 @@ class XfsMeta(Structure):
         ('_layoutId', c_uint32, 15),
         ('_meta', c_uint32, 16)
     )
+
+
 class XfsMetaUnion(Union):
     _fields_ = (
         ('_data', XfsMeta),
         ('_raw', c_uint32)
     )
+
 
 def read_chunk(buffer: KaitaiStream, layouts, parent):
     e = ET.SubElement(parent, 'class', attrib={})
@@ -401,14 +409,14 @@ def read_chunk(buffer: KaitaiStream, layouts, parent):
     io.BytesIO(buffer.read_bytes(4)).readinto(meta)
     chunk = buffer.read_u4le()
     layout = layouts[meta._layoutId]
-    e.attrib['name'] = RV_DTI_HASHES[layout.data.dti]
+    e.attrib['name'] = RV_DTI_HASHES.get(layout.data.dti, str(layout.data.dti))
     for prop in layout.data.prop:
         item_num = buffer.read_u4le()
         if prop.type in mt.type_to_class.keys():
             item_class = mt.type_to_class[prop.type]()
             item_bytes = prop.bytes
             it = ET.SubElement(e, 'vector', attrib={
-                    'type':RV_MtPropertyType[prop.type],
+                    'type': RV_MtPropertyType[prop.type],
                     'name': prop.name})
             for i in range(item_num):
                 vec = ET.SubElement(it, 'vec', attrib={})
@@ -459,9 +467,9 @@ def deserialize_class(dst_xfs: xfs.Xfs, node, buffer: io.BytesIO, classes, names
     if dti not in classes:
         classes.append(node.attrib['name'])
         class_def_check = True
-        class_def = dst_xfs.Obj(i = len(classes) - 1, _parent = dst_xfs, _root=dst_xfs._root)
+        class_def = dst_xfs.Obj(i=len(classes) - 1, _parent=dst_xfs, _root=dst_xfs._root)
         dst_xfs.objects.append(class_def)
-        class_def.data = dst_xfs.ObjectData(_parent=class_def,_root=class_def._root)
+        class_def.data = dst_xfs.ObjectData(_parent=class_def, _root=class_def._root)
         class_def.data.dti = DTI_HASHES[dti]
         class_def.data.prop_num = len(node)
         class_def.data.init = False
@@ -483,7 +491,7 @@ def deserialize_class(dst_xfs: xfs.Xfs, node, buffer: io.BytesIO, classes, names
         prop = None
         if class_def_check:
             prop = dst_xfs.MtProperty(_parent=class_def.data, _root=class_def._root)
-            #if c.tag != 'class':
+            # if c.tag != 'class':
             prop.type = MtPropertyType[c.attrib['type']]
             prop.attr = 0
             prop.disable = False
@@ -564,7 +572,7 @@ def to_xfs(root):
     for i in dst_xfs.objects:
         header.obj_pos.append(layout_size + header_size - 0x10)
         layout_size += 8 + i.data.prop_num * 24
-    #layout_size = 8 * len(classes) + sum([len(x.data.prop) for x in dst_xfs.objects])
+    # layout_size = 8 * len(classes) + sum([len(x.data.prop) for x in dst_xfs.objects])
 
     name_dict = write_name(name_buffer, name_set)
     for i, c in enumerate(dst_xfs.objects):

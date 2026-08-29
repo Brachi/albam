@@ -36,11 +36,11 @@ types:
       - {id: data_ref, type: u4}
     instances:
       size_:
-        value: 0x18
+        value: 24
       name:
         pos: name_ofs + _root.header.name_offset
         type: str
-        encoding: utf-8
+        encoding: UTF-8
         terminator: 0
       data:
         if: data_ref > 0 and type > 5
@@ -48,23 +48,27 @@ types:
         type:
           switch-on: prop_type
           cases:
-            3: u1
-            4: u1
-            5: u2
-            6: u4
-            7: u4
-            8: s1
-            9: u4
-            10: s4
-            12: f4
-            0xE: mt_str #string
-            0xF: color
-            0x14: vec3
-            0x15: vec4
-            0x16: vec4 #quat
-            0x22: float2
-            0x28: mt_easecurve
-            0x3A: resource
+            3: u1 # bool
+            4: u1 # u8
+            5: u2 # u16
+            6: u4 # u32
+            7: u8 # u64
+            8: s1 # s8
+            9: s2 # s16
+            10: s4 # s32
+            11: s8 # s64
+            12: f4 # f32
+            13: f8 # f64
+            14: mt_str #string
+            15: color
+            20: vec3
+            21: vec4
+            22: vec4 #quat
+            34: float2
+            35: float3
+            36: float4
+            40: mt_easecurve
+            58: resource
         repeat: expr
         repeat-expr: num_frames
       timing_frames:
@@ -83,7 +87,7 @@ types:
       ref_path:
         pos: ref_ofs + _root.header.name_offset + 4
         type: str
-        encoding: utf-8
+        encoding: UTF-8
         terminator: 0
        
   timing_frame:
@@ -133,7 +137,7 @@ types:
       string:
         pos: ptr
         type: str
-        encoding: utf-8
+        encoding: UTF-8
         terminator: 0
       
   rect:
@@ -168,6 +172,19 @@ types:
     seq:
       - {id: x, type: f4}
       - {id: y, type: f4}
+
+  float3:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
+      - {id: z, type: f4}
+
+  float4:
+    seq:
+      - {id: x, type: f4}
+      - {id: y, type: f4}
+      - {id: z, type: f4}
+      - {id: w, type: f4}
 
   mt_easecurve:
     seq:
