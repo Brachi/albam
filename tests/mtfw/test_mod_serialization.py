@@ -492,6 +492,15 @@ def _exported_index_counts_match(src_mod, dst_mod):
     they cannot match however correctly they are derived - the defect is
     upstream, in the geometry. Checking it directly is what lets the
     assertions below stay strict for every model that does round-trip.
+
+    What goes missing is a Blender data model limit, not an export bug: a
+    mesh there cannot hold two faces over the same set of vertices, nor a
+    face that repeats one. Both exist in real files, and both are dropped on
+    import, so export has nothing to write them back from. It accounts for
+    the loss exactly on the one umvc3 model in this dataset that shows it -
+    117729 source indices against 116022 exported, and 530 faces sharing a
+    vertex set (1590 indices) plus 39 degenerate faces (117) is 1707. The
+    other two lose nothing and are asserted strictly.
     """
     return (sum(m.num_indices for m in src_mod.meshes_data.meshes) ==
             sum(m.num_indices for m in dst_mod.meshes_data.meshes))
@@ -499,7 +508,7 @@ def _exported_index_counts_match(src_mod, dst_mod):
 
 def test_export_header_face_counts(mod_imported_local, mod_exported_local):
     if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
-        pytest.xfail("meshes exported a different index count, so counts derived from it differ")
+        pytest.xfail("duplicate/degenerate faces dropped on import, so the index count differs")
     sheader = mod_imported_local.header
     dheader = mod_exported_local.header
 
@@ -514,7 +523,7 @@ def test_export_header_size_file(mod_imported_local, mod_exported_local):
     if mod_imported_local.header.version not in (210, 211, 212):
         pytest.skip("no size_file on this version")
     if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
-        pytest.xfail("meshes exported a different index count, so the file size differs")
+        pytest.xfail("duplicate/degenerate faces dropped on import, so the file size differs")
     assert mod_imported_local.header.size_file == mod_exported_local.header.size_file
 
 
