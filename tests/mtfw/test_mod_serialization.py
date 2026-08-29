@@ -463,17 +463,87 @@ def test_export_header_size_file(mod_imported_local, mod_exported_local):
     assert mod_imported_local.header.size_file == mod_exported_local.header.size_file
 
 
-@pytest.mark.xfail(reason="WIP")
-def test_meshes_data_xfail(mod_imported_local, mod_exported_local, subtests):
+# The only per-mesh offset that round-trips on every model measured, so it
+# is asserted rather than excused.
+MESH_FIELDS_ROUND_TRIPPED = ("face_offset",)
 
-    assert (mod_imported_local.meshes_data.num_weight_bounds ==
-            mod_exported_local.meshes_data.num_weight_bounds)
-    for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
-        src_mesh = mesh
+# Buffer placement and what follows from it. Measured across the three
+# umvc3 models in the dataset: of 51/1/31 meshes, face_position differs on
+# 50/0/0, vertex_position on 4/0/13, num_indices on 18/0/0, and min_index,
+# max_index and vertex_offset differ on exactly the meshes vertex_position
+# does - they are derived from it. num_indices is the odd one out: 6918
+# against 6822 on one mesh is a real geometry difference, not a placement
+# one. The middle model round-trips all of them, so none of this is
+# inherent to the format.
+MESH_FIELDS_BUFFER_PLACEMENT = (
+    "vertex_position", "min_index", "max_index", "vertex_offset",
+    "face_position", "num_indices",
+)
+APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3"}
+
+
+def _mesh_field_mismatches(src_meshes, dst_meshes, fields):
+    mismatches = []
+    for i, src_mesh in enumerate(src_meshes):
+        dst_mesh = dst_meshes[i]
+        for field in fields:
+            src_value = getattr(src_mesh, field)
+            dst_value = getattr(dst_mesh, field)
+            if src_value != dst_value:
+                mismatches.append(f"mesh {i}: {field} {src_value} != {dst_value}")
+    return mismatches
+
+
+def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
+    """The per-mesh fields that already round-trip, asserted so they stay
+    that way.
+
+    Version-gated like test_meshes_data_21: these are the 21 layout's field
+    names, and a 156 mesh has no vertex_position at all (it has
+    vertex_position_2). Without the gate every re5 mesh raised
+    AttributeError inside a subtest, which pytest-subtests reports as a
+    failed subtest while the test itself still passes - so the old blanket
+    xfail on this reported XPASS while checking nothing.
+
+    No num_weight_bounds check: where it lives depends on the version (and
+    on the app, for 211), and test_meshes_data_21 already checks it on the
+    right side of that split. Reading it unconditionally here used to raise
+    AttributeError on umvc3 - under an xfail marker, so every assertion in
+    this test silently never ran for that app at all.
+    """
+    if mod_imported_local.header.version not in (210, 211, 212):
+        pytest.skip()
+    for i, src_mesh in enumerate(mod_imported_local.meshes_data.meshes):
         dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(i=i):
-            assert src_mesh.vertex_position == dst_mesh.vertex_position
-            assert src_mesh.vertex_offset == dst_mesh.vertex_offset
-            assert src_mesh.face_position == dst_mesh.face_position
-            assert src_mesh.num_indices == dst_mesh.num_indices
-            assert src_mesh.face_offset == dst_mesh.face_offset
+            for field in MESH_FIELDS_ROUND_TRIPPED:
+                assert getattr(src_mesh, field) == getattr(dst_mesh, field), field
+
+
+def test_meshes_data_buffer_placement(
+        mod_imported_local, mod_exported_local, local_app_id):
+    """Buffer placement and index count - see MESH_FIELDS_BUFFER_PLACEMENT.
+
+    xfail is applied per app rather than to the whole test, and only after
+    running the checks, so an app listed as broken that starts passing fails
+    here asking to be removed from the set - the signal a plain
+    xfail(reason="WIP") throws away.
+    """
+    if mod_imported_local.header.version not in (210, 211, 212):
+        pytest.skip()
+    mismatches = _mesh_field_mismatches(
+        mod_imported_local.meshes_data.meshes,
+        mod_exported_local.meshes_data.meshes,
+        MESH_FIELDS_BUFFER_PLACEMENT,
+    )
+    if local_app_id in APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED:
+        if mismatches:
+            pytest.xfail(
+                f"{len(mismatches)} mesh field(s) not round-tripped: {mismatches[0]}")
+        # A model in a listed app that round-trips cleanly is not a
+        # contradiction - one of the three umvc3 models does - so this
+        # passes rather than demanding the app be removed from the set.
+        # Whether the app as a whole is fixed can only be judged across
+        # every model at once, which a per-model test cannot see.
+        return
+    assert not mismatches, "\n".join(mismatches)
