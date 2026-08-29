@@ -952,6 +952,21 @@ def export_mod(bl_obj):
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
     # TODO: revise, name accordingly
     dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+    if dst_mod.header.version not in VERSIONS_USE_TRISTRIPS:
+        # num_edges was initialised to 0 and never assigned, so every export
+        # wrote 0 for it. On a version that indexes triangles as a plain
+        # list, the two fields are one relation apart - measured across
+        # every model in the serialization dataset, num_faces equals the
+        # summed mesh index count and num_edges is exactly a third of it,
+        # which is what the TODO above is pointing at: these are the index
+        # count and the triangle count. Deriving it keeps the header
+        # self-consistent whatever num_faces ends up being.
+        #
+        # Left alone on the tristrip versions: there the index count is not
+        # three per triangle, num_edges has no such relation to num_faces in
+        # a real file, and recovering the triangle count needs the strip
+        # decomposition rather than arithmetic.
+        dst_mod.header.num_edges = dst_mod.header.num_faces // 3
     if app_id not in ["re5"]:
         index_buffer.extend((0, 0))
 
