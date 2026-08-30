@@ -878,7 +878,20 @@ def _get_material_hash(mod, mesh, app_id):
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @blender_registry.register_export_function(app_id="dmc4", extension="mod")
-@blender_registry.register_export_function(app_id="umvc3", extension="mod")
+# umvc3 is deliberately absent: .mod geometry round-trips, but the .mrl
+# written alongside it does not describe a material this game ships. Every
+# one of the 16963 materials in umvc3's own files matches one of 296 distinct
+# resource signatures; of the 37 materials exported from the two non-trivial
+# models in the serialization dataset, zero do. Export drops the toon
+# pipeline the game's look is built on - ttoonmap, ftoonlightcalc,
+# cbhalflambert, cbdiffusecolorcorect - and invents fambient/focclusion/
+# femission in its place, so the engine would be handed shader permutations
+# no shipped content uses. Import is unaffected and stays registered.
+#
+# Re-register together with the .mrl work, gated on that measurement rather
+# than on resource counts: exported signatures should be found in the
+# shipped set. See docs on albam-wip's mrl-export-overhaul branch, whose
+# bugs 3, 4, 7 and 9 are the same code.
 @check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
