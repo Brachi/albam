@@ -894,6 +894,16 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     return resource
 
 
+# The byte left in the unused tail of a texture path slot. 0xCD is MSVC's
+# uninitialised-heap fill, so what a real file carries there is whatever the
+# game's own tools happened to leave in memory rather than anything the
+# format requires. Measured on real files: re1 writes 0xCD throughout,
+# umvc3 zeroes the buffer instead. Only those two are measured, so anything
+# else keeps the long-standing default.
+TEXTURE_PATH_FILLER_BYTE = {"umvc3": 0x00}
+DEFAULT_TEXTURE_PATH_FILLER_BYTE = 0xCD
+
+
 def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id=None):
     tex_types = {}
     image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
@@ -931,7 +941,9 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id
                 tex.unk_02 = 0  # TODO: research
                 tex.unk_03 = 0  # TODO: research
                 tex.texture_path = relative_path_no_ext
-                tex.filler = [0xcd] * (64 - len(tex.texture_path) - 1)
+                filler_byte = TEXTURE_PATH_FILLER_BYTE.get(
+                    app_id, DEFAULT_TEXTURE_PATH_FILLER_BYTE)
+                tex.filler = [filler_byte] * (64 - len(tex.texture_path) - 1)
 
                 textures_list.append(tex)
                 real_tex_idx = len(textures_list) - 1
