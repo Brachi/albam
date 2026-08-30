@@ -128,13 +128,32 @@ MRL_BLEND_STATE_STR = {
     0xc4064: "BSRevSubAlpha",
 }
 
+# Keys are the low 20 bits of crcjam32(name) - the same digest the format
+# uses elsewhere - which is how DSDefault below was recovered: it is not a
+# literal in the executable, but UserShaderPackage.mfx names all 44 DS
+# states, and hashing those finds the one umvc3 uses.
 MRL_DEPTH_STENCIL_STATE_STR = {
     0x7d2f6: "DSZTest",
     0xb8139: "DSZTestWrite",
     0xc80a6: "DSZTestWriteStencilWrite",
     0x30511: "DSZTestStencilWrite",
     0xa967c: "DSZWrite",
+    0xeab42: "DSDefault",
 }
+
+
+def _state_enum_items(mapping):
+    """EnumProperty items for a state table, derived from the table itself.
+
+    Typed out by hand until now, with a comment saying which table they came
+    from - and they drifted: adding DSDefault to the table left the property
+    rejecting it, so a model using it still failed to import, just one line
+    further on. Deriving them means a new state needs one entry, not two.
+    Order follows the table, so the first item - the property's default -
+    is unchanged.
+    """
+    return [(name, name, "", i) for i, name in enumerate(mapping.values(), 1)]
+
 
 MRL_RASTERIZER_STATE_STR = {
     0x108cf: "RSMesh",
@@ -1630,16 +1649,9 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         default="BSSolid",
         options=set()
     )
-    # from MRL_DEPTH_STENCIL_STATE_STR
     depth_stencil_enum = bpy.props.EnumProperty(
         name="Depth Stencil State",
-        items=[
-            ("DSZTest", "DSZTest", "", 1),
-            ("DSZTestWrite", "DSZTestWrite", "", 2),
-            ("DSZTestWriteStencilWrite", "DSZTestWriteStencilWrite", "", 3),
-            ("DSZTestStencilWrite", "DSZTestStencilWrite", "", 4),
-            ("DSZWrite", "DSZWrite", "", 5)
-        ],
+        items=_state_enum_items(MRL_DEPTH_STENCIL_STATE_STR),
         options=set()
     )
     # from MRL_RASTERIZER_STATE_STR
