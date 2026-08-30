@@ -484,31 +484,50 @@ def test_export_header_sizes(mod_imported_local, mod_exported_local, local_app_i
         assert sheader.size_vertex_buffer == dheader.size_vertex_buffer
 
 
-def _exported_index_counts_match(src_mod, dst_mod):
-    """Whether export reproduced the source's geometry index-for-index.
+# Versions whose index buffer holds triangle strips rather than independent
+# triples - mirrors VERSIONS_USE_TRISTRIPS in albam/engines/mtfw/mesh.py.
+VERSIONS_TRISTRIP = {153, 156, 212}
 
-    num_faces, num_edges and size_file are all computed from the index
-    buffer, so on a model whose meshes export a different number of indices
-    they cannot match however correctly they are derived - the defect is
-    upstream, in the geometry. Checking it directly is what lets the
-    assertions below stay strict for every model that does round-trip.
 
-    What goes missing is a Blender data model limit, not an export bug: a
-    mesh there cannot hold two faces over the same set of vertices, nor a
-    face that repeats one. Both exist in real files, and both are dropped on
-    import, so export has nothing to write them back from. It accounts for
-    the loss exactly on the one umvc3 model in this dataset that shows it -
-    117729 source indices against 116022 exported, and 530 faces sharing a
-    vertex set (1590 indices) plus 39 degenerate faces (117) is 1707. The
-    other two lose nothing and are asserted strictly.
+def _index_count_mismatch_reason(src_mod, dst_mod):
+    """Why the exported index count differs from the source, or None if it
+    doesn't. num_faces, num_edges and size_file are all computed from the
+    index buffer, so none of them can match while this does not.
+
+    Two unrelated causes, and which one applies depends on the version.
+
+    On a triangle-list version the count is 3 per face, so it only moves when
+    faces go missing - and they do, to a Blender data model limit rather than
+    an export bug: a mesh there cannot hold two faces over the same set of
+    vertices, nor a face that repeats one. That accounts for the loss exactly
+    on the one umvc3 model in this dataset that shows it, 117729 source
+    indices against 116022 exported, being 530 faces sharing a vertex set
+    (1590 indices) plus 39 degenerate ones (117).
+
+    On a tristrip version the count is a strip length, so it moves whenever
+    the strips are cut differently - and albam's own striper
+    (lib/blender.py's triangles_list_to_triangles_strip) does not reproduce
+    the game's. The count as often grows as shrinks: re5's three models here
+    come out +771, -132 and +68. Face dedup contributes as well, but is the
+    smaller term, and source restart degenerates never reach Blender at all
+    since strip_triangles_to_triangles_list drops them at decode. The
+    invariant that actually holds on these versions is the decoded triangle
+    set, not the index count - so this is a statement about what the header
+    tests can assert, not a fidelity check.
     """
-    return (sum(m.num_indices for m in src_mod.meshes_data.meshes) ==
-            sum(m.num_indices for m in dst_mod.meshes_data.meshes))
+    src = sum(m.num_indices for m in src_mod.meshes_data.meshes)
+    dst = sum(m.num_indices for m in dst_mod.meshes_data.meshes)
+    if src == dst:
+        return None
+    if src_mod.header.version in VERSIONS_TRISTRIP:
+        return f"strips re-cut on export, so the index count differs ({src} -> {dst})"
+    return f"duplicate/degenerate faces dropped on import ({src} -> {dst})"
 
 
 def test_export_header_face_counts(mod_imported_local, mod_exported_local):
-    if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
-        pytest.xfail("duplicate/degenerate faces dropped on import, so the index count differs")
+    reason = _index_count_mismatch_reason(mod_imported_local, mod_exported_local)
+    if reason:
+        pytest.xfail(reason)
     sheader = mod_imported_local.header
     dheader = mod_exported_local.header
 
@@ -522,8 +541,9 @@ def test_export_header_size_file(mod_imported_local, mod_exported_local):
     # replaced went unnoticed for its whole life.
     if mod_imported_local.header.version not in (210, 211, 212):
         pytest.skip("no size_file on this version")
-    if not _exported_index_counts_match(mod_imported_local, mod_exported_local):
-        pytest.xfail("duplicate/degenerate faces dropped on import, so the file size differs")
+    reason = _index_count_mismatch_reason(mod_imported_local, mod_exported_local)
+    if reason:
+        pytest.xfail(reason)
     assert mod_imported_local.header.size_file == mod_exported_local.header.size_file
 
 
