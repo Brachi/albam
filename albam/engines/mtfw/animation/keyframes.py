@@ -301,14 +301,27 @@ class LMTKeyFrames:
         return dkf
 
     def canonicalize(self, kf, key_type):
-        """The w >= 0 form of a rotation, for buffer types that drop w.
+        """The unit, w >= 0 form of a rotation, for buffer types that drop w.
 
-        restore_w() rebuilds w as a positive square root, so a quaternion
-        stored with w < 0 decodes to a different rotation. Negating all four
-        components names the same rotation with w >= 0, which does survive.
-        Types that store w keep whichever sign they were given.
+        Two things have to hold for a rotation to survive a type that stores
+        only x, y and z. restore_w() rebuilds w as a positive square root, so a
+        quaternion stored with w < 0 decodes to a different rotation; negating
+        all four components names the same rotation with w >= 0, which does
+        survive. And that square root, 1 - x^2 - y^2 - z^2, is only the right w
+        if x, y and z came from a unit quaternion - real files miss unit norm by
+        a fraction, which is harmless in itself since scaling a quaternion does
+        not change the rotation it names, but leaves restore_w solving for the
+        wrong w. The error is worst where w is small, so a norm off by 4e-4
+        comes back as a rotation off by degrees.
+
+        Types that store w need neither: they keep whatever sign and scale they
+        were given.
         """
-        if key_type not in W_REBUILT_FROM_XYZ_TYPES or kf.w >= 0:
+        if key_type not in W_REBUILT_FROM_XYZ_TYPES:
+            return kf
+        if kf.magnitude:
+            kf = kf.normalized()
+        if kf.w >= 0:
             return kf
         return Quaternion((-kf.w, -kf.x, -kf.y, -kf.z))
 

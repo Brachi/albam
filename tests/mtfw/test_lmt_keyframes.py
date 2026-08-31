@@ -237,3 +237,23 @@ def test_restoring_w_survives_a_quantized_over_unit_quaternion():
     restored = LMTKeyFrames().restore_w(_Kf())
     assert restored.w == 0.0
     assert restored.x == pytest.approx(-0.98218)
+
+
+def test_a_rotation_that_misses_unit_norm_still_round_trips():
+    """Real files carry quaternions a fraction off unit length.
+
+    Scaling a quaternion does not change the rotation it names, so nothing is
+    wrong with those values - but a buffer type that stores only x, y and z
+    rebuilds w as sqrt(1 - x^2 - y^2 - z^2), which is the right answer only for
+    a unit quaternion. Feed it a slightly long one and the rebuilt w is wrong,
+    worst of all where w is small: a norm off by 4e-4 came back as a rotation
+    off by 1.7 degrees.
+    """
+    unit = Quaternion((0.02, 0.7, 0.1, 0.707)).normalized()
+    stretched = Quaternion([c * 1.0004 for c in unit])
+    assert stretched.magnitude != pytest.approx(1.0, abs=1e-6), "test value must not be unit"
+
+    decoded, _track = _round_trip_rotation(stretched)
+    drift = math.degrees(decoded.normalized().rotation_difference(unit).angle)
+    drift = min(drift, abs(360.0 - drift))
+    assert drift < 0.05, f"rotation drifted {drift:.4f} deg"
