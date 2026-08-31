@@ -60,6 +60,25 @@ def _select_kf_usage(bone, track_type):
             raise f" Track type {track_type} isn't correct"
 
 
+def _block_length(action, fcurves, custom_props):
+    """How many frames the block runs for.
+
+    An action whose tracks never change carries a single keyframe, because one
+    keyframe is all a constant needs - so its frame range reads 1 no matter how
+    long the block actually runs. Blocks like that are ordinary: a static idle
+    the engine holds for a couple of seconds. Taking the range there would
+    write a 60 frame hold out as a single frame, leaving the pose right and the
+    timing destroyed, so the length the block already declares is kept instead.
+
+    An action with real keyframes is the authority on its own length, including
+    when the intent is to shorten the block.
+    """
+    frames = {keyframe.co[0] for fcurve in fcurves for keyframe in fcurve.keyframe_points}
+    if len(frames) > 1:
+        return int(action.frame_range[1])
+    return int(custom_props.num_frames) or int(action.frame_range[1])
+
+
 def _serialize_lmt_track(armature, tracks, mapping, app_id):
     keyframes = LMTKeyFrames()
     keyframes.version = APPID_VERSION_MAPPER[app_id]
@@ -156,8 +175,8 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
-            num_frames = int(action.frame_range[1])
             fcurves = _get_action_fcurves(action, armature)
+            num_frames = _block_length(action, fcurves, custom_props)
             for fcurve in fcurves:
                 path = fcurve.data_path
                 index = fcurve.array_index

@@ -165,3 +165,75 @@ def test_fold_leaves_values_a_signed_property_already_holds_alone():
 
     for already_fine in (0, 1, 900, 0x7FFFFFFF):
         assert to_signed_32(already_fine) == already_fine
+
+
+class _FakeKeyframe:
+    def __init__(self, frame):
+        self.co = (frame, 0.0)
+
+
+class _FakeFcurve:
+    def __init__(self, frames):
+        self.keyframe_points = [_FakeKeyframe(f) for f in frames]
+
+
+class _FakeAction:
+    def __init__(self, last_frame):
+        self.frame_range = (1.0, float(last_frame))
+
+
+class _FakeProps:
+    def __init__(self, num_frames):
+        self.num_frames = num_frames
+
+
+def test_a_block_that_never_moves_keeps_its_length():
+    """A constant track needs one keyframe, however long the block runs.
+
+    Reading the length off the action there turns a static hold into a single
+    frame: the pose stays right and the timing is destroyed, which is worse
+    than a wrong pose because nothing about the exported file looks wrong.
+    """
+    from albam.engines.mtfw.animation.animation_export import _block_length
+
+    action = _FakeAction(1)
+    fcurves = [_FakeFcurve([1.0]) for _ in range(57)]
+    assert _block_length(action, fcurves, _FakeProps(60)) == 60
+
+
+def test_an_action_with_keyframes_decides_its_own_length():
+    """Including when the intent is to shorten the block - an edited action is
+    the authority on how long it runs, so the stored length must not win.
+    """
+    from albam.engines.mtfw.animation.animation_export import _block_length
+
+    action = _FakeAction(30)
+    fcurves = [_FakeFcurve([1.0, 15.0, 30.0])]
+    assert _block_length(action, fcurves, _FakeProps(150)) == 30
+
+
+def test_a_block_with_no_stored_length_falls_back_to_the_action():
+    """A block built from scratch has nothing stored to fall back to."""
+    from albam.engines.mtfw.animation.animation_export import _block_length
+
+    action = _FakeAction(1)
+    fcurves = [_FakeFcurve([1.0])]
+    assert _block_length(action, fcurves, _FakeProps(0)) == 1
+
+
+def test_restoring_w_survives_a_quantized_over_unit_quaternion():
+    """A stored x/y/z can already sum past unit norm.
+
+    Quantization does it on its own, and it shows up where w is near zero -
+    rare, but present in real files. Rebuilding w with an unclamped square root
+    raises there, which would let albam write a track it cannot read back.
+    """
+    from albam.engines.mtfw.animation import LMTKeyFrames
+
+    class _Kf:
+        # x^2 + y^2 + z^2 == 1.000289, straight from a real single-frame track
+        x, y, z = -0.98218, 0.0, -0.18872
+
+    restored = LMTKeyFrames().restore_w(_Kf())
+    assert restored.w == 0.0
+    assert restored.x == pytest.approx(-0.98218)
