@@ -1148,7 +1148,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + self.vertex_position * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + (self.face_offset + self.vertex_position) * self.vertex_stride)
             self._m_vertices = []
             for i in range(self.num_vertices):
                 _on = self.vertex_format
@@ -1444,7 +1444,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write_vertices(self):
             self._should_write_vertices = False
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + self.vertex_position * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + (self.face_offset + self.vertex_position) * self.vertex_stride)
             for i in range(len(self._m_vertices)):
                 pass
                 _on = self.vertex_format

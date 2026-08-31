@@ -182,7 +182,15 @@ types:
         repeat-expr: num_indices
         type: u2
       vertices:
-        pos: _root.header.offset_vertex_buffer + vertex_offset + (vertex_position * vertex_stride)
+        # face_offset is the mesh's base into the vertex buffer, and
+        # vertex_position is relative to it. A model with one vertex block
+        # leaves it 0, which is nearly all of them; where a second block
+        # exists its meshes restart vertex_position at 0 and carry the base
+        # here. /stg/106/mod/0000.mod: block one ends at 60853, block two
+        # carries face_offset 60853, and 60853 plus block two's span is
+        # 116870, exactly header.num_vertices and the buffer's capacity.
+        # Without it those meshes re-read block one and render as garbage.
+        pos: _root.header.offset_vertex_buffer + vertex_offset + ((face_offset + vertex_position) * vertex_stride)
         repeat: expr
         repeat-expr: num_vertices
         type:
