@@ -1,13 +1,39 @@
 name: Test
 on:
   push:
-    branches: [ "main" ]
+    # Every branch, not just main: a branch used to get no CI at all until a
+    # PR was opened for it. The duplicate runs this would normally cause on
+    # an open PR are suppressed by the tests job's own condition below.
+    branches: [ "**" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
+  # Re-run on demand without pushing anything, e.g. to retry a flaky job:
+  # `gh workflow run tests.yml --ref <branch>`. Only offered once this file
+  # is on the default branch - GitHub reads the trigger list from there.
+  workflow_dispatch:
+
+# A burst of pushes to one branch used to leave every intermediate commit
+# running both matrix legs to completion; only the newest is worth the
+# runner. main and tags are excluded: publish-latest-main and publish-release
+# hang off this workflow, so cancelling a superseded run there would skip a
+# release build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   tests:
+    # A branch in this repo is already covered by the push trigger above, so
+    # its PR would otherwise run the whole matrix a second time on the same
+    # commit. A fork's branch produces no push event here, so fork PRs - the
+    # only ones this skips for - still need the pull_request trigger. A
+    # skipped job satisfies a required status check, so this stays usable
+    # with branch protection.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -121,6 +147,12 @@ jobs:
       - name: "Coverage report"
         run: coverage report --sort cover
       - name: "Make badge"
+        # The badge is public and reads as "albam's coverage", so only main
+        # may write it - the steps above still run everywhere, so a PR (or a
+        # workflow_dispatch run on a branch) keeps its coverage report and
+        # step summary. Without this the job had no branch condition at all,
+        # and a branch run would overwrite the badge with that branch's number.
+        if: github.ref == 'refs/heads/main'
         uses: schneegans/dynamic-badges-action@v1.4.0
         with:
           # GIST_TOKEN is a GitHub personal access token with scope "gist".
