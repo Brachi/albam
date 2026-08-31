@@ -315,7 +315,13 @@ class LMTKeyFrames:
     def restore_w(self, kf):
         # Always the positive root: see canonicalize(), which is what keeps
         # that from silently changing the rotation.
-        w = math.sqrt(1.0 - kf.x**2 - kf.y**2 - kf.z**2)
+        #
+        # Clamped at zero because the radicand can go slightly negative: a
+        # quantized x/y/z whose components already sum past unit norm is
+        # ordinary in real files (w near zero is where it shows up), and an
+        # unclamped sqrt raises there - so albam could write a track it could
+        # not read back. Zero is the limit the value is approaching anyway.
+        w = math.sqrt(max(0.0, 1.0 - kf.x**2 - kf.y**2 - kf.z**2))
         frame = Quaternion((w, kf.x, kf.y, kf.z))
         return frame
 
