@@ -383,10 +383,21 @@ def _armature_in_edit_mode(armature):
 
 
 def _create_missing_bones(armature, bone_index, key, mapping):
-    bone_name = key
+    """A bone to hang a track on when the rig maps nothing to that anim id.
+
+    The name Blender settles on is the one to return, not the one asked for.
+    Bone names are unique, and a rig can already carry a bone *named* for a
+    number that is some other bone's anim id - the two are separate spaces, a
+    bone named "104" answering to anim id 77 is ordinary. Blender then makes
+    the new bone "104.001", and returning the requested name instead hands the
+    caller that unrelated existing bone: the track lands on it, overwriting
+    whatever it was doing, and export reads it back as that bone's own id, so
+    the original id disappears from the file and a duplicate takes its place.
+    """
     with _armature_in_edit_mode(armature) as edit_bones:
-        blender_bone = edit_bones.new(bone_name)
-        mapping[key] = blender_bone.name
+        blender_bone = edit_bones.new(key)
+        bone_name = blender_bone.name
+        mapping[key] = bone_name
         blender_bone.tail[2] += 0.01
         blender_bone["mtfw.anim_retarget"] = key
     return bone_name

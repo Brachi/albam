@@ -395,3 +395,50 @@ def test_root_motion_constraints_are_identities_at_rest(lmt_imported_local):
         worst = max((live[name].to_translation() - matrix.to_translation()).length
                     for name, matrix in muted.items())
         assert worst < 1e-5, f"the constraints move the rest pose by {worst * 100:.4f} cm"
+
+
+def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
+    """Bone names and anim ids are separate spaces, and they collide.
+
+    A rig can carry a bone *named* "104" that answers to anim id 77 - the name
+    comes from the .mod, the id from idx_anim_map. When a track needs anim id
+    104 and the rig maps nothing to it, Blender names the new bone "104.001",
+    because bone names are unique. Handing the caller "104" instead points it
+    at the unrelated existing bone: the track overwrites that bone's animation,
+    and export reads it back as *its* id, so 104 vanishes from the file and a
+    duplicate 77 appears in its place. It surfaces only as "F-Curve already
+    exists", which names neither bone.
+
+    Synthetic: builds the collision directly, no game data needed.
+    """
+    from albam.engines.mtfw.animation.animation_import import _create_missing_bones
+
+    armature_data = bpy.data.armatures.new("collision_rig")
+    armature = bpy.data.objects.new("collision_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        decoy = armature_data.edit_bones.new("104")
+        decoy.tail = (0.0, 0.0, 0.1)
+        decoy["mtfw.anim_retarget"] = "77"      # named 104, answers to 77
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        mapping = {}
+        returned = _create_missing_bones(armature, 104, "104", mapping)
+
+        assert returned != "104", (
+            "returned the pre-existing bone named 104, which answers to anim id 77"
+        )
+        assert returned == mapping["104"], "return value and mapping disagree"
+        assert armature_data.bones[returned].get("mtfw.anim_retarget") == "104"
+        assert armature_data.bones["104"].get("mtfw.anim_retarget") == "77", (
+            "the unrelated bone must be left alone"
+        )
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
