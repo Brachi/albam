@@ -1,4 +1,5 @@
 import json
+import math
 import os
 
 import bpy
@@ -108,11 +109,16 @@ def lmt_exported_local(lmt_export_local):
 
 
 def test_export_header(lmt_imported_local, lmt_exported_local):
+    """The file header survives a round trip.
+
+    These were three bare comparisons whose results went nowhere, so the
+    test passed whatever the exporter wrote.
+    """
     slmt = lmt_imported_local
     dlmt = lmt_exported_local
-    slmt.id_magic == dlmt.id_magic
-    slmt.version == dlmt.version
-    slmt.num_block_offsets == dlmt.num_block_offsets
+    assert slmt.id_magic == dlmt.id_magic
+    assert slmt.version == dlmt.version
+    assert slmt.num_block_offsets == dlmt.num_block_offsets
 
 
 def test_export_anim_block(lmt_imported_local, lmt_exported_local):
@@ -128,12 +134,24 @@ def test_export_anim_block(lmt_imported_local, lmt_exported_local):
             print(i)
             # assert sab.block_header.ofs_frame == dab.block_header.ofs_frame
             assert sab.block_header.num_tracks == dab.block_header.num_tracks
-            # anim blocks have non correct value of frames, actually 1
-            if i not in (100, 101, 102, 103, 104):
-                assert sab.block_header.num_frames == dab.block_header.num_frames
+            # A block whose tracks never change carries one keyframe however
+            # long it runs, and its length used to be read off that, writing a
+            # static hold out as a single frame. See _block_length().
+            assert sab.block_header.num_frames == dab.block_header.num_frames
             assert sab.block_header.loop_frame == dab.block_header.loop_frame
             assert sab.block_header.init_position == dab.block_header.init_position
             assert sab.block_header.init_quaterion == dab.block_header.init_quaterion
+            # The event tables - footstep sounds, collision triggers. Compared
+            # by content: ofs_events is a file offset and moves whenever the
+            # layout does, so it says nothing about whether the events survived.
+            for table in ("collision_events", "motion_sound_effects"):
+                sev = getattr(sab.block_header, table)
+                dev = getattr(dab.block_header, table)
+                assert (sev is None) == (dev is None), table + " appeared or vanished"
+                if sev is None:
+                    continue
+                assert list(sev.event_id) == list(dev.event_id), table + " ids changed"
+                assert sev.num_events == dev.num_events, table + " count changed"
             stracks = [tr for _, tr in enumerate(sab.block_header.tracks)]
             dtracks = [tr for _, tr in enumerate(dab.block_header.tracks)]
             for strack in stracks:
@@ -152,11 +170,17 @@ def test_export_anim_block(lmt_imported_local, lmt_exported_local):
                 assert str.joint_type == dtr.joint_type
                 assert str.bone_index == dtr.bone_index
                 assert str.weight == dtr.weight
-                # assert str.reference_data == dtr.reference_data
-                # can't pass because of unknow logic for static keyframes type
-                if str.len_data != dtr.len_data:
-                    print(f"don't match {str.buffer_type} and {dtr.buffer_type}")
-                else:
+                # Re-encoding a track shifts its fallback value in the last
+                # decimals, so this is a tolerance rather than equality.
+                assert list(str.reference_data) == pytest.approx(
+                    list(dtr.reference_data), abs=1e-3)
+                # A re-encoded track has a different length by definition -
+                # the exporter picks the buffer type that fits the keyframes it
+                # has, not the one the original used. Skipping the comparison
+                # when the length differs skipped exactly the tracks whose
+                # values had most room to drift, so the values are compared
+                # whenever both sides carry data at all.
+                if str.len_data and dtr.len_data:
                     # Compare fully decoded values (through the same
                     # dequantaize/to_quat/to_vec3 pipeline import uses), not
                     # raw struct fields - several buffer types (XwQuat/
@@ -176,16 +200,34 @@ def test_export_anim_block(lmt_imported_local, lmt_exported_local):
                         dkeyframes.bounds = LMTKeyframeBounds(dtr.bounds)
                     dkeyframes.decode_framedata(version, dtr.buffer_type, dtr.data)
 
+                    skept = [f for f in skeyframes.decoded_frames if f is not None]
+                    dkept = [f for f in dkeyframes.decoded_frames if f is not None]
+                    assert len(skept) == len(dkept), (
+                        "keyframe count changed: %d -> %d" % (len(skept), len(dkept)))
                     for k, (sframe, dframe) in enumerate(
                             zip(skeyframes.decoded_frames, dkeyframes.decoded_frames)):
                         print("Keyframe is:", k)
                         if sframe is None or dframe is None:
                             continue  # duration padding, not a real keyframe
-                        assert sframe.x == pytest.approx(dframe.x, rel=0.001)
-                        assert sframe.y == pytest.approx(dframe.y, rel=0.001)
-                        assert sframe.z == pytest.approx(dframe.z, rel=0.001)
                         if hasattr(sframe, "w"):
-                            assert sframe.w == pytest.approx(dframe.w, rel=0.001)
+                            # Compare the rotation, not the components. A
+                            # buffer type that stores only x/y/z rebuilds w as
+                            # a positive square root, so a quaternion with a
+                            # negative w comes back negated - and q and -q are
+                            # the same rotation, which componentwise equality
+                            # would call a failure.
+                            drift = math.degrees(sframe.normalized().rotation_difference(
+                                dframe.normalized()).angle)
+                            # rotation_difference reports the negated case as a
+                            # full turn rather than none, and a full turn is the
+                            # identity
+                            drift = min(drift, abs(360.0 - drift))
+                            assert drift < 0.5, (
+                                "rotation drifted %.4f deg" % drift)
+                        else:
+                            assert sframe.x == pytest.approx(dframe.x, rel=0.001)
+                            assert sframe.y == pytest.approx(dframe.y, rel=0.001)
+                            assert sframe.z == pytest.approx(dframe.z, rel=0.001)
                 j += 1
         else:
             assert sab.offset == dab.offset
