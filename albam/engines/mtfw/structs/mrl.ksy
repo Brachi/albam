@@ -34,7 +34,14 @@ instances:
   ofs_resources_calculated:
     value: "ofs_resources_calculated_no_padding + (-ofs_resources_calculated_no_padding % 16)"
   size_top_level_:
-    value: 28
+    # Same 40-vs-28 split as ofs_textures_calculated above: shader_version,
+    # ofs_textures and ofs_materials are u8 on umvc3, so its header is 12
+    # bytes longer. This one was left at 28 when that branch was added, and
+    # it feeds ofs_resources_calculated_no_padding and size_todo_, so on
+    # export every material's ofs_cmd landed 12 bytes early and the output
+    # buffer was 12 bytes short. Verified against a real file: Ryu.mrl
+    # stores ofs_textures 40.
+    value: 'app_id == "umvc3" ? 40 : 28'
   size_todo_:  # TODO: # padding(16) + sum(m.cmd_buffer_size + m.anim_data_size for m in materials)
     value: size_top_level_ + size_textures_ + size_materials_
   use_64bit_ofs:

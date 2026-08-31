@@ -10899,7 +10899,7 @@ class Mrl(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = 28
+        self._m_size_top_level_ = (40 if self.app_id == u"umvc3" else 28)
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):

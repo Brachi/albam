@@ -37,7 +37,12 @@ instances:
   size_mipmap_offset:
     value: "_root.use_64bit_ofs == true ? 8 : 4"
   size_before_data_:
-    value: "num_images == 1 ? 16 + (size_mipmap_offset * num_mipmaps_per_image * num_images) : 16 + (4 * num_mipmaps_per_image * num_images)  + 36 * 3"
+    # Both branches size the same mipmap_offsets array, which is u8 on umvc3
+    # (see the seq entry above), so both need size_mipmap_offset. The cube
+    # branch kept a hardcoded 4 when the single-image one was updated:
+    # /stg/100/tex/Environment_CM.tex, 6 images of 7 mipmaps, came out 292
+    # against the correct 460.
+    value: "num_images == 1 ? 16 + (size_mipmap_offset * num_mipmaps_per_image * num_images) : 16 + (size_mipmap_offset * num_mipmaps_per_image * num_images)  + 36 * 3"
   #unk_type:
   #  value: packed_data_1 & 0xffff
   #reserved_01:
