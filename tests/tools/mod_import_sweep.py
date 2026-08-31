@@ -9,12 +9,12 @@ every model a game ships.
 
 Usage (from the repo root, with a bpy-enabled interpreter):
 
-    python tools/mod_import_sweep.py <app-id> <game-root> [--pattern REGEX]
+    python tests/tools/mod_import_sweep.py <app-id> <game-root> [--pattern REGEX]
                                      [--limit N] [--out results.json]
 
 Example:
 
-    python tools/mod_import_sweep.py umvc3 "/path/to/UMVC3" \
+    python tests/tools/mod_import_sweep.py umvc3 "/path/to/UMVC3" \
         --pattern '^/chr/[^/]+/model/1p/[^/]+\\.mod$'
 """
 import argparse
@@ -26,7 +26,7 @@ import sys
 import time
 import traceback
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _REPO_ROOT)
 
 

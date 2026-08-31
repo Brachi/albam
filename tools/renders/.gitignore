@@ -1,3 +1,0 @@
-# Renders are local build output: large, binary, and derived from a real
-# game install nobody else's checkout has.
-*.png

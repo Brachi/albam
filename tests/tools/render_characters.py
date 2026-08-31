@@ -1,6 +1,6 @@
 """Renders every character model an app can import, one PNG per character.
 
-A visual counterpart to tools/mod_import_sweep.py: the sweep says an import
+A visual counterpart to tests/tools/mod_import_sweep.py: the sweep says an import
 raised no exception, this says whether what came out looks like the
 character. Geometry that imports "successfully" with a flipped normal, a
 missing texture or a collapsed skeleton is obvious in a render and invisible
@@ -10,14 +10,14 @@ Runs against the `bpy` pip package in .venv (Python 3.13, Blender 5.2), the
 same interpreter pytest uses - not the real Blender application.
 
 Usage:
-    python tools/render_characters.py <app-id> <game-root> [--pattern REGEX]
+    python tests/tools/render_characters.py <app-id> <game-root> [--pattern REGEX]
                                       [--suffix NAME] [--limit N]
 
 Example:
 
-    python tools/render_characters.py umvc3 "/path/to/UMVC3" --suffix baseline
+    python tests/tools/render_characters.py umvc3 "/path/to/UMVC3" --suffix baseline
 
-Writes tools/renders/<app-id>/<model>[_<suffix>].png. Pass --suffix to keep
+Writes tests/data/<app-id>/<model>[_<suffix>].png. Pass --suffix to keep
 a before/after pair side by side while working on shading.
 """
 import argparse
@@ -30,12 +30,12 @@ import sys
 import bpy
 from mathutils import Vector
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Script-mode execution puts this file's own dir at sys.path[0] instead of
 # the repo root, which can let a stale/partial "albam" dir elsewhere on
 # sys.path shadow the real package as an empty namespace package.
 sys.path.insert(0, REPO_ROOT)
-OUTPUT_ROOT = os.path.join(REPO_ROOT, "tools", "renders")
+OUTPUT_ROOT = os.path.join(REPO_ROOT, "tests", "data")
 
 # Default: a game's own playable character models, one per character. Most MT
 # Framework titles lay these out as chr/<Name>/model/1p/<Name>.mod.
