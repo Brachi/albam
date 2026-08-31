@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
+- Animation blocks that never move losing their length on export, so a static
+  hold played back as a single frame
+- Exported animation tracks that could not be read back, when a rotation's
+  quantized components summed past unit norm
+- Animation tracks landing on an unrelated bone when the skeleton has no bone
+  for that animation id, dropping the id from an exported `.lmt`
 
 ### Changed
 
