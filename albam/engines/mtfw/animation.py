@@ -62,7 +62,15 @@ def _get_action_channels(action, armature):
 
 
 @blender_registry.register_import_function(app_id="re5", extension='lmt', albam_asset_type="ANIMATION")
-@blender_registry.register_import_function(app_id="umvc3", extension='lmt', albam_asset_type="ANIMATION")
+# umvc3 is deliberately absent: its .lmt parses, but the animations it
+# produces are visibly wrong. 2235 of Ryu_l0.lmt's 14010 tracks use the two
+# quaternion buffer types that store no w and reconstruct it, and
+# origin/LMTShuffler_2 carries a fix for exactly that ("Keep a rotation's
+# sign when the buffer type stores no w") along with a restructure of this
+# module into a package. The 64-bit .lmt struct work stays here, unused, so
+# it can be ported onto that package rather than merged against the file it
+# replaces - every conflict between these two branches today is in animation
+# code, and none of it is in the files that branch adds.
 def load_lmt(file_item, context):
     lmt_bytes = file_item.get_bytes()
     lmt = parse(Lmt, lmt_bytes, file_item.app_id)
