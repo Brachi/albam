@@ -202,8 +202,6 @@ def test_scenario_imports_assembled(archive_path, local_app_id, _clean_scene):
     is exactly what a matrix silently dropped somewhere would leave. Distinct
     object matrices spread over a real extent is what says otherwise.
     """
-    from albam.registry import blender_registry
-
     bpy.context.scene.albam.apps.app_selected = local_app_id
     vfs = bpy.context.scene.albam.vfs
     root = vfs.add_real_file(local_app_id, archive_path)
@@ -215,8 +213,14 @@ def test_scenario_imports_assembled(archive_path, local_app_id, _clean_scene):
     # The smallest one: they all go through the same code, and a room can
     # carry a hundred models.
     vfile = min(scenarios, key=lambda vf: len(vf.get_bytes()))
-    import_function = blender_registry.import_registry[(vfile.app_id, vfile.extension)]
-    bl_scenario = import_function(vfile, bpy.context)
+    vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+    # Through the operator, the way the VFS panel imports: the linking a
+    # scenario's objects need is partly the operator's, so calling the import
+    # function directly would not cover it.
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}, f"{vfile.display_name} returned {result}"
+    bl_scenario = next(o for o in bpy.context.scene.objects
+                       if o.type == "EMPTY" and o.name.startswith(vfile.display_name))
 
     placed = list(bl_scenario.children)
     assert placed, "the scenario placed nothing"
