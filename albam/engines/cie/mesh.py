@@ -133,8 +133,9 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     # usually only one armature is full, other bin files include only bones used by the mesh
     shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
     root_vfile = vfile.root_vfile
-    skeleton = _build_armature(bl_object_name, bin, context, shared_armature,
-                               archive_id=root_vfile.name if root_vfile else "")
+    skeleton, skeleton_is_new = _build_armature(
+        bl_object_name, bin, context, shared_armature,
+        archive_id=root_vfile.name if root_vfile else "")
 
     if skeleton:
         _apply_weights(bl_mesh_ob, bin)
@@ -142,7 +143,12 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         arm_mod.object = skeleton
         arm_mod.use_vertex_groups = True
 
-    if skeleton and not shared_armature:
+    # Only the model that brought the armature in is represented by it. A
+    # model reusing one gets an empty of its own, so each stays a separate
+    # asset to export - otherwise every part of a character would be parented
+    # to the same object and exporting any one of them would sweep up the
+    # rest.
+    if skeleton and skeleton_is_new:
         bl_object = skeleton
     else:
         bl_object = bpy.data.objects.new(bl_object_name, None)
@@ -336,14 +342,14 @@ def _find_reusable_armature(bin, context, archive_id):
 def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_id=None):
     """Create an armature object from BIN bones and return it, or None if no bones."""
     if not bin.bones:
-        return None
+        return None, False
 
     existing = shared_armature
     if existing is None and archive_id:
         existing = _find_reusable_armature(bin, context, archive_id)
     if existing:
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
-        return existing
+        return existing, False
 
     bone_data = {b.bone_id: b for b in bin.bones}
 
@@ -404,7 +410,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
     # Show bones in front of the mesh (same style as MT Framework armatures in albam)
     arm_ob.show_in_front = True
     arm_data.display_type = 'STICK'
-    return arm_ob
+    return arm_ob, True
 
 
 def _apply_weights(mesh_ob, bin):

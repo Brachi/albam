@@ -129,13 +129,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             pass
             for i in range(len(self._m_weights)):
                 pass
-                _on = self.header.num_weights2 > 255
-                if _on == False:
-                    pass
-                    self._m_weights[i]._fetch_instances()
-                elif _on == True:
-                    pass
-                    self._m_weights[i]._fetch_instances()
+                self._m_weights[i]._fetch_instances()
 
 
 
@@ -291,23 +285,17 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         if self.weights__enabled:
             pass
-            if len(self._m_weights) != self.header.num_weights:
-                raise kaitaistruct.ConsistencyError(u"weights", self.header.num_weights, len(self._m_weights))
-            for i in range(len(self._m_weights)):
+            if self.header.offset_weights > 0:
                 pass
-                _on = self.header.num_weights2 > 255
-                if _on == False:
+                if len(self._m_weights) != (self.header.num_weights2 if self.header.num_weights2 > 255 else self.header.num_weights):
+                    raise kaitaistruct.ConsistencyError(u"weights", (self.header.num_weights2 if self.header.num_weights2 > 255 else self.header.num_weights), len(self._m_weights))
+                for i in range(len(self._m_weights)):
                     pass
                     if self._m_weights[i]._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"weights", self._root, self._m_weights[i]._root)
                     if self._m_weights[i]._parent != self:
                         raise kaitaistruct.ConsistencyError(u"weights", self, self._m_weights[i]._parent)
-                elif _on == True:
-                    pass
-                    if self._m_weights[i]._root != self._root:
-                        raise kaitaistruct.ConsistencyError(u"weights", self._root, self._m_weights[i]._root)
-                    if self._m_weights[i]._parent != self:
-                        raise kaitaistruct.ConsistencyError(u"weights", self, self._m_weights[i]._parent)
+
 
 
         self._dirty = False
@@ -1597,27 +1585,20 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         if not self.weights__enabled:
             return None
 
-        _pos = self._io.pos()
-        self._io.seek(self.header.offset_weights)
-        self._m_weights = []
-        for i in range(self.header.num_weights):
-            _on = self.header.num_weights2 > 255
-            if _on == False:
-                pass
+        if self.header.offset_weights > 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_weights)
+            self._m_weights = []
+            for i in range((self.header.num_weights2 if self.header.num_weights2 > 255 else self.header.num_weights)):
                 _t__m_weights = Re4UhdBin.FmtbinWeight(self._io, self, self._root)
                 try:
                     _t__m_weights._read()
                 finally:
                     self._m_weights.append(_t__m_weights)
-            elif _on == True:
-                pass
-                _t__m_weights = Re4UhdBin.FmtbinWeightExt(self._io, self, self._root)
-                try:
-                    _t__m_weights._read()
-                finally:
-                    self._m_weights.append(_t__m_weights)
 
-        self._io.seek(_pos)
+            self._io.seek(_pos)
+
         return getattr(self, '_m_weights', None)
 
     @weights.setter
@@ -1627,18 +1608,15 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
     def _write_weights(self):
         self._should_write_weights = False
-        _pos = self._io.pos()
-        self._io.seek(self.header.offset_weights)
-        for i in range(len(self._m_weights)):
+        if self.header.offset_weights > 0:
             pass
-            _on = self.header.num_weights2 > 255
-            if _on == False:
-                pass
-                self._m_weights[i]._write__seq(self._io)
-            elif _on == True:
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_weights)
+            for i in range(len(self._m_weights)):
                 pass
                 self._m_weights[i]._write__seq(self._io)
 
-        self._io.seek(_pos)
+            self._io.seek(_pos)
+
 
 

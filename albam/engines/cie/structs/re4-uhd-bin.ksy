@@ -11,15 +11,16 @@ seq:
 instances:
   bones:
     {pos: header.offset_bones, type: bone, repeat: expr, repeat-expr: header.num_bones}
+  # num_weights is a u1 and cannot hold the real count past 255; num_weights2
+  # is the u2 that takes over there. The entry layout does not change with it
+  # - the two files known to use 2-byte bone ids are an anomaly of their own,
+  # not something this count selects.
   weights:
     pos: header.offset_weights
-    type:
-      switch-on: header.num_weights2 > 255
-      cases:
-        true: fmtbin_weight_ext
-        false: fmtbin_weight
+    type: fmtbin_weight
     repeat: expr
-    repeat-expr: header.num_weights
+    repeat-expr: 'header.num_weights2 > 255 ? header.num_weights2 : header.num_weights'
+    if: header.offset_weights > 0
   morphs:
     {pos: header.offset_morphs, type: morph_block, if: header.offset_morphs > 0 }
   bone_pairs:
