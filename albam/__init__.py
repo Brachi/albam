@@ -2,10 +2,12 @@ import importlib
 import os
 
 import bpy
+from .lib.tools import face_attr_editor as overlay
 
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
+from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
 from .data_loading import populate_albam_data
 from .lib import fs_registry
 from .registry import blender_registry
@@ -75,17 +77,23 @@ def register():
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
+    register_workspace_tools()
+    bpy.app.timers.register(overlay.check_active_tool, first_interval=0.1, persistent=True)
+
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(overlay.check_active_tool):
+        bpy.app.timers.unregister(overlay.check_active_tool)
+    overlay.hide()
+
     for handler in LOAD_POST_HANDLERS:
         try:
             bpy.app.handlers.load_post.remove(handler)
         except ValueError:
             pass  # already removed, e.g. a previous unregister() call
-
     fs_registry.clear()
 
     for _, cls in reversed(blender_registry.props):
@@ -93,6 +101,8 @@ def unregister():
 
     for cls in reversed(blender_registry.types):
         bpy.utils.unregister_class(cls)
+
+    unregister_workspace_tools()
 
     for cls in reversed(_CUSTOM_PROPERTIES_CLASSES):
         bpy.utils.unregister_class(cls)

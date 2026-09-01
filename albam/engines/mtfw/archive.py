@@ -9,7 +9,7 @@ from ...lib.kaitai_utils import check_recursive, parse
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
-from ...blender_ui.tools import show_message_box
+from ...blender_ui.tools_panel import show_message_box
 
 
 @blender_registry.register_fs_root_loader(app_id="re0", extension="arc")
