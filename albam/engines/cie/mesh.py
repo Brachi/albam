@@ -46,11 +46,15 @@ VERSION_FLAGS_PLAIN = 0x20010801
 NO_PARENT = 0xFF
 NO_TEXTURE = 0xFF
 MAX_BONE_INFLUENCES = 3
-# Both counts are u2, and every triangle costs three corners of its own.
+# Both counts are u2, so a model cannot state more corners than this.
 MAX_VERTICES = 0xFFFF
-MAX_TRIANGLES_PER_STRIP = 0xFFFF // 3
+# How closely two corners' normals must agree to be the same entry - see
+# _normal_clusters. One degree: measured across a character mesh, loops the
+# importer gave an identical normal come back differing by at most 0.34
+# degrees and usually 0.01, while a real shading split is a large angle.
+NORMAL_MERGE_COSINE = math.cos(math.radians(1.0))
 
-FTYPE_TRIANGLE_LIST = 5
+FTYPE_TRIANGLE_STRIP = 6
 
 _MATERIAL_BYTE_FIELDS = (
     "unk_min_11", "unk_min_10", "unk_min_09", "unk_min_08", "unk_min_07",
@@ -792,6 +796,7 @@ def _collect_geometry(bl_mesh_objs):
         # Weights depend only on the vertex, while corners are visited once
         # per triangle they belong to.
         weight_keys = {}
+        normal_clusters = _normal_clusters(bl_mesh)
 
         # Polygons grouped by material slot, so each material's corners are
         # contiguous - the strips can only address them that way.
@@ -802,39 +807,158 @@ def _collect_geometry(bl_mesh_objs):
         for material_index in sorted(by_material):
             bl_material = (slots[material_index].material
                            if material_index < len(slots) else None)
-            triangles = 0
+
+            # What decides whether two triangles can share one entry in the
+            # file - see _strips_from_triangles. Keyed on the vertex rather
+            # than its position, since one vertex has one position, and on a
+            # normal cluster rather than the normal itself (see
+            # _normal_clusters).
+            corners = {}
+            corner_list = []
+            triangles = []
             for polygon in by_material[material_index]:
                 loops = list(polygon.loop_indices)
                 # Fan-triangulate: an n-gon becomes n-2 triangles sharing its
-                # first corner. Nothing here needs a better triangulation -
-                # the corners are written out independently either way.
+                # first corner.
                 for i in range(1, len(loops) - 1):
+                    triangle = []
                     for loop_index in (loops[0], loops[i], loops[i + 1]):
                         loop = bl_mesh.loops[loop_index]
                         vertex = bl_mesh.vertices[loop.vertex_index]
-                        positions.append(_zy_flip(*(matrix @ vertex.co)))
-                        normals.append((normal_matrix @ loop.normal).normalized())
-                        if uv_layer:
-                            u, v = uv_layer.data[loop_index].uv
-                        else:
-                            u, v = 0.0, 0.0
-                        uvs.append((u, 1.0 - v))  # V is flipped on import
 
                         key = weight_keys.get(vertex.index)
                         if key is None:
                             key = _weight_key(bl_mesh_ob, vertex, group_ids)
                             weight_keys[vertex.index] = key
-                        index = weight_lookup.get(key)
-                        if index is None:
-                            index = len(weight_table)
-                            weight_lookup[key] = index
+                        weight_index = weight_lookup.get(key)
+                        if weight_index is None:
+                            weight_index = len(weight_table)
+                            weight_lookup[key] = weight_index
                             weight_table.append(key)
-                        weight_indices.append(index)
-                    triangles += 1
-            if triangles:
-                groups.append((bl_material, triangles))
+
+                        uv = uv_layer.data[loop_index].uv if uv_layer else (0.0, 0.0)
+                        uv = (uv[0], 1.0 - uv[1])  # V is flipped on import
+                        key = (loop.vertex_index, normal_clusters[loop_index], uv, weight_index)
+                        corner_id = corners.get(key)
+                        if corner_id is None:
+                            corner_id = len(corner_list)
+                            corners[key] = corner_id
+                            corner_list.append((
+                                _zy_flip(*(matrix @ vertex.co)),
+                                tuple((normal_matrix @ loop.normal).normalized()),
+                                uv,
+                                weight_index,
+                            ))
+                        triangle.append(corner_id)
+                    triangles.append(tuple(triangle))
+
+            if not triangles:
+                continue
+
+            strips = _strips_from_triangles(triangles)
+            for strip in strips:
+                for corner_id in strip:
+                    position, normal, uv, weight_index = corner_list[corner_id]
+                    positions.append(position)
+                    normals.append(normal)
+                    uvs.append(uv)
+                    weight_indices.append(weight_index)
+            groups.append((bl_material, [len(strip) for strip in strips]))
 
     return groups, positions, normals, uvs, weight_indices, weight_table
+
+
+def _normal_clusters(bl_mesh):
+    """{loop index: cluster}, grouping a vertex's loops by normal direction.
+
+    Two corners of one vertex are the same entry in the file only if they
+    shade the same way, and comparing normals for equality does not survive
+    the round trip: Blender keeps custom split normals in a compressed form,
+    so loops the importer gave one identical normal read back differing
+    slightly. Measured on a character mesh, every such spread was under 0.34
+    degrees, while a genuine hard edge is a large angle - so an angular
+    tolerance separates the two cleanly, where rounding coordinates into
+    buckets splits pairs that happen to straddle a boundary.
+    """
+    clusters = {}
+    representatives = {}
+    for loop in bl_mesh.loops:
+        found = representatives.setdefault(loop.vertex_index, [])
+        for index, representative in enumerate(found):
+            if representative.dot(loop.normal) >= NORMAL_MERGE_COSINE:
+                clusters[loop.index] = index
+                break
+        else:
+            found.append(loop.normal.copy())
+            clusters[loop.index] = len(found) - 1
+    return clusters
+
+
+def _strips_from_triangles(triangles):
+    """`triangles` (triples of corner ids) as triangle strips.
+
+    A strip in this format carries no indices: it consumes the next `fcount`
+    corners in order, and each new corner makes a triangle with the two
+    before it, winding alternating (see _process_strip, which this inverts).
+    So two triangles can share a corner only if they agree on everything
+    that corner holds - position, normal, UV and weight - which is why the
+    caller has already merged identical corners and passes ids rather than
+    Blender loops. Across a UV seam nothing merges, so no strip crosses it,
+    which is exactly right.
+
+    Greedy: take a triangle, extend as far as the shared edge and the winding
+    allow, start again. Strips are kept separate rather than stitched with
+    degenerate triangles - the format allows any number of them per material,
+    so there is nothing to gain by joining them and no degenerate winding to
+    get wrong.
+    """
+    edges = {}
+    for index, (a, b, c) in enumerate(triangles):
+        for edge in ((a, b), (b, c), (c, a)):
+            edges.setdefault(frozenset(edge), []).append(index)
+
+    used = [False] * len(triangles)
+    strips = []
+    for start in range(len(triangles)):
+        if used[start]:
+            continue
+        used[start] = True
+        strip = list(triangles[start])
+        while True:
+            # The parity of the corner about to be appended decides which way
+            # round the next triangle has to read: an even one traverses the
+            # strip's last edge forwards, an odd one backwards.
+            a, b = strip[-2], strip[-1]
+            forwards = len(strip) % 2 == 0
+            found = None
+            for candidate in edges.get(frozenset((a, b)), ()):
+                if used[candidate]:
+                    continue
+                if _traverses(triangles[candidate], a, b) is forwards:
+                    found = candidate
+                    break
+            if found is None:
+                break
+            used[found] = True
+            strip.append(_third_corner(triangles[found], a, b))
+        strips.append(strip)
+    return strips
+
+
+def _traverses(triangle, first, second):
+    """Whether `triangle` reads `first` immediately before `second`, taken
+    round its own winding."""
+    for i in range(3):
+        if triangle[i] == first and triangle[(i + 1) % 3] == second:
+            return True
+    return False
+
+
+def _third_corner(triangle, first, second):
+    for corner in triangle:
+        if corner != first and corner != second:
+            return corner
+    return triangle[0]
 
 
 def _texture_slot(bl_material, input_name, app_id):
@@ -862,14 +986,12 @@ def _texture_slot(bl_material, input_name, app_id):
     return NO_TEXTURE
 
 
-def _serialize_material(dst_bin, bl_material, triangles, app_id):
+def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
     """One material plus the face-index block that follows it inline.
 
-    Every triangle is emitted as its own entry in a triangle-list strip
-    (ftype 5), rather than as strips: the corners are already written out
-    per triangle, so a list costs nothing to build and cannot get the winding
-    wrong the way a mis-stitched strip can. fcount is a u2, so a material
-    with more triangles than fit is split across several strips.
+    Each strip becomes one entry of type 6, whose fcount is how many corners
+    it consumes; the triangles it makes are that minus two. The count field
+    holds the total, which is what the format stores there.
     """
     dst_material = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
     for attribute in _MATERIAL_BYTE_FIELDS:
@@ -886,19 +1008,16 @@ def _serialize_material(dst_bin, bl_material, triangles, app_id):
 
     dst_face_index = dst_bin.FaceIndex(_parent=dst_material, _root=dst_bin._root)
     strips = []
-    remaining = triangles
-    while remaining:
-        in_strip = min(remaining, MAX_TRIANGLES_PER_STRIP)
+    for length in strip_lengths:
         strip = dst_bin.Strip(_parent=dst_face_index, _root=dst_bin._root)
-        strip.ftype = FTYPE_TRIANGLE_LIST
-        strip.fcount = in_strip * 3
+        strip.ftype = FTYPE_TRIANGLE_STRIP
+        strip.fcount = length
         strip._check()
         strips.append(strip)
-        remaining -= in_strip
 
     dst_face_index.strip_count = len(strips)
     dst_face_index.strips = strips
-    dst_face_index.num_triangles = triangles
+    dst_face_index.num_triangles = sum(length - 2 for length in strip_lengths)
     # buffer_size is measured from the strip_count word and padded to 16.
     body_size = 4 + len(strips) * 4
     dst_face_index.buffer_size = _align(body_size)
@@ -945,8 +1064,9 @@ def export_bin(bl_obj):
         raise AlbamCheckFailure(
             f"{bl_obj.name} has too much geometry to export: {num_vertices} face "
             f"corners, and the format counts them in 16 bits",
-            details=f"The limit is {MAX_VERTICES}. Every triangle contributes three "
-                    f"corners, since the format shares no vertices between faces.",
+            details=f"The limit is {MAX_VERTICES}. Corners are shared along a triangle "
+                    f"strip but never across a UV seam or a shading split, so a mesh "
+                    f"needs somewhere between one and three per triangle.",
             solution="Reduce the polygon count, or split the model across several meshes",
         )
 
@@ -963,8 +1083,8 @@ def export_bin(bl_obj):
         dst_bin.indexes = list(weight_indices)
         dst_bin.indexes2 = list(weight_indices)
     dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
-    dst_bin.materials = [_serialize_material(dst_bin, bl_material, triangles, app_id)
-                         for bl_material, triangles in groups]
+    dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
+                         for bl_material, strip_lengths in groups]
     # Morphs, bone pairs and adjacency are left out: their offsets stay 0 and
     # the header flags announcing them are cleared with them, which is how a
     # shipped model without them looks. They are not assigned at all rather
@@ -1031,7 +1151,7 @@ def _serialize_normals(dst_bin, normals):
     dst_normals = []
     for normal in normals:
         dst_normal = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
-        _encode_normal(dst_normal, normal, extended=True)
+        _encode_normal(dst_normal, Vector(normal), extended=True)
         dst_normal._check()
         dst_normals.append(dst_normal)
     return dst_normals

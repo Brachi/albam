@@ -7,10 +7,11 @@ modding workflow depends on, and the part a parser test cannot reach.
 
 What is compared, and what deliberately is not: triangle, material and bone
 counts have to match exactly. Vertex counts do not, and are reported rather
-than checked. The format shares no vertices between faces, and export writes
-every triangle as three corners of its own, so a model whose original used
-triangle strips comes back with more vertices than it went in with while
-describing the same surface (see albam/engines/cie/mesh.py).
+than checked. Corners are shared along a triangle strip but never across a
+UV seam or a shading split, and where a strip has to restart the two corners
+it begins with are written again - so a re-imported model carries slightly
+more vertices than the original while describing the same surface (see
+albam/engines/cie/mesh.py).
 
 Maintainer/owner tool, not part of CI: it needs a real game install, and
 mounting archives means decompressing them.
@@ -160,8 +161,7 @@ def summarize(results):
         was = sum(r["original_bytes"] for r in ok)
         print(f"  triangles: {sum(r['before']['triangles'] for r in ok)}, "
               f"bones: {sum(r['before']['bones'] for r in ok)}")
-        print(f"  bytes: {was} in, {grew} out ({grew / was:.2f}x - triangle lists "
-              f"rather than strips)")
+        print(f"  bytes: {was} in, {grew} out ({grew / was:.2f}x)")
     if bad:
         kinds = {}
         for r in bad:

@@ -8,10 +8,10 @@ export do - so it covers the parts a parsing test cannot reach.
 
 What is compared, and what deliberately is not: triangles, materials and
 bones have to match exactly, and so do every material's texture slots.
-Vertex counts do not. The format shares no vertices between faces and export
-writes each triangle as three corners of its own, so a model whose original
-used triangle strips comes back with more vertices describing the same
-surface (see albam/engines/cie/mesh.py).
+Vertex counts do not: corners are shared along a strip but never across a UV
+seam or a shading split, and a strip restart rewrites the two corners it
+begins with, so a re-imported model carries slightly more vertices while
+describing the same surface (see albam/engines/cie/mesh.py).
 """
 import json
 import os
