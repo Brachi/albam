@@ -16,9 +16,8 @@ class Udas(ReadWriteKaitaiStruct):
     type is a trailing sound block, whose descriptor carries a `size` of 0
     because it simply runs to the end of the file.
     
-    The 8 words before the table are not constant across archives and neither
-    albam nor JADERLINK's DATUDAS tool validates them: two sampled archives
-    carry 0x20BEB6CA and a third the byte-reversed 0xCAB6BE20.
+    The 8 words before the table are the same value repeated, and that value is
+    a byte-order mark - see id_magic.
     
     The DAT block's own layout is the same one dat.ksy models standalone, so
     the two agree field for field; it is repeated here rather than shared

@@ -1,9 +1,9 @@
 meta:
   id: udas
   file-extension: udas
-  endian: le
   ks-version: "0.11"
   title: Capcom Internal Engine block container
+  endian: le
 
 doc: |
   A UDAS wraps one or more blocks, described by a table of 32-byte
@@ -13,9 +13,8 @@ doc: |
   type is a trailing sound block, whose descriptor carries a `size` of 0
   because it simply runs to the end of the file.
 
-  The 8 words before the table are not constant across archives and neither
-  albam nor JADERLINK's DATUDAS tool validates them: two sampled archives
-  carry 0x20BEB6CA and a third the byte-reversed 0xCAB6BE20.
+  The 8 words before the table are the same value repeated, and that value is
+  a byte-order mark - see id_magic.
 
   The DAT block's own layout is the same one dat.ksy models standalone, so
   the two agree field for field; it is repeated here rather than shared
@@ -28,6 +27,14 @@ seq:
 types:
   udas_header:
     seq:
+    # The same word repeated 8 times, and it doubles as a byte-order mark:
+    # 0xCAB6BE20 read little-endian in an archive whose fields are
+    # little-endian, and the byte-reversed 0x20BEB6CA in one whose fields are
+    # big-endian. A handful of archives in a real install are the big-endian
+    # kind and are not read correctly here - this file is little-endian
+    # throughout, and Kaitai cannot switch on a field of the type being read.
+    # Reading them means byte-swapping the descriptor table and the file
+    # table, but not the 4-character extensions in it, before parsing.
     - {id: id_magic, type: u4, repeat: expr, repeat-expr: 8}
     - {id: blocks, type: block_descriptor, repeat: until,
        repeat-until: _.block_type == 0xffffffff}
