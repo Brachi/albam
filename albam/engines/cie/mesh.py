@@ -769,6 +769,18 @@ def _collect_geometry(bl_mesh_objs):
         uv_layer = bl_mesh.uv_layers.active
         slots = bl_mesh_ob.material_slots
 
+        # Object-level transforms are baked in: moving, rotating or scaling
+        # the object itself is an edit like any other, and import leaves
+        # everything at the origin so this is the identity for an unmodified
+        # model. Normals go through the inverse transpose, which is what
+        # keeps them perpendicular under a non-uniform scale.
+        matrix = bl_mesh_ob.matrix_world
+        normal_matrix = matrix.to_3x3().inverted_safe().transposed()
+
+        # Weights depend only on the vertex, while corners are visited once
+        # per triangle they belong to.
+        weight_keys = {}
+
         # Polygons grouped by material slot, so each material's corners are
         # contiguous - the strips can only address them that way.
         by_material = {}
@@ -788,15 +800,18 @@ def _collect_geometry(bl_mesh_objs):
                     for loop_index in (loops[0], loops[i], loops[i + 1]):
                         loop = bl_mesh.loops[loop_index]
                         vertex = bl_mesh.vertices[loop.vertex_index]
-                        positions.append(_zy_flip(*vertex.co))
-                        normals.append(loop.normal)
+                        positions.append(_zy_flip(*(matrix @ vertex.co)))
+                        normals.append((normal_matrix @ loop.normal).normalized())
                         if uv_layer:
                             u, v = uv_layer.data[loop_index].uv
                         else:
                             u, v = 0.0, 0.0
                         uvs.append((u, 1.0 - v))  # V is flipped on import
 
-                        key = _weight_key(bl_mesh_ob, vertex, group_ids)
+                        key = weight_keys.get(vertex.index)
+                        if key is None:
+                            key = _weight_key(bl_mesh_ob, vertex, group_ids)
+                            weight_keys[vertex.index] = key
                         index = weight_lookup.get(key)
                         if index is None:
                             index = len(weight_table)
