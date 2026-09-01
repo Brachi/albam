@@ -708,7 +708,11 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
             continue
         influences.append((group.weight, bone_id))
     if not influences:
-        return (0, 0, 0), (0, 0, 0), 0
+        # A vertex in no vertex group still needs an entry: the format has no
+        # way to say "unweighted", and a count of 0 is not something any
+        # shipped model contains. Pinning it wholly to the first bone at
+        # least keeps it attached to the model.
+        return (0, 0, 0), (100, 0, 0), 1
 
     influences.sort(reverse=True)
     influences = influences[:MAX_BONE_INFLUENCES]
@@ -922,12 +926,15 @@ def export_bin(bl_obj):
     dst_bin = Re4UhdBin()
     dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
     dst_bin.bones = _serialize_bones(dst_bin, armature) if armature else []
-    dst_bin.weights = _serialize_weights(dst_bin, weight_table)
+    # No armature means nothing to weight against, and a shipped model
+    # without bones carries no weight block at all.
+    dst_bin.weights = _serialize_weights(dst_bin, weight_table) if armature else []
     dst_bin.vertex_positions = _serialize_vec3s(dst_bin, positions)
     dst_bin.normals = _serialize_normals(dst_bin, normals)
     dst_bin.texcoords = _serialize_uvs(dst_bin, uvs)
-    dst_bin.indexes = list(weight_indices)
-    dst_bin.indexes2 = list(weight_indices)
+    if armature:
+        dst_bin.indexes = list(weight_indices)
+        dst_bin.indexes2 = list(weight_indices)
     dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
     dst_bin.materials = [_serialize_material(dst_bin, bl_material, triangles, app_id)
                          for bl_material, triangles in groups]
@@ -1066,14 +1073,21 @@ def _layout_and_write(dst_bin, num_vertices):
     header.offset_vertex_position = offset
     offset = _align(offset + num_vertices * VEC3_SIZE)
 
-    header.offset_index_buffer = offset
-    offset = _align(offset + num_vertices * INDEX_SIZE)
+    # The two weight-index arrays only mean anything alongside a weight
+    # table, and shipped models without one leave their offsets at 0. They
+    # hold the same values as each other: no shipped model was found where
+    # the second differs from the first.
+    weighted = bool(dst_bin.weights)
+    header.offset_index_buffer = offset if weighted else 0
+    if weighted:
+        offset = _align(offset + num_vertices * INDEX_SIZE)
 
     header.offset_vertex_normals = offset
     offset = _align(offset + num_vertices * VEC3_SIZE)
 
-    header.offset_index_buffer2 = offset
-    offset = _align(offset + num_vertices * INDEX_SIZE)
+    header.offset_index_buffer2 = offset if weighted else 0
+    if weighted:
+        offset = _align(offset + num_vertices * INDEX_SIZE)
 
     header.offset_vertex_colors = offset
     offset = _align(offset + num_vertices * RGBA_SIZE)
