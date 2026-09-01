@@ -167,8 +167,11 @@ types:
 
   face_index:
     seq:
+      # Measured from the strip_count word, padded up to 16.
       - {id: buffer_size, type: u4}
-      - {id: count, type: u4}
+      # The number of triangles the strips below expand to - checked against
+      # the expansion over every material group of a sampled model set.
+      - {id: num_triangles, type: u4}
       - {id: strip_count, type: u4}
       - {id: strips, type: strip, repeat: expr, repeat-expr: strip_count}
       - {id: padding, size: buffer_size - (strip_count * 4 + 4)}

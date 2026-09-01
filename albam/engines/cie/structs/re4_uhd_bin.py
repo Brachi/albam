@@ -477,7 +477,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.buffer_size = self._io.read_u4le()
-            self.count = self._io.read_u4le()
+            self.num_triangles = self._io.read_u4le()
             self.strip_count = self._io.read_u4le()
             self.strips = []
             for i in range(self.strip_count):
@@ -502,7 +502,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Re4UhdBin.FaceIndex, self)._write__seq(io)
             self._io.write_u4le(self.buffer_size)
-            self._io.write_u4le(self.count)
+            self._io.write_u4le(self.num_triangles)
             self._io.write_u4le(self.strip_count)
             for i in range(len(self.strips)):
                 pass

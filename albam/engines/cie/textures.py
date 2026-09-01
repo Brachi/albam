@@ -9,6 +9,13 @@ from .structs.tpl import Tpl
 # same pack id, and a .tpl entry names only the id.
 TEXTURE_PACK_FOLDERS = ("ImagePackHD", "ImagePack")
 
+# pack id -> {texture index: (name, bytes)}, for this Blender session.
+# Reading a pack means decompressing a whole archive, and one is shared by
+# every model in a character archive, so it is read once. It also keeps
+# textures resolvable for a model re-imported from an export root, which has
+# no path on disk to find the pack from.
+_PACK_CACHE = {}
+
 
 def _texture_pack_archive(pack_name, model_root):
     """The .lfs holding texture pack `pack_name`, found next to the model's
@@ -70,15 +77,19 @@ def _process_tpls(tpl_id):
 
     for i, te in enumerate(tpl.tpl_entries):
         tpl_entry = {
+            # The slot a material addresses this texture by. Export reads it
+            # back off the image to rebuild the material's texture indices.
+            "tpl_index": i,
             "tpl_name": tpl_vfile.display_name,
             "tpl_entry": te,
             "pack_name": f"{te.image_data.ids.pack_id:08x}",
             "pack_name_vfile": "",
             "model_root": tpl_vfile.root_vfile,
+            "texture_name": None,
+            "texture_bytes": None,
             "texture_id": te.image_data.ids.texture_id,
             "width": te.image_data.width,
             "height": te.image_data.height,
-            "vfile": None
         }
 
         tpl_db.append(tpl_entry)
@@ -88,82 +99,92 @@ def _process_tpls(tpl_id):
 
 
 def _process_tex_indices(tpl_db):
-    """Resolve every TPL entry to the VFS file holding its texture bytes.
+    """Resolve every TPL entry to the bytes of the texture it names.
 
     A .tpl doesn't name its textures: an entry carries a pack id and an index
-    into that pack (see structs/tpl.ksy), and the pack is a separate
-    "<pack_id>.pack.yz2.lfs" archive the user has to have added to the VFS
-    too. Pack roots are matched by their own file name (`in`, not equality -
-    some ids are written with a leading zero the tpl entry doesn't have), and
-    a texture by the index LfsFS numbered it with, parsed back out of its
-    name rather than taken from its position in `file_list`, which is sorted
-    by name and so only coincides with the container's own numbering while a
-    pack holds under 1000 textures.
+    into that pack (see structs/tpl.ksy), and the pack is a separate archive.
+    It is used if the user has already added it, and otherwise opened straight
+    off disk - see _load_pack, which explains why it isn't mounted.
     """
-    vfs = bpy.context.scene.albam.vfs
-    pack_roots = {}  # pack_name : root vfile
+    packs = {}  # pack_name : {texture index : (name, bytes)}
     for tp in tpl_db:
         pack_name = tp["pack_name"]
-        if pack_name in pack_roots:
-            continue
-        root = _find_or_mount_pack(vfs, pack_name, tp["model_root"])
-        if root is not None:
-            pack_roots[pack_name] = root
-        else:
-            print(f"{pack_name} texture pack wasn't found in the virtual file system")
+        if pack_name not in packs:
+            packs[pack_name] = _load_pack(pack_name, tp["model_root"])
+            if not packs[pack_name]:
+                print(f"{pack_name} texture pack wasn't found")
 
-    if not pack_roots:
+    if not any(packs.values()):
         return None
 
-    textures_per_pack = {}  # pack_name : {texture index : vfile}
-    for pack_name, root in pack_roots.items():
-        textures = {}
-        # Re-read the list rather than closing over one taken earlier:
-        # _find_or_mount_pack may have added a root, and a Blender
-        # CollectionProperty invalidates references across an add().
-        for vfile in vfs.file_list:
-            if vfile.tree_node.root_id != root.name or vfile.is_root:
-                continue
-            index = _texture_index(vfile.display_name)
-            if index is not None:
-                textures[index] = vfile
-        textures_per_pack[pack_name] = textures
-
     for tp in tpl_db:
-        pack_root = pack_roots.get(tp["pack_name"])
-        if pack_root is None:
+        textures = packs.get(tp["pack_name"])
+        if not textures:
             continue
-        tp["pack_name_vfile"] = pack_root.display_name
-        try:
-            tp["vfile"] = textures_per_pack[tp["pack_name"]][tp["texture_id"]]
-        except KeyError:
+        tp["pack_name_vfile"] = tp["pack_name"]
+        texture = textures.get(tp["texture_id"])
+        if texture is None:
             raise RuntimeError(
-                "Texture {} not found in {}".format(tp["texture_id"], pack_root.display_name)
+                "Texture {} not found in pack {}".format(tp["texture_id"], tp["pack_name"])
             )
+        tp["texture_name"], tp["texture_bytes"] = texture
     return tpl_db
 
 
-def _find_or_mount_pack(vfs, pack_name, model_root):
-    """The VFS root for texture pack `pack_name`, mounting it from disk if the
-    user hasn't added it themselves.
+def _load_pack(pack_name, model_root):
+    """{texture index: (name, bytes)} for one texture pack.
 
-    Matched on `in`, not equality: an archive is named after its pack id, but
-    some ids appear with a leading zero the .tpl entry doesn't carry.
+    Reads the pack rather than adding it to the VFS. Adding a root mid-import
+    would reallocate the file list, and Blender invalidates every reference
+    into a CollectionProperty when it grows - including the one the import
+    operator is holding to write back onto the imported object once the
+    import function returns.
+
+    A pack the user added themselves is read through the VFS; otherwise it is
+    opened directly from the archive next to the model (see
+    _texture_pack_archive).
     """
-    for vfile in vfs.file_list:
+    from .fs import LfsFS
+
+    cached = _PACK_CACHE.get(pack_name)
+    if cached:
+        return cached
+
+    for vfile in bpy.context.scene.albam.vfs.file_list:
         if vfile.is_root and pack_name in vfile.display_name:
-            return vfile
+            root_id = vfile.name
+            textures = {}
+            for entry in bpy.context.scene.albam.vfs.file_list:
+                if entry.tree_node.root_id != root_id or entry.is_root:
+                    continue
+                index = _texture_index(entry.display_name)
+                if index is not None:
+                    textures[index] = (entry.display_name, entry.get_bytes())
+            _PACK_CACHE[pack_name] = textures
+            return textures
 
     archive_path = _texture_pack_archive(pack_name, model_root)
     if archive_path is None:
-        return None
-    print(f"Mounting texture pack {os.path.basename(archive_path)}")
-    return vfs.add_real_file(model_root.app_id, archive_path)
+        return {}
+
+    print(f"Reading texture pack {os.path.basename(archive_path)}")
+    pack_fs = LfsFS(archive_path)
+    try:
+        textures = {}
+        for path in pack_fs.walk.files():
+            name = path.lstrip("/")
+            index = _texture_index(name)
+            if index is not None:
+                textures[index] = (name, pack_fs.readbytes(path))
+        _PACK_CACHE[pack_name] = textures
+        return textures
+    finally:
+        pack_fs.close()
 
 
 def _texture_index(display_name):
-    """The index LfsFS gave a packed texture, from its "<stem>_NNN.<ext>"
-    name - None for anything not named that way."""
+    """The index a packed texture was numbered with, from its
+    "<stem>_NNN.<ext>" name - None for anything not named that way."""
     stem = display_name.rsplit(".", 1)[0]
     _, _, index = stem.rpartition("_")
     return int(index) if index.isdigit() else None
@@ -171,23 +192,28 @@ def _texture_index(display_name):
 
 def _create_blender_image_from_tex(tpl):
     app_id = "re4uhd"
-    vfile = tpl["vfile"]
-    bl_image = bpy.data.images.get(vfile.display_name)
+    name = tpl.get("texture_name")
+    data = tpl.get("texture_bytes")
+    if not name or not data:
+        return None
+
+    bl_image = bpy.data.images.get(name)
     if bl_image:
         return bl_image
 
-    tex = vfile.get_bytes()
-
-    bl_image = bpy.data.images.new(f"{vfile.display_name}", tpl["width"], tpl["height"])
+    # Dimensions come from the packed file's own header once Blender reads it;
+    # the .tpl's are the original pack's, which the higher-resolution packs
+    # don't match.
+    bl_image = bpy.data.images.new(name, tpl["width"], tpl["height"])
     bl_image.source = "FILE"
-    bl_image.pack(data=tex, data_len=len(tex))
+    bl_image.pack(data=data, data_len=len(data))
 
     bl_image.albam_asset.app_id = app_id
     custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.set_from_source(tpl["tpl_entry"].image_data)
     custom_properties.tpl_id = tpl["tpl_name"]
     custom_properties.pack_id = tpl["pack_name"]
-    image_data = tpl["tpl_entry"].image_data
-    custom_properties.set_from_source(image_data)
+    custom_properties.tpl_index = tpl["tpl_index"]
     return bl_image
 
 
@@ -196,6 +222,9 @@ def _create_blender_image_from_tex(tpl):
 class TexCIECustomProperties(bpy.types.PropertyGroup):
     tpl_id: bpy.props.StringProperty(default="")
     pack_id: bpy.props.StringProperty(default="")
+    # Which slot of that .tpl this image came from; -1 for an image albam
+    # didn't import (one the user brought in themselves).
+    tpl_index: bpy.props.IntProperty(default=-1)
     pixel_format_type: bpy.props.IntProperty(default=0)
     id_offset: bpy.props.IntProperty(default=0)
     wrap_s: bpy.props.IntProperty(default=0)
@@ -209,9 +238,14 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
     is_compressed: bpy.props.IntProperty(default=0)
 
     # XXX copy paste in mesh, material
+    # Set by the importer from the .tpl entry, not present on it.
+    _NOT_ON_SOURCE = ("tpl_id", "pack_id", "tpl_index")
+
     def set_from_source(self, mesh):
         # XXX assume only properties are part of annotations
         for attr_name in self.__annotations__:
+            if attr_name in self._NOT_ON_SOURCE:
+                continue
             self.copy_attr(mesh, self, attr_name)
 
     def set_to_dest(self, mesh):

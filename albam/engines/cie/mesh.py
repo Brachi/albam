@@ -4,12 +4,8 @@ import bpy
 from mathutils import Vector
 import math
 from ...registry import blender_registry
-from ...vfs import VirtualFile
+from ...vfs import VirtualFile, VirtualFileData
 from ...lib.misc import chunks
-from ...lib.blender import (triangles_list_to_vtx_strips,
-                            get_uvs_per_loop,
-                            get_bone_indices_and_weights_per_vertex)
-from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .material import build_blender_materials
@@ -20,6 +16,61 @@ from .material import build_blender_materials
 GLOBAL_SCALE = 0.001  # same raw unit as vertex positions
 GLOBAL_NORMAL_FIX_EXTENDED = 545460800000
 GLOBAL_NORMAL_FIX_REDUCED = 16384
+
+# Header layout. The format allows 0x40, 0x50 and 0x60 headers - the shorter
+# ones simply stop before the trailing offsets - and offset_bones doubles as
+# the header's own size.
+HEADER_SIZE = 0x60
+BONE_SIZE = 16
+WEIGHT_SIZE = 8
+VEC3_SIZE = 12
+UV_SIZE = 8
+RGBA_SIZE = 4
+INDEX_SIZE = 2
+MATERIAL_SIZE = 24
+
+# The flags word at 0x20. 0x80000000 is set on every mesh .bin and on nothing
+# else, which is what tells a mesh apart from the camera and lighting data
+# that share the extension.
+BIN_FLAG_IS_MESH = 0x80000000
+BIN_FLAG_VERTEX_COLORS = 0x40000000
+BIN_FLAG_ALT_NORMALS = 0x20000000
+BIN_FLAG_ADJACENCY = 0x00000200
+BIN_FLAG_BONEPAIRS = 0x00000100
+
+# Build stamps, shipped as exactly these two values: the first where the
+# bonepair and adjacency blocks are present, the second where they are not.
+VERSION_FLAGS_WITH_TAGS = 0x20030818
+VERSION_FLAGS_PLAIN = 0x20010801
+
+NO_PARENT = 0xFF
+NO_TEXTURE = 0xFF
+MAX_BONE_INFLUENCES = 3
+# Both counts are u2, and every triangle costs three corners of its own.
+MAX_VERTICES = 0xFFFF
+MAX_TRIANGLES_PER_STRIP = 0xFFFF // 3
+
+FTYPE_TRIANGLE_LIST = 5
+
+_MATERIAL_BYTE_FIELDS = (
+    "unk_min_11", "unk_min_10", "unk_min_09", "unk_min_08", "unk_min_07",
+    "unk_min_06", "unk_min_05", "unk_min_04", "unk_min_03", "unk_min_02",
+    "unk_min_01", "material_flag", "diffuse_map", "intensity_specular_r",
+    "intensity_specular_g", "intensity_specular_b", "unk_00", "unk_01",
+    "specular_scale", "unk_02",
+)
+_MATERIAL_NO_TEXTURE_FIELDS = (
+    "bump_map", "opacity_map", "generic_specular_map", "custom_specular_map",
+)
+# Which shader-group input each of the material's texture slots is wired to
+# on import (see engines/cie/material.py). Read back the same way on export,
+# so a texture swapped in Blender is the one that gets written.
+_TEXTURE_SLOT_INPUTS = (
+    ("diffuse_map", "Diffuse BM"),
+    ("bump_map", "Normal NM"),
+    ("opacity_map", "Alpha BM"),
+    ("custom_specular_map", "Special MM"),
+)
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
 FCOUNT_TYPES = {
@@ -73,6 +124,8 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         bl_mesh.normals_split_custom_set(loop_normals)
     bl_mesh.normals_split_custom_set(loop_normals)
 
+    bl_mesh.albam_custom_properties.get_custom_properties_for_appid(
+        "re4uhd").set_from_source(bin.header)
     _apply_materials(bl_mesh, bin, mat_face_ranges)
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
     _build_shape_keys(bl_mesh_ob, bin)
@@ -101,6 +154,27 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     context.collection.objects.link(bl_mesh_ob)
     bl_mesh_ob.parent = bl_object
     return bl_object
+
+
+@blender_registry.register_custom_properties_mesh("bin_cie_mesh", ("re4uhd",))
+@blender_registry.register_blender_prop
+class BinCIEMeshCustomProperties(bpy.types.PropertyGroup):
+    """Header values a Blender mesh has nowhere else to keep.
+
+    Everything else in the header is either geometry Blender holds directly
+    or an offset the exporter computes, so only these survive a round trip by
+    being stored here rather than read back off the file being replaced.
+    """
+    # The exponent of the divisor morph deltas are stored against:
+    # delta / 2 ** vertex_scale.
+    vertex_scale: bpy.props.IntProperty(name="Vertex Scale", default=0, options=set())  # noqa: F821
+    # How many TPL slots the materials address. The count is what pairs a
+    # model with the right .tpl in its archive.
+    num_tpl: bpy.props.IntProperty(name="TPL Slots", default=0, options=set())  # noqa: F821
+
+    def set_from_source(self, bin_header):
+        self.vertex_scale = bin_header.vertex_scale
+        self.num_tpl = bin_header.num_tpl
 
 
 def _yz_flip(x, y, z):
@@ -343,24 +417,6 @@ def _apply_weights(mesh_ob, bin):
     print(f"[re4uhd] weights: {len(weight_index)} verts, {len(vg_cache)} vertex groups")
 
 
-def _get_uvs_per_vertex(bl_mesh_ob, layer_index):
-    """{vertex_index: (uv_x, uv_y)}, first corner of each vertex wins.
-
-    The .bin format this exports to stores one UV per vertex, so a vertex
-    shared between UV islands can only keep one of its corners' UVs - unlike
-    the MT Framework exporter, which splits such a vertex instead. Wrapping
-    lib.blender.get_uvs_per_loop() here rather than reaching for a per-vertex
-    helper there keeps that limitation where it applies.
-    """
-    uvs_per_loop = get_uvs_per_loop(bl_mesh_ob, layer_index)
-    uvs = {}
-    for loop in bl_mesh_ob.data.loops:
-        if loop.vertex_index in uvs or loop.index not in uvs_per_loop:
-            continue
-        uvs[loop.vertex_index] = uvs_per_loop[loop.index]
-    return uvs
-
-
 def _get_tpl_files_enum(self, context):
     """Dynamically generate enum items for available .tpl files in same root"""
     vfs = context.scene.albam.vfs
@@ -422,9 +478,9 @@ def poll_import_operator_for_bin(panel_class, context):
     return bool(context.scene.albam.import_options_bin.tpl_file_id)
 
 
-def _calc_padding(size, alignment):
-    """Workaround for now, probably kaitai parser should do it"""
-    return (alignment - (size % alignment)) % alignment
+def _align(size, alignment=16):
+    """`size` rounded up to `alignment`."""
+    return (size + alignment - 1) // alignment * alignment
 
 
 def _classify_mesh_ob(bl_mesh_ob):
@@ -446,379 +502,443 @@ def _classify_mesh_ob(bl_mesh_ob):
         return bin_type, armature
 
 
-def _serialize_bones(dst_bin, bones):
+def _bone_id(bl_bone, fallback):
+    """The .bin bone id a Blender bone stands for.
+
+    Import names each bone after its id (see _build_armature), so the name is
+    the id coming back. A bone the user added by hand won't be named that way;
+    it gets its position in the armature instead, which at least stays inside
+    the u1 the format allows.
+    """
+    name = bl_bone.name
+    if name.isdigit() and int(name) < 255:
+        return int(name)
+    return min(fallback, 254)
+
+
+def _serialize_bones(dst_bin, bl_armature):
+    """The bone table, as local offsets from each bone's parent.
+
+    The file stores a parent-relative offset per bone, while Blender holds
+    absolute rest positions, so each one is differenced against its parent on
+    the way out. Parent 0xFF means "no parent".
+    """
+    bones = list(bl_armature.data.bones)
+    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(bones)}
+
     dst_bones = []
-    for bone in bones:
+    for i, bone in enumerate(bones):
         dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
-        dst_bone.bone_id = int(bone.get('cie.anim_retarget', 255))
-        dst_bone.parent = bone.parent
-        dst_bone.x, dst_bone.y, dst_bone.z = _yz_flip(bone.head.x, bone.head.y, bone.head.z)
+        dst_bone.bone_id = ids[bone.name]
+        dst_bone.parent = ids[bone.parent.name] if bone.parent else NO_PARENT
+        head = bone.head_local
+        if bone.parent:
+            head = head - bone.parent.head_local
+        dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
+        dst_bone.filler = 0
         dst_bone._check()
         dst_bones.append(dst_bone)
     return dst_bones
 
 
-def _serialize_skinweights(dst_bin, vtx_weights):
-    limit = 3
-    dst_skinweights = []
-    dst_sw_indices = []
-    skinweights_palette = []
-    used_bones = set()
-    for weights_per_vertex in vtx_weights:
-        # influence list [(bone_index, weight), ...]
-        for vertex_index, influence_list in weights_per_vertex.items():
-            if len(influence_list) > limit:
-                influence_list = sorted(influence_list, key=lambda t: t[1])[-limit:]
-            weight_data = {t[0]: t[1] for t in influence_list}  # trasform to {bone_index: weight}
-            wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
-            bone_indices = [bi for bi in wd_sorted.keys()]
-            weights = [w for w in wd_sorted.values()]
-            # normalize
-            total_weight = sum(weights)
-            if total_weight:
-                weights = [round((w / total_weight), 4) for w in weights]
-            # can't have zero values
-            weights = [round(w * 255) or 1 for w in weights]
-            excess = sum(weights) - 255
-            if excess:
-                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
-                weights[max_index] -= excess
-            used_bones.update(bone_indices)
-            bone_key = tuple(bone_indices)
-            weight_key = tuple(weights)
-            try:
-                skinweight_index = skinweights_palette.index((bone_key, weight_key))
-            except ValueError:
-                skinweights_palette.append((bone_key, weight_key))
-                skinweight_index = len(skinweights_palette) - 1
-            dst_sw_indices.append(skinweight_index)
-        for bone_key, weight_key in skinweights_palette:
-            if len(used_bones) > 255:
-                dst_weight = dst_bin.FmtbinWeightExt(_parent=dst_bin, _root=dst_bin._root)
-            else:
-                dst_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
-            dst_weight.count = len(bone_key)
-            dst_bone_id = [0, 0, 0]
-            dst_weights = [0, 0, 0]
-            for i in range(len(bone_key)):
-                dst_bone_id[i] = bone_key[i]
-                dst_weights[i] = weight_key[i]
-            dst_weight.bone_ids = dst_bone_id
-            dst_weight.weights = dst_weights
-            dst_weight.unk_00 = 0
-            dst_weight._check()
-            dst_skinweights.append(dst_weight)
-    print(f"[re4uhd] skin indices: {len(dst_sw_indices)} unique, {len(used_bones)} bones used")
-    return dst_skinweights, dst_sw_indices, used_bones
+def _weight_key(bl_mesh_ob, vertex, group_ids):
+    """(bone ids, weights) for one vertex, as the format stores them.
+
+    Weights are percentages of 100, not fractions of 255, and at most three
+    bones influence a vertex. The largest three win, and the remainder is
+    folded into the biggest so they sum to 100 exactly - the game reads them
+    as whole percent, so anything left over is simply lost influence.
+    """
+    influences = []
+    for group in vertex.groups:
+        bone_id = group_ids.get(group.group)
+        if bone_id is None or group.weight <= 0:
+            continue
+        influences.append((group.weight, bone_id))
+    if not influences:
+        return (0, 0, 0), (0, 0, 0), 0
+
+    influences.sort(reverse=True)
+    influences = influences[:MAX_BONE_INFLUENCES]
+    total = sum(weight for weight, _ in influences)
+    percents = [max(1, round(weight / total * 100)) for weight, _ in influences]
+    percents[0] += 100 - sum(percents)
+    if percents[0] < 1:
+        # Three near-equal influences can push the first below 1 after the
+        # others are floored up; give the largest share back to it.
+        percents = [100 - (len(percents) - 1)] + [1] * (len(percents) - 1)
+
+    bone_ids = [bone_id for _, bone_id in influences]
+    while len(bone_ids) < 3:
+        bone_ids.append(0)
+        percents.append(0)
+    return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _serialize_morphs(dst_bin, scr_bin, bl_ob):
-    if not bl_ob.data.shape_keys or len(bl_ob.data.shape_keys.key_blocks) <= 1 or not scr_bin.morphs:
-        return 0
+def _collect_geometry(bl_mesh_objs):
+    """Everything per-corner the format needs, in the order it stores it.
 
-    base_sk = [vtx.co for vtx in bl_ob.data.vertices]
-    extra_scale = 2 ** scr_bin.header.vertex_scale
-    num_morph_groups = scr_bin.morphs.num_morph_groups
-    src_morph_groups = scr_bin.morphs.morph_groups
-    morphs_size = 4
+    The format is non-indexed: positions, normals, UVs and weight indices are
+    all one entry per face corner, consumed sequentially by each material's
+    strips, with no vertex sharing at all. That means no index buffer to
+    build and no vertex welding to undo - a triangle is simply three more
+    entries on the end of every array.
 
-    def _zy_flip_scaled(base_vtx_pos, sk_vtx_pos):
-        x = int((sk_vtx_pos.x - base_vtx_pos.x) * extra_scale / GLOBAL_SCALE)
-        y = int((sk_vtx_pos.y - base_vtx_pos.y) * extra_scale / GLOBAL_SCALE)
-        z = int((sk_vtx_pos.z - base_vtx_pos.z) * extra_scale / GLOBAL_SCALE)
-        return (x, y, -z)
+    Returns (groups, positions, normals, uvs, weight_indices, weight_table),
+    where `groups` is one (bl_material, triangle count) per material in the
+    order their corners appear.
+    """
+    groups = []
+    positions = []
+    normals = []
+    uvs = []
+    weight_indices = []
+    weight_table = []
+    weight_lookup = {}
 
-    morph_groups = []
-    sk_i = 0
-    for sk in bl_ob.data.shape_keys.key_blocks[1:num_morph_groups + 1]:
-        sk_i += 1
-        src_morph_group = src_morph_groups[sk_i]
-        morph_group = dst_bin.MorphGroup(_parent=dst_bin, _root=dst_bin._root)
-        morph_group.body = dst_bin.MorphBody(_parent=morph_group, _root=dst_bin._root)
-        morph_group.body.header = src_morph_group.body.header
-        morph_group.body.vertices = []
-        for i, vtx in enumerate(sk.data):
-            morph_vertex = dst_bin.MorphVertex(_parent=morph_group.body, _root=dst_bin._root)
-            morph_vertex.id = i
-            base_vtx_pos = base_sk[vtx.index]
-            vtx_shift = _zy_flip_scaled(base_vtx_pos, vtx.co)
-            morph_vertex.position.x = vtx_shift[0]
-            morph_vertex.position.y = vtx_shift[1]
-            morph_vertex.position.z = vtx_shift[2]
-            morph_group.body.vertices.append(morph_vertex)
-        morph_groups.append(morph_group)
+    for bl_mesh_ob in bl_mesh_objs:
+        bl_mesh = bl_mesh_ob.data
+        armature_modifier = bl_mesh_ob.modifiers.get("Armature")
+        armature = armature_modifier.object if armature_modifier else None
+        group_ids = {}
+        if armature:
+            bone_ids = {bone.name: _bone_id(bone, i)
+                        for i, bone in enumerate(armature.data.bones)}
+            for group in bl_mesh_ob.vertex_groups:
+                if group.name in bone_ids:
+                    group_ids[group.index] = bone_ids[group.name]
+                elif group.name.isdigit():
+                    group_ids[group.index] = int(group.name)
 
-    start_group_offset = num_morph_groups * 8 + 16
-    for i, mg in enumerate(morph_groups):
-        morphs_size += 8
-        if mg.num_vertices > 0:
-            morphs_size += 4 + len(mg.body.vertices) * 8
-        mg.offset = start_group_offset
-        start_group_offset += 4 + len(mg.body.vertices) * 8
-    dst_bin.morphs = dst_bin.Morphs(_parent=dst_bin, _root=dst_bin._root)
-    dst_bin.morphs.morph_groups = morph_groups
-    return morphs_size + _calc_padding(morphs_size, 16)
+        uv_layer = bl_mesh.uv_layers.active
+        slots = bl_mesh_ob.material_slots
+
+        # Polygons grouped by material slot, so each material's corners are
+        # contiguous - the strips can only address them that way.
+        by_material = {}
+        for polygon in bl_mesh.polygons:
+            by_material.setdefault(polygon.material_index, []).append(polygon)
+
+        for material_index in sorted(by_material):
+            bl_material = (slots[material_index].material
+                           if material_index < len(slots) else None)
+            triangles = 0
+            for polygon in by_material[material_index]:
+                loops = list(polygon.loop_indices)
+                # Fan-triangulate: an n-gon becomes n-2 triangles sharing its
+                # first corner. Nothing here needs a better triangulation -
+                # the corners are written out independently either way.
+                for i in range(1, len(loops) - 1):
+                    for loop_index in (loops[0], loops[i], loops[i + 1]):
+                        loop = bl_mesh.loops[loop_index]
+                        vertex = bl_mesh.vertices[loop.vertex_index]
+                        positions.append(_zy_flip(*vertex.co))
+                        normals.append(loop.normal)
+                        if uv_layer:
+                            u, v = uv_layer.data[loop_index].uv
+                        else:
+                            u, v = 0.0, 0.0
+                        uvs.append((u, 1.0 - v))  # V is flipped on import
+
+                        key = _weight_key(bl_mesh_ob, vertex, group_ids)
+                        index = weight_lookup.get(key)
+                        if index is None:
+                            index = len(weight_table)
+                            weight_lookup[key] = index
+                            weight_table.append(key)
+                        weight_indices.append(index)
+                    triangles += 1
+            if triangles:
+                groups.append((bl_material, triangles))
+
+    return groups, positions, normals, uvs, weight_indices, weight_table
 
 
-def _serialize_vertex_positions(dst_bin, vtx_locations):
-    dst_vertex_positions = []
-    for loc in vtx_locations:
-        dst_vtx = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
-        locl = list(loc)  # WTF? debug says it's tuple, the error says it's generator
-        dst_vtx.x = locl[0]
-        dst_vtx.y = locl[1]
-        dst_vtx.z = locl[2]
-        dst_vtx._check()
-        dst_vertex_positions.append(dst_vtx)
-    return dst_vertex_positions
+def _texture_slot(bl_material, input_name, app_id):
+    """The .tpl slot the image wired into `input_name` came from, or 0xFF.
+
+    A material's texture references are bindings, not values, so they live in
+    the node tree rather than in the material's custom properties - which is
+    also what makes swapping a texture in Blender an edit export can see.
+    Import records which .tpl slot each image came from on the image itself;
+    this reads it back.
+    """
+    if not bl_material.use_nodes:
+        return NO_TEXTURE
+    for node in bl_material.node_tree.nodes:
+        if node.type != "GROUP" or input_name not in node.inputs:
+            continue
+        for link in node.inputs[input_name].links:
+            image = getattr(link.from_node, "image", None)
+            if image is None:
+                continue
+            custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(
+                app_id)
+            index = custom_properties.tpl_index
+            return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
+    return NO_TEXTURE
 
 
-def _serialize_vertex_normals(dst_bin, vtx_normals):
-    dst_vertex_normals = []
-    for n in vtx_normals:
-        dst_n = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
-        _encode_normal(dst_n, Vector(n), extended=True)
-        dst_n._check()
-        dst_vertex_normals.append(dst_n)
-    return dst_vertex_normals
+def _serialize_material(dst_bin, bl_material, triangles, app_id):
+    """One material plus the face-index block that follows it inline.
+
+    Every triangle is emitted as its own entry in a triangle-list strip
+    (ftype 5), rather than as strips: the corners are already written out
+    per triangle, so a list costs nothing to build and cannot get the winding
+    wrong the way a mis-stitched strip can. fcount is a u2, so a material
+    with more triangles than fit is split across several strips.
+    """
+    dst_material = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
+    for attribute in _MATERIAL_BYTE_FIELDS:
+        setattr(dst_material, attribute, 0)
+    for attribute in _MATERIAL_NO_TEXTURE_FIELDS:
+        setattr(dst_material, attribute, NO_TEXTURE)
+
+    if bl_material is not None:
+        custom_properties = bl_material.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        custom_properties.copy_custom_properties_to(dst_material)
+        for field, input_name in _TEXTURE_SLOT_INPUTS:
+            setattr(dst_material, field, _texture_slot(bl_material, input_name, app_id))
+
+    dst_face_index = dst_bin.FaceIndex(_parent=dst_material, _root=dst_bin._root)
+    strips = []
+    remaining = triangles
+    while remaining:
+        in_strip = min(remaining, MAX_TRIANGLES_PER_STRIP)
+        strip = dst_bin.Strip(_parent=dst_face_index, _root=dst_bin._root)
+        strip.ftype = FTYPE_TRIANGLE_LIST
+        strip.fcount = in_strip * 3
+        strip._check()
+        strips.append(strip)
+        remaining -= in_strip
+
+    dst_face_index.strip_count = len(strips)
+    dst_face_index.strips = strips
+    dst_face_index.num_triangles = triangles
+    # buffer_size is measured from the strip_count word and padded to 16.
+    body_size = 4 + len(strips) * 4
+    dst_face_index.buffer_size = _align(body_size)
+    dst_face_index.padding = b"\x00" * (dst_face_index.buffer_size - body_size)
+    dst_face_index._check()
+
+    dst_material.face_index = dst_face_index
+    dst_material._check()
+    return dst_material
 
 
 @blender_registry.register_export_function(app_id="re4uhd", extension="bin")
 def export_bin(bl_obj):
+    """Serialize a Blender object back to a mesh .bin.
+
+    Everything written comes from what is in Blender now - geometry, normals,
+    UVs, the armature and its weights - so an edit made there is what lands in
+    the file. The handful of header words Blender has nowhere to keep (build
+    stamps, the morph divisor, the TPL slot count) are carried on the mesh's
+    own albam custom properties, put there at import time.
+    """
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    vfiles = []
-    vtx_locations = []
-    vtx_normals = []
-    vtx_uvs = []
-    vtx_skinweights = []
-    separated_mesh_objs = []
-    materials = []
 
-    src_bin = Re4UhdBin.from_bytes(asset.original_bytes)
-    src_bin._read()
+    bl_mesh_objs = [bl_obj] if bl_obj.type == "MESH" else [
+        child for child in bl_obj.children_recursive if child.type == "MESH"]
+    if not bl_mesh_objs:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} has no mesh to export",
+            details="A RE4 UHD model is exported from a mesh object, or from an "
+                    "armature or empty with mesh children",
+            solution="Select the imported model's armature, or its mesh",
+        )
+
+    _, armature = _classify_mesh_ob(bl_mesh_objs[0])
+    if armature is None and bl_obj.type == "ARMATURE":
+        armature = bl_obj
+
+    (groups, positions, normals, uvs,
+     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs)
+
+    num_vertices = len(positions)
+    if num_vertices > MAX_VERTICES:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} has too much geometry to export: {num_vertices} face "
+            f"corners, and the format counts them in 16 bits",
+            details=f"The limit is {MAX_VERTICES}. Every triangle contributes three "
+                    f"corners, since the format shares no vertices between faces.",
+            solution="Reduce the polygon count, or split the model across several meshes",
+        )
+
     dst_bin = Re4UhdBin()
+    dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
+    dst_bin.bones = _serialize_bones(dst_bin, armature) if armature else []
+    dst_bin.weights = _serialize_weights(dst_bin, weight_table)
+    dst_bin.vertex_positions = _serialize_vec3s(dst_bin, positions)
+    dst_bin.normals = _serialize_normals(dst_bin, normals)
+    dst_bin.texcoords = _serialize_uvs(dst_bin, uvs)
+    dst_bin.indexes = list(weight_indices)
+    dst_bin.indexes2 = list(weight_indices)
+    dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
+    dst_bin.materials = [_serialize_material(dst_bin, bl_material, triangles, app_id)
+                         for bl_material, triangles in groups]
+    # Morphs, bone pairs and adjacency are left out: their offsets stay 0 and
+    # the header flags announcing them are cleared with them, which is how a
+    # shipped model without them looks. They are not assigned at all rather
+    # than assigned None - these are conditional Kaitai instances, and the
+    # generated writer walks whatever is set.
 
-    bl_mesh_objs = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    try:
-        bin_type, armature = _classify_mesh_ob(bl_mesh_objs[0])
-    except IndexError:
-        raise "No mesh objects found to export"
-    if bpy.data.collections.get("AlbamTemp"):
-        for ob in bpy.data.collections["AlbamTemp"].objects:
-            delete_ob(ob)
+    data_bytes = _layout_and_write(dst_bin, num_vertices)
+    return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)]
 
-    for bl_mesh_ob in bl_mesh_objs:
-        separated_mesh_objs.extend(split_mesh_by_material(bl_mesh_ob))
-    move_to_collection(separated_mesh_objs, "AlbamTemp")
 
-    materials_size = 0
-    for bl_mesh_ob in separated_mesh_objs:
-        vtx_skinweights.append(get_bone_indices_and_weights_per_vertex(bl_mesh_ob))
-        bl_mat = bl_mesh_ob.material_slots[0].material if bl_mesh_ob.material_slots else None
-        dst_mat = dst_bin.Material(_parent=dst_bin, _root=dst_bin._root)
-        custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        custom_properties.copy_custom_properties_to(dst_mat)
+def _serialize_header(dst_bin, bl_mesh_ob):
+    """The header, with counts and offsets left at 0 for _layout_and_write."""
+    header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
+    for attribute in ("offset_bones", "unk_00", "unk_01", "offset_vertex_colors",
+                      "offset_vertex_texcoord", "offset_weights", "num_weights",
+                      "num_bones", "num_materials", "offset_materials",
+                      "texture1_flags", "texture2_flags", "num_tpl", "vertex_scale",
+                      "unk_02", "num_weights2", "offset_morphs",
+                      "offset_vertex_position", "offset_vertex_normals",
+                      "num_vertices", "num_vertex_normals", "version_flags",
+                      "offset_bonepairs", "offset_adjacents", "offset_index_buffer",
+                      "offset_index_buffer2"):
+        setattr(header, attribute, 0)
 
-        dst_face_idx = dst_bin.FaceIndex(_parent=dst_mat, _root=dst_bin._root)
-        loop_cache = {loop.vertex_index: loop for loop in bl_mesh_ob.data.loops}
+    custom_properties = bl_mesh_ob.data.albam_custom_properties.get_custom_properties_for_appid(
+        "re4uhd")
+    header.vertex_scale = custom_properties.vertex_scale
+    header.num_tpl = custom_properties.num_tpl
+    return header
 
-        vtx_uvs.append(_get_uvs_per_vertex(bl_mesh_ob, 0))
-        for vtx in bl_mesh_ob.data.vertices:
-            vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
 
-        strips_vtx = triangles_list_to_vtx_strips(bl_mesh_ob)
-        cur_mat_size = 24 + 12 + len(strips_vtx) * 4
-        cur_mat_size += _calc_padding(cur_mat_size, 16) + 16
-        materials_size += cur_mat_size
-        dst_strips = []
-        for strip in strips_vtx:
-            # vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z) for vtx in strip)
-            for vtx in strip:
-                loop = loop_cache[vtx.index]
-                vtx_normals.append(_zy_flip(loop.normal.x, loop.normal.y, loop.normal.z))
-            dst_strip = dst_bin.Strip(_parent=dst_face_idx, _root=dst_bin._root)
-            match len(strip):
-                case 3:
-                    print("ftype = 5: triangle")
-                    dst_strip.ftype = 5
-                    dst_strip.fcount = 3
-                case 4:
-                    print("ftype = 8: quad")
-                    dst_strip.ftype = 8
-                    dst_strip.fcount = 4
-                case _:
-                    print("ftype = 6: strip")
-                    dst_strip.ftype = 6
-                    dst_strip.fcount = len(strip)
-            dst_strips.append(dst_strip)
-        dst_mat.face_index = dst_face_idx
-        dst_mat._check()
-        materials.append(dst_mat)
+def _serialize_weights(dst_bin, weight_table):
+    dst_weights = []
+    for bone_ids, percents, count in weight_table:
+        dst_weight = dst_bin.FmtbinWeight(_parent=dst_bin, _root=dst_bin._root)
+        dst_weight.bone_ids = list(bone_ids)
+        dst_weight.weights = list(percents)
+        dst_weight.count = count
+        dst_weight.unk00 = 0
+        dst_weight._check()
+        dst_weights.append(dst_weight)
+    return dst_weights
 
-    # bones
-    bones = []
-    match bin_type:
-        case 'full armature':
-            bones = _serialize_bones(dst_bin, armature.data.bones)
-        case 'inherited armature':
-            vg_names_cache = []
-            for mesh_ob in bl_mesh_objs:
-                for vg in bl_mesh_ob.vertex_groups:
-                    if vg.name not in vg_names_cache:
-                        vg_names_cache.append(vg.name)
-            for vg_name in vg_names_cache:
-                if vg_name in armature.data.bones:
-                    inherited_bones = armature.data.bones[vg_name]
-            bones = _serialize_bones(dst_bin, inherited_bones)
-    if not bin_type == 'static':
-        dst_bin.bones = bones
-    bones_size = len(dst_bin.bones) * 16 + 16
-    # weights
-    test_num_skinweights = sum(len(w) for w in vtx_skinweights)
-    print(f"[re4uhd] total skinweights: {test_num_skinweights}")
-    dst_skinweights, dst_indices, used_bones = _serialize_skinweights(dst_bin, vtx_skinweights)
-    dst_bin.weights = dst_skinweights
-    weight_block_size = 8 if len(bones) < 255 else 16
-    weights_size = len(dst_bin.weights) * weight_block_size + 16
-    # morphs
-    morphs_size = _serialize_morphs(dst_bin, src_bin, bl_mesh_ob)
-    # bone pairs
-    bone_pairs_size = 0
-    if getattr(src_bin, "bone_pairs"):  # looks like doesn't exist in inherited armature bins
-        dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
-        dst_bone_pairs.num_pair = src_bin.bone_pairs.num_pair
-        line_pairs = []
-        for i in range(src_bin.bone_pairs.num_pair):
-            line = dst_bin.PairLine(_parent=dst_bone_pairs, _root=dst_bin._root)
-            line.data = src_bin.bone_pairs.line[i].data
-            line_pairs.append(line)
-        dst_bone_pairs.line = line_pairs
-        dst_bone_pairs._check()
-        dst_bin.bone_pair = dst_bone_pairs
-        bone_pairs_size = 4 + len(dst_bin.bone_pair.line) * 8
-        bone_pairs_size += _calc_padding(bone_pairs_size, 16)
-        dst_bin.bone_pairs = dst_bone_pairs
-    # adjacent
-    dst_adjacent = dst_bin.BoneAdj(_parent=dst_bin, _root=dst_bin._root)
-    dst_adjacent.count = src_bin.adjacent.count
-    dst_adjacent.adj = src_bin.adjacent.adj
-    dst_adjacent._check()
-    adjacent_size = 4 + dst_adjacent.count[3] * 2  # count is probably num bones
-    adjacent_size += _calc_padding(adjacent_size, 16)
-    dst_bin.adjacent = dst_adjacent
-    # vertex positions
-    dst_bin.vertex_positions = _serialize_vertex_positions(dst_bin, vtx_locations)
-    vertex_positions_size = len(dst_bin.vertex_positions) * 12
-    vertex_positions_size += _calc_padding(vertex_positions_size, 16)
-    # indexes
-    dst_bin.indexes = dst_indices
-    indexes_size = len(dst_bin.indexes) * 2
-    indexes_size += _calc_padding(indexes_size, 16)
-    # normals
-    dst_bin.normals = _serialize_vertex_normals(dst_bin, vtx_normals)
-    normals_size = len(dst_bin.normals) * 12
-    normals_size += _calc_padding(normals_size, 16)
-    # indexes2
-    dst_bin.indexes2 = dst_indices
-    indexes2_size = len(dst_bin.indexes) * 2
-    indexes2_size += _calc_padding(indexes2_size, 16)
-    # vertex colors
-    vtx_colors = []
-    for vtx in vtx_locations:
-        vc = dst_bin.Rgba(_parent=dst_bin, _root=dst_bin._root)
-        vc.a = 255
-        vc.r = 255
-        vc.g = 255
-        vc.a = 255
-        vtx_colors.append(vc)
-    dst_bin.vertex_colors = vtx_colors
-    vtx_colors_size = len(dst_bin.vertex_colors) * 4
-    vtx_colors_size += _calc_padding(vtx_colors_size, 16) + 16
-    # texcoords
-    texcoord = []
-    for mesh_uv in vtx_uvs:
-        for vtx_uv in mesh_uv.values():
-            uv = dst_bin.Uv(_parent=dst_bin, _root=dst_bin._root)
-            uv.u = vtx_uv[0]
-            uv.v = vtx_uv[1]
-            texcoord.append(uv)
-    dst_bin.texcoords = texcoord
-    texcoords_size = len(texcoord) * 8
-    texcoords_size += _calc_padding(texcoords_size, 16) + 16
-    # materials
-    dst_bin.materials = materials
 
-    # header
-    cur_size = 0
-    header_size = 96
-    dst_header = dst_bin.UhdBinHeader(_parent=dst_bin, _root=dst_bin._root)
-    dst_header.unk_00 = src_bin.header.unk_00
-    dst_header.unk_01 = src_bin.header.unk_01
-    dst_header.num_bones = src_bin.header.num_bones
-    cur_size += header_size
-    dst_header.offset_bones = cur_size
+def _serialize_vec3s(dst_bin, vectors):
+    dst_vectors = []
+    for x, y, z in vectors:
+        dst_vector = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
+        dst_vector.x, dst_vector.y, dst_vector.z = x, y, z
+        dst_vector._check()
+        dst_vectors.append(dst_vector)
+    return dst_vectors
 
-    dst_header.num_weights = len(dst_bin.weights)
-    cur_size += bones_size
-    dst_header.offset_weights = cur_size
 
-    cur_size += weights_size
-    dst_header.offset_morphs = cur_size if morphs_size > 0 else 0
+def _serialize_normals(dst_bin, normals):
+    """Normals, scaled the way the shipped files carry them.
 
-    cur_size += morphs_size
-    dst_header.offset_bonepairs = cur_size
-    cur_size += bone_pairs_size
-    dst_header.offset_adjacents = cur_size
+    They are unit vectors multiplied by a large constant - measured at about
+    5.42e11 across real models, matching GLOBAL_NORMAL_FIX_EXTENDED. Import
+    divides by the vector's own length so the scale doesn't matter coming in,
+    but the game is handed these directly, so they go out at the scale it
+    ships.
+    """
+    dst_normals = []
+    for normal in normals:
+        dst_normal = dst_bin.Vec3(_parent=dst_bin, _root=dst_bin._root)
+        _encode_normal(dst_normal, normal, extended=True)
+        dst_normal._check()
+        dst_normals.append(dst_normal)
+    return dst_normals
 
-    dst_header.num_vertices = len(vtx_locations)
-    cur_size += adjacent_size
-    dst_header.offset_vertex_position = cur_size
 
-    cur_size += vertex_positions_size
-    dst_header.offset_index_buffer = cur_size
+def _serialize_uvs(dst_bin, uvs):
+    dst_uvs = []
+    for u, v in uvs:
+        dst_uv = dst_bin.Uv(_parent=dst_bin, _root=dst_bin._root)
+        dst_uv.u, dst_uv.v = u, v
+        dst_uv._check()
+        dst_uvs.append(dst_uv)
+    return dst_uvs
 
-    dst_header.num_vertex_normals = len(vtx_normals)
-    cur_size += indexes_size
-    dst_header.offset_vertex_normals = cur_size
 
-    cur_size += normals_size
-    dst_header.offset_index_buffer2 = cur_size
+def _serialize_colors(dst_bin, count):
+    """A white vertex-colour entry per corner.
 
-    cur_size += indexes2_size
-    dst_header.offset_vertex_colors = cur_size
+    Every shipped model has a non-zero colour offset even though none of them
+    sets the flag that says the colours are used, so the block is written to
+    keep the layout shipped files have rather than for anything to read.
+    """
+    dst_colors = []
+    for _ in range(count):
+        dst_color = dst_bin.Rgba(_parent=dst_bin, _root=dst_bin._root)
+        dst_color.a = dst_color.r = dst_color.g = dst_color.b = 255
+        dst_color._check()
+        dst_colors.append(dst_color)
+    return dst_colors
 
-    cur_size += vtx_colors_size
-    dst_header.offset_vertex_texcoord = cur_size
 
-    dst_header.num_materials = len(separated_mesh_objs)
-    cur_size += texcoords_size
-    dst_header.offset_materials = cur_size
+def _layout_and_write(dst_bin, num_vertices):
+    """Place every block, fill in the header, and serialize.
 
-    dst_header.texture1_flags = src_bin.header.texture1_flags
-    dst_header.texture2_flags = src_bin.header.texture2_flags
-    dst_header.num_tpl = src_bin.header.num_tpl
-    dst_header.vertex_scale = src_bin.header.vertex_scale
-    dst_header.unk_02 = src_bin.header.unk_02
-    dst_header.num_weights2 = src_bin.header.num_weights2
-    dst_header.version_flags = src_bin.header.version_flags
+    Offsets are all explicit in the header, so the file's layout is ours to
+    choose rather than something to reproduce; blocks go in the order shipped
+    files use them, each aligned to 16. The header is a fixed 0x60 here - the
+    format allows 0x40 and 0x50 too, which simply stop before the four
+    trailing offsets, and writing the largest means never having to decide.
+    """
+    header = dst_bin.header
+    header.num_bones = len(dst_bin.bones)
+    header.num_materials = len(dst_bin.materials)
+    header.num_vertices = num_vertices
+    header.num_vertex_normals = num_vertices
 
-    dst_header._check()
-    dst_bin.header = dst_header
+    weight_count = len(dst_bin.weights)
+    # num_weights is the u1 count the game reads while it fits; num_weights2
+    # is the u2 that takes over past 255.
+    header.num_weights = weight_count if weight_count <= 255 else weight_count & 0xFF
+    header.num_weights2 = weight_count
 
-    final_size = sum((header_size,
-                     bones_size,
-                     weights_size,
-                     morphs_size,
-                     bone_pairs_size,
-                     adjacent_size,
-                     indexes_size,
-                     normals_size,
-                     indexes2_size,
-                     vtx_colors_size,
-                     texcoords_size,
-                     materials_size))
-    stream = KaitaiStream(BytesIO(bytearray(final_size)))
+    # Bit 0x80000000 is what marks the file as a mesh at all; the other two
+    # say the bonepair and adjacency blocks are present, and nothing rebuilds
+    # those yet. The flags word is one u4 that the .ksy still splits in two.
+    flags = BIN_FLAG_IS_MESH
+    header.texture1_flags = flags & 0xFFFF
+    header.texture2_flags = (flags >> 16) & 0xFFFF
+    header.version_flags = VERSION_FLAGS_PLAIN
+    header.unk_01 = 0
+
+    offset = HEADER_SIZE
+    header.offset_bones = HEADER_SIZE
+    offset = _align(offset + len(dst_bin.bones) * BONE_SIZE)
+
+    header.offset_weights = offset if dst_bin.weights else 0
+    offset = _align(offset + weight_count * WEIGHT_SIZE)
+
+    header.offset_vertex_position = offset
+    offset = _align(offset + num_vertices * VEC3_SIZE)
+
+    header.offset_index_buffer = offset
+    offset = _align(offset + num_vertices * INDEX_SIZE)
+
+    header.offset_vertex_normals = offset
+    offset = _align(offset + num_vertices * VEC3_SIZE)
+
+    header.offset_index_buffer2 = offset
+    offset = _align(offset + num_vertices * INDEX_SIZE)
+
+    header.offset_vertex_colors = offset
+    offset = _align(offset + num_vertices * RGBA_SIZE)
+
+    header.offset_vertex_texcoord = offset
+    offset = _align(offset + num_vertices * UV_SIZE)
+
+    header.offset_materials = offset
+    for dst_material in dst_bin.materials:
+        offset += MATERIAL_SIZE + 8 + dst_material.face_index.buffer_size
+    total_size = _align(offset)
+
+    header._check()
     dst_bin._check()
+    stream = KaitaiStream(BytesIO(bytearray(total_size)))
     dst_bin._write(stream)
-    return vfiles
+    return stream.to_byte_array()
