@@ -78,7 +78,8 @@ def build_blender_materials(bl_mesh, bin, tpl_vfile):
                         link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Specular MM"])
                         blender_texture_node.location = (-300, -350)
                     if tex_code == 5:
-                        link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Special MM"])
+                        link(blender_texture_node.outputs["Color"],
+                             shader_node_group.inputs["Special Specular MM"])
                         blender_texture_node.location = (-300, -700)
 
         bl_mesh.materials.append(blender_material)

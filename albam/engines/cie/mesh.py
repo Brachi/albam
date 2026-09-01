@@ -69,7 +69,7 @@ _TEXTURE_SLOT_INPUTS = (
     ("diffuse_map", "Diffuse BM"),
     ("bump_map", "Normal NM"),
     ("opacity_map", "Alpha BM"),
-    ("custom_specular_map", "Special MM"),
+    ("custom_specular_map", "Special Specular MM"),
 )
 
 # face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
