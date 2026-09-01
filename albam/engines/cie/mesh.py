@@ -132,7 +132,9 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
 
     # usually only one armature is full, other bin files include only bones used by the mesh
     shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
-    skeleton = _build_armature(bl_object_name, bin, context, shared_armature)
+    root_vfile = vfile.root_vfile
+    skeleton = _build_armature(bl_object_name, bin, context, shared_armature,
+                               archive_id=root_vfile.name if root_vfile else "")
 
     if skeleton:
         _apply_weights(bl_mesh_ob, bin)
@@ -301,14 +303,44 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile):
             bl_mesh.polygons[fi].material_index = mat_i
 
 
-def _build_armature(bl_object_name, bin, context, shared_armature=None):
+ARCHIVE_PROPERTY = "cie.source_archive"
+
+
+def _find_reusable_armature(bin, context, archive_id):
+    """An armature already imported from `archive_id` that covers every bone
+    this model uses, or None.
+
+    A character archive holds one model carrying the whole skeleton and many
+    carrying only the bones they need - a head, a hand, a level-of-detail
+    copy. Importing them one after another otherwise leaves a scene full of
+    part-skeletons that don't move together; reusing the fullest one binds
+    every part to the same rig.
+
+    Scoped to the archive it came from because bone ids are per-model
+    integers, not names: every character in the game numbers its bones from
+    0, so two characters in one scene would look like each other's skeletons.
+    """
+    needed = {str(bone.bone_id) for bone in bin.bones}
+    best = None
+    for bl_object in context.scene.objects:
+        if bl_object.type != "ARMATURE":
+            continue
+        if bl_object.get(ARCHIVE_PROPERTY) != archive_id:
+            continue
+        names = {bone.name for bone in bl_object.data.bones}
+        if needed <= names and (best is None or len(names) > len(best.data.bones)):
+            best = bl_object
+    return best
+
+
+def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_id=None):
     """Create an armature object from BIN bones and return it, or None if no bones."""
     if not bin.bones:
         return None
 
-    # Reuse an existing armature if the scene already has one with matching bones.
-    # This avoids duplicates when importing multiple BINs from the same character.
     existing = shared_armature
+    if existing is None and archive_id:
+        existing = _find_reusable_armature(bin, context, archive_id)
     if existing:
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
         return existing
@@ -333,6 +365,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
 
     arm_data = bpy.data.armatures.new(f"{bl_object_name}_armature")
     arm_ob = bpy.data.objects.new(f"{bl_object_name}_armature", arm_data)
+    arm_ob[ARCHIVE_PROPERTY] = archive_id or ""
     context.collection.objects.link(arm_ob)
 
     # Use bpy.ops with a reliable override to enter edit mode
@@ -549,7 +582,11 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
         description="Which .tpl the model's textures come from. Auto works it "
                     "out from the model's own materials",
     )
-    shared_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=filter_armatures)
+    # An override. Left empty, import reuses an armature already brought in
+    # from the same archive that covers this model's bones - see
+    # _find_reusable_armature.
+    shared_armature: bpy.props.PointerProperty(
+        name="Armature", type=bpy.types.Object, poll=filter_armatures)  # noqa: F821
 
     def get_tpl_file(self, context):
         """Get the selected .tpl VirtualFile object"""
@@ -564,10 +601,11 @@ class ImportOptionsBIN(bpy.types.PropertyGroup):
 def draw_bin_options(panel_instance, context):
     panel_instance.bl_label = "BIN Options"
     layout = panel_instance.layout
-    layout.label(text="TPL File")
-    layout.prop(context.scene.albam.import_options_bin, 'tpl_file_id', text="")
-    layout.label(text="Use already imported armature")
-    layout.prop(context.scene.albam.import_options_bin, 'shared_armature', text="")
+    options = context.scene.albam.import_options_bin
+    layout.label(text="Textures")
+    layout.prop(options, 'tpl_file_id', text="")
+    layout.label(text="Attach to armature (optional)")
+    layout.prop(options, 'shared_armature', text="")
 
 
 @blender_registry.register_import_options_custom_poll_func(extension='bin')
