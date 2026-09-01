@@ -109,8 +109,12 @@ def _yz_flip(x, y, z):
 
 
 def _zy_flip(x, y, z):
-    """Convert Z-up (Blender, meters) to Y-up (RE4, milimeters)"""
-    return (x / GLOBAL_SCALE, y / GLOBAL_SCALE, -z / GLOBAL_SCALE)  # in some cases returned as generator
+    """Convert Z-up (Blender, meters) to Y-up (RE4, millimeters).
+
+    The exact inverse of _yz_flip: that maps (X, Y, Z) to (X, -Z, Y), so
+    coming back means (x, z, -y), not (x, y, -z).
+    """
+    return (x / GLOBAL_SCALE, z / GLOBAL_SCALE, -y / GLOBAL_SCALE)
 
 
 def _build_shape_keys(bl_ob, bin):

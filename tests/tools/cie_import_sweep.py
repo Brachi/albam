@@ -24,10 +24,9 @@ Usage (from the repo root, with a bpy-enabled interpreter):
     python tests/tools/cie_import_sweep.py <game-root> [--pattern REGEX]
                                      [--limit N] [--out results.json]
 
-Example - every character and enemy:
-
-    python tests/tools/cie_import_sweep.py "/path/to/Resident Evil 4" \\
-        --pattern 'BIO4/Em/(pl|em).*\\.udas\\.lfs$'
+--pattern matches an archive's path relative to the game root, so it is how
+you narrow a run to one content folder - characters, say - rather than every
+container archive in the install.
 """
 import argparse
 import gc
@@ -43,9 +42,9 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 sys.path.insert(0, _REPO_ROOT)
 
 APP_ID = "re4uhd"
-# Default: the archives holding player characters and enemies. Both live in
-# BIO4/Em - there is no BIO4/Pl - as "<name>.udas.lfs".
-DEFAULT_PATTERN = r"BIO4/Em/(pl|em)[0-9a-f]+\.udas\.lfs$"
+# Every block container in the install. Models live in these; narrow with
+# --pattern to sweep one folder's worth rather than all of them.
+DEFAULT_PATTERN = r"\.udas\.lfs$"
 
 # A mesh .bin always has this bit set in the flags word at 0x20. Camera,
 # lighting and other ".bin" payloads don't, so it's what separates a model

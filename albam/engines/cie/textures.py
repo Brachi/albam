@@ -4,7 +4,7 @@ import bpy
 from ...registry import blender_registry
 from .structs.tpl import Tpl
 
-# Where a texture pack lives, relative to BIO4, best first: the UHD release
+# The content sub-folders holding texture packs, best first: this release
 # ships both the original packs and higher-resolution replacements under the
 # same pack id, and a .tpl entry names only the id.
 TEXTURE_PACK_FOLDERS = ("ImagePackHD", "ImagePack")
@@ -15,18 +15,18 @@ def _texture_pack_archive(pack_name, model_root):
     own archive on disk, or None.
 
     A .tpl names its textures by pack id alone (see _process_tex_indices), and
-    the pack is a separate archive - so importing a character otherwise means
-    the user first working out that "00000006" means
-    BIO4/ImagePackHD/00000006.pack.yz2.lfs and adding it by hand. Every model
-    archive sits at BIO4/<folder>/<name>.lfs, so BIO4 is two levels up from
-    the model's own path and the pack folders are siblings of its own.
+    the pack is a separate archive - so importing a model otherwise means the
+    user first working out which archive an 8-hex-digit pack id refers to and
+    adding it by hand. Model archives and pack folders are siblings under one
+    content directory, so that directory is two levels up from the model's
+    own path and a pack is named after its id.
     """
     absolute_path = model_root.absolute_path if model_root else ""
     if not absolute_path:
         return None
-    bio4 = os.path.dirname(os.path.dirname(absolute_path))
+    content_dir = os.path.dirname(os.path.dirname(absolute_path))
     try:
-        siblings = {name.lower(): name for name in os.listdir(bio4)}
+        siblings = {name.lower(): name for name in os.listdir(content_dir)}
     except OSError:
         return None
 
@@ -34,7 +34,7 @@ def _texture_pack_archive(pack_name, model_root):
         real_folder = siblings.get(folder.lower())
         if real_folder is None:
             continue
-        pack_dir = os.path.join(bio4, real_folder)
+        pack_dir = os.path.join(content_dir, real_folder)
         try:
             names = sorted(os.listdir(pack_dir))
         except OSError:

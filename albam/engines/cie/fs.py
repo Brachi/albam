@@ -145,9 +145,9 @@ class LfsFS(FS):
             return single_file
 
         # The extension only says what the archive is *named*, and a real
-        # install has files it's wrong about - "SizeTbl.dat.lfs" is a plain
-        # table, not a .dat container, and reads as one claiming ten million
-        # files. Falling back to the whole payload as a single file keeps such
+        # install has archives it is wrong about: one named for a container
+        # holds a plain table instead, and reads as a container claiming ten
+        # million files. Falling back to the whole payload as a single file keeps such
         # an archive mountable and readable (which is all the VFS needs of it)
         # instead of failing to mount at all. The entry reads are inside the
         # same guard because they're lazy: a container whose header parses can

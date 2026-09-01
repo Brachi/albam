@@ -9,6 +9,22 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Udas(ReadWriteKaitaiStruct):
+    """A UDAS wraps one or more blocks, described by a table of 32-byte
+    descriptors starting at 0x20 and ending at one whose `block_type` is
+    0xFFFFFFFF. `block_type` 0 is the DAT block - the file table every model,
+    texture and animation in a character archive lives in - and a non-zero
+    type is a trailing sound block, whose descriptor carries a `size` of 0
+    because it simply runs to the end of the file.
+    
+    The 8 words before the table are not constant across archives and neither
+    albam nor JADERLINK's DATUDAS tool validates them: two sampled archives
+    carry 0x20BEB6CA and a third the byte-reversed 0xCAB6BE20.
+    
+    The DAT block's own layout is the same one dat.ksy models standalone, so
+    the two agree field for field; it is repeated here rather than shared
+    because a .dat entry's offsets are relative to the file while a UDAS's are
+    relative to the block.
+    """
     def __init__(self, _io=None, _parent=None, _root=None):
         super(Udas, self).__init__(_io)
         self._parent = _parent
@@ -36,6 +52,40 @@ class Udas(ReadWriteKaitaiStruct):
         if self.header._parent != self:
             raise kaitaistruct.ConsistencyError(u"header", self, self.header._parent)
         self._dirty = False
+
+    class BlockDescriptor(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Udas.BlockDescriptor, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.block_type = self._io.read_u4le()
+            self.size = self._io.read_u4le()
+            self.unused = self._io.read_u4le()
+            self.offset = self._io.read_u4le()
+            self.padding = self._io.read_bytes(16)
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Udas.BlockDescriptor, self)._write__seq(io)
+            self._io.write_u4le(self.block_type)
+            self._io.write_u4le(self.size)
+            self._io.write_u4le(self.unused)
+            self._io.write_u4le(self.offset)
+            self._io.write_bytes(self.padding)
+
+
+        def _check(self):
+            if len(self.padding) != 16:
+                raise kaitaistruct.ConsistencyError(u"padding", 16, len(self.padding))
+            self._dirty = False
+
 
     class Extension(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -280,10 +330,18 @@ class Udas(ReadWriteKaitaiStruct):
             for i in range(8):
                 self.id_magic.append(self._io.read_u4le())
 
-            self.unk_00 = self._io.read_u4le()
-            self.file_size = self._io.read_u4le()
-            self.unk_01 = self._io.read_u4le()
-            self.data_offset = self._io.read_u4le()
+            self.blocks = []
+            i = 0
+            while True:
+                _t_blocks = Udas.BlockDescriptor(self._io, self, self._root)
+                try:
+                    _t_blocks._read()
+                finally:
+                    _ = _t_blocks
+                    self.blocks.append(_)
+                if _.block_type == 4294967295:
+                    break
+                i += 1
             self._dirty = False
 
 
@@ -291,6 +349,10 @@ class Udas(ReadWriteKaitaiStruct):
             pass
             for i in range(len(self.id_magic)):
                 pass
+
+            for i in range(len(self.blocks)):
+                pass
+                self.blocks[i]._fetch_instances()
 
             _ = self.data_blocks
             if hasattr(self, '_m_data_blocks'):
@@ -306,10 +368,10 @@ class Udas(ReadWriteKaitaiStruct):
                 pass
                 self._io.write_u4le(self.id_magic[i])
 
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.file_size)
-            self._io.write_u4le(self.unk_01)
-            self._io.write_u4le(self.data_offset)
+            for i in range(len(self.blocks)):
+                pass
+                self.blocks[i]._write__seq(self._io)
+
 
 
         def _check(self):
@@ -317,6 +379,18 @@ class Udas(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"id_magic", 8, len(self.id_magic))
             for i in range(len(self.id_magic)):
                 pass
+
+            if len(self.blocks) == 0:
+                raise kaitaistruct.ConsistencyError(u"blocks", 0, len(self.blocks))
+            for i in range(len(self.blocks)):
+                pass
+                if self.blocks[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"blocks", self._root, self.blocks[i]._root)
+                if self.blocks[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"blocks", self, self.blocks[i]._parent)
+                _ = self.blocks[i]
+                if (_.block_type == 4294967295) != (i == len(self.blocks) - 1):
+                    raise kaitaistruct.ConsistencyError(u"blocks", i == len(self.blocks) - 1, _.block_type == 4294967295)
 
             if self.data_blocks__enabled:
                 pass
@@ -327,6 +401,16 @@ class Udas(ReadWriteKaitaiStruct):
 
             self._dirty = False
 
+        @property
+        def data_block(self):
+            if hasattr(self, '_m_data_block'):
+                return self._m_data_block
+
+            self._m_data_block = self.blocks[0]
+            return getattr(self, '_m_data_block', None)
+
+        def _invalidate_data_block(self):
+            del self._m_data_block
         @property
         def data_blocks(self):
             if self._should_write_data_blocks:
@@ -356,5 +440,25 @@ class Udas(ReadWriteKaitaiStruct):
             self._m_data_blocks._write__seq(self._io)
             self._io.seek(_pos)
 
+        @property
+        def data_offset(self):
+            if hasattr(self, '_m_data_offset'):
+                return self._m_data_offset
+
+            self._m_data_offset = self.data_block.offset
+            return getattr(self, '_m_data_offset', None)
+
+        def _invalidate_data_offset(self):
+            del self._m_data_offset
+        @property
+        def file_size(self):
+            if hasattr(self, '_m_file_size'):
+                return self._m_file_size
+
+            self._m_file_size = self.data_block.size
+            return getattr(self, '_m_file_size', None)
+
+        def _invalidate_file_size(self):
+            del self._m_file_size
 
 

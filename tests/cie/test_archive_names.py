@@ -11,7 +11,7 @@ from albam.engines.cie.fs import split_archive_name
 @pytest.mark.parametrize("file_name,expected", [
     ("r20d.udas.lfs", ("r20d", ".udas")),
     ("icon_u.tpl.lfs", ("icon_u", ".tpl")),
-    ("SizeTbl.dat.lfs", ("SizeTbl", ".dat")),
+    ("MixedCase.dat.lfs", ("MixedCase", ".dat")),
     # The extra ".yz2" is bookkeeping the game adds; the payload is a pack.
     ("0d104000.pack.yz2.lfs", ("0d104000", ".pack")),
     # The stem is everything up to the first dot, so a dotted stem would be

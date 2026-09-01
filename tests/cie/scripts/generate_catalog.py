@@ -17,7 +17,7 @@ Usage:
     python tests/cie/scripts/generate_catalog.py <app-id> <game-root>
 
 Example:
-    python tests/cie/scripts/generate_catalog.py re4uhd "/path/to/Resident Evil 4"
+    python tests/cie/scripts/generate_catalog.py re4uhd "/path/to/game/root"
 """
 import argparse
 import json

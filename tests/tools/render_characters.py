@@ -48,11 +48,11 @@ OUTPUT_ROOT = os.path.join(REPO_ROOT, "tests", "data")
 # Framework titles lay these out as chr/<Name>/model/1p/<Name>.mod.
 DEFAULT_PATTERN = r"^/chr/[^/]+/model/1p/[^/]+\.mod$"
 # RE4 UHD has no whole-game filesystem to walk (see albam/engines/cie/fs.py),
-# so its models are reached by mounting archives one at a time and its
-# pattern matches archive paths rather than model paths. Characters, enemies
-# and the weapons they hold all live in BIO4/Em.
+# so its models are reached by mounting archives one at a time, and its
+# pattern matches archive paths rather than model paths. Narrow it to one
+# content folder to render just that folder's models.
 CIE_APP_ID = "re4uhd"
-CIE_DEFAULT_PATTERN = r"BIO4/Em/(pl|em|wep)[0-9a-f]+\.udas\.lfs$"
+CIE_DEFAULT_PATTERN = r"\.udas\.lfs$"
 
 
 def _clear_scene():
