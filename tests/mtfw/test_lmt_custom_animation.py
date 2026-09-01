@@ -6,6 +6,22 @@ import pytest
 from tests.mtfw.conftest import action_fcurves
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
+
+def _block_index(block):
+    """Where export will write this block, not where it sits in the tree.
+
+    Export orders blocks by the index import stamped on them, because
+    `children_recursive` is name order and a second import in the same session
+    renames every block it creates. Reading the tree order here agrees with the
+    file only until something else has been imported first.
+    """
+    from albam.engines.mtfw.animation import BLOCK_INDEX_PROP
+
+    index = block.get(BLOCK_INDEX_PROP)
+    assert index is not None, f"{block.name} carries no block index"
+    return int(index)
+
+
 # The same pl00 pair lmt_serialization_hashes.json uses. Only re5: writing a
 # .lmt is registered for re5 alone, so a version 67 entry here would drive an
 # export that no longer exists.
@@ -98,7 +114,7 @@ def test_edited_keyframe_survives_export(
     dst_lmt = Lmt.from_bytes(vfile_lmt_exported.get_bytes())
     dst_lmt._read()
 
-    block_index = bl_objects.index(target_block)
+    block_index = _block_index(target_block)
     dst_block = dst_lmt.block_offsets[block_index]
     assert dst_block.offset != 0
 
@@ -252,7 +268,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
     dst_lmt = Lmt.from_bytes(vfile_exported.get_bytes())
     dst_lmt._read()
 
-    dst_block = dst_lmt.block_offsets[bl_objects.index(target_block)]
+    dst_block = dst_lmt.block_offsets[_block_index(target_block)]
     assert dst_block.offset != 0
     matching = [t for t in dst_block.block_header.tracks if t.usage in {1, 4}]
     assert matching, "No location-usage track in the exported block"
