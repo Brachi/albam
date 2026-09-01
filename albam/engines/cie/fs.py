@@ -115,7 +115,7 @@ class LfsFS(FS):
 
         lfs = Lfs.from_file(self.lfs_path)
         lfs._read()
-        decompressed = bytes(lfs_decompress.xcompress_decompress_re4hd(lfs.file_entries))
+        decompressed = bytes(lfs_decompress.xcompress_decompress_re4hd(lfs.chunks))
 
         # Set when an archive named after a container extension turns out not
         # to hold one after all - see _split().

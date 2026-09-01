@@ -31,6 +31,8 @@ POSITION_BASE = [
 
 LFS_MAGIC1 = 0x584C4452
 LFS_CHUNK_SIZE = 0x10000
+# The value real archives carry in the header's second word.
+LFS_DEFAULT_FILE_ID = 0xAABAEEFE
 
 
 class _BitReader:
@@ -489,35 +491,69 @@ def lfs_decompress(data):
     return out[:out_pos]
 
 
-def xcompress_decompress_re4hd(file_entries):
-    """
-    Takes the LFS file_entries (with .raw_data, .size_compressed,
-    .size_decompressed, .offset attributes) and returns decompressed bytearray.
+def xcompress_decompress_re4hd(chunks):
+    """The payload of an .lfs, from its parsed chunk list (see lfs.ksy).
+
+    Chunks share one LZX window: the decoder state carries across them, so
+    they have to be decoded in order and none can be decoded on its own.
+    That, and the chunk table living inside no index of its own, is why an
+    .lfs can only ever be read whole.
     """
     dec_data = bytearray()
     st = _LzxState(131072)
 
-    for i, fe in enumerate(file_entries):
-        src_size = LFS_CHUNK_SIZE if fe.size_compressed == 0 else fe.size_compressed
-        expected_size = LFS_CHUNK_SIZE if fe.size_decompressed == 0 else fe.size_decompressed
+    for i, chunk in enumerate(chunks):
+        raw = bytes(chunk.raw_data)
+        expected_size = LFS_CHUNK_SIZE if chunk.size_decompressed == 0 else chunk.size_decompressed
 
-        # The low bit of `offset` is the compressed flag; the rest is the
-        # chunk's own position (masked off in lfs.ksy's raw_data). A stored
-        # chunk is copied out verbatim - the format's own escape hatch for
-        # data that doesn't compress, and what lets albam write an .lfs
-        # without an LZX encoder.
-        if fe.offset & 1:
-            # Compressed chunk
-            raw = fe.raw_data if isinstance(fe.raw_data, (bytes, bytearray)) else bytes(fe.raw_data)
-            chunk_out = bytearray(expected_size)
-            written = _lzx_inflate(st, bytearray(raw), 0, src_size,
-                                   chunk_out, 0, expected_size)
-            if written != expected_size:
-                raise RuntimeError(
-                    f"Chunk {i} output size mismatch (got {written}, expected {expected_size})")
-            dec_data.extend(chunk_out[:expected_size])
-        else:
-            # Uncompressed chunk
-            dec_data.extend(fe.raw_data)
+        if not chunk.is_compressed:
+            dec_data.extend(raw)
+            continue
+
+        chunk_out = bytearray(expected_size)
+        written = _lzx_inflate(st, bytearray(raw), 0, len(raw), chunk_out, 0, expected_size)
+        if written != expected_size:
+            raise RuntimeError(
+                f"Chunk {i} output size mismatch (got {written}, expected {expected_size})")
+        dec_data.extend(chunk_out[:expected_size])
 
     return dec_data
+
+
+def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID):
+    """`payload` wrapped as a complete .lfs file, using stored chunks.
+
+    No LZX encoder is involved: the format flags each chunk as compressed or
+    stored (see lfs.ksy), and the game's own loader reads stored ones - real
+    game data contains one. The result is therefore larger than the archive
+    it replaces, but valid, and it decompresses back to exactly `payload`.
+
+    Writing a real LZX encoder would only change the file's size, not whether
+    it loads, so it is a size optimisation rather than a prerequisite for
+    exporting.
+    """
+    payload = bytes(payload)
+    chunks = [payload[i:i + LFS_CHUNK_SIZE] for i in range(0, len(payload), LFS_CHUNK_SIZE)]
+    if not chunks:
+        # A zero-length payload still needs a chunk: num_chunks == 0 is
+        # rejected as a malformed header on the way back in.
+        chunks = [b""]
+
+    table_size = len(chunks) * 8
+    table = bytearray()
+    # Offsets are measured from the start of the chunk table, so the first
+    # chunk's data begins right after the table itself.
+    offset = table_size
+    for chunk in chunks:
+        # 0x10000 doesn't fit a u2; the format spells a full chunk as 0.
+        size = 0 if len(chunk) == LFS_CHUNK_SIZE else len(chunk)
+        # Low bit clear: stored. Offsets are even anyway - chunk sizes are
+        # multiples of 0x10000 bar the last - so no padding is needed to keep
+        # the flag bit free.
+        table += struct.pack("<HHI", size, size, offset)
+        offset += len(chunk)
+
+    body = b"".join(chunks)
+    header = struct.pack("<5I", LFS_MAGIC1, file_id, len(payload), table_size + len(body),
+                         len(chunks))
+    return header + bytes(table) + body
