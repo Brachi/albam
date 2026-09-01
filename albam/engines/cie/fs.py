@@ -155,17 +155,14 @@ class LfsFS(FS):
         try:
             container = struct_cls.from_bytes(decompressed)
             container._read()
-            return self._split_container(struct_cls, container)
+            return self._split_container(struct_cls, container, decompressed)
         except Exception as error:
             self.container_error = error
             return single_file
 
-    def _split_container(self, struct_cls, container):
+    def _split_container(self, struct_cls, container, decompressed):
         if struct_cls is Evd:
-            return {
-                "/" + entry.name_file.replace("\\", "/").lstrip("/"): entry.raw_data
-                for entry in container.file_entries
-            }
+            return self._split_evd(container, decompressed)
         if struct_cls is Udas:
             entries = container.header.data_blocks.file_entries
             extensions = container.header.data_blocks.file_extension
@@ -188,6 +185,26 @@ class LfsFS(FS):
                 extension = "dds" if entry.data.is_dds else "tga"
                 raw_data = entry.data.raw_data
             data[f"/{self._stem}_{i:03d}.{extension}"] = raw_data
+        return data
+
+    def _split_evd(self, container, decompressed):
+        """An .evd entry's content runs from its own offset to whichever
+        entry's offset comes next, in ascending-offset order - the file table
+        itself is not sorted by offset (it groups shared model files before
+        the scene's own), so table order can't be used, and the entry's `size`
+        field doesn't measure the span either (see structs/evd.ksy).
+
+        Verified against every .evd in a real install: sliced this way, each
+        entry's bytes start with the magic its extension calls for and every
+        .bin/.tpl parses through to the end of the slice, while `size` leaves
+        every model .bin short of its own vertex data.
+        """
+        by_offset = sorted(container.file_entries, key=lambda entry: entry.offset)
+        data = {}
+        for i, entry in enumerate(by_offset):
+            end = by_offset[i + 1].offset if i + 1 < len(by_offset) else len(decompressed)
+            name = "/" + entry.name_file.replace("\\", "/").lstrip("/")
+            data[name] = decompressed[entry.offset:end]
         return data
 
     def close(self):

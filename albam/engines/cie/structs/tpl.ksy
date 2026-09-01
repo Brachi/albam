@@ -29,8 +29,9 @@ types:
 
   tpl_info:
     seq:
-      - {id: width, type: u2}
+      # Height comes first, then width.
       - {id: height, type: u2}
+      - {id: width, type: u2}
       - {id: pixel_format_type, type: u4}
       - {id: id_offset, type: u4}
       - {id: wrap_s, type: u4}

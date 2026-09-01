@@ -138,3 +138,44 @@ def test_read_only(lfs_fs):
 
     with pytest.raises(ResourceReadOnly):
         lfs_fs.openbin(next(iter(lfs_fs.walk.files())), mode="w")
+
+
+def test_evd_entries_are_sliced_by_offset_order(lfs_fs, local_payload_extension):
+    """An .evd's file table is not sorted by offset and its entries' `size`
+    field doesn't measure their content, so LfsFS slices each entry from its
+    own offset to the next one in ascending-offset order (see fs._split_evd).
+
+    Getting that wrong is silent rather than loud - a .bin comes back short of
+    its own vertex data, not empty - so this checks the bytes really are a
+    whole file: the magic its extension calls for, and a full parse.
+    """
+    if local_payload_extension != ".evd":
+        pytest.skip("only .evd entries are sliced this way")
+
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+    from albam.engines.cie.structs.tpl import Tpl
+
+    checked = 0
+    for path in lfs_fs.walk.files():
+        blob = lfs_fs.readbytes(path)
+        if path.endswith(".bin"):
+            assert blob[:4] == b"\x60\x00\x00\x00", f"{path} is not a .bin"
+            parsed = Re4UhdBin.from_bytes(blob)
+            parsed._read()
+            # Lazy instances: reading them is what needs the whole slice.
+            for attribute in ("bones", "vertex_positions", "normals", "texcoords", "materials"):
+                getattr(parsed, attribute)
+        elif path.endswith(".tpl"):
+            # Both byte orders of the same magic occur (see structs/tpl.ksy).
+            assert blob[:4] in (b"\x78\x56\x34\x12", b"\x12\x34\x56\x78"), (
+                f"{path} is not a .tpl"
+            )
+            parsed = Tpl.from_bytes(blob)
+            parsed._read()
+            for entry in parsed.tpl_entries:
+                entry.image_data.ids
+        else:
+            continue
+        checked += 1
+    if not checked:
+        pytest.skip("this .evd holds no model files")

@@ -1,10 +1,47 @@
 [
-  {"app_id": "re4uhd", "archive_path_hash": "b1038f780053dc89", "payload_extension": ".udas"},
-  {"app_id": "re4uhd", "archive_path_hash": "6365b5b2145d343c", "payload_extension": ".dat"},
-  {"app_id": "re4uhd", "archive_path_hash": "a4b433b343533cb7", "payload_extension": ".pack"},
-  {"app_id": "re4uhd", "archive_path_hash": "2d008cd3de7a7e5b", "payload_extension": ".pack"},
-  {"app_id": "re4uhd", "archive_path_hash": "097b7fcbe31774e9", "payload_extension": ".evd"},
-  {"app_id": "re4uhd", "archive_path_hash": "ec06d9e1d6db3fa6", "payload_extension": ".tpl"},
-  {"app_id": "re4uhd", "archive_path_hash": "57643e4dd128841e", "payload_extension": ".bin"},
-  {"app_id": "re4uhd", "archive_path_hash": "697963f2625baa92", "payload_extension": ".tga"}
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "b1038f780053dc89",
+    "payload_extension": ".udas"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "6365b5b2145d343c",
+    "payload_extension": ".dat"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "a4b433b343533cb7",
+    "payload_extension": ".pack"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "2d008cd3de7a7e5b",
+    "payload_extension": ".pack"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "097b7fcbe31774e9",
+    "payload_extension": ".evd"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "1cf892226107478c",
+    "payload_extension": ".evd"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "ec06d9e1d6db3fa6",
+    "payload_extension": ".tpl"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "57643e4dd128841e",
+    "payload_extension": ".bin"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "697963f2625baa92",
+    "payload_extension": ".tga"
+  }
 ]

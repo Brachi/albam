@@ -116,8 +116,6 @@ class Evd(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"file_entries", self._root, self._m_file_entries[i]._root)
                 if self._m_file_entries[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"file_entries", self, self._m_file_entries[i]._parent)
-                if self._m_file_entries[i].i != i:
-                    raise kaitaistruct.ConsistencyError(u"file_entries", i, self._m_file_entries[i].i)
 
 
         if self.packets__enabled:
@@ -1755,13 +1753,10 @@ class Evd(ReadWriteKaitaiStruct):
 
 
     class FileEntry(ReadWriteKaitaiStruct):
-        def __init__(self, i, _io=None, _parent=None, _root=None):
+        def __init__(self, _io=None, _parent=None, _root=None):
             super(Evd.FileEntry, self).__init__(_io)
             self._parent = _parent
             self._root = _root
-            self.i = i
-            self._should_write_raw_data = False
-            self.raw_data__enabled = True
 
         def _read(self):
             self.name_file = (KaitaiStream.bytes_terminate(self._io.read_bytes(48), 0, False)).decode(u"UTF-8")
@@ -1773,15 +1768,10 @@ class Evd(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            _ = self.raw_data
-            if hasattr(self, '_m_raw_data'):
-                pass
-
 
 
         def _write__seq(self, io=None):
             super(Evd.FileEntry, self)._write__seq(io)
-            self._should_write_raw_data = self.raw_data__enabled
             self._io.write_bytes_limit((self.name_file).encode(u"UTF-8"), 48, 0, 0)
             self._io.write_u4le(self.offset)
             self._io.write_u4le(self.size)
@@ -1795,40 +1785,7 @@ class Evd(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"name_file", -1, KaitaiStream.byte_array_index_of((self.name_file).encode(u"UTF-8"), 0))
             if len(self.filler) != 8:
                 raise kaitaistruct.ConsistencyError(u"filler", 8, len(self.filler))
-            if self.raw_data__enabled:
-                pass
-
             self._dirty = False
-
-        @property
-        def raw_data(self):
-            if self._should_write_raw_data:
-                self._write_raw_data()
-            if hasattr(self, '_m_raw_data'):
-                return self._m_raw_data
-
-            if not self.raw_data__enabled:
-                return None
-
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            self._m_raw_data = self._io.read_bytes((self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset))
-            self._io.seek(_pos)
-            return getattr(self, '_m_raw_data', None)
-
-        @raw_data.setter
-        def raw_data(self, v):
-            self._dirty = True
-            self._m_raw_data = v
-
-        def _write_raw_data(self):
-            self._should_write_raw_data = False
-            _pos = self._io.pos()
-            self._io.seek(self.offset)
-            if len(self._m_raw_data) != (self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset):
-                raise kaitaistruct.ConsistencyError(u"raw_data", (self._io.size() - self.offset if self.i == self._parent.header.num_bin_tbl - 1 else self._parent.file_entries[self.i + 1].offset - self.offset), len(self._m_raw_data))
-            self._io.write_bytes(self._m_raw_data)
-            self._io.seek(_pos)
 
 
     class Vec3(ReadWriteKaitaiStruct):
@@ -1873,7 +1830,7 @@ class Evd(ReadWriteKaitaiStruct):
         self._io.seek(self.header.offst_bin_tbl)
         self._m_file_entries = []
         for i in range(self.header.num_bin_tbl):
-            _t__m_file_entries = Evd.FileEntry(i, self._io, self, self._root)
+            _t__m_file_entries = Evd.FileEntry(self._io, self, self._root)
             try:
                 _t__m_file_entries._read()
             finally:

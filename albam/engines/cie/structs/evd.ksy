@@ -15,7 +15,7 @@ instances:
     repeat-until: _io.pos >= header.offset_pac + header.size_pac
   file_entries:
     pos: header.offst_bin_tbl
-    type: file_entry(_index)
+    type: file_entry
     repeat: expr
     repeat-expr: header.num_bin_tbl
  
@@ -81,19 +81,17 @@ types:
             'evp_tp::evp_tp_focus': evp_focus
             'evp_tp::evp_tp_set_mdt': evp_set_mdt
   file_entry:
-    params:
-      - id: i
-        type: s4
     seq:
       - {id: name_file, type: str, size: 48, encoding: UTF-8, terminator: 0}
       - {id: offset, type: u4}
       - {id: size, type: u4}
       - {id: filler, size: 8}
-    instances:
-      raw_data:
-        pos: offset
-        size: "i == _parent.header.num_bin_tbl - 1 ? (_io.size - offset) : (_parent.file_entries[i + 1].offset - offset)"
-      
+      # An entry's content runs from `offset` to whichever entry's offset
+      # comes next in ascending-offset order - which the table is not sorted
+      # by, so it isn't expressible here; albam/engines/cie/fs.py slices it.
+      # `size` does not measure that span: for a .bin entry it is smaller
+      # than the model, and for a .tpl entry far larger than the palette. Its
+      # real meaning is unknown.
   evp_set_pl:
     seq:
       - {id: name_mod, type: str, size: 12, encoding: UTF-8, terminator: 0}  

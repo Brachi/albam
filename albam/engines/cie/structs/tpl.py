@@ -163,8 +163,8 @@ class Tpl(ReadWriteKaitaiStruct):
             self.ids__enabled = True
 
         def _read(self):
-            self.width = self._io.read_u2le()
             self.height = self._io.read_u2le()
+            self.width = self._io.read_u2le()
             self.pixel_format_type = self._io.read_u4le()
             self.id_offset = self._io.read_u4le()
             self.wrap_s = self._io.read_u4le()
@@ -191,8 +191,8 @@ class Tpl(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Tpl.TplInfo, self)._write__seq(io)
             self._should_write_ids = self.ids__enabled
-            self._io.write_u2le(self.width)
             self._io.write_u2le(self.height)
+            self._io.write_u2le(self.width)
             self._io.write_u4le(self.pixel_format_type)
             self._io.write_u4le(self.id_offset)
             self._io.write_u4le(self.wrap_s)
