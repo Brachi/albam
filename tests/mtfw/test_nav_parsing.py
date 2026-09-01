@@ -1,0 +1,108 @@
+import json
+import os
+
+import pytest
+
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified files to
+# parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
+# to add more.
+NAV_PARSING_DATASET_PATH = os.path.join(os.path.dirname(__file__), "datasets", "nav_parsing_hashes.json")
+with open(NAV_PARSING_DATASET_PATH) as f:
+    NAV_PARSING_DATASET = json.load(f)
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_nav_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_nav_path_hash")
+        argvalues = [(d["app_id"], d["nav_path_hash"]) for d in NAV_PARSING_DATASET]
+        ids = [f"{d['app_id']}-{d['nav_path_hash']}" for d in NAV_PARSING_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by NAV_PARSING_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in NAV_PARSING_DATASET:
+        catalog_path = os.path.join(os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["nav_path_hash"] in catalog_hashes, (
+            f"{entry['nav_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def parsed_nav(game_fs_root, local_nav_path_hash):
+    from albam.engines.mtfw.structs.nav_156 import Nav156
+
+    path = resolve_hashes(game_fs_root, {local_nav_path_hash})[local_nav_path_hash]
+    src_bytes = game_fs_root.readbytes(path)
+
+    parsed = Nav156.from_bytes(src_bytes)
+    parsed._read()
+    return parsed
+
+
+KNOWN_FACE_FLAGS = [0, 1, 2, 3, 4, 8, 256, 1024, 1296, 1536, 2048, 2049, 2050, 2051, 2304, 2560, 2561, 2816,
+                    3072, 3076, 3080, 3328, 3584, 3840, 4096, 4097, 4098, 4608, 4864, 5120, 5124, 5128, 5376,
+                    5632, 5888, 6144, 6145, 6146, 6147, 6148, 6150, 6152, 6400, 6656, 6657, 6659, 6660, 6664,
+                    6912, 7168, 7169, 7170, 7171, 7172, 7176, 7180, 7180, 7180, 7180, 7180, 7180, 7424, 7680,
+                    7936, 8192, 8196, 8448, 8452, 8456, 9472, 10240, 10248, 10496, 10752, 11008, 11016, 11264,
+                    11276, 11520, 12032, 12288, 13056, 13320, 14336, 14344, 14592, 14596, 14600, 14848, 15104,
+                    15108, 15112, 15364, 15372, 15616, 15620, 15624, 15628, 16640, 18688, 19200, 19712, 24832,
+                    27392, 27904, 32768, 33024, 34064, 35584, 36112, 36608, 39680, 39684, 40192, 40204, 41216,
+                    41220, 43264, 43776, 44288, 44800, 47360, 47872, 48384, 48388, 65536, 65792, 68352, 69376,
+                    72192, 73728, 73984, 73992, 75776, 76032, 76544, 76800, 77056, 78080, 80128, 80896, 81152,
+                    82176, 98304, 98560, 100352, 100608, 101120, 101632, 102144, 102656, 104704, 105216,
+                    105728, 106240, 106752, 108800, 109824, 110336, 112896, 114944, 131076, 131080, 131328,
+                    133120, 133632, 133632, 134144, 134656, 137216, 138240, 138244, 138248, 138752, 139520,
+                    139520, 139520, 139520, 139520, 141568, 141568, 142080, 142592, 142592, 142592, 142592,
+                    145664, 146176, 146176, 146688, 146688, 155904, 172288, 174336, 175872, 178432, 179968,
+                    196864, 205056, 205056, 205056, 205056, 205056, 205056, 207104, 207104, 207104, 207616,
+                    207616, 207616, 208128, 211200, 211200, 211200, 211712, 211712, 211712, 211712,
+                    212224, 229632, 231424, 231680, 231680, 232192, 232192, 232192, 232192, 232704, 233216,
+                    233216, 233216, 234240, 235776, 235780, 236032, 236032, 236032, 236288, 236292, 236800,
+                    237312, 262144, 264192, 266240, 268288, 268800, 270592, 272384, 272640, 273664, 278784,
+                    284928, 303360, 305408, 309504, 368896, 393472, 397824, 397824, 397824, 397824, 397824,
+                    397824, 397824, 397824, 397824, 397824, 403712, 404736, 409856, 409856, 409856, 409856,
+                    409856, 409856, 411904, 412416, 412928, 412928, 412928, 416000, 416000, 416000, 416512,
+                    417024, 417024, 417024, 426240, 426240, 426240, 426240, 426240, 426240, 426240, 426240,
+                    428288, 429312, 429312, 430848, 430848, 430848, 430848, 430848, 430848, 430848, 430848,
+                    430848, 432384, 432896, 432896, 432896, 432896, 432896, 432896, 432896, 432896, 433408,
+                    433408, 441088, 524288, 526336, 526848, 1048576, 1212672, 4202752, 4219136, 4464896,
+                    4472064, 4537088, 8388608, 8388612, 8388616, 8388864, 8390656, 8390657, 8391168, 8394752,
+                    8394753, 8394754, 8394755, 8395264, 8397056, 8397060, 8397064, 8397068, 8403712, 8404228,
+                    8404232, 8404236, 8429824, 8454400, 8462592, 8487168, 8528128, 8585472, 8593152, 8650752,
+                    8658944, 8921344, 12591360, 12853504, 16785664, 16785668, 16785672, 16791808, 16792320,
+                    16793856, 16851200, 16853760, 16854272, 16875776, 16883968, 16916736, 16924928, 17012992,
+                    17014528, 17015040, 17047808, 17050368, 17056000, 17072384, 17074432, 17203456, 25174272,
+                    25176832, 25239808, 25272576, 25305344, 25320192, 25377536, 25402112, 25444608, 25640192,
+                    1073743872, 1073747968]
+
+# Junk?
+UNK_BBOX_PADDING = [b'\x00\x00\x00\x00', b'\xcd\xcd\xcd\xcd', b'1_cl', b'pen\x00',
+                    b'own\x00', b'\x8c\x00\x9f\x02', b'se\x00\x00', b'\x01\x00j\x00',
+                    b'\xc45@\x01', b'E~\xe3\x00', b'L\x01\x00\x03']
+
+UNK_GRID_PADDING = b"\x00" * 5460
+
+
+def test_parsed_nav(parsed_nav):
+    nav = parsed_nav
+    nav.version = 2
+    nav.reserved = 0
+    nav.header_padding = 1
+    assert nav.bbox.padding_00 == 0
+    assert nav.bbox.padding_01 in UNK_BBOX_PADDING
+    assert nav.bbox.padding_02 in UNK_BBOX_PADDING
+    assert nav.footer_padding == UNK_GRID_PADDING
+    for i, face in enumerate(nav.faces):
+        assert face.flags in KNOWN_FACE_FLAGS
+    grid_cells = [c for _, c in enumerate(nav.lookup_grid)]
+    assert grid_cells[4095].face_count >= 0

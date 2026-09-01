@@ -2,13 +2,14 @@ import time
 import os
 import bpy
 
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
-    VirtualFileData,
+    root_fs,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 
@@ -69,6 +70,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     far_file_name: bpy.props.StringProperty(name="New Name")  # noqa: F722
     far_add_new: bpy.props.BoolProperty(default=False)
     export_autofix: bpy.props.BoolProperty(default=False)
+    remove_unused_textures: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_prop
@@ -196,6 +198,8 @@ class ALBAM_WM_OT_ExportOptions(bpy.types.Operator):
                     text="Set LOD ID = 255 (always visible) for exported meshes")
         layout.prop(export_settings, "export_bones", text="Export edited bones")
         layout.prop(export_settings, "export_autofix", text="Make no mistakes")
+        layout.prop(export_settings, "remove_unused_textures",
+                    text="Remove orphaned textures from arc")
         layout.label(text="Dragon's Dogma export hacks")
         layout.prop(export_settings, "no_vf_grouping",
                     text="Don't group meshes by vertex format")
@@ -283,8 +287,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
         try:
             self._execute(context, item)
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Export failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
@@ -299,9 +302,8 @@ class ALBAM_OT_Export(bpy.types.Operator):
         vfiles = export_function(item.bl_object)
 
         root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
-        vfile_root = VirtualFileData(app_id, root_id)
         vfs = context.scene.albam.exported
-        vfs.add_vfiles_as_tree(app_id, vfile_root, vfiles)
+        vfs.add_export_root(app_id, root_id, vfiles)
 
     @classmethod
     def poll(cls, context):
@@ -357,7 +359,8 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Pack failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):  # pragma: no cover
@@ -365,11 +368,22 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         # necessary for kaitaistruct unavailable when registering
         # blender types
         from ..engines.mtfw.archive import update_arc
+        from ..engines.mtfw.arc_fs import origin_arc_path
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
         if item_i.is_archive:
-            path_i = item_i.absolute_path
+            if item_i.fs_key:
+                # Resolves correctly whether this root is a single
+                # ArcFS-wrapped .arc (always returns that arc's own path) or
+                # a whole MTFW_FS game-folder root (resolves the specific
+                # .arc this path actually came from) - see origin_arc_path.
+                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path)
+                if path_i is None:
+                    self.report({'ERROR'}, "Selected archive isn't backed by a packed .arc file")
+                    return
+            else:
+                path_i = item_i.absolute_path
         else:
             arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
             arc_node = [item for item in vfs_i.file_list
@@ -388,7 +402,8 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(path_i, files_e)
+        remove_unused = context.scene.albam.export_settings.remove_unused_textures
+        arc = update_arc(path_i, files_e, remove_unused_textures=remove_unused)
         with open(self.filepath, "wb") as f:
             f.write(arc)
 
@@ -437,7 +452,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Patch failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):
@@ -458,7 +474,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(self.filepath, files_e)
+        arc = update_arc(self.filepath, files_e,
+                         remove_unused_textures=context.scene.albam.export_settings.remove_unused_textures)
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}

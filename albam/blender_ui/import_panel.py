@@ -1,56 +1,75 @@
-import os
-
 import bpy
 
-from ..apps import APPS
+from ..apps import APPS, REENGINE_APPS
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import ALBAM_OT_VirtualFileSystemCollapseToggle, VirtualFile
+from ..data_loading import AppsUserDataConfigManager
 
-# FIXME: store in app data
-APP_DIRS_CACHE = {}
-# FIXME: store in app data
-APP_CONFIG_FILE_CACHE = {}
+# REENGINE_APPS[0] is a stray None (pre-existing, unrelated) - filtered out
+# before unpacking, not after (unpacking None itself raises TypeError).
+REENGINE_APP_IDS = {entry[0] for entry in REENGINE_APPS if entry}
 
 
-def update_app_data(self, context):
+def get_app_dir_from_config(self, context):
     current_app = context.scene.albam.apps.app_selected
-    cached_dir = APP_DIRS_CACHE.get(current_app)
-    cached_file = APP_CONFIG_FILE_CACHE.get(current_app)
-    if cached_dir:
-        context.scene.albam.apps.app_dir = cached_dir
+    current_app_userdata = AppsUserDataConfigManager().get_app_section(current_app)
+    if current_app_userdata:
+        context.scene.albam.apps.app_dir = current_app_userdata.get("app_dir", "")
+        context.scene.albam.apps.path_list_file = current_app_userdata.get("path_list_file", "")
     else:
         context.scene.albam.apps.app_dir = ""
-
-    if cached_file:
-        context.scene.albam.apps.app_config_filepath = cached_file
-    else:
-        context.scene.albam.apps.app_config_filepath = ""
+        context.scene.albam.apps.path_list_file = ""
 
 
-def update_app_caches(self, context):
+def set_app_dir_config(self, context):
     current_app = context.scene.albam.apps.app_selected
     current_dir = context.scene.albam.apps.app_dir
-    current_file = context.scene.albam.apps.app_config_filepath
+    if not current_dir:
+        return
 
-    APP_DIRS_CACHE[current_app] = current_dir
-    APP_CONFIG_FILE_CACHE[current_app] = current_file
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["app_dir"] = current_dir
+
+    config_mgr.save()
+
+
+def set_path_list_file_config(self, context):
+    current_app = context.scene.albam.apps.app_selected
+    current_path = context.scene.albam.apps.path_list_file
+    if not current_path:
+        return
+
+    config_mgr = AppsUserDataConfigManager()
+    app_section = config_mgr.get_app_section(current_app)
+    if not app_section:
+        config_mgr.config.add_section(current_app)
+        app_section = config_mgr.get_app_section(current_app)
+    app_section["path_list_file"] = current_path
+
+    config_mgr.save()
 
 
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
-    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=update_app_data)
-    app_dir : bpy.props.StringProperty(name="", description="", update=update_app_caches)
-    app_config_filepath : bpy.props.StringProperty(name="", update=update_app_caches)
+    app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
+    app_dir : bpy.props.StringProperty(name="", description="", update=set_app_dir_config)
+    # RE Engine only (see REENGINE_APP_IDS): a .pak's file entries carry only
+    # hashes, not paths, so reng needs an external plaintext candidate-path
+    # list to resolve anything at all (see albam.engines.reng.pak_fs).
+    path_list_file : bpy.props.StringProperty(name="", description="", update=set_path_list_file_config)
     mouse_x: bpy.props.IntProperty()
     mouse_y: bpy.props.IntProperty()
-
-    def get_app_config_filepath(self, app_id):
-        return APP_CONFIG_FILE_CACHE.get(app_id)
 
 
 @blender_registry.register_blender_prop_albam(name="import_settings")
 class AlbamImportSettings(bpy.types.PropertyGroup):
     import_only_main_lods: bpy.props.BoolProperty(default=True)
+    batch_import_folder: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
@@ -60,7 +79,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
+        batch = context.scene.albam.import_settings.batch_import_folder
         vfile = self.get_selected_item(context)
+
+        if batch and vfile and vfile.is_expandable:
+            return self._execute_batch(vfile, context)
+
         try:
             bl_object = self._execute(vfile, context)
             # Animations right now don't return a blender object
@@ -73,10 +97,48 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 self._make_exportable(vfile, bl_object, context)
 
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Import failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
+        return {"FINISHED"}
+
+    def _execute_batch(self, folder_item, context):
+        vfs = context.scene.albam.vfs
+        folder_node_id = folder_item.name
+        imported_count = 0
+        failed = []
+
+        for item in vfs.file_list:
+            if item.is_expandable:
+                continue
+            if not item.display_name.lower().endswith(".mod"):
+                continue
+            if (item.app_id, item.extension) not in blender_registry.importable_extensions:
+                continue
+            is_child = False
+            for ancestor in item.tree_node_ancestors:
+                if ancestor.node_id == folder_node_id:
+                    is_child = True
+                    break
+            if not is_child:
+                continue
+            try:
+                bl_object = self._execute(item, context)
+                if bl_object:
+                    bl_object.albam_asset.original_bytes = item.get_bytes()
+                    bl_object.albam_asset.app_id = item.app_id
+                    bl_object.albam_asset.relative_path = item.relative_path
+                    bl_object.albam_asset.extension = item.extension
+                    self._set_asset_type(item, bl_object)
+                    self._make_exportable(item, bl_object, context)
+                    imported_count += 1
+            except Exception:
+                failed.append(item.display_name)
+
+        msg = f"Batch imported {imported_count} .mod file(s)"
+        if failed:
+            msg += f", {len(failed)} failed: {', '.join(failed)}"
+        self.report({'INFO'}, msg)
         return {"FINISHED"}
 
     def _make_exportable(self, vfile, bl_object, context):
@@ -116,7 +178,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         item = cls.get_selected_item(context)
-        if not item or (item.app_id, item.extension) not in blender_registry.importable_extensions:
+        if not item:
+            return False
+        batch = context.scene.albam.import_settings.batch_import_folder
+        if batch and item.is_expandable:
+            return True
+        if (item.app_id, item.extension) not in blender_registry.importable_extensions:
             return False
         custom_poll_func = blender_registry.import_operator_poll_funcs.get(item.extension)
         if custom_poll_func:
@@ -219,10 +286,8 @@ class ALBAM_PT_ImportSection(bpy.types.Panel):
 
     def draw(self, context):
         row = self.layout.row()
+        row.operator("albam.app_config_popup", icon="OPTIONS")
         row.prop(context.scene.albam.apps, "app_selected")
-        # Experimental for reengine
-        if os.getenv("ALBAM_ENABLE_REEN"):
-            row.operator("albam.app_config_popup", icon="OPTIONS")
 
 
 @blender_registry.register_blender_type
@@ -293,6 +358,7 @@ class ALBAM_PT_ImportOptionsCustom(bpy.types.Panel):
 
 @blender_registry.register_blender_type
 class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
+    """App settings"""
     bl_label = ""
     bl_idname = "albam.app_config_popup"
 
@@ -317,22 +383,19 @@ class ALBAM_OT_AppConfigPopup(bpy.types.Operator):
         layout = self.layout
 
         apps = context.scene.albam.apps
-        try:
-            app_index = apps["app_selected"]
-        except KeyError:
-            # default, before actually selecting
-            app_index = 0
-        app_selected_name = apps.bl_rna.properties["app_selected"].enum_items[app_index].name
-        layout.label(text=f"{app_selected_name}")
+        current_app = context.scene.albam.apps.app_selected
+        current_app_name = apps.bl_rna.properties["app_selected"].enum_items[current_app].name
+        layout.label(text=f"{current_app_name}")
         layout.row()
 
         row = self.layout.row(heading="App Folder:", align=True)
         row.prop(context.scene.albam.apps, "app_dir")
         row.operator("albam.app_dir_setter", text="", icon="FILEBROWSER")
 
-        row = self.layout.row(heading="App Config:", align=True)
-        row.prop(context.scene.albam.apps, "app_config_filepath")
-        row.operator("albam.app_config_filepath_setter", text="", icon="FILEBROWSER")
+        if current_app in REENGINE_APP_IDS:
+            row = self.layout.row(heading="Path List:", align=True)
+            row.prop(context.scene.albam.apps, "path_list_file")
+            row.operator("albam.path_list_file_setter", text="", icon="FILEBROWSER")
 
 
 @blender_registry.register_blender_type
@@ -358,11 +421,11 @@ class ALBAM_OT_AppDirSetter(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
-    bl_idname = "albam.app_config_filepath_setter"
-    bl_label = "Select App Config"
+class ALBAM_OT_PathListFileSetter(bpy.types.Operator):
+    bl_idname = "albam.path_list_file_setter"
+    bl_label = "Select Path List"
 
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # NOQA
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # noqa: F821
 
     def invoke(self, context, event):
         wm = context.window_manager
@@ -370,7 +433,7 @@ class ALBAM_OT_SetAppConfigPath(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.albam.apps.app_config_filepath = self.filepath
+        context.scene.albam.apps.path_list_file = self.filepath
         bpy.ops.albam.app_config_popup("INVOKE_DEFAULT")
         return {"FINISHED"}
 
@@ -409,6 +472,86 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
         import_settings = context.scene.albam.import_settings
         layout = self.layout
         layout.prop(import_settings, "import_only_main_lods", text="Import main LODs only")
+        layout.prop(import_settings, "batch_import_folder", text="Batch import folder (.mod)")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
+    """Import all .mod files from the selected folder in the VFS tree"""
+    bl_idname = "albam.batch_import_folder"
+    bl_label = "Batch import folder"
+
+    def execute(self, context):
+        vfs = context.scene.albam.vfs
+        if len(vfs.file_list) == 0:
+            self.report({'WARNING'}, 'No files loaded')
+            return {'CANCELLED'}
+
+        index = vfs.file_list_selected_index
+        selected = vfs.file_list[index]
+
+        if not selected.is_expandable:
+            self.report({'WARNING'}, 'Select a folder, not a file')
+            return {'CANCELLED'}
+
+        selected_node_id = selected.name
+
+        # Find all .mod children of the selected folder
+        mod_items = []
+        for item in vfs.file_list:
+            if item.is_expandable:
+                continue
+            if item.display_name.lower().endswith(".mod"):
+                for ancestor in item.tree_node_ancestors:
+                    if ancestor.node_id == selected_node_id:
+                        mod_items.append(item)
+                        break
+
+        if not mod_items:
+            self.report({'WARNING'}, 'No .mod files found in selected folder')
+            return {'CANCELLED'}
+
+        imported_count = 0
+        failed = []
+        for vfile in mod_items:
+            if (vfile.app_id, vfile.extension) not in blender_registry.importable_extensions:
+                continue
+            try:
+                bl_object = ALBAM_OT_Import._execute(vfile, context)
+                if bl_object:
+                    bl_object.albam_asset.original_bytes = vfile.get_bytes()
+                    bl_object.albam_asset.app_id = vfile.app_id
+                    bl_object.albam_asset.relative_path = vfile.relative_path
+                    bl_object.albam_asset.extension = vfile.extension
+                    asset_type = blender_registry.albam_asset_types.get(
+                        (vfile.app_id, vfile.extension), "")
+                    bl_object.albam_asset.asset_type = asset_type
+                    export_function = blender_registry.export_registry.get(
+                        (vfile.app_id, vfile.extension))
+                    if export_function:
+                        exportable = context.scene.albam.exportable.file_list.add()
+                        exportable.bl_object = bl_object
+                        context.scene.albam.exportable.file_list.update()
+                    imported_count += 1
+            except Exception:
+                failed.append(vfile.display_name)
+
+        msg = f"Imported {imported_count} .mod file(s)"
+        if failed:
+            msg += f", {len(failed)} failed: {', '.join(failed)}"
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        if len(context.scene.albam.vfs.file_list) == 0:
+            return False
+        index = context.scene.albam.vfs.file_list_selected_index
+        try:
+            item = context.scene.albam.vfs.file_list[index]
+        except IndexError:
+            return False
+        return item.is_expandable

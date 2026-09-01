@@ -3,8 +3,11 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_21
-  ks-version: 0.11
+  ks-version: '0.11'
   title: MTFramework model format 210 and 211
+
+params:
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: header, type: mod_header}
@@ -12,7 +15,8 @@ seq:
   - {id: bbox_min, type: vec4}
   - {id: bbox_max, type: vec4}
   - {id: model_info, type: model_info}
-  - {id: num_weight_bounds, type: u4, if: _root.header.version == 210 or _root.header.version == 212}
+  - {id: num_weight_bounds, type: u4,
+     if: _root.header.version == 210 or _root.header.version == 212 or _root.app_id == "umvc3"}
   # TODO: padding
 
 instances:
@@ -33,7 +37,9 @@ instances:
   index_buffer:
     {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
   size_top_level_:
-    value: "_root.header.version == 210 or _root.header.version == 212 ? _root.header.size_ + 68 : _root.header.size_ + 64"
+    value: "_root.header.version == 210 or _root.header.version == 212  or _root.app_id == 'umvc3' ? _root.header.size_ + 68 : _root.header.size_ + 64"
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
 
 types:
   mod_header:
@@ -49,17 +55,17 @@ types:
       - {id: num_edges, type: u4}
       - {id: size_vertex_buffer, type: u4}
       - {id: reserved_01, type: u4}
-      - {id: num_groups, type: u4}
-      - {id: offset_bones_data, type: u4}
-      - {id: offset_groups, type: u4}
-      - {id: offset_materials_data, type: u4}
-      - {id: offset_meshes_data, type: u4}
-      - {id: offset_vertex_buffer, type: u4}
-      - {id: offset_index_buffer, type: u4}
-      - {id: size_file, type: u4}
+      - {id: num_groups, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_bones_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_groups, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_materials_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_meshes_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_vertex_buffer, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: offset_index_buffer, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: size_file, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       size_:
-        value: 64
+        value: '_root.use_64bit_ofs ? 96 : 64'
 
   model_info:
     seq:
@@ -113,21 +119,23 @@ types:
 
   materials_data:
     seq:
-      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 210 or _root.header.version == 212}
-      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials, if: _root.header.version == 211}
+      - {id: material_names, type: str, encoding: ASCII, size: 128, terminator: 0, repeat: expr, repeat-expr: _root.header.num_materials,
+         if: _root.header.version == 210 or _root.header.version == 212 or (_root.header.version == 211 and _root.app_id == "umvc3")}
+      - {id: material_hashes, type: u4, repeat: expr, repeat-expr: _root.header.num_materials,
+         if: (_root.header.version == 211 and _root.app_id != "umvc3")}
     instances:
       size_:
-        value: "_root.header.version == 210 or _root.header.version == 212 ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
+        value: "_root.header.version == 210 or _root.header.version == 212 or _root.app_id == 'umvc3' ? 128 * _root.header.num_materials : 4 * _root.header.num_materials"
 
   meshes_data:
     seq:
       - {id: meshes, type: mesh, repeat: expr, repeat-expr: _root.header.num_meshes}
-      - {id: num_weight_bounds, type: u4, if: _root.header.version == 211}
-      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 ? _root.num_weight_bounds : num_weight_bounds"}
+      - {id: num_weight_bounds, type: u4, if: (_root.header.version == 211 and _root.app_id != "umvc3")}
+      - {id: weight_bounds, type: weight_bound, repeat: expr, repeat-expr: "_root.header.version == 210 or _root.header.version == 212 or _root.app_id == 'umvc3' ? _root.num_weight_bounds : num_weight_bounds"}
     instances:
       size_:
         value: |
-          _root.header.version == 210 or _root.header.version == 212 ?
+          _root.header.version == 210 or _root.header.version == 212  or _root.app_id == "umvc3" ?
           _root.header.num_meshes * meshes[0].size_ + _root.num_weight_bounds * weight_bounds[0].size_ :
           _root.header.num_meshes * meshes[0].size_ + (num_weight_bounds * weight_bounds[0].size_) + 4
   mesh:
@@ -158,16 +166,31 @@ types:
       - {id: min_index, type: u2}
       - {id: max_index, type: u2}
       - {id: boundary, type: u4}
+      - {id: padding, type: u8, if: _root.use_64bit_ofs}
     instances:
       size_:
-        value: 48
+        value: '_root.app_id == "umvc3" ? 56 : 48'
       indices:
-        pos: _root.header.offset_index_buffer + face_offset * 2 + face_position * 2
+        # face_offset is an index base (see its own comment), added to the
+        # index values rather than to the buffer position - meshes tile
+        # contiguously by face_position alone, and the last one ends exactly
+        # at header.num_faces, so there is no room for it to shift anything.
+        # It is 0 in all but 9 of umvc3's 2702 .mod, which is why including
+        # it here read past end of file on precisely those 9.
+        pos: _root.header.offset_index_buffer + face_position * 2
         repeat: expr
         repeat-expr: num_indices
         type: u2
       vertices:
-        pos: _root.header.offset_vertex_buffer + vertex_offset + (vertex_position * vertex_stride)
+        # face_offset is the mesh's base into the vertex buffer, and
+        # vertex_position is relative to it. A model with one vertex block
+        # leaves it 0, which is nearly all of them; where a second block
+        # exists its meshes restart vertex_position at 0 and carry the base
+        # here. /stg/106/mod/0000.mod: block one ends at 60853, block two
+        # carries face_offset 60853, and 60853 plus block two's span is
+        # 116870, exactly header.num_vertices and the buffer's capacity.
+        # Without it those meshes re-read block one and render as garbage.
+        pos: _root.header.offset_vertex_buffer + vertex_offset + ((face_offset + vertex_position) * vertex_stride)
         repeat: expr
         repeat-expr: num_vertices
         type:
@@ -812,3 +835,4 @@ types:
     instances:
       size_:
         value: 144
+

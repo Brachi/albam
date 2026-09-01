@@ -28,6 +28,55 @@ pytest
 ```
 Note: you need application data to run most useful tests.
 
+### Running against a real Blender in development mode
+
+Blender loads extensions from its per-version `extensions/user_default/` directory, keyed by the
+`id` in `albam/blender_manifest.toml` (`albam`). Blender's extension scanner explicitly follows
+symlinks there, so instead of copying or installing a built zip, symlink this repo's `albam/`
+directory straight in. Blender then sees live edits immediately, no rebuild/reinstall step:
+```
+# Linux
+ln -s "$(pwd)/albam" ~/.config/blender/<bl-version>/extensions/user_default/albam
+# Windows (as Administrator)
+mklink /D "%APPDATA%\Blender Foundation\Blender\<bl-version>\extensions\user_default\albam" "%CD%\albam"
+```
+After symlinking, (re)start Blender and enable "Albam" under Preferences > Get Extensions
+(or Add-ons) if it isn't already.
+
+Dependencies:
+Blender's own bundled Python doesn't have this addon's pip-installed dependencies,
+only the `.venv` above does. Launch Blender with
+[`--python-use-system-env`](https://docs.blender.org/manual/en/latest/advanced/command_line/arguments.html)
+and `PYTHONPATH` pointing at the venv's site-packages, so Blender's bundled Python
+resolves imports through it.
+```
+source .venv/bin/activate
+PYTHONPATH="$VIRTUAL_ENV/lib/python3.13/site-packages" blender --python-use-system-env
+```
+
+
+### Regenerating the Kaitai Struct parsers
+
+Binary formats are described by `.ksy` files under each engine's `structs/` directory and compiled
+to the `*.py` next to them with [Kaitai Struct](https://kaitai.io/) (currently 0.11):
+
+```
+kaitai-struct-compiler --target python -w --outdir . <file>.ksy
+```
+
+`-w`/`--read-write` applies to every parser, including formats albam only reads today, so there is
+one command rather than a per-file split that nothing in a `.ksy` records. It implies
+`--no-auto-read`, which is the one thing callers have to know: constructing a parser (or calling
+`from_bytes()`) no longer parses anything on its own, so every call site follows it with an
+explicit `_read()`.
+
+A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
+a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both
+cases and does the `_read()` for you. Every MT Framework model and texture struct takes an
+`app_id`, since some of their fields differ per app rather than per format version - UMVC3, for
+one, is a 64-bit build whose offsets are `u8` where every other app's are `u4`.
+
+
 ## Supported Engines
 
 * [MT Framework](https://en.wikipedia.org/wiki/MT_Framework)
@@ -47,3 +96,4 @@ Note: you need application data to run most useful tests.
 * Henry of Carim
 * AsteriskAmpersand
 * Che
+* Kami

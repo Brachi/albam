@@ -5,9 +5,13 @@ __pycache__/
 .cache
 .venv/
 tests/data/
-albam/albam_vendor/*.so
-albam/albam_vendor/*.dll
-albam/albam_vendor/*.list
-albam/albam_vendor/pybc7.py
 Albam.egg-info/
 build/
+dist/
+
+# local-only debug dumps (real, plain-text game asset paths - never commit)
+*_tree_dump.txt
+
+# real credentials (R2, etc) - see .env.example for the expected keys
+.env
+.env2

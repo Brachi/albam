@@ -9,7 +9,7 @@ from .custom_properties import (
 from .error_handling import ALBAM_OT_ErrorHandler
 from .import_panel import ALBAM_PT_ImportSection
 from .export_panel import ALBAM_PT_ExportSection
-from .tools import ALBAM_PT_ToolsPanel, ALBAM_OT_SplitUVSeams
+from .tools import ALBAM_PT_ToolsPanel
 
 
 __all__ = (
@@ -22,5 +22,4 @@ __all__ = (
     "ALBAM_PT_ExportSection",
     "ALBAM_PT_ToolsPanel",
     "ALBAM_OT_ErrorHandler",
-    "ALBAM_OT_SplitUVSeams"
 )

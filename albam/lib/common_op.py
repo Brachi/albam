@@ -163,14 +163,21 @@ def copy_faces(sourceMesh, targetMesh, numVertices, materialsMap):
             targetFace.material_index = materialsMap[sourceFace.material_index]
 
 
-def triangulate_meshes(bl_objects):
+# Works but slower ~+ 0.015 seconds for the test mesh
+def triangulate_meshes_modifier(bl_objects):
+    unselect()
     for ob in bl_objects:
-        mesh = ob.data
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method='BEAUTY', ngon_method='BEAUTY')
-        bm.to_mesh(mesh)
-        mesh.update()
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+
+        tri_mod = ob.modifiers.new(name="Triangulate", type='TRIANGULATE')
+        tri_mod.quad_method = 'BEAUTY'
+        tri_mod.ngon_method = 'BEAUTY'
+        tri_mod.keep_custom_normals = True
+
+        bpy.ops.object.modifier_apply(modifier=tri_mod.name)
+
+        ob.select_set(False)
 
 
 def move_to_collection(bl_objects, col_name):

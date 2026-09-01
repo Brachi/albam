@@ -3,8 +3,11 @@ meta:
   bit-endian: le
   file-extension: rtex
   id: rtex_157
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework texture render target format version 157
+
+params:
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: id_magic, contents: [0x52, 0x54, 0x58, 0x00]}
