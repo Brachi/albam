@@ -131,3 +131,52 @@ def test_chain_goal_is_the_joints_own_position(chain_rig):
                 )
                 checked += 1
     assert checked, "no posed goal was measured"
+
+
+@pytest.fixture(scope="session")
+def reimported_actions(chain_rig, game_fs_root, local_app_id, local_lmt_path_hash):
+    """The actions a second import of the same .lmt onto the same rig produces.
+
+    Shuffling animations means loading more than one .lmt onto a character, and
+    the control bones and their constraints survive the first import. What must
+    survive with them is the bookkeeping that lets a later block say its chain
+    is inactive.
+    """
+    armature, first_actions = chain_rig
+    resolved = resolve_hashes(game_fs_root, {local_lmt_path_hash})
+    bpy.context.scene.albam.import_options_lmt.armature = armature
+
+    before = set(bpy.data.actions)
+    assert bpy.context.scene.albam.vfs.select_vfile(
+        local_app_id, resolved[local_lmt_path_hash].lstrip("/"))
+    assert bpy.ops.albam.import_vfile() == {"FINISHED"}
+    return armature, [a for a in bpy.data.actions if a not in before]
+
+
+def test_a_second_import_still_keys_its_chains(reimported_actions):
+    """A constraint the rig already carries is still keyed off where unused.
+
+    The constraint belongs to the rig for good, but the record of which
+    constraint serves which chain is rebuilt per file. Lose it and the second
+    file's actions key no influence at all, so every chain keeps solving
+    towards a goal those blocks never move - the limb is dragged to the
+    control bone's rest position for the whole animation.
+    """
+    armature, actions = reimported_actions
+    assert actions, "expected the second import to create its own actions"
+
+    influence_paths = {
+        f'pose.bones["{bone.name}"].constraints["{constraint.name}"].influence'
+        for bone in armature.pose.bones
+        for constraint in bone.constraints
+        if constraint.type == "IK"
+    }
+    assert influence_paths, "expected the rig to carry IK constraints"
+
+    keyed = {
+        fcurve.data_path
+        for action in actions
+        for fcurve in action_fcurves(action)
+    }
+    assert influence_paths & keyed, (
+        "no action from the second import keys any chain's influence")

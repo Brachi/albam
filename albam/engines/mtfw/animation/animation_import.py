@@ -445,7 +445,15 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
         bone_name = "IK_Foot.L"
     else:
         bone_name = f"IK_Target.{track_bone_index}"
+    # The control bone and its constraint outlive the import that made them,
+    # but chain_constraints is rebuilt per file: a second .lmt on the same rig
+    # has to find the existing constraint again, or none of its actions key
+    # influence and every chain stays wherever the previous file left it.
+    pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
+    constraint_name = f"chain.{track_bone_index}"
     if bone_name in armature.data.bones:
+        if constraint_name in pose_bone.constraints:
+            chain_constraints[track_bone_index] = (pose_bone.name, constraint_name)
         return bone_name
 
     with _armature_in_edit_mode(armature) as edit_bones:
@@ -459,14 +467,13 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
         blender_bone[CHAIN_LENGTH_PROP] = chain_count
 
     # constrain the chain to the goal
-    pose_bone = armature.pose.bones[mapping.get(str(track_bone_index))]
     constraint = pose_bone.constraints.new('IK')
-    constraint.name = f"chain.{track_bone_index}"
+    constraint.name = constraint_name
     constraint.target = armature
     constraint.subtarget = bone_name
     constraint.chain_count = chain_count
     constraint.use_rotation = True
-    chain_constraints[track_bone_index] = (pose_bone.name, constraint.name)
+    chain_constraints[track_bone_index] = (pose_bone.name, constraint_name)
 
     root_motion_bone = _get_or_create_root_motion_bone(armature, mapping)
     _follow_root_motion(armature, bone_name, root_motion_bone)

@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   quantized components summed past unit norm
 - Animation tracks landing on an unrelated bone when the skeleton has no bone
   for that animation id, dropping the id from an exported `.lmt`
+- A second animation file imported onto the same skeleton leaving its limb
+  chains solving towards goals none of its blocks move
 
 ### Changed
 
