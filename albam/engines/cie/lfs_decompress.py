@@ -525,10 +525,15 @@ def chunk_sizes(chunks, stream_size):
 def xcompress_decompress_re4hd(chunks):
     """The payload of an .lfs, from its parsed chunk list (see lfs.ksy).
 
-    Chunks share one LZX window: the decoder state carries across them, so
-    they have to be decoded in order and none can be decoded on its own.
-    That, and the chunk table living inside no index of its own, is why an
-    .lfs can only ever be read whole.
+    Chunks are decoded through one shared LZX state, which is what this
+    decoder's original does. Real data never needs it - across a 150 archive
+    sample none of 72146673 matches reaches back past the start of its own
+    chunk - and the game's own decoder gives a chunk no history at all, so a
+    chunk anything but albam wrote does decode on its own. The state is
+    carried anyway because it costs nothing and reads strictly more.
+
+    An .lfs is still only ever read whole, though: the chunk table has no
+    index of its own, so there is nothing to seek to a single file by.
     """
     dec_data = bytearray()
     if not chunks:
@@ -563,9 +568,14 @@ def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID, compress=Fals
     Chunks are stored rather than compressed by default. The format flags
     each chunk either way and the game reads both - an archive written with
     stored chunks loads, confirmed in the real game, while one written with
-    albam's own LZX does not, even though albam's decoder reads it back
-    correctly. So the encoder satisfies this decoder and not the game's, and
-    until that is understood the larger archive is the one that works.
+    albam's own LZX did not, even though albam's decoder read it back
+    correctly.
+
+    Why it did not is understood now and fixed in lfs_compress: those chunks
+    matched back into the chunks before them, which this decoder allows and
+    the game's does not. The default stays here all the same, because only a
+    load of a rebuilt archive in the real game can say whether the encoder is
+    right, and that has not happened since the fix.
 
     Pass compress=True to use the encoder anyway (see lfs_compress).
     """

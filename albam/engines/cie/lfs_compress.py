@@ -11,13 +11,15 @@ slots.
 Two things about the container shape the encoder more than the bit format
 does (see lfs.ksy and xcompress_decompress_re4hd):
 
-* Chunks share one window. A chunk is not an independent stream: it is
-  decoded with the window left behind by the chunks before it, so matches may
-  reach back into them and a chunk only decodes in its own place in the
-  sequence. Only the compressed chunks feed that window, though - a stored
-  chunk is copied straight out and never written to it - so the history a
-  chunk may refer to is the concatenation of the *compressed* chunks before
-  it, which is what `history` tracks below.
+* No match reaches out of its own chunk. This decoder would allow it - it
+  carries one window across the whole file, so a chunk can refer to what the
+  chunks before it decoded - and an earlier version of this encoder did
+  exactly that, producing archives this decoder read back perfectly and the
+  game rejected outright. The game's own data says why: over a 150 archive
+  sample, of 72146673 matches not one reaches back past the start of the
+  chunk it lives in, and the longest distance seen anywhere is 65469, under
+  one chunk. So a chunk here is encoded as if the window were empty, and
+  decodes on its own wherever it sits in the file.
 * Per chunk the decoder resets the code lengths and the three repeated
   offsets, but not the window, not the current block and not the trees. So
   every chunk here starts a fresh block and ends exactly on its last byte,
@@ -25,7 +27,7 @@ does (see lfs.ksy and xcompress_decompress_re4hd):
 
 Match finding is delegated to zlib: its deflate output is parsed back into the
 literal/match token stream that produced it (_lz77_tokens), which is then
-re-encoded as LZX. Deflate's window is 32KB against LZX's 128KB, so this
+re-encoded as LZX. Deflate's window is 32KB against the chunk's 64KB, so this
 leaves some ratio on the table, but it puts the O(n) search work in C instead
 of in Python.
 """
@@ -43,9 +45,6 @@ from .lfs_decompress import (
     POSITION_BASE,
 )
 
-# The window lfs_decompress builds its state with. Match distances cannot
-# exceed it, and chunks are decoded one after another into it.
-WINDOW_SIZE = 131072
 # One frame's uncompressed size. The frame header's size fields are 16 bit,
 # and a whole chunk does not fit one, so a chunk is two frames.
 FRAME_SIZE = 32768
@@ -114,6 +113,14 @@ def _huffman_lengths(freqs, max_length):
 
     Over-long codes are dealt with by halving the frequencies and rebuilding,
     which converges because equal weights bound the depth at log2(n).
+
+    A tree of one symbol gets a second, unused one alongside it, so that the
+    lengths always describe a complete code. This decoder does not care - it
+    walks a tree and only ever meets the code that was written - but a
+    decoder building a lookup table has half of it undefined, and the game's
+    own data never leaves a code incomplete: across a 40 archive sample all
+    9909 pre-trees and all 3303 main trees are complete, and of the 3303
+    length trees 3219 are complete and 84 empty, with none in between.
     """
     freqs = list(freqs)
     while True:
@@ -123,6 +130,7 @@ def _huffman_lengths(freqs, max_length):
             return lengths
         if len(used) == 1:
             lengths[used[0]] = 1
+            lengths[1 if used[0] == 0 else 0] = 1
             return lengths
 
         heap = [(freqs[i], i) for i in used]
@@ -402,15 +410,9 @@ def _parse_deflate(data):
             return tokens
 
 
-def _lz77_tokens(chunk, history, level=9):
-    """`chunk` as literals and back-references, `history` being what precedes
-    it in the window and may therefore be matched against."""
-    if history:
-        window = history[-FRAME_SIZE:]
-        compressor = zlib.compressobj(level, zlib.DEFLATED, -15, 9, zlib.Z_DEFAULT_STRATEGY,
-                                      zdict=window)
-    else:
-        compressor = zlib.compressobj(level, zlib.DEFLATED, -15, 9)
+def _lz77_tokens(chunk, level=9):
+    """`chunk` as literals and back-references, all within the chunk itself."""
+    compressor = zlib.compressobj(level, zlib.DEFLATED, -15, 9)
     return _parse_deflate(compressor.compress(chunk) + compressor.flush())
 
 
@@ -485,13 +487,13 @@ def _operations(chunk, tokens):
     return operations
 
 
-def _compress_chunk(chunk, history):
+def _compress_chunk(chunk):
     """One chunk as LZX frames, or None if that is no smaller than storing it.
 
     A single verbatim block covers the whole chunk and ends on its last byte,
     so the decoder's block state is clean again for the next chunk.
     """
-    tokens = _lz77_tokens(chunk, history)
+    tokens = _lz77_tokens(chunk)
     operations = _operations(chunk, tokens)
 
     main_freqs = [0] * LZX_MAIN_SYMBOLS
@@ -567,25 +569,19 @@ def _frame(data, uncompressed_size):
 def compress_chunks(payload):
     """`payload` split into .lfs chunks, each as (bytes, is_compressed).
 
-    A chunk that does not come out smaller compressed is stored instead. A
-    stored chunk never reaches the decoder's window, so it is also left out of
-    the history the chunks after it are compressed against.
+    Each chunk is compressed on its own, referring to nothing outside itself,
+    so it does not matter what the chunks around it are or whether they are
+    compressed at all. A chunk that does not come out smaller compressed is
+    stored instead.
     """
     chunks = []
-    history = bytearray()
     for start in range(0, len(payload), LFS_CHUNK_SIZE):
         chunk = payload[start:start + LFS_CHUNK_SIZE]
         try:
-            compressed = _compress_chunk(chunk, history)
+            compressed = _compress_chunk(chunk)
         except _FrameTooLarge:
             compressed = None
-        if compressed is None:
-            chunks.append((chunk, False))
-        else:
-            chunks.append((compressed, True))
-            history += chunk
-            if len(history) > WINDOW_SIZE:
-                del history[:len(history) - WINDOW_SIZE]
+        chunks.append((chunk, False) if compressed is None else (compressed, True))
     if not chunks:
         # A zero-length payload still needs a chunk: num_chunks == 0 is
         # rejected as a malformed header on the way back in.
