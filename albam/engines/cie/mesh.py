@@ -147,6 +147,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         # rest of its archive is not its skeleton, and bones nothing is
         # weighted to are in nothing else here - see _bones_to_write.
         bl_mesh_ob[BONE_IDS_PROPERTY] = [bone.bone_id for bone in bin.bones]
+        bl_mesh_ob[BONE_PARENTS_PROPERTY] = [bone.parent for bone in bin.bones]
         _apply_weights(bl_mesh_ob, bin)
         arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = skeleton
@@ -323,6 +324,12 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile):
 ARCHIVE_PROPERTY = "cie.source_archive"
 # The bone ids the model was imported with (see build_blender_model).
 BONE_IDS_PROPERTY = "cie.bone_ids"
+# The parent each of those bones had in this model's own table. A shared
+# armature cannot hold them: measured over one character archive, 10 of its
+# 119 bone ids are given different parents by different models, and some
+# models root a bone whose parent is present. Whatever the game reads them
+# for, they are the model's own and are carried rather than recomputed.
+BONE_PARENTS_PROPERTY = "cie.bone_parents"
 
 
 def _find_reusable_armature(bin, context, archive_id):
@@ -751,7 +758,7 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
     return [bone for bone in all_bones if bone.name in kept]
 
 
-def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=()):
+def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=None):
     """The bone table, as local offsets from each bone's parent.
 
     Holds the bones this model itself uses, not every bone of the armature it
@@ -776,12 +783,25 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=()):
         bones = all_bones
     kept = {bone.name for bone in bones}
 
+    own_parents = own_parents or {}
+    by_id = {ids[bone.name]: bone for bone in all_bones}
+
     dst_bones = []
     for bone in sorted(bones, key=lambda b: ids[b.name]):
         dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
-        dst_bone.bone_id = ids[bone.name]
-        parent = bone.parent if bone.parent and bone.parent.name in kept else None
-        dst_bone.parent = ids[parent.name] if parent else NO_PARENT
+        bone_id = ids[bone.name]
+        dst_bone.bone_id = bone_id
+
+        # The model's own parent for this bone if it recorded one, since the
+        # armature it is bound to may be shared and disagree; otherwise the
+        # armature's own hierarchy, clipped to the bones being written.
+        recorded = own_parents.get(bone_id)
+        if recorded is not None and (recorded == NO_PARENT or recorded in by_id):
+            dst_bone.parent = recorded
+            parent = None if recorded == NO_PARENT else by_id[recorded]
+        else:
+            parent = bone.parent if bone.parent and bone.parent.name in kept else None
+            dst_bone.parent = ids[parent.name] if parent else NO_PARENT
         head = bone.head_local
         if parent:
             head = head - parent.head_local
@@ -1190,7 +1210,7 @@ def export_bin(bl_obj):
     dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
     dst_bin.bones = (
         _serialize_bones(dst_bin, armature, _weighted_bone_ids(weight_table),
-                         _own_bone_ids(bl_mesh_objs))
+                         _own_bone_ids(bl_mesh_objs), _own_bone_parents(bl_mesh_objs))
         if armature else [])
     # No armature means nothing to weight against, and a shipped model
     # without bones carries no weight block at all.
@@ -1247,6 +1267,22 @@ def _own_bone_ids(bl_mesh_objs):
     for bl_mesh_ob in bl_mesh_objs:
         own.update(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
     return own
+
+
+def _own_bone_parents(bl_mesh_objs):
+    """{bone id: parent id} as the model's own table had them.
+
+    See BONE_PARENTS_PROPERTY: the same bone is parented differently by
+    different models of one character, so the armature they share cannot
+    answer this and the model has to say.
+    """
+    parents = {}
+    for bl_mesh_ob in bl_mesh_objs:
+        ids = bl_mesh_ob.get(BONE_IDS_PROPERTY) or ()
+        recorded = bl_mesh_ob.get(BONE_PARENTS_PROPERTY) or ()
+        for bone_id, parent in zip(ids, recorded):
+            parents.setdefault(bone_id, parent)
+    return parents
 
 
 def _weighted_bone_ids(weight_table):

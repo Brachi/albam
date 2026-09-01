@@ -557,14 +557,51 @@ def xcompress_decompress_re4hd(chunks):
     return dec_data
 
 
-def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID):
+def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID, compress=False):
     """`payload` wrapped as a complete .lfs file.
 
-    Chunks are LZX compressed (see lfs_compress), except any that does not
-    come out smaller than it went in: the format flags each chunk as
-    compressed or stored (see lfs.ksy) and the game reads both, so an
-    incompressible chunk is written verbatim rather than grown.
-    """
-    from .lfs_compress import compress_lfs
+    Chunks are stored rather than compressed by default. The format flags
+    each chunk either way and the game reads both - an archive written with
+    stored chunks loads, confirmed in the real game, while one written with
+    albam's own LZX does not, even though albam's decoder reads it back
+    correctly. So the encoder satisfies this decoder and not the game's, and
+    until that is understood the larger archive is the one that works.
 
-    return compress_lfs(payload, file_id)
+    Pass compress=True to use the encoder anyway (see lfs_compress).
+    """
+    if compress:
+        from .lfs_compress import compress_lfs
+        return compress_lfs(payload, file_id)
+    return store_lfs(payload, file_id)
+
+
+def store_lfs(payload, file_id=LFS_DEFAULT_FILE_ID):
+    """`payload` wrapped as an .lfs whose chunks are all stored.
+
+    No LZX involved: the chunk table's flag says each chunk is verbatim, and
+    the game's own data contains such a chunk, so its loader accepts them.
+    """
+    payload = bytes(payload)
+    chunks = [payload[i:i + LFS_CHUNK_SIZE]
+              for i in range(0, len(payload), LFS_CHUNK_SIZE)]
+    if not chunks:
+        # A zero-length payload still needs a chunk: num_chunks == 0 is
+        # rejected as a malformed header on the way back in.
+        chunks = [b""]
+
+    table = bytearray()
+    body = bytearray()
+    table_size = len(chunks) * 8
+    total = 0
+    for i, chunk in enumerate(chunks):
+        # 0x10000 doesn't fit a u2; the format spells a full chunk as 0.
+        size = len(chunk) % LFS_CHUNK_SIZE
+        # Low bit clear: stored. Offsets are measured from the chunk table.
+        table += struct.pack("<HHI", size, size, table_size + len(body))
+        body += chunk
+        total += len(chunk)
+        if i + 1 < len(chunks):
+            body += b"\x00" * (-len(body) % CHUNK_ALIGNMENT)
+
+    header = struct.pack("<5I", LFS_MAGIC1, file_id, len(payload), total, len(chunks))
+    return header + bytes(table) + bytes(body)

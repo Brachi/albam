@@ -39,12 +39,18 @@ def _random_bytes(size):
 
 
 def _round_trip(payload):
-    """`payload` compressed and read back, with the rebuilt file's size."""
+    """`payload` compressed and read back, with the rebuilt file's size.
+
+    compress=True is explicit because it is no longer the default: writing an
+    archive stores its chunks, since an archive written with this encoder is
+    read back correctly here and rejected by the game. These tests are what
+    covers the encoder itself, so they ask for it by name.
+    """
     from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
                                                   xcompress_decompress_re4hd)
     from albam.engines.cie.structs.lfs import Lfs
 
-    rebuilt = xcompress_compress_re4hd(payload)
+    rebuilt = xcompress_compress_re4hd(payload, compress=True)
     reparsed = Lfs.from_bytes(rebuilt)
     reparsed._read()
     assert reparsed.header.size_decompressed == len(payload)
