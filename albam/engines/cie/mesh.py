@@ -486,11 +486,21 @@ def _entry_number(display_name):
 
 
 def _tpl_candidates(vfs, bin_vfile):
-    """Every .tpl sharing a root with `bin_vfile`."""
+    """The .tpl files a model could be addressing.
+
+    Its own archive first, since that is where a model's textures live. A
+    model whose root holds none falls back to every .tpl in the VFS - which
+    is what a model re-imported after export is: it comes from an export
+    root, which has no textures of its own, and re-importing to check an
+    edit should still show it textured.
+    """
     root_id = bin_vfile.tree_node.root_id
-    return [vf for vf in vfs.file_list
-            if vf.tree_node.root_id == root_id and
-            vf.display_name.lower().endswith(".tpl")]
+    candidates = [vf for vf in vfs.file_list
+                  if vf.tree_node.root_id == root_id and
+                  vf.display_name.lower().endswith(".tpl")]
+    if candidates:
+        return candidates
+    return [vf for vf in vfs.file_list if vf.display_name.lower().endswith(".tpl")]
 
 
 def choose_tpl(vfs, bin_vfile, bin):
