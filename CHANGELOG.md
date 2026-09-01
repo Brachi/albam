@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   for that animation id, dropping the id from an exported `.lmt`
 - A second animation file imported onto the same skeleton leaving its limb
   chains solving towards goals none of its blocks move
+- Spurious "Array iterator out of range" messages printed on every export of a mesh with fewer UV layers than the vertex format allows
 
 ### Changed
 

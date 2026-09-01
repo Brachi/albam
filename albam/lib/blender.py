@@ -178,12 +178,20 @@ def get_uvs_per_loop(blender_mesh_object, layer_index):
     Return {loop_index: (uv_x, uv_y)}, one entry per mesh corner (as opposed
     to per vertex): a shared vertex can be part of more than one UV island,
     so its corners can legitimately have different UVs.
+
+    Callers ask for a fixed number of layers because that is what the vertex
+    formats allow, so a mesh with fewer is the normal case, not an error.
+    Asking how many there are rather than indexing and catching the failure
+    keeps Blender from printing "Array iterator out of range" to stdout: it
+    writes that before raising, so catching the exception does not suppress
+    it, and once per missing layer per mesh it reads like a real error in
+    the middle of an export log.
     """
     loops = {}
-    try:
-        uv_layer = blender_mesh_object.data.uv_layers[layer_index]
-    except IndexError:
+    uv_layers = blender_mesh_object.data.uv_layers
+    if layer_index >= len(uv_layers):
         return loops
+    uv_layer = uv_layers[layer_index]
     uvs_per_loop = uv_layer.data
     if not uvs_per_loop:
         return loops
