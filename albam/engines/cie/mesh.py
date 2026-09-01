@@ -201,23 +201,25 @@ def _zy_flip(x, y, z):
 
 
 def _build_shape_keys(bl_ob, bin):
+    """Morph targets as shape keys.
+
+    A delta goes through the same axis change as the position it is added to
+    - _yz_flip, negation included - or the morph moves the wrong way in
+    depth while the base mesh sits correctly. It is additionally divided by
+    2 ** vertex_scale, the exponent the header stores for exactly this.
+    """
     if not bin.morphs:
         return
     extra_scale = 2 ** bin.header.vertex_scale
 
-    def _yz_flip_scaled(x, y, z):
-        return ((x / extra_scale), (z / extra_scale), (y / extra_scale))
-
     bl_ob.shape_key_add(name="Basis", from_mix=False)
-    for i, mgroup in enumerate(bin.morphs.morph_groups):
-        sk = bl_ob.shape_key_add(name=str(i).zfill(3), from_mix=False)
-        for i, vtx in enumerate(mgroup.body.vertices):
-            vtx_shift = _yz_flip_scaled(vtx.position.x,
-                                        vtx.position.y,
-                                        vtx.position.z)
-            sk.data[vtx.id].co.x += vtx_shift[0] * GLOBAL_SCALE
-            sk.data[vtx.id].co.y += vtx_shift[1] * GLOBAL_SCALE
-            sk.data[vtx.id].co.z += vtx_shift[2] * GLOBAL_SCALE
+    for group_index, mgroup in enumerate(bin.morphs.morph_groups):
+        shape_key = bl_ob.shape_key_add(name=str(group_index).zfill(3), from_mix=False)
+        for vtx in mgroup.body.vertices:
+            delta = _yz_flip(vtx.position.x, vtx.position.y, vtx.position.z)
+            shape_key.data[vtx.id].co.x += delta[0] / extra_scale
+            shape_key.data[vtx.id].co.y += delta[1] / extra_scale
+            shape_key.data[vtx.id].co.z += delta[2] / extra_scale
 
 
 def _decode_normal(n):
