@@ -1,9 +1,15 @@
 """What a RE4 UHD model must not lose when it is exported unedited.
 
 tests/cie/test_bin_serialization.py round-trips a model imported under the
-best conditions, with its textures resolving. A model whose textures could
-not be found still carries its materials' texture references, and they have
-to survive an export that has no image nodes to read them off.
+best conditions: its textures resolve, and it is the model that brought its
+armature into the scene. These are the two cases either side of that, both
+of which quietly wrote a worse file than the one that came in:
+
+- a model whose textures could not be found still carries its materials'
+  texture references, so they have to survive an export that has no image
+  nodes to read them off;
+- a model bound to an armature it shares with the rest of its archive has to
+  export its own bone table, not the whole shared rig's.
 """
 import json
 import os
@@ -217,3 +223,86 @@ def test_texture_slot_follows_the_image_bound_to_it(
     assert edited != unedited, "binding another image should change the file"
     assert any(unused in slots[:5] for slots in edited), (
         "the slot the newly bound image names should be the one written")
+
+
+def _bone_table(bin_bytes):
+    """(bone ids in the order they are written, ids the weights name)."""
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    parsed = Re4UhdBin.from_bytes(bin_bytes)
+    parsed._read()
+    ids = [bone.bone_id for bone in parsed.bones]
+    weighted = set()
+    if ids:
+        for weight in parsed.weights:
+            weighted.update(weight.bone_ids[:weight.count])
+    return ids, weighted
+
+
+def test_model_sharing_an_armature_exports_its_own_bones(
+        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+    """A model bound to a shared armature writes its own bone table.
+
+    Import binds a model to an armature already brought in from the same
+    archive that covers its bones, so a character's parts share one rig. The
+    export then wrote every bone of that armature, so a model that had two
+    bones came out with the whole character's table - and its weights, which
+    name bones by id, no longer described the same skinning.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.registry import blender_registry
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+    models = _mesh_models(vfs, root)
+    assert models, "this archive should hold a mesh .bin"
+
+    import_function = blender_registry.import_registry[(local_app_id, "bin")]
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+
+    shared = None
+    for vfile in models:
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        original_bytes = vfile.get_bytes()
+        bl_object = import_function(vfile, bpy.context)
+        armature = next((o for o in bpy.context.scene.objects if o.type == "ARMATURE"), None)
+        original_ids, weighted = _bone_table(original_bytes)
+        if armature and original_ids and len(original_ids) < len(armature.data.bones):
+            shared = (vfile, original_bytes, bl_object, armature, original_ids, weighted)
+            break
+    if shared is None:
+        pytest.skip("no model in this archive reuses another's armature")
+
+    vfile, original_bytes, bl_object, armature, original_ids, weighted = shared
+    exported_bytes = _export(bl_object, vfile, original_bytes, local_app_id)
+    exported_ids, _ = _bone_table(exported_bytes)
+
+    assert exported_ids, "an exported skinned model should carry a bone table"
+    assert len(exported_ids) < len(armature.data.bones), (
+        "the shared armature's whole bone table was written, not this model's")
+    assert set(exported_ids) <= set(original_ids), (
+        "no bone should be written that the model did not have")
+    assert weighted <= set(exported_ids), (
+        "every bone the weights name has to be in the table")
+    if len(set(original_ids)) == len(original_ids):
+        assert exported_ids == sorted(original_ids), (
+            "an unedited model should write back the bone table it came with")
+    assert exported_ids == sorted(exported_ids), "the table is written in bone id order"
+    # A bone names its parent by id, so a table that dropped one would leave
+    # the bones under it unable to say where they hang from.
+    parents = {bone_id: parent for bone_id, parent in _bone_parents(exported_bytes)}
+    for bone_id, parent in parents.items():
+        assert parent == NO_PARENT or parent == bone_id or parent in parents, (
+            f"bone {bone_id} names a parent that is not in the table")
+
+
+def _bone_parents(bin_bytes):
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    parsed = Re4UhdBin.from_bytes(bin_bytes)
+    parsed._read()
+    return [(bone.bone_id, bone.parent) for bone in parsed.bones]

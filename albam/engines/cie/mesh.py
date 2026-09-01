@@ -143,6 +143,10 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         archive_id=root_vfile.name if root_vfile else "")
 
     if skeleton:
+        # Which bones the model itself had. An armature it shares with the
+        # rest of its archive is not its skeleton, and bones nothing is
+        # weighted to are in nothing else here - see _bones_to_write.
+        bl_mesh_ob[BONE_IDS_PROPERTY] = [bone.bone_id for bone in bin.bones]
         _apply_weights(bl_mesh_ob, bin)
         arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = skeleton
@@ -317,6 +321,8 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile):
 
 
 ARCHIVE_PROPERTY = "cie.source_archive"
+# The bone ids the model was imported with (see build_blender_model).
+BONE_IDS_PROPERTY = "cie.bone_ids"
 
 
 def _find_reusable_armature(bin, context, archive_id):
@@ -684,24 +690,101 @@ def _bone_id(bl_bone, fallback):
     return min(fallback, 254)
 
 
-def _serialize_bones(dst_bin, bl_armature):
+def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
+    """The armature's bones this model needs: the ones it was imported with,
+    the ones its weights name, and the ones between those.
+
+    An armature in the scene is not one model's skeleton. Import binds a
+    model to an armature already brought in from the same archive whenever
+    that one covers its bones (see _find_reusable_armature), so a character's
+    parts share one rig - and writing all of it back gave a model that used
+    two bones the whole character's table instead.
+
+    `own_ids` is what the model was imported with, so an unedited one writes
+    back the table it came with, bones nothing is weighted to included. On
+    top of that go the bones the weights name, which is what covers a model
+    weighted to a bone it did not have before, or built in Blender with no
+    imported table behind it at all.
+
+    A bone names its parent by id, so a bone kept without the bones under
+    which it hangs could not say where it is. Every bone on the path from a
+    weighted bone up to the deepest bone all of them share is therefore kept
+    too, and that last one is written as a root - exactly as a partial table
+    in a shipped model is, theirs starting at whatever bone the part hangs
+    from rather than at the skeleton's own root. Measured over a verified
+    dataset, taking the shared bone as the root keeps the table inside the
+    one the model came with, and walking all the way to the skeleton's root
+    does not.
+    """
+    all_bones = list(bl_armature.data.bones)
+    by_id = {}
+    for bone in all_bones:
+        by_id.setdefault(ids[bone.name], bone)
+
+    kept = set()
+    for bone_id in own_ids:
+        bone = by_id.get(bone_id)
+        if bone is not None:
+            kept.add(bone.name)
+
+    # Each used bone's line of descent, root first.
+    chains = []
+    for bone_id in sorted(used_ids):
+        bone = by_id.get(bone_id)
+        if bone is not None:
+            chains.append(list(reversed(bone.parent_recursive)) + [bone])
+
+    by_root = {}
+    for chain in chains:
+        by_root.setdefault(chain[0].name, []).append(chain)
+    for sharing_a_root in by_root.values():
+        shared = 0
+        for depth in range(min(len(chain) for chain in sharing_a_root)):
+            if len({chain[depth].name for chain in sharing_a_root}) > 1:
+                break
+            shared = depth
+        for chain in sharing_a_root:
+            kept.update(bone.name for bone in chain[shared:])
+
+    # In the armature's own order, so the table is the same whichever order
+    # the weights happened to name their bones in.
+    return [bone for bone in all_bones if bone.name in kept]
+
+
+def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=()):
     """The bone table, as local offsets from each bone's parent.
+
+    Holds the bones this model itself uses, not every bone of the armature it
+    is bound to - see _bones_to_write.
+
+    Written in non-decreasing bone-id order, which every shipped model is
+    laid out in. Blender's own bone order is not id order, and a table in any
+    other order does not read back as the same skeleton. Ids repeat in some
+    shipped tables, so the sort has to be stable rather than a sort of a set.
 
     The file stores a parent-relative offset per bone, while Blender holds
     absolute rest positions, so each one is differenced against its parent on
-    the way out. Parent 0xFF means "no parent".
+    the way out. Parent 0xFF means "no parent", and such a bone's offset is
+    absolute - which is how the bone the table starts at is written when the
+    model hangs off part of a larger skeleton.
     """
-    bones = list(bl_armature.data.bones)
-    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(bones)}
+    all_bones = list(bl_armature.data.bones)
+    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
+    bones = _bones_to_write(bl_armature, ids, used_ids, own_ids)
+    if not bones:
+        # Nothing said which bones are used - a model with no weights at all.
+        bones = all_bones
+    kept = {bone.name for bone in bones}
 
     dst_bones = []
-    for i, bone in enumerate(bones):
+    for bone in sorted(bones, key=lambda b: ids[b.name]):
         dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
         dst_bone.bone_id = ids[bone.name]
-        dst_bone.parent = ids[bone.parent.name] if bone.parent else NO_PARENT
+        parent = bone.parent if bone.parent and bone.parent.name in kept else None
+        dst_bone.parent = ids[parent.name] if parent else NO_PARENT
         head = bone.head_local
-        if bone.parent:
-            head = head - bone.parent.head_local
+        if parent:
+            head = head - parent.head_local
         dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
         dst_bone.filler = 0
         dst_bone._check()
@@ -1105,7 +1188,10 @@ def export_bin(bl_obj):
 
     dst_bin = Re4UhdBin()
     dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
-    dst_bin.bones = _serialize_bones(dst_bin, armature) if armature else []
+    dst_bin.bones = (
+        _serialize_bones(dst_bin, armature, _weighted_bone_ids(weight_table),
+                         _own_bone_ids(bl_mesh_objs))
+        if armature else [])
     # No armature means nothing to weight against, and a shipped model
     # without bones carries no weight block at all.
     dst_bin.weights = _serialize_weights(dst_bin, weight_table) if armature else []
@@ -1147,6 +1233,28 @@ def _serialize_header(dst_bin, bl_mesh_ob):
     header.vertex_scale = custom_properties.vertex_scale
     header.num_tpl = custom_properties.num_tpl
     return header
+
+
+def _own_bone_ids(bl_mesh_objs):
+    """The bone ids the model was imported with, if it still says.
+
+    Recorded on import (see BONE_IDS_PROPERTY) because a bone nothing is
+    weighted to is in nothing else on the Blender side, while the file it
+    came from listed it. Anything since weighted to a bone this does not name
+    is still written - the table is the union of the two.
+    """
+    own = set()
+    for bl_mesh_ob in bl_mesh_objs:
+        own.update(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
+    return own
+
+
+def _weighted_bone_ids(weight_table):
+    """Every bone id the weights about to be written name."""
+    used = set()
+    for bone_ids, _percents, count in weight_table:
+        used.update(bone_ids[:count])
+    return used
 
 
 def _serialize_weights(dst_bin, weight_table):
