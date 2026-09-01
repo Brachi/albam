@@ -9,6 +9,7 @@ from ..vfs import (
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
+    _extension_from_name,
     root_fs,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
@@ -367,7 +368,6 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
-        from ..engines.mtfw.archive import update_arc
         from ..engines.mtfw.arc_fs import origin_arc_path
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
@@ -378,9 +378,9 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 # ArcFS-wrapped .arc (always returns that arc's own path) or
                 # a whole MTFW_FS game-folder root (resolves the specific
                 # .arc this path actually came from) - see origin_arc_path.
-                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path)
+                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path) or item_i.absolute_path
                 if path_i is None:
-                    self.report({'ERROR'}, "Selected archive isn't backed by a packed .arc file")
+                    self.report({'ERROR'}, "Selected archive isn't backed by a packed file")
                     return
             else:
                 path_i = item_i.absolute_path
@@ -402,10 +402,23 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        remove_unused = context.scene.albam.export_settings.remove_unused_textures
-        arc = update_arc(path_i, files_e, remove_unused_textures=remove_unused)
+
+        # Rebuilding a container is the engine's own business - the formats
+        # have nothing in common beyond both being archives - so it is looked
+        # up rather than hardcoded here.
+        extension = _extension_from_name(os.path.basename(path_i))
+        writer = blender_registry.archive_writer_registry.get((item_i.app_id, extension))
+        if writer is None:
+            self.report({'ERROR'},
+                        f"No way to repack a {extension!r} archive for {item_i.app_id}")
+            return
+        options = {}
+        if item_i.app_id not in ("re4uhd",):
+            options["remove_unused_textures"] = (
+                context.scene.albam.export_settings.remove_unused_textures)
+        archive = writer(path_i, files_e, **options)
         with open(self.filepath, "wb") as f:
-            f.write(arc)
+            f.write(archive)
 
     @classmethod
     def poll(cls, context):

@@ -213,6 +213,15 @@ def _find_orphaned_textures(file_entries, app_id, old_texture_paths, new_texture
     return cleaned, removed
 
 
+@blender_registry.register_archive_writer(app_id="re0", extension="arc")
+@blender_registry.register_archive_writer(app_id="re1", extension="arc")
+@blender_registry.register_archive_writer(app_id="re5", extension="arc")
+@blender_registry.register_archive_writer(app_id="re6", extension="arc")
+@blender_registry.register_archive_writer(app_id="rev1", extension="arc")
+@blender_registry.register_archive_writer(app_id="rev2", extension="arc")
+@blender_registry.register_archive_writer(app_id="dd", extension="arc")
+@blender_registry.register_archive_writer(app_id="dmc4", extension="arc")
+@blender_registry.register_archive_writer(app_id="umvc3", extension="arc")
 def update_arc(filepath, vfiles, remove_unused_textures=False):
     imported = {}
     exported = {}
