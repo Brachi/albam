@@ -64,6 +64,11 @@ def build_blender_materials(bl_mesh, bin, tpl_vfile):
                     blender_texture_node = blender_material.node_tree.nodes.new("ShaderNodeTexImage")
                     bl_image = _create_blender_image_from_tex(tex)
                     blender_texture_node.image = bl_image
+                    if bl_image is not None:
+                        # An image node now stands for at least one of this
+                        # material's slots, so export can read the node tree
+                        # back and take an empty slot as emptied on purpose.
+                        custom_props_top_level.texture_slots_bound = True
                     if tex_code == 1:
                         link(blender_texture_node.outputs["Color"], shader_node_group.inputs["Diffuse BM"])
                         blender_texture_node.location = (-300, 350)
@@ -190,6 +195,16 @@ class BinCIEMaterialCustomProperties(BaseMaterialCustomProperties):
     unk_min_02: bpy.props.IntProperty(name="Unk Min 02", default=0, options=set())
     unk_min_01: bpy.props.IntProperty(name="Unk Min 01", default=0, options=set())
     material_flag: bpy.props.IntProperty(name="Material Flag", default=0, options=set())
+    # The material's texture slots, kept here as well as bound as image nodes.
+    # The node tree is what an export reads when the textures resolved, so
+    # swapping a texture in Blender still lands in the file; these are what it
+    # falls back to when they did not, which would otherwise write "no
+    # texture" over every reference the file had (see texture_slots_bound).
+    diffuse_map: bpy.props.IntProperty(name="Diffuse Map", default=255, options=set())
+    bump_map: bpy.props.IntProperty(name="Bump Map", default=255, options=set())
+    opacity_map: bpy.props.IntProperty(name="Opacity Map", default=255, options=set())
+    custom_specular_map: bpy.props.IntProperty(
+        name="Custom Specular Map", default=255, options=set())
     # Not an index into the model's .tpl but a texture id in one fixed pack,
     # so there is no image node in Blender standing for it and nothing else
     # would carry it across an export.
@@ -202,3 +217,25 @@ class BinCIEMaterialCustomProperties(BaseMaterialCustomProperties):
     unk_01: bpy.props.IntProperty(name="Unk 01", default=0, options=set())
     specular_scale: bpy.props.IntProperty(name="Specular Scale", default=0, options=set())
     unk_02: bpy.props.IntProperty(name="Unk 02", default=0, options=set())
+    # Whether this material's textures resolved on import, so that image nodes
+    # actually stand for its texture slots. Import-time state, not recomputed:
+    # it is what tells a slot the user emptied on purpose apart from one that
+    # was never bound in the first place. Not a field of the format.
+    texture_slots_bound: bpy.props.BoolProperty(default=False, options=set())
+
+    _NOT_ON_SOURCE = ("texture_slots_bound",)
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if attr_name in self._NOT_ON_SOURCE:
+                continue
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        """Every slot the format holds, whether or not its texture resolved:
+        this is the only place they are recorded, and the case they exist for
+        is exactly the one where nothing resolves."""
+        for attr_name in self.__annotations__:
+            if attr_name in self._NOT_ON_SOURCE:
+                continue
+            setattr(self, attr_name, getattr(src_obj, attr_name))

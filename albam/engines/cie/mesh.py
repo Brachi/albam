@@ -961,29 +961,45 @@ def _third_corner(triangle, first, second):
     return triangle[0]
 
 
-def _texture_slot(bl_material, input_name, app_id):
-    """The .tpl slot the image wired into `input_name` came from, or 0xFF.
+# What _texture_slot found at a material input, when it found no image there.
+SLOT_EMPTY = "empty"  # nothing is wired into the input
+SLOT_UNRESOLVED = "unresolved"  # a texture node is, but it holds no image
 
-    A material's texture references are bindings, not values, so they live in
-    the node tree rather than in the material's custom properties - which is
-    also what makes swapping a texture in Blender an edit export can see.
+
+def _texture_slot(bl_material, input_name, app_id):
+    """The .tpl slot the image wired into `input_name` came from, or
+    SLOT_EMPTY / SLOT_UNRESOLVED when there is no image to read it off.
+
+    A material's texture references are bindings, not values, so a bound one
+    lives in the node tree rather than in the material's custom properties -
+    which is what makes swapping a texture in Blender an edit export can see.
     Import records which .tpl slot each image came from on the image itself;
-    this reads it back.
+    this reads it back. An image that did not come from the model's .tpl has
+    no slot to name it by, so it reads as 0xFF: still a binding, just one the
+    format cannot express.
+
+    No image bound is not the same as no texture - see _serialize_material.
     """
     if not bl_material.use_nodes:
-        return NO_TEXTURE
+        return SLOT_EMPTY
+    found = SLOT_EMPTY
     for node in bl_material.node_tree.nodes:
         if node.type != "GROUP" or input_name not in node.inputs:
             continue
         for link in node.inputs[input_name].links:
-            image = getattr(link.from_node, "image", None)
+            if not hasattr(link.from_node, "image"):
+                continue
+            image = link.from_node.image
             if image is None:
+                # A node import made for a texture whose bytes it could not
+                # find. It stands for the slot without saying which one.
+                found = SLOT_UNRESOLVED
                 continue
             custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(
                 app_id)
             index = custom_properties.tpl_index
             return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
-    return NO_TEXTURE
+    return found
 
 
 def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
@@ -1002,9 +1018,26 @@ def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
     if bl_material is not None:
         custom_properties = bl_material.albam_custom_properties.get_custom_properties_for_appid(
             app_id)
+        # This writes the slot indices the material carries; the node tree
+        # then overrides them wherever an image is actually bound.
         custom_properties.copy_custom_properties_to(dst_material)
         for field, input_name in _TEXTURE_SLOT_INPUTS:
-            setattr(dst_material, field, _texture_slot(bl_material, input_name, app_id))
+            index = _texture_slot(bl_material, input_name, app_id)
+            if index == SLOT_UNRESOLVED:
+                # The texture behind this slot could not be found on import,
+                # so there is no image to read an index off and the carried
+                # one is the only thing that knows it.
+                continue
+            if index == SLOT_EMPTY:
+                if custom_properties.texture_slots_bound:
+                    # This material's textures did resolve on import, so its
+                    # image nodes stand for its slots: an input with nothing
+                    # wired into it was emptied on purpose.
+                    setattr(dst_material, field, NO_TEXTURE)
+                # Otherwise nothing in Blender ever stood for these slots and
+                # the carried indices stand.
+                continue
+            setattr(dst_material, field, index)
 
     dst_face_index = dst_bin.FaceIndex(_parent=dst_material, _root=dst_bin._root)
     strips = []
