@@ -62,6 +62,7 @@ _MATERIAL_BYTE_FIELDS = (
 _MATERIAL_NO_TEXTURE_FIELDS = (
     "bump_map", "opacity_map", "generic_specular_map", "custom_specular_map",
 )
+
 # Which shader-group input each of the material's texture slots is wired to
 # on import (see engines/cie/material.py). Read back the same way on export,
 # so a texture swapped in Blender is the one that gets written.
@@ -552,8 +553,10 @@ def _resolve_tpl(vfile, bin, context):
     vfs = context.scene.albam.vfs
     selected = context.scene.albam.import_options_bin.tpl_file_id
     if selected and selected != AUTO_TPL:
-        chosen = next((vf for vf in _tpl_candidates(vfs, vfile)
-                       if vf.name == selected), None)
+        # Looked up across the whole VFS, not just this model's own archive:
+        # an explicit choice is the user's, and a model re-imported from an
+        # export root has no archive of its own to find a .tpl in.
+        chosen = next((vf for vf in vfs.file_list if vf.name == selected), None)
         if chosen is not None:
             return chosen
     return choose_tpl(vfs, vfile, bin)
@@ -944,7 +947,7 @@ def _serialize_header(dst_bin, bl_mesh_ob):
     for attribute in ("offset_bones", "unk_00", "unk_01", "offset_vertex_colors",
                       "offset_vertex_texcoord", "offset_weights", "num_weights",
                       "num_bones", "num_materials", "offset_materials",
-                      "texture1_flags", "texture2_flags", "num_tpl", "vertex_scale",
+                      "flags", "num_tpl", "vertex_scale",
                       "unk_02", "num_weights2", "offset_morphs",
                       "offset_vertex_position", "offset_vertex_normals",
                       "num_vertices", "num_vertex_normals", "version_flags",
@@ -1047,12 +1050,9 @@ def _layout_and_write(dst_bin, num_vertices):
     header.num_weights = weight_count if weight_count <= 255 else weight_count & 0xFF
     header.num_weights2 = weight_count
 
-    # Bit 0x80000000 is what marks the file as a mesh at all; the other two
-    # say the bonepair and adjacency blocks are present, and nothing rebuilds
-    # those yet. The flags word is one u4 that the .ksy still splits in two.
-    flags = BIN_FLAG_IS_MESH
-    header.texture1_flags = flags & 0xFFFF
-    header.texture2_flags = (flags >> 16) & 0xFFFF
+    # 0x80000000 is what marks the file as a mesh at all; the bone-pair and
+    # adjacency bits stay clear because nothing rebuilds those blocks yet.
+    header.flags = BIN_FLAG_IS_MESH
     header.version_flags = VERSION_FLAGS_PLAIN
     header.unk_01 = 0
 

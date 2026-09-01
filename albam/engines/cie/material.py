@@ -190,6 +190,11 @@ class BinCIEMaterialCustomProperties(BaseMaterialCustomProperties):
     unk_min_02: bpy.props.IntProperty(name="Unk Min 02", default=0, options=set())
     unk_min_01: bpy.props.IntProperty(name="Unk Min 01", default=0, options=set())
     material_flag: bpy.props.IntProperty(name="Material Flag", default=0, options=set())
+    # Not an index into the model's .tpl but a texture id in one fixed pack,
+    # so there is no image node in Blender standing for it and nothing else
+    # would carry it across an export.
+    generic_specular_map: bpy.props.IntProperty(
+        name="Generic Specular Map", default=255, options=set())
     intensity_specular_r: bpy.props.IntProperty(name="Specular intensity R", default=0, options=set())
     intensity_specular_g: bpy.props.IntProperty(name="Specular intensity G", default=0, options=set())
     intensity_specular_b: bpy.props.IntProperty(name="Specular intensity B", default=0, options=set())
