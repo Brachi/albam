@@ -134,3 +134,54 @@ def clear_scene():
     for _ in range(3):
         bpy.ops.outliner.orphans_purge(
             do_local_ids=True, do_linked_ids=True, do_recursive=True)
+
+
+def action_fcurves(action):
+    """Every fcurve an action holds, whichever Blender version made it.
+
+    The flat Action.fcurves shortcut is gone from 5.0 on - the same removal
+    the LMT import tests exist to catch - so reading it directly here would
+    break the tests exactly where it broke the code.
+    """
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [
+        fcurve
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+        for fcurve in channelbag.fcurves
+    ]
+
+
+@pytest.fixture
+def mount_vfs_root():
+    """Mount VFS roots and take them back out again afterwards.
+
+    The VFS lives in Blender's scene data, which is process-global and outlives
+    any one test, while the filesystems behind its roots do not. Node ids are
+    `app_id::relative_path` with no scoping per root, so a root left mounted is
+    one a later test can resolve a path to and then fail to read - and the
+    failure surfaces in that later test, nowhere near the cause.
+
+    Teardown runs whether the test passed or not, which matters most when it
+    failed: leaving the roots behind turns one real failure into a cascade of
+    unrelated ones. Roots come out in reverse order, and only the ones actually
+    mounted, so nothing has to be kept in sync by hand.
+    """
+    mounted = []
+
+    def mount(app_id, fs_instance, display_name, **kwargs):
+        bpy.context.scene.albam.vfs.add_fs_root(
+            app_id, fs_instance, display_name=display_name, **kwargs)
+        mounted.append((app_id, display_name))
+
+    yield mount
+
+    vfs = bpy.context.scene.albam.vfs
+    for app_id, display_name in reversed(mounted):
+        index = vfs.file_list.find(f"{app_id}::{display_name}")
+        if index == -1:
+            continue  # the test removed it itself
+        vfs.file_list_selected_index = index
+        bpy.ops.albam.remove_imported()

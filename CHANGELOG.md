@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Error message for the case when there is no mesh to export
 - Support for navigation mesh import-export (Resident Evil 5)
 - Autosorter tool to automatically set `alpha priority` values ​​for hair cards
+- Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 
 ### Fixed
@@ -29,6 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
+- Animation blocks that never move losing their length on export, so a static
+  hold played back as a single frame
+- Exported animation tracks that could not be read back, when a rotation's
+  quantized components summed past unit norm
+- Animation tracks landing on an unrelated bone when the skeleton has no bone
+  for that animation id, dropping the id from an exported `.lmt`
+- A second animation file imported onto the same skeleton leaving its limb
+  chains solving towards goals none of its blocks move
 
 ### Changed
 
