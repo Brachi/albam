@@ -491,7 +491,13 @@ def _get_or_create_root_motion_bone(armature, mapping):
         blender_bone.tail[2] += 0.01
         blender_bone["mtfw.anim_retarget"] = "255"
 
-    _follow_root_motion(armature, mapping.get(ROOT_BONE_NAME), bone_name)
+    root_bone_name = mapping.get(ROOT_BONE_NAME)
+    if root_bone_name is None:
+        raise ValueError(
+            f"The armature has no bone for animation id {ROOT_BONE_NAME}, so root motion "
+            "has nothing to move. Check the skeleton's mtfw.anim_retarget properties."
+        )
+    _follow_root_motion(armature, root_bone_name, bone_name)
 
     return bone_name
 

@@ -442,3 +442,31 @@ def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
         bpy.data.objects.remove(armature, do_unlink=True)
         bpy.data.armatures.remove(armature_data)
         bpy.context.view_layer.objects.active = previous
+
+
+def test_root_motion_on_a_rig_with_no_root_bone_says_so():
+    """Root motion moves the skeleton's root, so a rig without one cannot take it.
+
+    The root is found through anim id 0, not by name. A rig that maps nothing
+    to it used to hand `None` straight to `pose.bones[...]`, so any file with a
+    root motion or chain track died on a TypeError naming neither the rig nor
+    the id it wanted.
+
+    Synthetic: builds the rig directly, no game data needed.
+    """
+    from albam.engines.mtfw.animation.animation_import import _get_or_create_root_motion_bone
+
+    armature_data = bpy.data.armatures.new("rootless_rig")
+    armature = bpy.data.objects.new("rootless_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        with pytest.raises(ValueError, match="animation id 0"):
+            _get_or_create_root_motion_bone(armature, {})
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
