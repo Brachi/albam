@@ -5,12 +5,11 @@ provide, and the control rig for the limbs whose middle joint the file leaves
 to a solver.
 """
 import contextlib
-from io import BytesIO
 
 import bpy
-from kaitaistruct import KaitaiStream
 from mathutils import Matrix, Quaternion, Vector
 
+from ....lib.kaitai_utils import parse
 from ....registry import blender_registry
 from ..structs.lmt import Lmt
 from .keyframes import LMTKeyFrames, LMTKeyframeBounds, TRANSLATION_USAGES, USAGE
@@ -59,8 +58,7 @@ def _get_action_channels(action, armature):
 def load_lmt(vfile, context):
     app_id = vfile.app_id
     lmt_bytes = vfile.get_bytes()
-    lmt = Lmt(KaitaiStream(BytesIO(lmt_bytes)))
-    lmt._read()
+    lmt = parse(Lmt, lmt_bytes, app_id)
     lmt_ver = lmt.version
     armature = context.scene.albam.import_options_lmt.armature
     mapping = _create_bone_mapping(armature)

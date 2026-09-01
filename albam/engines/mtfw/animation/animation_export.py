@@ -571,7 +571,7 @@ def export_lmt(bl_obj):
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
     bl_objects = _lmt_blocks(bl_obj)
     armature = bpy.context.scene.albam.import_options_lmt.armature
-    dst_lmt = Lmt()
+    dst_lmt = Lmt(app_id)
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)

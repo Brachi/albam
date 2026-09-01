@@ -39,17 +39,18 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_lmt(game_fs_root, local_lmt_path_hash):
+def parsed_lmt(game_fs_root, local_app_id, local_lmt_path_hash):
     from albam.engines.mtfw.structs.lmt import Lmt
+    from albam.lib.kaitai_utils import parse
 
     path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash]
     src_bytes = game_fs_root.readbytes(path)
 
-    lmt = Lmt.from_bytes(src_bytes)
-    lmt._read()
-    return lmt
+    lmt = parse(Lmt, src_bytes, local_app_id)
+    return lmt, src_bytes
 
 
+MAX_BONE_INDEX = 255
 SUPPORTED_LMT_VERSIONS = (51, 67)
 SUPPORTED_BUFFER_TYPES = [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15]
 LOCATION = [1, 4]
@@ -67,7 +68,7 @@ BONES_WITH_JOINT_TYPES = [16, 11, 20, 6, 254]  # 20: "thigh_l",
 
 
 def test_lmt(parsed_lmt):
-    lmt = parsed_lmt
+    lmt, _ = parsed_lmt
     assert lmt.id_magic == b"LMT\x00"
     assert lmt.version in SUPPORTED_LMT_VERSIONS
     assert lmt.num_block_offsets == len(lmt.block_offsets)
@@ -143,7 +144,7 @@ def is_strictly_increasing(lst):
 
 
 def test_joint(parsed_lmt):
-    lmt = parsed_lmt
+    lmt, _ = parsed_lmt
     anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
     for ab in anim_blocks:
         assert ab.loop_frame in (-1, 0, 1)
@@ -171,7 +172,7 @@ def test_joint(parsed_lmt):
 
 
 def test_joint_type_usage(parsed_lmt):
-    lmt = parsed_lmt
+    lmt, _ = parsed_lmt
     anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
     for ab in anim_blocks:
         tracks = getattr(ab, "tracks")
@@ -186,3 +187,47 @@ def test_joint_type_usage(parsed_lmt):
             if (track.bone_index, usage_str) in seen:
                 assert track.bone_index in (0, 254, 255)
             seen.add((track.bone_index, usage_str))
+
+
+def test_lmt_blocks_are_not_empty(parsed_lmt):
+    """A .lmt whose offsets are read at the wrong width still parses, it just
+    yields blocks that all look empty - which is silently indistinguishable
+    from "this file has no animation" further up in the importer.
+    """
+    lmt, src_bytes = parsed_lmt
+    blocks = [b for b in lmt.block_offsets if b.offset != 0]
+
+    assert blocks, "every block offset is 0"
+    for block in blocks:
+        assert block.offset < len(src_bytes)
+
+    animated = [b for b in blocks if b.block_header.num_tracks > 0]
+    assert animated, "no block declares any track"
+
+
+def test_lmt_tracks_point_inside_the_file(parsed_lmt):
+    lmt, src_bytes = parsed_lmt
+    num_tracks_with_data = 0
+
+    for block in lmt.block_offsets:
+        if block.offset == 0:
+            continue
+        header = block.block_header
+        assert header.ofs_frame < len(src_bytes)
+        for track in header.tracks:
+            assert track.bone_index <= MAX_BONE_INDEX
+            assert track.ofs_data + track.len_data <= len(src_bytes)
+            if track.ofs_data and track.len_data:
+                num_tracks_with_data += 1
+                assert len(track.data) == track.len_data
+            if lmt.version != 67:
+                continue
+            assert 0.0 <= track.weight <= 1.0
+            # The bounds a version 67 track quantizes against, named here
+            # rather than left as a raw offset and an untyped float run.
+            if track.ofs_bounds:
+                assert track.ofs_bounds < len(src_bytes)
+                assert len(track.bounds.addin) == 4
+                assert len(track.bounds.offset) == 4
+
+    assert num_tracks_with_data, "no track carries any keyframe data"

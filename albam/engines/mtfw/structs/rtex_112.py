@@ -9,10 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Rtex112(ReadWriteKaitaiStruct):
-    def __init__(self, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Rtex112, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self.app_id = app_id
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)

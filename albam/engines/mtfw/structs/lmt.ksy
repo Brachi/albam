@@ -6,6 +6,8 @@ meta:
   ks-version: '0.11'
   title: MTFramework animation format
 
+params:
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: id_magic, contents: [0x4c, 0x4d, 0x54, 0x00]}
@@ -13,10 +15,14 @@ seq:
   - {id: num_block_offsets, type: u2}
   - {id: block_offsets, type: block_offset, repeat: expr, repeat-expr: num_block_offsets}
 
+instances:
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
+
 types:
   block_offset:
     seq:
-      - {id: offset, type: u4}
+      - {id: offset, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       is_used:
         value: offset != 0
@@ -48,10 +54,12 @@ types:
 
   block_header67: # MOTION_INFO
     seq:
-      - {id: ofs_frame, type: u4}
+      - {id: ofs_frame, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: num_tracks, type: u4}
       - {id: num_frames, type: u4}
       - {id: loop_frame, type: s4}
+      # Aligns the two vectors below to 16 bytes.
+      - {id: unk_01, size: 12, if: _root.use_64bit_ofs}
       - {id: init_position, type: f4, repeat: expr, repeat-expr: 3}
       - {id: filler, type: u4}
       - {id: init_quaterion, type: f4, repeat: expr, repeat-expr: 4}
@@ -60,8 +68,12 @@ types:
       - {id: seq_num, type: b3}
       - {id: duplicate, type: b3}
       - {id: reserved, type: b5}
-      - {id: ofs_sequence_infos, type: u4}
-      - {id: ofs_keyframe_infos, type: u4} # padding after it
+      # Aligns the two offsets below to 8 bytes.
+      - {id: unk_02, size: 4, if: _root.use_64bit_ofs}
+      - {id: ofs_sequence_infos, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: ofs_keyframe_infos, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: unk_03, type: u4}
+      - {id: unk_04, type: f4, if: _root.use_64bit_ofs}
     instances:
       tracks:
         {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
@@ -91,10 +103,10 @@ types:
       - {id: joint_type, type: u1}
       - {id: bone_index, type: u1}
       - {id: weight, type: f4}
-      - {id: len_data, type: u4}
-      - {id: ofs_data, type: u4}
+      - {id: len_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: ofs_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: reference_data, type: f4, repeat: expr, repeat-expr: 4}
-      - {id: ofs_bounds, type: u4}
+      - {id: ofs_bounds, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       data:
         {pos: ofs_data, size: len_data}

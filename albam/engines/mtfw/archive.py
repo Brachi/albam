@@ -5,7 +5,7 @@ import zlib
 from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
 from .arc_fs import ArcFS, MTFW_FS
 from .structs.arc import Arc
@@ -20,6 +20,7 @@ from ...blender_ui.tools import show_message_box
 @blender_registry.register_fs_root_loader(app_id="rev2", extension="arc")
 @blender_registry.register_fs_root_loader(app_id="dd", extension="arc")
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="umvc3", extension="arc")
 def arc_fs_root_loader(absolute_path):
     return ArcFS(absolute_path)
 
@@ -32,6 +33,7 @@ def arc_fs_root_loader(absolute_path):
 @blender_registry.register_fs_root_loader(app_id="rev2", extension=None)
 @blender_registry.register_fs_root_loader(app_id="dd", extension=None)
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
+@blender_registry.register_fs_root_loader(app_id="umvc3", extension=None)
 def game_fs_root_loader(absolute_path):
     return MTFW_FS(absolute_path)
 
@@ -147,8 +149,7 @@ def _texture_paths_from_mod(mod_bytes, app_id):
 
     mod_cls = {"re5": Mod156, "dmc4": Mod153}.get(app_id, Mod21)
     try:
-        mod = mod_cls.from_bytes(mod_bytes)
-        mod._read()
+        mod = parse(mod_cls, mod_bytes, app_id)
     except Exception:
         return None
     materials_data = getattr(mod, "materials_data", None)
@@ -159,11 +160,9 @@ def _texture_paths_from_mod(mod_bytes, app_id):
 
 
 def _texture_paths_from_mrl(mrl_bytes, app_id):
-    from kaitaistruct import BytesIO, KaitaiStream
     from .structs.mrl import Mrl
     try:
-        mrl = Mrl(app_id, KaitaiStream(BytesIO(mrl_bytes)))
-        mrl._read()
+        mrl = parse(Mrl, mrl_bytes, app_id)
     except Exception:
         return None
     return {_normalize_texture_key(t.texture_path) for t in mrl.textures if t.texture_path}

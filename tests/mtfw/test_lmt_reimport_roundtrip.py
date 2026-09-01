@@ -9,12 +9,12 @@ operator stack, not just Kaitai-level byte parsing:
   3. Export the edited pose back to .lmt bytes via bpy.ops.albam.export().
   4. Stage those bytes as a real file under a fresh, single-file OSFS root
      and reimport them via bpy.ops.albam.import_vfile() - the actual import
-     operator, not Lmt.from_bytes() - onto a second, independently imported
+     operator, not by parsing the bytes - onto a second, independently imported
      instance of the same character.
   5. Compare the reimported pose's bone rotations against the edited values.
 
 test_lmt_custom_animation.py already proves an edited keyframe survives
-export by parsing the exported bytes directly with Lmt.from_bytes(); this
+export by parsing the exported bytes directly; this
 file closes the remaining gap of proving those bytes also come back in
 through the real VFS + import operator and produce a matching pose on an
 independent armature.
@@ -145,6 +145,7 @@ def test_reimport_through_import_operator(
     local_mod_path_hash, local_lmt_path_hash
 ):
     from albam.engines.mtfw.structs.lmt import Lmt
+    from albam.lib.kaitai_utils import parse
     from fs.osfs import OSFS
 
     app_id = local_app_id
@@ -229,8 +230,7 @@ def test_reimport_through_import_operator(
     # produce a confusing failure three steps later.
     from albam.engines.mtfw.animation import APPID_VERSION_MAPPER
 
-    parsed = Lmt.from_bytes(exported_bytes)
-    parsed._read()
+    parsed = parse(Lmt, exported_bytes, app_id)
     assert parsed.version == APPID_VERSION_MAPPER[app_id]
     assert any(block.offset != 0 for block in parsed.block_offsets)
 

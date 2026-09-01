@@ -100,6 +100,42 @@ def import_export(local_app_id, local_path):
     return vfile
 
 
+def import_vfile(local_app_id, local_path):
+    """Select local_path (already resolved from a committed hash, and
+    already mounted into the VFS via game_fs_root) and run it through the
+    real Blender import_vfile() operator.
+
+    The import-only half of import_export() above, for the tests that only
+    care about what a file turns into in Blender - most notably apps albam
+    can import but not yet export.
+    """
+    vfs = bpy.context.scene.albam.vfs
+    try:
+        vfile = vfs.select_vfile(local_app_id, local_path)
+    except KeyError:
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    return vfile
+
+
+def clear_scene():
+    """Drops everything a previous import left behind.
+
+    Imports accumulate in bpy.data otherwise, so a per-model assertion like
+    "this model built some materials" would really be reading the sum of
+    every model imported before it - and a whole game's worth of models in
+    one session would exhaust memory. Deleting objects only unlinks the
+    meshes/images they used; orphans_purge is what actually frees them.
+    """
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=True)
+    for _ in range(3):
+        bpy.ops.outliner.orphans_purge(
+            do_local_ids=True, do_linked_ids=True, do_recursive=True)
+
+
 def action_fcurves(action):
     """Every fcurve an action holds, whichever Blender version made it.
 

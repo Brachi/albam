@@ -50,6 +50,7 @@ def test_dataset_hashes_are_in_catalog():
 @pytest.fixture(scope="session")
 def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
     from albam.engines.mtfw.structs.lmt import Lmt
+    from albam.lib.kaitai_utils import parse
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
@@ -91,10 +92,8 @@ def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_
 
     vfile_lmt_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_lmt_path)
     assert vfile_lmt_exported
-    src_lmt = Lmt.from_bytes(vfile_lmt.get_bytes())
-    dst_lmt = Lmt.from_bytes(vfile_lmt_exported.get_bytes())
-    src_lmt._read()
-    dst_lmt._read()
+    src_lmt = parse(Lmt, vfile_lmt.get_bytes(), local_app_id)
+    dst_lmt = parse(Lmt, vfile_lmt_exported.get_bytes(), local_app_id)
     return src_lmt, dst_lmt
 
 

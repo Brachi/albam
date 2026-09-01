@@ -9,10 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Lmt(ReadWriteKaitaiStruct):
-    def __init__(self, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Lmt, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self.app_id = app_id
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -246,10 +247,23 @@ class Lmt(ReadWriteKaitaiStruct):
             self.tracks__enabled = True
 
         def _read(self):
-            self.ofs_frame = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_frame = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_frame = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_frame = self._io.read_u4le()
             self.num_tracks = self._io.read_u4le()
             self.num_frames = self._io.read_u4le()
             self.loop_frame = self._io.read_s4le()
+            if self._root.use_64bit_ofs:
+                pass
+                self.unk_01 = self._io.read_bytes(12)
+
             self.init_position = []
             for i in range(3):
                 self.init_position.append(self._io.read_f4le())
@@ -264,17 +278,74 @@ class Lmt(ReadWriteKaitaiStruct):
             self.seq_num = self._io.read_bits_int_le(3)
             self.duplicate = self._io.read_bits_int_le(3)
             self.reserved = self._io.read_bits_int_le(5)
-            self.ofs_sequence_infos = self._io.read_u4le()
-            self.ofs_keyframe_infos = self._io.read_u4le()
+            if self._root.use_64bit_ofs:
+                pass
+                self.unk_02 = self._io.read_bytes(4)
+
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_sequence_infos = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_sequence_infos = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_sequence_infos = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_keyframe_infos = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_keyframe_infos = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_keyframe_infos = self._io.read_u4le()
+            self.unk_03 = self._io.read_u4le()
+            if self._root.use_64bit_ofs:
+                pass
+                self.unk_04 = self._io.read_f4le()
+
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            if self._root.use_64bit_ofs:
+                pass
+
             for i in range(len(self.init_position)):
                 pass
 
             for i in range(len(self.init_quaterion)):
+                pass
+
+            if self._root.use_64bit_ofs:
+                pass
+
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            if self._root.use_64bit_ofs:
                 pass
 
             _ = self.key_infos
@@ -308,10 +379,23 @@ class Lmt(ReadWriteKaitaiStruct):
             self._should_write_key_infos = self.key_infos__enabled
             self._should_write_sequence_infos = self.sequence_infos__enabled
             self._should_write_tracks = self.tracks__enabled
-            self._io.write_u4le(self.ofs_frame)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_frame)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_frame)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_frame)
             self._io.write_u4le(self.num_tracks)
             self._io.write_u4le(self.num_frames)
             self._io.write_s4le(self.loop_frame)
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_bytes(self.unk_01)
+
             for i in range(len(self.init_position)):
                 pass
                 self._io.write_f4le(self.init_position[i])
@@ -326,11 +410,50 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(3, self.seq_num)
             self._io.write_bits_int_le(3, self.duplicate)
             self._io.write_bits_int_le(5, self.reserved)
-            self._io.write_u4le(self.ofs_sequence_infos)
-            self._io.write_u4le(self.ofs_keyframe_infos)
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_bytes(self.unk_02)
+
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_sequence_infos)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_sequence_infos)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_sequence_infos)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_keyframe_infos)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_keyframe_infos)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_keyframe_infos)
+            self._io.write_u4le(self.unk_03)
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_f4le(self.unk_04)
+
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            if self._root.use_64bit_ofs:
+                pass
+                if len(self.unk_01) != 12:
+                    raise kaitaistruct.ConsistencyError(u"unk_01", 12, len(self.unk_01))
+
             if len(self.init_position) != 3:
                 raise kaitaistruct.ConsistencyError(u"init_position", 3, len(self.init_position))
             for i in range(len(self.init_position)):
@@ -339,6 +462,28 @@ class Lmt(ReadWriteKaitaiStruct):
             if len(self.init_quaterion) != 4:
                 raise kaitaistruct.ConsistencyError(u"init_quaterion", 4, len(self.init_quaterion))
             for i in range(len(self.init_quaterion)):
+                pass
+
+            if self._root.use_64bit_ofs:
+                pass
+                if len(self.unk_02) != 4:
+                    raise kaitaistruct.ConsistencyError(u"unk_02", 4, len(self.unk_02))
+
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            if self._root.use_64bit_ofs:
                 pass
 
             if self.key_infos__enabled:
@@ -503,12 +648,28 @@ class Lmt(ReadWriteKaitaiStruct):
             self.block_header__enabled = True
 
         def _read(self):
-            self.offset = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset = self._io.read_u8le()
+            else:
+                pass
+                self.offset = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             _ = self.block_header
             if hasattr(self, '_m_block_header'):
                 pass
@@ -525,10 +686,26 @@ class Lmt(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Lmt.BlockOffset, self)._write__seq(io)
             self._should_write_block_header = self.block_header__enabled
-            self._io.write_u4le(self.offset)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset)
+            else:
+                pass
+                self._io.write_u4le(self.offset)
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if self.block_header__enabled:
                 pass
                 if self.is_used:
@@ -1699,21 +1876,69 @@ class Lmt(ReadWriteKaitaiStruct):
             self.joint_type = self._io.read_u1()
             self.bone_index = self._io.read_u1()
             self.weight = self._io.read_f4le()
-            self.len_data = self._io.read_u4le()
-            self.ofs_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.len_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.len_data = self._io.read_u8le()
+            else:
+                pass
+                self.len_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_data = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_data = self._io.read_u4le()
             self.reference_data = []
             for i in range(4):
                 self.reference_data.append(self._io.read_f4le())
 
-            self.ofs_bounds = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_bounds = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_bounds = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_bounds = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             for i in range(len(self.reference_data)):
                 pass
 
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             _ = self.bounds
             if hasattr(self, '_m_bounds'):
                 pass
@@ -1734,21 +1959,69 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_u1(self.joint_type)
             self._io.write_u1(self.bone_index)
             self._io.write_f4le(self.weight)
-            self._io.write_u4le(self.len_data)
-            self._io.write_u4le(self.ofs_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.len_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.len_data)
+            else:
+                pass
+                self._io.write_u4le(self.len_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_data)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_data)
             for i in range(len(self.reference_data)):
                 pass
                 self._io.write_f4le(self.reference_data[i])
 
-            self._io.write_u4le(self.ofs_bounds)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_bounds)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_bounds)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_bounds)
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if len(self.reference_data) != 4:
                 raise kaitaistruct.ConsistencyError(u"reference_data", 4, len(self.reference_data))
             for i in range(len(self.reference_data)):
                 pass
 
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if self.bounds__enabled:
                 pass
                 if self.is_used:
@@ -2090,4 +2363,14 @@ class Lmt(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
 

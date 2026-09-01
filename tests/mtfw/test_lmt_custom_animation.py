@@ -44,6 +44,7 @@ def test_edited_keyframe_survives_export(
     game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash
 ):
     from albam.engines.mtfw.structs.lmt import Lmt
+    from albam.lib.kaitai_utils import parse
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
@@ -111,8 +112,7 @@ def test_edited_keyframe_survives_export(
 
     vfile_lmt_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, lmt_path)
     assert vfile_lmt_exported
-    dst_lmt = Lmt.from_bytes(vfile_lmt_exported.get_bytes())
-    dst_lmt._read()
+    dst_lmt = parse(Lmt, vfile_lmt_exported.get_bytes(), local_app_id)
 
     block_index = _block_index(target_block)
     dst_block = dst_lmt.block_offsets[block_index]
@@ -230,6 +230,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
     well-formed and simply missing the animation.
     """
     from albam.engines.mtfw.structs.lmt import Lmt
+    from albam.lib.kaitai_utils import parse
 
     armature, lmt_path, bl_objects = imported_lmt_blocks
     target_block, action, fcurve = _first_block_with_location_action(bl_objects, local_app_id)
@@ -265,8 +266,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
 
     vfile_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, lmt_path)
     assert vfile_exported
-    dst_lmt = Lmt.from_bytes(vfile_exported.get_bytes())
-    dst_lmt._read()
+    dst_lmt = parse(Lmt, vfile_exported.get_bytes(), local_app_id)
 
     dst_block = dst_lmt.block_offsets[_block_index(target_block)]
     assert dst_block.offset != 0
