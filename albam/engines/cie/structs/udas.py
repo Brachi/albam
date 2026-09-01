@@ -16,8 +16,12 @@ class Udas(ReadWriteKaitaiStruct):
     type is a trailing sound block, whose descriptor carries a `size` of 0
     because it simply runs to the end of the file.
     
-    The 8 words before the table are the same value repeated, and that value is
-    a byte-order mark - see id_magic.
+    The 8 words before the table are the same value repeated. It is a signature
+    no reader validates and it says nothing about the container - see id_magic.
+    
+    This models the little-endian variant, the one all but a couple of archives
+    of an install use. albam/engines/cie/fs.py tells the other one apart and
+    says why it cannot be listed.
     
     The DAT block's own layout is the same one dat.ksy models standalone, so
     the two agree field for field; it is repeated here rather than shared

@@ -13,8 +13,12 @@ doc: |
   type is a trailing sound block, whose descriptor carries a `size` of 0
   because it simply runs to the end of the file.
 
-  The 8 words before the table are the same value repeated, and that value is
-  a byte-order mark - see id_magic.
+  The 8 words before the table are the same value repeated. It is a signature
+  no reader validates and it says nothing about the container - see id_magic.
+
+  This models the little-endian variant, the one all but a couple of archives
+  of an install use. albam/engines/cie/fs.py tells the other one apart and
+  says why it cannot be listed.
 
   The DAT block's own layout is the same one dat.ksy models standalone, so
   the two agree field for field; it is repeated here rather than shared
@@ -27,14 +31,11 @@ seq:
 types:
   udas_header:
     seq:
-    # The same word repeated 8 times, and it doubles as a byte-order mark:
-    # 0xCAB6BE20 read little-endian in an archive whose fields are
-    # little-endian, and the byte-reversed 0x20BEB6CA in one whose fields are
-    # big-endian. A handful of archives in a real install are the big-endian
-    # kind and are not read correctly here - this file is little-endian
-    # throughout, and Kaitai cannot switch on a field of the type being read.
-    # Reading them means byte-swapping the descriptor table and the file
-    # table, but not the 4-character extensions in it, before parsing.
+    # The same word repeated 8 times, either 0xCAB6BE20 or its byte-reverse
+    # 0x20BEB6CA. Both values occur in archives whose fields are
+    # little-endian, so the word is not a byte-order mark and no reader
+    # validates it. What varies between archives is the byte order of the
+    # block table below, which albam/engines/cie/fs.py reads for itself.
     - {id: id_magic, type: u4, repeat: expr, repeat-expr: 8}
     - {id: blocks, type: block_descriptor, repeat: until,
        repeat-until: _.block_type == 0xffffffff}

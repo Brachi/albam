@@ -35,6 +35,8 @@ is a TPL:
 """
 import io
 import os
+import re
+import struct
 from collections import defaultdict
 
 from fs.base import FS
@@ -58,6 +60,90 @@ CONTAINER_STRUCTS = {
     ".pack": Pack,
     ".evd": Evd,
 }
+
+# A UDAS's block table: eight signature words, then a 32-byte descriptor per
+# block from 0x20 on, ending at one whose type is 0xFFFFFFFF (see
+# structs/udas.ksy). Udas reads the descriptors little-endian; a variant
+# writes them big-endian, which is what udas_byte_order() tells apart.
+UDAS_BLOCK_TABLE_OFFSET = 0x20
+UDAS_BLOCK_DESCRIPTOR_SIZE = 32
+UDAS_BLOCK_TERMINATOR = 0xFFFFFFFF
+# A YZ2 compressed block opens with its own sizes in ASCII: the compressed
+# length, a tab, the decompressed length, a newline, zero padded to 32 bytes,
+# and then range coded data.
+YZ2_HEADER_SIZE = 32
+YZ2_HEADER_PATTERN = re.compile(rb"^[0-9a-f]+\t[0-9a-f]+\n\x00*$")
+
+
+def read_udas_block_table(payload, byte_order):
+    """The block descriptors of `payload` as [(type, size, offset)], read in
+    `byte_order` ("<" or ">"), or None when it holds no table in that order.
+
+    A descriptor whose `unused` word is set, or whose block runs past the end
+    of the payload, is what says the order is the wrong one: read the other
+    way round, the words of a real table come out as huge values that fail
+    both checks (verified across every .udas archive of an install, each of
+    which reads as a table in exactly one order, bar a handful whose second
+    order happens to be valid too).
+    """
+    blocks = []
+    offset = UDAS_BLOCK_TABLE_OFFSET
+    while offset + UDAS_BLOCK_DESCRIPTOR_SIZE <= len(payload):
+        block_type, size, unused, block_offset = struct.unpack_from(
+            byte_order + "4I", payload, offset)
+        offset += UDAS_BLOCK_DESCRIPTOR_SIZE
+        if block_type == UDAS_BLOCK_TERMINATOR:
+            return blocks or None
+        if unused or not offset <= block_offset <= len(payload):
+            return None
+        if size > len(payload) - block_offset:
+            return None
+        blocks.append((block_type, size, block_offset))
+    return None
+
+
+def udas_byte_order(payload):
+    """The byte order a UDAS's block table is written in - "<" or ">" - or
+    None for a payload that holds no block table at all.
+
+    The eight repeated words in front of the table are not a byte-order mark,
+    despite reading as one value or its byte-reverse: both values occur in
+    archives whose fields are little-endian, and no reader validates them.
+    The table itself is the only thing that says which order an archive uses.
+    """
+    for byte_order in ("<", ">"):
+        if read_udas_block_table(payload, byte_order):
+            return byte_order
+    return None
+
+
+def is_yz2_block(payload, offset):
+    """Whether the block at `offset` is a YZ2 compressed stream rather than a
+    file table, which is what a big-endian UDAS holds its DAT block as."""
+    return bool(YZ2_HEADER_PATTERN.match(payload[offset:offset + YZ2_HEADER_SIZE]))
+
+
+def _udas_read_error(payload):
+    """Why this UDAS payload cannot be listed, as an exception, or None when
+    nothing more specific than the parser's own error can be said."""
+    byte_order = udas_byte_order(payload)
+    if byte_order is None:
+        return ValueError(
+            "no UDAS block table reads out of this payload in either byte order, so "
+            "the archive holds something other than the container its name claims"
+        )
+    if byte_order == "<":
+        return None
+    data_offset = read_udas_block_table(payload, byte_order)[0][2]
+    if is_yz2_block(payload, data_offset):
+        return NotImplementedError(
+            "this is the big-endian UDAS variant, and its data block is a YZ2 "
+            "compressed stream rather than a file table; albam has no YZ2 decoder, "
+            "so the files inside cannot be listed"
+        )
+    return NotImplementedError(
+        "this is the big-endian UDAS variant, whose data block albam does not model"
+    )
 
 
 def split_archive_name(file_name):
@@ -157,6 +243,12 @@ class LfsFS(FS):
             container._read()
             return self._split_container(struct_cls, container, decompressed)
         except Exception as error:
+            if struct_cls is Udas:
+                # Two variants read as a UDAS by name only: one whose block
+                # table is big-endian, and one holding no block table at all.
+                # Saying which beats handing on the parser's own error, which
+                # only ever reports running off the end of the payload.
+                error = _udas_read_error(decompressed) or error
             self.container_error = error
             return single_file
 

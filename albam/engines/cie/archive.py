@@ -11,7 +11,7 @@ flag as stored instead.
 import os
 import struct
 
-from .fs import LfsFS, split_archive_name
+from .fs import LfsFS, split_archive_name, udas_byte_order
 from .lfs_decompress import xcompress_compress_re4hd, xcompress_decompress_re4hd
 from .structs.lfs import Lfs
 from .structs.udas import Udas
@@ -86,6 +86,15 @@ def _rebuild_udas(payload, replacements):
     carried rather than rewritten. The block descriptors are updated, since
     the DAT block changes size and anything after it moves.
     """
+    if udas_byte_order(payload) != "<":
+        # The big-endian variant, or something that is not a UDAS at all (see
+        # fs.udas_byte_order). Rewriting either through the little-endian
+        # reader below would emit a container the game cannot load, silently.
+        raise NotImplementedError(
+            "this .udas is not the little-endian variant albam reads, so it cannot be "
+            "written back - see albam.engines.cie.fs.udas_byte_order"
+        )
+
     udas = Udas.from_bytes(payload)
     udas._read()
     header = udas.header
