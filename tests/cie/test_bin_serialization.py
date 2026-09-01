@@ -154,3 +154,42 @@ def test_bin_round_trips_through_export(game_root, local_app_id,
     assert after["triangles"] == before["triangles"]
     assert after["materials"] == before["materials"]
     assert after["bones"] == before["bones"]
+
+
+def test_importing_several_models_from_one_archive(game_root, local_app_id,
+                                                   local_archive_path_hash, _clean_scene):
+    """Importing model after model from one archive keeps working.
+
+    The second one onward is where this broke: the first model in an archive
+    brings in the armature and is represented by it, and the import operator
+    leaves an armature alone because building one has already linked it. Every
+    later model reuses that armature and so is represented by an empty
+    instead, which the operator does link - and the importer had linked it
+    too, which raises. Every model after the first failed with "already in
+    collection" while its geometry had in fact been built.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+
+    models = [vf for vf in vfs.file_list
+              if vf.tree_node.root_id == root.name and not vf.is_root and
+              vf.display_name.lower().endswith(".bin") and _is_mesh_bin(vf.get_bytes())]
+    if len(models) < 2:
+        pytest.skip("this archive holds a single model")
+
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+    for vfile in models[:4]:
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        # Through the operator, not the import function: what broke lives in
+        # the operator's own linking, so calling past it would not see it.
+        result = bpy.ops.albam.import_vfile()
+        assert result == {"FINISHED"}, f"{vfile.display_name} returned {result}"
+
+    meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    assert len(meshes) >= len(models[:4]), "every imported model should be in the scene"

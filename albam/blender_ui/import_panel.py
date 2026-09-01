@@ -165,8 +165,15 @@ class ALBAM_OT_Import(bpy.types.Operator):
             return
 
         if bl_container.type != "ARMATURE" and bl_container.type != "IMAGE":
-            # armature building needs it linked to for building
-            bpy.context.collection.objects.link(bl_container)
+            try:
+                # An import function may have linked it already - armature
+                # building needs that, and an engine whose container is not
+                # an armature can have the same reason. Linking twice raises,
+                # and it means the object is where it needs to be, which is
+                # the same reason the children below are guarded.
+                bpy.context.collection.objects.link(bl_container)
+            except RuntimeError:
+                pass
         for child in getattr(bl_container, "children_recursive", {}):
             try:
                 # already linked
