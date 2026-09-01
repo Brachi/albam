@@ -14,12 +14,12 @@ import zlib
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
+from fs.errors import CreateFailed, IllegalBackReference, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import dirname, join
+from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
 from . import FILE_ID_TO_EXTENSION
@@ -28,9 +28,16 @@ from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 
 def _entry_path(file_entry):
+    """The path an .arc entry is exposed at, from its raw internal one.
+
+    Normalized, because an entry's internal path is game data and can carry
+    "." / ".." components (e.g. "chr\\x\\weapon\\1p\\..\\y"). PyFilesystem
+    resolves those away in every incoming path (fs.base.FS.validatepath), so
+    an unnormalized key would list fine but never match a read.
+    """
     ext = FILE_ID_TO_EXTENSION.get(file_entry.file_type, str(file_entry.file_type))
     posix_path = file_entry.file_path.replace("\\", "/").lstrip("/")
-    return f"/{posix_path}.{ext}"
+    return normpath(f"/{posix_path}.{ext}")
 
 
 def _local_opener(path):
@@ -73,7 +80,15 @@ class ArcFS(FS):
             self._entries = {}
             self._directory = MemoryFS()
             for file_entry in arc.file_entries:
-                path = _entry_path(file_entry)
+                try:
+                    path = _entry_path(file_entry)
+                except IllegalBackReference:
+                    # ".." climbing above the .arc's own root: unreachable
+                    # through any FS API anyway, so skip it rather than
+                    # failing the whole archive.
+                    print(f"{self.arc_path}: skipping entry {file_entry.file_path!r} "
+                          f"(path escapes the archive root)")
+                    continue
                 self._entries[path] = file_entry
                 self._directory.makedirs(dirname(path), recreate=True)
                 self._directory.create(path)

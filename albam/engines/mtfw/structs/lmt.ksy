@@ -5,6 +5,8 @@ meta:
   ks-version: '0.11'
   title: MTFramework animation format
 
+params:
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: id_magic, contents: [0x4c, 0x4d, 0x54, 0x00]}
@@ -12,10 +14,14 @@ seq:
   - {id: num_block_offsets, type: u2}
   - {id: block_offsets, type: block_offset, repeat: expr, repeat-expr: num_block_offsets}
 
+instances:
+  use_64bit_ofs:
+    value: _root.app_id == "umvc3"
+
 types:
   block_offset:
     seq:
-      - {id: offset, type: u4}
+      - {id: offset, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       lmt_ver:
         value: _parent.version
@@ -73,14 +79,22 @@ types:
       
   block_header67:
     seq:
-      - {id: ofs_frame, type: u4}
+      - {id: ofs_frame, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: num_tracks, type: u4}
       - {id: num_frames, type: u4}
       - {id: loop_frame, type: u4}
+      # Aligns unk_floats below to 16 bytes.
+      - {id: unk_01, size: 12, if: _root.use_64bit_ofs}
+      # Two 16-byte aligned vectors: unk_floats[0..3] has a zero 4th
+      # component, unk_floats[4..7] is a normalized quaternion.
       - {id: unk_floats, type: f4, repeat: expr, repeat-expr: 8}
       - {id: unk_00, type: u4}
-      - {id: ofs_buffer_1, type: u4}
-      - {id: ofs_buffer_2, type: u4}
+      # Aligns the two offsets below to 8 bytes.
+      - {id: unk_02, size: 4, if: _root.use_64bit_ofs}
+      - {id: ofs_buffer_1, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: ofs_buffer_2, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: unk_03, type: u4}
+      - {id: unk_04, type: f4, if: _root.use_64bit_ofs}
     instances:
       tracks:
         {pos: ofs_frame, type: track67, repeat: expr, repeat-expr: num_tracks}
@@ -92,8 +106,8 @@ types:
       - {id: joint_type, type: u1}
       - {id: bone_index, type: u1}
       - {id: weight, type: f4}
-      - {id: len_data, type: u4}
-      - {id: ofs_data, type: u4}
+      - {id: len_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
+      - {id: ofs_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: unk_reference_data, type: f4, repeat: expr, repeat-expr: 4}
       - {id: ofs_floats, type:  ofs_float_buff}
     instances:
@@ -102,7 +116,7 @@ types:
   
   ofs_float_buff:
     seq:
-    - {id: ofs_buffer, type: u4}
+    - {id: ofs_buffer, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
     instances:
       is_exist:
         value: ofs_buffer

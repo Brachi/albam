@@ -46,14 +46,13 @@ def test_dataset_hashes_are_in_catalog():
 @pytest.fixture(scope="session")
 def parsed_tex(game_fs_root, local_app_id, local_tex_path_hash):
     from albam.engines.mtfw.texture import APPID_TEXCLS_MAP
+    from albam.lib.kaitai_utils import parse
 
     path = resolve_hashes(game_fs_root, {local_tex_path_hash})[local_tex_path_hash]
     tex_bytes = game_fs_root.readbytes(path)
     Tex = APPID_TEXCLS_MAP[local_app_id]
 
-    parsed = Tex.from_bytes(tex_bytes)
-    parsed._read()
-    return parsed
+    return parse(Tex, tex_bytes, local_app_id)
 
 
 ACCEPTABLE_SIZES = {2 ** n for n in range(2, 12)}  # min:8; max:2048
