@@ -257,3 +257,15 @@ def test_a_rotation_that_misses_unit_norm_still_round_trips():
     drift = math.degrees(decoded.normalized().rotation_difference(unit).angle)
     drift = min(drift, abs(360.0 - drift))
     assert drift < 0.05, f"rotation drifted {drift:.4f} deg"
+
+
+def test_an_unknown_track_type_raises_something_catchable():
+    """The diagnostic has to reach the caller as an exception.
+
+    `raise "some message"` is a TypeError about exception types, not the
+    message it carries, so the track type that caused it never reaches anyone.
+    """
+    from albam.engines.mtfw.animation.animation_export import _select_kf_usage
+
+    with pytest.raises(ValueError, match="not_a_track_type"):
+        _select_kf_usage({}, "not_a_track_type")

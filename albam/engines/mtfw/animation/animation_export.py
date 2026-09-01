@@ -57,7 +57,7 @@ def _select_kf_usage(bone, track_type):
         case "scale":
             return 5 if is_mroot else 2
         case _:
-            raise f" Track type {track_type} isn't correct"
+            raise ValueError(f"Track type {track_type} isn't correct")
 
 
 def _block_length(action, fcurves, custom_props):
