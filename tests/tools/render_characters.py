@@ -12,7 +12,7 @@ same interpreter pytest uses - not the real Blender application.
 Usage:
     python tests/tools/render_characters.py <app-id> <game-root> [--pattern REGEX]
                                       [--suffix NAME] [--limit N]
-                                      [--resolution WIDTHxHEIGHT]
+                                      [--resolution WIDTHxHEIGHT] [--jobs N]
 
 Example:
 
@@ -20,12 +20,17 @@ Example:
 
 Writes tests/data/<app-id>/<model>[_<suffix>].png. Pass --suffix to keep
 a before/after pair side by side while working on shading.
+
+Rendering is spread over --jobs worker processes. One process per worker is
+the only way to parallelise this: bpy drives a single global Blender session,
+so two characters cannot be in flight inside one interpreter.
 """
 import argparse
 import gc
 import math
 import os
 import re
+import subprocess
 import sys
 
 import bpy
@@ -167,6 +172,20 @@ def _model_name(path):
     return re.sub(r"[^A-Za-z0-9_-]+", "_", stem)
 
 
+def _run_workers(args):
+    """Re-run this script once per shard and wait for them all."""
+    base = [sys.executable, os.path.abspath(__file__), args.app_id, args.game_root,
+            "--pattern", args.pattern, "--resolution", args.resolution, "--jobs", "1"]
+    if args.suffix:
+        base += ["--suffix", args.suffix]
+    if args.limit:
+        base += ["--limit", str(args.limit)]
+
+    workers = [subprocess.Popen(base + ["--shard", f"{index}/{args.jobs}"])
+               for index in range(args.jobs)]
+    return max(worker.wait() for worker in workers)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -178,7 +197,13 @@ def main():
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--resolution", default="1024x1536",
                         help="WIDTHxHEIGHT, e.g. 640x960 for a quick low-res pass")
+    parser.add_argument("--jobs", type=int, default=4,
+                        help="worker processes to render with (default 4)")
+    parser.add_argument("--shard", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    if args.shard is None and args.jobs > 1:
+        return _run_workers(args)
 
     import albam
     albam.register()
@@ -193,6 +218,12 @@ def main():
                    if p.lower().endswith(".mod") and rx.match(p))
     if args.limit:
         paths = paths[:args.limit]
+    if args.shard:
+        index, total = (int(n) for n in args.shard.split("/"))
+        # Round robin rather than contiguous blocks: neighbouring characters
+        # in a sorted listing tend to be alike in size, so a block hands one
+        # worker every heavy model and leaves another idle.
+        paths = paths[index::total]
     print(f"{len(paths)} models", file=sys.stderr)
 
     bpy.context.scene.albam.apps.app_selected = args.app_id
