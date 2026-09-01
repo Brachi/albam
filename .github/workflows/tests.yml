@@ -42,9 +42,9 @@ jobs:
               {"bpy-version": "5.2.0", "python-version": "3.13"}
              ]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
     - name: Set up Python ${{ matrix.bpy.python-version }} with bpy ${{ matrix.bpy-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.bpy.python-version }}
         # No `cache: pip` - uv caches instead, below. setup-python's pip cache
@@ -52,9 +52,9 @@ jobs:
         # requirements.txt), so the key never changed and the cache only ever
         # grew: 946MB for 3.11 against 461MB for 3.13, same dependencies.
     - name: Set up uv
-      # v6 is the newest floating major tag astral-sh publishes; 10.x exists
-      # but only as exact versions (there is no v10 tag to track).
-      uses: astral-sh/setup-uv@v6
+      # v7 is the newest floating major tag astral-sh publishes; later
+      # majors exist but only as exact versions, with no tag to track.
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
         # Both files pin what gets installed - pyproject.toml for these jobs,
@@ -109,7 +109,7 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: .coverage.${{ matrix.bpy.bpy-version }}
         path: .coverage.${{ matrix.bpy.bpy-version }}
@@ -121,9 +121,9 @@ jobs:
     needs: tests
     steps:
       - name: "Check out the repo"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
       - name: "Set up Python"
-        uses: "actions/setup-python@v5"
+        uses: "actions/setup-python@v6"
         with:
           python-version: "3.12"
           # No pip cache here: this job installs one small package, and the
@@ -132,7 +132,7 @@ jobs:
         run: |
           python -m pip install coverage
       - name: "Download coverage data"
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v6
         with:
           path: .covdata
           pattern: .coverage.*
@@ -177,13 +177,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # `git describe`/`rev-list --count` below need full history and
           # tags to compute the commit-count-since-last-release suffix -
           # actions/checkout defaults to a shallow, tag-less clone.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: 'pip'
@@ -235,8 +235,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: 'pip'
