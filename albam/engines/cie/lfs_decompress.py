@@ -501,7 +501,12 @@ def xcompress_decompress_re4hd(file_entries):
         src_size = LFS_CHUNK_SIZE if fe.size_compressed == 0 else fe.size_compressed
         expected_size = LFS_CHUNK_SIZE if fe.size_decompressed == 0 else fe.size_decompressed
 
-        if fe.offset != 0:
+        # The low bit of `offset` is the compressed flag; the rest is the
+        # chunk's own position (masked off in lfs.ksy's raw_data). A stored
+        # chunk is copied out verbatim - the format's own escape hatch for
+        # data that doesn't compress, and what lets albam write an .lfs
+        # without an LZX encoder.
+        if fe.offset & 1:
             # Compressed chunk
             raw = fe.raw_data if isinstance(fe.raw_data, (bytes, bytearray)) else bytes(fe.raw_data)
             chunk_out = bytearray(expected_size)

@@ -1,6 +1,51 @@
+import os
+
 import bpy
 from ...registry import blender_registry
 from .structs.tpl import Tpl
+
+# Where a texture pack lives, relative to BIO4, best first: the UHD release
+# ships both the original packs and higher-resolution replacements under the
+# same pack id, and a .tpl entry names only the id.
+TEXTURE_PACK_FOLDERS = ("ImagePackHD", "ImagePack")
+
+
+def _texture_pack_archive(pack_name, model_root):
+    """The .lfs holding texture pack `pack_name`, found next to the model's
+    own archive on disk, or None.
+
+    A .tpl names its textures by pack id alone (see _process_tex_indices), and
+    the pack is a separate archive - so importing a character otherwise means
+    the user first working out that "00000006" means
+    BIO4/ImagePackHD/00000006.pack.yz2.lfs and adding it by hand. Every model
+    archive sits at BIO4/<folder>/<name>.lfs, so BIO4 is two levels up from
+    the model's own path and the pack folders are siblings of its own.
+    """
+    absolute_path = model_root.absolute_path if model_root else ""
+    if not absolute_path:
+        return None
+    bio4 = os.path.dirname(os.path.dirname(absolute_path))
+    try:
+        siblings = {name.lower(): name for name in os.listdir(bio4)}
+    except OSError:
+        return None
+
+    for folder in TEXTURE_PACK_FOLDERS:
+        real_folder = siblings.get(folder.lower())
+        if real_folder is None:
+            continue
+        pack_dir = os.path.join(bio4, real_folder)
+        try:
+            names = sorted(os.listdir(pack_dir))
+        except OSError:
+            continue
+        for name in names:
+            low = name.lower()
+            # ".lfs" only: an unpacked ".pack.yz2" sitting next to it is not
+            # something the VFS has a loader for.
+            if low.startswith(pack_name) and low.endswith(".lfs"):
+                return os.path.join(pack_dir, name)
+    return None
 
 
 def _process_tpls(tpl_id):
@@ -29,6 +74,7 @@ def _process_tpls(tpl_id):
             "tpl_entry": te,
             "pack_name": f"{te.image_data.ids.pack_id:08x}",
             "pack_name_vfile": "",
+            "model_root": tpl_vfile.root_vfile,
             "texture_id": te.image_data.ids.texture_id,
             "width": te.image_data.width,
             "height": te.image_data.height,
@@ -54,17 +100,15 @@ def _process_tex_indices(tpl_db):
     by name and so only coincides with the container's own numbering while a
     pack holds under 1000 textures.
     """
-    vfile_list = bpy.context.scene.albam.vfs.file_list
+    vfs = bpy.context.scene.albam.vfs
     pack_roots = {}  # pack_name : root vfile
     for tp in tpl_db:
         pack_name = tp["pack_name"]
         if pack_name in pack_roots:
             continue
-        for vfile in vfile_list:
-            if vfile.is_root and pack_name in vfile.display_name:
-                print(f"Found {vfile.display_name}!")
-                pack_roots[pack_name] = vfile
-                break
+        root = _find_or_mount_pack(vfs, pack_name, tp["model_root"])
+        if root is not None:
+            pack_roots[pack_name] = root
         else:
             print(f"{pack_name} texture pack wasn't found in the virtual file system")
 
@@ -74,7 +118,10 @@ def _process_tex_indices(tpl_db):
     textures_per_pack = {}  # pack_name : {texture index : vfile}
     for pack_name, root in pack_roots.items():
         textures = {}
-        for vfile in vfile_list:
+        # Re-read the list rather than closing over one taken earlier:
+        # _find_or_mount_pack may have added a root, and a Blender
+        # CollectionProperty invalidates references across an add().
+        for vfile in vfs.file_list:
             if vfile.tree_node.root_id != root.name or vfile.is_root:
                 continue
             index = _texture_index(vfile.display_name)
@@ -94,6 +141,24 @@ def _process_tex_indices(tpl_db):
                 "Texture {} not found in {}".format(tp["texture_id"], pack_root.display_name)
             )
     return tpl_db
+
+
+def _find_or_mount_pack(vfs, pack_name, model_root):
+    """The VFS root for texture pack `pack_name`, mounting it from disk if the
+    user hasn't added it themselves.
+
+    Matched on `in`, not equality: an archive is named after its pack id, but
+    some ids appear with a leading zero the .tpl entry doesn't carry.
+    """
+    for vfile in vfs.file_list:
+        if vfile.is_root and pack_name in vfile.display_name:
+            return vfile
+
+    archive_path = _texture_pack_archive(pack_name, model_root)
+    if archive_path is None:
+        return None
+    print(f"Mounting texture pack {os.path.basename(archive_path)}")
+    return vfs.add_real_file(model_root.app_id, archive_path)
 
 
 def _texture_index(display_name):
