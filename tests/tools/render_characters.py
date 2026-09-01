@@ -70,7 +70,12 @@ def _world_points(max_points=20000):
 
     Framing on vertices rather than on each object's bounding box matters for
     a character standing diagonally to the camera: the box corners stick out
-    into empty space and cost a good part of the frame."""
+    into empty space and cost a good part of the frame.
+
+    Thinning is done by index rather than by slicing: a Blender collection
+    rejects a slice with a step, so `vertices[::stride]` raised for any mesh
+    over max_points - exactly the meshes the thinning exists for.
+    """
     points = []
     for obj in bpy.data.objects:
         if obj.type != "MESH":
@@ -78,7 +83,7 @@ def _world_points(max_points=20000):
         vertices = obj.data.vertices
         stride = max(1, len(vertices) // max_points)
         matrix = obj.matrix_world
-        points.extend(matrix @ v.co for v in vertices[::stride])
+        points.extend(matrix @ vertices[i].co for i in range(0, len(vertices), stride))
     if not points:
         raise RuntimeError("no mesh geometry to frame")
     return points
