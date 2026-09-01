@@ -165,11 +165,10 @@ class VirtualFileSystemBase:
         fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
                      blender_registry.fs_root_loader_registry.get((app_id, None)))
         if fs_loader:
-            self.add_fs_root(
+            return self.add_fs_root(
                 app_id, fs_loader(absolute_path), display_name=path.name,
                 is_archive=bool(extension), absolute_path=absolute_path,
             )
-            return
 
         vf = self.file_list.add()
         vf.is_root = True

@@ -1,6 +1,6 @@
 """
 Pure-Python LZX / LFS decompressor for RE4 UHD
-Drop-in replacement for xcompress.py - no DLL dependency.
+No DLL dependency, unlike the xcompress64.dll wrapper this replaced.
 Based on lfs_decompress.h by kreed
 """
 
@@ -427,7 +427,7 @@ def _lzx_inflate(st, data, offset, comp_size, out, out_offset, decomp_size):
 
 
 # ============================================================================
-# LFS public API — drop-in replacement for xcompress.py
+# LFS public API
 # ============================================================================
 
 def is_lfs(data):
@@ -491,8 +491,7 @@ def lfs_decompress(data):
 
 def xcompress_decompress_re4hd(file_entries):
     """
-    Drop-in replacement for xcompress.xcompress_decompress_re4hd.
-    Takes the same LFS file_entries (with .raw_data, .size_compressed,
+    Takes the LFS file_entries (with .raw_data, .size_compressed,
     .size_decompressed, .offset attributes) and returns decompressed bytearray.
     """
     dec_data = bytearray()

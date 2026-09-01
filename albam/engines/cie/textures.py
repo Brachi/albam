@@ -11,8 +11,8 @@ def _process_tpls(tpl_id):
     try:
         tpl_vfile = tpl_vfiles[0]
     except IndexError:
-        raise(f"{tpl_id} wasn't found")
-    
+        raise RuntimeError(f"{tpl_id} wasn't found")
+
     print(f"TPL is: {tpl_vfile.display_name}")
     tpl_bytes = tpl_vfile.get_bytes()
     tpl = Tpl.from_bytes(tpl_bytes)
@@ -42,44 +42,66 @@ def _process_tpls(tpl_id):
 
 
 def _process_tex_indices(tpl_db):
+    """Resolve every TPL entry to the VFS file holding its texture bytes.
+
+    A .tpl doesn't name its textures: an entry carries a pack id and an index
+    into that pack (see structs/tpl.ksy), and the pack is a separate
+    "<pack_id>.pack.yz2.lfs" archive the user has to have added to the VFS
+    too. Pack roots are matched by their own file name (`in`, not equality -
+    some ids are written with a leading zero the tpl entry doesn't have), and
+    a texture by the index LfsFS numbered it with, parsed back out of its
+    name rather than taken from its position in `file_list`, which is sorted
+    by name and so only coincides with the container's own numbering while a
+    pack holds under 1000 textures.
+    """
     vfile_list = bpy.context.scene.albam.vfs.file_list
-    cached_packs = {}
+    pack_roots = {}  # pack_name : root vfile
     for tp in tpl_db:
-        pack_found = False
         pack_name = tp["pack_name"]
-        if pack_name not in cached_packs.keys():
-            for vfile in vfile_list:
-                if vfile.display_name not in cached_packs.keys():
-                    # there are cases when it's "0" + pack_name
-                    if pack_name in vfile.display_name and vfile.is_root:
-                        print(f"Found {vfile.display_name}!")
-                        tp["pack_name_vfile"] = vfile.display_name
-                        pack_found = True
-                        cached_packs[vfile.display_name] = vfile.name
-                else:
-                    pack_found = True
-                    tp["pack_name_vfile"] = vfile.display_name
-        if not pack_found:
+        if pack_name in pack_roots:
+            continue
+        for vfile in vfile_list:
+            if vfile.is_root and pack_name in vfile.display_name:
+                print(f"Found {vfile.display_name}!")
+                pack_roots[pack_name] = vfile
+                break
+        else:
             print(f"{pack_name} texture pack wasn't found in the virtual file system")
 
-    if not cached_packs:
+    if not pack_roots:
         return None
 
-    tex_db = {}
-    for pack_name, root_id in cached_packs.items():
-        tex_list = []
+    textures_per_pack = {}  # pack_name : {texture index : vfile}
+    for pack_name, root in pack_roots.items():
+        textures = {}
         for vfile in vfile_list:
-            if vfile.tree_node.root_id == root_id:
-                tex_list.append(vfile)
-        tex_db[pack_name] = tex_list
+            if vfile.tree_node.root_id != root.name or vfile.is_root:
+                continue
+            index = _texture_index(vfile.display_name)
+            if index is not None:
+                textures[index] = vfile
+        textures_per_pack[pack_name] = textures
 
     for tp in tpl_db:
-        tex_pack = tex_db.get(tp["pack_name_vfile"], [None])
+        pack_root = pack_roots.get(tp["pack_name"])
+        if pack_root is None:
+            continue
+        tp["pack_name_vfile"] = pack_root.display_name
         try:
-            tp["vfile"] = tex_pack[tp["texture_id"]]
-        except IndexError:
-            raise RuntimeError("Index {} isn't correct".format(tp["texture_id"]))
+            tp["vfile"] = textures_per_pack[tp["pack_name"]][tp["texture_id"]]
+        except KeyError:
+            raise RuntimeError(
+                "Texture {} not found in {}".format(tp["texture_id"], pack_root.display_name)
+            )
     return tpl_db
+
+
+def _texture_index(display_name):
+    """The index LfsFS gave a packed texture, from its "<stem>_NNN.<ext>"
+    name - None for anything not named that way."""
+    stem = display_name.rsplit(".", 1)[0]
+    _, _, index = stem.rpartition("_")
+    return int(index) if index.isdigit() else None
 
 
 def _create_blender_image_from_tex(tpl):
@@ -121,7 +143,6 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
     max_lod: bpy.props.IntProperty(default=0)
     is_compressed: bpy.props.IntProperty(default=0)
 
-
     # XXX copy paste in mesh, material
     def set_from_source(self, mesh):
         # XXX assume only properties are part of annotations
@@ -141,9 +162,9 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
         except AttributeError:
             print(name)
 
-        #try:
-        #    if isinstance(src_value, str):
-        #        src_value = int(src_value, 16)
-        #    setattr(dst, name, src_value)
-        #except TypeError:
-        #    setattr(dst, name, hex(src_value))
+        # try:
+        #     if isinstance(src_value, str):
+        #         src_value = int(src_value, 16)
+        #     setattr(dst, name, src_value)
+        # except TypeError:
+        #     setattr(dst, name, hex(src_value))

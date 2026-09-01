@@ -7,7 +7,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFile
 from ...lib.misc import chunks
 from ...lib.blender import (triangles_list_to_vtx_strips,
-                            get_uvs_per_vertex,
+                            get_uvs_per_loop,
                             get_bone_indices_and_weights_per_vertex)
 from ...lib.common_op import split_mesh_by_material, move_to_collection, delete_ob
 from ...exceptions import AlbamCheckFailure
@@ -37,7 +37,7 @@ def _validate_bin_mesh(bin_bytes, bl_object_name):
     if len(bin_bytes) < re4uhd_bin_mesh_hdr_size:
         raise AlbamCheckFailure(
             f"The {bl_object_name}' is not a valid mesh BIN file and probably contains a non-geometry data",
-            details=f"The file is smaller than a minimum size {re4uhd_bin_mesh_hdr_size } bytes",
+            details=f"The file is smaller than a minimum size {re4uhd_bin_mesh_hdr_size} bytes",
             solution="Select another .BIN file"
         )
 
@@ -130,7 +130,7 @@ def _decode_normal(n):
     normal_fix = math.sqrt(n.x ** 2 + n.y ** 2 + n.z ** 2)
     if normal_fix == 0:
         normal_fix = 1
-    return (n.x/normal_fix, n.z/normal_fix * -1, n.y/normal_fix)
+    return (n.x / normal_fix, n.z / normal_fix * -1, n.y / normal_fix)
 
 
 def _encode_normal(vector, n, extended=True):
@@ -268,7 +268,8 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None):
         if children:
             child_avg = sum((world_positions[c.bone_id] for c in children), Vector((0, 0, 0)))
             child_avg /= len(children)
-            blender_bone.tail = child_avg if (child_avg - head).length > 0.001 else head + Vector((0, 0, 0.02))
+            blender_bone.tail = (child_avg if (child_avg - head).length > 0.001
+                                 else head + Vector((0, 0, 0.02)))
         else:
             blender_bone.tail = head + Vector((0, 0, 0.02))
 
@@ -329,6 +330,24 @@ def _apply_weights(mesh_ob, bin):
             get_vg(bone_id).add([vert_i], raw_w / total, 'REPLACE')
 
     print(f"[re4uhd] weights: {len(weight_index)} verts, {len(vg_cache)} vertex groups")
+
+
+def _get_uvs_per_vertex(bl_mesh_ob, layer_index):
+    """{vertex_index: (uv_x, uv_y)}, first corner of each vertex wins.
+
+    The .bin format this exports to stores one UV per vertex, so a vertex
+    shared between UV islands can only keep one of its corners' UVs - unlike
+    the MT Framework exporter, which splits such a vertex instead. Wrapping
+    lib.blender.get_uvs_per_loop() here rather than reaching for a per-vertex
+    helper there keeps that limitation where it applies.
+    """
+    uvs_per_loop = get_uvs_per_loop(bl_mesh_ob, layer_index)
+    uvs = {}
+    for loop in bl_mesh_ob.data.loops:
+        if loop.vertex_index in uvs or loop.index not in uvs_per_loop:
+            continue
+        uvs[loop.vertex_index] = uvs_per_loop[loop.index]
+    return uvs
 
 
 def _get_tpl_files_enum(self, context):
@@ -561,7 +580,6 @@ def export_bin(bl_obj):
     vtx_locations = []
     vtx_normals = []
     vtx_uvs = []
-    vtx_ids = []
     vtx_skinweights = []
     separated_mesh_objs = []
     materials = []
@@ -594,7 +612,7 @@ def export_bin(bl_obj):
         dst_face_idx = dst_bin.FaceIndex(_parent=dst_mat, _root=dst_bin._root)
         loop_cache = {loop.vertex_index: loop for loop in bl_mesh_ob.data.loops}
 
-        vtx_uvs.append(get_uvs_per_vertex(bl_mesh_ob, 0))
+        vtx_uvs.append(_get_uvs_per_vertex(bl_mesh_ob, 0))
         for vtx in bl_mesh_ob.data.vertices:
             vtx_locations.append(_zy_flip(vtx.co.x, vtx.co.y, vtx.co.z))
 
