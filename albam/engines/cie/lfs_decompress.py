@@ -33,6 +33,10 @@ LFS_MAGIC1 = 0x584C4452
 LFS_CHUNK_SIZE = 0x10000
 # The value real archives carry in the header's second word.
 LFS_DEFAULT_FILE_ID = 0xAABAEEFE
+# Chunk data is padded to this; the last chunk is not padded.
+CHUNK_ALIGNMENT = 16
+# Bytes before the chunk table, which chunk offsets are measured from.
+LFS_HEADER_SIZE = 20
 
 
 class _BitReader:
@@ -491,6 +495,32 @@ def lfs_decompress(data):
     return out[:out_pos]
 
 
+def chunk_sizes(chunks, stream_size):
+    """The real compressed length of every chunk.
+
+    `size_compressed` is a u2 holding a length that can reach 0x10000 and
+    beyond - a chunk that barely compresses ends up larger than the chunk
+    size - so it is stored modulo 0x10000 and cannot be read at face value.
+    What pins it down is the distance to the next chunk: chunks are laid out
+    in order, padded to 16 bytes (the last one not padded), so the real
+    length is the only value congruent to `size_compressed` that lands in
+    that distance.
+
+    This also covers the ordinary full-size chunk, which stores 0 and means
+    0x10000, without needing a special case for it.
+    """
+    positions = [chunk.data_offset for chunk in chunks]
+    sizes = []
+    for i, chunk in enumerate(chunks):
+        end = positions[i + 1] if i + 1 < len(positions) else stream_size
+        gap = end - positions[i]
+        size = chunk.size_compressed
+        while size <= gap - CHUNK_ALIGNMENT:
+            size += LFS_CHUNK_SIZE
+        sizes.append(min(size, gap))
+    return sizes
+
+
 def xcompress_decompress_re4hd(chunks):
     """The payload of an .lfs, from its parsed chunk list (see lfs.ksy).
 
@@ -500,10 +530,16 @@ def xcompress_decompress_re4hd(chunks):
     .lfs can only ever be read whole.
     """
     dec_data = bytearray()
+    if not chunks:
+        return dec_data
+
+    stream = chunks[0]._io
+    sizes = chunk_sizes(chunks, stream.size())
     st = _LzxState(131072)
 
     for i, chunk in enumerate(chunks):
-        raw = bytes(chunk.raw_data)
+        stream.seek(chunk.data_offset)
+        raw = stream.read_bytes(sizes[i])
         expected_size = LFS_CHUNK_SIZE if chunk.size_decompressed == 0 else chunk.size_decompressed
 
         if not chunk.is_compressed:

@@ -14,10 +14,14 @@ doc: |
   TPL (see albam/engines/cie/fs.py).
 
   Every chunk decompresses to 0x10000 bytes except the last, and both size
-  fields are u2, so a full-size chunk is stored as 0 in them. Across a real
-  install (350907 chunks) `size_decompressed` is 0 for 346438 of them and
-  `size_compressed` is never 0, compressed chunks always coming out smaller
-  than the chunk size.
+  fields are u2. That is one byte too narrow for a full chunk, so both are
+  stored **modulo 0x10000**: `size_decompressed` reads 0 for a full chunk
+  (346438 of 350907 across a real install), and `size_compressed` wraps for a
+  chunk that barely compresses - one whose real compressed size is 65564
+  reads as 28. A chunk's real size can only be recovered from the distance to
+  the next chunk, which is why albam/engines/cie/lfs_decompress.py slices the
+  chunk data rather than this declaring a size for it. Chunks are padded to
+  16 bytes, the last one not being padded at all.
 
   Chunks are not necessarily compressed. The low bit of `offset` is the
   compressed flag and the rest is the chunk's own position, measured from the
@@ -48,8 +52,8 @@ types:
     instances:
       is_compressed:
         value: (offset & 1) != 0
-      # 0 means a full 0x10000 chunk - see this format's own doc.
-      len_raw_data:
-        value: 'size_compressed == 0 ? 0x10000 : size_compressed'
-      raw_data:
-        {pos: (offset & ~1) + 20, size: len_raw_data}
+      # Where this chunk's bytes start. How many there are cannot be said
+      # here: the count is modulo 0x10000 (see this format's own doc) and is
+      # recovered from the next chunk's position.
+      data_offset:
+        value: (offset & ~1) + 20

@@ -16,10 +16,14 @@ class Lfs(ReadWriteKaitaiStruct):
     TPL (see albam/engines/cie/fs.py).
     
     Every chunk decompresses to 0x10000 bytes except the last, and both size
-    fields are u2, so a full-size chunk is stored as 0 in them. Across a real
-    install (350907 chunks) `size_decompressed` is 0 for 346438 of them and
-    `size_compressed` is never 0, compressed chunks always coming out smaller
-    than the chunk size.
+    fields are u2. That is one byte too narrow for a full chunk, so both are
+    stored **modulo 0x10000**: `size_decompressed` reads 0 for a full chunk
+    (346438 of 350907 across a real install), and `size_compressed` wraps for a
+    chunk that barely compresses - one whose real compressed size is 65564
+    reads as 28. A chunk's real size can only be recovered from the distance to
+    the next chunk, which is why albam/engines/cie/lfs_decompress.py slices the
+    chunk data rather than this declaring a size for it. Chunks are padded to
+    16 bytes, the last one not being padded at all.
     
     Chunks are not necessarily compressed. The low bit of `offset` is the
     compressed flag and the rest is the chunk's own position, measured from the
@@ -87,8 +91,6 @@ class Lfs(ReadWriteKaitaiStruct):
             super(Lfs.Chunk, self).__init__(_io)
             self._parent = _parent
             self._root = _root
-            self._should_write_raw_data = False
-            self.raw_data__enabled = True
 
         def _read(self):
             self.size_compressed = self._io.read_u2le()
@@ -99,28 +101,28 @@ class Lfs(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            _ = self.raw_data
-            if hasattr(self, '_m_raw_data'):
-                pass
-
 
 
         def _write__seq(self, io=None):
             super(Lfs.Chunk, self)._write__seq(io)
-            self._should_write_raw_data = self.raw_data__enabled
             self._io.write_u2le(self.size_compressed)
             self._io.write_u2le(self.size_decompressed)
             self._io.write_u4le(self.offset)
 
 
         def _check(self):
-            if self.raw_data__enabled:
-                pass
-                if len(self._m_raw_data) != self.len_raw_data:
-                    raise kaitaistruct.ConsistencyError(u"raw_data", self.len_raw_data, len(self._m_raw_data))
-
             self._dirty = False
 
+        @property
+        def data_offset(self):
+            if hasattr(self, '_m_data_offset'):
+                return self._m_data_offset
+
+            self._m_data_offset = (self.offset & ~1) + 20
+            return getattr(self, '_m_data_offset', None)
+
+        def _invalidate_data_offset(self):
+            del self._m_data_offset
         @property
         def is_compressed(self):
             if hasattr(self, '_m_is_compressed'):
@@ -131,44 +133,6 @@ class Lfs(ReadWriteKaitaiStruct):
 
         def _invalidate_is_compressed(self):
             del self._m_is_compressed
-        @property
-        def len_raw_data(self):
-            if hasattr(self, '_m_len_raw_data'):
-                return self._m_len_raw_data
-
-            self._m_len_raw_data = (65536 if self.size_compressed == 0 else self.size_compressed)
-            return getattr(self, '_m_len_raw_data', None)
-
-        def _invalidate_len_raw_data(self):
-            del self._m_len_raw_data
-        @property
-        def raw_data(self):
-            if self._should_write_raw_data:
-                self._write_raw_data()
-            if hasattr(self, '_m_raw_data'):
-                return self._m_raw_data
-
-            if not self.raw_data__enabled:
-                return None
-
-            _pos = self._io.pos()
-            self._io.seek((self.offset & ~1) + 20)
-            self._m_raw_data = self._io.read_bytes(self.len_raw_data)
-            self._io.seek(_pos)
-            return getattr(self, '_m_raw_data', None)
-
-        @raw_data.setter
-        def raw_data(self, v):
-            self._dirty = True
-            self._m_raw_data = v
-
-        def _write_raw_data(self):
-            self._should_write_raw_data = False
-            _pos = self._io.pos()
-            self._io.seek((self.offset & ~1) + 20)
-            self._io.write_bytes(self._m_raw_data)
-            self._io.seek(_pos)
-
 
     class LfsHeader(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
