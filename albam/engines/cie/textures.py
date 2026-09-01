@@ -9,6 +9,13 @@ from .structs.tpl import Tpl
 # same pack id, and a .tpl entry names only the id.
 TEXTURE_PACK_FOLDERS = ("ImagePackHD", "ImagePack")
 
+# Content directories a texture pack has been found in this session, most
+# recent first. A model archive being modded is often somewhere else
+# entirely - a working folder, not the install - and its textures still have
+# to come from somewhere, so a directory that worked once is remembered and
+# tried for later archives that have no pack folders of their own.
+_PACK_DIRECTORIES = []
+
 # pack id -> {texture index: (name, bytes)}, for this Blender session.
 # Reading a pack means decompressing a whole archive, and one is shared by
 # every model in a character archive, so it is read once. It also keeps
@@ -28,10 +35,38 @@ def _texture_pack_archive(pack_name, model_root):
     content directory, so that directory is two levels up from the model's
     own path and a pack is named after its id.
     """
+    candidates = []
     absolute_path = model_root.absolute_path if model_root else ""
-    if not absolute_path:
-        return None
-    content_dir = os.path.dirname(os.path.dirname(absolute_path))
+    if absolute_path:
+        candidates.append(os.path.dirname(os.path.dirname(absolute_path)))
+    candidates.extend(_PACK_DIRECTORIES)
+    candidates.extend(_content_directories_in_vfs())
+
+    seen = set()
+    for content_dir in candidates:
+        if not content_dir or content_dir in seen:
+            continue
+        seen.add(content_dir)
+        found = _find_pack_in(content_dir, pack_name)
+        if found:
+            if content_dir in _PACK_DIRECTORIES:
+                _PACK_DIRECTORIES.remove(content_dir)
+            _PACK_DIRECTORIES.insert(0, content_dir)
+            return found
+    return None
+
+
+def _content_directories_in_vfs():
+    """Where every other archive the user has added sits, so a model opened
+    from outside the install can still reach the install's textures."""
+    directories = []
+    for vfile in bpy.context.scene.albam.vfs.file_list:
+        if vfile.is_root and vfile.absolute_path:
+            directories.append(os.path.dirname(os.path.dirname(vfile.absolute_path)))
+    return directories
+
+
+def _find_pack_in(content_dir, pack_name):
     try:
         siblings = {name.lower(): name for name in os.listdir(content_dir)}
     except OSError:
@@ -105,7 +140,8 @@ def _process_tex_indices(tpl_db):
         if pack_name not in packs:
             packs[pack_name] = _load_pack(pack_name, tp["model_root"])
             if not packs[pack_name]:
-                print(f"{pack_name} texture pack wasn't found")
+                print(f"{pack_name} texture pack wasn't found - looked beside "
+                      f"this archive and beside every other one added")
 
     if not any(packs.values()):
         return None

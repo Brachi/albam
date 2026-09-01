@@ -603,6 +603,7 @@ def compress_lfs(payload, file_id=LFS_DEFAULT_FILE_ID):
     # Offsets are measured from the start of the chunk table, so the first
     # chunk's data begins right after the table itself.
     table_size = len(chunks) * 8
+    chunk_total = 0
     for i, (data, is_compressed) in enumerate(chunks):
         decompressed_size = min(len(payload) - i * LFS_CHUNK_SIZE, LFS_CHUNK_SIZE)
         # 0x10000 doesn't fit a u2; the format spells a full chunk as 0, and
@@ -612,11 +613,15 @@ def compress_lfs(payload, file_id=LFS_DEFAULT_FILE_ID):
                              decompressed_size % LFS_CHUNK_SIZE,
                              offset | (1 if is_compressed else 0))
         body += data
+        chunk_total += len(data)
         if i + 1 < len(chunks):
             # Chunks are padded to 16 bytes, the last one not at all, which
             # is also what keeps the offsets even and the flag bit free.
             body += b"\x00" * (-len(body) % CHUNK_ALIGNMENT)
 
-    header = struct.pack("<5I", LFS_MAGIC1, file_id, len(payload), table_size + len(body),
-                         len(chunks))
+    # size_compressed is the sum of the chunks' own bytes: not the file size,
+    # and neither the chunk table nor the padding between chunks counts
+    # towards it. Checked against a sample of real archives.
+    header = struct.pack("<5I", LFS_MAGIC1, file_id, len(payload),
+                         chunk_total, len(chunks))
     return header + bytes(table) + bytes(body)

@@ -31,8 +31,9 @@ POSITION_BASE = [
 
 LFS_MAGIC1 = 0x584C4452
 LFS_CHUNK_SIZE = 0x10000
-# The value real archives carry in the header's second word.
-LFS_DEFAULT_FILE_ID = 0xAABAEEFE
+# The value real archives carry in the header's second word - the same in
+# every one of a 400-archive sample, so a constant rather than an id.
+LFS_DEFAULT_FILE_ID = 0xFEEEBAAA
 # Chunk data is padded to this; the last chunk is not padded.
 CHUNK_ALIGNMENT = 16
 # Bytes before the chunk table, which chunk offsets are measured from.
