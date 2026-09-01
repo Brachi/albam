@@ -12,6 +12,7 @@ same interpreter pytest uses - not the real Blender application.
 Usage:
     python tests/tools/render_characters.py <app-id> <game-root> [--pattern REGEX]
                                       [--suffix NAME] [--limit N]
+                                      [--resolution WIDTHxHEIGHT]
 
 Example:
 
@@ -52,18 +53,23 @@ def _clear_scene():
     gc.collect()
 
 
-def _bounding_box_world():
-    """World-space bounding box (min, max) across every mesh object."""
-    corners = []
+def _world_points(max_points=20000):
+    """World-space vertices of every mesh object, thinned to a bounded sample.
+
+    Framing on vertices rather than on each object's bounding box matters for
+    a character standing diagonally to the camera: the box corners stick out
+    into empty space and cost a good part of the frame."""
+    points = []
     for obj in bpy.data.objects:
         if obj.type != "MESH":
             continue
-        for corner in obj.bound_box:
-            corners.append(obj.matrix_world @ Vector(corner))
-    if not corners:
-        raise RuntimeError("no mesh objects to frame")
-    xs, ys, zs = zip(*corners)
-    return Vector((min(xs), min(ys), min(zs))), Vector((max(xs), max(ys), max(zs)))
+        vertices = obj.data.vertices
+        stride = max(1, len(vertices) // max_points)
+        matrix = obj.matrix_world
+        points.extend(matrix @ v.co for v in vertices[::stride])
+    if not points:
+        raise RuntimeError("no mesh geometry to frame")
+    return points
 
 
 def _setup_three_point_lighting(key=2.5, fill=0.9, rim=1.4):
@@ -90,32 +96,59 @@ def _setup_three_point_lighting(key=2.5, fill=0.9, rim=1.4):
         background.inputs["Strength"].default_value = 1.0
 
 
-def _setup_camera(bbox_min, bbox_max, fov_deg=40):
-    center = (bbox_min + bbox_max) / 2
-    dimensions = bbox_max - bbox_min
-    # Fit the bounding sphere, not the height: a model that is longer than
-    # it is tall (a quadruped, a vehicle) would otherwise run out of frame.
-    radius = (dimensions.length / 2) or 1.0
+def _setup_camera(points, resolution, fov_deg=40):
+    xs, ys, zs = zip(*points)
+    center = Vector((
+        (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (min(zs) + max(zs)) / 2))
 
     fov = math.radians(fov_deg)
-    distance = radius / math.sin(fov / 2) * 1.1  # a little headroom
+    # Blender's camera angle applies to the larger render dimension; the other
+    # axis follows from the aspect ratio.
+    width, height = resolution
+    if width >= height:
+        fov_x, fov_y = fov, 2 * math.atan(math.tan(fov / 2) * height / width)
+    else:
+        fov_y, fov_x = fov, 2 * math.atan(math.tan(fov / 2) * width / height)
 
     # Slightly elevated 3/4 front view - the usual character showcase angle.
     azimuth, elevation = math.radians(-25), math.radians(12)
-    cam_location = center + Vector((
+    direction = Vector((
         math.sin(azimuth) * math.cos(elevation),
         -math.cos(azimuth) * math.cos(elevation),
         math.sin(elevation),
-    )) * distance
+    ))
+    rotation = direction.to_track_quat("Z", "Y").to_matrix()
+    right, up = rotation.col[0], rotation.col[1]
+
+    # Centre on the silhouette as the camera sees it, not on the world-space
+    # box: an off-centre mid-point costs frame on one side and clips on the other.
+    local_x = [(p - center).dot(right) for p in points]
+    local_y = [(p - center).dot(up) for p in points]
+    center = center + right * ((min(local_x) + max(local_x)) / 2)
+    center = center + up * ((min(local_y) + max(local_y)) / 2)
+
+    # For a point at camera-space (x, y, z) the camera must stand at least
+    # z + |x| / tan(fov_x / 2) away for it to stay in frame (likewise for y),
+    # so take the furthest demand any point makes.
+    distance = 0.0
+    for point in points:
+        offset = point - center
+        local = Vector((offset.dot(right), offset.dot(up), offset.dot(direction)))
+        distance = max(
+            distance,
+            local.z + abs(local.x) / math.tan(fov_x / 2),
+            local.z + abs(local.y) / math.tan(fov_y / 2),
+        )
+    distance = (distance or 1.0) * 1.06  # a little headroom
 
     cam_data = bpy.data.cameras.new("RenderCamera")
     cam_data.lens_unit = "FOV"
     cam_data.angle = fov
     cam_obj = bpy.data.objects.new("RenderCamera", cam_data)
-    cam_obj.location = cam_location
+    cam_obj.location = center + direction * distance
     bpy.context.collection.objects.link(cam_obj)
     bpy.context.scene.camera = cam_obj
-    cam_obj.rotation_euler = (center - cam_location).to_track_quat("-Z", "Y").to_euler()
+    cam_obj.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
 
 
 def _render(output_path, resolution=(1024, 1536)):
@@ -143,6 +176,8 @@ def main():
     parser.add_argument("--suffix", default=None,
                         help="appended to each filename, to keep runs side by side")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--resolution", default="1024x1536",
+                        help="WIDTHxHEIGHT, e.g. 640x960 for a quick low-res pass")
     args = parser.parse_args()
 
     import albam
@@ -165,6 +200,8 @@ def main():
     vfs = bpy.context.scene.albam.vfs
     vfs.add_fs_root(args.app_id, game_fs, display_name=f"{args.app_id}-render")
 
+    resolution = tuple(int(n) for n in args.resolution.lower().split("x"))
+
     rendered, failed = [], []
     for i, path in enumerate(paths, 1):
         name = _model_name(path)
@@ -186,10 +223,10 @@ def main():
             # unculled that hull simply swallows the model.
             for bl_material in bpy.data.materials:
                 bl_material.use_backface_culling = True
-            bbox_min, bbox_max = _bounding_box_world()
+            points = _world_points()
             _setup_three_point_lighting()
-            _setup_camera(bbox_min, bbox_max)
-            _render(output_path)
+            _setup_camera(points, resolution)
+            _render(output_path, resolution=resolution)
             rendered.append(output_path)
         except Exception as e:
             failed.append((name, f"{type(e).__name__}: {e}"))
