@@ -185,10 +185,10 @@ def test_lfs_round_trips_through_the_writer(lfs_fs):
     """An archive rebuilt by xcompress_compress_re4hd decompresses back to
     exactly the payload it was given.
 
-    The writer stores chunks rather than compressing them (see lfs.ksy), so
-    the rebuilt file is bigger than the original and is not compared to it
-    byte for byte - what matters is that the game's own chunk table format is
-    written correctly enough to read back.
+    The rebuilt file is not compared to the original byte for byte: albam
+    writes its own LZX (see tests/cie/test_lfs_compress.py), not a
+    reproduction of whatever produced the shipped archives. What matters here
+    is that the container it writes reads back as the same payload.
     """
     from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
                                                   xcompress_decompress_re4hd)
@@ -204,4 +204,3 @@ def test_lfs_round_trips_through_the_writer(lfs_fs):
 
     assert bytes(xcompress_decompress_re4hd(reparsed.chunks)) == payload
     assert reparsed.header.size_decompressed == len(payload)
-    assert not any(chunk.is_compressed for chunk in reparsed.chunks)

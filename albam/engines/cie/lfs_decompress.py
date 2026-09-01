@@ -557,39 +557,13 @@ def xcompress_decompress_re4hd(chunks):
 
 
 def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID):
-    """`payload` wrapped as a complete .lfs file, using stored chunks.
+    """`payload` wrapped as a complete .lfs file.
 
-    No LZX encoder is involved: the format flags each chunk as compressed or
-    stored (see lfs.ksy), and the game's own loader reads stored ones - real
-    game data contains one. The result is therefore larger than the archive
-    it replaces, but valid, and it decompresses back to exactly `payload`.
-
-    Writing a real LZX encoder would only change the file's size, not whether
-    it loads, so it is a size optimisation rather than a prerequisite for
-    exporting.
+    Chunks are LZX compressed (see lfs_compress), except any that does not
+    come out smaller than it went in: the format flags each chunk as
+    compressed or stored (see lfs.ksy) and the game reads both, so an
+    incompressible chunk is written verbatim rather than grown.
     """
-    payload = bytes(payload)
-    chunks = [payload[i:i + LFS_CHUNK_SIZE] for i in range(0, len(payload), LFS_CHUNK_SIZE)]
-    if not chunks:
-        # A zero-length payload still needs a chunk: num_chunks == 0 is
-        # rejected as a malformed header on the way back in.
-        chunks = [b""]
+    from .lfs_compress import compress_lfs
 
-    table_size = len(chunks) * 8
-    table = bytearray()
-    # Offsets are measured from the start of the chunk table, so the first
-    # chunk's data begins right after the table itself.
-    offset = table_size
-    for chunk in chunks:
-        # 0x10000 doesn't fit a u2; the format spells a full chunk as 0.
-        size = 0 if len(chunk) == LFS_CHUNK_SIZE else len(chunk)
-        # Low bit clear: stored. Offsets are even anyway - chunk sizes are
-        # multiples of 0x10000 bar the last - so no padding is needed to keep
-        # the flag bit free.
-        table += struct.pack("<HHI", size, size, offset)
-        offset += len(chunk)
-
-    body = b"".join(chunks)
-    header = struct.pack("<5I", LFS_MAGIC1, file_id, len(payload), table_size + len(body),
-                         len(chunks))
-    return header + bytes(table) + body
+    return compress_lfs(payload, file_id)

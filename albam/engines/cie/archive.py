@@ -4,10 +4,9 @@ Reading is the fs_root_loader below, which hands the VFS an LfsFS (see fs.py).
 Writing is update_lfs(): an archive with some of its files replaced by what
 albam exported, rebuilt and recompressed into a file the game can load.
 
-Nothing here compresses. The .lfs container flags each chunk as compressed or
-stored and the game reads both, so albam writes stored chunks (see
-lfs_decompress.xcompress_compress_re4hd). The archive is larger than the one
-it replaces and otherwise equivalent.
+Compression is lfs_compress's, by way of lfs_decompress.xcompress_compress_re4hd:
+chunks are LZX compressed, bar any that would grow, which the container can
+flag as stored instead.
 """
 import os
 import struct
