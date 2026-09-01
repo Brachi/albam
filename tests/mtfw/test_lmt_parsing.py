@@ -175,13 +175,14 @@ def test_joint_type_usage(parsed_lmt):
     anim_blocks = {ab.block_header for ab in lmt.block_offsets if ab.offset != 0}
     for ab in anim_blocks:
         tracks = getattr(ab, "tracks")
-        joint_types = {}
+        # A block keys a given bone once per usage, with one exception: the
+        # bones that carry placement rather than a joint's own transform can
+        # appear twice for the same usage. What tells those two apart is not
+        # joint_type - it repeats for the same pair in some files and differs
+        # in others, so nothing here may assume it identifies a track.
+        seen = set()
         for track in tracks:
             usage_str = USAGE.get(track.usage)
-            cur_joint_type = joint_types.get((track.bone_index, usage_str), None)
-            if cur_joint_type is None:
-                joint_types[(track.bone_index, usage_str)] = track.joint_type
-            else:
-                assert cur_joint_type == joint_types[(track.bone_index, usage_str)]
+            if (track.bone_index, usage_str) in seen:
                 assert track.bone_index in (0, 254, 255)
-                print(track.bone_index, usage_str)
+            seen.add((track.bone_index, usage_str))
