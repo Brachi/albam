@@ -81,12 +81,13 @@ def _find_pack_in(content_dir, pack_name):
             names = sorted(os.listdir(pack_dir))
         except OSError:
             continue
-        for name in names:
-            low = name.lower()
-            # ".lfs" only: an unpacked ".pack.yz2" sitting next to it is not
-            # something the VFS has a loader for.
-            if low.startswith(pack_name) and low.endswith(".lfs"):
-                return os.path.join(pack_dir, name)
+        # A pack ships either compressed, as a ".lfs", or as a plain file
+        # sitting on its own - a tenth of the packs a sampled set of models
+        # referenced are the plain kind, and skipping those cost those models
+        # their textures. The compressed one is preferred where both exist.
+        found = [name for name in names if name.lower().startswith(pack_name)]
+        for name in sorted(found, key=lambda n: not n.lower().endswith(".lfs")):
+            return os.path.join(pack_dir, name)
     return None
 
 
@@ -197,18 +198,42 @@ def _load_pack(pack_name, model_root):
         return {}
 
     print(f"Reading texture pack {os.path.basename(archive_path)}")
-    pack_fs = LfsFS(archive_path)
-    try:
-        textures = {}
-        for path in pack_fs.walk.files():
-            name = path.lstrip("/")
-            index = _texture_index(name)
-            if index is not None:
-                textures[index] = (name, pack_fs.readbytes(path))
-        _PACK_CACHE[pack_name] = textures
-        return textures
-    finally:
-        pack_fs.close()
+    if archive_path.lower().endswith(".lfs"):
+        pack_fs = LfsFS(archive_path)
+        try:
+            textures = {}
+            for path in pack_fs.walk.files():
+                name = path.lstrip("/")
+                index = _texture_index(name)
+                if index is not None:
+                    textures[index] = (name, pack_fs.readbytes(path))
+        finally:
+            pack_fs.close()
+    else:
+        textures = _read_plain_pack(archive_path)
+
+    _PACK_CACHE[pack_name] = textures
+    return textures
+
+
+def _read_plain_pack(pack_path):
+    """A pack stored uncompressed, with no .lfs around it.
+
+    Named the same way its entries are numbered elsewhere (see
+    albam/engines/cie/fs.py), so a texture resolves by index either way.
+    """
+    from .structs.pack import Pack
+
+    with open(pack_path, "rb") as f:
+        pack = Pack.from_bytes(f.read())
+    pack._read()
+
+    stem = os.path.basename(pack_path).split(".")[0]
+    textures = {}
+    for index, entry in enumerate(pack.file_entries):
+        extension = "dds" if entry.data.is_dds else "tga"
+        textures[index] = (f"{stem}_{index:03d}.{extension}", entry.data.raw_data)
+    return textures
 
 
 def _texture_index(display_name):
