@@ -183,6 +183,8 @@ def _run_workers(args):
     """Re-run this script once per shard and wait for them all."""
     base = [sys.executable, os.path.abspath(__file__), args.app_id, args.game_root,
             "--pattern", args.pattern, "--resolution", args.resolution, "--jobs", "1"]
+    if args.main_only:
+        base.append("--main-only")
     if args.suffix:
         base += ["--suffix", args.suffix]
     if args.limit:
@@ -272,11 +274,14 @@ def _cie_models(args, vfs):
         children = [vf for vf in vfs.file_list
                     if vf.tree_node.root_id == root.name and not vf.is_root]
         archive_name = os.path.basename(relative).split(".")[0]
-        for vfile in children:
-            if not vfile.display_name.lower().endswith(".bin"):
-                continue
-            if not is_mesh_bin(vfile.get_bytes()):
-                continue
+        models = [vf for vf in children
+                  if vf.display_name.lower().endswith(".bin") and is_mesh_bin(vf.get_bytes())]
+        if args.main_only and models:
+            # One image per archive: the largest model in it, which for a
+            # character archive is the body rather than a hand, a weapon
+            # attachment or a level-of-detail copy.
+            models = [max(models, key=lambda vf: len(vf.get_bytes()))]
+        for vfile in models:
             name = f"{archive_name}_{os.path.splitext(vfile.display_name)[0]}"
             yield name, functools.partial(load, vfile)
 
@@ -297,6 +302,9 @@ def main():
                         help="WIDTHxHEIGHT, e.g. 640x960 for a quick low-res pass")
     parser.add_argument("--jobs", type=int, default=4,
                         help="worker processes to render with (default 4)")
+    parser.add_argument("--main-only", action="store_true",
+                        help="render only the largest model in each archive, so a "
+                             "character folder gives one image per character")
     parser.add_argument("--shard", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.pattern is None:
