@@ -26,6 +26,7 @@ the only way to parallelise this: bpy drives a single global Blender session,
 so two characters cannot be in flight inside one interpreter.
 """
 import argparse
+import functools
 import gc
 import math
 import os
@@ -46,6 +47,12 @@ OUTPUT_ROOT = os.path.join(REPO_ROOT, "tests", "data")
 # Default: a game's own playable character models, one per character. Most MT
 # Framework titles lay these out as chr/<Name>/model/1p/<Name>.mod.
 DEFAULT_PATTERN = r"^/chr/[^/]+/model/1p/[^/]+\.mod$"
+# RE4 UHD has no whole-game filesystem to walk (see albam/engines/cie/fs.py),
+# so its models are reached by mounting archives one at a time and its
+# pattern matches archive paths rather than model paths. Characters, enemies
+# and the weapons they hold all live in BIO4/Em.
+CIE_APP_ID = "re4uhd"
+CIE_DEFAULT_PATTERN = r"BIO4/Em/(pl|em|wep)[0-9a-f]+\.udas\.lfs$"
 
 
 def _clear_scene():
@@ -186,12 +193,103 @@ def _run_workers(args):
     return max(worker.wait() for worker in workers)
 
 
+def _shard(items, shard):
+    """The slice of `items` this worker owns.
+
+    Round robin rather than contiguous blocks: neighbouring characters in a
+    sorted listing tend to be alike in size, so a block hands one worker
+    every heavy model and leaves another idle.
+    """
+    if not shard:
+        return items
+    index, total = (int(n) for n in shard.split("/"))
+    return items[index::total]
+
+
+def _mtfw_models(args, vfs):
+    """(name, load) for every .mod matching --pattern in an MT Framework
+    install, mounted as one game-wide filesystem."""
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+
+    game_fs = MTFW_FS(args.game_root)
+    rx = re.compile(args.pattern, re.IGNORECASE)
+    paths = sorted(p for p in game_fs.walk.files()
+                   if p.lower().endswith(".mod") and rx.match(p))
+    if args.limit:
+        paths = paths[:args.limit]
+    paths = _shard(paths, args.shard)
+    print(f"{len(paths)} models", file=sys.stderr)
+
+    vfs.add_fs_root(args.app_id, game_fs, display_name=f"{args.app_id}-render")
+
+    def load(path):
+        # add_fs_root() strips the leading "/" when building its tree
+        vfile = vfs.select_vfile(args.app_id, path.lstrip("/"))
+        if vfile is None:
+            raise KeyError(path)
+        result = bpy.ops.albam.import_vfile()
+        if result != {"FINISHED"}:
+            raise RuntimeError(f"import_vfile returned {result}")
+
+    for path in paths:
+        yield _model_name(path), functools.partial(load, path)
+
+
+def _cie_models(args, vfs):
+    """(name, load) for every mesh .bin in the RE4 UHD archives matching
+    --pattern.
+
+    Sharding is by archive rather than by model: mounting one costs a full
+    decompression (see albam/engines/cie/fs.py), so splitting a single
+    archive's models across workers would pay that cost once per worker.
+
+    Archives are mounted lazily, as the generator reaches them, and dropped
+    afterwards - a worker's share of a character folder is more decompressed
+    archive than is worth holding at once.
+    """
+    from albam.lib import fs_registry
+    from albam.registry import blender_registry
+    from tests.tools.cie_import_sweep import find_archives, is_mesh_bin
+
+    archives = find_archives(args.game_root, args.pattern, args.limit)
+    archives = _shard(archives, args.shard)
+    print(f"{len(archives)} archives", file=sys.stderr)
+
+    def load(vfile, tpl_name):
+        # Selection first: the .tpl dropdown's items are computed from
+        # whatever is selected (see mesh._get_tpl_files_enum).
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        if tpl_name:
+            bpy.context.scene.albam.import_options_bin.tpl_file_id = tpl_name
+        import_function = blender_registry.import_registry[(vfile.app_id, vfile.extension)]
+        import_function(vfile, bpy.context)
+
+    for relative, absolute_path in archives:
+        vfs.file_list.clear()
+        fs_registry.clear()
+        root = vfs.add_real_file(args.app_id, absolute_path)
+        children = [vf for vf in vfs.file_list
+                    if vf.tree_node.root_id == root.name and not vf.is_root]
+        tpl = next((vf for vf in children if vf.display_name.lower().endswith(".tpl")), None)
+        archive_name = os.path.basename(relative).split(".")[0]
+        for vfile in children:
+            if not vfile.display_name.lower().endswith(".bin"):
+                continue
+            if not is_mesh_bin(vfile.get_bytes()):
+                continue
+            name = f"{archive_name}_{os.path.splitext(vfile.display_name)[0]}"
+            yield name, functools.partial(load, vfile, tpl.name if tpl else None)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("app_id")
     parser.add_argument("game_root")
-    parser.add_argument("--pattern", default=DEFAULT_PATTERN)
+    parser.add_argument("--pattern", default=None,
+                        help="model paths to render, or archive paths for "
+                             f"{CIE_APP_ID} (defaults: {DEFAULT_PATTERN!r}, "
+                             f"{CIE_DEFAULT_PATTERN!r})")
     parser.add_argument("--suffix", default=None,
                         help="appended to each filename, to keep runs side by side")
     parser.add_argument("--limit", type=int, default=None)
@@ -201,53 +299,35 @@ def main():
                         help="worker processes to render with (default 4)")
     parser.add_argument("--shard", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.pattern is None:
+        args.pattern = CIE_DEFAULT_PATTERN if args.app_id == CIE_APP_ID else DEFAULT_PATTERN
 
     if args.shard is None and args.jobs > 1:
         return _run_workers(args)
 
     import albam
     albam.register()
-    from albam.engines.mtfw.arc_fs import MTFW_FS
 
     out_dir = os.path.join(OUTPUT_ROOT, args.app_id)
     os.makedirs(out_dir, exist_ok=True)
 
-    game_fs = MTFW_FS(args.game_root)
-    rx = re.compile(args.pattern, re.IGNORECASE)
-    paths = sorted(p for p in game_fs.walk.files()
-                   if p.lower().endswith(".mod") and rx.match(p))
-    if args.limit:
-        paths = paths[:args.limit]
-    if args.shard:
-        index, total = (int(n) for n in args.shard.split("/"))
-        # Round robin rather than contiguous blocks: neighbouring characters
-        # in a sorted listing tend to be alike in size, so a block hands one
-        # worker every heavy model and leaves another idle.
-        paths = paths[index::total]
-    print(f"{len(paths)} models", file=sys.stderr)
-
     bpy.context.scene.albam.apps.app_selected = args.app_id
     bpy.context.scene.albam.import_settings.import_only_main_lods = True
     vfs = bpy.context.scene.albam.vfs
-    vfs.add_fs_root(args.app_id, game_fs, display_name=f"{args.app_id}-render")
+
+    source = _cie_models if args.app_id == CIE_APP_ID else _mtfw_models
+    models = source(args, vfs)
 
     resolution = tuple(int(n) for n in args.resolution.lower().split("x"))
 
     rendered, failed = [], []
-    for i, path in enumerate(paths, 1):
-        name = _model_name(path)
+    for i, (name, load) in enumerate(models, 1):
         suffix = f"_{args.suffix}" if args.suffix else ""
         output_path = os.path.join(out_dir, f"{name}{suffix}.png")
-        print(f"[{i}/{len(paths)}] {name}", file=sys.stderr)
+        print(f"[{i}] {name}", file=sys.stderr)
         _clear_scene()
         try:
-            # add_fs_root() strips the leading "/" when building its tree
-            vfile = vfs.select_vfile(args.app_id, path.lstrip("/"))
-            if vfile is None:
-                raise KeyError(path)
-            result = bpy.ops.albam.import_vfile()
-            if result != {"FINISHED"}:
-                raise RuntimeError(f"import_vfile returned {result}")
+            load()
             # Cel-shaded models are built with inverted-hull outlines: a
             # black copy of the body, normals pointing inward, drawn with
             # front faces culled so only the silhouette shows. Rendered
@@ -262,7 +342,7 @@ def main():
         except Exception as e:
             failed.append((name, f"{type(e).__name__}: {e}"))
 
-    print(f"\nrendered {len(rendered)}/{len(paths)} into {out_dir}")
+    print(f"\nrendered {len(rendered)}/{len(rendered) + len(failed)} into {out_dir}")
     for name, error in failed:
         print(f"  FAILED {name}: {error}")
     return 0 if not failed else 1

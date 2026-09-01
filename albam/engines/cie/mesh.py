@@ -91,7 +91,14 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         bl_object = skeleton
     else:
         bl_object = bpy.data.objects.new(bl_object_name, None)
+        context.collection.objects.link(bl_object)
 
+    # Linking is what puts an object in the scene: one that only exists in
+    # bpy.data is invisible in the viewport and absent from renders, even
+    # though it has geometry and shows up in bpy.data.objects. The armature
+    # was already linked in _build_armature, so before this a character
+    # imported as a skeleton with nothing on it.
+    context.collection.objects.link(bl_mesh_ob)
     bl_mesh_ob.parent = bl_object
     return bl_object
 
