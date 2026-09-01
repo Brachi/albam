@@ -55,16 +55,9 @@ def _texture_pack_archive(pack_name, model_root):
     return None
 
 
-def _process_tpls(tpl_id):
-    # Process TPLs in a scope of the container with BIN file
-    vf_list = bpy.context.scene.albam.vfs.file_list
-    tpl_vfiles = [vf for vf in vf_list if vf.name == tpl_id]
+def _process_tpls(tpl_vfile):
+    """Every texture entry of one .tpl, resolved to the bytes behind it."""
     tpl_db = []
-    try:
-        tpl_vfile = tpl_vfiles[0]
-    except IndexError:
-        raise RuntimeError(f"{tpl_id} wasn't found")
-
     print(f"TPL is: {tpl_vfile.display_name}")
     tpl_bytes = tpl_vfile.get_bytes()
     tpl = Tpl.from_bytes(tpl_bytes)

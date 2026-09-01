@@ -7,14 +7,13 @@ from .textures import _process_tpls, _create_blender_image_from_tex
 REUHD_SHADER_NODEGROUP_NAME = "RE4 UHD shader"
 
 
-def build_blender_materials(bl_mesh, bin):
+def build_blender_materials(bl_mesh, bin, tpl_vfile):
     app_id = "re4uhd"
     _create_cie_shader()
     # Resolved once for the whole model, not once per material: this parses
     # the .tpl and reads the texture pack behind it, and a model with a dozen
     # materials would otherwise decompress the same pack a dozen times.
-    selected_tpl = bpy.context.scene.albam.import_options_bin.tpl_file_id
-    textures_db = _process_tpls(selected_tpl)
+    textures_db = _process_tpls(tpl_vfile) if tpl_vfile else None
     for mat_i, mat in enumerate(bin.materials):
         mat_name = bl_mesh.name + "_" + str(mat_i).zfill(3)
         blender_material = bpy.data.materials.new(name=mat_name)

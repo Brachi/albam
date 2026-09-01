@@ -247,6 +247,7 @@ def _cie_models(args, vfs):
     afterwards - a worker's share of a character folder is more decompressed
     archive than is worth holding at once.
     """
+    from albam.engines.cie.mesh import AUTO_TPL
     from albam.lib import fs_registry
     from albam.registry import blender_registry
     from tests.tools.cie_import_sweep import find_archives, is_mesh_bin
@@ -255,12 +256,12 @@ def _cie_models(args, vfs):
     archives = _shard(archives, args.shard)
     print(f"{len(archives)} archives", file=sys.stderr)
 
-    def load(vfile, tpl_name):
-        # Selection first: the .tpl dropdown's items are computed from
-        # whatever is selected (see mesh._get_tpl_files_enum).
+    def load(vfile):
+        # Left on "Auto": the importer works out which .tpl a model's
+        # materials address (see mesh.choose_tpl), which is what a user gets
+        # by default too.
         vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
-        if tpl_name:
-            bpy.context.scene.albam.import_options_bin.tpl_file_id = tpl_name
+        bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
         import_function = blender_registry.import_registry[(vfile.app_id, vfile.extension)]
         import_function(vfile, bpy.context)
 
@@ -270,7 +271,6 @@ def _cie_models(args, vfs):
         root = vfs.add_real_file(args.app_id, absolute_path)
         children = [vf for vf in vfs.file_list
                     if vf.tree_node.root_id == root.name and not vf.is_root]
-        tpl = next((vf for vf in children if vf.display_name.lower().endswith(".tpl")), None)
         archive_name = os.path.basename(relative).split(".")[0]
         for vfile in children:
             if not vfile.display_name.lower().endswith(".bin"):
@@ -278,7 +278,7 @@ def _cie_models(args, vfs):
             if not is_mesh_bin(vfile.get_bytes()):
                 continue
             name = f"{archive_name}_{os.path.splitext(vfile.display_name)[0]}"
-            yield name, functools.partial(load, vfile, tpl.name if tpl else None)
+            yield name, functools.partial(load, vfile)
 
 
 def main():
