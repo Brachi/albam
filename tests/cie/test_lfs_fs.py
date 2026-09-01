@@ -204,3 +204,64 @@ def test_lfs_round_trips_through_the_writer(lfs_fs):
 
     assert bytes(xcompress_decompress_re4hd(reparsed.chunks)) == payload
     assert reparsed.header.size_decompressed == len(payload)
+
+
+def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, local_payload_extension,
+                                                              tmp_path):
+    """Rebuilding an archive without changing anything gives back what went in.
+
+    This is the path a mod takes - the archive writer rebuilds the file table
+    around the exported files and recompresses - so an identity run of it is
+    what says the rebuild itself introduces nothing. Entries are matched by
+    the number they were unpacked under rather than by name, since the name
+    carries the archive's own filename.
+    """
+    if local_payload_extension != ".udas":
+        pytest.skip("only .udas containers are rebuilt")
+
+    from albam.engines.cie.archive import _read_payload, _rebuild_udas
+    from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
+                                                  xcompress_decompress_re4hd)
+    from albam.engines.cie.structs.lfs import Lfs
+    from albam.engines.cie.structs.udas import Udas
+
+    before = {_entry_key(path): lfs_fs.readbytes(path) for path in lfs_fs.walk.files()}
+    assert before
+
+    payload, _extension = _read_payload(lfs_fs.lfs_path)
+    # One entry handed back unchanged: the writer needs a replacement to
+    # match, and substituting an entry for itself is the identity case.
+    any_path = next(iter(lfs_fs.walk.files()))
+    rebuilt_payload = _rebuild_udas(payload, {any_path.lstrip("/"): lfs_fs.readbytes(any_path)})
+
+    original = Udas.from_bytes(payload)
+    original._read()
+    rebuilt = Udas.from_bytes(rebuilt_payload)
+    rebuilt._read()
+    assert [(b.block_type, b.size, b.offset) for b in rebuilt.header.blocks] == \
+           [(b.block_type, b.size, b.offset) for b in original.header.blocks]
+
+    archive_bytes = xcompress_compress_re4hd(rebuilt_payload)
+    parsed = Lfs.from_bytes(archive_bytes)
+    parsed._read()
+    assert bytes(xcompress_decompress_re4hd(parsed.chunks)) == rebuilt_payload
+
+    # Mounted from disk rather than compared in memory: this is the archive a
+    # mod would ship, so the check is that mounting it gives the same files.
+    from albam.engines.cie.fs import LfsFS
+    repacked_path = tmp_path / os.path.basename(lfs_fs.lfs_path)
+    repacked_path.write_bytes(archive_bytes)
+    repacked = LfsFS(str(repacked_path))
+    try:
+        after = {_entry_key(path): repacked.readbytes(path) for path in repacked.walk.files()}
+    finally:
+        repacked.close()
+    assert after == before
+
+
+def _entry_key(path):
+    """(entry number, extension) - the identity an entry has independent of
+    which archive filename it was unpacked from."""
+    name = path.rsplit("/", 1)[-1]
+    stem, _, extension = name.rpartition(".")
+    return int(stem.rsplit("_", 1)[1]), extension

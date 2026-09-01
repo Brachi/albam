@@ -58,10 +58,14 @@ def _build_dat_block(entries):
 
     body = bytearray()
     offsets = []
-    for _extension, data in entries:
+    for index, (_extension, data) in enumerate(entries):
+        if index:
+            # Padding goes between entries, never after the last one: the
+            # final entry's length is whatever is left of the block, so
+            # trailing padding would become part of that file.
+            body += b"\x00" * (_align(len(body)) - len(body))
         offsets.append(body_start + len(body))
         body += data
-        body += b"\x00" * (_align(len(body)) - len(body))
 
     block = bytearray()
     block += struct.pack("<4I", count, 0, 0, 0)
