@@ -1,10 +1,12 @@
 
+
 class BlenderRegistry:
     def __init__(self):
         self.import_registry = {}
         self.export_registry = {}
         self.archive_loader_registry = {}
         self.archive_accessor_registry = {}
+        self.fs_root_loader_registry = {}
         self.props = []  # order is meaningful for dependencies
         self.types = []  # order is meaningufl for dependencies
         self.import_options_custom_draw_funcs = {}
@@ -12,9 +14,11 @@ class BlenderRegistry:
         self.import_operator_poll_funcs = {}
         self.custom_properties_material = {}
         self.custom_properties_mesh = {}
+        self.custom_properties_object = {}
         self.custom_properties_image = {}
-        self.file_categories = {}
+        self.albam_asset_types = {}
 
+    # TODO: rename to register_albam_prop_global
     def register_blender_prop_albam(self, name):
         """
         Classes decorated will be automatically registered
@@ -51,10 +55,10 @@ class BlenderRegistry:
             return f
         return decorator
 
-    def register_import_function(self, app_id, extension, file_category=None):
+    def register_import_function(self, app_id, extension, albam_asset_type):
         def decorator(f):
             self.import_registry[(app_id, extension)] = f
-            self.file_categories[(app_id, extension)] = file_category
+            self.albam_asset_types[(app_id, extension)] = albam_asset_type
             return f
         return decorator
 
@@ -77,25 +81,51 @@ class BlenderRegistry:
 
         return decorator
 
-    def register_custom_properties_material(self, name, app_ids, is_secondary=False, display_name=""):
+    def register_fs_root_loader(self, app_id, extension=None):
+        """
+        Decorated function must be `absolute_path -> fs.base.FS`.
+        `extension=None` registers a whole-folder loader for app_id
+        (e.g. a recursive game install root); otherwise the loader is
+        keyed to a single file's extension (e.g. one archive file).
+        """
+        def decorator(f):
+            self.fs_root_loader_registry[(app_id, extension)] = f
+            return f
+        return decorator
+
+    def register_custom_properties_material(self, name, app_ids, is_secondary=False,
+                                            display_name="", asset_type="MODEL"):
         def decorator(cls):
             for app_id in app_ids:
                 self.custom_properties_material.setdefault(
-                    app_id, {})[name] = (cls, is_secondary, display_name)
+                    app_id, {})[name] = (cls, is_secondary, display_name, asset_type)
             return cls
         return decorator
 
-    def register_custom_properties_mesh(self, name, app_ids, is_secondary=False, display_name=""):
+    def register_custom_properties_mesh(self, name, app_ids, is_secondary=False,
+                                        display_name="", asset_type="MODEL"):
         def decorator(cls):
             for app_id in app_ids:
-                self.custom_properties_mesh.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
+                self.custom_properties_mesh.setdefault(app_id, {})[name] = (cls, is_secondary,
+                                                                            display_name, asset_type)
             return cls
         return decorator
 
-    def register_custom_properties_image(self, name, app_ids, is_secondary=False, display_name=""):
+    def register_custom_properties_image(self, name, app_ids, is_secondary=False,
+                                         display_name="", asset_type="TEXTURE"):
         def decorator(cls):
             for app_id in app_ids:
-                self.custom_properties_image.setdefault(app_id, {})[name] = (cls, is_secondary, display_name)
+                self.custom_properties_image.setdefault(app_id, {})[name] = (cls, is_secondary,
+                                                                             display_name, asset_type)
+            return cls
+        return decorator
+
+    def register_custom_properties_object(self, name, app_ids, is_secondary=False,
+                                          display_name="", asset_type="MODEL"):
+        def decorator(cls):
+            for app_id in app_ids:
+                self.custom_properties_object.setdefault(app_id, {})[name] = (cls, is_secondary,
+                                                                              display_name, asset_type)
             return cls
         return decorator
 

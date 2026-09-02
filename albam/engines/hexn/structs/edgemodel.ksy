@@ -4,7 +4,7 @@ meta:
   title: Hexane Engine Model Format
   file-extension: edgemodel
   license: CC0-1.0
-  ks-version: 0.8
+  ks-version: '0.11'
 
 seq:
   - {id: header, type: edge_header}

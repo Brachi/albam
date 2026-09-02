@@ -16,9 +16,10 @@ def generate_mfx_entry_id(mfx_entry_name, mfx_entry_index):
 
 def dump_mfx(app_id, mfx_filepath):
     # XXX temp until proper script installation
-    from albam.engines.mtfw.structs.mfx import Mfx
+    from ..structs.mfx import Mfx
 
     mfx = Mfx.from_file(mfx_filepath)
+    mfx._read()
 
     try:
         with open(OUT) as f:

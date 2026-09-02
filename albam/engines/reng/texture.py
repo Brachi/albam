@@ -3,9 +3,9 @@ import struct
 
 import bpy
 from kaitaistruct import KaitaiStream
-from pybc7 import unpack_dds
+from bc7enc import unpack_dds
 
-from albam.registry import blender_registry
+from ...registry import blender_registry
 from .apps import APPS_TODO
 from .structs.reengine_tex import ReengineTex
 
@@ -21,15 +21,17 @@ KNOWN_TEXTURE_TYPES = {
 }
 
 
-@blender_registry.register_import_function("re2_non_rt", extension="tex.10", file_category="TEXTURE")
-@blender_registry.register_import_function("re2", extension="tex.34")
-@blender_registry.register_import_function("re3_non_rt", extension="tex.190820018", file_category="TEXTURE")
-@blender_registry.register_import_function("re3", extension="tex.34", file_category="TEXTURE")
-@blender_registry.register_import_function("re8", extension="tex.30", file_category="TEXTURE")
+@blender_registry.register_import_function("re2_non_rt", extension="tex.10", albam_asset_type="TEXTURE")
+@blender_registry.register_import_function("re2", extension="tex.34", albam_asset_type="TEXTURE")
+@blender_registry.register_import_function("re3_non_rt", extension="tex.190820018",
+                                           albam_asset_type="TEXTURE")
+@blender_registry.register_import_function("re3", extension="tex.34", albam_asset_type="TEXTURE")
+@blender_registry.register_import_function("re8", extension="tex.30", albam_asset_type="TEXTURE")
 def import_texture(file_list_item, context):
 
     tex_bytes = file_list_item.get_bytes()
     tex = ReengineTex(KaitaiStream(io.BytesIO(tex_bytes)))
+    tex._read()
 
     dds_data = tex.mipmaps[0].dds_data
     pixel_bytes = unpack_dds(io.BytesIO(dds_data), tex.width, tex.height, 'BC7', 0)
@@ -68,6 +70,7 @@ def build_blender_images(app_id, texture_headers, context):
         try:
             tex_bytes = tex_virtual_file.get_bytes()
             tex = ReengineTex(KaitaiStream(io.BytesIO(tex_bytes)))
+            tex._read()
 
             if tex.format == 98 or tex.format == 99:
                 tex_format = "BC7"

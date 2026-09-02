@@ -1,3 +1,4 @@
+import os
 from platform import platform
 import traceback
 from pathlib import Path
@@ -5,9 +6,11 @@ import sys
 
 import bpy
 
-from albam.exceptions import AlbamCheckFailure
-from albam.registry import blender_registry
-from albam.__version__ import __version__ as albam_version
+from ..exceptions import AlbamCheckFailure
+from ..registry import blender_registry
+from ..__version__ import __version__ as albam_version
+
+RERAISE_ERRORS_ENV_VAR = "ALBAM_RERAISE_ERRORS"
 
 ERROR_TEMPLATE = """
 ==================
@@ -22,6 +25,51 @@ Traceback:
 {traceback_str}
 =================
 """
+
+
+def format_error_report(type_err, err, tb):
+    """The full report - versions, OS, redacted traceback - as a string.
+
+    Module level, and taking the exception explicitly, so callers outside a
+    popup can use it: the operator error handlers print it from their own
+    `except` blocks, which is the only way it reaches a console when Blender
+    runs in background mode (`INVOKE_DEFAULT` falls back to `execute()`
+    there, so the popup's `invoke()` never runs and its print never happens).
+    """
+    stack_summary = traceback.extract_tb(tb)
+    traceback_str = "".join(stack_summary.format())
+    traceback_str_home_redacted = traceback_str.replace(str(Path.home()), "******")
+    return ERROR_TEMPLATE.format(
+        blender_version=".".join(map(str, bpy.app.version)),
+        albam_version=albam_version,
+        operating_system=platform(),
+        error=f"{type_err.__name__}: {str(err)}",
+        traceback_str=traceback_str_home_redacted,
+    )
+
+
+def handle_operator_exception(operator, message):
+    """Shared tail for every operator `except` block: print the report, then
+    surface it to the user.
+
+    Call from inside the `except`, which is where sys.exc_info() is live.
+    Printing here rather than from the popup means the traceback survives
+    headless Blender and CI, where the popup never opens - the popup itself
+    tells users to "provide the error shown in the console", which until now
+    was empty for exactly those users.
+
+    With ALBAM_RERAISE_ERRORS set the exception is re-raised instead of being
+    turned into an operator report. Blender converts an {'ERROR'} report into
+    a bare RuntimeError carrying only `message`, which loses the traceback
+    and the exception type - fine for a user staring at a dialog, useless for
+    a test asserting on a failure. The test suite sets it (tests/conftest.py).
+    """
+    type_err, err, tb = sys.exc_info()
+    print(format_error_report(type_err, err, tb))
+    if os.environ.get(RERAISE_ERRORS_ENV_VAR):
+        raise err
+    operator.report({"ERROR"}, f"{message}: {type_err.__name__}: {err}")
+    bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
 
 
 @blender_registry.register_blender_type
@@ -85,19 +133,7 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
 
     @staticmethod
     def _generate_error_report(type_err, err, tb):
-        type_err, err, tb = sys.exc_info()
-        stack_summary = traceback.extract_tb(tb)
-        traceback_str = "".join(stack_summary.format())
-        traceback_str_home_redacted = traceback_str.replace(str(Path.home()), "******")
-        error = ERROR_TEMPLATE.format(
-            blender_version=".".join(map(str, bpy.app.version)),
-            albam_version=albam_version,
-            operating_system=platform(),
-            error=f"{type_err.__name__}: {str(err)}",
-            traceback_str=traceback_str_home_redacted,
-        )
-
-        return error
+        return format_error_report(type_err, err, tb)
 
     def _calculate_popup_width(self):
         using_space = (

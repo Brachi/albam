@@ -1,9 +1,19 @@
 import bmesh
 import bpy
-import ntpath
+import re
+from mathutils import Vector, bvhtree
 
-from albam.registry import blender_registry
-from albam.lib.bone_names import BONES_BODY, BONES_HEAD
+
+from ..registry import blender_registry
+from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+from ..lib.handshaker import handshake, dump_frames, frames_path
+
+BONE_NAMES = {
+    "Body": BONES_BODY,
+    "Head": BONES_HEAD
+}
+
+DEV_MODE = False
 
 
 def show_message_box(message="", title="Message Box", icon='INFO'):
@@ -17,14 +27,37 @@ def mesh_filter(self, object):
     return object.type == 'MESH'
 
 
+def armature_filter(self, object):
+    return object.type == 'ARMATURE'
+
+
+def face_preset_update(self, context):
+    presets = {
+        'PhysWall': (0x10, 0),
+        'IntWall': (0x13, 0),
+        'SpecWall': (0x0, 0x20000000),
+        'Ground': (0x20, 0),
+        'Leap': (0x0, 0x10000000),
+        'Auto': (0, 0)
+    }
+    id = context.scene.albam.tools_settings.face_preset
+    sur, spec = presets[id]
+    context.scene.albam.tools_settings.surface_attr = sur
+    context.scene.albam.tools_settings.special_attr = spec
+
+
 @blender_registry.register_blender_prop_albam(name="meshes")
 class AlbamMeshes(bpy.types.PropertyGroup):
     all_meshes: bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
 
 
+@blender_registry.register_blender_prop_albam(name="armatures")
+class AlbamArmatures(bpy.types.PropertyGroup):
+    all_armatures: bpy.props.PointerProperty(type=bpy.types.Object, poll=armature_filter)
+
+
 @blender_registry.register_blender_prop_albam(name="tools_settings")
 class ToolsSettings(bpy.types.PropertyGroup):
-    split_uv_seams_transfer_normals: bpy.props.BoolProperty(default=True)
     default_path = "path\\to_textures\\"
     relative_path_to_textures: bpy.props.StringProperty(default=default_path)
     bone_names_enum = bpy.props.EnumProperty(
@@ -39,6 +72,28 @@ class ToolsSettings(bpy.types.PropertyGroup):
     bone_names_preset: bone_names_enum
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
+    use_clones: bpy.props.BoolProperty(default=False)
+    overwrite_tex_path: bpy.props.BoolProperty(default=False)
+    sorting_dbg_draw: bpy.props.BoolProperty(default=False)
+    face_group: bpy.props.IntProperty(name='Type')  # noqa: F821
+    surface_attr: bpy.props.IntProperty(name='Surface attributes')  # noqa: F821
+    special_attr: bpy.props.IntProperty(name='Behavior attributes')  # noqa: F821
+    face_preset_enum = bpy.props.EnumProperty(
+        name="",
+        description="Select face property",
+        items=[
+            ("PhysWall", "Physical Wall", "Stops bullets, can be jumped, etc.", 1),
+            ("IntWall", "Intangible Wall", "E.g. BP walls", 2),
+            ("SpecWall", "Special Wall", "Blocks camera, trigger effects, etc.", 3),
+            ("Ground", "Ground", "Ground", 4),
+            ("Leap", "Leapable Ledge", "Boundary for triggering leaps", 5),
+            ('Auto', 'Auto', 'Automatically assigns attributes, also used for ceiling', 6)
+        ],
+        default="Ground",
+        update=face_preset_update
+    )
+    face_preset: face_preset_enum
+    overwrite_tex_path: bpy.props.BoolProperty(default=False)
 
 
 @blender_registry.register_blender_type
@@ -54,33 +109,177 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        op = row.operator('albam.split_uv_seams', text="Split UV Seams")
-        op.transfer_normals = context.scene.albam.tools_settings.split_uv_seams_transfer_normals
-        row.prop(
-            context.scene.albam.tools_settings,
-            "split_uv_seams_transfer_normals",
-            text="Transfer Normals",
-        )
+        row.label(text="Active Mesh")
         row = layout.row()
-        row.operator('albam.transfer_normals', text="Transfer normals from")
         row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        layout.separator()
+        row = layout.row()
+        row.operator('albam.transfer_normals', text="Transfer normals from Active mesh")
+        row = layout.row()
+        row.operator('albam.batch_transfer_weights', text="Transfer skinweights from Active mesh")
+        layout.separator()
         row = layout.row()
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
             context.scene.albam.tools_settings,
+            "overwrite_tex_path",
+            text="Overwrite path if exists",
+        )
+        row = layout.row()
+        row.prop(
+            context.scene.albam.tools_settings,
             "relative_path_to_textures",
-            text="",)
+            text="",
+        )
+        layout.separator()
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
         row.prop(
             context.scene.albam.tools_settings,
             "bone_names_preset",
-            text="",)
+            text="",
+        )
+        layout.separator()
+        row = layout.row()
+        row.operator('albam.separate_by_material', text="Separate by material")
+        row.prop(
+            context.scene.albam.tools_settings,
+            "use_clones",
+            text="Use clones for separation",
+        )
+        row = layout.row()
+        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
+        row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row = layout.row()
+        row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
+        row = layout.row()
+        row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        layout.separator()
+        row = layout.row()
+        row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
+        row = layout.row()
+        row.prop(
+            context.scene.albam.tools_settings,
+            "sorting_dbg_draw",
+            text="Sorting debug draw",
+        )
+        row = layout.row()
+        row.label(text="Active Armature")
+        row = layout.row()
+        row.prop(context.scene.albam.armatures, "all_armatures", text="")
+        row = layout.row()
+        row.operator('albam.set_armature_object', text="Set armature object")
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
+    bl_idname = "albam.apply_face_props"
+    bl_label = "Apply Face Properties"
+
+    @classmethod
+    def poll(self, context):
+        ob = context.edit_object
+        if not ob:
+            return False
+        return True
+
+    def execute(self, context):
+        ob = context.edit_object
+        bm = bmesh.from_edit_mesh(ob.data)
+
+        group = bm.faces.layers.int.get('type', None)
+        surface_attr = bm.faces.layers.int.get('surface_attr', None)
+        special_attr = bm.faces.layers.int.get('special_attr', None)
+
+        new_group = context.scene.albam.tools_settings.face_group
+        new_surface_attr = context.scene.albam.tools_settings.surface_attr
+        new_special_attr = context.scene.albam.tools_settings.special_attr
+        if group and surface_attr and special_attr:
+            for f in bm.faces:
+                if f.select:
+                    f[group] = new_group
+                    f[surface_attr] = new_surface_attr
+                    f[special_attr] = new_special_attr
+        else:
+            group = bm.faces.layers.int.new('type')
+            surface_attr = bm.faces.layers.int.new('surface_attr')
+            special_attr = bm.faces.layers.int.new('special_attr')
+            for f in bm.faces:
+                if f.select:
+                    f[group] = new_group
+                    f[surface_attr] = new_surface_attr
+                    f[special_attr] = new_special_attr
+
+        bmesh.update_edit_mesh(ob.data)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_FACE_PROP_EDIT(bpy.types.Panel):
+    '''UI Tool subpanel in Mesh Object Data'''
+    bl_label = "Face Properties Edit"
+    bl_idname = "ALBAM_PT_FACE_PROP_EDIT"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        scn = context.scene.albam.tools_settings
+        row = layout.row()
+        row.prop(scn, 'face_preset')
+        row = layout.row()
+        row.prop(scn, 'face_group')
+        row = layout.row()
+        row.prop(scn, 'surface_attr')
+        row = layout.row()
+        row.prop(scn, 'special_attr')
+        row = layout.row()
+        row.operator("albam.apply_face_props")
+
+
+@blender_registry.register_blender_type
+class ALBAM_PT_FACE_PROP(bpy.types.Panel):
+    '''UI Tool subpanel in Mesh Object Data'''
+    bl_label = "Face properties"
+    bl_idname = "ALBAM_PT_FACE_PROP"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+
+        ob = context.edit_object
+        bm = bmesh.from_edit_mesh(ob.data)
+
+        type = bm.faces.layers.int.get('type', None)
+        surface_attr = bm.faces.layers.int.get('surface_attr', None)
+        special_attr = bm.faces.layers.int.get('special_attr', None)
+
+        if type and surface_attr and special_attr:
+            for f in bm.faces:
+                if f.select:
+                    layout.label(text=f'Index: {f.index}')
+                    layout.label(text=f'Type: {f[type]}')
+                    layout.label(text=f'Surface attribute: {hex(f[surface_attr])}')
+                    layout.label(text=f'Behavior attribute: {hex(f[special_attr])}')
+                    break
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.edit_object
+        if ob:
+            return True
+        else:
+            return False
 
 
 @blender_registry.register_blender_type
 class ALBAM_PT_VGMerger(bpy.types.Panel):
-    '''UI Tool subpanel in Mesh Object Data'''
+    '''UI Tool for merging vertex'''
     bl_label = "Vertex Groups Merger"
     bl_idname = "ALBAM_PT_VGMerger"
     bl_parent_id = "ALBAM_PT_ToolsPanel"
@@ -93,9 +292,9 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
 
         scn = context.scene.albam.tools_settings
         row = layout.row()
-        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Group A")
+        row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
         row = layout.row()
-        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Group B")
+        row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
         row = layout.row()
         row.operator("albam.vg_merge")
 
@@ -111,61 +310,36 @@ class ALBAM_PT_VGMerger(bpy.types.Panel):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_SplitUVSeams(bpy.types.Operator):
-    '''
-    Split vertices that are part of a UV seam (edges of a UV island).
-    This is a workaround for a bug in the exporter[1] and necessary to avoid
-    artifacts in UV textures displayed in-game.
-    [1] https://github.com/Brachi/albam/issues/78
-    '''
-    bl_idname = "albam.split_uv_seams"
-    bl_label = "Split UV seams"
+class ALBAM_PT_Handshaker(bpy.types.Panel):
+    '''UI Tool for creating posed hands'''
+    bl_label = "Handshaker"
+    bl_idname = "ALBAM_PT_Handshaker"
+    bl_parent_id = "ALBAM_PT_ToolsPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
 
-    transfer_normals: bpy.props.BoolProperty(default=False)
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.operator("albam.handshake").filepath = frames_path
+        row.prop(context.scene.albam.meshes, "all_meshes", text="")
+        if DEV_MODE:
+            row = layout.row()
+            row.label(text="Dump frames to json files")
+            row = layout.row()
+            row.operator("albam.dump_anim_frames", text="Dump frames for left side").side = "left"
+            row.operator("albam.dump_anim_frames", text="Dump frames for right side").side = "right"
 
     @classmethod
-    def poll(self, context):
-        if not bpy.context.selected_objects:
-            return False
-        return True
-
-    def execute(self, context):
+    def poll(cls, context):
         selection = bpy.context.selected_objects
-        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
-        if selected_meshes:
-            self.split_UV_seams_operator(selected_meshes)
+        selected_meshes = [obj for obj in selection if obj.type == 'ARMATURE']
+        if selection:
+            if selected_meshes:
+                return True
         else:
-            show_message_box(message="There is no mesh in the selection")
-        return {'FINISHED'}
-
-    def split_UV_seams_operator(self, selected_meshes):
-        for mesh in selected_meshes:
-            me = mesh.data
-            if (self.transfer_normals):
-                # create temporal mesh for normal transfer
-                temp_list = []
-                temp_data = me.copy()
-                temp_mesh = mesh.copy()
-                temp_mesh.data = temp_data
-            # in order to select edges, you need to make sure that
-            # previously you deselected everything in the Edit Mode
-            # and set the select_mode to 'EDGE'
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(type='EDGE')
-            bpy.ops.mesh.select_all(action='SELECT')
-            split_seams(me)
-            bpy.ops.mesh.select_all(action='DESELECT')
-
-            # we need to return back to the OBJECT mode,
-            # otherwise, the result won't be seen,
-            # see https://blender.stackexchange.com/questions/43127 for info
-            bpy.ops.object.mode_set(mode='OBJECT')
-            if self.transfer_normals:
-                # transfer normals and remove temporal mesh
-                temp_list.append(mesh)
-                transfer_normals(temp_mesh, temp_list)
-                objs = bpy.data.objects
-                objs.remove(temp_mesh, do_unlink=True)
+            return False
 
 
 @blender_registry.register_blender_type
@@ -191,6 +365,7 @@ class ALBAM_OT_TransferNormal(bpy.types.Operator):
         target_objs = [obj for obj in selection if obj.type == 'MESH']
         if target_objs and source_obj:
             transfer_normals(source_obj, target_objs)
+            show_message_box(message=f"Normals were transferred for {len(target_objs)} meshes")
         else:
             show_message_box(message="There is no mesh in selection")
         return {'FINISHED'}
@@ -218,7 +393,7 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         for ob in meshes:
             mat = ob.materials[0]
             set_image_albam_attr(mat, app_id, local_path)
-
+        show_message_box(message=f"Texture params were autoset for {len(meshes)} meshes")
         return {'FINISHED'}
 
 
@@ -267,35 +442,337 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        bone_names = {
-            "Body": BONES_BODY,
-            "Head": BONES_HEAD,
-        }
+        app_id = context.scene.albam.apps.app_selected
         bone_names_preset = context.scene.albam.tools_settings.bone_names_preset
-        selected_bone_names = bone_names.get(bone_names_preset)
         selection = bpy.context.selected_objects
         armature_ob = [obj for obj in selection if obj.type == 'ARMATURE']
-        rename_bones(armature_ob[0], selected_bone_names)
+        rename_bones(armature_ob[0], app_id, bone_names_preset)
+        show_message_box(message="Armature bones were renamed")
         return {'FINISHED'}
 
 
-def split_seams(me):
-    bm = bmesh.from_edit_mesh(me)
-    bpy.context.scene.tool_settings.use_uv_select_sync = True
-    # old seams
-    old_seams = [e for e in bm.edges if e.seam]
-    # unmark
-    for e in old_seams:
-        e.seam = False
-    # mark seams from uv islands
-    bpy.ops.uv.seams_from_islands()
-    seams = [e for e in bm.edges if e.seam]
-    # split on seams
-    bmesh.ops.split_edges(bm, edges=seams)
-    # re instate old seams.. could clear new seams.
-    for e in old_seams:
-        e.seam = True
-    bmesh.update_edit_mesh(me)
+@blender_registry.register_blender_type
+class ALBAM_OT_DumpFrames(bpy.types.Operator):
+    '''Dump Animation frames to json'''
+    bl_idname = "albam.dump_anim_frames"
+    bl_label = "Dump animation frames"
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath to dumped frames",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    filepath: FILEPATH
+    HAND_SIDE = bpy.props.EnumProperty(
+        name="Side",
+        description="Side of the character to dump frames for",
+        default="left",
+        options={'SKIP_SAVE'},
+        items=[
+            ('left', "Left", "Dump frames for left side"),
+            ('right', "Right", "Dump frames for right side"),
+        ],
+    )
+    EXTENSION_FILTER = bpy.props.StringProperty(
+        default="*.json",
+        options={'HIDDEN'},
+    )
+    side: HAND_SIDE
+    filter_glob: EXTENSION_FILTER
+    filename = bpy.props.StringProperty(default="")
+
+    def invoke(self, context, event):  # pragma: no cover
+        self.filepath = context.active_object.name + ".json"
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        ob_armature = self.get_selected_armature(context)
+        app_id = context.scene.albam.apps.app_selected
+        print(self.filepath)
+        dump_frames(self.filepath, ob_armature, 10, self.side, app_id)
+        return {'FINISHED'}
+
+    def get_selected_armature(self, context):
+        selection = bpy.context.selected_objects
+        armatures = [obj for obj in selection if obj.type == 'ARMATURE']
+        try:
+            ob = armatures[0]
+        except KeyError:
+            ob = None
+        return ob
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_ApplyFrames(bpy.types.Operator):
+    '''Apply Animation frames to an armature'''
+    bl_idname = "albam.handshake"
+    bl_label = "Apply animation frames"
+    FILEPATH = bpy.props.StringProperty(
+        name="File Path",
+        description="Filepath to dumped frames",
+        maxlen=1024,
+        subtype='FILE_PATH',
+    )
+    filepath: FILEPATH
+
+    def invoke(self, context, event):  # pragma: no cover
+        # self.filepath = self.FILEPATH # frames_dir
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        handshake(self.filepath, source_obj)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveEmptyVertexGroups(bpy.types.Operator):
+    '''Remove vertex groups with 0 skin weighs'''
+    bl_idname = "albam.remove_empty_vertex_groups"
+    bl_label = "remove empty vertex groups"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        bpy.ops.object.mode_set(mode='OBJECT')
+        selection = bpy.context.scene.objects
+        scene_meshes = [obj for obj in selection if obj.type == 'MESH']
+
+        for ob in scene_meshes:
+            ob.update_from_editmode()
+
+            vgroup_used = {i: False for i, k in enumerate(ob.vertex_groups)}
+
+            for v in ob.data.vertices:
+                for g in v.groups:
+                    if g.weight > 0.0:
+                        vgroup_used[g.group] = True
+
+            for i, used in sorted(vgroup_used.items(), reverse=True):
+                if not used:
+                    ob.vertex_groups.remove(ob.vertex_groups[i])
+        show_message_box(message="Removing complete")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SeparateByMaterial(bpy.types.Operator):
+    '''Separate selected mesh by material'''
+    bl_idname = "albam.separate_by_material"
+    bl_label = "Separate by material"
+    bl_options = {'UNDO'}
+    bl_description = "Separate selected mesh by material"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        use_clones = context.scene.albam.tools_settings.use_clones
+        if selected_meshes:
+            bpy.ops.object.select_all(action='DESELECT')
+            for mesh_ob in selected_meshes:
+                try:
+                    target_collection = mesh_ob.users_collection[0]
+                except IndexError:
+                    target_collection = bpy.context.collection
+                active_ob = mesh_ob
+                if use_clones:
+                    duplicate = mesh_ob.copy()
+                    duplicate.data = mesh_ob.data.copy()
+                    target_collection.objects.link(duplicate)
+                    bpy.ops.object.select_all(action='DESELECT')
+                    duplicate.select_set(True)
+                    active_ob = duplicate
+                bpy.context.view_layer.objects.active = active_ob
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.separate(type='MATERIAL')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                show_message_box(message=f"Mesh {mesh_ob.name} was separated")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_RemoveUnusedMaterialSlots(bpy.types.Operator):
+    ''''Remove unused material slots from selected meshes'''
+    bl_idname = "albam.remove_unused_material_slots"
+    bl_label = "Remove unused material slots"
+    bl_options = {'UNDO'}
+    bl_description = "Remove unused material slots from selected meshes"
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selected_meshes:
+            for mesh_ob in selected_meshes:
+                mesh = mesh_ob.data
+                used_materials = set()
+                for poly in mesh.polygons:
+                    used_materials.add(poly.material_index)
+                for i in reversed(range(len(mesh.materials))):
+                    if i not in used_materials:
+                        mesh.materials.pop(index=i)
+            show_message_box(message="Removing complete")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchPropsPaste(bpy.types.Operator):
+    '''Batch paste Albam custom properties'''
+    bl_idname = "albam.batch_props_paste"
+    bl_label = "Batch paste Albam custom properties"
+    bl_options = {'UNDO'}
+
+    prop_type: bpy.props.StringProperty(
+        name="Property Type",
+        description="Type of the property to paste",
+        default="",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if selected_meshes:
+            for mesh_ob in selected_meshes:
+                if self.prop_type == "mesh":
+                    prop = mesh_ob.data
+                else:
+                    prop = mesh_ob.material_slots[0].material
+                paste_props(prop)
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchTransferWeights(bpy.types.Operator):
+    '''Transfer weights from Active mesh to selected meshes'''
+    bl_idname = "albam.batch_transfer_weights"
+    bl_label = "Batch transfer skin weights"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        source_obj = context.scene.albam.meshes.all_meshes
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if source_obj is None or not bpy.context.selected_objects:
+            return False
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        src_obj = context.scene.albam.meshes.all_meshes
+        dst_objs = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+        for dst_obj in dst_objs:
+            if dst_obj != src_obj:
+                # create vertex groups in destination object
+                for vg in src_obj.vertex_groups:
+                    if vg.name not in dst_obj.vertex_groups.keys():
+                        dst_obj.vertex_groups.new(name=vg.name)
+
+                mod = dst_obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+                mod.object = src_obj
+                mod.use_vert_data = True
+                mod.data_types_verts = {'VGROUP_WEIGHTS'}
+                mod.vert_mapping = 'NEAREST'
+
+                # apply modifier
+                bpy.context.view_layer.objects.active = dst_obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+        show_message_box(message="Skin weights were transferred")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SetArmatureObject(bpy.types.Operator):
+    '''Set armature object for selected meshes'''
+    bl_idname = "albam.set_armature_object"
+    bl_label = "Set armature object"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        armature_obj = context.scene.albam.armatures.all_armatures
+        if armature_obj is None:
+            return False
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes:
+            return False
+        return True
+
+    def execute(self, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        new_arm_obj = context.scene.albam.armatures.all_armatures
+        for mesh_ob in selected_meshes:
+            arm_modifier = None
+            for modifier in mesh_ob.modifiers:
+                if modifier.type == 'ARMATURE':
+                    arm_modifier = modifier
+                    break
+            if not arm_modifier:
+                arm_modifier = mesh_ob.modifiers.new(name="Armature", type='ARMATURE')
+            arm_modifier.object = new_arm_obj
+        show_message_box(
+            message=f"Armature object {new_arm_obj.name} was set for {len(selected_meshes)} meshes")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_SortHairCards(bpy.types.Operator):
+    '''Sort hair cards by distance'''
+    bl_idname = "albam.sort_hair_cards"
+    bl_label = "sort hair cards by distance"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH']
+        if not selected_meshes or context.scene.albam.meshes.all_meshes is None:
+            return False
+        return True
+
+    def execute(self, context):
+        bpy.ops.object.mode_set(mode='OBJECT')
+        source_obj = context.scene.albam.meshes.all_meshes
+        selection = bpy.context.selected_objects
+        selected_meshes = [obj for obj in selection if obj.type == 'MESH' and obj != source_obj]
+        sort_hair_cards(source_obj, selected_meshes)
+        show_message_box(message=f"{len(selected_meshes)} hair cards were sorted")
+        return {'FINISHED'}
 
 
 def transfer_normals(source_obj, target_objs):
@@ -317,8 +794,8 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     color_out = blender_texture_image_node.outputs['Color']
     try:
         socket_name = color_out.links[0].to_socket.name
-    except ValueError:
-        print("the texture has no connections")
+    except IndexError:
+        print("The texture node {} has no connections".format(blender_texture_image_node))
         return None
 
     tex_codes_mapper = {
@@ -338,6 +815,10 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     return texture_code
 
 
+def strict_sanitize(filename):
+    return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+
+
 def set_image_albam_attr(blender_material, app_id, local_path):
     TEX_COMPRESSION = {
         "re0": (24, 20, 25, 31),  # BM alpha, BM no alpha, MM, NM
@@ -345,16 +826,26 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev1": (23, 19, 25, 31),
         "rev2": (24, 20, 25, 31),
         "re6": (24, 20, 25, 31),
+        "dd": (24, 20, 25, 31),
     }
 
-    UNKNOWN_TYPE = {
-        "re0": "0x209d",
-        "re1": "0x209d",
-        "rev1": "0xa09d",
-        "rev2": "0x209d",
+    VERSION = {
+        "re0": "0x9d",
+        "re1": "0x9d",
+        "rev1": "0x9d",
+        "rev2": "0x9d",
         "re6": "0x9a",
+        "dd": "0x99",
     }
 
+    UNK = {
+        "re0": 32,
+        "re1": 32,
+        "rev1": 160,
+        "rev2": 32,
+        "re6": 0,
+    }
+    overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
     for tn in blender_material.node_tree.nodes:
@@ -362,33 +853,55 @@ def set_image_albam_attr(blender_material, app_id, local_path):
             continue
         type = blender_texture_to_texture_code(tn)
         if tn.image:
-            name = ntpath.splitext(tn.image.name)[0]
+            name = tn.image.name.split(".")[0]
+            name = strict_sanitize(name)
         else:
             continue
-        if not tn.image.albam_asset.relative_path:
+        if not tn.image.albam_asset.relative_path or overwrite_tex_path:
             tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
-        tex_157_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        tex_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)
             if type == 0:
-                tex_157_props.compression_format = tex_compr_preset[1]
+                tex_props.compression_format = tex_compr_preset[1]
             if type == 1:
-                tex_157_props.compression_format = tex_compr_preset[3]
+                tex_props.compression_format = tex_compr_preset[3]
             if type == 2:
-                tex_157_props.compression_format = tex_compr_preset[2]
+                tex_props.compression_format = tex_compr_preset[2]
             if type == 7:
-                tex_157_props.compression_format = tex_compr_preset[3]
-        if app_id in UNKNOWN_TYPE:
-            tex_157_props.unk_type = UNKNOWN_TYPE.get(app_id)
+                tex_props.compression_format = tex_compr_preset[3]
+        else:
+            if type == 0:
+                tex_props.encoded_type = '0x2'
+            if type == 1:
+                tex_props.encoded_type = '0x3'
+            if type == 2:
+                tex_props.encoded_type = '0x0'
+            if type == 7:
+                tex_props.encoded_type = '0x3'
+        if app_id in UNK:
+            tex_props.unk = UNK.get(app_id)
+        if app_id in VERSION:
+            tex_props.version = VERSION.get(app_id)
 
 
-def rename_bones(armature_ob, names_preset):
+def rename_bones(armature_ob, app_id, body_type):
+    names_preset = BONE_NAMES.get(body_type)
+    fixes_preset = NAME_FIXES.get(body_type)
+    fixed_name = fixes_preset.get(app_id, None)
+    bone_name = None
+    if fixed_name:
+        for k, v in fixed_name.items():
+            names_preset[k] = v
     armature = armature_ob.data
     bones = armature.bones
     for bone in bones:
         reference_bone_id = bone.get('mtfw.anim_retarget')
-        bone_name = names_preset.get(int(reference_bone_id), None)
+        if reference_bone_id:
+            bone_name = names_preset.get(int(reference_bone_id), None)
+        else:
+            continue
         if bone_name:
             bone.name = bone_name
 
@@ -418,3 +931,314 @@ def merge_vgroups(vg_a, vg_b):
         ob.vertex_groups.remove(ob.vertex_groups[vg_a])
         ob.vertex_groups.remove(ob.vertex_groups[vg_b])
         vg_merged.name = vg_a
+
+
+def paste_props(context_item):
+    albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+    app_id = albam_asset.app_id
+    custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_props_sec = context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+
+    props_name = context_item.albam_custom_properties.APPID_MAP[app_id]
+    props_name = props_name.get("custom_props_name")
+    buff = bpy.context.scene.albam.clipboard.get_buffer()
+    to_paste = buff.get(app_id, {}).get(props_name, {})
+
+    for k, v in to_paste.items():
+        setattr(custom_props, k, v)
+
+    for sec_prop_name, sec_prop in custom_props_sec.items():
+        to_paste = buff.get(app_id, {}).get(sec_prop_name, {})
+        for k, v in to_paste.items():
+            setattr(sec_prop, k, v)
+
+
+def _debug_draw_bvh_rays(rays, ob_name):
+    rvis_name = ob_name + "_rays_viz"
+    rviz_ob = bpy.data.objects.get(rvis_name, None)
+    debug_collection = bpy.data.collections.get("DebugDraw")
+    if debug_collection is None:
+        debug_collection = bpy.data.collections.new("DebugDraw")
+        bpy.context.scene.collection.children.link(debug_collection)
+
+    if rviz_ob:
+        rvis_mesh = rviz_ob.data
+    else:
+        rvis_mesh = bpy.data.meshes.new(rvis_name)
+        rviz_ob = bpy.data.objects.new(rvis_name, rvis_mesh)
+        debug_collection.objects.link(rviz_ob)
+
+    bm_vis = bmesh.new()
+
+    for origin, hit_loc in rays:
+        v1 = bm_vis.verts.new(origin)
+        v2 = bm_vis.verts.new(hit_loc)
+        bm_vis.edges.new((v1, v2))
+
+    bm_vis.to_mesh(rvis_mesh)
+    bm_vis.free()
+
+
+# Get minimal distance to the head
+def _min_distance_to_target(obj, target_bvh):
+    bm = bmesh.new()
+    bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
+    bm.verts.ensure_lookup_table()
+    min_dist = float('inf')
+    for v in bm.verts:
+        world_v = obj.matrix_world @ v.co
+        hit = target_bvh.find_nearest(world_v)
+        if hit:
+            loc, normal, index, dist = hit
+            min_dist = min(min_dist, dist)
+    return min_dist
+
+
+def _get_blocked_objs(card_ob, v_from, v_to, bvh_list):
+    '''Returns dictionary: {object: distance_to_hit}'''
+    direction = (v_to - v_from).normalized()
+    length = (v_to - v_from).length
+    hit_objs = {}
+    exclude_obj = []
+    exclude_obj.append(card_ob)
+    # Check if the ray the goes from card to body is blocked by other cards
+    for bvh, target_ob in bvh_list:
+        if target_ob in exclude_obj:
+            continue
+        hit = bvh.ray_cast(v_from, direction, length)
+        location, normal, index, distance = hit
+        if hit[0]:
+            hit_objs[target_ob] = [distance * 100]  # scaling value not sure if needed
+            exclude_obj.append(target_ob)
+    return hit_objs
+
+
+def _get_mesh_albam_props(obj):
+    albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+    if not albam_asset:
+        return None
+    app_id = albam_asset.app_id
+    custom_props = obj.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return custom_props
+
+
+def _get_max_alpha_priority(cards_objs):
+    max_aprior = 0
+    for card_ob in cards_objs:
+        custom_props = _get_mesh_albam_props(card_ob)
+        if custom_props:
+            if custom_props.alpha_priority > max_aprior:
+                max_aprior = custom_props.alpha_priority
+        else:
+            if card_ob.get('order', 0) > max_aprior:
+                max_aprior = card_ob.get('order', 0)
+    return max_aprior
+
+
+def _get_alpha_priority(card_ob):
+    alpha_prior = 0
+    custom_props = _get_mesh_albam_props(card_ob)
+    if custom_props:
+        alpha_prior = custom_props.alpha_priority
+    else:
+        alpha_prior = card_ob.get('order', 0)
+    return alpha_prior
+
+
+def _set_dbg_vtx_colors(bl_objects):
+    max_alpha_pri = _get_max_alpha_priority(bl_objects)
+    for i, obj in enumerate(bl_objects):
+        if obj.type == 'MESH':
+            cur_apha_pri = _get_alpha_priority(obj)
+            mesh = obj.data
+            if not mesh.vertex_colors:
+                vcol_layer = mesh.vertex_colors.new(name="dbg_distance")
+            else:
+                vcol_layer = mesh.vertex_colors.active
+            t = cur_apha_pri / max_alpha_pri if max_alpha_pri > 0 else 0
+            color = (t, 0.0, 1.0 - t, 1.0)  # RGBA
+            for poly in mesh.polygons:
+                for loop_index in poly.loop_indices:
+                    vcol_layer.data[loop_index].color = color
+
+
+def _nullify_alpha_prior(cards_objs):
+    # Set alpha priority index to 0 for all hair cards
+    for card_ob in cards_objs:
+        custom_props = _get_mesh_albam_props(card_ob)
+        if custom_props:
+            custom_props.alpha_priority = 0
+        card_ob['order'] = 0
+
+
+def sort_hair_cards(body_ob, cards_objs):
+    albam_settings = bpy.context.scene.albam.tools_settings
+    debug_draw = albam_settings.sorting_dbg_draw
+
+    deps = bpy.context.evaluated_depsgraph_get()
+    body_bm = bmesh.new()
+    body_bm.from_object(body_ob, deps)
+    body_bm.verts.ensure_lookup_table()
+    body_bm.faces.ensure_lookup_table()
+    body_bvh = bvhtree.BVHTree.FromBMesh(body_bm)
+    body_bm.free()
+
+    # Build the BVH tree for cards
+    bvh_list = []
+    for card_ob in cards_objs:
+        bm = bmesh.new()
+        bm.from_object(card_ob, deps)
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        bvh = bvhtree.BVHTree.FromBMesh(bm)
+        bvh_list.append((bvh, card_ob))
+        bm.free()
+
+    def compute_blockers(card_ob, debug_draw=False):
+        debug_rays = []
+
+        bm = bmesh.new()
+        bm.from_object(card_ob, deps)
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+
+        sample_points = []
+        # Add vertices as sample points
+        for v in bm.verts:
+            sample_points.append(card_ob.matrix_world @ v.co)
+        # Add centers of faces as sample points
+        for face in bm.faces:
+            center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
+            sample_points.append(center)
+
+        blockers_cache = {}
+        for world_v in sample_points:
+            hit = body_bvh.find_nearest(world_v)
+            if hit:
+                loc, normal, index, dist = hit
+                debug_rays.append((world_v, loc))
+                # blocked_obj: distance
+                blocked = _get_blocked_objs(card_ob, world_v, loc, bvh_list)
+                if blocked:
+                    for bobj, bdist in blocked.items():
+                        #
+                        blockers_cache[bobj] = blockers_cache.get(bobj, []) + bdist
+        # If few rays hit the same blocker, average the distance to it
+        blockers_cache = {k: sum(v) / len(v) for k, v in blockers_cache.items()}
+        # Sort by minimal distances to the head, reverse because the ray casts from the card
+        blocked_objs = sorted(blockers_cache, key=blockers_cache.get)
+        bm.free()
+        print("Card {} is blocked by {}".format(card_ob.name, blocked_objs))
+        if debug_draw:
+            _debug_draw_bvh_rays(debug_rays, card_ob.name)
+        return blocked_objs
+
+    def sorting_pass(cards_objs):
+        # Collect blocker info for each card
+        cards_objs_sorted = sorted(cards_objs, key=lambda o: _min_distance_to_target(o, body_bvh))
+        _nullify_alpha_prior(cards_objs_sorted)
+
+        card_info = {}  # {card_ob: {'distance': float, 'blockers': [list]}}
+        for card_ob in cards_objs_sorted:
+            dist = _min_distance_to_target(card_ob, body_bvh)
+            blockers = compute_blockers(card_ob, debug_draw)
+            card_info[card_ob] = {
+                'distance': dist,
+                'blockers': blockers,
+                'priority': 0
+            }
+
+        def _get_total_blocker_depth(card_ob, visited=None):
+            """Recursively count total blocker depth including blockers of blockers"""
+            if visited is None:
+                visited = set()
+            if card_ob in visited:
+                return 0
+            visited.add(card_ob)
+            blockers = card_info[card_ob]['blockers']
+            total = len(blockers)
+            for blocker in blockers:
+                total += _get_total_blocker_depth(blocker, visited)
+            return total
+
+        # Check for intersections of cards (cycles in blocker dependencies)
+        print("\n=== Checking for Intersections ===")
+        for card_ob in card_info.keys():
+            blockers = card_info[card_ob]['blockers']
+            # Check if any blocker has this card in its blockers (direct cycle)
+            for blocker in blockers:
+                if card_ob in card_info[blocker]['blockers']:
+                    print("WARNING: Intersection detected between {} and {}".format(
+                        card_ob.name, blocker.name))
+
+        # Topological sorting: priority = max(priority of blockers) + 1
+        # Iterate until all priorities are assigned
+        max_iterations = len(cards_objs) + 1
+        iteration = 0
+        unassigned = set(card_info.keys())
+
+        print("\n=== Topological Sorting ===")
+        while unassigned and iteration < max_iterations:
+            iteration += 1
+            assigned_this_pass = False
+
+            for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
+                blockers = card_info[card_ob]['blockers']
+
+                # check if all blockers have priority assigned
+                all_blockers_assigned = all(card_info[blocker]['priority'] > 0 for blocker in blockers)
+
+                if not blockers:
+                    # No blockers - priority 1
+                    card_info[card_ob]['priority'] = 1
+                    assigned_this_pass = True
+                    unassigned.remove(card_ob)
+                    print("Pass {}: {} - no blockers → priority=1".format(iteration, card_ob.name))
+
+                elif all_blockers_assigned:
+                    # All blockers have priority - take max + 1
+                    max_blocker_priority = max(card_info[b]['priority'] for b in blockers)
+                    priority = max_blocker_priority + 1
+                    card_info[card_ob]['priority'] = priority
+                    assigned_this_pass = True
+                    unassigned.remove(card_ob)
+                    print("Pass {}: {} - max(blockers)={} → priority={}".format(
+                        iteration, card_ob.name, max_blocker_priority, priority))
+
+            if not assigned_this_pass and unassigned:
+                # Fallback: assign remaining (cycle detection)
+                print("Warning: Cycle or missing blockers detected. Assigning remaining cards with fallback.")
+                for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
+                    blockers = card_info[card_ob]['blockers']
+                    assigned_priorities = [card_info[b]['priority']
+                                           for b in blockers if card_info[b]['priority'] > 0]
+                    if assigned_priorities:
+                        priority = max(assigned_priorities) + 1
+                    else:
+                        priority = 1
+                    card_info[card_ob]['priority'] = priority
+                    unassigned.remove(card_ob)
+                    print("Fallback: {} → priority={}".format(card_ob.name, priority))
+                break
+
+        # Apply priorities to objects
+        print("\n=== Final Priorities ===")
+        for card_ob in cards_objs_sorted:
+            priority = card_info[card_ob]['priority']
+            blockers_count = len(card_info[card_ob]['blockers'])
+
+            albam_props = _get_mesh_albam_props(card_ob)
+            if albam_props:
+                albam_props.alpha_priority = priority
+            card_ob['order'] = priority
+
+            print("{}: priority={}, blockers={} {}".format(
+                card_ob.name,
+                priority,
+                blockers_count,
+                [b.name for b in card_info[card_ob]['blockers']]
+            ))
+
+    sorting_pass(cards_objs)
+    if debug_draw:
+        _set_dbg_vtx_colors(cards_objs)

@@ -3,8 +3,11 @@ meta:
   bit-endian: le
   file-extension: mod
   id: mod_156
-  ks-version: 0.11
+  ks-version: '0.11'
   title: MTFramework model format 156
+
+params:
+  - {id: app_id, type: str}  # TODO: enum
 
 seq:
   - {id: header, type: mod_header}
@@ -147,7 +150,7 @@ types:
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
       - {id: idx_mapping, type: u1}
-      - {id: unk_01, type: f4}
+      - {id: length, type: f4}
       - {id: parent_distance, type: f4}
       - {id: location, type: vec3}
     instances:
@@ -283,7 +286,13 @@ types:
       size_:
         value: 52
       indices:
-        pos: _root.header.offset_index_buffer + face_offset * 2 + face_position * 2
+        # face_offset is an index base (see its own comment), added to the
+        # index values rather than to the buffer position - meshes tile
+        # contiguously by face_position alone, and the last one ends exactly
+        # at header.num_faces, so there is no room for it to shift anything.
+        # It is 0 in all but 9 of umvc3's 2702 .mod, which is why including
+        # it here read past end of file on precisely those 9.
+        pos: _root.header.offset_index_buffer + face_position * 2
         repeat: expr
         repeat-expr: num_indices
         type: u2

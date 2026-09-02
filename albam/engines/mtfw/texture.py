@@ -7,21 +7,25 @@ import math
 import bpy
 from kaitaistruct import KaitaiStream
 
-from albam.exceptions import AlbamCheckFailure
-from albam.lib.blender import (
+from ...exceptions import AlbamCheckFailure
+from ...lib.blender import (
     get_bl_teximage_nodes,
     get_bl_materials,
     is_blimage_dds,
 )
-from albam.lib.dds import DDSHeader
-from albam.registry import blender_registry
-from albam.vfs import VirtualFileData
+from ...lib.dds import DDSHeader
+from ...lib.kaitai_utils import check_recursive, parse
+from ...registry import blender_registry
+from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
 from .structs.tex_112 import Tex112
 from .structs.tex_157 import Tex157
 from .structs.rtex_112 import Rtex112
 from .structs.rtex_157 import Rtex157
 from .structs.mrl import Mrl
+
+
+APP_USES_64BIT_OFS = {"umvc3"}
 
 
 class TextureType2(Enum):  # TODO: unify
@@ -55,6 +59,12 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     NORMAL_DETAIL_2 = 20
     INDIRECT = 21
     SPECULAR_BLEND = 22
+    # UMVC3's cel-shading LUTs: ttoonmap/ttoonrevmap are the lit/unlit
+    # ramps nDraw::MaterialChar samples, tindirectmapuser its user-supplied
+    # indirect map.
+    TOON = 23
+    TOON_REVERSE = 24
+    INDIRECT_USER = 25
 
 
 TEX_TYPE_MAP_2 = {
@@ -87,6 +97,9 @@ TEX_TYPE_MAP_2 = {
     "tspheremap": TextureType.SPHERE,
     "tindirectmap": TextureType.INDIRECT,
     "tspecularblendmap": TextureType.SPECULAR_BLEND,
+    "ttoonmap": TextureType.TOON,
+    "ttoonrevmap": TextureType.TOON_REVERSE,
+    "tindirectmapuser": TextureType.INDIRECT_USER,
 }
 
 
@@ -107,6 +120,9 @@ NODE_NAMES_TO_TYPES = {
     'Hair Shift': TextureType.HAIR_SHIFT,
     'Height Map': TextureType.HEIGHTMAP,
     'Emission': TextureType.EMISSION,
+    'Toon Ramp': TextureType.TOON,
+    'Toon Ramp Reverse': TextureType.TOON_REVERSE,
+    'Indirect User': TextureType.INDIRECT_USER,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -122,17 +138,24 @@ TEX_FORMAT_MAPPER = {
     14: b"",  # uncompressed
     19: b"DXT1",  # BM/Diffuse without alpha
     20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
+    21: b"DXT5",  # BM/Diffuse, effect textures
     23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
+    30: b"DXT1",  # DM/Damage
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
+    37: b"DXT1",  # FIXME: unchecked
     39: b"",  # uncompressed
     40: b"",  # uncompressed
+    42: b"DXT5",  # BM/Diffuse, UI sprites
     43: b"DXT1",  # FIXME: unchecked
+    47: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
+    "DXT3": b"DXT3",
     "DXT5": b"DXT5",
+    '\x15\x00\x00\x00': b"",
 }
 
 # FIXME: take into account type of texture (BM/NM/MM, etc.)
@@ -149,6 +172,8 @@ APPID_SERIALIZE_MAPPER = {
     "rev1": lambda: _serialize_texture_21,
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
+    "dmc4": lambda: _serialize_texture_156,
+    "umvc3": lambda: _serialize_texture_21,
 }
 
 APPID_TEXCLS_MAP = {
@@ -159,6 +184,8 @@ APPID_TEXCLS_MAP = {
     "rev1": Tex157,
     "rev2": Tex157,
     "dd": Tex157,
+    "dmc4": Tex112,
+    "umvc3": Tex157,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -169,6 +196,8 @@ APPID_RTEXCLS_MAP = {
     "rev1": Rtex157,
     "rev2": Rtex157,
     "dd": Rtex157,
+    "dmc4": Rtex112,
+    "umvc3": Rtex157,
 }
 
 TEX_TYPE_MAPPER = {
@@ -203,6 +232,62 @@ TEX_TYPE_MAPPER = {
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
 
+# The FTransparency feature value meaning "this material is opaque". Its
+# albedo map's alpha channel is then not opacity - it carries whatever the
+# shader wants there - so wiring that channel to the shader group's alpha
+# renders the mesh away. Every other FTransparency* value does describe some
+# form of transparency, so those keep the alpha link.
+FTRANSPARENCY_OPAQUE = "FTransparency"
+
+# The engine's placeholder textures. A material binding one of these is
+# saying the map is deliberately absent - the same thing tex_idx 0 says, but
+# spelled as a path at a real index instead, so the tex_index == 0 check in
+# assign_textures() never sees it. They exist in no .arc, so they resolve to
+# None like a genuinely missing texture does; matching on the path is what
+# tells the two apart. Anything else that fails to resolve keeps building an
+# empty image node, so a real gap still surfaces (see
+# test_mod_import_textures_are_resolved) instead of being skipped silently
+# alongside the placeholders.
+DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
+
+
+def is_dummy_texture_path(texture_path):
+    if not texture_path:
+        return False
+    return texture_path.replace("\\", "/").lower().startswith(DUMMY_TEXTURE_PATH_PREFIX)
+
+
+@blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
+def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
+    app_id = vfile.app_id
+    TexCls = APPID_TEXCLS_MAP[app_id]
+    tex = parse(TexCls, vfile.get_bytes(), app_id)
+    dds = convert_tex_to_dds(tex)
+
+    bl_image = bpy.data.images.new(f"{vfile.display_name}.dds", tex.width, tex.height)
+    bl_image.source = "FILE"
+    bl_image.pack(data=dds, data_len=len(dds))
+
+    custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_properties.set_from_source(tex)
+
+    return bl_image
+
+
+def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
+    compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
+    dds_header = DDSHeader(
+        dwHeight=tex.height,
+        dwWidth=tex.width,
+        pixelfmt_dwFourCC=compression_fmt,
+        dwMipMapCount=tex.num_mipmaps_per_image
+    )
+    dds_header.set_constants()
+    dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
+    dds = bytes(dds_header) + tex.dds_data
+
+    return dds
+
 
 def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     textures = []
@@ -234,15 +319,14 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             except KeyError:
                 tex_bytes = None
         if not tex_bytes:
-            print(f"texture_path {texture_path} not found in arc")
+            # Both cases append None - assign_textures() tells them apart by
+            # the path, and only the placeholder is skipped there.
+            if not is_dummy_texture_path(texture_path):
+                print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
-            # TODO: handle missing texture
             continue
-        if is_rtex:
-            tex = RtexCls.from_bytes(tex_bytes)
-        else:
-            tex = TexCls.from_bytes(tex_bytes)
-        tex._read()
+        TexOrRtexCls = RtexCls if is_rtex else TexCls
+        tex = parse(TexOrRtexCls, tex_bytes, app_id)
         if not is_rtex:
             try:
                 compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
@@ -267,7 +351,6 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             bl_image.generated_type = 'UV_GRID'
             bl_image.albam_asset.app_id = app_id
             bl_image.albam_asset.relative_path = texture_path + ".rtex"
-            bl_image.albam_asset.render_target = True
             bl_image.albam_asset.extension = "rtex"
         else:
             bl_image = bpy.data.images.new(f"{tex_name}.dds", tex.width, tex.height)
@@ -294,10 +377,15 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     return textures
 
 
-def assign_textures(mtfw_material, bl_material, textures, mrl):
+def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
     if not mrl:
         old_assignment(mtfw_material, bl_material, textures)
         return
+    features = (bl_material.albam_custom_properties
+                .get_custom_properties_secondary_for_appid(app_id)
+                .get("features"))
+    link_albedo_alpha = (
+        features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
 
@@ -317,15 +405,26 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
                 print("         Unknown tex type: ", tex_type_mtfw)
                 continue
 
-            if tex_index > 0:
-                texture_target = textures[real_tex_index]
-            else:
-                texture_target = None
+            if tex_index == 0:
+                # Index 0 is the engine's dummy texture: the material is
+                # saying this map is deliberately absent. Leave the socket
+                # on the shader group's own default - an empty image node
+                # would drive it with black, which for a normal map is not
+                # the neutral value. old_assignment() skips these too.
+                continue
+            texture_target = textures[real_tex_index]
+            if texture_target is None and is_dummy_texture_path(
+                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                # Same case as tex_index == 0 above, just spelled as a path:
+                # leave the socket on the shader group's default rather than
+                # driving it with an empty image node.
+                continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material,
+                                            link_albedo_alpha=link_albedo_alpha)
             if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
@@ -366,16 +465,19 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
         if tex_value == texture_type:
             tex_slot = tex_type
             break
-    tex_index = getattr(mtfw_material, tex_slot)
+    tex_index = getattr(mtfw_material, tex_slot, 0)  # TODO: fix slots for DMC4
     return tex_index
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material,
+                                    link_albedo_alpha=True):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
     blender_texture_node : image texture node
     blender_material : shader material
+    link_albedo_alpha : whether the albedo map's alpha channel is this
+        material's opacity (see FTRANSPARENCY_OPAQUE)
     """
     # blender_texture_node.use_map_alpha = True
     shader_node_grp = blender_material.node_tree.nodes.get("MTFrameworkGroup")
@@ -384,7 +486,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     if texture_code == 1:
         # Diffuse _BM
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Diffuse BM"])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
+        if link_albedo_alpha:
+            link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
         blender_texture_node.location = (-300, 350)
         # blender_texture_node.use_map_color_diffuse = True
     elif texture_code == 2:
@@ -455,7 +558,7 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
 
     elif texture_code == 14:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend 2 BM"])
-        blender_texture_node.location = (-700, 350)
+        blender_texture_node.location = (-900, 350)
 
     elif texture_code == 10:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Vertex Displacement"])
@@ -481,6 +584,18 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 DNM"])
         blender_texture_node.location = (-600, -800)
 
+    elif texture_code == 23:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp"])
+        blender_texture_node.location = (-600, -2000)
+
+    elif texture_code == 24:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp Reverse"])
+        blender_texture_node.location = (-600, -2050)
+
+    elif texture_code == 25:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
+        blender_texture_node.location = (-600, -2100)
+
     else:
         print("texture_code not supported", texture_code)
 
@@ -491,15 +606,24 @@ def serialize_textures(app_id, bl_materials):
     serialize_func = APPID_SERIALIZE_MAPPER[app_id]()
 
     bad_appid = []
+    texture_paths = []
+    duplicated_paths = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
+        if data["image"].albam_asset.relative_path in texture_paths:
+            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
+        texture_paths.append(data["image"].albam_asset.relative_path)
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
             "Go to Image -> tools -> Albam and select the proper app_id for each."
         )
-
+    if duplicated_paths:
+        raise AttributeError(
+            f"The following images have duplicated relative paths: {duplicated_paths}\n"
+            "Go to Image Editor -> Albam and select a unique relative path for each."
+        )
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
@@ -507,123 +631,108 @@ def serialize_textures(app_id, bl_materials):
     return exported_textures
 
 
+def _check_is_power_of_two(image):
+    for i in range(2):
+        if image.size[i] > 0 and image.size[i] & (image.size[i] - 1) != 0:
+            print(f"Warning: Image {image.name} is not a power of two size.")
+            break
+
+
 def _serialize_texture_156(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    is_rtex = bl_im.albam_asset.render_target
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    is_rtex = custom_properties.render_target
+    _check_is_power_of_two(bl_im)
 
     if is_rtex:
-        tex = Rtex112()
+        tex = Rtex112(app_id)
         tex.id_magic = b"RTX\x00"
         tex.version = 112
-        tex.revision = 514
+        # tex.revision = 514
         tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_images = 1
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1]
-        tex.reserved = 0
+        # tex.reserved = 0
         tex.compression_format = b"\x15\x00\x00\x00".decode("ascii")
         dds_data_len = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex112()
+        tex = Tex112(app_id)
         tex.id_magic = b"TEX\x00"
         tex.version = 112
-        tex.revision = 34  # FIXME: not really, changes with cubemaps
+        #  revision = 34
+        # if dds_header.image_count > 1:
+        #    revision = 3
+        # tex.revision = revision
         tex.num_mipmaps_per_image = dds_header.dwMipMapCount
         tex.num_images = dds_header.image_count
         tex.width = bl_im.size[0]
         tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-        tex.reserved = 0
-        tex.compression_format = dds_header.pixelfmt_dwFourCC.decode()
 
+        fmt = dds_header.pixelfmt_dwFourCC.decode()
+        if fmt == "":
+            fmt = b"\x15\x00\x00\x00".decode("ascii")
+        tex.compression_format = fmt
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
         dds_data_len = len(tex.dds_data)
-
-    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    tex.padding = 0
     custom_properties.set_to_dest(tex)
 
-    tex._check()
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_len
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
-    relative_path = _handle_relative_path(bl_im)
+    relative_path = _handle_relative_path(bl_im, custom_properties.render_target)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
 
 def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
-    is_rtex = bl_im.albam_asset.render_target
-
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
-    compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
+    is_rtex = custom_properties.render_target
+    # compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
-        tex = Rtex157()
+        tex = Rtex157(app_id)
         tex.id_magic = b"RTX\x00"
-        tex_type = int(custom_properties.unk_type, 16)
-        reserved_01 = 0
-        shift = 0
-        constant = 0
-        reserved_02 = 2
-        dimension = 2
+        # tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
+        tex.num_mipmaps_per_image = 1
         dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex157()
+        tex = Tex157(app_id)
         tex.id_magic = b"TEX\x00"
-        tex_type = int(custom_properties.unk_type, 16)
-        reserved_01 = 0
-        shift = 0
-        constant = 1  # XXX Not really, see tests
-        reserved_02 = 0
-        dimension = 2 if not dds_header.is_proper_cubemap else 6
 
-    packed_data_1 = (
-        (tex_type & 0xffff) |
-        ((reserved_01 & 0x00ff) << 16) |
-        ((shift & 0x000f) << 24) |
-        ((dimension & 0x000f) << 28)
-    )
-
-    width = bl_im.size[0]
+    tex.width = bl_im.size[0]
     if is_rtex:
-        image_count = 1  # curently hardcoded
-        height = bl_im.size[1]
-        num_mipmaps = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2))
+        if custom_properties.type == "0x6":
+            tex.num_images = 6
+        else:
+            tex.num_images = 1  # curently hardcoded
+        tex.height = bl_im.size[1]
     else:
-        image_count = dds_header.image_count
-        height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
-        num_mipmaps = dds_header.dwMipMapCount
+        tex.num_images = dds_header.image_count
+        tex.height = bl_im.size[1] // dds_header.image_count  # cubemaps are a vertical strip in Blender
+        tex.num_mipmaps_per_image = dds_header.dwMipMapCount
 
-    packed_data_2 = (
-        (num_mipmaps & 0x3f) |
-        ((width & 0x1fff) << 6) |
-        ((height & 0x1fff) << 19)
-    )
-    packed_data_3 = (
-        (image_count & 0xff) |
-        ((compression_format & 0xff) << 8) |
-        ((constant & 0x1fff) << 16) |
-        ((reserved_02 & 0x003) << 29)
-    )
-    tex.packed_data_1 = packed_data_1
-    tex.packed_data_2 = packed_data_2
-    tex.packed_data_3 = packed_data_3
     if not is_rtex:
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
         tex.dds_data = dds_header.data
         dds_data_size = len(tex.dds_data)
-    tex._check()
+
+    custom_properties.set_to_dest(tex)
+    check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_size
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     tex._write(stream)
-    relative_path = _handle_relative_path(bl_im)
+    relative_path = _handle_relative_path(bl_im, is_rtex)
     vf = VirtualFileData(app_id, relative_path, data_bytes=stream.to_byte_array())
     return vf
 
@@ -670,10 +779,10 @@ def _infer_compression_format(dict_tex):
     return tex_type.value
 
 
-def _handle_relative_path(bl_im):
+def _handle_relative_path(bl_im, render_target=False):
     path = bl_im.albam_asset.relative_path or bl_im.name
     before, _, after = path.rpartition(".")
-    if bl_im.albam_asset.render_target:
+    if render_target:
         ext = "rtex"
     else:
         ext = "tex"
@@ -699,11 +808,59 @@ def _calculate_cube_faces_data(tex):
     return cube_faces
 
 
-@blender_registry.register_custom_properties_image("tex_112", ("re5", ))
+@blender_registry.register_custom_properties_image("tex_112", ("re5", "dmc4",))
 @blender_registry.register_blender_prop
 class Tex112CustomProperties(bpy.types.PropertyGroup):
-    unk_02: bpy.props.IntProperty(default=0)  # TODO u1
-    unk_03: bpy.props.IntProperty(default=0)  # TODO u1
+    texture_type: bpy.props.EnumProperty(  # noqa: F821
+        name="Texture Type",
+        items=[
+            ("0x0", "Undefined", "", 1),  # noqa: F821
+            ("0x1", "1D", "", 2),
+            ("0x2", "2D", "", 3),
+            ("0x3", "2D Cube", "", 4),
+            ("0x4", "3D", "", 5),
+        ],
+        default="0x2",
+        options=set()
+    )
+    encoded_type: bpy.props.EnumProperty(  # noqa: F821
+        name="Encode Type",
+        items=[
+            ("0x0", "None", "", 1),
+            ("0x1", "RGBI", "", 2),  # noqa: F821
+            ("0x2", "RGBY", "", 3),  # noqa: F821
+            ("0x3", "RGBN", "", 4),  # noqa: F821
+            ("0x4", "Pal8", "", 5),  # noqa: F821
+        ],
+        default="0x2",
+        options=set()
+    )
+    attr: bpy.props.EnumProperty(
+        name="Attribute",   # noqa: F821
+        items=[
+            ("0x0", "FillMargin", "", 1),  # noqa: F821
+            ("0x1", "Grayscale", "", 2),  # noqa: F821
+            ("0x2", "Nuki", "", 3),  # noqa: F821
+            ("0x3", "Dither", "", 4),  # noqa: F821
+            ("0x4", "RGBI Encoded", "", 5),
+        ],
+        default="0x0",
+        options=set()
+    )
+    depth: bpy.props.IntProperty(
+        name="Depth",  # noqa: F821
+        default=0,
+    )
+    depend_screen: bpy.props.BoolProperty(  # noqa: F821
+        name="Depend on Screen",
+        description="Does this texture depend on screen resolution?",
+        default=False,
+    )
+    render_target: bpy.props.BoolProperty(  # noqa: F821
+        name="Render Target",
+        description="Is this texture a render target?",
+        default=False,
+    )
     red: bpy.props.FloatProperty(default=0.7)
     green: bpy.props.FloatProperty(default=0.7)
     blue: bpy.props.FloatProperty(default=0.7)
@@ -723,23 +880,87 @@ class Tex112CustomProperties(bpy.types.PropertyGroup):
     def copy_attr(src, dst, name):
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
-        setattr(dst, name, src_value)
+        try:
+            if isinstance(src_value, str):
+                src_value = int(src_value, 16)
+            setattr(dst, name, src_value)
+        except TypeError:
+            setattr(dst, name, hex(src_value))
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+TEX_VERSION = {
+    "0x99": 153,
+    "0x9a": 154,
+    "0x9b": 155,
+    "0x9d": 157,
+    "0x9e": 158,
+}
+
+tex_version_enum_items = [(key, str(label), "", idx) for idx, (key, label) in enumerate(TEX_VERSION.items())]
+
+
+@blender_registry.register_custom_properties_image("tex_157",
+                                                   ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
-    compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
-    unk_type: bpy.props.EnumProperty(
-        name="Unknown Type",
+    unk: bpy.props.IntProperty(  # noqa: F821
+        name="Unknown",  # noqa: F821
+        default=0,
+        description="Unknown property, usually 0"
+    )
+    version: bpy.props.EnumProperty(  # noqa: F821
+        name="Tex format version",
+        items=tex_version_enum_items,
+        default="0x9d",
+        options=set()
+    )
+    attr: bpy.props.EnumProperty(  # noqa: F821
+        name="Attribute",   # noqa: F821
         items=[
-            ("0x209d", "0x209d", "", 1),
-            ("0x9a", "0x9a", "", 2),
-            ("0xa09d", "0xa09d", "", 3),
-            ("0x9e", "0x9e", "", 4),
-            ("0x99", "0x99", "", 5),
+            ("0x0", "FillMargin", "", 1),  # noqa: F821
+            ("0x2", "Grayscale", "", 2),  # noqa: F821
+            ("0x4", "Nuki", "", 3),  # noqa: F821
+            ("0x8", "Dither", "", 4),  # noqa: F821
+            ("0x10", "Linear", "", 5),  # noqa: F821
+            ("0x20", "Special", "", 5),  # noqa: F821
         ],
         options=set()
+    )
+    prebias: bpy.props.IntProperty(name="Prebias", default=0)  # noqa: F821
+    type: bpy.props.EnumProperty(
+        name="Texture Type",
+        items=[
+            ("0x0", "Undefined", "", 1),  # noqa: F821
+            ("0x1", "1D", "", 2),
+            ("0x2", "2D", "", 3),
+            ("0x3", "3D", "", 4),
+            ("0x4", "1D Array", "", 5),
+            ("0x5", "2D Array", "", 6),
+            ("0x6", "Cube", "", 7),  # noqa: F821
+            ("0x7", "Cube Array", "", 8),
+            ("0x8", "2D Multisample", "", 9),
+            ("0x9", "2D Multisample Array", "", 10),
+        ],
+        default="0x2",
+        options=set()
+    )
+    compression_format: bpy.props.IntProperty(name="Compression Format", default=0, min=0, max=43)
+    depth: bpy.props.IntProperty(
+        name="Depth",  # noqa: F821
+        default=1,
+    )
+    auto_resize: bpy.props.BoolProperty(  # noqa: F821
+        name="Auto Resize",
+        default=False,
+    )
+    render_target: bpy.props.BoolProperty(  # noqa: F821
+        name="Render Target",
+        description="Is this texture a render target?",
+        default=False,
+    )
+    use_vtf: bpy.props.BoolProperty(  # noqa: F821
+        name="Use VTF",
+        default=False,
     )
 
     # XXX copy paste in mesh, material
@@ -757,6 +978,8 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         # will raise, making sure there's consistency
         src_value = getattr(src, name)
         try:
+            if isinstance(src_value, str):
+                src_value = int(src_value, 16)
             setattr(dst, name, src_value)
         except TypeError:
             setattr(dst, name, hex(src_value))
@@ -780,7 +1003,10 @@ def check_dds_textures(func):
         images = get_bl_teximage_nodes(materials)
         non_dds = []
         for bl_im_name, bl_im_dict in images.items():
-            if bl_im_dict["image"].albam_asset.render_target is True:
+            app_id = bl_im_dict["image"].albam_asset.app_id
+            image = bl_im_dict["image"]
+            custom_propertins = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            if custom_propertins.render_target is True:
                 continue
             if not is_blimage_dds(bl_im_dict["image"]):
                 non_dds.append((bl_im_name, bl_im_dict))

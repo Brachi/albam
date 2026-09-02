@@ -8,21 +8,24 @@ from kaitaistruct import KaitaiStream
 from mathutils import Matrix
 import numpy as np
 
-from albam.lib.misc import chunks
-from albam.registry import blender_registry
+from ...lib.misc import chunks
+from ...registry import blender_registry
 from .material import build_blender_materials
 from .structs.reengine_mesh import ReengineMesh
 
 
-@blender_registry.register_import_function("re2", extension="mesh.2109108288", file_category="MESH")
-@blender_registry.register_import_function("re2_non_rt", extension="mesh.1808312334", file_category="MESH")
-@blender_registry.register_import_function("re3", extension="mesh.2109108288", file_category="MESH")
-@blender_registry.register_import_function("re3_non_rt", extension="mesh.1902042334", file_category="MESH")
-@blender_registry.register_import_function("re8", extension="mesh.2101050001", file_category="MESH")
+@blender_registry.register_import_function("re2", extension="mesh.2109108288", albam_asset_type="MODEL")
+@blender_registry.register_import_function("re2_non_rt", extension="mesh.1808312334",
+                                           albam_asset_type="MODEL")
+@blender_registry.register_import_function("re3", extension="mesh.2109108288", albam_asset_type="MODEL")
+@blender_registry.register_import_function("re3_non_rt", extension="mesh.1902042334",
+                                           albam_asset_type="MODEL")
+@blender_registry.register_import_function("re8", extension="mesh.2101050001", albam_asset_type="MODEL")
 def build_blender_model(file_list_item, context: bpy.types.Context) -> bpy.types.Object:
 
     mesh_bytes = file_list_item.get_bytes()
     re_mesh = ReengineMesh(KaitaiStream(io.BytesIO(mesh_bytes)))
+    re_mesh._read()
 
     bl_object_name = file_list_item.display_name
     skeleton = None if not re_mesh.header.offset_bones else build_blender_armature(re_mesh, bl_object_name)
@@ -92,9 +95,17 @@ def build_blender_mesh(re_mesh, sub_mesh):
     norms = np.linalg.norm(vert_normals, axis=1, keepdims=True)
     np.divide(vert_normals, norms, out=vert_normals, where=norms != 0)
     bl_mesh.polygons.foreach_set("use_smooth", [True] * len(bl_mesh.polygons))
-    bl_mesh.create_normals_split()
+    try:
+        bl_mesh.create_normals_split()
+    except AttributeError:
+        # blender 4.1+
+        pass
     bl_mesh.normals_split_custom_set_from_vertices(vert_normals)
-    bl_mesh.use_auto_smooth = True
+    try:
+        bl_mesh.use_auto_smooth = True
+    except AttributeError:
+        # blender 4.1+
+        pass
 
     return ob
 

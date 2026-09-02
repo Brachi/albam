@@ -1,3 +1,55 @@
+import json
+import os
+
+import pytest
+
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified files to
+# parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
+# to add more.
+MOD_PARSING_DATASET_PATH = os.path.join(os.path.dirname(__file__), "datasets", "mod_parsing_hashes.json")
+with open(MOD_PARSING_DATASET_PATH) as f:
+    MOD_PARSING_DATASET = json.load(f)
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_mod_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_mod_path_hash")
+        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_PARSING_DATASET]
+        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_PARSING_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by MOD_PARSING_DATASET must be a subset of that app_id's committed
+    catalog, so this file only ever exercises real, unmodified, hash-verified
+    game files. CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in MOD_PARSING_DATASET:
+        catalog_path = os.path.join(os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["mod_path_hash"] in catalog_hashes, (
+            f"{entry['mod_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def parsed_mod(game_fs_root, local_app_id, local_mod_path_hash):
+    from albam.engines.mtfw.mesh import MOD_CLASS_MAPPER
+    from albam.lib.kaitai_utils import parse
+
+    path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash]
+    src_bytes = game_fs_root.readbytes(path)
+    mod_version = src_bytes[4]
+    ModCls = MOD_CLASS_MAPPER[mod_version]
+
+    return parse(ModCls, src_bytes, local_app_id)
+
+
 SUPPORTED_MOD_VERSIONS = (156, 210, 211, 212)
 
 KNOWN_CONNECT = {
@@ -85,8 +137,66 @@ KNOWN_FUNC_SKIN = {
 }
 
 
-def test_mod(parsed_mod_from_arc):
-    mod = parsed_mod_from_arc
+KNOWN_DRAW_MODE = {
+    0,
+    32,
+    4128,
+    58560,
+    58561,
+    58577,
+    58579,
+    58821,
+    58853,
+    59080,
+    59340,
+    59112,
+    59341,
+    60901,
+    61439,
+    62689,
+    62691,
+    62949,
+    62965,
+    63469,
+    63485,
+    64755,
+    64997,
+    64999,
+    65013,
+    65015,
+    65517,
+    65519,
+    65533,
+    65534,
+    65535,
+    # Values only umvc3 uses so far
+    4096,
+    58563,
+    58592,
+    58593,
+    60609,
+    60659,
+    60919,
+    61179,
+    61437,
+    62657,
+    62705,
+    63227,
+    63437,
+    63487,
+    65259,
+    65275,
+    65503,
+}
+
+KNOWN_TOPOLOGY = {
+    3,
+    4,  # probably strips
+}
+
+
+def test_mod(parsed_mod, local_app_id):
+    mod = parsed_mod
     if mod.header.version == 156:
         materials = [m for m in mod.materials_data.materials]
         for m in mod.meshes_data.meshes:
@@ -124,12 +234,18 @@ def test_mod(parsed_mod_from_arc):
         vertex_formats = vtype_types
     else:
         vertex_formats = {m.vertex_format for m in mod.meshes_data.meshes}
+        draw_modes = {m.draw_mode for m in mod.meshes_data.meshes}
+        topology = {m.topology for m in mod.meshes_data.meshes}
+        assert not draw_modes.difference(KNOWN_DRAW_MODE)
+        assert not topology.difference(KNOWN_TOPOLOGY)
     total_num_weight_bounds = sum(m.num_weight_bounds for m in mod.meshes_data.meshes)
-    # FIXME: mod.header.version == 211
-    num_weight_bounds = (
-        mod.num_weight_bounds if mod.header.version == 210 or mod.header.version == 212
-        else mod.meshes_data.num_weight_bounds
-    )
+    # Version 211 normally carries its weight-bound count inside meshes_data,
+    # but umvc3's own 211 keeps it at the top level like 210/212 do - see the
+    # matching condition in mod-21.ksy.
+    if mod.header.version in (210, 212) or local_app_id == "umvc3":
+        num_weight_bounds = mod.num_weight_bounds
+    else:
+        num_weight_bounds = mod.meshes_data.num_weight_bounds
 
     assert mod.header.ident == b"MOD\x00"
     assert mod.header.version in SUPPORTED_MOD_VERSIONS
