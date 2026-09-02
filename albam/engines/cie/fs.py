@@ -43,6 +43,7 @@ from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
+from kaitaistruct import KaitaiStream
 
 from . import lfs_decompress
 from .structs.dat import Dat
@@ -170,8 +171,17 @@ def split_archive_name(file_name):
     return stem, extensions[0]
 
 
+def _local_opener(path):
+    return open(path, "rb")
+
+
 class LfsFS(FS):
     """Read-only PyFilesystem2 view of a single RE4UHD .lfs archive.
+
+    `lfs_path` is an opaque identifier handed to `opener(lfs_path)` for a
+    seekable, readable file-like object, not necessarily a local path -
+    the same shape ArcFS and SsgFS use, so an archive can be read from S3
+    or R2 as easily as from disk.
 
     __init__ decompresses the whole archive and slices every file out of it
     (see this module's docstring for why it can't be deferred or made
@@ -189,9 +199,10 @@ class LfsFS(FS):
         "virtual": False,
     }
 
-    def __init__(self, lfs_path):
+    def __init__(self, lfs_path, opener=None):
         super().__init__()
         self.lfs_path = str(lfs_path)
+        self._opener = opener or _local_opener
 
         file_name = os.path.basename(self.lfs_path)
         try:
@@ -199,9 +210,13 @@ class LfsFS(FS):
         except ValueError as error:
             raise CreateFailed(str(error))
 
-        lfs = Lfs.from_file(self.lfs_path)
-        lfs._read()
-        decompressed = bytes(lfs_decompress.xcompress_decompress_re4hd(lfs.chunks))
+        handle = self._opener(self.lfs_path)
+        try:
+            lfs = Lfs(KaitaiStream(handle))
+            lfs._read()
+            decompressed = bytes(lfs_decompress.xcompress_decompress_re4hd(lfs.chunks))
+        finally:
+            handle.close()
 
         # Set when an archive named after a container extension turns out not
         # to hold one after all - see _split().
