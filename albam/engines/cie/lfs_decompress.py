@@ -1,5 +1,5 @@
 """
-Pure-Python LZX / LFS decompressor for RE4 UHD
+Pure-Python LZX / LFS decompressor for RE4UHD
 No DLL dependency, unlike the xcompress64.dll wrapper this replaced.
 Based on lfs_decompress.h by kreed
 """
@@ -447,7 +447,7 @@ def is_lfs(data):
 
 def lfs_decompress(data):
     """
-    Decompress an LFS file (RE4 UHD format).
+    Decompress an LFS file (RE4UHD format).
     Accepts bytes or bytearray. Returns bytearray.
     """
     if isinstance(data, (bytes, memoryview)):

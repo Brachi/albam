@@ -47,7 +47,7 @@ OUTPUT_ROOT = os.path.join(REPO_ROOT, "tests", "data")
 # Default: a game's own playable character models, one per character. Most MT
 # Framework titles lay these out as chr/<Name>/model/1p/<Name>.mod.
 DEFAULT_PATTERN = r"^/chr/[^/]+/model/1p/[^/]+\.mod$"
-# RE4 UHD has no whole-game filesystem to walk (see albam/engines/cie/fs.py),
+# RE4UHD has no whole-game filesystem to walk (see albam/engines/cie/fs.py),
 # so its models are reached by mounting archives one at a time, and its
 # pattern matches archive paths rather than model paths. Narrow it to one
 # content folder to render just that folder's models.
@@ -243,7 +243,7 @@ def _mtfw_models(args, vfs):
 
 
 def _cie_models(args, vfs):
-    """(name, load) for every mesh .bin in the RE4 UHD archives matching
+    """(name, load) for every mesh .bin in the RE4UHD archives matching
     --pattern.
 
     Sharding is by archive rather than by model: mounting one costs a full

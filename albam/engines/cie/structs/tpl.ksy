@@ -3,7 +3,7 @@ meta:
   file-extension: tpl
   endian: le
   ks-version: "0.11"
-  title: Capcom Internal Engine texture palette
+  title: RE4UHD texture palette
   
 seq:
   - {id: magic, type: u4} # 0x78563412 or 0x12345678

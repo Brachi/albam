@@ -1,4 +1,4 @@
-"""Build a modded RE4 UHD archive, checking the exporter against the original
+"""Build a modded RE4UHD archive, checking the exporter against the original
 before trusting it with an edit.
 
 The check is the point. Importing a model and exporting it again proves

@@ -1,6 +1,6 @@
 """
 Generates tests/cie/datasets/re4uhd_catalog.json: a hashed catalog of every
-.lfs archive in a local RE4 UHD install. No plain-text game asset paths get
+.lfs archive in a local RE4UHD install. No plain-text game asset paths get
 committed - only sha256-truncated hashes (see
 tests/mtfw/scripts/catalog_paths.py for the full rationale, whose hashing
 this reuses).

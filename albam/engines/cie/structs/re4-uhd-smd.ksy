@@ -2,7 +2,7 @@ meta:
   id: re4_uhd_smd
   endian: le
   ks-version: "0.11"
-  title: Capcom Internal Engine scenario file (room geometry and placement)
+  title: RE4UHD scenario file (room geometry and placement)
 
 doc: |
   A room's own geometry, as opposed to the props standing in it.

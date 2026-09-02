@@ -1,5 +1,5 @@
 """
-Round-trip a real RE4 UHD model through the import and export functions:
+Round-trip a real RE4UHD model through the import and export functions:
 import it, export it, import what came out, and check the model survived.
 
 Unlike tests/cie/test_lfs_fs.py, which only reads, this drives the registry,

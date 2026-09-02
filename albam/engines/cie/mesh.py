@@ -77,7 +77,7 @@ _TEXTURE_SLOT_INPUTS = (
     ("custom_specular_map", "Special Specular MM"),
 )
 
-# face_index primitive types (RE4 UHD BIN format, same as DirectX D3DPT_* values)
+# face_index primitive types (RE4UHD BIN format, same as DirectX D3DPT_* values)
 FCOUNT_TYPES = {
     5: "FTYPE_TRIANGLE_LIST",  # fcount/3 triangles, 3 sequential verts per triangle
     6: "FTYPE_TRIANGLE_STRIP",  # fcount-2 triangles, alternating winding
@@ -246,7 +246,7 @@ def _encode_normal(vector, n, extended=True):
 
 
 def _build_faces(bin):
-    # RE4 UHD uses a non-indexed mesh layout: vertex_positions has one entry
+    # RE4UHD uses a non-indexed mesh layout: vertex_positions has one entry
     # per face-corner (no vertex sharing). Faces are formed by consuming vertices
     # sequentially, grouped per material and per strip within each material.
     faces = []
@@ -1183,7 +1183,7 @@ def export_bin(bl_obj):
     if not bl_mesh_objs:
         raise AlbamCheckFailure(
             f"{bl_obj.name} has no mesh to export",
-            details="A RE4 UHD model is exported from a mesh object, or from an "
+            details="A RE4UHD model is exported from a mesh object, or from an "
                     "armature or empty with mesh children",
             solution="Select the imported model's armature, or its mesh",
         )

@@ -3,7 +3,7 @@ meta:
   file-extension: pack
   endian: le
   ks-version: "0.11"
-  title: Capcom Internal Engine texture bank
+  title: RE4UHD texture bank
 
 seq:
   - {id: pack_name, type: u4}

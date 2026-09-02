@@ -1,5 +1,5 @@
 """
-Finding and identifying .lfs archives in a local RE4 UHD install.
+Finding and identifying .lfs archives in a local RE4UHD install.
 
 The identity of one archive here is its path relative to the game root,
 forward-slashed and lowercased, hashed the same way every other engine's

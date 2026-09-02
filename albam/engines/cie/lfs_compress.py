@@ -1,5 +1,5 @@
 """
-Pure-Python LZX encoder for RE4 UHD .lfs archives.
+Pure-Python LZX encoder for RE4UHD .lfs archives.
 
 The counterpart of lfs_decompress.py, and written against it rather than
 against any general description of LZX: that decoder is what the game's own

@@ -1,4 +1,4 @@
-"""Round-trip every RE4 UHD mesh .bin an archive holds: import, export,
+"""Round-trip every RE4UHD mesh .bin an archive holds: import, export,
 re-import, and check the model survived.
 
 The import sweep says a file parsed. This says albam can write one back that

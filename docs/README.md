@@ -6,6 +6,6 @@ what is known about each field - and the repo's `CLAUDE.md`.
 
 ## Guides
 
-- [Modding a character (Resident Evil 4 UHD)](modding-a-character.md) - importing
+- [Modding a character (RE4UHD)](modding-a-character.md) - importing
   a character, changing it, and getting it back into the game, with the checks
   worth running before you do.

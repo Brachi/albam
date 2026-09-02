@@ -3,7 +3,7 @@ meta:
   id: re4_uhd_bin
   endian: le
   ks-version: "0.11"
-  title: Capcom Internal Engine 3d model file
+  title: RE4UHD 3d model file
 
 seq:
   - {id: header, type: uhd_bin_header}

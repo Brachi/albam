@@ -4,7 +4,7 @@ meta:
   endian: le
   bit-endian: le
   ks-version: "0.11"
-  title: RE4 UHD LZX ("xcompress") compressed container
+  title: RE4UHD LZX ("xcompress") compressed container
 
 doc: |
   An .lfs is a compression wrapper, not a file archive: it holds exactly one

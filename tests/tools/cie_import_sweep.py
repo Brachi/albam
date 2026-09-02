@@ -1,8 +1,8 @@
-"""Import every RE4 UHD mesh .bin in a set of .lfs archives through the real
+"""Import every RE4UHD mesh .bin in a set of .lfs archives through the real
 Blender operator stack, and report what succeeded, what failed and why.
 
 The cie counterpart of tests/tools/mod_import_sweep.py. It differs in what it
-sweeps over, because RE4 UHD has no whole-game filesystem to walk: an .lfs's
+sweeps over, because RE4UHD has no whole-game filesystem to walk: an .lfs's
 file table lives inside its compressed stream, so archives are mounted one at
 a time (see albam/engines/cie/fs.py). This mounts each archive matching
 --pattern, then imports every mesh .bin inside it.

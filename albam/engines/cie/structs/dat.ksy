@@ -3,7 +3,7 @@ meta:
   file-extension: dat
   endian: le
   ks-version: "0.11"
-  title: Capcom Internal Engine file container
+  title: RE4UHD file container
   
 seq:
   - {id: header, type: dat_header}

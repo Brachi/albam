@@ -1,4 +1,4 @@
-"""Reading and writing RE4 UHD archives.
+"""Reading and writing RE4UHD archives.
 
 Reading is the fs_root_loader below, which hands the VFS an LfsFS (see fs.py).
 Writing is update_lfs(): an archive with some of its files replaced by what

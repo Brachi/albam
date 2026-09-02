@@ -1,5 +1,5 @@
 """
-PyFilesystem2 adapter for Capcom Internal Engine (RE4 UHD) .lfs archives.
+PyFilesystem2 adapter for RE4UHD .lfs archives.
 
 An .lfs is an LZX ("xcompress") stream split into fixed-size chunks (see
 structs/lfs.ksy): the header records each chunk's compressed and
@@ -13,7 +13,7 @@ the resulting bytes for the life of the instance; close() drops them.
 
 That cost is also why there is no whole-game-root loader here, the way
 albam.engines.mtfw.arc_fs.MTFW_FS and albam.engines.hexn.fs.HexnFS both
-have one: a real RE4 UHD install ships ~4500 .lfs archives, and mounting
+have one: a real RE4UHD install ships ~4500 .lfs archives, and mounting
 the game folder would have to decompress every one of them up front just
 to know what is inside. Archives are mounted one at a time instead ("Add
 Files" in the VFS panel - see archive.py).
@@ -171,7 +171,7 @@ def split_archive_name(file_name):
 
 
 class LfsFS(FS):
-    """Read-only PyFilesystem2 view of a single RE4 UHD .lfs archive.
+    """Read-only PyFilesystem2 view of a single RE4UHD .lfs archive.
 
     __init__ decompresses the whole archive and slices every file out of it
     (see this module's docstring for why it can't be deferred or made

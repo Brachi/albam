@@ -4,7 +4,7 @@ from ...registry import blender_registry
 from ..mtfw.material import BaseMaterialCustomProperties
 from .textures import _process_tpls, _create_blender_image_from_tex
 
-REUHD_SHADER_NODEGROUP_NAME = "RE4 UHD shader"
+REUHD_SHADER_NODEGROUP_NAME = "RE4UHD shader"
 
 
 def build_blender_materials(bl_mesh, bin, tpl_vfile):
@@ -31,8 +31,8 @@ def build_blender_materials(bl_mesh, bin, tpl_vfile):
                 break
 
         shader_node_group = blender_material.node_tree.nodes.new("ShaderNodeGroup")
-        shader_node_group.node_tree = bpy.data.node_groups["RE4 UHD shader"]
-        shader_node_group.name = "RE4 UHD shader group"
+        shader_node_group.node_tree = bpy.data.node_groups["RE4UHD shader"]
+        shader_node_group.name = "RE4UHD shader group"
         shader_node_group.width = 300
 
         for node in blender_material.node_tree.nodes:
@@ -99,7 +99,7 @@ def _get_texture_from_db(tex_db, tex_index):
 def _create_cie_shader():
     """Creates shader node group to hide all nodes from users under the hood
 
-    RE4 UHD stores normals with X in the R channel (G and B are identical to R)
+    RE4UHD stores normals with X in the R channel (G and B are identical to R)
     and Y in the Alpha channel. Z is not stored and must be approximated.
     Using B=1.0 as the Z approximation is accurate for typical surface normals
     and avoids unnecessary math node complexity.

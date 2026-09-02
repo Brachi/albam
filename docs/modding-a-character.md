@@ -1,4 +1,4 @@
-# Modding a character (Resident Evil 4 UHD)
+# Modding a character (RE4UHD)
 
 A worked example: taking the player character, changing something about him, and
 getting the result back into the game.
@@ -15,7 +15,7 @@ to end and confirmed in the running game.
 
 ## 1. Pick the app
 
-In the Albam sidebar, set the app to **Resident Evil 4 UHD**. Everything below
+In the Albam sidebar, set the app to **RE4UHD**. Everything below
 is keyed off that: which importers run, which formats are offered, how an
 archive is repacked.
 

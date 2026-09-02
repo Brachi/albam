@@ -2,7 +2,7 @@ meta:
   id: udas
   file-extension: udas
   ks-version: "0.11"
-  title: Capcom Internal Engine block container
+  title: RE4UHD block container
   endian: le
 
 doc: |

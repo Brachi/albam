@@ -1,4 +1,4 @@
-"""What a RE4 UHD model must not lose when it is exported unedited.
+"""What a RE4UHD model must not lose when it is exported unedited.
 
 tests/cie/test_bin_serialization.py round-trips a model imported under the
 best conditions: its textures resolve, and it is the model that brought its
