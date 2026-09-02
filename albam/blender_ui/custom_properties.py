@@ -286,6 +286,17 @@ def AlbamCustomPropertiesFactory(kind: str):
                 break
         return albam_asset
 
+    def _get_parent_albam_asset_bone(armature_obj):
+        """A pose bone's `id_data` is the armature object, which for a .mod is
+        the asset root itself. Parents are walked for a rig parented elsewhere.
+        """
+        obj = armature_obj
+        while obj is not None:
+            if obj.albam_asset.relative_path:
+                return obj.albam_asset
+            obj = obj.parent
+        return None
+
     def _get_parent_albam_asset_object(bl_obj):
         albam_asset = None
         for obj in bpy.data.objects:
@@ -300,6 +311,10 @@ def AlbamCustomPropertiesFactory(kind: str):
     def get_parent_albam_asset(self):
         custom_prop_context = self.id_data
         albam_asset = None
+
+        if kind == "bone":
+            # a pose bone's id_data is an Object too, so kind tells them apart
+            return _get_parent_albam_asset_bone(custom_prop_context)
 
         if isinstance(custom_prop_context, bpy.types.Mesh):
             albam_asset = _get_parent_albam_asset_mesh(custom_prop_context)
@@ -363,7 +378,7 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image", "object"), f"kind: {kind} incorrect"
+    assert kind in ("mesh", "material", "image", "object", "bone"), f"kind: {kind} incorrect"
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -395,7 +410,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         Only show custom properties panel if the contex_item (mesh, object or material)
         are associated with an albam asset (e.g. a 3d model)
         """
-        context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
+        context_item = getattr(context, cls.CONTEXT_ITEM_NAME, None)
         if not context_item:
             return False
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
@@ -545,6 +560,16 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     CONTEXT_ITEM_NAME = "mesh"
 
 
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesBone(ALBAM_PT_CustomPropertiesBase):
+    """`context.pose_bone`, not `context.bone`: that is where the group lives."""
+    bl_idname = "ALBAM_PT_CustomPropertiesBone"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "bone"
+    CONTEXT_ITEM_NAME = "pose_bone"
+
+
 @blender_registry.register_blender_prop_albam(name="clipboard")
 class ClipboardData(bpy.types.PropertyGroup):
     buff: bpy.props.StringProperty(default="{}")
@@ -580,6 +605,8 @@ def get_context_item(context):  # workaround for bledner 4.5 api
             return context.material
         elif space.context == 'DATA':
             return context.mesh
+        elif space.context == 'BONE':
+            return getattr(context, "pose_bone", None)
     else:
         return None
 

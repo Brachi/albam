@@ -274,9 +274,12 @@ def _root_motion_track_angle(action, armature):
 
 
 def _skeleton_root_bone(armature):
-    for bone in armature.data.bones:
-        if str(bone.get("mtfw.anim_retarget")) == "0":
-            return bone.name
+    from albam.engines.mtfw.bone import get_anim_retarget
+
+    app_id = armature.albam_asset.app_id
+    for pose_bone in armature.pose.bones:
+        if get_anim_retarget(pose_bone, app_id) == "0":
+            return pose_bone.name
     raise AssertionError("the armature carries no bone mapped to anim id 0")
 
 
@@ -412,6 +415,7 @@ def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
     Synthetic: builds the collision directly, no game data needed.
     """
     from albam.engines.mtfw.animation.animation_import import _create_missing_bones
+    from albam.engines.mtfw.bone import get_anim_retarget, set_anim_retarget
 
     armature_data = bpy.data.armatures.new("collision_rig")
     armature = bpy.data.objects.new("collision_rig", armature_data)
@@ -422,18 +426,19 @@ def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
         bpy.ops.object.mode_set(mode="EDIT")
         decoy = armature_data.edit_bones.new("104")
         decoy.tail = (0.0, 0.0, 0.1)
-        decoy["mtfw.anim_retarget"] = "77"      # named 104, answers to 77
         bpy.ops.object.mode_set(mode="OBJECT")
+        # named 104, answers to 77
+        set_anim_retarget(armature.pose.bones["104"], "re5", "77")
 
         mapping = {}
-        returned = _create_missing_bones(armature, 104, "104", mapping)
+        returned = _create_missing_bones(armature, 104, "104", mapping, "re5")
 
         assert returned != "104", (
             "returned the pre-existing bone named 104, which answers to anim id 77"
         )
         assert returned == mapping["104"], "return value and mapping disagree"
-        assert armature_data.bones[returned].get("mtfw.anim_retarget") == "104"
-        assert armature_data.bones["104"].get("mtfw.anim_retarget") == "77", (
+        assert get_anim_retarget(armature.pose.bones[returned], "re5") == "104"
+        assert get_anim_retarget(armature.pose.bones["104"], "re5") == "77", (
             "the unrelated bone must be left alone"
         )
     finally:
@@ -463,7 +468,7 @@ def test_root_motion_on_a_rig_with_no_root_bone_says_so():
     try:
         bpy.context.view_layer.objects.active = armature
         with pytest.raises(ValueError, match="animation id 0"):
-            _get_or_create_root_motion_bone(armature, {})
+            _get_or_create_root_motion_bone(armature, {}, "re5")
     finally:
         if bpy.context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")

@@ -13,8 +13,14 @@ from mathutils import Quaternion, Vector
 
 from ....registry import blender_registry
 from ....vfs import VirtualFileData
+from ..bone import get_anim_retarget
 from ..structs.lmt import Lmt
-from .animation_import import BLOCK_INDEX_PROP, CHAIN_TARGET_PROP, _create_bone_mapping
+from .animation_import import (
+    BLOCK_INDEX_PROP,
+    CHAIN_TARGET_PROP,
+    ROOT_MOTION_BONE_ID,
+    _create_bone_mapping,
+)
 from .keyframes import (
     APPID_VERSION_MAPPER,
     ActionKey,
@@ -25,8 +31,9 @@ from .keyframes import (
 )
 
 
-def _local_space_to_parent_translation(frame, bone):
-    anim_bone_id = bone.get("mtfw.anim_retarget", "").split("_")[0]
+def _local_space_to_parent_translation(frame, pose_bone, app_id):
+    bone = pose_bone.bone
+    anim_bone_id = get_anim_retarget(pose_bone, app_id).split("_")[0]
 
     if bone.parent is None:
         if anim_bone_id in ("0", "255") or anim_bone_id.startswith("254"):
@@ -47,17 +54,21 @@ def _local_space_to_parent_translation(frame, bone):
     return global_pos
 
 
-def _select_kf_usage(bone, track_type):
-    is_mroot = bone.get('mtfw.anim_retarget', "-1") == "255"
-    match track_type:
-        case "rotation_quaternion":
-            return 3 if is_mroot else 0
-        case "location":
-            return 4 if is_mroot else 1
-        case "scale":
-            return 5 if is_mroot else 2
-        case _:
-            raise ValueError(f"Track type {track_type} isn't correct")
+# track type -> usage on an ordinary bone, and on the root motion bone
+_TRACK_TYPE_USAGES = {
+    "rotation_quaternion": (0, 3),
+    "location": (1, 4),
+    "scale": (2, 5),
+}
+
+
+def _select_kf_usage(pose_bone, track_type, app_id):
+    try:
+        ordinary, motion_root = _TRACK_TYPE_USAGES[track_type]
+    except KeyError:
+        raise ValueError(f"Track type {track_type} isn't correct")
+    is_mroot = get_anim_retarget(pose_bone, app_id) == str(ROOT_MOTION_BONE_ID)
+    return motion_root if is_mroot else ordinary
 
 
 def _block_length(action, fcurves, custom_props):
@@ -86,12 +97,12 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         location = {}
         rotation_quaternion = {}
         scale = {}
-        bone = armature.data.bones.get(bone_name)
+        pose_bone = armature.pose.bones.get(bone_name)
         bone_index = mapping.get(bone_name)
         for frame, action_key in bone_tracks.items():
             if action_key.location is not None:
                 kf = action_key.location
-                kf = _local_space_to_parent_translation(kf, bone)
+                kf = _local_space_to_parent_translation(kf, pose_bone, app_id)
                 location[frame] = kf
             if action_key.rotation_quaternion is not None:
                 rotation_quaternion[frame] = action_key.rotation_quaternion
@@ -100,7 +111,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if rotation_quaternion:
             keyframes.track_type = "rotation_quaternion"
             rotation_sorted = {k: rotation_quaternion[k] for k in sorted(rotation_quaternion)}
-            usage = _select_kf_usage(bone, "rotation_quaternion")
+            usage = _select_kf_usage(pose_bone, "rotation_quaternion", app_id)
             if len(rotation_sorted) == 1 and keyframes.version != 51:
                 # see encode_framedata(static=True): v67's single-frame quat
                 # type id is taken by an unrelated vec3 format
@@ -111,14 +122,14 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
         if location:
             keyframes.track_type = "location"
             location_sorted = {k: location[k] for k in sorted(location)}
-            usage = _select_kf_usage(bone, "location")
+            usage = _select_kf_usage(pose_bone, "location", app_id)
             kf_type = 2 if len(location_sorted) == 1 else 9
             keyframes.encode_framedata(kf_type, bone_index, location_sorted, usage)
         if scale:
             keyframes.track_type = "scale"
             scale_sorted = {k: scale[k] for k in sorted(scale)}
             kf_type = 2 if len(scale_sorted) == 1 else 9
-            usage = _select_kf_usage(bone, "scale")
+            usage = _select_kf_usage(pose_bone, "scale", app_id)
             keyframes.encode_framedata(kf_type, bone_index, scale_sorted, usage)
     return keyframes.encoded_frames
 
@@ -166,7 +177,7 @@ def _get_action_fcurves(action, armature):
 
 
 def _generate_track_from_action(armature, bl_objects, app_id):
-    mapping = _create_bone_mapping(armature)
+    mapping = _create_bone_mapping(armature, app_id)
     mapping = {value: key for key, value in mapping.items()}
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey

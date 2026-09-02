@@ -16,6 +16,7 @@ class BlenderRegistry:
         self.custom_properties_mesh = {}
         self.custom_properties_object = {}
         self.custom_properties_image = {}
+        self.custom_properties_bone = {}
         self.albam_asset_types = {}
 
     # TODO: rename to register_albam_prop_global
@@ -126,6 +127,20 @@ class BlenderRegistry:
             for app_id in app_ids:
                 self.custom_properties_object.setdefault(app_id, {})[name] = (cls, is_secondary,
                                                                               display_name, asset_type)
+            return cls
+        return decorator
+
+    def register_custom_properties_bone(self, name, app_ids, is_secondary=False,
+                                        display_name="", asset_type="MODEL"):
+        """
+        Registers on the pose bone, not on the armature's bone: an id belongs
+        to a rig as it is being posed, so two objects sharing one armature can
+        answer to two different sets of ids.
+        """
+        def decorator(cls):
+            for app_id in app_ids:
+                self.custom_properties_bone.setdefault(app_id, {})[name] = (
+                    cls, is_secondary, display_name, asset_type)
             return cls
         return decorator
 
