@@ -171,17 +171,15 @@ def split_archive_name(file_name):
     return stem, extensions[0]
 
 
-def _local_opener(path):
-    return open(path, "rb")
-
-
 class LfsFS(FS):
     """Read-only PyFilesystem2 view of a single RE4UHD .lfs archive.
 
-    `lfs_path` is an opaque identifier handed to `opener(lfs_path)` for a
-    seekable, readable file-like object, not necessarily a local path -
-    the same shape ArcFS and SsgFS use, so an archive can be read from S3
-    or R2 as easily as from disk.
+    `lfs_path` is a local path. Unlike ArcFS and SsgFS there is no opener
+    hook to read one from S3: those read a header over a range request and
+    fetch only what is touched, while an .lfs has to be decompressed whole
+    before anything in it can be listed, so reading one remotely would
+    fetch the entire object anyway. The tests download instead (see
+    tests/cie/conftest.py).
 
     __init__ decompresses the whole archive and slices every file out of it
     (see this module's docstring for why it can't be deferred or made
@@ -199,10 +197,9 @@ class LfsFS(FS):
         "virtual": False,
     }
 
-    def __init__(self, lfs_path, opener=None):
+    def __init__(self, lfs_path):
         super().__init__()
         self.lfs_path = str(lfs_path)
-        self._opener = opener or _local_opener
 
         file_name = os.path.basename(self.lfs_path)
         try:
@@ -210,7 +207,7 @@ class LfsFS(FS):
         except ValueError as error:
             raise CreateFailed(str(error))
 
-        handle = self._opener(self.lfs_path)
+        handle = open(self.lfs_path, "rb")
         try:
             lfs = Lfs(KaitaiStream(handle))
             lfs._read()
