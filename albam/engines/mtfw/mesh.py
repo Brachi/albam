@@ -424,7 +424,7 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     uvs_4 = []
     vertex_colors = []
     weights_per_bone = {}
-    shape_keys = {0: [], 1: [], 2: [], 3: [], }
+    shape_keys = {}
 
     for vertex_index, vertex in enumerate(mesh.vertices):
         _process_locations(mod.header.version, mesh, vertex, locations, bbox_data)
@@ -546,6 +546,8 @@ def _process_morphs(mod_version, mesh, vertex, morph_out, bbox_data):
     if not hasattr(vertex, "morph_position"):
         return
     for i in range(4):
+        if morph_out.get(i, None) is None:
+            morph_out[i] = []
         x = vertex.position.x
         y = vertex.position.y
         z = vertex.position.z
@@ -558,25 +560,11 @@ def _process_morphs(mod_version, mesh, vertex, morph_out, bbox_data):
         dy = cur_morph.y
         dz = cur_morph.z
 
-        mx = (x + dx) / 32767 * bbox_data.width + bbox_data.min_x
-        my = (y + dy) / 32767 * bbox_data.height + bbox_data.min_y
-        mz = (z + dz) / 32767 * bbox_data.depth + bbox_data.min_z
-        '''
-        w = getattr(vertex.position, "w", None)
-        if w is not None and mod_version == 156:
-            mx = mx / 32767 * bbox_data.width + bbox_data.min_x
-            my = my / 32767 * bbox_data.height + bbox_data.min_y
-            mz = mz / 32767 * bbox_data.depth + bbox_data.min_z
+        mx = (x + dx) / 32767 * bbox_data.dimension + bbox_data.min_x
+        my = (y + dy) / 32767 * bbox_data.dimension + bbox_data.min_y
+        mz = (z + dz) / 32767 * bbox_data.dimension + bbox_data.min_z
 
-        elif (w is not None and mod_version in (210, 211)) or (
-                mod_version in (210, 211) and mesh.vertex_format in BBOX_AFFECTED):
-            mx = mx / 32767 * bbox_data.dimension + bbox_data.min_x
-            my = my / 32767 * bbox_data.dimension + bbox_data.min_y
-            mz = mz / 32767 * bbox_data.dimension + bbox_data.min_z
-        '''
-        # Y-up to z-up and cm to m
-        #morph_out[i].append((mx * 0.01, -mz * 0.01, my * 0.01))
-        morph_out[i].append((mx * 1, -mz * 1, my * 1))
+        morph_out[i].append((mx * 0.01, -mz * 0.01, my * 0.01))
 
 
 def _process_weights(mod, mesh, vertex, vertex_index, weights_per_bone):
@@ -715,19 +703,21 @@ def _build_uvs(bl_mesh, uvs, name="uv"):
     uv_layer.data.foreach_set("uv", per_loop_list)
 
 
-def _build_shape_keys(bl_obj, shape_keys):
+def _build_shape_keys(bl_ob, shape_keys):
     if not shape_keys:
         return
-    if not shape_keys[0]:
-        return
-    if not bl_obj.data.shape_keys:
-        bl_obj.shape_key_add(name="basis")
+    bl_ob.shape_key_add(name="Basis", from_mix=False)
 
-    for i in range(4):
-        bl_obj.shape_key_add(name="morph_position_" + str(i))
-        bl_obj.active_shape_key_index = i
-        for j, vert in enumerate(bl_obj.data.vertices):
-            vert.co = shape_keys[i][j]
+    for morph_index, positions in shape_keys.items():
+        if len(positions) != len(bl_ob.data.vertices):
+            raise ValueError(
+                f"Morph {morph_index}: "
+                f"{len(positions)} positions for "
+                f"{len(bl_ob.data.vertices)} vertices"
+            )
+        key = bl_ob.shape_key_add(name=f"morph_{morph_index}")
+        for i, pos in enumerate(positions):
+            key.data[i].co = pos
 
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
