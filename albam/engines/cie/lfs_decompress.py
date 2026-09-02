@@ -571,11 +571,15 @@ def xcompress_compress_re4hd(payload, file_id=LFS_DEFAULT_FILE_ID, compress=Fals
     albam's own LZX did not, even though albam's decoder read it back
     correctly.
 
-    Why it did not is understood now and fixed in lfs_compress: those chunks
-    matched back into the chunks before them, which this decoder allows and
-    the game's does not. The default stays here all the same, because only a
-    load of a rebuilt archive in the real game can say whether the encoder is
-    right, and that has not happened since the fix.
+    Two reasons for that are understood now and fixed in lfs_compress: those
+    chunks matched back into the chunks before them, and they ended without
+    the five zero bytes and the long final frame header every compressed
+    chunk in the game's own data ends with. This decoder notices neither -
+    it carries a window across the whole file, and it stops on the output
+    size rather than on a frame header saying there is nothing left. The
+    default stays here all the same, because only a load of a rebuilt
+    archive in the real game can say whether the encoder is right, and that
+    has not happened since the fixes.
 
     Pass compress=True to use the encoder anyway (see lfs_compress).
     """

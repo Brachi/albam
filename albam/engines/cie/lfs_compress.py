@@ -24,6 +24,10 @@ does (see lfs.ksy and xcompress_decompress_re4hd):
   offsets, but not the window, not the current block and not the trees. So
   every chunk here starts a fresh block and ends exactly on its last byte,
   leaving no partial block for the next chunk to fall into.
+* A chunk says where its frames stop, rather than leaving that to whoever
+  counts the bytes coming out: its last frame takes the long header and five
+  zero bytes follow it (see _frame and FRAME_TERMINATOR). This decoder needs
+  neither, which is how an encoder written against it came to omit both.
 
 Match finding is delegated to zlib: its deflate output is parsed back into the
 literal/match token stream that produced it (_lz77_tokens), which is then
@@ -48,8 +52,15 @@ from .lfs_decompress import (
 # One frame's uncompressed size. The frame header's size fields are 16 bit,
 # and a whole chunk does not fit one, so a chunk is two frames.
 FRAME_SIZE = 32768
-# A frame whose uncompressed size is exactly FRAME_SIZE gets the short header.
+# Introduces the long frame header; a frame not starting with it carries the
+# short one (see _frame).
 SHORT_FRAME_HEADER_MARKER = 0xFF
+# Closes a chunk, after its last frame. Reads as a frame header declaring no
+# compressed bytes, which is what stops a reader that walks frames until they
+# run out rather than until the output is full. Every compressed chunk in the
+# game's own data ends with exactly these five bytes, and they count towards
+# the chunk's size in the chunk table.
+FRAME_TERMINATOR = b"\x00" * 5
 
 LZX_NUM_CHARS = 256
 LZX_MIN_MATCH = 2
@@ -522,8 +533,7 @@ def _compress_chunk(chunk):
     _write_lengths(writer, secondary_lengths, [0] * LZX_NUM_SECONDARY_LENGTHS,
                    0, LZX_NUM_SECONDARY_LENGTHS)
 
-    out = bytearray()
-    frames_left = len(chunk)
+    frames = []
     emitted = 0
     for symbol, secondary, value, bits, size in operations:
         writer.write(main_codes[symbol], main_lengths[symbol])
@@ -533,27 +543,37 @@ def _compress_chunk(chunk):
             writer.write(value, bits)
         emitted += size
         if emitted == FRAME_SIZE:
-            out += _frame(writer.finish(), emitted)
-            frames_left -= emitted
+            frames.append((writer.finish(), emitted))
             emitted = 0
             writer = _BitWriter()
     if emitted:
-        out += _frame(writer.finish(), emitted)
-        frames_left -= emitted
-    if frames_left:
+        frames.append((writer.finish(), emitted))
+    if sum(size for _data, size in frames) != len(chunk):
         raise RuntimeError("LZX encoder lost track of a chunk's output size")
+
+    out = bytearray()
+    for i, (data, size) in enumerate(frames):
+        out += _frame(data, size, last=i + 1 == len(frames))
+    out += FRAME_TERMINATOR
 
     if len(out) >= len(chunk):
         return None
     return bytes(out)
 
 
-def _frame(data, uncompressed_size):
+def _frame(data, uncompressed_size, last):
     """One frame, with the header lfs_decompress._lzx_inflate expects.
 
-    Both of its sizes are big-endian u2. A frame of the standard size gets the
-    two byte header, anything else the five byte one the 0xFF marker
-    introduces.
+    Both of its sizes are big-endian u2. The two byte header says only how
+    many compressed bytes follow and leaves the uncompressed size implied, so
+    it can only carry a frame of the standard size; the five byte one the
+    0xFF marker introduces spells both out.
+
+    A chunk's last frame always takes the long header, even when its
+    uncompressed size is the standard one and the short header would do. That
+    is what the game's own data does without exception: over a 700 archive
+    sample every one of 65594 compressed chunks ends on a long header, and
+    every frame before it uses the short one.
     """
     size = len(data)
     if size > 0xFFFF:
@@ -561,7 +581,7 @@ def _frame(data, uncompressed_size):
         # large means the data did not compress at all, and the chunk it
         # belongs to is about to be stored instead.
         raise _FrameTooLarge()
-    if uncompressed_size == FRAME_SIZE and (size >> 8) != SHORT_FRAME_HEADER_MARKER:
+    if not last and uncompressed_size == FRAME_SIZE and (size >> 8) != SHORT_FRAME_HEADER_MARKER:
         return struct.pack(">H", size) + data
     return struct.pack(">BHH", SHORT_FRAME_HEADER_MARKER, uncompressed_size, size) + data
 

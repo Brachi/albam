@@ -215,3 +215,46 @@ def test_real_payload_round_trips_compressed(game_root, local_archive_path_hash)
     reparsed._read()
     assert any(chunk.is_compressed for chunk in reparsed.chunks)
     assert len(rebuilt) < len(payload), "the rebuilt archive should be compressed"
+
+
+def _frames_of(chunk):
+    """A compressed chunk as (header size, uncompressed size, compressed size)
+    per frame, plus whatever follows the last one."""
+    frames = []
+    position = 0
+    while position < len(chunk):
+        if chunk[position] == 0xFF:
+            header, uncompressed = 5, (chunk[position + 1] << 8) | chunk[position + 2]
+            compressed = (chunk[position + 3] << 8) | chunk[position + 4]
+        else:
+            header, uncompressed = 2, 32768
+            compressed = (chunk[position] << 8) | chunk[position + 1]
+        if compressed == 0:
+            break
+        frames.append((header, uncompressed, compressed))
+        position += header + compressed
+    return frames, chunk[position:]
+
+
+@pytest.mark.parametrize("size", [1000, CHUNK_SIZE, CHUNK_SIZE + 4321])
+def test_a_compressed_chunk_ends_the_way_the_game_s_own_do(size):
+    """The frame shape every compressed chunk in the game's data has.
+
+    Measured over a 700 archive sample, without a single exception in 65594
+    chunks: every frame but the last carries the two byte header, the last
+    carries the five byte one even when the short one would fit it, and five
+    zero bytes close the chunk. Those bytes read as a frame header declaring
+    nothing to decompress, which is what ends a reader walking frames rather
+    than counting output bytes - and this decoder, which counts output bytes,
+    is exactly the reader that would not notice them missing.
+    """
+    from albam.engines.cie.lfs_compress import _compress_chunk
+
+    payload = (b"a line that repeats itself, mostly\n" * 3000)[:size]
+    chunk = _compress_chunk(payload)
+    assert chunk is not None
+    frames, trailing = _frames_of(chunk)
+    assert frames
+    assert [f[0] for f in frames] == [2] * (len(frames) - 1) + [5]
+    assert sum(f[1] for f in frames) == size
+    assert trailing == b"\x00" * 5
