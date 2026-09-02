@@ -182,20 +182,18 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
 
     An empty slot has to stay empty and every offset in the header is written
     by position, so getting the order wrong does not produce a slightly wrong
-    file - it produces one whose blocks are all in the wrong place. Export used
-    to take that order from `children_recursive`, which matches only because a
-    first import happens to name the objects in block order; import the same
-    .lmt again in one session and Blender renumbers the duplicates, the names
-    stop lining up, and the order silently changes.
+    file, it produces one whose blocks are all in the wrong place. Export used
+    to take that order from `children_recursive`, which is name order and
+    matches only while the names a first import gave still sort in block order.
     """
-    from albam.engines.mtfw.animation import BLOCK_INDEX_PROP, _lmt_blocks
+    from albam.engines.mtfw.animation import _lmt_blocks, get_block_index
 
     _result, _armature, _actions, lmt_object = lmt_imported_local
-    blocks = _lmt_blocks(lmt_object)
+    app_id = lmt_object.albam_asset.app_id
+    blocks = _lmt_blocks(lmt_object, app_id)
     assert blocks, "the .lmt produced no blocks"
 
-    recorded = [block.get(BLOCK_INDEX_PROP) for block in blocks]
-    assert None not in recorded, "a block carries no index to order it by"
+    recorded = [get_block_index(block, app_id) for block in blocks]
     assert recorded == list(range(len(blocks))), (
         f"blocks are not in file order: {recorded[:8]}...")
 
@@ -205,7 +203,7 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
     try:
         for position, block in enumerate(blocks):
             block.name = f"scrambled.{len(blocks) - position:04d}"
-        after = [block.get(BLOCK_INDEX_PROP) for block in _lmt_blocks(lmt_object)]
+        after = [get_block_index(block, app_id) for block in _lmt_blocks(lmt_object, app_id)]
         assert after == recorded, "renaming the objects reordered the blocks"
     finally:
         for block, name in zip(blocks, original_names):

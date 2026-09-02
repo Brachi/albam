@@ -46,6 +46,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - A bone's animation re-targeting id is now an Albam custom property on the pose
   bone, shown as "Anim Retarget" in the Bone tab. Rigs saved with the old
   `mtfw.anim_retarget` property are migrated the first time they are used
+- An animation block's index is now an Albam custom property alongside the rest
+  of its block data, instead of the raw `mtfw.lmt_block_index` property.
+  Blocks saved with the old property are migrated the first time they are used
 
 ### Removed
 

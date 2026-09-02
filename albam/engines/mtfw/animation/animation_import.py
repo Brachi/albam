@@ -29,11 +29,39 @@ HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
 CHAIN_TARGET_PROP = "mtfw.chain_target"
-BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
+# Where the block index lived before it became an albam custom property.
+# Files saved with it are migrated on read - see get_block_index.
+LEGACY_BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
 CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
+
+
+def _block_props(anim_object, app_id):
+    return anim_object.albam_custom_properties.get_custom_properties_for_appid(app_id)
+
+
+def set_block_index(anim_object, app_id, block_index):
+    _block_props(anim_object, app_id).block_index = block_index
+
+
+def get_block_index(anim_object, app_id):
+    """Which slot of the file this block is, 0 for one that never recorded it.
+
+    Blocks predating the move to an albam custom property carry the index as a
+    raw one, and are migrated here on read. Ones from before it was recorded at
+    all have nothing to migrate; they all answer 0, so a stable sort leaves
+    them in the order it found them, which is what they had before.
+    """
+    props = _block_props(anim_object, app_id)
+    if props.block_index >= 0:
+        return props.block_index
+    legacy = anim_object.get(LEGACY_BLOCK_INDEX_PROP)
+    if legacy is None:
+        return 0
+    props.block_index = int(legacy)
+    return props.block_index
 
 
 def _get_action_channels(action, armature):
@@ -78,10 +106,10 @@ def load_lmt(vfile, context):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
-        # Which slot of the file this block is. The name carries it too, but
-        # Blender renumbers duplicate names, so it stops matching as soon as
-        # the same .lmt is imported twice in one session - see _lmt_blocks.
-        anim_object[BLOCK_INDEX_PROP] = block_index
+        # Which slot of the file this block is, which is what identifies it.
+        # The tree order it would otherwise be read back in is name order, and
+        # names stop agreeing with block order - see _lmt_blocks.
+        set_block_index(anim_object, app_id, block_index)
         if block.offset == 0:
             continue
         if DEBUG_BLOCK is not None and DEBUG_BLOCK != block_index:

@@ -16,10 +16,10 @@ from ....vfs import VirtualFileData
 from ..bone import get_anim_retarget
 from ..structs.lmt import Lmt
 from .animation_import import (
-    BLOCK_INDEX_PROP,
     CHAIN_TARGET_PROP,
     ROOT_MOTION_BONE_ID,
     _create_bone_mapping,
+    get_block_index,
 )
 from .keyframes import (
     APPID_VERSION_MAPPER,
@@ -552,20 +552,21 @@ def _calculate_offsets(bl_objects, app_id):
         return _calculate_offsets_lmt67(bl_objects, app_id)
 
 
-def _lmt_blocks(bl_obj):
+def _lmt_blocks(bl_obj, app_id):
     """This .lmt's blocks, in the order the file stores them.
 
-    A block's position is what gives it its identity - an empty slot has to
-    stay empty, and every offset in the header is written by position - but
-    Blender's children are not kept in the order they were created, and the
-    names that used to stand in for the index get renumbered as soon as the
-    same .lmt is imported twice in one session. Sorting on the index recorded
-    at import is the only thing that survives that. Objects from before it was
-    recorded all sort equal, which a stable sort leaves exactly as it found
-    them.
+    A block's position is what gives it its identity: an empty slot has to stay
+    empty, and every offset in the header is written by position. That order
+    cannot be read back off the scene. `children_recursive` is name order,
+    because Blender keeps `bpy.data.objects` sorted by name, and names are
+    compared as text while blocks are numbered. Re-importing renames the
+    duplicates - the 4th import of a 256 block file in one session gets
+    `.1000`, which sorts before the `.771` of the import before it - and a user
+    is free to rename a block outright. Sorting on the index recorded at import
+    is what survives both.
     """
     blocks = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
-    return sorted(blocks, key=lambda block: block.get(BLOCK_INDEX_PROP, 0))
+    return sorted(blocks, key=lambda block: get_block_index(block, app_id))
 
 
 # re5 only, deliberately. Writing a .lmt was built and measured against
@@ -580,7 +581,7 @@ def export_lmt(bl_obj):
     app_id = asset.app_id
     vfiles = []
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
-    bl_objects = _lmt_blocks(bl_obj)
+    bl_objects = _lmt_blocks(bl_obj, app_id)
     armature = bpy.context.scene.albam.import_options_lmt.armature
     dst_lmt = Lmt(app_id)
     dst_lmt.id_magic = b"LMT\x00"
