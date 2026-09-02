@@ -50,6 +50,17 @@ reen = [
 requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+# pytest installs its own warning filters around every test, which discards
+# the one albam sets on import (albam/_pkg_resources_warning.py), so the
+# same two messages have to be named again here. Both come from `fs` 2.4.16
+# declaring pkg_resources namespace packages, and neither says anything
+# about albam.
+filterwarnings = [
+  "ignore:pkg_resources is deprecated as an API:UserWarning",
+  "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
+]
+
 [tool.black]
 line-length = 110
 

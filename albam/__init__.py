@@ -3,6 +3,7 @@ import os
 
 import bpy
 
+from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
