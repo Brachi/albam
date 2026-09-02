@@ -114,10 +114,9 @@ from, the file table rebuilt around their new sizes, and the result recompressed
 archive's own filename, so an archive under a different name produces differently
 named entries and its replacements will not match.
 
-Archives albam writes are larger than the originals - it stores its chunks rather
-than compressing them. That is deliberate: albam has an LZX encoder, but archives
-written with it are rejected by the game while stored ones load. Size is the
-right thing to trade for a file that works.
+Archives albam writes come out about 6% larger than the originals. Its LZX
+encoder does not find quite as many matches as the one the game shipped with,
+which costs size and nothing else.
 
 ## 7. Install and test
 
@@ -167,5 +166,3 @@ Add one layer of albam at a time, and whichever fails first names the layer:
   facial morphs loses them on export.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
-- **The LZX encoder** produces archives the game rejects, so archives are stored
-  instead and come out larger.
