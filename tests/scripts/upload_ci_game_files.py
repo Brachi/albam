@@ -1,14 +1,19 @@
 """
-Uploads to R2 exactly the game files an app_id's CI run needs - the .arc
-archives (and loose files) backing the committed dataset hashes - and
-nothing else.
+Uploads to R2 exactly the game files an app_id's CI run needs - the archives
+(and loose files) backing the committed dataset hashes - and nothing else.
 
 A full game install is far too large to mirror, and most of it is never
 read: the committed datasets reference a few dozen files out of ~60k-100k
 catalog entries. This resolves that reference set against a local install
-and uploads only the archives that actually back it, under the same
-"<bucket>/<app_id>/<game-root-relative path>" layout MTFW_FS.from_s3()
-expects (see .env.example and albam/engines/mtfw/arc_fs.py).
+and uploads only the files that actually back it, under the same
+"<bucket>/<app_id>/<game-root-relative path>" layout the tests mount from
+(see .env.example).
+
+Everything engine-specific - where the datasets live, how a hash becomes a
+local file, and what else that file needs to be importable - is a
+per-engine upload source module (tests/mtfw/upload_source.py,
+tests/cie/upload_source.py). Adding an engine means adding one of those and
+listing it in UPLOAD_SOURCES below; nothing else here changes.
 
 Only app_ids the CI workflow actually passes a --game-dir for are
 uploadable. Uploading data for an app_id CI never mounts would cost bucket
@@ -20,18 +25,18 @@ Credentials come from env/.env exactly as the tests read them (see
 tests/mtfw/r2_config.py); no credential is ever taken from a CLI flag.
 
 This is a real maintainer/owner-run tool, not part of CI or routine test
-runs - same as generate_catalog.py alongside it.
+runs - same as the generate_catalog.py scripts beside each engine's tests.
 
 Usage:
-    python tests/mtfw/scripts/upload_ci_game_files.py --app-id re5 \
-        --game-root "/path/to/Resident Evil 5" [--dry-run]
+    python tests/scripts/upload_ci_game_files.py --app-id re5 \
+        --game-root "/path/to/game" [--dry-run]
 
-Note on completeness: whole .arc archives are uploaded, so a referenced
-file's siblings (a .mod's .mrl, its textures) come along automatically when
-they live in the same archive - which is the usual layout. A test needing a
-file from an archive nothing in the datasets references would still fail to
-resolve it; that surfaces as a test failure naming the missing path, and
-the fix is to add that file's hash to the relevant dataset and re-run this.
+Note on completeness: whole archives are uploaded, so a referenced file's
+siblings come along automatically when they live in the same archive - which
+is the usual layout. A test needing a file from an archive nothing in the
+datasets references would still fail to resolve it; that surfaces as a test
+failure naming the missing path, and the fix is to add that file's hash to
+the relevant dataset and re-run this.
 """
 import argparse
 import glob
@@ -42,20 +47,19 @@ import re
 import sys
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "..", "..", ".."))
-DATASETS_DIR = os.path.join(_REPO_ROOT, "tests", "mtfw", "datasets")
+_REPO_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "..", ".."))
 DEFAULT_WORKFLOW = os.path.join(_REPO_ROOT, ".github", "workflows", "tests.yml")
 
 sys.path.insert(0, _REPO_ROOT)
 
+from tests.cie import upload_source as cie_source  # noqa: E402
+from tests.mtfw import upload_source as mtfw_source  # noqa: E402
 from tests.mtfw.r2_config import r2_credentials  # noqa: E402
-from tests.mtfw.scripts.catalog_paths import resolve_hashes  # noqa: E402
 
-# albam.engines.* is imported lazily, inside resolve_upload_set(): importing
-# albam pulls in bpy, and everything before resolution - the CI gate, the
-# dataset and catalog checks, --help - is plain JSON/text work that has no
-# reason to need Blender installed. It also keeps the "CI does not run this
-# app_id" refusal usable from any interpreter.
+# The engines this can upload for. Each module says where its datasets live
+# and how to turn a set of hashes into local files; neither imports albam at
+# module level, so the gate below stays usable from any interpreter.
+UPLOAD_SOURCES = (mtfw_source, cie_source)
 
 # Matches the app-id in a `--game-dir=<app-id>::<value>` flag as written in
 # the workflow. Only the app-id is wanted: the value there is a shell
@@ -94,6 +98,14 @@ def ci_app_ids(workflow_path):
         return set(GAME_DIR_APP_ID_RE.findall(f.read()))
 
 
+def upload_source_for(app_id):
+    """The engine module owning app_id, or None if no engine claims it."""
+    for source in UPLOAD_SOURCES:
+        if app_id in source.APP_IDS:
+            return source
+    return None
+
+
 def dataset_hashes_for(app_id):
     """{path_hash: [dataset file names]} for every committed dataset entry
     belonging to app_id.
@@ -102,8 +114,11 @@ def dataset_hashes_for(app_id):
     file is needed *for* - useful when deciding whether a large archive is
     worth uploading.
     """
+    source = upload_source_for(app_id)
+    if source is None:
+        return {}
     hashes = {}
-    for path in sorted(glob.glob(os.path.join(DATASETS_DIR, "*_hashes.json"))):
+    for path in sorted(glob.glob(os.path.join(source.DATASETS_DIR, "*_hashes.json"))):
         name = os.path.basename(path)
         with open(path) as f:
             entries = json.load(f)
@@ -117,134 +132,21 @@ def dataset_hashes_for(app_id):
 
 
 def load_catalog(app_id):
-    path = os.path.join(DATASETS_DIR, f"{app_id}_catalog.json")
+    source = upload_source_for(app_id)
+    path = os.path.join(source.DATASETS_DIR, f"{app_id}_catalog.json")
     if not os.path.isfile(path):
         raise SystemExit(
             f"no catalog for app_id={app_id!r} at {path} - generate one first:\n"
-            f"    python tests/mtfw/scripts/generate_catalog.py {app_id} <game-root>"
+            f"    " + source.CATALOG_COMMAND.format(app_id=app_id)
         )
     with open(path) as f:
         return {e["path_hash"]: e for e in json.load(f)}
 
 
-# A .mod's material library sits beside it under one of these suffixes, and
-# its textures are named without an extension - both mirrored from the
-# importer (_infer_mrl in material.py, build_blender_textures in texture.py).
-# Keep them in step: a model whose .mrl or textures live in an archive
-# nothing uploaded imports with empty image nodes rather than failing
-# outright, which is exactly what test_mod_import_textures_are_resolved
-# caught for all 59 umvc3 characters.
-MRL_SUFFIXES = (".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl")
-TEXTURE_EXTENSIONS = (".tex", ".rtex")
-
-
-def _first_existing(game_fs, candidates):
-    for candidate in candidates:
-        if game_fs.exists(candidate):
-            return candidate
-    return None
-
-
-def mod_dependencies(game_fs, app_id, mod_path):
-    """(paths, unresolved) for the .mrl and textures `mod_path` needs.
-
-    Resolution follows the importer exactly rather than guessing at a
-    naming convention: the .mrl by suffix, then every texture_path it
-    lists, .tex first and .rtex second. `unresolved` names the texture
-    paths this install has no file for - not fatal (the importer itself
-    only warns), but worth reporting, since an upload can't include what
-    isn't there.
-    """
-    from albam.engines.mtfw.structs.mrl import Mrl
-    from albam.lib.kaitai_utils import parse
-
-    base = mod_path[:-len(".mod")] if mod_path.lower().endswith(".mod") else mod_path
-    mrl_path = _first_existing(game_fs, [base + suffix for suffix in MRL_SUFFIXES])
-    if mrl_path is None:
-        return set(), set()
-
-    paths = {mrl_path}
-    unresolved = set()
-    try:
-        with game_fs.openbin(mrl_path) as f:
-            mrl = parse(Mrl, f.read(), app_id)
-    except Exception as e:
-        # A .mrl this tool can't parse is a real gap, but not one to abort
-        # a whole upload over - report it as unresolved and carry on.
-        return paths, {f"{mrl_path} (unparsed: {e})"}
-
-    for texture in mrl.textures:
-        texture_path = getattr(texture, "texture_path", None)
-        if not texture_path:
-            continue
-        normalized = "/" + texture_path.replace("\\", "/").lstrip("/")
-        found = _first_existing(game_fs, [normalized + ext for ext in TEXTURE_EXTENSIONS])
-        if found:
-            paths.add(found)
-        else:
-            unresolved.add(texture_path)
-    return paths, unresolved
-
-
 def resolve_upload_set(game_root, app_id, hashes):
-    """{absolute local path: game-root-relative key suffix} for the files
-    backing `hashes`.
-
-    An archived hash contributes the whole .arc that holds it (many hashes
-    usually collapse onto one archive); a loose hash contributes the file
-    itself. Resolution is forward-only - hashes are matched by walking the
-    install and hashing what's there, never by turning a hash back into a
-    path - so a hash that doesn't correspond to this install fails loudly
-    via resolve_hashes rather than silently uploading the wrong thing.
-    """
-    try:
-        from albam.engines.mtfw.arc_fs import MTFW_FS
-    except ImportError as e:
-        # albam imports bpy at package level, so this tool needs the same
-        # environment the tests run in. Worth naming outright: the traceback
-        # alone points at albam/__init__.py and reads like a repo problem.
-        raise SystemExit(
-            f"cannot import albam ({e}) - run this with the same interpreter as the "
-            f"test suite, e.g. .venv/bin/python with bpy installed"
-        )
-
-    game_fs = MTFW_FS(game_root)
-    resolved = resolve_hashes(game_fs, hashes)
-
-    # A .mod alone isn't importable: its .mrl and every texture that .mrl
-    # names have to be reachable too, and they routinely live in other
-    # archives. Expand before mapping to archives so those come along.
-    wanted = set(resolved.values())
-    unresolved = set()
-    for virtual_path in sorted(resolved.values()):
-        if not virtual_path.lower().endswith(".mod"):
-            continue
-        deps, missing = mod_dependencies(game_fs, app_id, virtual_path)
-        wanted |= deps
-        unresolved |= missing
-
-    uploads = {}
-    for virtual_path in sorted(wanted):
-        absolute = game_fs.origin_absolute_path(virtual_path)
-        if absolute is None:
-            # Loose file: no owning archive, so the file itself is what CI
-            # needs. MTFW_FS mounts loose files from an OSFS rooted at
-            # game_root, so the virtual path is already the relative one.
-            absolute = os.path.join(game_root, virtual_path.lstrip("/"))
-        relative = os.path.relpath(absolute, game_root).replace(os.sep, "/")
-        uploads[absolute] = relative
-
-    if unresolved:
-        print(f"  {len(unresolved)} texture path(s) named by a .mrl are not in this "
-              f"install - the importer only warns about these, so they are left out:")
-        for path in sorted(unresolved)[:10]:
-            print(f"    {path}")
-        if len(unresolved) > 10:
-            print(f"    ... and {len(unresolved) - 10} more")
-
-    print(f"  {len(resolved)} referenced file(s) pulled in {len(wanted) - len(resolved)} "
-          f"dependency file(s) (.mrl + textures)")
-    return uploads, resolved
+    """{absolute local path: key suffix} for the files backing `hashes`, and
+    what those hashes resolved to, from the engine that owns app_id."""
+    return upload_source_for(app_id).resolve_upload_set(game_root, app_id, hashes)
 
 
 def size_upload_set(game_root, app_id, hashes):

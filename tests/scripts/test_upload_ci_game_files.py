@@ -10,11 +10,10 @@ import os
 
 import pytest
 
-from tests.mtfw.scripts import upload_ci_game_files as uploader
+from tests.scripts import upload_ci_game_files as uploader
 
 WORKFLOW = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     ".github", "workflows", "tests.yml",
 )
 
@@ -24,7 +23,7 @@ def test_ci_app_ids_matches_the_workflow():
     after a workflow edit, the upload gate is about to allow (or refuse) a
     different set of app_ids - which is the point, but worth noticing.
     """
-    assert uploader.ci_app_ids(WORKFLOW) == {"re5", "re1", "umvc3"}
+    assert uploader.ci_app_ids(WORKFLOW) == {"re5", "re1", "umvc3", "re4uhd"}
 
 
 def test_ci_app_ids_ignores_the_shell_expression_in_the_value():
@@ -53,6 +52,23 @@ def test_dataset_hashes_are_collected_per_app():
 
 def test_dataset_hashes_for_unknown_app_is_empty():
     assert uploader.dataset_hashes_for("not-a-real-app") == {}
+
+
+def test_each_app_id_is_claimed_by_exactly_one_engine():
+    """An app_id in two engines' APP_IDS would resolve against whichever
+    module happens to be listed first, silently uploading the wrong files.
+    """
+    claimed = [app_id for source in uploader.UPLOAD_SOURCES for app_id in source.APP_IDS]
+    assert len(claimed) == len(set(claimed))
+
+
+def test_dataset_hashes_are_collected_for_every_engine():
+    """Each engine's datasets are found through its own module, so a source
+    pointed at the wrong directory shows up here rather than as an empty
+    upload."""
+    for source in uploader.UPLOAD_SOURCES:
+        assert any(uploader.dataset_hashes_for(app_id) for app_id in source.APP_IDS), (
+            f"no committed dataset references any app_id of {source.__name__}")
 
 
 @pytest.mark.parametrize("app_id", ["re6"])
@@ -89,7 +105,8 @@ def test_every_dataset_hash_is_in_the_catalog():
     hash missing from the catalog would bake that disagreement into R2.
     """
     for app_id in uploader.ci_app_ids(WORKFLOW):
-        catalog_path = os.path.join(uploader.DATASETS_DIR, f"{app_id}_catalog.json")
+        source = uploader.upload_source_for(app_id)
+        catalog_path = os.path.join(source.DATASETS_DIR, f"{app_id}_catalog.json")
         if not os.path.isfile(catalog_path):
             continue
         with open(catalog_path) as f:
