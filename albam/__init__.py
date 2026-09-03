@@ -3,6 +3,7 @@ import os
 
 import bpy
 
+from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
@@ -39,6 +40,9 @@ def register():
     importlib.import_module(".engines.mtfw.archive", __package__)
     importlib.import_module(".engines.mtfw.mesh", __package__)
     importlib.import_module(".engines.mtfw.navmesh", __package__)
+    importlib.import_module(".engines.cie.archive", __package__)
+    importlib.import_module(".engines.cie.mesh", __package__)
+    importlib.import_module(".engines.cie.scenario", __package__)
     if os.getenv("ALBAM_ENABLE_REEN"):
         importlib.import_module(".engines.reng.archive", __package__)
         importlib.import_module(".engines.reng.mesh", __package__)

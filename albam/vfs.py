@@ -165,11 +165,10 @@ class VirtualFileSystemBase:
         fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
                      blender_registry.fs_root_loader_registry.get((app_id, None)))
         if fs_loader:
-            self.add_fs_root(
+            return self.add_fs_root(
                 app_id, fs_loader(absolute_path), display_name=path.name,
                 is_archive=bool(extension), absolute_path=absolute_path,
             )
-            return
 
         vf = self.file_list.add()
         vf.is_root = True
@@ -430,7 +429,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
     # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})  # NOQA
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.lfs", options={"HIDDEN"})  # NOQA
 
     def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager

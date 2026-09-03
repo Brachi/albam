@@ -20,6 +20,7 @@ APPS = [
     ("dd", "Dragon's Dogma", "", 11),
     ("dmc4", "Devil May Cry 4", "", 12),
     ("umvc3", "UMVC3", "", 13),
+    ("re4uhd", "Resident Evil 4 UHD", "", 14),
 ]
 
 REENGINE_APPS = [

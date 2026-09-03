@@ -7,6 +7,7 @@ class BlenderRegistry:
         self.archive_loader_registry = {}
         self.archive_accessor_registry = {}
         self.fs_root_loader_registry = {}
+        self.archive_writer_registry = {}
         self.props = []  # order is meaningful for dependencies
         self.types = []  # order is meaningufl for dependencies
         self.import_options_custom_draw_funcs = {}
@@ -80,6 +81,22 @@ class BlenderRegistry:
             self.archive_accessor_registry[(app_id, extension)] = f
             return f
 
+        return decorator
+
+    def register_archive_writer(self, app_id, extension):
+        """
+        Decorated function must be
+        `(archive_path, exported_vfiles, **options) -> bytes`: the archive at
+        `archive_path` with each exported file's bytes substituted for the
+        entry of the same name, returned whole and ready to write.
+
+        This is what the Pack operator dispatches on, so that repacking is
+        the engine's own business rather than something the UI knows how to
+        do for one engine only.
+        """
+        def decorator(f):
+            self.archive_writer_registry[(app_id, extension)] = f
+            return f
         return decorator
 
     def register_fs_root_loader(self, app_id, extension=None):

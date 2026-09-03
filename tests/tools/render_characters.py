@@ -26,6 +26,7 @@ the only way to parallelise this: bpy drives a single global Blender session,
 so two characters cannot be in flight inside one interpreter.
 """
 import argparse
+import functools
 import gc
 import math
 import os
@@ -46,6 +47,12 @@ OUTPUT_ROOT = os.path.join(REPO_ROOT, "tests", "data")
 # Default: a game's own playable character models, one per character. Most MT
 # Framework titles lay these out as chr/<Name>/model/1p/<Name>.mod.
 DEFAULT_PATTERN = r"^/chr/[^/]+/model/1p/[^/]+\.mod$"
+# RE4UHD has no whole-game filesystem to walk (see albam/engines/cie/fs.py),
+# so its models are reached by mounting archives one at a time, and its
+# pattern matches archive paths rather than model paths. Narrow it to one
+# content folder to render just that folder's models.
+CIE_APP_ID = "re4uhd"
+CIE_DEFAULT_PATTERN = r"\.udas\.lfs$"
 
 
 def _clear_scene():
@@ -63,7 +70,12 @@ def _world_points(max_points=20000):
 
     Framing on vertices rather than on each object's bounding box matters for
     a character standing diagonally to the camera: the box corners stick out
-    into empty space and cost a good part of the frame."""
+    into empty space and cost a good part of the frame.
+
+    Thinning is done by index rather than by slicing: a Blender collection
+    rejects a slice with a step, so `vertices[::stride]` raised for any mesh
+    over max_points - exactly the meshes the thinning exists for.
+    """
     points = []
     for obj in bpy.data.objects:
         if obj.type != "MESH":
@@ -71,7 +83,7 @@ def _world_points(max_points=20000):
         vertices = obj.data.vertices
         stride = max(1, len(vertices) // max_points)
         matrix = obj.matrix_world
-        points.extend(matrix @ v.co for v in vertices[::stride])
+        points.extend(matrix @ vertices[i].co for i in range(0, len(vertices), stride))
     if not points:
         raise RuntimeError("no mesh geometry to frame")
     return points
@@ -176,6 +188,8 @@ def _run_workers(args):
     """Re-run this script once per shard and wait for them all."""
     base = [sys.executable, os.path.abspath(__file__), args.app_id, args.game_root,
             "--pattern", args.pattern, "--resolution", args.resolution, "--jobs", "1"]
+    if args.main_only:
+        base.append("--main-only")
     if args.suffix:
         base += ["--suffix", args.suffix]
     if args.limit:
@@ -186,31 +200,23 @@ def _run_workers(args):
     return max(worker.wait() for worker in workers)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("app_id")
-    parser.add_argument("game_root")
-    parser.add_argument("--pattern", default=DEFAULT_PATTERN)
-    parser.add_argument("--suffix", default=None,
-                        help="appended to each filename, to keep runs side by side")
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--resolution", default="1024x1536",
-                        help="WIDTHxHEIGHT, e.g. 640x960 for a quick low-res pass")
-    parser.add_argument("--jobs", type=int, default=4,
-                        help="worker processes to render with (default 4)")
-    parser.add_argument("--shard", default=None, help=argparse.SUPPRESS)
-    args = parser.parse_args()
+def _shard(items, shard):
+    """The slice of `items` this worker owns.
 
-    if args.shard is None and args.jobs > 1:
-        return _run_workers(args)
+    Round robin rather than contiguous blocks: neighbouring characters in a
+    sorted listing tend to be alike in size, so a block hands one worker
+    every heavy model and leaves another idle.
+    """
+    if not shard:
+        return items
+    index, total = (int(n) for n in shard.split("/"))
+    return items[index::total]
 
-    import albam
-    albam.register()
+
+def _mtfw_models(args, vfs):
+    """(name, load) for every .mod matching --pattern in an MT Framework
+    install, mounted as one game-wide filesystem."""
     from albam.engines.mtfw.arc_fs import MTFW_FS
-
-    out_dir = os.path.join(OUTPUT_ROOT, args.app_id)
-    os.makedirs(out_dir, exist_ok=True)
 
     game_fs = MTFW_FS(args.game_root)
     rx = re.compile(args.pattern, re.IGNORECASE)
@@ -218,36 +224,123 @@ def main():
                    if p.lower().endswith(".mod") and rx.match(p))
     if args.limit:
         paths = paths[:args.limit]
-    if args.shard:
-        index, total = (int(n) for n in args.shard.split("/"))
-        # Round robin rather than contiguous blocks: neighbouring characters
-        # in a sorted listing tend to be alike in size, so a block hands one
-        # worker every heavy model and leaves another idle.
-        paths = paths[index::total]
+    paths = _shard(paths, args.shard)
     print(f"{len(paths)} models", file=sys.stderr)
+
+    vfs.add_fs_root(args.app_id, game_fs, display_name=f"{args.app_id}-render")
+
+    def load(path):
+        # add_fs_root() strips the leading "/" when building its tree
+        vfile = vfs.select_vfile(args.app_id, path.lstrip("/"))
+        if vfile is None:
+            raise KeyError(path)
+        result = bpy.ops.albam.import_vfile()
+        if result != {"FINISHED"}:
+            raise RuntimeError(f"import_vfile returned {result}")
+
+    for path in paths:
+        yield _model_name(path), functools.partial(load, path)
+
+
+def _cie_models(args, vfs):
+    """(name, load) for every mesh .bin in the RE4UHD archives matching
+    --pattern.
+
+    Sharding is by archive rather than by model: mounting one costs a full
+    decompression (see albam/engines/cie/fs.py), so splitting a single
+    archive's models across workers would pay that cost once per worker.
+
+    Archives are mounted lazily, as the generator reaches them, and dropped
+    afterwards - a worker's share of a character folder is more decompressed
+    archive than is worth holding at once.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.lib import fs_registry
+    from albam.registry import blender_registry
+    from tests.tools.cie_import_sweep import find_archives, is_mesh_bin
+
+    archives = find_archives(args.game_root, args.pattern, args.limit)
+    archives = _shard(archives, args.shard)
+    print(f"{len(archives)} archives", file=sys.stderr)
+
+    def load(vfile):
+        # Left on "Auto": the importer works out which .tpl a model's
+        # materials address (see mesh.choose_tpl), which is what a user gets
+        # by default too.
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+        import_function = blender_registry.import_registry[(vfile.app_id, vfile.extension)]
+        import_function(vfile, bpy.context)
+
+    for relative, absolute_path in archives:
+        vfs.file_list.clear()
+        fs_registry.clear()
+        root = vfs.add_real_file(args.app_id, absolute_path)
+        children = [vf for vf in vfs.file_list
+                    if vf.tree_node.root_id == root.name and not vf.is_root]
+        archive_name = os.path.basename(relative).split(".")[0]
+        models = [vf for vf in children
+                  if vf.display_name.lower().endswith(".bin") and is_mesh_bin(vf.get_bytes())]
+        if args.main_only and models:
+            # One image per archive: the largest model in it, which for a
+            # character archive is the body rather than a hand, a weapon
+            # attachment or a level-of-detail copy.
+            models = [max(models, key=lambda vf: len(vf.get_bytes()))]
+        for vfile in models:
+            name = f"{archive_name}_{os.path.splitext(vfile.display_name)[0]}"
+            yield name, functools.partial(load, vfile)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("app_id")
+    parser.add_argument("game_root")
+    parser.add_argument("--pattern", default=None,
+                        help="model paths to render, or archive paths for "
+                             f"{CIE_APP_ID} (defaults: {DEFAULT_PATTERN!r}, "
+                             f"{CIE_DEFAULT_PATTERN!r})")
+    parser.add_argument("--suffix", default=None,
+                        help="appended to each filename, to keep runs side by side")
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--resolution", default="1024x1536",
+                        help="WIDTHxHEIGHT, e.g. 640x960 for a quick low-res pass")
+    parser.add_argument("--jobs", type=int, default=4,
+                        help="worker processes to render with (default 4)")
+    parser.add_argument("--main-only", action="store_true",
+                        help="render only the largest model in each archive, so a "
+                             "character folder gives one image per character")
+    parser.add_argument("--shard", default=None, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if args.pattern is None:
+        args.pattern = CIE_DEFAULT_PATTERN if args.app_id == CIE_APP_ID else DEFAULT_PATTERN
+
+    if args.shard is None and args.jobs > 1:
+        return _run_workers(args)
+
+    import albam
+    albam.register()
+
+    out_dir = os.path.join(OUTPUT_ROOT, args.app_id)
+    os.makedirs(out_dir, exist_ok=True)
 
     bpy.context.scene.albam.apps.app_selected = args.app_id
     bpy.context.scene.albam.import_settings.import_only_main_lods = True
     vfs = bpy.context.scene.albam.vfs
-    vfs.add_fs_root(args.app_id, game_fs, display_name=f"{args.app_id}-render")
+
+    source = _cie_models if args.app_id == CIE_APP_ID else _mtfw_models
+    models = source(args, vfs)
 
     resolution = tuple(int(n) for n in args.resolution.lower().split("x"))
 
     rendered, failed = [], []
-    for i, path in enumerate(paths, 1):
-        name = _model_name(path)
+    for i, (name, load) in enumerate(models, 1):
         suffix = f"_{args.suffix}" if args.suffix else ""
         output_path = os.path.join(out_dir, f"{name}{suffix}.png")
-        print(f"[{i}/{len(paths)}] {name}", file=sys.stderr)
+        print(f"[{i}] {name}", file=sys.stderr)
         _clear_scene()
         try:
-            # add_fs_root() strips the leading "/" when building its tree
-            vfile = vfs.select_vfile(args.app_id, path.lstrip("/"))
-            if vfile is None:
-                raise KeyError(path)
-            result = bpy.ops.albam.import_vfile()
-            if result != {"FINISHED"}:
-                raise RuntimeError(f"import_vfile returned {result}")
+            load()
             # Cel-shaded models are built with inverted-hull outlines: a
             # black copy of the body, normals pointing inward, drawn with
             # front faces culled so only the silhouette shows. Rendered
@@ -262,7 +355,7 @@ def main():
         except Exception as e:
             failed.append((name, f"{type(e).__name__}: {e}"))
 
-    print(f"\nrendered {len(rendered)}/{len(paths)} into {out_dir}")
+    print(f"\nrendered {len(rendered)}/{len(rendered) + len(failed)} into {out_dir}")
     for name, error in failed:
         print(f"  FAILED {name}: {error}")
     return 0 if not failed else 1
