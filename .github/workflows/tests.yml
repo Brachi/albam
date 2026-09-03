@@ -208,6 +208,36 @@ jobs:
           echo "value=${base_version}+${commit_count}.${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
       - name: Build extension zip
         run: python scripts/build_extension.py --version "${{ steps.version.outputs.value }}"
+      - name: Build release notes
+        # Points at the built extension zip explicitly, since GitHub attaches
+        # its own auto-generated "Source code" archives to every release and
+        # those are not installable in Blender. The changelog's [unreleased]
+        # section doubles as the list of what this build has over the last
+        # tagged release.
+        run: |
+          set -e
+          {
+            echo "Automated build of the current tip of \`main\` ($GITHUB_SHA)."
+            echo
+            echo "**This is a development build, not a stable release.** It may be"
+            echo "unstable, and anything in it may change or break before it ships."
+            echo "For a tested build, use the [latest tagged release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest)."
+            echo
+            echo "## Install"
+            echo
+            echo "Download \`albam-${{ steps.version.outputs.value }}.zip\` from the assets below,"
+            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
+            echo "The \"Source code\" archives are generated automatically by GitHub and"
+            echo "cannot be installed as an extension."
+            echo
+            echo "<details>"
+            echo "<summary><b>Upcoming changes</b> - already in this build, slated for the next release</summary>"
+            echo
+          } > release_notes.md
+          if ! python scripts/extract_changelog_section.py unreleased >> release_notes.md; then
+            echo "_Nothing recorded in CHANGELOG.md's [unreleased] section yet._" >> release_notes.md
+          fi
+          printf '\n</details>\n' >> release_notes.md
       - name: Publish rolling "latest main" pre-release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -216,7 +246,7 @@ jobs:
           gh release delete latest-main --yes --cleanup-tag || true
           gh release create latest-main dist/albam-*.zip \
             --title "Latest main build (${{ steps.version.outputs.value }})" \
-            --notes "Automated build of the latest main branch ($GITHUB_SHA). Not a stable release - see the Releases page for tagged versions." \
+            --notes-file release_notes.md \
             --prerelease \
             --latest=false \
             --target "$GITHUB_SHA"
@@ -255,8 +285,22 @@ jobs:
           fi
       - name: Build extension zip
         run: python scripts/build_extension.py
-      - name: Extract release notes from CHANGELOG.md
-        run: python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" > release_notes.md
+      - name: Build release notes from CHANGELOG.md
+        # The install note names the built zip explicitly: GitHub attaches its
+        # own auto-generated "Source code" archives to every release, and those
+        # are not installable in Blender.
+        run: |
+          set -e
+          {
+            echo "## Install"
+            echo
+            echo "Download \`albam-${GITHUB_REF_NAME#v}.zip\` from the assets below,"
+            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
+            echo "The \"Source code\" archives are generated automatically by GitHub and"
+            echo "cannot be installed as an extension."
+            echo
+          } > release_notes.md
+          python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" >> release_notes.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
