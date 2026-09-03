@@ -51,31 +51,3 @@ def test_block_order_survives_names_that_stop_sorting_in_block_order():
     finally:
         for obj in reversed(created):
             bpy.data.objects.remove(obj, do_unlink=True)
-
-
-def test_a_block_saved_before_the_move_keeps_its_index():
-    """.blend files predating the move carry the index as a raw property."""
-    from albam.engines.mtfw.animation import _lmt_blocks, get_block_index
-    from albam.engines.mtfw.animation.animation_import import LEGACY_BLOCK_INDEX_PROP
-
-    created = []
-    try:
-        root = bpy.data.objects.new("legacy_anim", None)
-        bpy.context.scene.collection.objects.link(root)
-        created.append(root)
-        # named against block order, so only the recorded index can order them
-        for name, index in (("c", 0), ("b", 1), ("a", 2)):
-            block = bpy.data.objects.new(name, None)
-            block.parent = root
-            bpy.context.scene.collection.objects.link(block)
-            created.append(block)
-            block[LEGACY_BLOCK_INDEX_PROP] = index
-
-        assert [get_block_index(b, "re5") for b in _lmt_blocks(root, "re5")] == [0, 1, 2]
-        moved = root.children_recursive[0].albam_custom_properties
-        assert moved.get_custom_properties_for_appid("re5").block_index >= 0, (
-            "reading it should have moved it onto the albam custom property"
-        )
-    finally:
-        for obj in reversed(created):
-            bpy.data.objects.remove(obj, do_unlink=True)

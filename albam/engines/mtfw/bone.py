@@ -14,11 +14,10 @@ from ...registry import blender_registry
 # idx_anim_map is a u1 in mod 153, 156 and 21x alike, so one group covers all
 MTFW_APP_IDS = ("re0", "re1", "re5", "re6", "rev1", "rev2", "dd", "dmc4", "umvc3")
 
-# Where these lived before they became albam custom properties. Files saved
-# before the move still carry them, so a read falls back and moves them over.
+# Where the re-target id lived before it became an albam custom property. It
+# shipped in 0.5.0, so files saved with it are still out there and a read falls
+# back and moves it over. The chain properties never shipped, so they need none.
 LEGACY_ANIM_RETARGET_PROP = "mtfw.anim_retarget"
-LEGACY_CHAIN_TARGET_PROP = "mtfw.chain_target"
-LEGACY_CHAIN_LENGTH_PROP = "mtfw.chain_length"
 
 
 @blender_registry.register_custom_properties_bone("mod_bone", MTFW_APP_IDS)
@@ -68,19 +67,11 @@ def set_anim_retarget(pose_bone, app_id, value):
 
 
 def get_chain_target(pose_bone, app_id):
-    props = get_bone_custom_properties(pose_bone, app_id)
-    if not props.chain_target and pose_bone.bone.get(LEGACY_CHAIN_TARGET_PROP):
-        props.chain_target = True
-    return props.chain_target
+    return get_bone_custom_properties(pose_bone, app_id).chain_target
 
 
 def get_chain_length(pose_bone, app_id):
-    props = get_bone_custom_properties(pose_bone, app_id)
-    if not props.chain_length:
-        legacy = pose_bone.bone.get(LEGACY_CHAIN_LENGTH_PROP)
-        if legacy is not None:
-            props.chain_length = int(legacy)
-    return props.chain_length
+    return get_bone_custom_properties(pose_bone, app_id).chain_length
 
 
 def set_chain_target(pose_bone, app_id, chain_length):

@@ -28,9 +28,6 @@ HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 # nor the bone id names a body part. Verified over every re5 character: 35422
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
-# Where the block index lived before it became an albam custom property.
-# Files saved with it are migrated on read - see get_block_index.
-LEGACY_BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
@@ -47,19 +44,11 @@ def set_block_index(anim_object, app_id, block_index):
 def get_block_index(anim_object, app_id):
     """Which slot of the file this block is, 0 for one that never recorded it.
 
-    Blocks predating the move to an albam custom property carry the index as a
-    raw one, and are migrated here on read. Ones from before it was recorded at
-    all have nothing to migrate; they all answer 0, so a stable sort leaves
-    them in the order it found them, which is what they had before.
+    An empty albam did not import has nothing to say about its slot. They all
+    answer 0, so a stable sort leaves them in the order it found them.
     """
-    props = _block_props(anim_object, app_id)
-    if props.block_index >= 0:
-        return props.block_index
-    legacy = anim_object.get(LEGACY_BLOCK_INDEX_PROP)
-    if legacy is None:
-        return 0
-    props.block_index = int(legacy)
-    return props.block_index
+    block_index = _block_props(anim_object, app_id).block_index
+    return block_index if block_index >= 0 else 0
 
 
 def _get_action_channels(action, armature):
