@@ -244,13 +244,42 @@ def _texture_index(display_name):
     return int(index) if index.isdigit() else None
 
 
+def _image_name(app_id, texture_name, tpl_index):
+    """The datablock name to import this texture under.
+
+    Images are shared between the models of an archive - one pack serves all
+    of them, and a character archive holds dozens of models. But the .tpl
+    slot recorded on an image is only true for models whose .tpl puts that
+    texture at that slot, and an archive holds many .tpl files that need not
+    agree. Export reads the slot back off the image (see mesh._texture_slot),
+    so a shared image carrying another .tpl's slot writes a material pointing
+    at the wrong texture - correct-looking in Blender and wrong in the game.
+
+    So the texture's own name is used while the slot agrees, and a texture
+    that lands on a different slot gets a datablock of its own. Sharing is
+    what happens in the common case; duplicating only where it has to.
+
+    No shipped archive is known to need this: every .tpl of a sampled
+    archive agrees on where a given packed texture sits. It is a guard on an
+    invariant the format does not state, not a fix for an observed failure.
+    """
+    bl_image = bpy.data.images.get(texture_name)
+    if bl_image is None:
+        return texture_name
+    custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    if custom_properties.tpl_index == tpl_index:
+        return texture_name
+    return f"{texture_name}@{tpl_index}"
+
+
 def _create_blender_image_from_tex(tpl):
     app_id = "re4uhd"
-    name = tpl.get("texture_name")
+    texture_name = tpl.get("texture_name")
     data = tpl.get("texture_bytes")
-    if not name or not data:
+    if not texture_name or not data:
         return None
 
+    name = _image_name(app_id, texture_name, tpl["tpl_index"])
     bl_image = bpy.data.images.get(name)
     if bl_image:
         return bl_image

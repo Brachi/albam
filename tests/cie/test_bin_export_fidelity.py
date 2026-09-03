@@ -306,3 +306,44 @@ def _bone_parents(bin_bytes):
     parsed = Re4UhdBin.from_bytes(bin_bytes)
     parsed._read()
     return [(bone.bone_id, bone.parent) for bone in parsed.bones]
+
+
+def test_every_model_in_an_archive_keeps_its_texture_slots(
+        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+    """Not just the first one imported.
+
+    The round trip in test_bin_serialization.py checks the first model of an
+    archive, which is the one that populated every shared image datablock and
+    is self-consistent by construction. Models after it read those images
+    back through their own .tpl, so anything the sharing gets wrong can only
+    show up from the second model on.
+
+    Nothing in the shipped data is known to break this today - it is here so
+    that a change to how images are shared or how a slot is recorded cannot
+    quietly go wrong for every model but the first.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.registry import blender_registry
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+    models = _mesh_models(vfs, root)
+    assert models, "this archive should hold a mesh .bin"
+
+    import_function = blender_registry.import_registry[(local_app_id, "bin")]
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+
+    checked = 0
+    for vfile in models:
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        original_bytes = vfile.get_bytes()
+        bl_object = import_function(vfile, bpy.context)
+        exported_bytes = _export(bl_object, vfile, original_bytes, local_app_id)
+        assert _texture_slots(exported_bytes) == _texture_slots(original_bytes), (
+            f"{vfile.display_name} exported different texture slots than it came with")
+        checked += 1
+    assert checked == len(models)
