@@ -222,7 +222,7 @@ def _find_orphaned_textures(file_entries, app_id, old_texture_paths, new_texture
 @blender_registry.register_archive_writer(app_id="dd", extension="arc")
 @blender_registry.register_archive_writer(app_id="dmc4", extension="arc")
 @blender_registry.register_archive_writer(app_id="umvc3", extension="arc")
-def update_arc(filepath, vfiles, remove_unused_textures=False):
+def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     imported = {}
     exported = {}
     vf_sorted = _sort_arc_entries(vfiles)

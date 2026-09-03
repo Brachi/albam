@@ -128,13 +128,24 @@ def _rebuild_udas(payload, replacements):
 
     # Blocks after the DAT one move with it. Their sizes are unchanged: only
     # the DAT block is rebuilt.
+    #
+    # The DAT block is descriptors[0], not "whichever descriptor has type 0" -
+    # data_offset above is blocks[0].offset, so resizing a different
+    # descriptor would describe bytes that are not there. Position is also
+    # the rule every reader of this format follows (see structs/udas.ksy).
     shift = len(block) - header.file_size
-    for descriptor in descriptors:
+    if descriptors[0][0] != BLOCK_TYPE_DAT:
+        # Never seen, and the whole rebuild rests on it: data_offset,
+        # file_size and the block written above all come from blocks[0].
+        raise ValueError(
+            f"the first block of this archive is type {descriptors[0][0]:#x}, not the DAT "
+            f"block every reader of this format expects there"
+        )
+    descriptors[0][1] = len(block)
+    for descriptor in descriptors[1:]:
         if descriptor[0] == BLOCK_TERMINATOR:
             continue
-        if descriptor[0] == BLOCK_TYPE_DAT:
-            descriptor[1] = len(block)
-        elif descriptor[3] > data_offset:
+        if descriptor[3] > data_offset:
             descriptor[3] += shift
 
     for i, descriptor in enumerate(descriptors):

@@ -26,6 +26,7 @@ import os
 import bpy
 from mathutils import Euler, Matrix, Vector
 
+from ...exceptions import AlbamCheckFailure
 from ...registry import blender_registry
 from ...vfs import VirtualFile
 from .mesh import AUTO_TPL, GLOBAL_SCALE, build_blender_model
@@ -112,7 +113,14 @@ def _build_model(smd, scenario_bytes, model_id, tpl_id, name, vfile, context):
     if tpl_offset is not None and tpl_offset < len(scenario_bytes):
         tpl_vfile = _EmbeddedFile(f"{name}.tpl", scenario_bytes[tpl_offset:], vfile)
 
-    bl_object = build_blender_model(model_vfile, _ScenarioContext(context, tpl_vfile))
+    try:
+        bl_object = build_blender_model(model_vfile, _ScenarioContext(context, tpl_vfile))
+    except AlbamCheckFailure:
+        # A room places hundreds of models. One the .bin importer refuses -
+        # an offset landing on something that is not a model - counts as
+        # unresolved, like a model index the tables have no entry for, rather
+        # than taking the whole room down with it.
+        return None
     # The importer returns whatever it parents the mesh to - an empty, or an
     # armature for a model carrying bones. A placed model needs neither: the
     # placement is what parents it, and a room model's bones are one bone at

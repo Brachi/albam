@@ -414,10 +414,13 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             self.report({'ERROR'},
                         f"No way to repack a {extension!r} archive for {item_i.app_id}")
             return
-        options = {}
-        if item_i.app_id not in ("re4uhd",):
-            options["remove_unused_textures"] = (
-                context.scene.albam.export_settings.remove_unused_textures)
+        # Every export setting the panel offers is passed to whichever writer
+        # was looked up; a writer takes the ones it understands and ignores
+        # the rest, which is what the **options in its contract is for. An
+        # app_id branch here would put one engine's option back in the UI.
+        options = {
+            "remove_unused_textures": context.scene.albam.export_settings.remove_unused_textures,
+        }
         archive = writer(path_i, files_e, **options)
         with open(self.filepath, "wb") as f:
             f.write(archive)
