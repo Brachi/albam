@@ -18,7 +18,7 @@ from albam.engines.mtfw.arc_fs import (
     decompress_entry,
     file_type_extensions,
 )
-from albam.lib.xcompress import xmem_decompress
+from albam.lib.xcompress import _BitReader, xmem_decompress
 
 ARC_VERSION_ZLIB = 7
 
@@ -105,3 +105,30 @@ def test_writing_refuses_an_archive_it_can_only_read(tmp_path):
 
     with pytest.raises(ValueError, match="cannot be written back"):
         update_arc(str(path), [])
+
+
+def _bits_msb_first(data):
+    """The bit sequence _BitReader walks: 16-bit little-endian words, each
+    read most significant bit first."""
+    bits = ""
+    for i in range(0, len(data) - 1, 2):
+        word = data[i] | (data[i + 1] << 8)
+        bits += format(word, "016b")
+    return bits
+
+
+@pytest.mark.parametrize("skip", range(16))
+def test_bit_reader_matches_the_bit_sequence(skip):
+    """A 24-bit read entered with a nearly empty buffer needs 39 bits held
+    at once; a reader that keeps only 32 returns a truncated value. That is
+    the block-length field, so the block ends in the wrong place and the
+    rest of the stream decodes as noise.
+    """
+    data = bytes((i * 37 + 11) & 0xFF for i in range(32))
+    bits = _bits_msb_first(data)
+
+    reader = _BitReader(data, 0, len(data))
+    if skip:
+        assert reader.read(skip) == int(bits[:skip], 2)
+    assert reader.read(24) == int(bits[skip:skip + 24], 2)
+    assert reader.read(16) == int(bits[skip + 24:skip + 40], 2)
