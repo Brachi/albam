@@ -38,21 +38,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   for that animation id, dropping the id from an exported `.lmt`
 - A second animation file imported onto the same skeleton leaving its limb
   chains solving towards goals none of its blocks move
-- Autorename Bones failing on a skeleton that already had an animation imported onto it
 - Spurious "Array iterator out of range" messages printed on every export of a mesh with fewer UV layers than the vertex format allows
 
 ### Changed
 
 - A bone's animation re-targeting id is now an Albam custom property on the pose
   bone, shown as "Anim Retarget" in the Bone tab, instead of the raw
-  `mtfw.anim_retarget` property
-- An animation block's index is now an Albam custom property alongside the rest
-  of its block data, instead of the raw `mtfw.lmt_block_index` property
-- A limb chain's goal and length are now Albam custom properties on the pose
-  bone, shown as "Chain Target" and "Chain Length", instead of the raw
-  `mtfw.chain_target` and `mtfw.chain_length` properties
-- Rigs and animations in `.blend` files saved with any of the old raw
-  properties are migrated the first time they are used
+  `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
+  property are migrated the first time they are used
 
 ### Removed
 
