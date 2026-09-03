@@ -78,7 +78,9 @@ Anything you do to the mesh is what gets written:
   in on export, so you do not need to apply transforms first.
 - **Materials** - swapping the image in a texture node changes which texture the
   model uses, because the exporter reads the binding back rather than a stored
-  value.
+  value. Note what this is and is not: it re-points the material at a texture
+  **already in the archive's texture pack**. Bringing a new image into the game
+  is not supported - see below.
 
 Two things to keep in mind:
 
@@ -166,3 +168,8 @@ Add one layer of albam at a time, and whichever fails first names the layer:
   facial morphs loses them on export.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
+- **New textures cannot be added.** Nothing writes a `.pack` or a `.tpl`, so a
+  model can only address textures its archive already ships. Retexturing - the
+  usual reason to mod a character - needs that, and it needs a DDS encoder
+  (albam only reads DDS) plus a decoder for the YZ2 layer that about a third of
+  the packs carry.
