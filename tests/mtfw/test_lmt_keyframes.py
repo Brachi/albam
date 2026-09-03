@@ -268,4 +268,4 @@ def test_an_unknown_track_type_raises_something_catchable():
     from albam.engines.mtfw.animation.animation_export import _select_kf_usage
 
     with pytest.raises(ValueError, match="not_a_track_type"):
-        _select_kf_usage({}, "not_a_track_type")
+        _select_kf_usage({}, "not_a_track_type", "re5")

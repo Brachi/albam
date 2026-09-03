@@ -182,20 +182,18 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
 
     An empty slot has to stay empty and every offset in the header is written
     by position, so getting the order wrong does not produce a slightly wrong
-    file - it produces one whose blocks are all in the wrong place. Export used
-    to take that order from `children_recursive`, which matches only because a
-    first import happens to name the objects in block order; import the same
-    .lmt again in one session and Blender renumbers the duplicates, the names
-    stop lining up, and the order silently changes.
+    file, it produces one whose blocks are all in the wrong place. Export used
+    to take that order from `children_recursive`, which is name order and
+    matches only while the names a first import gave still sort in block order.
     """
-    from albam.engines.mtfw.animation import BLOCK_INDEX_PROP, _lmt_blocks
+    from albam.engines.mtfw.animation import _lmt_blocks, get_block_index
 
     _result, _armature, _actions, lmt_object = lmt_imported_local
-    blocks = _lmt_blocks(lmt_object)
+    app_id = lmt_object.albam_asset.app_id
+    blocks = _lmt_blocks(lmt_object, app_id)
     assert blocks, "the .lmt produced no blocks"
 
-    recorded = [block.get(BLOCK_INDEX_PROP) for block in blocks]
-    assert None not in recorded, "a block carries no index to order it by"
+    recorded = [get_block_index(block, app_id) for block in blocks]
     assert recorded == list(range(len(blocks))), (
         f"blocks are not in file order: {recorded[:8]}...")
 
@@ -205,7 +203,7 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
     try:
         for position, block in enumerate(blocks):
             block.name = f"scrambled.{len(blocks) - position:04d}"
-        after = [block.get(BLOCK_INDEX_PROP) for block in _lmt_blocks(lmt_object)]
+        after = [get_block_index(block, app_id) for block in _lmt_blocks(lmt_object, app_id)]
         assert after == recorded, "renaming the objects reordered the blocks"
     finally:
         for block, name in zip(blocks, original_names):
@@ -274,9 +272,12 @@ def _root_motion_track_angle(action, armature):
 
 
 def _skeleton_root_bone(armature):
-    for bone in armature.data.bones:
-        if str(bone.get("mtfw.anim_retarget")) == "0":
-            return bone.name
+    from albam.engines.mtfw.bone import get_anim_retarget
+
+    app_id = armature.albam_asset.app_id
+    for pose_bone in armature.pose.bones:
+        if get_anim_retarget(pose_bone, app_id) == "0":
+            return pose_bone.name
     raise AssertionError("the armature carries no bone mapped to anim id 0")
 
 
@@ -412,6 +413,7 @@ def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
     Synthetic: builds the collision directly, no game data needed.
     """
     from albam.engines.mtfw.animation.animation_import import _create_missing_bones
+    from albam.engines.mtfw.bone import get_anim_retarget, set_anim_retarget
 
     armature_data = bpy.data.armatures.new("collision_rig")
     armature = bpy.data.objects.new("collision_rig", armature_data)
@@ -422,18 +424,19 @@ def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
         bpy.ops.object.mode_set(mode="EDIT")
         decoy = armature_data.edit_bones.new("104")
         decoy.tail = (0.0, 0.0, 0.1)
-        decoy["mtfw.anim_retarget"] = "77"      # named 104, answers to 77
         bpy.ops.object.mode_set(mode="OBJECT")
+        # named 104, answers to 77
+        set_anim_retarget(armature.pose.bones["104"], "re5", "77")
 
         mapping = {}
-        returned = _create_missing_bones(armature, 104, "104", mapping)
+        returned = _create_missing_bones(armature, 104, "104", mapping, "re5")
 
         assert returned != "104", (
             "returned the pre-existing bone named 104, which answers to anim id 77"
         )
         assert returned == mapping["104"], "return value and mapping disagree"
-        assert armature_data.bones[returned].get("mtfw.anim_retarget") == "104"
-        assert armature_data.bones["104"].get("mtfw.anim_retarget") == "77", (
+        assert get_anim_retarget(armature.pose.bones[returned], "re5") == "104"
+        assert get_anim_retarget(armature.pose.bones["104"], "re5") == "77", (
             "the unrelated bone must be left alone"
         )
     finally:
@@ -463,7 +466,7 @@ def test_root_motion_on_a_rig_with_no_root_bone_says_so():
     try:
         bpy.context.view_layer.objects.active = armature
         with pytest.raises(ValueError, match="animation id 0"):
-            _get_or_create_root_motion_bone(armature, {})
+            _get_or_create_root_motion_bone(armature, {}, "re5")
     finally:
         if bpy.context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")

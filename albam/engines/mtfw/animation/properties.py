@@ -36,6 +36,10 @@ class LMT51AnimationCustomProperties(CustomPropsBase):
         default=False,
         options=set(),
     )
+    # Which slot of the file this block is, stamped at import. Not a field of
+    # the block header: the header says nothing about its own position, and
+    # position is what identifies a block. -1 means never recorded.
+    block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
     ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())  # noqa: F821
     num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
     num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
@@ -66,6 +70,10 @@ class LMT67AnimationCustomProperties(CustomPropsBase):
         default=False,
         options=set(),
     )
+    # Which slot of the file this block is, stamped at import. Not a field of
+    # the block header: the header says nothing about its own position, and
+    # position is what identifies a block. -1 means never recorded.
+    block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
     ofs_frame: bpy.props.IntProperty(name="Offset", default=0, options=set())  # noqa: F821
     num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
     num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821

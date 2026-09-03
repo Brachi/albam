@@ -11,6 +11,7 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ....lib.kaitai_utils import parse
 from ....registry import blender_registry
+from ..bone import get_anim_retarget, set_anim_retarget, set_chain_target
 from ..structs.lmt import Lmt
 from .keyframes import LMTKeyFrames, LMTKeyframeBounds, TRANSLATION_USAGES, USAGE
 
@@ -27,12 +28,27 @@ HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 # nor the bone id names a body part. Verified over every re5 character: 35422
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
-CHAIN_TARGET_PROP = "mtfw.chain_target"
-BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
-CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
+
+
+def _block_props(anim_object, app_id):
+    return anim_object.albam_custom_properties.get_custom_properties_for_appid(app_id)
+
+
+def set_block_index(anim_object, app_id, block_index):
+    _block_props(anim_object, app_id).block_index = block_index
+
+
+def get_block_index(anim_object, app_id):
+    """Which slot of the file this block is, 0 for one that never recorded it.
+
+    An empty albam did not import has nothing to say about its slot. They all
+    answer 0, so a stable sort leaves them in the order it found them.
+    """
+    block_index = _block_props(anim_object, app_id).block_index
+    return block_index if block_index >= 0 else 0
 
 
 def _get_action_channels(action, armature):
@@ -61,7 +77,7 @@ def load_lmt(vfile, context):
     lmt = parse(Lmt, lmt_bytes, app_id)
     lmt_ver = lmt.version
     armature = context.scene.albam.import_options_lmt.armature
-    mapping = _create_bone_mapping(armature)
+    mapping = _create_bone_mapping(armature, app_id)
 
     # DEBUG_BLOCK = 2
     DEBUG_BLOCK = None
@@ -77,10 +93,10 @@ def load_lmt(vfile, context):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
-        # Which slot of the file this block is. The name carries it too, but
-        # Blender renumbers duplicate names, so it stops matching as soon as
-        # the same .lmt is imported twice in one session - see _lmt_blocks.
-        anim_object[BLOCK_INDEX_PROP] = block_index
+        # Which slot of the file this block is, which is what identifies it.
+        # The tree order it would otherwise be read back in is name order, and
+        # names stop agreeing with block order - see _lmt_blocks.
+        set_block_index(anim_object, app_id, block_index)
         if block.offset == 0:
             continue
         if DEBUG_BLOCK is not None and DEBUG_BLOCK != block_index:
@@ -131,7 +147,7 @@ def load_lmt(vfile, context):
 
             # Set motion root bone
             if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
-                bone_index = _get_or_create_root_motion_bone(armature, mapping)
+                bone_index = _get_or_create_root_motion_bone(armature, mapping, app_id)
 
             # Restore IK. Driven by the chain the block declares, not by a
             # fixed pair of bone ids: an arm, and every limb of a quadruped,
@@ -140,14 +156,15 @@ def load_lmt(vfile, context):
             if is_chain_goal:
                 bone_index = _get_or_create_ik_bone(
                     armature, track.bone_index, bone_index, mapping, chains[track.bone_index],
-                    chain_constraints)
+                    chain_constraints, app_id)
 
             # LMT references service(?) bones absent in the imported armature
             if bone_index is None:
                 bone_index = _create_missing_bones(armature,
                                                    track.bone_index,
                                                    key,
-                                                   mapping)
+                                                   mapping,
+                                                   app_id)
             if track.joint_type != 0:
                 action[f"{USAGE.get(track.usage)}_{key}"] = track.joint_type
 
@@ -317,41 +334,20 @@ def _find_chains(tracks, version):
     return chains
 
 
-def _create_bone_mapping(armature_obj):
-    """Creates a dictionary: animation bone index -> bone name.
+def _create_bone_mapping(armature_obj, app_id):
+    """animation bone id -> bone name, from each pose bone's anim_retarget.
 
-    The animation bone index isn't something Albam derives - it's
-    .mod's own idx_anim_map field (structs/mod-*.ksy), copied verbatim onto
-    each bone as the 'mtfw.anim_retarget' custom property in
-    mesh.py:build_blender_armature(). MT Framework uses this to decouple a
-    character's own skeleton (bone order/count is per-.mod, e.g. pl00 vs an
-    enemy with a completely different hierarchy) from the numeric bone-id
-    space .lmt tracks are keyed on, which is shared across the whole engine
-    (root=0, root_motion=255, common IK/service ids, etc. - see the
-    HACKY_BONE_INDEX_*/ROOT_*_ID constants above). An .lmt authored against
-    one character's idx_anim_map layout plays back correctly against any
-    other armature as long as this property is populated the same way, since
-    load_lmt()/_generate_track_from_action() only ever address bones through
-    this id, never through .mod's own per-file bone order.
-
-    Note: 'mtfw.anim_retarget' is stored as a str (see the assignments
-    below and in mesh.py), so the `== 0`/`== 0` comparisons just below are
-    always False against the string "0" - the multiple-root-bone special
-    case they guard is currently dead code, not a deliberately-skipped one.
+    A branch here used to drop a rig's parentless second bone holding id 0,
+    comparing the id against the integer 0 while it has always been a string.
+    It never fired, so it is dropped rather than switched on with nothing
+    covering it.
     """
     bone_names = {}
-    # find root bones, at least 2 can have the same 0 index
-    root_bone_names = [b.name for idx, b in enumerate(
-        armature_obj.data.bones) if b.get('mtfw.anim_retarget', None) == 0]
-    for b_idx, mapped_bone in enumerate(armature_obj.data.bones):
-        animation_bone_id = mapped_bone.get('mtfw.anim_retarget')
-        if animation_bone_id is None:
+    for b_idx, mapped_bone in enumerate(armature_obj.pose.bones):
+        animation_bone_id = get_anim_retarget(mapped_bone, app_id)
+        if not animation_bone_id:
             print(f"WARNING: {armature_obj.name}->{mapped_bone.name} doesn't contain a mapped bone")
             continue
-        # ignore possible root_ground bone
-        if animation_bone_id == 0 and len(root_bone_names) > 1:
-            if mapped_bone.parent is None:
-                continue
         if animation_bone_id in bone_names:
             print(f"WARNING: bone_id {b_idx} already mapped. TODO")
         bone_names[animation_bone_id] = mapped_bone.name
@@ -380,7 +376,7 @@ def _armature_in_edit_mode(armature):
         bpy.ops.object.mode_set(mode='OBJECT')
 
 
-def _create_missing_bones(armature, bone_index, key, mapping):
+def _create_missing_bones(armature, bone_index, key, mapping, app_id):
     """A bone to hang a track on when the rig maps nothing to that anim id.
 
     The name Blender settles on is the one to return, not the one asked for.
@@ -397,7 +393,7 @@ def _create_missing_bones(armature, bone_index, key, mapping):
         bone_name = blender_bone.name
         mapping[key] = bone_name
         blender_bone.tail[2] += 0.01
-        blender_bone["mtfw.anim_retarget"] = key
+    set_anim_retarget(armature.pose.bones[bone_name], app_id, key)
     return bone_name
 
 
@@ -429,7 +425,7 @@ def _follow_root_motion(armature, bone_name, root_motion_bone):
 
 
 def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chain_count,
-                           chain_constraints):
+                           chain_constraints, app_id):
     """A control bone carrying a chain's goal, with the chain constrained to it.
 
     The goal is a point in space rather than a rotation of the bone it belongs
@@ -458,11 +454,11 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
         blender_bone = edit_bones.new(bone_name)
         blender_bone.head = edit_bones[bone_index].head
         blender_bone.tail = edit_bones[bone_index].tail
-        blender_bone["mtfw.anim_retarget"] = str(track_bone_index) + "_1"
-        # marks the bone as carrying a goal rather than a joint's own transform,
-        # so export leaves its position channel alone exactly as import did
-        blender_bone[CHAIN_TARGET_PROP] = True
-        blender_bone[CHAIN_LENGTH_PROP] = chain_count
+
+    # chain_target marks the bone as carrying a goal rather than a joint's own
+    # transform, so export leaves its position channel alone exactly as import did
+    set_anim_retarget(armature.pose.bones[bone_name], app_id, str(track_bone_index) + "_1")
+    set_chain_target(armature.pose.bones[bone_name], app_id, chain_count)
 
     # constrain the chain to the goal
     constraint = pose_bone.constraints.new('IK')
@@ -473,13 +469,13 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
     constraint.use_rotation = True
     chain_constraints[track_bone_index] = (pose_bone.name, constraint_name)
 
-    root_motion_bone = _get_or_create_root_motion_bone(armature, mapping)
+    root_motion_bone = _get_or_create_root_motion_bone(armature, mapping, app_id)
     _follow_root_motion(armature, bone_name, root_motion_bone)
 
     return bone_name
 
 
-def _get_or_create_root_motion_bone(armature, mapping):
+def _get_or_create_root_motion_bone(armature, mapping, app_id):
     bone_name = ROOT_MOTION_BONE_NAME
     if bone_name in armature.data.bones:
         return bone_name
@@ -487,13 +483,13 @@ def _get_or_create_root_motion_bone(armature, mapping):
     with _armature_in_edit_mode(armature) as edit_bones:
         blender_bone = edit_bones.new(bone_name)
         blender_bone.tail[2] += 0.01
-        blender_bone["mtfw.anim_retarget"] = "255"
+    set_anim_retarget(armature.pose.bones[bone_name], app_id, str(ROOT_MOTION_BONE_ID))
 
     root_bone_name = mapping.get(ROOT_BONE_NAME)
     if root_bone_name is None:
         raise ValueError(
             f"The armature has no bone for animation id {ROOT_BONE_NAME}, so root motion "
-            "has nothing to move. Check the skeleton's mtfw.anim_retarget properties."
+            "has nothing to move. Check the skeleton's Anim Retarget bone properties."
         )
     _follow_root_motion(armature, root_bone_name, bone_name)
 

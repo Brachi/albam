@@ -5,6 +5,7 @@ from mathutils import Vector, bvhtree
 
 
 from ..registry import blender_registry
+from ..engines.mtfw.bone import get_anim_retarget
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.handshaker import handshake, dump_frames, frames_path
 
@@ -894,16 +895,14 @@ def rename_bones(armature_ob, app_id, body_type):
     if fixed_name:
         for k, v in fixed_name.items():
             names_preset[k] = v
-    armature = armature_ob.data
-    bones = armature.bones
-    for bone in bones:
-        reference_bone_id = bone.get('mtfw.anim_retarget')
-        if reference_bone_id:
-            bone_name = names_preset.get(int(reference_bone_id), None)
-        else:
+    for pose_bone in armature_ob.pose.bones:
+        reference_bone_id = get_anim_retarget(pose_bone, app_id)
+        # a control bone carries "<id>_<n>", and is no body part
+        if not reference_bone_id.isdigit():
             continue
+        bone_name = names_preset.get(int(reference_bone_id), None)
         if bone_name:
-            bone.name = bone_name
+            pose_bone.name = bone_name
 
 
 def merge_vgroups(vg_a, vg_b):

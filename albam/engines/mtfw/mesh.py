@@ -40,6 +40,7 @@ from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
+from .bone import set_anim_retarget
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -752,10 +753,16 @@ def build_blender_armature(app_id, mod, armature_name, bbox_data):
 
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
-        blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
         blender_bones.append(blender_bone)
 
+    # Values after leaving edit mode: a pose bone exists only once the edit
+    # bone it mirrors has been committed.
+    bone_names = [b.name for b in blender_bones]
     bpy.ops.object.mode_set(mode="OBJECT")
+
+    for i, bone in enumerate(mod.bones_data.bones_hierarchy):
+        set_anim_retarget(armature_ob.pose.bones[bone_names[i]], app_id, str(bone.idx_anim_map))
+
     return armature_ob
 
 

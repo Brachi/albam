@@ -42,6 +42,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Changed
 
+- A bone's animation re-targeting id is now an Albam custom property on the pose
+  bone, shown as "Anim Retarget" in the Bone tab, instead of the raw
+  `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
+  property are migrated the first time they are used
+
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically
