@@ -13,10 +13,9 @@ from mathutils import Quaternion, Vector
 
 from ....registry import blender_registry
 from ....vfs import VirtualFileData
-from ..bone import get_anim_retarget
+from ..bone import get_anim_retarget, get_chain_target
 from ..structs.lmt import Lmt
 from .animation_import import (
-    CHAIN_TARGET_PROP,
     ROOT_MOTION_BONE_ID,
     _create_bone_mapping,
     get_block_index,
@@ -44,7 +43,7 @@ def _local_space_to_parent_translation(frame, pose_bone, app_id):
     # A chain's goal was imported without a parent-space conversion, so it must
     # leave the same way. The bare ids are the fallback for rigs built before
     # the control bones were marked.
-    if bone.get(CHAIN_TARGET_PROP) or anim_bone_id in ("19", "23"):
+    if get_chain_target(pose_bone, app_id) or anim_bone_id in ("19", "23"):
         rest = bone.matrix_local.to_translation()
         return frame + Vector((rest.x, rest.z, -rest.y))
 
@@ -208,7 +207,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     # reference data was stored under the plain id the track
                     # came from, so ask for it under that.
                     rd_bone_id = mapping.get(bone_name)
-                    if armature.data.bones[bone_name].get(CHAIN_TARGET_PROP):
+                    if get_chain_target(armature.pose.bones[bone_name], app_id):
                         rd_bone_id = rd_bone_id.split("_")[0]
                     elif bone_name == "IK_Foot.L":
                         rd_bone_id = "23"

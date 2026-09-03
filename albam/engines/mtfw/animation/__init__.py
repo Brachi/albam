@@ -22,8 +22,6 @@ from . import ui  # noqa: F401  registers the import panel's options
 from . import properties  # noqa: F401  registers the custom property groups
 from . import animation_export  # noqa: F401  registers the export side
 from .animation_import import (  # noqa: F401  re-exported
-    CHAIN_LENGTH_PROP,
-    CHAIN_TARGET_PROP,
     ROOT_MOTION_BONE_NAME,
     get_block_index,
 )

@@ -76,8 +76,7 @@ def chain_rig(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_ha
 
 
 def test_chain_goal_is_the_joints_own_position(chain_rig):
-    from albam.engines.mtfw.animation import CHAIN_LENGTH_PROP, CHAIN_TARGET_PROP
-    from albam.engines.mtfw.bone import get_anim_retarget
+    from albam.engines.mtfw.bone import get_anim_retarget, get_chain_length, get_chain_target
 
     armature, actions = chain_rig
     app_id = armature.albam_asset.app_id
@@ -89,7 +88,7 @@ def test_chain_goal_is_the_joints_own_position(chain_rig):
 
     exact = []
     for control in armature.pose.bones:
-        if not control.bone.get(CHAIN_TARGET_PROP) or control.bone.get(CHAIN_LENGTH_PROP) != 2:
+        if not get_chain_target(control, app_id) or get_chain_length(control, app_id) != 2:
             continue  # only the exactly determined chains pin the space down
         target_id = int(get_anim_retarget(control, app_id).split("_")[0])
         middle, target = by_anim_id.get(str(target_id - 1)), by_anim_id.get(str(target_id))

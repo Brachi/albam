@@ -44,11 +44,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Changed
 
 - A bone's animation re-targeting id is now an Albam custom property on the pose
-  bone, shown as "Anim Retarget" in the Bone tab. Rigs saved with the old
-  `mtfw.anim_retarget` property are migrated the first time they are used
+  bone, shown as "Anim Retarget" in the Bone tab, instead of the raw
+  `mtfw.anim_retarget` property
 - An animation block's index is now an Albam custom property alongside the rest
-  of its block data, instead of the raw `mtfw.lmt_block_index` property.
-  Blocks saved with the old property are migrated the first time they are used
+  of its block data, instead of the raw `mtfw.lmt_block_index` property
+- A limb chain's goal and length are now Albam custom properties on the pose
+  bone, shown as "Chain Target" and "Chain Length", instead of the raw
+  `mtfw.chain_target` and `mtfw.chain_length` properties
+- Rigs and animations in `.blend` files saved with any of the old raw
+  properties are migrated the first time they are used
 
 ### Removed
 

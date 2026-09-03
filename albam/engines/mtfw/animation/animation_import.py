@@ -11,7 +11,7 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ....lib.kaitai_utils import parse
 from ....registry import blender_registry
-from ..bone import get_anim_retarget, set_anim_retarget
+from ..bone import get_anim_retarget, set_anim_retarget, set_chain_target
 from ..structs.lmt import Lmt
 from .keyframes import LMTKeyFrames, LMTKeyframeBounds, TRANSLATION_USAGES, USAGE
 
@@ -28,11 +28,9 @@ HACKY_BONE_INDEX_IK_FOOT_LEFT = 23
 # nor the bone id names a body part. Verified over every re5 character: 35422
 # chains, none of them keying the joint at root+1.
 CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
-CHAIN_TARGET_PROP = "mtfw.chain_target"
 # Where the block index lived before it became an albam custom property.
 # Files saved with it are migrated on read - see get_block_index.
 LEGACY_BLOCK_INDEX_PROP = "mtfw.lmt_block_index"
-CHAIN_LENGTH_PROP = "mtfw.chain_length"  # joints the solver owns, plus the target
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
@@ -467,12 +465,11 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
         blender_bone = edit_bones.new(bone_name)
         blender_bone.head = edit_bones[bone_index].head
         blender_bone.tail = edit_bones[bone_index].tail
-        # marks the bone as carrying a goal rather than a joint's own transform,
-        # so export leaves its position channel alone exactly as import did
-        blender_bone[CHAIN_TARGET_PROP] = True
-        blender_bone[CHAIN_LENGTH_PROP] = chain_count
 
+    # chain_target marks the bone as carrying a goal rather than a joint's own
+    # transform, so export leaves its position channel alone exactly as import did
     set_anim_retarget(armature.pose.bones[bone_name], app_id, str(track_bone_index) + "_1")
+    set_chain_target(armature.pose.bones[bone_name], app_id, chain_count)
 
     # constrain the chain to the goal
     constraint = pose_bone.constraints.new('IK')
