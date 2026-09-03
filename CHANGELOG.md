@@ -7,12 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Added
 
+- Support for Resident Evil 4 UHD: import and export of characters and enemies, room
+  import, and repacking edited files back into the game's archives. See
+  `docs/modding-a-character.md` for the full edit-and-repack workflow.
 - Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
 - Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
 - Error message for the case when there is no mesh to export
 - Support for navigation mesh import-export (Resident Evil 5)
-- Autosorter tool to automatically set `alpha priority` values ​​for hair cards
+- Autosorter tool to automatically set `alpha priority` values for hair cards
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 
