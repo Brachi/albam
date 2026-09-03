@@ -3,7 +3,7 @@ PyFilesystem2 adapter for MTFramework .arc archives.
 
 An .arc is a flat, zip-like container (see structs/arc.ksy): a header
 followed by fixed-size file entries (path, type-hash, sizes, offset), each
-pointing to a zlib-compressed blob later in the file. `ArcFS` exposes a
+pointing to a compressed blob later in the file. `ArcFS` exposes a
 single .arc as a read-only PyFilesystem2 filesystem; `MTFW_FS` overlays every
 .arc under a game root - plus its loose files - into one `MultiFS`, so
 callers can ask for a relative path without knowing which archive (or loose
@@ -22,12 +22,38 @@ from fs.osfs import OSFS
 from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
-from . import FILE_ID_TO_EXTENSION
+from . import FILE_ID_TO_EXTENSION, FILE_ID_TO_EXTENSION_DMC4
 from .structs.arc import Arc
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
+from ...lib.xcompress import xmem_decompress
 
 
-def _entry_path(file_entry):
+# The archive version this app writes. Every other app albam reads writes
+# version 7, so this is what tells the two apart - and they differ in both of
+# the things an entry needs to be read: version 7 entries are zlib, these are
+# XMemCompress (LZX) streams, and the two number their file types from
+# different hashes of the same resource class names.
+#
+# Sniffing the payload would not do for the codec: 41 of 60366 LZX streams in
+# the verified dataset open with bytes that pass zlib's own header check.
+ARC_VERSION_DMC4 = 17
+
+
+def file_type_extensions(arc_version):
+    """The file-type-id -> extension table an archive of this version uses."""
+    if arc_version == ARC_VERSION_DMC4:
+        return FILE_ID_TO_EXTENSION_DMC4
+    return FILE_ID_TO_EXTENSION
+
+
+def decompress_entry(arc_version, raw, size):
+    """One .arc file entry's payload, decoded with the codec its archive uses."""
+    if arc_version == ARC_VERSION_DMC4:
+        return xmem_decompress(raw, size)
+    return zlib.decompress(raw)
+
+
+def _entry_path(file_entry, extensions=FILE_ID_TO_EXTENSION):
     """The path an .arc entry is exposed at, from its raw internal one.
 
     Normalized, because an entry's internal path is game data and can carry
@@ -35,7 +61,7 @@ def _entry_path(file_entry):
     resolves those away in every incoming path (fs.base.FS.validatepath), so
     an unnormalized key would list fine but never match a read.
     """
-    ext = FILE_ID_TO_EXTENSION.get(file_entry.file_type, str(file_entry.file_type))
+    ext = extensions.get(file_entry.file_type, str(file_entry.file_type))
     posix_path = file_entry.file_path.replace("\\", "/").lstrip("/")
     return normpath(f"/{posix_path}.{ext}")
 
@@ -77,11 +103,13 @@ class ArcFS(FS):
         try:
             arc = Arc(KaitaiStream(f))
             arc._read()
+            self.version = arc.header.version
+            extensions = file_type_extensions(self.version)
             self._entries = {}
             self._directory = MemoryFS()
             for file_entry in arc.file_entries:
                 try:
-                    path = _entry_path(file_entry)
+                    path = _entry_path(file_entry, extensions)
                 except IllegalBackReference:
                     # ".." climbing above the .arc's own root: unreachable
                     # through any FS API anyway, so skip it rather than
@@ -134,7 +162,7 @@ class ArcFS(FS):
             raw = f.read(file_entry.zsize)
         finally:
             f.close()
-        data = zlib.decompress(raw)
+        data = decompress_entry(self.version, raw, file_entry.size)
         return _BytesFile(data)
 
     def makedir(self, path, permissions=None, recreate=False):
