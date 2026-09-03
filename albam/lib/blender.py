@@ -395,3 +395,28 @@ class ShaderGroupCompat:
             return self.shader_group.inputs
         return {item.name: item for item in self.shader_group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"}
+
+
+class BaseMaterialCustomProperties(bpy.types.PropertyGroup):
+    """Copies a property group's own annotated fields to and from a parsed
+    struct, with the hex-string fields a Blender UI needs converted back to
+    the integers the struct holds.
+
+    Here rather than in an engine: nothing about it is specific to a format,
+    and an engine importing it from another engine would tie the two
+    together for no reason.
+    """
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))

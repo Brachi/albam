@@ -1,7 +1,6 @@
 import bpy
-from ...lib.blender import ShaderGroupCompat
+from ...lib.blender import BaseMaterialCustomProperties, ShaderGroupCompat
 from ...registry import blender_registry
-from ..mtfw.material import BaseMaterialCustomProperties
 from .textures import _process_tpls, _create_blender_image_from_tex
 
 REUHD_SHADER_NODEGROUP_NAME = "RE4UHD shader"
