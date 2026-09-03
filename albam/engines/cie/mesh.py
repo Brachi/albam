@@ -124,10 +124,8 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         loop_normals = []
         for loop in bl_mesh.loops:
             n = bin.normals[loop.vertex_index]
-            # loop_normals.append(_yz_flip(n.x, n.y, n.z))
             loop_normals.append(_decode_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
-    bl_mesh.normals_split_custom_set(loop_normals)
 
     bl_mesh.albam_custom_properties.get_custom_properties_for_appid(
         "re4uhd").set_from_source(bin.header)
@@ -136,7 +134,10 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     _build_shape_keys(bl_mesh_ob, bin)
 
     # usually only one armature is full, other bin files include only bones used by the mesh
-    shared_armature = bpy.context.scene.albam.import_options_bin.shared_armature
+    # `context`, not bpy.context: scenario.py substitutes one carrying its own
+    # options so an embedded room model never binds to whatever armature the
+    # user happens to have selected in the BIN import panel.
+    shared_armature = context.scene.albam.import_options_bin.shared_armature
     root_vfile = vfile.root_vfile
     skeleton, skeleton_is_new = _build_armature(
         bl_object_name, bin, context, shared_armature,
