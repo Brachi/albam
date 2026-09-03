@@ -35,6 +35,58 @@ A mounted archive expands into numbered entries, because the container stores no
 names - only positions. A `.bin` is a model, a `.tpl` is a texture list, and the
 rest are animation and script data albam does not read yet.
 
+## How the files fit together
+
+Worth five minutes before you change anything: what you edit in Blender is one
+file inside one archive, and its textures are in a different archive entirely.
+
+```
+pl00.udas.lfs                  the archive you add - LZX compressed
+|
++-- pl00.udas                  the container inside it, entries in order,
+    |                          none of them named
+    +-- pl00_000.bin           a model (the body)
+    +-- pl00_001.bin           another part of the same character
+    +-- ...                    25 of them for a main character
+    +-- pl00_015.tpl           a texture list
+             |
+             |  entry 3 says: pack 44000002, texture 7
+             v
+    44000002.pack.lfs          a DIFFERENT archive, in ImagePackHD/
+    +-- 44000002_007.dds       the actual texture bytes
+```
+
+An archive holds no names for its entries, only positions, so albam numbers
+them after the archive's own filename: `pl00.udas.lfs` gives `pl00_000.bin`,
+`pl00_001.bin` and so on. **Rename the archive and every entry inside it is
+renamed too** - which is why step 6 insists you write the repacked file under
+the original name.
+
+| Entry | What it is | What albam does |
+| --- | --- | --- |
+| `.bin` with the mesh flag | a model | imports and exports it |
+| `.bin` without it | camera, lighting, collision | refuses it with an error |
+| `.tpl` | a texture list: slot -> pack id + index | reads it |
+| `.pack` (separate archive) | the texture bytes, DDS or TGA | reads it |
+| everything else | animation, script data | not read yet |
+
+Three things follow, and they are what catches people out:
+
+- **A material names a slot, not a texture.** Its `diffuse_map` is an index
+  into a `.tpl`, and the model never says which `.tpl` - so picking the wrong
+  one textures your character with someone else's textures. Step 3 covers the
+  setting that decides this.
+- **Textures live outside the archive you are modding**, so the archive alone
+  is not enough to import a textured model. Step 3 covers what to do when you
+  are working from a copy.
+- **A pack is shared by many models**, and about a third carry an extra YZ2
+  compression layer albam cannot read. That, plus there being no `.pack` or
+  `.tpl` writer, is why new textures cannot be added - see the end of this
+  guide.
+
+The parts of a character also share one skeleton, which is why the order you
+import them in matters - again, step 3.
+
 ## 3. Import the model
 
 Select a `.bin` entry and press **Import**.
