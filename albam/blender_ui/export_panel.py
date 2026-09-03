@@ -378,8 +378,10 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 # ArcFS-wrapped .arc (always returns that arc's own path) or
                 # a whole MTFW_FS game-folder root (resolves the specific
                 # .arc this path actually came from) - see origin_arc_path.
+                # origin_arc_path answers only for ArcFS/MTFW_FS, so anything
+                # else (LfsFS) falls back to the root's own path.
                 path_i = origin_arc_path(root_fs(item_i), item_i.fs_path) or item_i.absolute_path
-                if path_i is None:
+                if not path_i:
                     self.report({'ERROR'}, "Selected archive isn't backed by a packed file")
                     return
             else:

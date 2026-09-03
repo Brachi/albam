@@ -28,8 +28,8 @@ doc: |
   start of the chunk table (that is, from byte 20, past this header). A chunk
   with the bit clear is stored: its bytes are the payload's, verbatim. Real
   game data almost never uses this - exactly one chunk in the whole install is
-  stored - but the game's own loader accepts it, which is what lets albam
-  write an .lfs without implementing an LZX encoder.
+  stored - but the game's own loader accepts it either way, so an .lfs can be
+  written without compressing anything.
 
 seq:
   - {id: header, type: lfs_header}

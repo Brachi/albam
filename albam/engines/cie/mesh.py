@@ -3,6 +3,7 @@ from kaitaistruct import KaitaiStream
 import bpy
 from mathutils import Vector
 import math
+import struct
 from ...registry import blender_registry
 from ...vfs import VirtualFile, VirtualFileData
 from ...lib.misc import chunks
@@ -32,6 +33,7 @@ MATERIAL_SIZE = 24
 # The flags word at 0x20. 0x80000000 is set on every mesh .bin and on nothing
 # else, which is what tells a mesh apart from the camera and lighting data
 # that share the extension.
+BIN_FLAGS_OFFSET = 0x20
 BIN_FLAG_IS_MESH = 0x80000000
 BIN_FLAG_VERTEX_COLORS = 0x40000000
 BIN_FLAG_ALT_NORMALS = 0x20000000
@@ -87,13 +89,27 @@ FCOUNT_TYPES = {
 
 
 def _validate_bin_mesh(bin_bytes, bl_object_name):
-    # .BIN extension is misleading, different types of files (like camera, lighting) use it too
-    # The simplest size check with the mesh .bin header should to sift out the imposters
+    """Refuse a .bin that is not a model.
+
+    Camera, lighting and collision data share the extension and are listed
+    identically, so this is what a user selecting the wrong entry hits. The
+    header has to be there to read, and then the flags word says outright
+    whether this is a mesh - a size check alone lets an imposter through to
+    parse garbage offsets and die on an EOFError instead.
+    """
     re4uhd_bin_mesh_hdr_size = 80
     if len(bin_bytes) < re4uhd_bin_mesh_hdr_size:
         raise AlbamCheckFailure(
             f"The {bl_object_name}' is not a valid mesh BIN file and probably contains a non-geometry data",
             details=f"The file is smaller than a minimum size {re4uhd_bin_mesh_hdr_size} bytes",
+            solution="Select another .BIN file"
+        )
+    flags = struct.unpack_from("<I", bin_bytes, BIN_FLAGS_OFFSET)[0]
+    if not flags & BIN_FLAG_IS_MESH:
+        raise AlbamCheckFailure(
+            f"The {bl_object_name}' is not a valid mesh BIN file and probably contains a non-geometry data",
+            details=f"Its flags are {flags:#010x}, without the {BIN_FLAG_IS_MESH:#010x} bit every "
+                    f"mesh carries - this is camera, lighting or collision data",
             solution="Select another .BIN file"
         )
 

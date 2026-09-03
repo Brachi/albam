@@ -102,7 +102,12 @@ def _process_tpls(tpl_vfile):
     try:
         tpl.tpl_entries
     except EOFError:
+        # A truncated .tpl leaves a partially populated entry list behind
+        # (the generated accessor fills it in a `finally`), whose entries
+        # point at unread offsets - so reading on is what actually crashes,
+        # one line after the code that was meant to handle this.
         print(f"The {tpl_vfile.display_name} is incorrect")
+        return None
 
     for i, te in enumerate(tpl.tpl_entries):
         tpl_entry = {

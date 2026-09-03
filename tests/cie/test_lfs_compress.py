@@ -100,10 +100,9 @@ def _each_chunk_decodes_alone(rebuilt):
 def _round_trip(payload):
     """`payload` compressed and read back, with the rebuilt file's size.
 
-    compress=True is explicit because it is no longer the default: writing an
-    archive stores its chunks, since an archive written with this encoder is
-    read back correctly here and rejected by the game. These tests are what
-    covers the encoder itself, so they ask for it by name.
+    compress=True is passed explicitly even though it is the default: these
+    tests are what covers the encoder, so they name what they are asking for
+    rather than inheriting it.
     """
     from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
                                                   xcompress_decompress_re4hd)

@@ -50,8 +50,7 @@ def _build_dat_block(entries):
     """A DAT block from `entries`, a list of (extension, bytes).
 
     The offset table and the data are both rebuilt, so a replacement file may
-    be any size - which it will be, since albam writes triangle lists where
-    the original used strips.
+    be any size, which an edited one generally is.
     """
     count = len(entries)
     body_start = _align(DAT_HEADER_SIZE + count * 8)
