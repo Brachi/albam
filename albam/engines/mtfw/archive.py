@@ -7,7 +7,7 @@ from kaitaistruct import KaitaiStream
 from ...registry import blender_registry
 from ...lib.kaitai_utils import check_recursive, parse
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
-from .arc_fs import ArcFS, MTFW_FS
+from .arc_fs import ARC_VERSION_DMC4, ArcFS, MTFW_FS
 from .structs.arc import Arc
 from ...blender_ui.tools import show_message_box
 
@@ -36,6 +36,21 @@ def arc_fs_root_loader(absolute_path):
 @blender_registry.register_fs_root_loader(app_id="umvc3", extension=None)
 def game_fs_root_loader(absolute_path):
     return MTFW_FS(absolute_path)
+
+
+def _check_writable(parsed, filepath):
+    """Refuse an archive albam can read but cannot write back.
+
+    A version 17 archive's entries are XMemCompress (LZX) streams, and
+    albam only has a decoder. Rewriting one would either store zlib chunks
+    the game cannot read, or relabel the untouched LZX ones as zlib -
+    a broken archive either way, and silently so.
+    """
+    if parsed.header.version == ARC_VERSION_DMC4:
+        raise ValueError(
+            f"{filepath}: this archive's entries are compressed with a codec albam can "
+            f"only read, so it cannot be written back. Export the files on their own "
+            f"instead of packing them.")
 
 
 def _sort_arc_entries(entries, vfile=True):
@@ -84,11 +99,11 @@ def _get_file_entry(vfile):
     return item
 
 
-def _serialize_arc(exported):
+def _serialize_arc(exported, version=7):
     arc = Arc()
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
-    header.version = 7
+    header.version = version
     header.num_files = len(exported)
     arc.header = header
     file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
@@ -230,6 +245,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
         parsed._read()
+    _check_writable(parsed, filepath)
 
     imported = _to_dict(parsed.file_entries)
 
@@ -294,7 +310,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
             show_message_box(
                 f"Removed {len(removed)} orphaned texture(s): {preview}")
 
-    return _serialize_arc(exported)
+    return _serialize_arc(exported, parsed.header.version)
 
 
 def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
@@ -305,6 +321,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
         parsed._read()
+    _check_writable(parsed, filepath)
 
     imported_entries = [fe for fe in parsed.file_entries]
     if add_new:
@@ -334,4 +351,4 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             show_message_box("File: {} was not found in the archive".format(file_name))
             return None
     assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
-    return _serialize_arc(file_entries)
+    return _serialize_arc(file_entries, parsed.header.version)
