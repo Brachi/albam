@@ -86,5 +86,21 @@
     {
         "app_id": "umvc3",
         "mod_path_hash": "0e606e2025f2ba36"
+    },
+    {
+        "app_id": "dmc4",
+        "mod_path_hash": "13f03dbdf233833f"
+    },
+    {
+        "app_id": "dmc4",
+        "mod_path_hash": "88c385e51e659e3a"
+    },
+    {
+        "app_id": "dmc4",
+        "mod_path_hash": "940d6a6b53e8c80e"
+    },
+    {
+        "app_id": "dmc4",
+        "mod_path_hash": "5c65c23bfd23a636"
     }
 ]
