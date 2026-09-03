@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from albam.lib import fs_registry
+
 from tests.mtfw.r2_config import R2_PROTOCOL_PREFIX, resolve_r2_source
 
 # app_id -> the directory its archives were fetched into this session.
@@ -92,3 +94,17 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
     if not os.path.isdir(root):
         pytest.skip(f"--game-dir={local_app_id}::{root} does not exist")
     return root
+
+
+def close_new_fs_roots(before):
+    """Close the FS roots registered since `before` was taken.
+
+    Not fs_registry.clear(): that closes every filesystem in the process.
+    Session-scoped parametrization interleaves this suite's tests with
+    tests/mtfw's, whose game_fs_root is one session-scoped MTFW_FS shared by
+    every test in it - so clearing here closed it mid-run and every mtfw test
+    after this point failed with FilesystemClosed.
+    """
+    for key in fs_registry.keys():
+        if key not in before:
+            fs_registry.unregister(key)

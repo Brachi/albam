@@ -19,6 +19,7 @@ import bpy
 import pytest
 
 from albam.lib import fs_registry
+from tests.cie.conftest import close_new_fs_roots
 from tests.cie.lfs_paths import resolve_archive_hashes
 from tests.cie.test_bin_serialization import _is_mesh_bin, _texture_slots
 
@@ -57,12 +58,13 @@ def _clean_scene():
     # vfs, exported and bpy.data are session-scoped state: register() runs
     # once per pytest session, so a test that leaves objects or roots behind
     # changes what the next one sees.
+    before = fs_registry.keys()
     yield
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=True)
     bpy.context.scene.albam.vfs.file_list.clear()
     bpy.context.scene.albam.exported.file_list.clear()
-    fs_registry.clear()
+    close_new_fs_roots(before)
 
 
 @pytest.fixture

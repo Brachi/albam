@@ -21,6 +21,7 @@ import bpy
 import pytest
 
 from albam.lib import fs_registry
+from tests.cie.conftest import close_new_fs_roots
 from tests.cie.lfs_paths import resolve_archive_hashes
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
@@ -84,12 +85,13 @@ def _clean_scene():
     # bpy.data and the VFS are session-scoped state: register() runs once per
     # pytest session, so a test leaving objects or roots behind changes what
     # the next one sees.
+    before = fs_registry.keys()
     yield
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=True)
     bpy.context.scene.albam.vfs.file_list.clear()
     bpy.context.scene.albam.exported.file_list.clear()
-    fs_registry.clear()
+    close_new_fs_roots(before)
 
 
 def _parse(data):
