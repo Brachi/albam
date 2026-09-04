@@ -165,3 +165,65 @@ def test_a_created_root_motion_bone_carries_the_id_it_was_created_for():
         bpy.data.objects.remove(armature, do_unlink=True)
         bpy.data.armatures.remove(armature_data)
         bpy.context.view_layer.objects.active = previous
+
+
+def test_guessing_bone_mirrors_from_the_rest_pose():
+    """Mirrors are found by reflection, and ambiguity is broken by parentage.
+
+    A joint's counterpart sits at its own position reflected across x. That is
+    exact in the data, so it identifies a pair outright whenever only one joint
+    sits at the reflected point. When several do - which is common, since joints
+    pile up at the same spot - the tie is broken by requiring the candidate to
+    hang off the mirror of the bone's own parent.
+
+    Joints on the midline reflect onto themselves, and a joint whose reflection
+    is empty gets no answer at all rather than a wrong one.
+    """
+    from albam.engines.mtfw.bone import guess_mirrors
+
+    # A spine on the midline, a limb either side, and a pair of tips that share
+    # a position with each other so only their parents tell them apart.
+    layout = {
+        "spine": ((0.0, 0.0, 0.0), None),
+        "arm.L": ((1.0, 0.0, 0.0), "spine"),
+        "arm.R": ((-1.0, 0.0, 0.0), "spine"),
+        "tip.L": ((2.0, 1.0, 0.0), "arm.L"),
+        "tip.R": ((-2.0, 1.0, 0.0), "arm.R"),
+        "spur.L": ((2.0, 1.0, 0.0), "spine"),
+        "spur.R": ((-2.0, 1.0, 0.0), "spine"),
+        "lonely": ((5.0, 3.0, 0.0), "spine"),
+    }
+    armature_data = bpy.data.armatures.new("mirror_rig")
+    armature = bpy.data.objects.new("mirror_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name, (head, _parent) in layout.items():
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.head = head
+            edit_bone.tail = (head[0], head[1], head[2] + 0.1)
+        for name, (_head, parent) in layout.items():
+            if parent:
+                armature_data.edit_bones[name].parent = armature_data.edit_bones[parent]
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        guessed = guess_mirrors(armature)
+
+        assert guessed["arm.L"] == "arm.R"
+        assert guessed["arm.R"] == "arm.L"
+        # On the midline, so its own reflection.
+        assert guessed["spine"] == "spine"
+        # tip.* and spur.* sit on each other's positions; only the parent tells
+        # them apart, and getting this wrong is what a reflection-only rule does.
+        assert guessed["tip.L"] == "tip.R"
+        assert guessed["tip.R"] == "tip.L"
+        assert guessed["spur.L"] == "spur.R"
+        assert guessed["spur.R"] == "spur.L"
+        # Nothing sits at (-5, 3, 0), so there is no answer to give.
+        assert "lonely" not in guessed
+    finally:
+        bpy.context.view_layer.objects.active = previous
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data, do_unlink=True)

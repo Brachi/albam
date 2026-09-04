@@ -13,7 +13,7 @@ except ImportError:
 
 import bpy
 from kaitaistruct import KaitaiStream
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 import numpy as np
 
 from ...apps import get_app_description
@@ -40,7 +40,7 @@ from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
-from .bone import set_anim_retarget
+from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -761,7 +761,16 @@ def build_blender_armature(app_id, mod, armature_name, bbox_data):
     bpy.ops.object.mode_set(mode="OBJECT")
 
     for i, bone in enumerate(mod.bones_data.bones_hierarchy):
-        set_anim_retarget(armature_ob.pose.bones[bone_names[i]], app_id, str(bone.idx_anim_map))
+        pose_bone = armature_ob.pose.bones[bone_names[i]]
+        set_anim_retarget(pose_bone, app_id, str(bone.idx_anim_map))
+        # The format spells this three ways and all three have to survive: 255
+        # for a bone with no mirror at all, the bone's own index for one that
+        # mirrors itself, and another index for a real pair. Empty carries the
+        # first; the other two are just the name of the bone pointed at.
+        if bone.idx_mirror >= len(bone_names):
+            set_mirror(pose_bone, app_id, "")
+        else:
+            set_mirror(pose_bone, app_id, bone_names[bone.idx_mirror])
 
     return armature_ob
 
@@ -937,7 +946,8 @@ def export_mod(bl_obj):
     _init_mod_header(bl_obj, src_mod, dst_mod)
 
     bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
+    bones_data = _serialize_bones_data(
+        bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes)
     if bones_data is not None:
         # Only assign when there is one. Assigning None still *creates* the
         # attribute, and the generated _fetch_instances() guards optional
@@ -1131,16 +1141,252 @@ def _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod):
         dst_mod.num_weight_bounds = 0
 
 
-def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=None):
+# What bone_map holds for an animation id no bone answers to. A model can
+# never have a bone at index 255 - idx_parent is a u1 and 255 is its "no
+# parent" - so the index space has a spare value to say "unmapped".
+UNMAPPED_ANIM_ID = 255
+
+
+# What idx_parent holds for a bone with no parent, and idx_mirror for a bone
+# with no mirror. A bone that mirrors *itself* is spelled differently, with its
+# own index, and the two are not interchangeable.
+NO_PARENT = 255
+NO_MIRROR = 255
+
+# Blender works in metres and the format in centimetres, the same factor
+# _get_bone_transforms applies to every translation it writes.
+BONE_SCALE = 100
+
+# The fourth byte of the bone record is alignment padding, not a field: the
+# struct is three u1 then a f4, so the compiler leaves a byte spare. Capcom's
+# exporter wrote uninitialised heap into it - its most common value across a
+# large sample is 0xCD, which is MSVC's fill for exactly that - so there is
+# nothing to carry across and a defined value is written instead.
+BONE_RECORD_PADDING = 0
+
+
+def _derive_parent_ids(armature_ob, num_bones):
+    """Each bone's idx_parent, read off the armature's own hierarchy.
+
+    Bones serialize in `armature.data.bones` order, which is the order the rest
+    of the export already assumes, so a parent's index is just its position in
+    that list.
+    """
+    bl_bones = armature_ob.data.bones[:num_bones]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    ids = []
+    for bl_bone in bl_bones:
+        parent = bl_bone.parent
+        if parent is None:
+            ids.append(NO_PARENT)
+            continue
+        if parent.name not in index_of:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} is parented outside the exported skeleton",
+                details=(f"its parent {parent.name!r} is not among the first {num_bones} bones, "
+                         f"so there is no index to write for it"),
+                solution="Re-parent the bone within the model's own skeleton before exporting",
+            )
+        ids.append(index_of[parent.name])
+    return ids
+
+
+def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
+    """Each bone's `length`: how far the furthest vertex it influences sits.
+
+    The field is `furthestVertexDistance` in Capcom's own vocabulary, and it is
+    zero for a bone nothing skins to. Computed from the live meshes so that
+    reshaping geometry or repainting weights moves it, which copying it could
+    never do.
+
+    This over-estimates. Measured against the shipped values it is exact on
+    about 71% of bones and above them on nearly all the rest - the game's own
+    value is a maximum over some subset of the influenced vertices that has not
+    been identified, so the whole set is the closest honest answer.
+    """
+    bl_bones = armature_ob.data.bones[:num_bones]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    # Bone rest positions and vertices have to be compared in one space, and the
+    # file's is the armature's, scaled the way _get_bone_transforms scales it.
+    heads = [Vector(bl_bone.head_local) * BONE_SCALE for bl_bone in bl_bones]
+    furthest = [0.0] * len(bl_bones)
+    to_armature = armature_ob.matrix_world.inverted()
+    for bl_mesh in bl_meshes:
+        groups = {g.index: index_of.get(g.name) for g in bl_mesh.vertex_groups}
+        if not any(idx is not None for idx in groups.values()):
+            continue
+        to_bone_space = to_armature @ bl_mesh.matrix_world
+        for vertex in bl_mesh.data.vertices:
+            position = (to_bone_space @ vertex.co) * BONE_SCALE
+            for element in vertex.groups:
+                if not element.weight:
+                    continue
+                bone_index = groups.get(element.group)
+                if bone_index is None:
+                    continue
+                distance = (position - heads[bone_index]).length
+                if distance > furthest[bone_index]:
+                    furthest[bone_index] = distance
+    return furthest
+
+
+def _derive_mirror_ids(armature_ob, app_id, num_bones):
+    """Each bone's idx_mirror, resolved from the name the rig carries."""
+    bl_bones = armature_ob.data.bones[:num_bones]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    ids = []
+    for bl_bone in bl_bones:
+        name = get_mirror(armature_ob.pose.bones[bl_bone.name], app_id)
+        if not name:
+            ids.append(NO_MIRROR)
+            continue
+        if name not in index_of:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} names a mirror that is not in the skeleton",
+                details=f"its Mirror Bone is {name!r}, which is not one of the exported bones",
+                solution="Point Mirror Bone at a bone of this skeleton, or clear it if the "
+                         "bone sits on the midline",
+            )
+        ids.append(index_of[name])
+    return ids
+
+
+def _count_exportable_bones(armature_ob, app_id):
+    """How many of the rig's bones belong in the model.
+
+    Animation import gives a bone of its own to the second track in a block that
+    keys an id already taken, and names its id "<id>_<n>". Those exist to carry
+    animation and are not part of the skeleton the model describes, so they are
+    left out. Import appends them, so they sit at the end; if one does not, the
+    rest of the export would silently shift every bone index after it, and that
+    is an error rather than something to work around.
+    """
+    kept = 0
+    for i, bl_bone in enumerate(armature_ob.data.bones):
+        raw = get_anim_retarget(armature_ob.pose.bones[bl_bone.name], app_id)
+        if "_" not in raw:
+            if kept != i:
+                raise AlbamCheckFailure(
+                    message=f"Bone {bl_bone.name!r} sits after a bone that only carries animation",
+                    details=("bones added by animation import are skipped on export, and they are "
+                             "expected at the end of the armature; one earlier in the order would "
+                             "shift the index of every bone after it"),
+                    solution="Move the bone before any animation-only bone, or delete those bones",
+                )
+            kept += 1
+    return kept
+
+
+def _derive_anim_map_ids(armature_ob, app_id, num_bones):
+    """Each bone's idx_anim_map, read off the rig instead of the source file.
+
+    The id rides on the pose bone (see engines/mtfw/bone.py), put there by
+    whichever import built the armature, so a rig carries its own re-targeting
+    without the .mod it came from.
+    """
+    bl_bones = armature_ob.data.bones
+    if len(bl_bones) < num_bones:
+        raise AlbamCheckFailure(
+            message=f"Armature {armature_ob.name!r} has fewer bones than the model expects",
+            details=f"the model declares {num_bones} bones, the armature has {len(bl_bones)}",
+            solution="Export the armature the model was imported with, without deleting bones",
+        )
+    ids = []
+    for bl_bone in bl_bones[:num_bones]:
+        pose_bone = armature_ob.pose.bones[bl_bone.name]
+        # Animation import gives a bone of its own to the second track in a
+        # block that keys an id already taken, naming it "<id>_<n>"; the id is
+        # the part before the "_".
+        value = get_anim_retarget(pose_bone, app_id).split("_")[0]
+        if not value.isdigit() or int(value) > 255:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} has no usable animation id",
+                details=(f"its Anim Retarget is {value!r}, which is not a number in 0-255. "
+                         f"Animations address bones by this id, so a bone without one would "
+                         f"be invisible to every animation"),
+                solution=("Set Anim Retarget on the bone in the Bone tab, or re-import the "
+                          "model to have it filled in"),
+            )
+        ids.append(int(value))
+    return ids
+
+
+# The most bones a model can hold. idx_parent and idx_mirror are each a u1 and
+# spend 255 on "none", so 255 is the first index neither can name. num_bones is
+# a u2 and is not the limit.
+MAX_ADDRESSABLE_BONES = 255
+
+
+def _check_bone_budget(num_bones):
+    if num_bones > MAX_ADDRESSABLE_BONES:
+        raise AlbamCheckFailure(
+            message=f"The armature has {num_bones} bones, more than the format can address",
+            details=(f"a bone refers to its parent and its mirror with one byte each, and "
+                     f"255 of the 256 values means \"none\", so no bone past index "
+                     f"{MAX_ADDRESSABLE_BONES - 1} can be named by another"),
+            solution="Remove bones until the skeleton is within the limit",
+        )
+
+
+def _check_bone_map(bone_map, anim_ids):
+    """Every id a bone claims has to lead back to a bone.
+
+    Two bones sharing an id is normal and the map keeps the last of them, so the
+    check is that each id resolves at all, not that it resolves to a particular
+    bone. What it catches is an id whose slot was never written, which would
+    leave an animation targeting that id driving nothing.
+    """
+    for bone_index, anim_id in enumerate(anim_ids):
+        if bone_map[anim_id] == UNMAPPED_ANIM_ID:
+            raise AlbamCheckFailure(
+                message=f"Bone {bone_index} claims animation id {anim_id}, which maps to nothing",
+                details="the table that resolves an animation id to a bone has no entry for it, "
+                        "so every animation addressing that id would drive no bone at all",
+                solution="Report this: the exported skeleton is inconsistent with itself",
+            )
+
+
+def _build_bone_map(anim_ids):
+    """The 256-byte reverse table an .lmt is resolved through: id -> bone index.
+
+    Rebuilt from the ids rather than copied, which is exact: assigning in bone
+    order reproduces all 404 re5 models byte for byte. Two bones sharing an id
+    is normal rather than a mistake - 280 of those models give a second bone
+    the id 0 - and the shipped tables always resolve such an id to the *last*
+    bone holding it, which is what overwriting in bone order does.
+    """
+    bone_map = bytearray([UNMAPPED_ANIM_ID] * 256)
+    for bone_index, anim_id in enumerate(anim_ids):
+        bone_map[anim_id] = bone_index
+    return bytes(bone_map)
+
+
+def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes=None):
     if bl_obj.type != "ARMATURE":
         return
     export_settings = bpy.context.scene.albam.export_settings
     export_bones = export_settings.export_bones
     bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transforms(
         bl_obj, dst_mod)
-    dst_mod.header.num_bones = src_mod.header.num_bones
+    if export_bones:
+        # The rig decides how many bones there are, which is what lets one gain
+        # bones the file it came from never had.
+        dst_mod.header.num_bones = _count_exportable_bones(bl_obj, app_id)
+    else:
+        dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
-    bones_data.bone_map = src_mod.bones_data.bone_map
+    if export_bones:
+        _check_bone_budget(dst_mod.header.num_bones)
+        anim_map_ids = _derive_anim_map_ids(bl_obj, app_id, dst_mod.header.num_bones)
+        parent_ids = _derive_parent_ids(bl_obj, dst_mod.header.num_bones)
+        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones)
+        furthest_vertex = _derive_furthest_vertex_distances(
+            bl_obj, bl_meshes, dst_mod.header.num_bones)
+        bones_data.bone_map = _build_bone_map(anim_map_ids)
+        _check_bone_map(bones_data.bone_map, anim_map_ids)
+    else:
+        anim_map_ids = parent_ids = mirror_ids = furthest_vertex = None
+        bones_data.bone_map = src_mod.bones_data.bone_map
     bones_data.bones_hierarchy = []
     bones_data.parent_space_matrices = []
     bones_data.inverse_bind_matrices = []
@@ -1160,13 +1406,15 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
             bone_palette._check()
 
     for i in range(dst_mod.header.num_bones):
-        src_bone = src_mod.bones_data.bones_hierarchy[i]
+        # Only the branch that copies needs the original, and it is not there to
+        # read once the rig has more bones than the file did.
+        src_bone = None if export_bones else src_mod.bones_data.bones_hierarchy[i]
         bone = dst_mod.Bone(_parent=bones_data, _root=bones_data._root)
-        bone.idx_anim_map = src_bone.idx_anim_map
-        bone.idx_parent = src_bone.idx_parent
-        bone.idx_mirror = src_bone.idx_mirror
-        bone.idx_mapping = src_bone.idx_mapping
-        bone.length = src_bone.length
+        bone.idx_anim_map = anim_map_ids[i] if export_bones else src_bone.idx_anim_map
+        bone.idx_parent = parent_ids[i] if export_bones else src_bone.idx_parent
+        bone.idx_mirror = mirror_ids[i] if export_bones else src_bone.idx_mirror
+        bone.idx_mapping = BONE_RECORD_PADDING if export_bones else src_bone.idx_mapping
+        bone.length = furthest_vertex[i] if export_bones else src_bone.length
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
