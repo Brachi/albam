@@ -2,7 +2,7 @@ meta:
     id: reengine_mesh
     endian: le
     title: RE Engine mesh format
-    ks-version: 0.10
+    ks-version: '0.11'
 
 seq:
     - {id: id_magic, contents: [77, 69, 83, 72]}

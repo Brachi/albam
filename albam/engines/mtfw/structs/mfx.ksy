@@ -3,7 +3,7 @@ meta:
   bit-endian: le
   file-extension: mfx
   id: mfx
-  ks-version: 0.10
+  ks-version: '0.11'
   title: MTFramework Shader List format
 seq:
   - {id: id_magic, contents: [77, 70, 88, 0]}

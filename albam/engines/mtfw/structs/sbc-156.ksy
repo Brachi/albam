@@ -2,7 +2,7 @@ meta:
   endian: le
   file-extension: sbc
   id: sbc_156
-  ks-version: 0.11
+  ks-version: '0.11'
   title:  Resident Evil 5 (MTFramework) collision format
 
 seq:

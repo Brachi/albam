@@ -2,13 +2,15 @@ import time
 import os
 import bpy
 
+from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
-    VirtualFileData,
+    _extension_from_name,
+    root_fs,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 
@@ -286,8 +288,7 @@ class ALBAM_OT_Export(bpy.types.Operator):
         try:
             self._execute(context, item)
         except Exception:
-            self.report({'ERROR'}, 'Import failed')
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Export failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
@@ -302,9 +303,8 @@ class ALBAM_OT_Export(bpy.types.Operator):
         vfiles = export_function(item.bl_object)
 
         root_id = f"{app_id}-{bl_obj.name}-{round(time.time())}"
-        vfile_root = VirtualFileData(app_id, root_id)
         vfs = context.scene.albam.exported
-        vfs.add_vfiles_as_tree(app_id, vfile_root, vfiles)
+        vfs.add_export_root(app_id, root_id, vfiles)
 
     @classmethod
     def poll(cls, context):
@@ -360,19 +360,32 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Pack failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):  # pragma: no cover
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
-        from ..engines.mtfw.archive import update_arc
+        from ..engines.mtfw.arc_fs import origin_arc_path
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
         item_i = vfs_i.file_list[index_i]
         if item_i.is_archive:
-            path_i = item_i.absolute_path
+            if item_i.fs_key:
+                # Resolves correctly whether this root is a single
+                # ArcFS-wrapped .arc (always returns that arc's own path) or
+                # a whole MTFW_FS game-folder root (resolves the specific
+                # .arc this path actually came from) - see origin_arc_path.
+                # origin_arc_path answers only for ArcFS/MTFW_FS, so anything
+                # else (LfsFS) falls back to the root's own path.
+                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path) or item_i.absolute_path
+                if not path_i:
+                    self.report({'ERROR'}, "Selected archive isn't backed by a packed file")
+                    return
+            else:
+                path_i = item_i.absolute_path
         else:
             arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
             arc_node = [item for item in vfs_i.file_list
@@ -391,10 +404,26 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        remove_unused = context.scene.albam.export_settings.remove_unused_textures
-        arc = update_arc(path_i, files_e, remove_unused_textures=remove_unused)
+
+        # Rebuilding a container is the engine's own business - the formats
+        # have nothing in common beyond both being archives - so it is looked
+        # up rather than hardcoded here.
+        extension = _extension_from_name(os.path.basename(path_i))
+        writer = blender_registry.archive_writer_registry.get((item_i.app_id, extension))
+        if writer is None:
+            self.report({'ERROR'},
+                        f"No way to repack a {extension!r} archive for {item_i.app_id}")
+            return
+        # Every export setting the panel offers is passed to whichever writer
+        # was looked up; a writer takes the ones it understands and ignores
+        # the rest, which is what the **options in its contract is for. An
+        # app_id branch here would put one engine's option back in the UI.
+        options = {
+            "remove_unused_textures": context.scene.albam.export_settings.remove_unused_textures,
+        }
+        archive = writer(path_i, files_e, **options)
         with open(self.filepath, "wb") as f:
-            f.write(arc)
+            f.write(archive)
 
     @classmethod
     def poll(cls, context):
@@ -441,7 +470,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         try:
             self._execute(context)
         except Exception:
-            bpy.ops.albam.error_handler_popup("INVOKE_DEFAULT")
+            handle_operator_exception(self, "Patch failed")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
     def _execute(self, context):

@@ -2,7 +2,7 @@ meta:
   id: nav_156
   file-extension: nav
   endian: le
-  ks-version: "0.11"
+  ks-version: '0.11'
   title: Resident Evil 5 navmesh
 
 seq:
