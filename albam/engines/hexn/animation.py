@@ -606,6 +606,23 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
         # the game's skinning, because the rest orientations are the
         # importer's, not the file's. Real imports always pass the skel.
         parents, bind_local = _rest_as_bind(armature_object, bone_names)
+
+    # Every animated bone's parent chain has to resolve to a real bone
+    # name - bones[bone_names[parent_index]] is looked up per frame below,
+    # and a gap there (bone_names_from_armature returns None for a node
+    # index whose bone lost its NODE_INDEX_PROPERTY, e.g. a manually
+    # edited or mismatched armature) would otherwise raise deep inside
+    # that loop instead of here, with a message naming the actual bone
+    # rather than a bare index.
+    for bone_idx, name in animated.items():
+        parent_index = parents[bone_idx]
+        if parent_index != -1 and (parent_index >= len(bone_names) or bone_names[parent_index] is None):
+            raise ValueError(
+                f"{armature_object.name!r} bone {name!r} (skeleton node {bone_idx}) has an animated "
+                f"parent (node {parent_index}) with no matching bone in this armature - was it edited "
+                f"after import? Re-import the skeleton to restore the node-index mapping."
+            )
+
     bind_world = _compose(bind_local, parents)
     bind_world_inverted = [matrix.inverted() for matrix in bind_world]
 
