@@ -636,14 +636,18 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
     bind_world_inverted = [matrix.inverted() for matrix in bind_world]
 
     # Blender's own rest matrices, and each bone's rest relative to its
-    # parent - the frame a pose channel is expressed against.
-    rest_world, rest_relative = {}, {}
+    # parent - the frame a pose channel is expressed against. Inverted
+    # once here too, same as bind_world_inverted above: it's frame-
+    # invariant, so inverting it again inside the per-frame loop below
+    # would just repeat the same matrix inversion every frame.
+    rest_world, rest_relative_inverted = {}, {}
     for bone_idx, name in animated.items():
         bone = bones[name]
         rest_world[bone_idx] = bone.matrix_local
         parent_bone = bone.parent
-        rest_relative[bone_idx] = (parent_bone.matrix_local.inverted() @ bone.matrix_local
-                                   if parent_bone else bone.matrix_local.copy())
+        rest_relative = (parent_bone.matrix_local.inverted() @ bone.matrix_local
+                         if parent_bone else bone.matrix_local.copy())
+        rest_relative_inverted[bone_idx] = rest_relative.inverted()
 
     curves = {}
     for bone_idx, name in animated.items():
@@ -672,9 +676,9 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
             parent_index = parents[bone_idx]
             if parent_index != -1:
                 parent_pose = delta[parent_index] @ bones[bone_names[parent_index]].matrix_local
-                basis = rest_relative[bone_idx].inverted() @ parent_pose.inverted() @ pose_world
+                basis = rest_relative_inverted[bone_idx] @ parent_pose.inverted() @ pose_world
             else:
-                basis = rest_relative[bone_idx].inverted() @ pose_world
+                basis = rest_relative_inverted[bone_idx] @ pose_world
 
             location = basis.to_translation()
             rotation = basis.to_quaternion()
