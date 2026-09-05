@@ -34,14 +34,22 @@ ROOT_PARENT = 0xffff
 NODE_INDEX_PROPERTY = "albam_node_index"
 
 
-def _find_skel_vfile(vfs, stem):
-    """The VFS entry for the skeleton named `stem`, or None.
+def _find_skel_vfile(vfs, stem, root_id=None):
+    """The VFS entry for the skeleton named `stem`, or None - preferring
+    the one that also belongs to root `root_id` when given (see
+    vfs.get_vfile's own root_id parameter, the same preference-not-
+    restriction shape: a path only reachable through a different root
+    still resolves via the first-match fallback).
 
     A skeleton is filed as `<somewhere>/skel/<stem>.ssg`, and every pack
     and level has its own skel directory - dlc/pack1/Characters/skel and
     dlc/pack3/characters/skel both hold playable characters, weapons and
     world objects have their own. So the directory can't be assumed, only
-    the `skel/<stem>` tail.
+    the `skel/<stem>` tail - and because of that, two different packs can
+    each hold a same-named, differently-rigged skeleton: root_id is what
+    lets a caller that knows which pack it's resolving for (e.g. a mesh's
+    own mounted root) prefer that pack's copy over an unrelated same-named
+    one from another pack mounted alongside it.
 
     The extension can't be assumed either, because the same file is
     addressable two ways depending on how it was mounted: as
@@ -53,13 +61,18 @@ def _find_skel_vfile(vfs, stem):
     Both point at the same bytes.
     """
     tails = (f"/skel/{stem}.ssg".lower(), f"/skel/{stem}".lower())
+    fallback = None
     for vfile in vfs.file_list:
         if vfile.is_expandable:  # a directory node, not the file itself
             continue
         path = "/" + str(vfile.relative_path).replace("\\", "/").lower()
-        if path.endswith(tails):
+        if not path.endswith(tails):
+            continue
+        if root_id is not None and vfile.tree_node.root_id == root_id:
             return vfile
-    return None
+        if fallback is None:
+            fallback = vfile
+    return fallback
 
 
 def infer_skeleton_vfile(context, edgemodel_vfile):
@@ -72,7 +85,7 @@ def infer_skeleton_vfile(context, edgemodel_vfile):
     """
     vfs = context.scene.albam.vfs
     stem = PureWindowsPath(edgemodel_vfile.relative_path).stem
-    return _find_skel_vfile(vfs, stem)
+    return _find_skel_vfile(vfs, stem, root_id=edgemodel_vfile.tree_node.root_id)
 
 
 def find_skel_vfile(context, stem):
@@ -126,16 +139,17 @@ def build_blender_skeleton(edgemodel_vfile, context):
     albam.engines.reng.material._get_heuristic_mdf_names().
     """
     stem = PureWindowsPath(edgemodel_vfile.relative_path).stem
-    return build_blender_skeleton_by_stem(context, stem)
+    return build_blender_skeleton_by_stem(context, stem, root_id=edgemodel_vfile.tree_node.root_id)
 
 
-def build_blender_skeleton_by_stem(context, stem):
+def build_blender_skeleton_by_stem(context, stem, root_id=None):
     """Same as build_blender_skeleton(), for a caller that already knows
     the skeleton's own stem - e.g. albam.engines.hexn.animation, which
     gets it straight from a clip's own "<clip_path>--<skeleton_name>"
-    name, with no .edgemodel vfile to derive it from. Returns (None, None)
-    the same way when _find_skel_vfile() can't find the skeleton under
-    either of its two addressable paths.
+    name, with no .edgemodel vfile to derive it from (and so no root_id
+    either - a clip doesn't belong to any one mounted root the way a mesh
+    does). Returns (None, None) the same way when _find_skel_vfile() can't
+    find the skeleton under either of its two addressable paths.
 
     Reuses an already-imported armature of the same name instead of
     building a duplicate - a clip import for this same stem may have
@@ -144,7 +158,7 @@ def build_blender_skeleton_by_stem(context, stem):
     not a second, Blender-suffixed one left disconnected from the Action.
     """
     vfs = context.scene.albam.vfs
-    skel_vfile = _find_skel_vfile(vfs, stem)
+    skel_vfile = _find_skel_vfile(vfs, stem, root_id=root_id)
     if skel_vfile is None:
         return None, None
 
