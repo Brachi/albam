@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Support for Resident Evil 4 UHD: import and export of characters and enemies, room
   import, and repacking edited files back into the game's archives. See
   `docs/modding-a-character.md` for the full edit-and-repack workflow.
+- Import of Resident Evil: Operation Raccoon City characters, skeletons and
+  animations. No export yet for this game.
 - Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
 - Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
