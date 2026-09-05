@@ -112,12 +112,21 @@ def build_blender_textures(texture_paths, context, root_id=None):
         dds_header = DDSHeader()
         io.BytesIO(texture_bytes).readinto(dds_header)
 
-        if _texture_suffix(path) == "_n":
-            bl_image = _build_unswizzled_normal_image(os.path.basename(path), texture_bytes, dds_header)
-        else:
-            bl_image = bpy.data.images.new(os.path.basename(path), dds_header.dwWidth, dds_header.dwHeight)
-            bl_image.source = "FILE"
-            bl_image.pack(data=bytes(texture_bytes), data_len=len(texture_bytes))
+        try:
+            if _texture_suffix(path) == "_n":
+                bl_image = _build_unswizzled_normal_image(os.path.basename(path), texture_bytes, dds_header)
+            else:
+                bl_image = bpy.data.images.new(
+                    os.path.basename(path), dds_header.dwWidth, dds_header.dwHeight)
+                bl_image.source = "FILE"
+                bl_image.pack(data=bytes(texture_bytes), data_len=len(texture_bytes))
+        except ValueError as err:
+            # A real, if uncommon, DDS FourCC in the wild (DXT3, or none at
+            # all) that _dds_format doesn't decode - skip this one texture
+            # rather than take the whole model import down over it, same
+            # tolerate-absence convention as the KeyError above.
+            print(f"[{path}] {err}, skipping")
+            continue
 
         tex_mapping[path] = bl_image
 
