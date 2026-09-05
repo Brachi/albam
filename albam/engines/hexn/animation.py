@@ -56,7 +56,7 @@ from mathutils import Matrix, Quaternion, Vector
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
 from .skeleton import (ROOT_PARENT, armature_name_for, bone_names_from_armature,
-                       build_blender_skeleton_by_stem, find_skel)
+                       build_blender_skeleton_by_stem, find_skel, find_skel_vfile)
 from .structs.hexane_anims import HexaneAnims
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
@@ -111,7 +111,12 @@ def import_anim_clip(vfile, context):
             f"armature to apply it to. Add the archive holding that skeleton and try again."
         )
 
-    armature_object = bpy.data.objects.get(armature_name_for(skeleton_name))
+    # Scoped by the skel file's own resolved path, not the bare stem: two
+    # different packs can each ship a same-named skeleton with a different
+    # rig (see skeleton.armature_name_for), so this has to agree with
+    # exactly which one `skeleton` above just came from.
+    armature_name = armature_name_for(find_skel_vfile(context, skeleton_name))
+    armature_object = bpy.data.objects.get(armature_name)
     bone_names = None
     if armature_object is not None and armature_object.type == "ARMATURE":
         # Not armature_object.pose.bones' own order: Blender keeps its

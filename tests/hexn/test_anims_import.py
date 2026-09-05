@@ -76,7 +76,10 @@ def test_import_applies_action_to_a_real_armature(game_fs_root, hash_to_path, lo
     # import once the armature already exists; the first import of a given
     # character does create one, so check for it directly by name instead
     # of diffing `before`.
-    armature_ob = bpy.data.objects.get(f"{skeleton_name}_skeleton")
+    from albam.engines.hexn.skeleton import armature_name_for, find_skel_vfile
+
+    skel_vfile = find_skel_vfile(bpy.context, skeleton_name)
+    armature_ob = bpy.data.objects.get(armature_name_for(skel_vfile))
     assert armature_ob is not None
     assert armature_ob.type == "ARMATURE"
 
@@ -102,8 +105,8 @@ def test_import_applies_action_to_a_real_armature(game_fs_root, hash_to_path, lo
         assert len(fc.keyframe_points) > 0
 
     # A second clip for the *same* skeleton reuses the existing armature
-    # rather than building a duplicate (see import_anim_clip's own
-    # "<skeleton_name>_skeleton" reuse-by-name convention).
+    # rather than building a duplicate (see skeleton.armature_name_for's
+    # reuse-by-name convention).
     second_file_info = next(
         fi for fi in anims.files_info
         if fi.name != file_info.name and fi.name.endswith(f"--{skeleton_name}")

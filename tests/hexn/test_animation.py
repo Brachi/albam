@@ -313,7 +313,8 @@ def test_a_clip_poses_the_armature_the_way_the_game_composes_it(game_fs_root, ha
     """
     from albam.engines.hexn.animation import (GAME_TO_BLENDER, GAME_TO_BLENDER_INVERTED, _clip_matrix,
                                               _compose, _game_matrix, decode_clip)
-    from albam.engines.hexn.skeleton import bone_names_from_armature, find_skel
+    from albam.engines.hexn.skeleton import (armature_name_for, bone_names_from_armature, find_skel,
+                                             find_skel_vfile)
     from albam.engines.hexn.structs.hexane_anims import HexaneAnims
 
     anims = HexaneAnims.from_bytes(game_fs_root.readbytes(hash_to_path[ANIMS_BASELINE_HASH]))
@@ -324,7 +325,8 @@ def test_a_clip_poses_the_armature_the_way_the_game_composes_it(game_fs_root, ha
     vfs = bpy.context.scene.albam.vfs
     vfs.select_vfile(local_app_id, file_info.name.replace("\\", "/").lstrip("/") + ".animclip")
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
-    armature_ob = bpy.data.objects[f"{skeleton_name}_skeleton"]
+    skel_vfile = find_skel_vfile(bpy.context, skeleton_name)
+    armature_ob = bpy.data.objects[armature_name_for(skel_vfile)]
 
     skel = find_skel(bpy.context, skeleton_name)
     assert skel is not None

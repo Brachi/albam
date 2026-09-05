@@ -6,6 +6,7 @@ shape, except that each bone's tail points at its own child where the
 skeleton gives an unambiguous one (see _bone_tail) so the rig reads as a
 skeleton in the viewport instead of a cloud of identical stubs.
 """
+import hashlib
 from pathlib import PureWindowsPath
 
 import bpy
@@ -74,11 +75,20 @@ def infer_skeleton_vfile(context, edgemodel_vfile):
     return _find_skel_vfile(vfs, stem)
 
 
+def find_skel_vfile(context, stem):
+    """Public entry point for _find_skel_vfile(), for a caller (this
+    module's own armature_name_for(), or albam.engines.hexn.animation) that
+    needs the vfile itself rather than the parsed skeleton - e.g. to
+    compute the armature name that specific file resolves to.
+    """
+    return _find_skel_vfile(context.scene.albam.vfs, stem)
+
+
 def find_skel(context, stem):
     """The parsed HexaneSkel for `stem`, or None when it isn't reachable -
     the bind pose albam.engines.hexn.animation needs to fill in whatever a
     clip doesn't animate."""
-    skel_vfile = _find_skel_vfile(context.scene.albam.vfs, stem)
+    skel_vfile = find_skel_vfile(context, stem)
     if skel_vfile is None:
         return None
     skel = HexaneSkel.from_bytes(skel_vfile.get_bytes())
@@ -86,16 +96,26 @@ def find_skel(context, stem):
     return skel
 
 
-def armature_name_for(stem):
-    """The armature name a skeleton gets, from its own stem.
+def armature_name_for(skel_vfile):
+    """The armature name a skeleton gets, keyed by the resolved skel file's
+    own path rather than its bare stem: every pack and level ships its own
+    skel directory (see _find_skel_vfile), and two different packs can each
+    hold a same-named, differently-rigged skeleton - naming by stem alone
+    would let a clip import silently reuse (and animate) a same-named
+    skeleton from the wrong pack. A short hash of the file's own relative
+    path disambiguates that, while staying well under Blender's
+    63-character object-name limit; the stem is kept as a prefix so the
+    name still reads as the character it is in the outliner.
 
     Both entry points below go through this, and so does
     albam.engines.hexn.animation when it looks for an armature already in
-    the scene: a mesh import and a clip import of the same character have
-    to land on the same name, or importing a clip after its model builds a
-    second armature and animates that one instead.
+    the scene: resolving the same skel_vfile always yields the same name,
+    so a mesh import and a clip import of the same character land on it
+    together.
     """
-    return f"{stem}_skeleton"
+    stem = PureWindowsPath(skel_vfile.relative_path).stem
+    digest = hashlib.sha1(skel_vfile.relative_path.encode()).hexdigest()[:8]
+    return f"{stem}_skeleton_{digest}"
 
 
 def build_blender_skeleton(edgemodel_vfile, context):
@@ -128,7 +148,7 @@ def build_blender_skeleton_by_stem(context, stem):
     if skel_vfile is None:
         return None, None
 
-    armature_name = armature_name_for(stem)
+    armature_name = armature_name_for(skel_vfile)
     armature_object = bpy.data.objects.get(armature_name)
     if armature_object is not None and armature_object.type == "ARMATURE":
         bone_names = bone_names_from_armature(armature_object)
