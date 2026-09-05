@@ -204,10 +204,16 @@ def _build_weights(bl_obj, edge_mesh, bone_names=None):
     for bone_index, data in weights_per_bone.items():
         # Bone indices range over the skeleton's full node_count (see
         # skel.ksy's node_count), so bone_names[bone_index] is a real bone
-        # name whenever a skeleton was found at all.
+        # name whenever a skeleton was found at all - except bone_names
+        # can itself hold a None gap for a reused armature whose bone lost
+        # its node-index custom property (see
+        # skeleton.bone_names_from_armature); vertex_groups.new(name=None)
+        # raises, so that falls back to the same raw-index naming already
+        # used when there's no skeleton at all.
+        vg_name = None
         if bone_names and bone_index < len(bone_names):
             vg_name = bone_names[bone_index]
-        else:
+        if vg_name is None:
             vg_name = str(bone_index)
         vg = bl_obj.vertex_groups.new(name=vg_name)
         for vertex_index, weight_value in data:
