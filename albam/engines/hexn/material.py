@@ -112,9 +112,9 @@ def build_blender_materials(edgemodel, context, root_id=None):
                 link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
                 # _s is DXT5 (unlike _d's DXT1 - no alpha needed there), and its
                 # Alpha channel carries real per-texel variation distinct from
-                # RGB (checked against real hunk/partygirl textures: alpha
-                # isn't flat, and while it correlates with RGB luminance it
-                # isn't identical to it) - matching the classic DirectX9-era
+                # RGB (checked against real character textures: alpha isn't
+                # flat, and while it correlates with RGB luminance it isn't
+                # identical to it) - matching the classic DirectX9-era
                 # convention this specular map's format otherwise fits: RGB
                 # specular color/intensity, Alpha specular power/gloss. Invert
                 # because a bright/glossy value means low roughness. Without

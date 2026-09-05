@@ -356,8 +356,8 @@ class SsgFS(FS):
 # (distinct magic "IM6S", ~1-2KB) filed under the *same* virtual paths as
 # the real, full-geometry .edgemodel files (magic "FM6S") that live in
 # separate content archives - e.g. dlc/pack1/Characters/ModelInfos.ssg has
-# an "IM6S" stub at .../vector.edgemodel, while the real ~1.2MB "FM6S"
-# mesh for that same path lives in dlc/pack1/Characters/vector.ssg.
+# an "IM6S" stub at .../<model>.edgemodel, while the real ~1.2MB "FM6S"
+# mesh for that same path lives in dlc/pack1/Characters/<model>.ssg.
 # Nothing in this codebase parses the "IM6S" format - see _ssg_priority().
 # A random 300-archive sample of the full install found no third pattern
 # of info-only archive beyond these two.

@@ -65,8 +65,8 @@ def _build_unswizzled_normal_image(display_name, texture_bytes, dds_header):
     """_n maps are DXT5 with the classic "agnm"/DXT5nm swizzle (aka "green
     cast"): the real X component lives in Alpha (moved there for its higher
     per-block precision) and Z isn't stored at all, only reconstructable as
-    sqrt(1 - x^2 - y^2) - confirmed against real hunk/partygirl textures:
-    raw DXT5 R/B are near-constant filler (~0.14, not real per-texel data),
+    sqrt(1 - x^2 - y^2) - confirmed against real character textures: raw
+    DXT5 R/B are near-constant filler (~0.14, not real per-texel data),
     while Alpha and Green carry real, independent variation, and treating
     (Alpha, Green) as (X, Y) satisfies x^2+y^2<=1 for ~100% of sampled
     texels (a precondition for a valid Z reconstruction).
