@@ -5,7 +5,7 @@ from mathutils import Vector, bvhtree
 
 
 from ..registry import blender_registry
-from ..engines.mtfw.bone import get_anim_retarget
+from ..engines.mtfw.bone import get_anim_retarget, guess_mirrors, set_mirror
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.handshaker import handshake, dump_frames, frames_path
 
@@ -140,6 +140,8 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             "bone_names_preset",
             text="",
         )
+        row = layout.row()
+        row.operator('albam.guess_bone_mirrors', text="Guess bone mirrors")
         layout.separator()
         row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")
@@ -449,6 +451,31 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         armature_ob = [obj for obj in selection if obj.type == 'ARMATURE']
         rename_bones(armature_ob[0], app_id, bone_names_preset)
         show_message_box(message="Armature bones were renamed")
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_GuessBoneMirrors(bpy.types.Operator):
+    '''Fill in each bone's Mirror Bone from the rest pose'''
+    bl_idname = "albam.guess_bone_mirrors"
+    bl_label = "guess bone mirrors"
+
+    @classmethod
+    def poll(self, context):
+        return any(obj.type == 'ARMATURE' for obj in bpy.context.selected_objects)
+
+    def execute(self, context):
+        app_id = context.scene.albam.apps.app_selected
+        armature_ob = next(obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE')
+        guessed = guess_mirrors(armature_ob)
+        for bone_name, mirror_name in guessed.items():
+            set_mirror(armature_ob.pose.bones[bone_name], app_id, mirror_name)
+        # Whatever it could not place keeps whatever it had, which for a rig
+        # straight out of an import is the value the file shipped.
+        show_message_box(
+            message=f"Guessed a mirror for {len(guessed)} of {len(armature_ob.data.bones)} bones. "
+                    f"About one in twenty is wrong, so check them before exporting"
+        )
         return {'FINISHED'}
 
 
