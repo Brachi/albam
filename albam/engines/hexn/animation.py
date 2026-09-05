@@ -56,8 +56,9 @@ from mathutils import Matrix, Quaternion, Vector
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
 from .skeleton import (ROOT_PARENT, armature_name_for, bone_names_from_armature,
-                       build_blender_skeleton_by_stem, find_skel, find_skel_vfile)
+                       build_blender_skeleton_by_stem, find_skel_vfile)
 from .structs.hexane_anims import HexaneAnims
+from .structs.hexane_skel import HexaneSkel
 
 _QUAT_SCALE = ((1 << 15) - 1) / sqrt(2)
 _QUAT_OFFSET = _QUAT_SCALE / sqrt(2)
@@ -103,19 +104,26 @@ def import_anim_clip(vfile, context):
     # VFS after an earlier import - avoids silently reusing/building an
     # armature and then falling back to build_blender_action's own
     # rest-pose-as-bind path, which cannot reproduce the game's skinning.
-    skeleton = find_skel(context, skeleton_name)
-    if skeleton is None:
+    #
+    # Resolved once, as the vfile: parsing the skeleton straight from it
+    # here (rather than calling skeleton.find_skel(), which would resolve
+    # this same vfile a second time) also gives armature_name_for() below
+    # the exact vfile `skeleton` came from, with no separate lookup.
+    skel_vfile = find_skel_vfile(context, skeleton_name)
+    if skel_vfile is None:
         raise ValueError(
             f"No skeleton found for {clip_path!r}: nothing in the VFS is filed as "
             f"skel/{skeleton_name} (see skeleton._find_skel_vfile), and an animation needs an "
             f"armature to apply it to. Add the archive holding that skeleton and try again."
         )
+    skeleton = HexaneSkel.from_bytes(skel_vfile.get_bytes())
+    skeleton._read()
 
     # Scoped by the skel file's own resolved path, not the bare stem: two
     # different packs can each ship a same-named skeleton with a different
     # rig (see skeleton.armature_name_for), so this has to agree with
     # exactly which one `skeleton` above just came from.
-    armature_name = armature_name_for(find_skel_vfile(context, skeleton_name))
+    armature_name = armature_name_for(skel_vfile)
     armature_object = bpy.data.objects.get(armature_name)
     bone_names = None
     if armature_object is not None and armature_object.type == "ARMATURE":
