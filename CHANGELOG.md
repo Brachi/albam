@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autosorter tool to automatically set `alpha priority` values for hair cards
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
+- Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
 
 ### Fixed
 
