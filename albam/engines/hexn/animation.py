@@ -471,9 +471,10 @@ def _decode_root_motion(clip, clip_bytes, bones):
         # the community reference itself hits and falls back on for its
         # own compressed-channel decode (its "a NaN by Sony" case). Fall
         # back to the previous frame rather than produce a zero-magnitude
-        # rotation.
-        if quat.magnitude < 0.5 and rotations:
-            quat = rotations[-1]
+        # rotation - or, on frame 0 where there is no previous frame yet,
+        # to the identity.
+        if quat.magnitude < 0.5:
+            quat = rotations[-1] if rotations else Quaternion((1.0, 0.0, 0.0, 0.0))
         rotations.append(quat)
         pos += 16
     bones[0] = (positions, rotations)
