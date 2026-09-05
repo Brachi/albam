@@ -216,7 +216,9 @@ class SsgFS(FS):
 
     def _ensure_decompressed(self):
         """Decompress the whole archive once, on the first read of any file
-        in it, and keep the result for the life of this instance.
+        in it, and keep the result for the life of this instance. Returns
+        the cache dict directly - see openbin()'s own comment on why a
+        caller should read from that return value, not self._data again.
 
         The cache is built locally and published at the end: a failure
         part-way through (a corrupt chunk, a truncated read) would
@@ -235,7 +237,7 @@ class SsgFS(FS):
         """
         with self._decompress_lock:
             if self._data is not None:
-                return
+                return self._data
             data = {}
 
             # A skeleton entry's content is the whole raw file (see
@@ -281,6 +283,7 @@ class SsgFS(FS):
                     data[path] = bytes(uncompressed[offset:offset + self._sizes[path]])
 
             self._data = data
+            return data
 
     def close(self):
         """Drop the decompressed archive (see _ensure_decompressed) along
@@ -325,8 +328,14 @@ class SsgFS(FS):
         _path = self.validatepath(path)
         if _path not in self._sizes:
             raise ResourceNotFound(path)
-        self._ensure_decompressed()
-        return io.BytesIO(self._data[_path])
+        # Read from _ensure_decompressed()'s own return value, not
+        # self._data again: a concurrent close() between the two statements
+        # (this class declares _meta["thread_safe"] = True) could otherwise
+        # null self._data out from under this line. The returned dict is
+        # the same object close() would drop, so holding this local
+        # reference to it keeps it alive for this call regardless.
+        data = self._ensure_decompressed()
+        return io.BytesIO(data[_path])
 
     def makedir(self, path, permissions=None, recreate=False):
         raise ResourceReadOnly(path)
