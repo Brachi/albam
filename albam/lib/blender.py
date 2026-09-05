@@ -178,12 +178,20 @@ def get_uvs_per_loop(blender_mesh_object, layer_index):
     Return {loop_index: (uv_x, uv_y)}, one entry per mesh corner (as opposed
     to per vertex): a shared vertex can be part of more than one UV island,
     so its corners can legitimately have different UVs.
+
+    Callers ask for a fixed number of layers because that is what the vertex
+    formats allow, so a mesh with fewer is the normal case, not an error.
+    Asking how many there are rather than indexing and catching the failure
+    keeps Blender from printing "Array iterator out of range" to stdout: it
+    writes that before raising, so catching the exception does not suppress
+    it, and once per missing layer per mesh it reads like a real error in
+    the middle of an export log.
     """
     loops = {}
-    try:
-        uv_layer = blender_mesh_object.data.uv_layers[layer_index]
-    except IndexError:
+    uv_layers = blender_mesh_object.data.uv_layers
+    if layer_index >= len(uv_layers):
         return loops
+    uv_layer = uv_layers[layer_index]
     uvs_per_loop = uv_layer.data
     if not uvs_per_loop:
         return loops
@@ -421,3 +429,28 @@ class ShaderGroupCompat:
             return self.shader_group.inputs
         return {item.name: item for item in self.shader_group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"}
+
+
+class BaseMaterialCustomProperties(bpy.types.PropertyGroup):
+    """Copies a property group's own annotated fields to and from a parsed
+    struct, with the hex-string fields a Blender UI needs converted back to
+    the integers the struct holds.
+
+    Here rather than in an engine: nothing about it is specific to a format,
+    and an engine importing it from another engine would tie the two
+    together for no reason.
+    """
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))

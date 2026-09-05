@@ -19,13 +19,14 @@ mounted under would create ambiguous duplicate entries for the very same
 paths. local_game_fs below builds its own private MTFW_FS purely to
 resolve hashes to real paths - it is never itself added to the VFS.
 """
+import contextlib
 import json
 import os
 
 import bpy
 import pytest
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
@@ -67,24 +68,6 @@ def test_dataset_hashes_are_in_catalog():
             assert entry[key] in catalog_hashes, (
                 f"{entry[key]!r} ({entry['app_id']}) is not in {catalog_path!r}"
             )
-
-
-def action_fcurves(action):
-    """Every fcurve an action holds, whichever Blender version made it.
-
-    The flat Action.fcurves shortcut is gone from 5.0 on - the same removal
-    this file exists to catch - so reading it directly here would break the
-    test exactly where it broke the code.
-    """
-    if hasattr(action, "fcurves"):
-        return list(action.fcurves)
-    return [
-        fcurve
-        for layer in action.layers
-        for strip in layer.strips
-        for channelbag in strip.channelbags
-        for fcurve in channelbag.fcurves
-    ]
 
 
 @pytest.fixture(scope="session")
@@ -151,16 +134,33 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     # load_lmt() names every action it creates after the armature it was
     # applied to, and never assigns them, so that prefix is the only handle.
     actions = [a for a in bpy.data.actions if a.name.startswith(f"{armature.name}.")]
-    return result, armature, actions
+    latest = len(bpy.context.scene.albam.exportable.file_list) - 1
+    lmt_bl_object = bpy.context.scene.albam.exportable.file_list[latest].bl_object
+    yield result, armature, actions, lmt_bl_object
+
+    # Unmount both roots again. The VFS lives in Blender's scene data, which
+    # is process-global and outlives this fixture, while local_game_fs (and
+    # with it the ArcFS instances mounted above) is dropped when this param
+    # group tears down - leaving roots behind whose filesystem is closed.
+    # Node ids are app_id::relative_path only, so any later test selecting
+    # these same paths would resolve to one of those dead roots and fail with
+    # fs.errors.FilesystemClosed.
+    for display_name in ("single-arc-lmt", "single-arc-mod"):
+        root_id = f"{local_app_id}::{display_name}"
+        index = vfs.file_list.find(root_id)
+        if index == -1:
+            continue
+        vfs.file_list_selected_index = index
+        bpy.ops.albam.remove_imported()
 
 
 def test_lmt_import_succeeds(lmt_imported_local):
-    result, _armature, _actions = lmt_imported_local
+    result, _armature, _actions, _lmt_object = lmt_imported_local
     assert result == {"FINISHED"}
 
 
 def test_lmt_import_creates_actions(lmt_imported_local):
-    _result, armature, actions = lmt_imported_local
+    _result, armature, actions, _lmt_object = lmt_imported_local
     assert actions, "importing the .lmt created no actions"
     assert armature.animation_data is not None
 
@@ -169,9 +169,307 @@ def test_lmt_import_actions_have_keyframes(lmt_imported_local):
     """Without this, an import that swallowed the error and produced empty
     actions would still pass the two tests above.
     """
-    _result, _armature, actions = lmt_imported_local
+    _result, _armature, actions, _lmt_object = lmt_imported_local
     for action in actions:
         fcurves = action_fcurves(action)
         assert fcurves, f"{action.name} has no fcurves"
         for fcurve in fcurves:
             assert len(fcurve.keyframe_points), f"{action.name}/{fcurve.data_path} has no keyframes"
+
+
+def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
+    """Which slot of the file a block sits in is its identity.
+
+    An empty slot has to stay empty and every offset in the header is written
+    by position, so getting the order wrong does not produce a slightly wrong
+    file, it produces one whose blocks are all in the wrong place. Export used
+    to take that order from `children_recursive`, which is name order and
+    matches only while the names a first import gave still sort in block order.
+    """
+    from albam.engines.mtfw.animation import _lmt_blocks, get_block_index
+
+    _result, _armature, _actions, lmt_object = lmt_imported_local
+    app_id = lmt_object.albam_asset.app_id
+    blocks = _lmt_blocks(lmt_object, app_id)
+    assert blocks, "the .lmt produced no blocks"
+
+    recorded = [get_block_index(block, app_id) for block in blocks]
+    assert recorded == list(range(len(blocks))), (
+        f"blocks are not in file order: {recorded[:8]}...")
+
+    # The names are what used to carry the order, so breaking them must not
+    # change it. Reversed, so name order and block order disagree everywhere.
+    original_names = [block.name for block in blocks]
+    try:
+        for position, block in enumerate(blocks):
+            block.name = f"scrambled.{len(blocks) - position:04d}"
+        after = [get_block_index(block, app_id) for block in _lmt_blocks(lmt_object, app_id)]
+        assert after == recorded, "renaming the objects reordered the blocks"
+    finally:
+        for block, name in zip(blocks, original_names):
+            block.name = name
+
+
+@contextlib.contextmanager
+def _pose_restored(armature):
+    """Put the armature's pose back exactly as it was found.
+
+    Assigning an action makes Blender write the evaluated values into the pose
+    bones themselves, and taking the action away again does not undo that - the
+    armature keeps the last frame it was on. Root motion moves a character
+    metres from the origin, so a test that animates one and walks away leaves
+    every later test measuring that pose instead of the rest one.
+    """
+    from mathutils import Matrix
+
+    animation_data = armature.animation_data
+    previous_action = animation_data and animation_data.action
+    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
+    previous_frame = bpy.context.scene.frame_current
+    try:
+        yield
+    finally:
+        if armature.animation_data is not None:
+            armature.animation_data.action = previous_action
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
+        bpy.context.scene.frame_set(previous_frame)
+
+
+def _root_motion_track_angle(action, armature):
+    """How far and about what the root motion bone turns, from its own keys.
+
+    The axis comes back in the engine's frame, the one the track is written
+    against.
+    """
+    import math
+
+    from mathutils import Quaternion
+
+    from albam.engines.mtfw.animation import ROOT_MOTION_BONE_NAME
+
+    components = {}
+    for fcurve in action_fcurves(action):
+        if not fcurve.data_path.endswith("].rotation_quaternion"):
+            continue
+        if fcurve.data_path.split('"')[1] != ROOT_MOTION_BONE_NAME:
+            continue
+        components[fcurve.array_index] = fcurve
+    if len(components) != 4:
+        return None, None, None
+    frames = sorted({key.co[0] for key in components[0].keyframe_points})
+    if len(frames) < 2:
+        return None, None, None
+    first, last = (
+        Quaternion([components[i].evaluate(f) for i in range(4)]).normalized()
+        for f in (frames[0], frames[-1])
+    )
+    net = last @ first.inverted()
+    angle = math.degrees(net.angle)
+    return (360 - angle if angle > 180 else angle,
+            net.axis.normalized(),
+            (int(frames[0]), int(frames[-1])))
+
+
+def _skeleton_root_bone(armature):
+    from albam.engines.mtfw.bone import get_anim_retarget
+
+    app_id = armature.albam_asset.app_id
+    for pose_bone in armature.pose.bones:
+        if get_anim_retarget(pose_bone, app_id) == "0":
+            return pose_bone.name
+    raise AssertionError("the armature carries no bone mapped to anim id 0")
+
+
+def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
+    """Root motion is a whole-character transform, rotation included.
+
+    Two ways this has gone wrong, and one measurement rules out both. Bind the
+    rotation to nothing and a block that spins the character around plays as a
+    twist in place - he ends the block facing the way he started. Bind it in
+    the wrong frame and he turns about the wrong axis, and a block that should
+    turn him on the spot lays him on his face instead.
+
+    So the character's own rotation is compared against the track's, carried
+    over by the same (x, y, z) -> (x, -z, y) mapping a position takes. Not
+    against vertical: most of these are turns on the spot, but a small number
+    of blocks across the game really do turn the character about a horizontal
+    axis, and a test that assumed otherwise would be asserting something the
+    format does not promise.
+
+    Both mistakes are only visible in armature space. The bone the track is
+    keyed on is created pointing +Z, so its own rest orientation already
+    carries the engine's axes into Blender's - which makes the value read
+    straight off the fcurve the one place where neither shows up.
+    """
+    import math
+
+    from mathutils import Vector
+
+    _result, armature, actions, _lmt_object = lmt_imported_local
+    root_bone = _skeleton_root_bone(armature)
+
+    turning = []
+    for action in actions:
+        angle, axis, frames = _root_motion_track_angle(action, armature)
+        if angle is not None and angle > 5:
+            # the engine's axes into Blender's, the same mapping a position takes
+            turning.append((action, angle, Vector((axis.x, -axis.z, axis.y)), frames))
+    if not turning:
+        pytest.skip("no block of this .lmt turns the root motion bone")
+
+    with _pose_restored(armature):
+        for action, expected, expected_axis, (first, last) in turning:
+            if armature.animation_data is None:
+                armature.animation_data_create()
+            armature.animation_data.action = action
+            slots = getattr(action, "slots", None)
+            if slots:
+                armature.animation_data.action_slot = slots[0]
+
+            poses = []
+            for frame in (first, last):
+                bpy.context.scene.frame_set(frame)
+                depsgraph = bpy.context.evaluated_depsgraph_get()
+                evaluated = armature.evaluated_get(depsgraph)
+                poses.append(evaluated.pose.bones[root_bone].matrix.to_quaternion())
+
+            net = poses[1] @ poses[0].inverted()
+            angle = math.degrees(net.angle)
+            angle = 360 - angle if angle > 180 else angle
+            axis = net.axis.normalized()
+
+            assert abs(angle - expected) < 1.0, (
+                f"{action.name}: the root motion track turns {expected:.1f} deg but the "
+                f"character turns {angle:.1f} deg"
+            )
+            # abs(): at exactly 180 degrees the sign of an axis is arbitrary
+            assert abs(axis.dot(expected_axis)) > 0.999, (
+                f"{action.name}: the character turns about "
+                f"({axis.x:+.3f}, {axis.y:+.3f}, {axis.z:+.3f}), but the track names "
+                f"({expected_axis.x:+.3f}, {expected_axis.y:+.3f}, {expected_axis.z:+.3f})"
+            )
+
+
+def test_root_motion_constraints_are_identities_at_rest(lmt_imported_local):
+    """Adding the constraint must not move the rig on its own.
+
+    CHILD_OF applies the target's transform relative to the inverse matrix it
+    stores, so getting that matrix wrong doesn't fail loudly - it silently
+    bakes the root motion bone's own rest orientation into every rig the
+    moment the .lmt is imported, animated or not.
+    """
+    _result, armature, _actions, _lmt_object = lmt_imported_local
+
+    constraints = [
+        constraint
+        for pose_bone in armature.pose.bones
+        for constraint in pose_bone.constraints
+        if constraint.type == "CHILD_OF"
+    ]
+    assert constraints, "nothing binds the rig to the root motion bone"
+
+    from mathutils import Matrix
+
+    with _pose_restored(armature):
+        # Whatever the tests before this one left posed, measure from rest.
+        if armature.animation_data is not None:
+            armature.animation_data.action = None
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = Matrix.Identity(4)
+
+        def evaluate():
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            depsgraph.update()
+            evaluated = armature.evaluated_get(depsgraph)
+            return {pb.name: pb.matrix.copy() for pb in evaluated.pose.bones}
+
+        live = evaluate()
+        for constraint in constraints:
+            constraint.mute = True
+        try:
+            muted = evaluate()
+        finally:
+            for constraint in constraints:
+                constraint.mute = False
+
+        worst = max((live[name].to_translation() - matrix.to_translation()).length
+                    for name, matrix in muted.items())
+        assert worst < 1e-5, f"the constraints move the rest pose by {worst * 100:.4f} cm"
+
+
+def test_a_missing_bone_is_not_confused_with_a_bone_named_for_it():
+    """Bone names and anim ids are separate spaces, and they collide.
+
+    A rig can carry a bone *named* "104" that answers to anim id 77 - the name
+    comes from the .mod, the id from idx_anim_map. When a track needs anim id
+    104 and the rig maps nothing to it, Blender names the new bone "104.001",
+    because bone names are unique. Handing the caller "104" instead points it
+    at the unrelated existing bone: the track overwrites that bone's animation,
+    and export reads it back as *its* id, so 104 vanishes from the file and a
+    duplicate 77 appears in its place. It surfaces only as "F-Curve already
+    exists", which names neither bone.
+
+    Synthetic: builds the collision directly, no game data needed.
+    """
+    from albam.engines.mtfw.animation.animation_import import _create_missing_bones
+    from albam.engines.mtfw.bone import get_anim_retarget, set_anim_retarget
+
+    armature_data = bpy.data.armatures.new("collision_rig")
+    armature = bpy.data.objects.new("collision_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        decoy = armature_data.edit_bones.new("104")
+        decoy.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        # named 104, answers to 77
+        set_anim_retarget(armature.pose.bones["104"], "re5", "77")
+
+        mapping = {}
+        returned = _create_missing_bones(armature, 104, "104", mapping, "re5")
+
+        assert returned != "104", (
+            "returned the pre-existing bone named 104, which answers to anim id 77"
+        )
+        assert returned == mapping["104"], "return value and mapping disagree"
+        assert get_anim_retarget(armature.pose.bones[returned], "re5") == "104"
+        assert get_anim_retarget(armature.pose.bones["104"], "re5") == "77", (
+            "the unrelated bone must be left alone"
+        )
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
+def test_root_motion_on_a_rig_with_no_root_bone_says_so():
+    """Root motion moves the skeleton's root, so a rig without one cannot take it.
+
+    The root is found through anim id 0, not by name. A rig that maps nothing
+    to it used to hand `None` straight to `pose.bones[...]`, so any file with a
+    root motion or chain track died on a TypeError naming neither the rig nor
+    the id it wanted.
+
+    Synthetic: builds the rig directly, no game data needed.
+    """
+    from albam.engines.mtfw.animation.animation_import import _get_or_create_root_motion_bone
+
+    armature_data = bpy.data.armatures.new("rootless_rig")
+    armature = bpy.data.objects.new("rootless_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        with pytest.raises(ValueError, match="animation id 0"):
+            _get_or_create_root_motion_bone(armature, {}, "re5")
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous

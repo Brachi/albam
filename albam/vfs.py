@@ -96,7 +96,7 @@ class VirtualFile(bpy.types.PropertyGroup):
     def get_bytes(self):
         root = self.root_vfile
         if root and root.fs_key:
-            return fs_registry.get(root.fs_key).readbytes(self.fs_path)
+            return root_fs(root).readbytes(self.fs_path)
         accessor = self.get_accessor()
         return accessor(self, bpy.context)
 
@@ -105,7 +105,7 @@ class VirtualFile(bpy.types.PropertyGroup):
             return self.real_file_accessor
         if self.data_bytes:
             return lambda vfile, context: self.data_bytes
-        vfs = getattr(bpy.context.scene.albam, self.vfs_id)
+        vfs = self.get_vfs()
         root = vfs.file_list[self.tree_node.root_id]
         accessor_func = blender_registry.archive_accessor_registry.get(
             (self.app_id, root.extension)
@@ -121,7 +121,14 @@ class VirtualFile(bpy.types.PropertyGroup):
             return f.read()
 
     def get_vfs(self):
-        return getattr(bpy.context.scene.albam, self.vfs_id)
+        """The vfs collection this file actually belongs to - resolved
+        through the scene owning it (`id_data`), not through
+        bpy.context.scene: a file lives in one specific scene's albam data,
+        and looking it up in whichever scene happens to be active resolves
+        roots (and therefore bytes) from the wrong file list entirely.
+        """
+        scene = self.id_data
+        return getattr(scene.albam, self.vfs_id)
 
     def _get_relative_path_windows(self, include_extension=True):
         p = PureWindowsPath(self.relative_path)
@@ -183,11 +190,10 @@ class VirtualFileSystemBase:
         fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
                      blender_registry.fs_root_loader_registry.get((app_id, None)))
         if fs_loader:
-            self.add_fs_root(
+            return self.add_fs_root(
                 app_id, fs_loader(absolute_path), display_name=path.name,
                 is_archive=bool(extension), absolute_path=absolute_path,
             )
-            return
 
         vf = self.file_list.add()
         vf.is_root = True
@@ -348,37 +354,91 @@ class VirtualFileSystemBase:
         return vfile
 
 
+def _fs_root_loader(vf):
+    """The registered fs_root_loader able to rebuild root `vf`'s FS: keyed by
+    the root's own extension for an archive root ("Add Files"), falling back
+    to the whole-folder loader ("Add Folder"), same as add_real_file().
+    """
+    return (blender_registry.fs_root_loader_registry.get((vf.app_id, vf.extension)) or
+            blender_registry.fs_root_loader_registry.get((vf.app_id, None)))
+
+
+def reconnect_fs_root(vf):
+    """
+    Rebuild the fs_registry entry backing root `vf` - under the `fs_key` it
+    already carries, not a fresh one - and return the live FS instance.
+
+    fs_registry is plain in-process state (see its module docstring): it
+    isn't part of the .blend file, and it's also dropped mid-session
+    whenever the add-on is re-registered (Reload Scripts, an extension
+    update, a disable/enable cycle - unregister() calls fs_registry.clear()).
+    A root's `fs_key`/`absolute_path` are real bpy.props that outlive both,
+    so the entry can be recreated the same way add_real_file() created it
+    the first time.
+    """
+    if not vf.absolute_path:
+        raise RuntimeError(
+            f"VFS root {vf.display_name!r} has no path on disk to mount again - it only "
+            f"ever existed in memory (e.g. an export root), so it's gone for this session"
+        )
+    fs_loader = _fs_root_loader(vf)
+    if not fs_loader:
+        raise RuntimeError(
+            f"VFS root {vf.display_name!r} has no fs_root_loader registered for "
+            f"app_id={vf.app_id!r} to mount it again with"
+        )
+    fs_instance = fs_loader(vf.absolute_path)
+    fs_registry.reconnect(vf.fs_key, fs_instance)
+    return fs_instance
+
+
+def root_fs(root_vf):
+    """
+    The live FS instance backing root `root_vf`, mounting it again on demand
+    if this process's fs_registry doesn't have it (any more) - see
+    reconnect_fs_root(). Going through here instead of straight to
+    fs_registry.get() keeps a root readable in every case the load_post
+    handler below can't cover: the add-on being re-registered mid-session,
+    roots living in a scene that wasn't the active one when the file loaded,
+    or a file loaded before the add-on was enabled at all. Otherwise the
+    first read of such a root raises a bare KeyError on a uuid, from
+    wherever an importer happened to ask for bytes.
+    """
+    try:
+        return fs_registry.get(root_vf.fs_key)
+    except KeyError:
+        print(f"albam: mounting VFS root {root_vf.display_name!r} again "
+              f"from {root_vf.absolute_path!r}")
+        return reconnect_fs_root(root_vf)
+
+
 @persistent
 def reconnect_fs_roots(dummy):
     """
-    fs_registry is plain in-process state (see its module docstring) - it
-    isn't part of the .blend file and comes up empty in a fresh Blender
-    session, while a root VirtualFile's `fs_key`/`absolute_path` (real
-    bpy.props, restored from the file) still point at the FS instance that
-    used to back it. Without this, VirtualFile.get_bytes() on any such root
-    - i.e. every "Add Folder"/"Add Files" root re-added by loading a saved
-    .blend - raises KeyError the first time it's read (e.g. on import).
-    Rebuilds the registry entry the same way add_real_file() built it the
-    first time, so existing fs_key values keep pointing at something live.
-    Roots with no `absolute_path` (add_export_root()'s in-memory FS) can't
-    be recreated this way and are left as-is - they're transient, run-only
-    state to begin with.
+    Mount every FS-backed root in the freshly-loaded file again, so the
+    `fs_key` values restored from it keep pointing at something live (see
+    reconnect_fs_root() for what drops them). Doing it up front here keeps
+    the first read of a root predictable - a whole game folder can take a
+    while to mount - while get_bytes() still falls back to mounting lazily
+    for any root this misses. Roots with no `absolute_path`
+    (add_export_root()'s in-memory FS) can't be recreated this way and are
+    left as-is - they're transient, run-only state to begin with.
     """
-    for vfs_id in ("vfs", "exported"):
-        vfs = getattr(bpy.context.scene.albam, vfs_id, None)
-        if vfs is None:
+    for scene in bpy.data.scenes:
+        albam_data = getattr(scene, "albam", None)
+        if albam_data is None:
             continue
-        for vf in vfs.file_list:
-            if not (vf.is_root and vf.fs_key and vf.absolute_path):
+        for vfs_id in ("vfs", "exported"):
+            vfs = getattr(albam_data, vfs_id, None)
+            if vfs is None:
                 continue
-            fs_loader = (blender_registry.fs_root_loader_registry.get((vf.app_id, vf.extension)) or
-                         blender_registry.fs_root_loader_registry.get((vf.app_id, None)))
-            if not fs_loader:
-                continue
-            try:
-                fs_registry.reconnect(vf.fs_key, fs_loader(vf.absolute_path))
-            except Exception as err:
-                print(f"albam: could not reconnect VFS root {vf.display_name!r}: {err}")
+            for vf in vfs.file_list:
+                if not (vf.is_root and vf.fs_key and vf.absolute_path):
+                    continue
+                try:
+                    reconnect_fs_root(vf)
+                except Exception as err:
+                    print(f"albam: could not reconnect VFS root {vf.display_name!r}: {err}")
 
 
 @blender_registry.register_blender_prop_albam(name="vfs")
@@ -394,7 +454,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
     # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.ssg", options={"HIDDEN"})  # NOQA
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.ssg;*.lfs", options={"HIDDEN"})  # NOQA
 
     def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager

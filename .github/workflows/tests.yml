@@ -1,13 +1,39 @@
 name: Test
 on:
   push:
-    branches: [ "main" ]
+    # Every branch, not just main: a branch used to get no CI at all until a
+    # PR was opened for it. The duplicate runs this would normally cause on
+    # an open PR are suppressed by the tests job's own condition below.
+    branches: [ "**" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
+  # Re-run on demand without pushing anything, e.g. to retry a flaky job:
+  # `gh workflow run tests.yml --ref <branch>`. Only offered once this file
+  # is on the default branch - GitHub reads the trigger list from there.
+  workflow_dispatch:
+
+# A burst of pushes to one branch used to leave every intermediate commit
+# running both matrix legs to completion; only the newest is worth the
+# runner. main and tags are excluded: publish-latest-main and publish-release
+# hang off this workflow, so cancelling a superseded run there would skip a
+# release build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   tests:
+    # A branch in this repo is already covered by the push trigger above, so
+    # its PR would otherwise run the whole matrix a second time on the same
+    # commit. A fork's branch produces no push event here, so fork PRs - the
+    # only ones this skips for - still need the pull_request trigger. A
+    # skipped job satisfies a required status check, so this stays usable
+    # with branch protection.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -16,9 +42,9 @@ jobs:
               {"bpy-version": "5.2.0", "python-version": "3.13"}
              ]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
     - name: Set up Python ${{ matrix.bpy.python-version }} with bpy ${{ matrix.bpy-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.bpy.python-version }}
         # No `cache: pip` - uv caches instead, below. setup-python's pip cache
@@ -26,9 +52,9 @@ jobs:
         # requirements.txt), so the key never changed and the cache only ever
         # grew: 946MB for 3.11 against 461MB for 3.13, same dependencies.
     - name: Set up uv
-      # v6 is the newest floating major tag astral-sh publishes; 10.x exists
-      # but only as exact versions (there is no v10 tag to track).
-      uses: astral-sh/setup-uv@v6
+      # v7 is the newest floating major tag astral-sh publishes; later
+      # majors exist but only as exact versions, with no tag to track.
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
         # Both files pin what gets installed - pyproject.toml for these jobs,
@@ -70,7 +96,7 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1
+          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
@@ -83,7 +109,7 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: .coverage.${{ matrix.bpy.bpy-version }}
         path: .coverage.${{ matrix.bpy.bpy-version }}
@@ -95,9 +121,9 @@ jobs:
     needs: tests
     steps:
       - name: "Check out the repo"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
       - name: "Set up Python"
-        uses: "actions/setup-python@v5"
+        uses: "actions/setup-python@v6"
         with:
           python-version: "3.12"
           # No pip cache here: this job installs one small package, and the
@@ -106,7 +132,7 @@ jobs:
         run: |
           python -m pip install coverage
       - name: "Download coverage data"
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v6
         with:
           path: .covdata
           pattern: .coverage.*
@@ -121,6 +147,12 @@ jobs:
       - name: "Coverage report"
         run: coverage report --sort cover
       - name: "Make badge"
+        # The badge is public and reads as "albam's coverage", so only main
+        # may write it - the steps above still run everywhere, so a PR (or a
+        # workflow_dispatch run on a branch) keeps its coverage report and
+        # step summary. Without this the job had no branch condition at all,
+        # and a branch run would overwrite the badge with that branch's number.
+        if: github.ref == 'refs/heads/main'
         uses: schneegans/dynamic-badges-action@v1.4.0
         with:
           # GIST_TOKEN is a GitHub personal access token with scope "gist".
@@ -145,13 +177,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # `git describe`/`rev-list --count` below need full history and
           # tags to compute the commit-count-since-last-release suffix -
           # actions/checkout defaults to a shallow, tag-less clone.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: 'pip'
@@ -176,6 +208,36 @@ jobs:
           echo "value=${base_version}+${commit_count}.${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
       - name: Build extension zip
         run: python scripts/build_extension.py --version "${{ steps.version.outputs.value }}"
+      - name: Build release notes
+        # Points at the built extension zip explicitly, since GitHub attaches
+        # its own auto-generated "Source code" archives to every release and
+        # those are not installable in Blender. The changelog's [unreleased]
+        # section doubles as the list of what this build has over the last
+        # tagged release.
+        run: |
+          set -e
+          {
+            echo "Automated build of the current tip of \`main\` ($GITHUB_SHA)."
+            echo
+            echo "**This is a development build, not a stable release.** It may be"
+            echo "unstable, and anything in it may change or break before it ships."
+            echo "For a tested build, use the [latest tagged release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest)."
+            echo
+            echo "## Install"
+            echo
+            echo "Download \`albam-${{ steps.version.outputs.value }}.zip\` from the assets below,"
+            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
+            echo "The \"Source code\" archives are generated automatically by GitHub and"
+            echo "cannot be installed as an extension."
+            echo
+            echo "<details>"
+            echo "<summary><b>Upcoming changes</b> - already in this build, slated for the next release</summary>"
+            echo
+          } > release_notes.md
+          if ! python scripts/extract_changelog_section.py unreleased >> release_notes.md; then
+            echo "_Nothing recorded in CHANGELOG.md's [unreleased] section yet._" >> release_notes.md
+          fi
+          printf '\n</details>\n' >> release_notes.md
       - name: Publish rolling "latest main" pre-release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -184,7 +246,7 @@ jobs:
           gh release delete latest-main --yes --cleanup-tag || true
           gh release create latest-main dist/albam-*.zip \
             --title "Latest main build (${{ steps.version.outputs.value }})" \
-            --notes "Automated build of the latest main branch ($GITHUB_SHA). Not a stable release - see the Releases page for tagged versions." \
+            --notes-file release_notes.md \
             --prerelease \
             --latest=false \
             --target "$GITHUB_SHA"
@@ -203,8 +265,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: 'pip'
@@ -223,8 +285,22 @@ jobs:
           fi
       - name: Build extension zip
         run: python scripts/build_extension.py
-      - name: Extract release notes from CHANGELOG.md
-        run: python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" > release_notes.md
+      - name: Build release notes from CHANGELOG.md
+        # The install note names the built zip explicitly: GitHub attaches its
+        # own auto-generated "Source code" archives to every release, and those
+        # are not installable in Blender.
+        run: |
+          set -e
+          {
+            echo "## Install"
+            echo
+            echo "Download \`albam-${GITHUB_REF_NAME#v}.zip\` from the assets below,"
+            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
+            echo "The \"Source code\" archives are generated automatically by GitHub and"
+            echo "cannot be installed as an extension."
+            echo
+          } > release_notes.md
+          python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" >> release_notes.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

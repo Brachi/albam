@@ -9,10 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod153(ReadWriteKaitaiStruct):
-    def __init__(self, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Mod153, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self.app_id = app_id
         self._should_write_bones_data = False
         self.bones_data__enabled = True
         self._should_write_groups = False
@@ -1072,7 +1073,7 @@ class Mod153(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_index_buffer + self.face_offset * 2) + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.face_position * 2)
             self._m_indices = []
             for i in range(self.num_indices):
                 self._m_indices.append(self._io.read_u2le())
@@ -1088,7 +1089,7 @@ class Mod153(ReadWriteKaitaiStruct):
         def _write_indices(self):
             self._should_write_indices = False
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_index_buffer + self.face_offset * 2) + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.face_position * 2)
             for i in range(len(self._m_indices)):
                 pass
                 self._io.write_u2le(self._m_indices[i])

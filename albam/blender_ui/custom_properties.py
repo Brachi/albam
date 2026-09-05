@@ -63,23 +63,53 @@ def AlbamCustomPropertiesFactory(kind: str):
         Return the data necessary to generate a subclass of bpy.types.PropertyGroup
         """
         data = {}
-        # app_id: {
-        #  "custom_props_name": <str>,
-        #  "custom_props_asset_type": <model,texture,collision,animation>
-        # }
+        # Special case for object registry:
+        # app_id = {
+        #   asset_type: { # "ANIMATION", "COLLISION"
+        #       "custom_props_name": <str>,
+        #       "custom_props_asset_type": <str>}}
+
+        # For other registries:
+        # app_id = {
+        #   "custom_props_name": <str>,
+        #   "custom_props_asset_type": <str>}
         appid_map = {}
         appid_map_secondary = {}
         subpanel_type = SUBPANEL_BASE.get(registry_name, None)
+        is_object_registry = registry_name == "custom_properties_object"
         registry = getattr(blender_registry, registry_name)
+
         for app_id, props_dict in registry.items():
             for name, (cls, is_secondary, display_name, asset_type) in props_dict.items():
                 data[f"{app_id}__{name}"] = bpy.props.PointerProperty(type=cls)
                 if not is_secondary:
-                    appid_map[app_id] = {"custom_props_name": name, "custom_props_asset_type": asset_type}
+                    if is_object_registry:
+                        # For objects, support multiple asset types per app_id
+                        if app_id not in appid_map:
+                            appid_map[app_id] = {}
+                        appid_map[app_id][asset_type] = {
+                            "custom_props_name": name,
+                            "custom_props_asset_type": asset_type
+                        }
+                    else:
+                        # For other types (mesh, material, image), use simple flat structure
+                        appid_map[app_id] = {
+                            "custom_props_name": name,
+                            "custom_props_asset_type": asset_type
+                        }
                 else:
                     _create_custom_properties_secondary_subpanel(app_id, display_name, name, subpanel_type)
-                    prop_names = appid_map_secondary.setdefault(app_id, [])
-                    prop_names.append(name)
+                    if is_object_registry:
+                        # For objects, store secondary props by asset_type
+                        if app_id not in appid_map_secondary:
+                            appid_map_secondary[app_id] = {}
+                        if asset_type not in appid_map_secondary[app_id]:
+                            appid_map_secondary[app_id][asset_type] = []
+                        appid_map_secondary[app_id][asset_type].append(name)
+                    else:
+                        # For other types, use flat list
+                        prop_names = appid_map_secondary.setdefault(app_id, [])
+                        prop_names.append(name)
 
         return data, appid_map, appid_map_secondary
 
@@ -118,6 +148,16 @@ def AlbamCustomPropertiesFactory(kind: str):
         # Adding to the registry now anyways so auto-unregistering works
         blender_registry.types.append(SubPanel)
 
+    def _is_new_object_format(property_dict):
+        """
+        Check if property_dict uses the new object registry format (nested by asset_type).
+        Returns True if it's nested, False for flat structure.
+        """
+        if not property_dict:
+            return False
+        first_value = next(iter(property_dict.values()), None)
+        return isinstance(first_value, dict)
+
     def get_custom_properties(self):
         """
         Shortcut to get the custom properties based on the app_id
@@ -132,21 +172,70 @@ def AlbamCustomPropertiesFactory(kind: str):
         class method to return the custom_properties
         associated with the app_id
         """
-        # TODO: error handling
         property_dict = self.APPID_MAP[app_id]
+        if _is_new_object_format(property_dict):
+            # New format: app_id -> {asset_type -> {...}}
+            albam_asset = self.get_parent_albam_asset()
+            if albam_asset:
+                asset_type = albam_asset.asset_type
+                property_dict = property_dict.get(asset_type)
+            else:
+                # Fallback: if no albam_asset, pick the first available asset_type
+                # This handles cases where custom properties are accessed on objects
+                # that don't have an albam_asset parent (e.g., during animation import)
+                property_dict = next(iter(property_dict.values())) if property_dict else None
+
+            if not property_dict:
+                return None
+        # Old format or non-object registry: app_id -> {...}
         property_name = property_dict["custom_props_name"]
         return getattr(self, f"{app_id}__{property_name}")
 
     def get_custom_properties_name(self):
         albam_asset = self.get_parent_albam_asset()
-        app_id = albam_asset.app_id
+        if not albam_asset:
+            # Fallback for objects without albam_asset
+            app_ids = list(self.APPID_MAP.keys())
+            if not app_ids:
+                return None
+            app_id = app_ids[0]
+        else:
+            app_id = albam_asset.app_id
+
         property_dict = self.APPID_MAP[app_id]
+        if _is_new_object_format(property_dict):
+            # New format: app_id -> {asset_type -> {...}}
+            if albam_asset:
+                asset_type = albam_asset.asset_type
+                property_dict = property_dict.get(asset_type)
+            else:
+                # Fallback: pick the first available asset_type
+                property_dict = next(iter(property_dict.values())) if property_dict else None
+
+            if not property_dict:
+                return None
         return property_dict["custom_props_name"]
 
     def get_custom_properties_asset_type(self):
         albam_asset = self.get_parent_albam_asset()
-        app_id = albam_asset.app_id
+        if not albam_asset:
+            # Fallback for objects without albam_asset - return first available
+            app_ids = list(self.APPID_MAP.keys())
+            if not app_ids:
+                return None
+            app_id = app_ids[0]
+        else:
+            app_id = albam_asset.app_id
+
         property_dict = self.APPID_MAP.get(app_id, {})
+        if _is_new_object_format(property_dict):
+            # New format: app_id -> {asset_type -> {...}}
+            if albam_asset:
+                asset_type = albam_asset.asset_type
+                property_dict = property_dict.get(asset_type, {})
+            else:
+                # Fallback: pick the first available asset_type
+                property_dict = next(iter(property_dict.values())) if property_dict else {}
         return property_dict.get("custom_props_asset_type")
 
     def get_custom_properties_secondary_for_appid(self, app_id):
@@ -155,6 +244,22 @@ def AlbamCustomPropertiesFactory(kind: str):
             property_names = self.APPID_MAP_SECONDARY[app_id]
         except KeyError:
             return {}
+
+        # Check if this is the new object format (nested by asset_type)
+        if property_names and isinstance(property_names, dict):
+            # New format: app_id -> {asset_type -> [names...]}
+            albam_asset = self.get_parent_albam_asset()
+            if albam_asset:
+                # Use asset_type from albam_asset
+                asset_type = albam_asset.asset_type
+                property_names = property_names.get(asset_type, [])
+            else:
+                # If no albam_asset, collect names from ALL asset_types
+                # This ensures we get all available secondary properties
+                all_names = []
+                for asset_type_names in property_names.values():
+                    all_names.extend(asset_type_names)
+                property_names = all_names
 
         return {pn: getattr(self, f"{app_id}__{pn}") for pn in property_names}
 
@@ -181,6 +286,17 @@ def AlbamCustomPropertiesFactory(kind: str):
                 break
         return albam_asset
 
+    def _get_parent_albam_asset_bone(armature_obj):
+        """A pose bone's `id_data` is the armature object, which for a .mod is
+        the asset root itself. Parents are walked for a rig parented elsewhere.
+        """
+        obj = armature_obj
+        while obj is not None:
+            if obj.albam_asset.relative_path:
+                return obj.albam_asset
+            obj = obj.parent
+        return None
+
     def _get_parent_albam_asset_object(bl_obj):
         albam_asset = None
         for obj in bpy.data.objects:
@@ -196,6 +312,10 @@ def AlbamCustomPropertiesFactory(kind: str):
         custom_prop_context = self.id_data
         albam_asset = None
 
+        if kind == "bone":
+            # a pose bone's id_data is an Object too, so kind tells them apart
+            return _get_parent_albam_asset_bone(custom_prop_context)
+
         if isinstance(custom_prop_context, bpy.types.Mesh):
             albam_asset = _get_parent_albam_asset_mesh(custom_prop_context)
         elif isinstance(custom_prop_context, bpy.types.Material):
@@ -208,9 +328,21 @@ def AlbamCustomPropertiesFactory(kind: str):
     def get_custom_properties_as_dict(self):
         context_item = self.id_data
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
-        app_id = albam_asset.app_id
+        if not albam_asset:
+            # Fallback: use first available app_id if no albam_asset
+            app_ids = list(self.APPID_MAP.keys())
+            if not app_ids:
+                return {}
+            app_id = app_ids[0]
+        else:
+            app_id = albam_asset.app_id
+
         props_name = context_item.albam_custom_properties.get_custom_properties_name()
+        if not props_name:
+            return {}
         props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if not props:
+            return {}
 
         props_secondary = (
             context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
@@ -246,7 +378,7 @@ def AlbamCustomPropertiesFactory(kind: str):
 
     # missing bl_label and bl_idname in cls dict?
     # https://projects.blender.org/blender/blender/issues/86719#issuecomment-232525
-    assert kind in ("mesh", "material", "image", "object"), f"kind: {kind} incorrect"
+    assert kind in ("mesh", "material", "image", "object", "bone"), f"kind: {kind} incorrect"
     data, appid_map, appid_map_secondary = create_data_custom_properties(f"custom_properties_{kind}")
 
     return type(
@@ -263,6 +395,7 @@ def AlbamCustomPropertiesFactory(kind: str):
             get_custom_properties_for_appid.__name__: get_custom_properties_for_appid,
             get_custom_properties_secondary_for_appid.__name__: get_custom_properties_secondary_for_appid,
             get_parent_albam_asset.__name__: get_parent_albam_asset,
+            '_is_new_object_format': staticmethod(_is_new_object_format),
         }
     )
 
@@ -277,7 +410,7 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
         Only show custom properties panel if the contex_item (mesh, object or material)
         are associated with an albam asset (e.g. a 3d model)
         """
-        context_item = getattr(context, cls.CONTEXT_ITEM_NAME)
+        context_item = getattr(context, cls.CONTEXT_ITEM_NAME, None)
         if not context_item:
             return False
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
@@ -427,6 +560,16 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
     CONTEXT_ITEM_NAME = "mesh"
 
 
+@blender_registry.register_blender_type
+class ALBAM_PT_CustomPropertiesBone(ALBAM_PT_CustomPropertiesBase):
+    """`context.pose_bone`, not `context.bone`: that is where the group lives."""
+    bl_idname = "ALBAM_PT_CustomPropertiesBone"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "bone"
+    CONTEXT_ITEM_NAME = "pose_bone"
+
+
 @blender_registry.register_blender_prop_albam(name="clipboard")
 class ClipboardData(bpy.types.PropertyGroup):
     buff: bpy.props.StringProperty(default="{}")
@@ -462,6 +605,8 @@ def get_context_item(context):  # workaround for bledner 4.5 api
             return context.material
         elif space.context == 'DATA':
             return context.mesh
+        elif space.context == 'BONE':
+            return getattr(context, "pose_bone", None)
     else:
         return None
 
@@ -476,6 +621,9 @@ class ALBAM_OT_CustomPropertiesCopy(bpy.types.Operator):
 
     def execute(self, context):
         context_item = get_context_item(context)
+        if not context_item:
+            self.report({"ERROR"}, "No context item found")
+            return {'FINISHED'}
         props_dict = context_item.albam_custom_properties.get_custom_properties_as_dict()
         context.scene.albam.clipboard.update_buffer(props_dict)
         return {'FINISHED'}
@@ -491,13 +639,25 @@ class ALBAM_OT_CustomPropertiesPaste(bpy.types.Operator):
 
     def execute(self, context):
         context_item = get_context_item(context)
+        if not context_item:
+            self.report({"ERROR"}, "No context item found")
+            return {'FINISHED'}
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        if not albam_asset:
+            self.report({"ERROR"}, "Object is not associated with an Albam asset")
+            return {'FINISHED'}
         app_id = albam_asset.app_id
         custom_props = context_item.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        if not custom_props:
+            self.report({"ERROR"}, "No custom properties found for this object")
+            return {'FINISHED'}
         custom_props_sec = (
             context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
         )
         props_name = context_item.albam_custom_properties.get_custom_properties_name()
+        if not props_name:
+            self.report({"ERROR"}, "Custom properties name not found")
+            return {'FINISHED'}
         buff = context.scene.albam.clipboard.get_buffer()
 
         to_paste = buff.get(app_id, {}).get(props_name, {})
@@ -545,7 +705,13 @@ class ALBAM_OT_CustomPropertiesExport(bpy.types.Operator):
 
     def execute(self, context):
         context_item = get_context_item(context)
+        if not context_item:
+            self.report({"ERROR"}, "No context item found")
+            return {'FINISHED'}
         to_export = context_item.albam_custom_properties.get_custom_properties_as_dict()
+        if not to_export:
+            self.report({"ERROR"}, "No properties to export")
+            return {'FINISHED'}
         with open(self.filepath, "w") as w:
             json.dump(to_export, w, indent=4)
         return {'FINISHED'}
@@ -595,13 +761,25 @@ class ALBAM_OT_CustomPropertiesImport(bpy.types.Operator):
                 return {'FINISHED'}
 
         context_item = get_context_item(context)
+        if not context_item:
+            self.report({"ERROR"}, "No context item found")
+            return {'FINISHED'}
         albam_asset = context_item.albam_custom_properties.get_parent_albam_asset()
+        if not albam_asset:
+            self.report({"ERROR"}, "Object is not associated with an Albam asset")
+            return {'FINISHED'}
         app_id = albam_asset.app_id
         current_props = context_item.albam_custom_properties.get_custom_properties()
+        if not current_props:
+            self.report({"ERROR"}, "No custom properties found for this object")
+            return {'FINISHED'}
         current_props_sec = (
             context_item.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
         )
         props_name_main = context_item.albam_custom_properties.get_custom_properties_name()
+        if not props_name_main:
+            self.report({"ERROR"}, "Custom properties name not found")
+            return {'FINISHED'}
         props_main = {}
         props_sec = {}
         missing = []

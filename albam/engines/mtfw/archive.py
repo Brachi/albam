@@ -5,9 +5,9 @@ import zlib
 from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from . import EXTENSION_TO_FILE_ID, FILE_ID_TO_EXTENSION
-from .arc_fs import ArcFS, MTFW_FS
+from .arc_fs import ARC_VERSION_DMC4, ArcFS, MTFW_FS
 from .structs.arc import Arc
 from ...blender_ui.tools import show_message_box
 
@@ -20,6 +20,7 @@ from ...blender_ui.tools import show_message_box
 @blender_registry.register_fs_root_loader(app_id="rev2", extension="arc")
 @blender_registry.register_fs_root_loader(app_id="dd", extension="arc")
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension="arc")
+@blender_registry.register_fs_root_loader(app_id="umvc3", extension="arc")
 def arc_fs_root_loader(absolute_path):
     return ArcFS(absolute_path)
 
@@ -32,8 +33,24 @@ def arc_fs_root_loader(absolute_path):
 @blender_registry.register_fs_root_loader(app_id="rev2", extension=None)
 @blender_registry.register_fs_root_loader(app_id="dd", extension=None)
 @blender_registry.register_fs_root_loader(app_id="dmc4", extension=None)
+@blender_registry.register_fs_root_loader(app_id="umvc3", extension=None)
 def game_fs_root_loader(absolute_path):
     return MTFW_FS(absolute_path)
+
+
+def _check_writable(parsed, filepath):
+    """Refuse an archive albam can read but cannot write back.
+
+    A version 17 archive's entries are XMemCompress (LZX) streams, and
+    albam only has a decoder. Rewriting one would either store zlib chunks
+    the game cannot read, or relabel the untouched LZX ones as zlib -
+    a broken archive either way, and silently so.
+    """
+    if parsed.header.version == ARC_VERSION_DMC4:
+        raise ValueError(
+            f"{filepath}: this archive's entries are compressed with a codec albam can "
+            f"only read, so it cannot be written back. Export the files on their own "
+            f"instead of packing them.")
 
 
 def _sort_arc_entries(entries, vfile=True):
@@ -82,11 +99,11 @@ def _get_file_entry(vfile):
     return item
 
 
-def _serialize_arc(exported):
+def _serialize_arc(exported, version=7):
     arc = Arc()
     header = Arc.ArcHeader(None, arc, arc._root)
     header.ident = b"ARC\00"
-    header.version = 7
+    header.version = version
     header.num_files = len(exported)
     arc.header = header
     file_offset = header.num_files * 80 + -(header.num_files * 80) % 32768
@@ -147,8 +164,7 @@ def _texture_paths_from_mod(mod_bytes, app_id):
 
     mod_cls = {"re5": Mod156, "dmc4": Mod153}.get(app_id, Mod21)
     try:
-        mod = mod_cls.from_bytes(mod_bytes)
-        mod._read()
+        mod = parse(mod_cls, mod_bytes, app_id)
     except Exception:
         return None
     materials_data = getattr(mod, "materials_data", None)
@@ -159,11 +175,9 @@ def _texture_paths_from_mod(mod_bytes, app_id):
 
 
 def _texture_paths_from_mrl(mrl_bytes, app_id):
-    from kaitaistruct import BytesIO, KaitaiStream
     from .structs.mrl import Mrl
     try:
-        mrl = Mrl(app_id, KaitaiStream(BytesIO(mrl_bytes)))
-        mrl._read()
+        mrl = parse(Mrl, mrl_bytes, app_id)
     except Exception:
         return None
     return {_normalize_texture_key(t.texture_path) for t in mrl.textures if t.texture_path}
@@ -214,7 +228,16 @@ def _find_orphaned_textures(file_entries, app_id, old_texture_paths, new_texture
     return cleaned, removed
 
 
-def update_arc(filepath, vfiles, remove_unused_textures=False):
+@blender_registry.register_archive_writer(app_id="re0", extension="arc")
+@blender_registry.register_archive_writer(app_id="re1", extension="arc")
+@blender_registry.register_archive_writer(app_id="re5", extension="arc")
+@blender_registry.register_archive_writer(app_id="re6", extension="arc")
+@blender_registry.register_archive_writer(app_id="rev1", extension="arc")
+@blender_registry.register_archive_writer(app_id="rev2", extension="arc")
+@blender_registry.register_archive_writer(app_id="dd", extension="arc")
+@blender_registry.register_archive_writer(app_id="dmc4", extension="arc")
+@blender_registry.register_archive_writer(app_id="umvc3", extension="arc")
+def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     imported = {}
     exported = {}
     vf_sorted = _sort_arc_entries(vfiles)
@@ -222,6 +245,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False):
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
         parsed._read()
+    _check_writable(parsed, filepath)
 
     imported = _to_dict(parsed.file_entries)
 
@@ -286,7 +310,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False):
             show_message_box(
                 f"Removed {len(removed)} orphaned texture(s): {preview}")
 
-    return _serialize_arc(exported)
+    return _serialize_arc(exported, parsed.header.version)
 
 
 def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
@@ -297,6 +321,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
     with open(filepath, 'rb') as f:
         parsed = Arc.from_bytes(f.read())
         parsed._read()
+    _check_writable(parsed, filepath)
 
     imported_entries = [fe for fe in parsed.file_entries]
     if add_new:
@@ -326,4 +351,4 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
             show_message_box("File: {} was not found in the archive".format(file_name))
             return None
     assert len(parsed.file_entries) <= len(file_entries) <= len(parsed.file_entries) + 1
-    return _serialize_arc(file_entries)
+    return _serialize_arc(file_entries, parsed.header.version)

@@ -18,3 +18,4 @@ tools/renders/
 
 # real credentials (R2, etc) - see .env.example for the expected keys
 .env
+.env2

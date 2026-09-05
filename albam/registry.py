@@ -7,6 +7,7 @@ class BlenderRegistry:
         self.archive_loader_registry = {}
         self.archive_accessor_registry = {}
         self.fs_root_loader_registry = {}
+        self.archive_writer_registry = {}
         self.props = []  # order is meaningful for dependencies
         self.types = []  # order is meaningufl for dependencies
         self.import_options_custom_draw_funcs = {}
@@ -16,6 +17,7 @@ class BlenderRegistry:
         self.custom_properties_mesh = {}
         self.custom_properties_object = {}
         self.custom_properties_image = {}
+        self.custom_properties_bone = {}
         self.albam_asset_types = {}
 
     # TODO: rename to register_albam_prop_global
@@ -81,6 +83,22 @@ class BlenderRegistry:
 
         return decorator
 
+    def register_archive_writer(self, app_id, extension):
+        """
+        Decorated function must be
+        `(archive_path, exported_vfiles, **options) -> bytes`: the archive at
+        `archive_path` with each exported file's bytes substituted for the
+        entry of the same name, returned whole and ready to write.
+
+        This is what the Pack operator dispatches on, so that repacking is
+        the engine's own business rather than something the UI knows how to
+        do for one engine only.
+        """
+        def decorator(f):
+            self.archive_writer_registry[(app_id, extension)] = f
+            return f
+        return decorator
+
     def register_fs_root_loader(self, app_id, extension=None):
         """
         Decorated function must be `absolute_path -> fs.base.FS`.
@@ -126,6 +144,20 @@ class BlenderRegistry:
             for app_id in app_ids:
                 self.custom_properties_object.setdefault(app_id, {})[name] = (cls, is_secondary,
                                                                               display_name, asset_type)
+            return cls
+        return decorator
+
+    def register_custom_properties_bone(self, name, app_ids, is_secondary=False,
+                                        display_name="", asset_type="MODEL"):
+        """
+        Registers on the pose bone, not on the armature's bone: an id belongs
+        to a rig as it is being posed, so two objects sharing one armature can
+        answer to two different sets of ids.
+        """
+        def decorator(cls):
+            for app_id in app_ids:
+                self.custom_properties_bone.setdefault(app_id, {})[name] = (
+                    cls, is_secondary, display_name, asset_type)
             return cls
         return decorator
 
