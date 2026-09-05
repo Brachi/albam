@@ -172,15 +172,21 @@ def mount_vfs_root():
     mounted = []
 
     def mount(app_id, fs_instance, display_name, **kwargs):
-        bpy.context.scene.albam.vfs.add_fs_root(
+        root_vfile = bpy.context.scene.albam.vfs.add_fs_root(
             app_id, fs_instance, display_name=display_name, **kwargs)
-        mounted.append((app_id, display_name))
+        # Not f"{app_id}::{display_name}": _unique_root_name() suffixes that
+        # same key with "#1", "#2", ... when a same-named root is already
+        # mounted (see its own docstring), and reconstructing the unsuffixed
+        # form here would then miss the real root at teardown, leaking it.
+        # root_vfile.name is whatever key actually got used.
+        mounted.append(root_vfile.name)
+        return root_vfile
 
     yield mount
 
     vfs = bpy.context.scene.albam.vfs
-    for app_id, display_name in reversed(mounted):
-        index = vfs.file_list.find(f"{app_id}::{display_name}")
+    for root_id in reversed(mounted):
+        index = vfs.file_list.find(root_id)
         if index == -1:
             continue  # the test removed it itself
         vfs.file_list_selected_index = index
