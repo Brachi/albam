@@ -1546,6 +1546,11 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         if export_settings.force_lod255:
             custom_properties.level_of_detail = 255
         custom_properties.copy_custom_properties_to(mesh)
+        # Checked against every mesh (132161) in every .mod-156 in the local re5 install:
+        # disp is always True, no shipped file ever disables it, so it's no longer a
+        # stored/editable custom property. Applied here for dmc4 (mod-153) too, since both
+        # share this property group and export path, but only re5's data was checked.
+        mesh.disp = 1
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
@@ -2370,7 +2375,6 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
     alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",
                                           default=0, options=set())  # noqa: F821
-    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
     shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())   # noqa: F821
     reserved2_flag_1: bpy.props.BoolProperty(name="Reserved 1", default=0, options=set())  # noqa: F821
     reserved2_flag_2: bpy.props.BoolProperty(name="Reserved 2", default=0, options=set())  # noqa: F821

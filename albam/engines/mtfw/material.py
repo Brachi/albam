@@ -395,6 +395,15 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat.func_reserved2 = 0
         mat.reserved1 = 0
         mat.reserved2 = 0
+        if app_id == "re5":
+            # Constant across every re5 material checked (42856); dmc4 not checked and
+            # keeps its own values (its parallax_factor is a different size).
+            mat.htechnique = 0x8727e606
+            mat.uvscroll_enable = False
+            mat.ztest = True
+            mat.zwrite = True
+            mat.heightmap_occ = 0.2
+            mat.parallax_factor = [0.0, 0.0]
         dst_mod.materials_data.materials.append(mat)
         exported_materials_map[bl_mat.name] = mat_idx
 
@@ -1382,23 +1391,17 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
     fog_enable: bpy.props.BoolProperty(name="Fog Enable", default=True, options=set())  # noqa: F821
-    zwrite: bpy.props.BoolProperty(name="Z-write", default=True, options=set())  # noqa: F821
     attr: attr_enum
     num: bpy.props.IntProperty(name="Material Number", default=0, options=set())  # noqa: F821
     envmap_bias: bpy.props.IntProperty(name="Environmental Bias",
                                        default=4, options=set())  # noqa: F821
     vtype: vtype_enum
-    uvscroll_enable: bpy.props.BoolProperty(name="UV scroll enable",
-                                            default=False, options=set())  # noqa: F821
-    ztest: bpy.props.BoolProperty(name="Z-test", default=True, options=set())  # noqa: F821
     func_skin: func_skin_enum
     func_lighting: func_lighting_enum
     func_normalmap: func_normalmap_enum
     func_specular: func_specular_enum
     func_lightmap: func_lightmap_enum
     func_multitexture: func_multitexture_enum
-    htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
-                                         default="0x8727e606", options=set())  # noqa: F821
     pipeline: bpy.props.IntProperty(name="Pipline", default=379, options=set())  # noqa: F821
     pvdeclbase: bpy.props.IntProperty(name="PV declaration base", default=0, options=set())  # noqa: F821
     pvdecl: bpy.props.StringProperty(name="PV declaration", default="0x0", options=set())  # noqa: F821
@@ -1411,11 +1414,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         size=4, default=(1.0, 1.0, 1.0, 0), options=set(), subtype="COLOR")  # noqa: F821
     detail_factor: bpy.props.FloatVectorProperty(
         name="DetailFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
-    parallax_factor: bpy.props.FloatVectorProperty(
-        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set())  # noqa: F821
     flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
-    heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
-                                           default=0.2, options=set())  # noqa: F821
     blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())  # noqa: F821
     alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())  # noqa: F821
 
