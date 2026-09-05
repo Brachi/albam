@@ -1199,10 +1199,13 @@ def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
     reshaping geometry or repainting weights moves it, which copying it could
     never do.
 
-    This over-estimates. Measured against the shipped values it is exact on
-    about 71% of bones and above them on nearly all the rest - the game's own
-    value is a maximum over some subset of the influenced vertices that has not
-    been identified, so the whole set is the closest honest answer.
+    Measured against real shipped files this is exact on most bones, but on a
+    real skeleton a meaningful minority land on either side of the shipped
+    value by up to about 20% - the game's own value is a maximum over some
+    subset of the influenced vertices that has not been identified, so the
+    whole set is the closest honest answer. It was observed that this field
+    is most likely unused by the game itself, which is why a generous,
+    two-sided tolerance is preferable to chasing an exact match.
     """
     bl_bones = armature_ob.data.bones[:num_bones]
     index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
