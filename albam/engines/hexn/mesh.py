@@ -27,7 +27,7 @@ def build_blender_model(vfile, context):
     bl_object_name = vfile.display_name
     skeleton, bone_names = build_blender_skeleton(vfile, context)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
-    bl_materials = build_blender_materials(edgemodel, context)
+    bl_materials = build_blender_materials(edgemodel, context, root_id=vfile.tree_node.root_id)
 
     for i, mesh_header in enumerate(edgemodel.meshes_header):
         if mesh_header.lod != 0:

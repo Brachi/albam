@@ -24,7 +24,7 @@ TEXTURE_SLOTS = {
 }
 
 
-def build_blender_materials(edgemodel, context):
+def build_blender_materials(edgemodel, context, root_id=None):
 
     material_paths = set()
     matbs = []
@@ -43,8 +43,13 @@ def build_blender_materials(edgemodel, context):
         # (the UI's "Add Files") legitimately leaves some unresolvable.
         # Import what's there rather than failing outright - same
         # tolerate-absence convention as skeleton._find_skel_vfile.
+        #
+        # root_id prefers the model's own mounted root: different packs
+        # can each happen to use this same material path for an unrelated
+        # file, and without it a lookup could silently resolve to whichever
+        # root's copy was added first (see vfs.get_vfile's own docstring).
         try:
-            matb_vfile = vfs.get_vfile("reorc", material_path)
+            matb_vfile = vfs.get_vfile("reorc", material_path, root_id=root_id)
         except KeyError:
             print(f"[{material_path}] material not found, skipping")
             continue
@@ -56,7 +61,7 @@ def build_blender_materials(edgemodel, context):
             if _texture_suffix(texture_path) in TEXTURE_SLOTS:
                 texture_paths.add(texture_path)
 
-    tex_mapping = build_blender_textures(texture_paths, context)
+    tex_mapping = build_blender_textures(texture_paths, context, root_id=root_id)
 
     for matb, material_path in matbs:
         if not matb.shader.textures:

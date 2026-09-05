@@ -96,14 +96,15 @@ def _build_unswizzled_normal_image(display_name, texture_bytes, dds_header):
     return bl_image
 
 
-def build_blender_textures(texture_paths, context):
+def build_blender_textures(texture_paths, context, root_id=None):
     vfs = context.scene.albam.vfs
     tex_mapping = {}
     for path in texture_paths:
         # Unreachable textures are skipped, not fatal - see
-        # material.build_blender_materials for when that happens.
+        # material.build_blender_materials for when that happens. root_id
+        # prefers the model's own mounted root - see vfs.get_vfile.
         try:
-            texture_vfile = vfs.get_vfile("reorc", path)
+            texture_vfile = vfs.get_vfile("reorc", path, root_id=root_id)
         except KeyError:
             print(f"[{path}] texture not found, skipping")
             continue

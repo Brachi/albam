@@ -144,10 +144,37 @@ class VirtualFileSystemBase:
     SEPARATOR = "::"
     VFS_ID = "vfs"
 
-    def get_vfile(self, app_id, relative_path):
+    def get_vfile(self, app_id, relative_path, root_id=None):
+        """The vfile at `relative_path`, preferring the one that also
+        belongs to root `root_id` when given.
+
+        A plain lookup resolves to whichever root's entry was added first
+        when two mounted roots happen to share this same relative path
+        (see _unique_root_name's own docstring) - fine for a caller that
+        only ever has one root of this app_id mounted, wrong for one that
+        needs a path resolved against a *specific* root (e.g. a shared
+        material path that two different packs each happen to also use for
+        an unrelated file of their own). root_id is a preference, not a
+        restriction: a path genuinely only reachable through a different
+        root - e.g. a shared texture mounted as its own archive alongside
+        the model that references it - still resolves via the same
+        first-match fallback a plain lookup uses.
+        """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
-        return self.file_list[file_id]
+        if root_id is None:
+            return self.file_list[file_id]
+        fallback = None
+        for vfile in self.file_list:
+            if vfile.name != file_id:
+                continue
+            if vfile.tree_node.root_id == root_id:
+                return vfile
+            if fallback is None:
+                fallback = vfile
+        if fallback is not None:
+            return fallback
+        raise KeyError(file_id)
 
     def select_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
@@ -168,9 +195,10 @@ class VirtualFileSystemBase:
 
         Node ids themselves are still `app_id::<path parts>` with no root
         in them (see Tree), so two roots holding the *same* internal path
-        still give get_vfile()/select_vfile() only the first root's copy.
-        Reading either one's bytes works; addressing the second by path
-        does not.
+        still give a plain get_vfile()/select_vfile() only the first
+        root's copy - reading either one's bytes works, but addressing the
+        second by path alone does not. get_vfile()'s own root_id parameter
+        is the way out for a caller that needs the second root's copy.
         """
         root_name = f"{app_id}{self.SEPARATOR}{display_name}"
         if root_name not in self.file_list:
