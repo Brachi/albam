@@ -60,9 +60,17 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
     assert result == {"FINISHED"}
 
     imported = [ob for ob in bpy.data.objects if ob not in before]
-    armatures = [ob for ob in imported if ob.type == "ARMATURE"]
-    assert len(armatures) == 1, f"expected exactly one imported Armature, got {armatures}"
-    armature_ob = armatures[0]
+    mesh_obs = [ob for ob in imported if ob.type == "MESH"]
+    assert mesh_obs
+
+    # Not "exactly one new Armature since `before`": build_blender_skeleton
+    # reuses an already-imported armature of the same name rather than
+    # building a duplicate (see skeleton.build_blender_skeleton_by_stem),
+    # and another test in this session may have already built one for this
+    # same skeleton file. What the import actually promises is that the
+    # freshly-imported mesh parents to a real Armature - checked directly.
+    armature_ob = mesh_obs[0].parent
+    assert armature_ob is not None and armature_ob.type == "ARMATURE"
 
     bones = armature_ob.data.bones
     assert len(bones) == EXPECTED_NODE_COUNT
@@ -92,8 +100,6 @@ def test_import_builds_armature_matching_skel_file(game_fs_root, hash_to_path, l
     # Mesh objects parented to the armature, deforming via a real ARMATURE
     # modifier with vertex groups renamed to real bone names (not raw
     # indices) - see mesh.py/_build_weights().
-    mesh_obs = [ob for ob in imported if ob.type == "MESH"]
-    assert mesh_obs
     deforming = [
         ob for ob in mesh_obs
         if any(mod.type == "ARMATURE" and mod.object == armature_ob for mod in ob.modifiers)

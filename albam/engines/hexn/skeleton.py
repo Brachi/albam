@@ -116,13 +116,26 @@ def build_blender_skeleton_by_stem(context, stem):
     name, with no .edgemodel vfile to derive it from. Returns (None, None)
     the same way when _find_skel_vfile() can't find the skeleton under
     either of its two addressable paths.
+
+    Reuses an already-imported armature of the same name instead of
+    building a duplicate - a clip import for this same stem may have
+    already built one (see animation.import_anim_clip's own reuse check),
+    and importing a mesh after its clip must land on that same armature,
+    not a second, Blender-suffixed one left disconnected from the Action.
     """
     vfs = context.scene.albam.vfs
     skel_vfile = _find_skel_vfile(vfs, stem)
     if skel_vfile is None:
         return None, None
 
-    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name_for(stem))
+    armature_name = armature_name_for(stem)
+    armature_object = bpy.data.objects.get(armature_name)
+    if armature_object is not None and armature_object.type == "ARMATURE":
+        bone_names = bone_names_from_armature(armature_object)
+        if bone_names is not None:
+            return armature_object, bone_names
+
+    return _build_blender_skeleton_from_vfile(skel_vfile, armature_name)
 
 
 def _build_blender_skeleton_from_vfile(skel_vfile, armature_name):
