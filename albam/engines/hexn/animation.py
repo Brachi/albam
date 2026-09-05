@@ -96,6 +96,21 @@ def import_anim_clip(vfile, context):
 
     decoded = decode_clip(clip_bytes, name=clip_path, skeleton_name=skeleton_name)
 
+    # Resolved up front, before touching any armature: the clip only
+    # describes the bones it moves, and the rest have to hold their bind
+    # transform, which lives here (see build_blender_action). Failing now
+    # when it's missing - e.g. the archive holding it was removed from the
+    # VFS after an earlier import - avoids silently reusing/building an
+    # armature and then falling back to build_blender_action's own
+    # rest-pose-as-bind path, which cannot reproduce the game's skinning.
+    skeleton = find_skel(context, skeleton_name)
+    if skeleton is None:
+        raise ValueError(
+            f"No skeleton found for {clip_path!r}: nothing in the VFS is filed as "
+            f"skel/{skeleton_name} (see skeleton._find_skel_vfile), and an animation needs an "
+            f"armature to apply it to. Add the archive holding that skeleton and try again."
+        )
+
     armature_object = bpy.data.objects.get(armature_name_for(skeleton_name))
     bone_names = None
     if armature_object is not None and armature_object.type == "ARMATURE":
@@ -106,17 +121,6 @@ def import_anim_clip(vfile, context):
     if bone_names is None:
         armature_object, bone_names = build_blender_skeleton_by_stem(context, skeleton_name)
 
-    if armature_object is None:
-        raise ValueError(
-            f"No skeleton found for {clip_path!r}: nothing in the VFS is filed as "
-            f"skel/{skeleton_name} (see skeleton._find_skel_vfile), and an animation needs an "
-            f"armature to apply it to. Add the archive holding that skeleton and try again."
-        )
-
-    # The clip only describes the bones it moves; the rest have to hold
-    # their bind transform, which lives in the skel file (see
-    # build_blender_action).
-    skeleton = find_skel(context, skeleton_name)
     action_name = f"{skeleton_name}.{clip_path.rsplit('/', 1)[-1]}"
     build_blender_action(armature_object, decoded, action_name, bone_names, skeleton=skeleton)
     return None
