@@ -6,14 +6,17 @@ meta:
   license: CC0-1.0
   ks-version: '0.11'
 
-# `version` varies in the wild - 1, 3, 6 and 7 are all real - and only
+# `version` varies in the wild - 1, 3, 5, 6 and 7 are all real - and only
 # changes how many `extra_flags` words the fixed header carries. Since
 # `header_size` self-describes that, one seq below covers every version,
 # rather than a per-version type like mtfw's mod_153/156/21.
 
 seq:
   - {id: id_magic, contents: [0x4d, 0x41, 0x54]}  # "MAT"
-  - {id: version, type: u1}  # 1, 3, 6 or 7
+  - id: version
+    type: u1
+    valid:
+      any-of: [1, 3, 5, 6, 7]
   - {id: ofs_names, type: u4}
   - {id: num_textures, type: u4}
   - id: num_params

@@ -25,6 +25,8 @@ class HexaneMatb(ReadWriteKaitaiStruct):
         if not self.id_magic == b"\x4D\x41\x54":
             raise kaitaistruct.ValidationNotEqualError(b"\x4D\x41\x54", self.id_magic, self._io, u"/seq/0")
         self.version = self._io.read_u1()
+        if not  ((self.version == 1) or (self.version == 3) or (self.version == 5) or (self.version == 6) or (self.version == 7)) :
+            raise kaitaistruct.ValidationNotAnyOfError(self.version, self._io, u"/seq/1")
         self.ofs_names = self._io.read_u4le()
         self.num_textures = self._io.read_u4le()
         self.num_params = self._io.read_u4le()
@@ -88,6 +90,8 @@ class HexaneMatb(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"id_magic", 3, len(self.id_magic))
         if not self.id_magic == b"\x4D\x41\x54":
             raise kaitaistruct.ValidationNotEqualError(b"\x4D\x41\x54", self.id_magic, None, u"/seq/0")
+        if not  ((self.version == 1) or (self.version == 3) or (self.version == 5) or (self.version == 6) or (self.version == 7)) :
+            raise kaitaistruct.ValidationNotAnyOfError(self.version, None, u"/seq/1")
         if len(self.extra_flags) != (self.header_size - 24) // 4:
             raise kaitaistruct.ConsistencyError(u"extra_flags", (self.header_size - 24) // 4, len(self.extra_flags))
         for i in range(len(self.extra_flags)):
