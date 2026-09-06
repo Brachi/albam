@@ -98,16 +98,27 @@ def build_blender_materials(edgemodel, context, root_id=None):
             texture_node.label = os.path.basename(texture_path)
 
             if socket_name == "Normal":
-                normal_map_node = node_tree.nodes.new("ShaderNodeNormalMap")
                 # RE:ORC is DirectX9-era (Y-down/green-down normal maps);
-                # Blender's default convention is OpenGL (Y-up). The texture
-                # itself is still the raw, unswizzled DXT5nm data (see
-                # texture.py's _build_unswizzled_normal_image) - this is the
-                # only place the DirectX/OpenGL Y difference gets handled.
-                normal_map_node.convention = "DIRECTX"
-                link(texture_node.outputs["Color"], normal_map_node.inputs["Color"])
+                # Blender's own normal map convention is OpenGL (Y-up).
+                # ShaderNodeNormalMap.convention (5.x only, absent in 4.x)
+                # would flip this directly, but inverting the green channel
+                # first achieves the same DirectX-vs-OpenGL flip and works
+                # on every supported Blender version - the same technique
+                # albam.engines.mtfw.material and albam.engines.cie.material
+                # already use for their own DirectX-style normal maps. The
+                # texture itself is still the raw, unswizzled DXT5nm data
+                # (see texture.py's _build_unswizzled_normal_image).
+                invert_green_node = node_tree.nodes.new("ShaderNodeRGBCurve")
+                green_curve = invert_green_node.mapping.curves[1]
+                green_curve.points[0].location = (1, 0)
+                green_curve.points[1].location = (0, 1)
+                invert_green_node.mapping.update()
+
+                normal_map_node = node_tree.nodes.new("ShaderNodeNormalMap")
+                link(texture_node.outputs["Color"], invert_green_node.inputs["Color"])
+                link(invert_green_node.outputs["Color"], normal_map_node.inputs["Color"])
                 link(normal_map_node.outputs["Normal"], bsdf.inputs["Normal"])
-                node_chains.append([texture_node, normal_map_node])
+                node_chains.append([texture_node, invert_green_node, normal_map_node])
             elif socket_name == "Specular IOR Level":
                 link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
                 # _s is DXT5 (unlike _d's DXT1 - no alpha needed there), and its
