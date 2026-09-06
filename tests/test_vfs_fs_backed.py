@@ -12,6 +12,7 @@ from fs.memoryfs import MemoryFS
 
 from albam.lib import fs_registry
 from albam.vfs import VirtualFileData
+from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 
 
 @pytest.fixture(autouse=True)
@@ -20,10 +21,19 @@ def _clean_vfs_state():
     # per pytest session), so without this, roots added by one test would
     # collide by name with roots added by another - node ids are keyed by
     # app_id::relative_path only, not by which root added them.
+    #
+    # vfs.file_list and fs_registry are shared with every other engine's
+    # tests in the same session (mtfw's and hexn's own game_fs_root
+    # fixtures mount their whole-game root once per session and expect it
+    # to still be there on every later test) - see remove_new_vfs_roots's
+    # and close_new_fs_roots's own docstrings for what a wholesale
+    # .clear() there broke.
+    before_roots = vfs_root_names()
+    before_fs = fs_registry.keys()
     yield
-    bpy.context.scene.albam.vfs.file_list.clear()
+    remove_new_vfs_roots(before_roots)
     bpy.context.scene.albam.exported.file_list.clear()
-    fs_registry.clear()
+    close_new_fs_roots(before_fs)
 
 
 def _sample_fs():
@@ -246,6 +256,13 @@ def test_remove_root_unregisters_fs():
     from albam.vfs import ALBAM_OT_VirtualFileSystemRemoveRootVFile
 
     vfs = bpy.context.scene.albam.vfs
+    # Not "len(vfs.file_list) == 0" afterward: vfs.file_list is one
+    # collection shared by every engine's tests in the same session (see
+    # tests/conftest.py's remove_new_vfs_roots), so another suite's own
+    # session-scoped root can legitimately already be sitting in it -
+    # what this test actually promises is that removal takes back exactly
+    # what this root added, not that the whole VFS was empty to begin with.
+    before_size = len(vfs.file_list)
     root = vfs.add_fs_root("re5", _sample_fs(), display_name="removable-root")
     key = root.fs_key
     assert fs_registry.get(key) is not None
@@ -255,7 +272,8 @@ def test_remove_root_unregisters_fs():
         ALBAM_OT_VirtualFileSystemRemoveRootVFile, bpy.context
     )
 
-    assert len(vfs.file_list) == 0
+    assert len(vfs.file_list) == before_size
+    assert vfs.file_list.find(root.name) == -1
     with pytest.raises(KeyError):
         fs_registry.get(key)
 

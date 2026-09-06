@@ -1,9 +1,6 @@
 import os
 
-import bpy
 import pytest
-
-from albam.lib import fs_registry
 
 from tests.mtfw.r2_config import R2_PROTOCOL_PREFIX, resolve_r2_source
 
@@ -95,49 +92,3 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
     if not os.path.isdir(root):
         pytest.skip(f"--game-dir={local_app_id}::{root} does not exist")
     return root
-
-
-def close_new_fs_roots(before):
-    """Close the FS roots registered since `before` was taken.
-
-    Not fs_registry.clear(): that closes every filesystem in the process.
-    Session-scoped parametrization interleaves this suite's tests with
-    tests/mtfw's, whose game_fs_root is one session-scoped MTFW_FS shared by
-    every test in it - so clearing here closed it mid-run and every mtfw test
-    after this point failed with FilesystemClosed.
-    """
-    for key in fs_registry.keys():
-        if key not in before:
-            fs_registry.unregister(key)
-
-
-def vfs_root_names():
-    """Names of every root vfile currently in the main VFS - a snapshot to
-    diff against after a test, so only the roots it added get removed (see
-    remove_new_vfs_roots)."""
-    return {vf.name for vf in bpy.context.scene.albam.vfs.file_list if vf.is_root}
-
-
-def remove_new_vfs_roots(before):
-    """Remove only the VFS roots added since `before` was taken (see
-    vfs_root_names()), each via the real "Remove imported files" operator so
-    a root's whole subtree goes with it - not
-    scene.albam.vfs.file_list.clear().
-
-    vfs.file_list is one collection shared by every engine's tests in the
-    same session, same reasoning as close_new_fs_roots() above: mtfw's and
-    hexn's own game_fs_root fixtures mount their whole-game root once per
-    session and expect it to still be there on every later test. Clearing
-    the whole list here emptied it out from under them - the later test's
-    own session-scoped fixture, having already run once, never re-mounts,
-    so every VFS lookup after that silently found nothing.
-    """
-    vfs = bpy.context.scene.albam.vfs
-    for name in [vf.name for vf in vfs.file_list if vf.is_root]:
-        if name in before:
-            continue
-        index = vfs.file_list.find(name)
-        if index == -1:
-            continue  # already removed as part of an earlier root's own cleanup
-        vfs.file_list_selected_index = index
-        bpy.ops.albam.remove_imported()
