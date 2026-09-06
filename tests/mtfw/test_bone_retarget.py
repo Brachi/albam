@@ -88,6 +88,45 @@ def test_autorenaming_bones_keeps_them_addressable_by_animation_id():
         bpy.context.view_layer.objects.active = previous
 
 
+def test_autorenaming_bones_keeps_mirror_bone_pointing_at_a_real_bone():
+    """Mirror Bone is held by name, which Autorename Bones changes.
+
+    Renaming without updating it leaves Mirror Bone pointing at a name that no
+    longer exists, which export (mesh.py's _derive_mirror_ids) rejects with an
+    AlbamCheckFailure the moment "Export bones" is on. See #285.
+    """
+    from albam.blender_ui.tools import rename_bones
+    from albam.engines.mtfw.bone import get_mirror, set_anim_retarget, set_mirror
+
+    armature_data = bpy.data.armatures.new("mirror_rename_rig")
+    armature = bpy.data.objects.new("mirror_rename_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name in ("0", "1"):
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for name, anim_id in (("0", "0"), ("1", "1")):
+            set_anim_retarget(armature.pose.bones[name], "re5", anim_id)
+        set_mirror(armature.pose.bones["0"], "re5", "1")
+        set_mirror(armature.pose.bones["1"], "re5", "0")
+
+        rename_bones(armature, "re5", "Body")
+
+        # BONES_BODY names ids 0 and 1 "root" and "spine_lower"
+        assert get_mirror(armature.pose.bones["root"], "re5") == "spine_lower"
+        assert get_mirror(armature.pose.bones["spine_lower"], "re5") == "root"
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
 def test_a_rig_saved_before_the_move_still_maps_its_bones():
     """.blend files predating the move carry the id as a raw bone property.
 
