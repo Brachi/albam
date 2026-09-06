@@ -12,6 +12,24 @@ BoundingBox = namedtuple('bounding_box', (
 ))
 
 
+def get_action_channels(action, slot_name):
+    """The container a freshly-created action keeps its fcurves and groups
+    in, across every Blender version this addon supports.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether - the
+    container returned here (the action itself, or a channelbag) exposes the
+    same .fcurves.new()/.groups API either way, so a caller doesn't need its
+    own version check. `slot_name` only matters on 4.4+, where a slot names
+    the datablock (e.g. an armature) the channels animate.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=slot_name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 def strip_triangles_to_triangles_list(strip_indices_array):
     indices = []
 

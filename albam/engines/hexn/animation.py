@@ -53,6 +53,7 @@ from math import sqrt
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
+from ...lib.blender import get_action_channels
 from ...registry import blender_registry
 from .fs import ANIM_CLIP_EXTENSION
 from .skeleton import (ROOT_PARENT, armature_name_for, bone_names_from_armature,
@@ -590,7 +591,15 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
     armature_object.animation_data_create()
     action = bpy.data.actions.new(action_name)
     action.use_fake_user = True
+    channels = get_action_channels(action, armature_object.name)
     armature_object.animation_data.action = action
+    if not hasattr(action, "fcurves"):
+        # 4.4+ layered actions: assigning .action alone doesn't say which of
+        # its slots this object evaluates - done above, the action had no
+        # slot yet, so it stays unset and the armature plays back no
+        # channels at all (an unkeyed rest pose) despite the fcurves below
+        # being built and populated correctly.
+        armature_object.animation_data.action_slot = action.slots[-1]
 
     pose_bones = armature_object.pose.bones
     bones = armature_object.data.bones
@@ -651,14 +660,15 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
 
     curves = {}
     for bone_idx, name in animated.items():
-        curves[bone_idx] = (
-            [action.fcurve_ensure_for_datablock(
-                armature_object, f'pose.bones["{name}"].location', index=i, group_name=name)
-             for i in range(3)],
-            [action.fcurve_ensure_for_datablock(
-                armature_object, f'pose.bones["{name}"].rotation_quaternion', index=i, group_name=name)
-             for i in range(4)],
-        )
+        group = channels.groups.get(name) or channels.groups.new(name)
+        location_curves = [channels.fcurves.new(data_path=f'pose.bones["{name}"].location', index=i)
+                           for i in range(3)]
+        rotation_curves = [
+            channels.fcurves.new(data_path=f'pose.bones["{name}"].rotation_quaternion', index=i)
+            for i in range(4)]
+        for curve in location_curves + rotation_curves:
+            curve.group = group
+        curves[bone_idx] = (location_curves, rotation_curves)
     values = {bone_idx: ([[] for _ in range(3)], [[] for _ in range(4)]) for bone_idx in animated}
     previous_rotation = {}
 
