@@ -19,7 +19,7 @@ import bpy
 import pytest
 
 from albam.lib import fs_registry
-from tests.cie.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
+from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
 from tests.cie.test_bin_serialization import _is_mesh_bin, _texture_slots
 

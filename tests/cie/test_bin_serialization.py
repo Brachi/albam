@@ -20,7 +20,7 @@ import bpy
 import pytest
 
 from albam.lib import fs_registry
-from tests.cie.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
+from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
