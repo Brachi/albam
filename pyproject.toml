@@ -16,6 +16,9 @@ dependencies = [
   "setuptools==80.10.2",
   "kaitaistruct==0.11",
   "pymorton==1.0.5",
+  # albam.engines.hexn.texture: unpack_dds(..., unswizzle="agnm") to decode
+  # RE:ORC's DXT5nm-swizzled normal maps.
+  "bc7enc-py==0.1.0a1",
 ]
 
 [project.optional-dependencies]
@@ -37,11 +40,11 @@ s3 = [
 ]
 
 # albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
-# of a default install): bc7enc-py for BC7 DDS texture decode (.tex
-# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries, pymmh3
-# for PakFS/ReenFS's virtual-path hashing.
+# of a default install): zstd for PakFS.openbin()'s zstd-compressed .pak
+# entries, pymmh3 for PakFS/ReenFS's virtual-path hashing. bc7enc-py is also
+# used here (BC7 DDS texture decode, .tex import) but lives in the base
+# dependencies now - albam.engines.hexn needs it unconditionally too.
 reen = [
-  "bc7enc-py==0.1.0a1",
   "zstd==1.5.7.2",
   "pymmh3==0.0.5",
 ]
@@ -66,7 +69,12 @@ line-length = 110
 
 [tool.flake8]
 max-line-length = 110
-exclude = [".venv", "structs", "build"]
+# Neither holds this repo's own source, and linting them buries its real
+# findings: tests/data is local, gitignored working files (real game bytes
+# never get committed, see CLAUDE.md) including reference scripts nobody here
+# wrote or maintains; build/ is a packaging artifact holding a second copy of
+# albam/, vendored code included.
+exclude = [".venv", "structs", "tests/data", "build"]
 
 # F722: needed for Blender props annotations such as
 # ```

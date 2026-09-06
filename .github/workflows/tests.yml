@@ -96,7 +96,7 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd
+          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on

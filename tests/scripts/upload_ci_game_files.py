@@ -53,13 +53,14 @@ DEFAULT_WORKFLOW = os.path.join(_REPO_ROOT, ".github", "workflows", "tests.yml")
 sys.path.insert(0, _REPO_ROOT)
 
 from tests.cie import upload_source as cie_source  # noqa: E402
+from tests.hexn import upload_source as hexn_source  # noqa: E402
 from tests.mtfw import upload_source as mtfw_source  # noqa: E402
 from tests.mtfw.r2_config import r2_credentials  # noqa: E402
 
 # The engines this can upload for. Each module says where its datasets live
 # and how to turn a set of hashes into local files; neither imports albam at
 # module level, so the gate below stays usable from any interpreter.
-UPLOAD_SOURCES = (mtfw_source, cie_source)
+UPLOAD_SOURCES = (mtfw_source, cie_source, hexn_source)
 
 # Matches the app-id in a `--game-dir=<app-id>::<value>` flag as written in
 # the workflow. Only the app-id is wanted: the value there is a shell

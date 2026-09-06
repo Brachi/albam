@@ -11,7 +11,7 @@ import bpy
 import pytest
 
 from albam.lib import fs_registry
-from tests.cie.conftest import close_new_fs_roots
+from tests.cie.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
@@ -29,8 +29,9 @@ def _clean_vfs_state():
     # Same session-scoped Blender state every other VFS test has to clean up
     # after itself - see tests/test_vfs_fs_backed.py.
     before = fs_registry.keys()
+    before_roots = vfs_root_names()
     yield
-    bpy.context.scene.albam.vfs.file_list.clear()
+    remove_new_vfs_roots(before_roots)
     close_new_fs_roots(before)
 
 

@@ -10,6 +10,12 @@ def get_app_description(app_id):
     return app_desc
 
 
+# The fourth element is the EnumProperty's numeric value, and Blender
+# stores *that*, not the app id, in a saved .blend - scene.albam.vfs rows
+# and every imported asset carry it. So a value belongs to its app for
+# good: a new app is appended with a new number, never inserted, or every
+# file saved by an earlier version silently comes back naming a different
+# game.
 APPS = [
     ("re0", "Resident Evil 0", "", 0),
     ("re1", "Resident Evil 1", "", 1),
@@ -21,6 +27,7 @@ APPS = [
     ("dmc4", "Devil May Cry 4", "", 12),
     ("umvc3", "UMVC3", "", 13),
     ("re4uhd", "Resident Evil 4 UHD", "", 14),
+    ("reorc", "Resident Evil: ORC", "", 15),
 ]
 
 REENGINE_APPS = [
