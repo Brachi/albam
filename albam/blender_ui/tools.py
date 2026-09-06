@@ -5,7 +5,7 @@ from mathutils import Vector, bvhtree
 
 
 from ..registry import blender_registry
-from ..engines.mtfw.bone import get_anim_retarget, guess_mirrors, set_mirror
+from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.handshaker import handshake, dump_frames, frames_path
 
@@ -922,6 +922,7 @@ def rename_bones(armature_ob, app_id, body_type):
     if fixed_name:
         for k, v in fixed_name.items():
             names_preset[k] = v
+    renamed = {}
     for pose_bone in armature_ob.pose.bones:
         reference_bone_id = get_anim_retarget(pose_bone, app_id)
         # a control bone carries "<id>_<n>", and is no body part
@@ -929,7 +930,14 @@ def rename_bones(armature_ob, app_id, body_type):
             continue
         bone_name = names_preset.get(int(reference_bone_id), None)
         if bone_name:
+            renamed[pose_bone.name] = bone_name
             pose_bone.name = bone_name
+    # Mirror Bone is held by name (see bone.py), so a rename here would
+    # otherwise leave it pointing at a name that no longer exists.
+    for pose_bone in armature_ob.pose.bones:
+        mirror = get_mirror(pose_bone, app_id)
+        if mirror in renamed:
+            set_mirror(pose_bone, app_id, renamed[mirror])
 
 
 def merge_vgroups(vg_a, vg_b):
