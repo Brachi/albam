@@ -562,12 +562,19 @@ class ALBAM_PT_CustomPropertiesMesh(ALBAM_PT_CustomPropertiesBase):
 
 @blender_registry.register_blender_type
 class ALBAM_PT_CustomPropertiesBone(ALBAM_PT_CustomPropertiesBase):
-    """`context.pose_bone`, not `context.bone`: that is where the group lives."""
+    """`context.active_pose_bone`, not `context.bone`: that is where the group lives.
+
+    The Properties Editor's Bone tab does not populate `context.pose_bone` (it
+    only sets `context.bone`, a `bpy.types.Bone` with no albam properties on
+    it), so this panel never polled true and silently never showed. The
+    window-level `context.active_pose_bone` is the `bpy.types.PoseBone` the
+    group actually lives on, and it is populated in the same Properties tab.
+    """
     bl_idname = "ALBAM_PT_CustomPropertiesBone"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "bone"
-    CONTEXT_ITEM_NAME = "pose_bone"
+    CONTEXT_ITEM_NAME = "active_pose_bone"
 
 
 @blender_registry.register_blender_prop_albam(name="clipboard")
@@ -606,7 +613,7 @@ def get_context_item(context):  # workaround for bledner 4.5 api
         elif space.context == 'DATA':
             return context.mesh
         elif space.context == 'BONE':
-            return getattr(context, "pose_bone", None)
+            return getattr(context, "active_pose_bone", None)
     else:
         return None
 
