@@ -21,6 +21,8 @@ needing its own separate hash).
 """
 import bpy
 
+from tests.mtfw.conftest import action_fcurves
+
 
 ANIMS_HASH = "0aadc76ea27d6c42"
 
@@ -87,11 +89,7 @@ def test_import_applies_action_to_a_real_armature(game_fs_root, hash_to_path, lo
     action = armature_ob.animation_data.action
     assert action is not None
 
-    all_fcurves = []
-    for layer in action.layers:
-        for strip in layer.strips:
-            for channelbag in strip.channelbags:
-                all_fcurves.extend(channelbag.fcurves)
+    all_fcurves = action_fcurves(action)
     assert all_fcurves, "expected at least one fcurve on the imported action"
 
     bone_names = {b.name for b in armature_ob.pose.bones}

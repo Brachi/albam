@@ -5,6 +5,7 @@ import os
 import bpy
 from mathutils import Quaternion, Vector
 
+from tests.mtfw.conftest import action_fcurves
 from .test_skeleton_import import SKEL_HASH
 
 # Reuses test_anims_parsing.py's own committed dataset.
@@ -162,15 +163,13 @@ def test_build_blender_action(game_fs_root, hash_to_path, local_app_id, local_an
         action = build_blender_action(armature_obj, decoded, file_info.name, bone_names)
         n_actions += 1
 
-        for layer in action.layers:
-            for strip in layer.strips:
-                for channelbag in strip.channelbags:
-                    assert len(channelbag.fcurves) > 0
-                    for fcurve in channelbag.fcurves:
-                        for keyframe_point in fcurve.keyframe_points:
-                            value = keyframe_point.co[1]
-                            assert not math.isnan(value)
-                            assert not math.isinf(value)
+        fcurves = action_fcurves(action)
+        assert len(fcurves) > 0
+        for fcurve in fcurves:
+            for keyframe_point in fcurve.keyframe_points:
+                value = keyframe_point.co[1]
+                assert not math.isnan(value)
+                assert not math.isinf(value)
 
     assert n_actions or _is_empty_archive(anims), (
         "archive built no actions at all - it has entries, so something stopped them being read"
