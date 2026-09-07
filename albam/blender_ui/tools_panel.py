@@ -256,20 +256,6 @@ class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_FaceAttrEditor(bpy.types.Operator):
-    bl_idname = "albam.set_face_attr_editor"
-    bl_label = "Enable Face Attribute Editor"
-
-    def execute(self, context):
-        selected = context.active_object
-        region = context.region
-        rv3d = context.space_data.region_3d
-        overlay_enable(selected, region, rv3d)
-
-        return {'FINISHED'}
-
-
-@blender_registry.register_blender_type
 class ALBAM_OT_TransferNormal(bpy.types.Operator):
     '''Transfer normals from a unified mesh to its parts'''
     bl_idname = "albam.transfer_normals"
@@ -807,7 +793,6 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
         layout.prop(scn, 'surface_attr')
         layout.prop(scn, 'special_attr')
         layout.operator("albam.apply_face_props")
-        # layout.operator("albam.set_face_attr_editor")
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):

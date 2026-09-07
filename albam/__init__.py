@@ -78,16 +78,13 @@ def register():
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
     register_workspace_tools()
-    bpy.app.timers.register(overlay.check_active_tool, first_interval=0.1, persistent=True)
 
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
-    if bpy.app.timers.is_registered(overlay.check_active_tool):
-        bpy.app.timers.unregister(overlay.check_active_tool)
-    overlay.hide()
+    overlay.overlay_disable()
 
     for handler in LOAD_POST_HANDLERS:
         try:
