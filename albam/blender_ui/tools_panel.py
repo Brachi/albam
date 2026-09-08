@@ -24,7 +24,7 @@ def register_workspace_tools():
     for tool_cls in WORKSPACE_TOOLS:
         bpy.utils.register_tool(
             tool_cls,
-            after=tool_cls.after if tool_cls.after != "" else None,
+            after=(tool_cls.after,) if tool_cls.after != "" else None,
             group=(tool_cls.after == ""),
         )
 
