@@ -78,13 +78,14 @@ def register():
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
 
     register_workspace_tools()
+    overlay.register_overlay()
 
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
-    overlay.overlay_disable()
+    overlay.unregister_overlay()
 
     for handler in LOAD_POST_HANDLERS:
         try:

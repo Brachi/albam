@@ -9,7 +9,6 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.tools.face_attr_editor import overlay_enable, overlay_disable
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -773,17 +772,6 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
     @classmethod
     def poll(cls, context):
         return context.edit_object is not None
-
-    @staticmethod
-    def setup():
-        selected = bpy.context.active_object
-        region = bpy.context.region
-        rv3d = bpy.context.space_data.region_3d
-        overlay_enable(selected, region, rv3d)
-
-    @staticmethod
-    def teardown():
-        overlay_disable()
 
     @staticmethod
     def draw_settings(context, layout, tool):

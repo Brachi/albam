@@ -6,6 +6,7 @@ from gpu_extras.batch import batch_for_shader
 from bpy_extras.view3d_utils import location_3d_to_region_2d
 from ..misc import number_to_color
 
+TARGET_TOOL = "albam.face_prop_edit"
 _handler = None
 # shader = gpu.shader.from_builtin("UNIFORM_COLOR")
 shader = None
@@ -31,6 +32,19 @@ def get_selected_face_attributes():
 
 
 def draw_callback():
+    # Registered once for the addon's lifetime and only runs when Blender
+    # actually redraws the viewport - custom WorkSpaceTool.setup()/teardown()
+    # staticmethods are never called by Blender's tool system (register_tool()
+    # only ever reads idname/label/description/icon/cursor/options/widget/
+    # widget_properties/keymap/data_block/operator/draw_settings/draw_cursor
+    # off the class), so there's no lifecycle hook to toggle this on/off with.
+    workspace = getattr(bpy.context, "workspace", None)
+    if workspace is None:
+        return
+    tool = workspace.tools.from_space_view3d_mode(bpy.context.mode, create=False)
+    if not tool or tool.idname != TARGET_TOOL:
+        return
+
     font_id = 0
 
     obj = bpy.context.active_object
@@ -55,7 +69,7 @@ def draw_callback():
             y -= 18
 
 
-def show():
+def register_overlay():
     global _handler
 
     if _handler is None:
@@ -66,12 +80,8 @@ def show():
             'POST_PIXEL',
         )
 
-    for area in bpy.context.screen.areas:
-        if area.type == 'VIEW_3D':
-            area.tag_redraw()
 
-
-def hide():
+def unregister_overlay():
     global _handler
 
     if _handler is not None:
@@ -80,10 +90,6 @@ def hide():
             'WINDOW',
         )
         _handler = None
-
-    for area in bpy.context.screen.areas:
-        if area.type == 'VIEW_3D':
-            area.tag_redraw()
 
 
 def build_batches(bl_obj):
@@ -195,8 +201,6 @@ def overlay_enable(bl_object, region, rv3d):
     if _draw_face_handle is not None and _draw_text_handle is not None:
         return
 
-    show()
-
     faces, wires = build_batches(bl_object)
     _draw_face_handle = bpy.types.SpaceView3D.draw_handler_add(
         draw,
@@ -219,8 +223,6 @@ def overlay_enable(bl_object, region, rv3d):
 def overlay_disable():
     global _draw_face_handle
     global _draw_text_handle
-
-    hide()
 
     if _draw_face_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(
