@@ -130,13 +130,19 @@ def _decoded_triangles(bin_bytes):
     faces, _mat_face_ranges = _build_faces(parsed)
 
     positions = [_yz_flip(v.x, v.y, v.z) for v in parsed.vertex_positions]
-    normals = [_decode_normal(n) for n in parsed.normals] if parsed.normals else None
+    # A mesh .bin states one normal per face corner. Tolerating a file that
+    # states none would make the normal comparison pass without ever having
+    # compared anything, which is precisely the regression it exists to catch.
+    assert len(parsed.normals or ()) == len(parsed.vertex_positions), (
+        f"this file states {len(parsed.normals or ())} normals against "
+        f"{len(parsed.vertex_positions)} face corners"
+    )
+    normals = [_decode_normal(n) for n in parsed.normals]
     uvs = [(uv.u, 1.0 - uv.v) for uv in parsed.texcoords] if parsed.texcoords else None
 
     def corner(i):
         uv = tuple(uvs[i]) if uvs else ()
-        normal = tuple(normals[i]) if normals else ()
-        return (tuple(positions[i]), uv), normal
+        return (tuple(positions[i]), uv), tuple(normals[i])
 
     return [tuple(corner(i) for i in triangle) for triangle in faces]
 
