@@ -94,10 +94,16 @@ types:
       # 0x20030818 where the adjacency and bone-pair blocks are present,
       # 0x20010801 where they are not, always in step with unk_01.
       - {id: version_flags, type: u4}
-      - {id: offset_bonepairs, type: u4} # bonepair_offset
-      - {id: offset_adjacents, type: u4} # adjacent_offset
-      - {id: offset_index_buffer, type: u4} # vertex_weight_index_offset
-      - {id: offset_index_buffer2, type: u4} # vertex_weight2_index_offset
+      # These four do not exist in a 0x40 header at all - offset_bones (see
+      # above) is what says so. The hand-maintained reader in
+      # re4_uhd_bin.py defaults each to 0 ("not present") on that branch,
+      # since every reader downstream of this struct - here and in fs.py -
+      # expects the field to exist and reads a nonzero value as "this
+      # optional block is present".
+      - {id: offset_bonepairs, type: u4, if: offset_bones > 0x40} # bonepair_offset
+      - {id: offset_adjacents, type: u4, if: offset_bones > 0x40} # adjacent_offset
+      - {id: offset_index_buffer, type: u4, if: offset_bones > 0x40} # vertex_weight_index_offset
+      - {id: offset_index_buffer2, type: u4, if: offset_bones > 0x40} # vertex_weight2_index_offset
     instances:
       size_:
         value: 96
