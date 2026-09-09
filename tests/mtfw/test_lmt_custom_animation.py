@@ -310,3 +310,33 @@ def test_export_action_without_layers_does_not_crash(imported_lmt_blocks, local_
     custom_props = target_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
     with _block_action_swapped(custom_props, empty_action):
         assert bpy.ops.albam.export() == {"FINISHED"}
+
+
+def test_export_refuses_a_block_that_resolves_zero_tracks(imported_lmt_blocks, local_app_id):
+    """If none of an action's fcurve bone names resolve through the armature's
+    mapping, `_generate_track_from_action` would otherwise leave `tracks`
+    empty and the block gets written with num_tracks = 0 and a non-zero
+    ofs_frame - a well-formed file quietly missing its animation (#254).
+    Export must refuse instead of producing that file.
+    """
+    from albam.lib.blender import get_action_channels
+
+    armature, _lmt_path, bl_objects = imported_lmt_blocks
+    target_block, action, _fcurve = _first_block_with_location_action(bl_objects, local_app_id)
+    if action is None:
+        pytest.skip("No block with an action to replace")
+
+    unmapped = bpy.data.actions.new(f"{action.name}.unmapped")
+    unmapped.use_fake_user = True
+    channels = get_action_channels(unmapped, armature.name)
+    curve = channels.fcurves.new(data_path='pose.bones["not_a_real_bone_254"].location', index=0)
+    curve.keyframe_points.add(1)
+    curve.keyframe_points[0].co = (1, 0.0)
+
+    custom_props = target_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
+    with _block_action_swapped(custom_props, unmapped):
+        result = bpy.ops.albam.export()
+
+    assert result == {"CANCELLED"}, (
+        f"expected export to refuse a block that resolves zero tracks, got {result}"
+    )
