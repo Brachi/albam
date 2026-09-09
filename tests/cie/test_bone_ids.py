@@ -3,7 +3,10 @@
 CI-safe: no game data or scene state, just the pure id-assignment logic (see
 albam/engines/cie/mesh.py).
 """
+import pytest
+
 from albam.engines.cie.mesh import _bone_ids_by_name
+from albam.exceptions import AlbamCheckFailure
 
 
 class _FakeBone:
@@ -41,3 +44,24 @@ def test_every_id_stays_within_the_format_s_u1_ceiling():
     bones = [_FakeBone(str(i)) for i in range(200, 260)]
     ids = _bone_ids_by_name(bones)
     assert all(0 <= bone_id <= 254 for bone_id in ids.values())
+
+
+def test_a_zero_padded_name_does_not_claim_an_id_a_second_time():
+    """"05" and "5" spell the same id, so letting both claim it dropped one
+    of the two bones from the exported table while its weights re-mapped
+    onto the survivor.
+    """
+    bones = [_FakeBone("5"), _FakeBone("05"), _FakeBone("head")]
+    ids = _bone_ids_by_name(bones)
+
+    assert len(set(ids.values())) == len(ids), f"id collision in {ids}"
+    assert ids["5"] == 5
+
+
+def test_an_armature_with_no_free_id_left_errors_instead_of_doubling_up():
+    """Nudging a fallback used to stop at 254 and hand it out anyway, which
+    is the very duplicate this function exists to prevent."""
+    bones = [_FakeBone(str(i)) for i in range(255)] + [_FakeBone("extra")]
+
+    with pytest.raises(AlbamCheckFailure):
+        _bone_ids_by_name(bones)

@@ -700,45 +700,47 @@ def _classify_mesh_ob(bl_mesh_ob):
         return bin_type, armature
 
 
-def _bone_id(bl_bone, fallback):
-    """The .bin bone id a Blender bone stands for.
+def _claimed_id(bone_name):
+    """The .bin bone id a Blender bone name claims outright, or None.
 
     Import names each bone after its id (see _build_armature), so the name is
-    the id coming back. A bone the user added by hand won't be named that way;
-    it gets its position in the armature instead, which at least stays inside
-    the u1 the format allows.
+    the id coming back. A zero-padded spelling names the same id its
+    canonical form does, so "05" and "5" claim one id between them rather
+    than one each.
     """
-    name = bl_bone.name
-    if name.isdigit() and int(name) < 255:
-        return int(name)
-    return min(fallback, 254)
+    if bone_name.isdigit() and int(bone_name) < 255:
+        return int(bone_name)
+    return None
 
 
 def _bone_ids_by_name(all_bones):
-    """{bone name: id}, resolving every bone through _bone_id without two of
-    them landing on the same id.
+    """{bone name: id}, with no two bones landing on the same id.
 
-    A bone literally named after an id (say "5") claims it outright; a
-    hand-added bone falls back to its position in the armature, and that
-    position can be the very number an id-named bone elsewhere claims - a
-    hand-added bone at index 5 collides with one named "5" wherever it sits.
-    Digit names are therefore resolved first, reserving their ids, and a
-    colliding fallback is nudged to the next free one instead of silently
-    doubling up.
+    A bone named after an id claims it (see _claimed_id); a bone the user
+    added by hand falls back to its position in the armature, which at least
+    stays inside the u1 the format allows. That position can be the very
+    number an id-named bone elsewhere claims - a hand-added bone at index 5
+    collides with one named "5" wherever it sits. Claimed ids are therefore
+    reserved up front, and anything colliding with one is nudged to the next
+    free id instead of silently doubling up.
     """
-    reserved = {int(bone.name) for bone in all_bones
-                if bone.name.isdigit() and int(bone.name) < 255}
-    used = set(reserved)
+    used = {claimed for claimed in (_claimed_id(bone.name) for bone in all_bones)
+            if claimed is not None}
+    taken = set()
     ids = {}
     for i, bone in enumerate(all_bones):
-        if bone.name.isdigit() and int(bone.name) < 255:
-            ids[bone.name] = int(bone.name)
-            continue
-        candidate = min(i, 254)
-        while candidate in used and candidate < 254:
-            candidate += 1
-        used.add(candidate)
-        ids[bone.name] = candidate
+        bone_id = _claimed_id(bone.name)
+        if bone_id is None or bone_id in taken:
+            bone_id = min(i, 254)
+            while bone_id in used or bone_id in taken:
+                if bone_id == 254:
+                    raise AlbamCheckFailure(
+                        f"Bone {bone.name!r} has no free bone id left: the format "
+                        "can only name 255 bones and this armature needs more"
+                    )
+                bone_id += 1
+        taken.add(bone_id)
+        ids[bone.name] = bone_id
     return ids
 
 
