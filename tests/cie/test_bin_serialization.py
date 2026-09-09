@@ -104,21 +104,20 @@ def _decoded_triangles(bin_bytes):
     bytes through the same per-corner arrays and strip-to-triangle logic
     import uses (see albam.engines.cie.mesh), not through Blender.
 
-    Position and UV are kept exact, and compared later on a grid fine enough
-    to catch a scale, axis or UV regression but coarse enough to absorb
-    float32 round-tripping (see _unmatched_surfaces). The normal is kept
-    alongside each corner rather than folded into the
-    same comparison key: Blender recomputes a loop's split normal from the
-    surrounding topology on every mesh edit, and reproduces it only to
-    within about a tenth even for a model that came back with the same
-    surface - see test_bin_round_trip_matches_the_original_geometry, which
-    checks normals on their own with a looser, majority-agreement tolerance
-    instead of demanding every one match exactly.
+    Every value is kept exactly as the file states it; what absorbs the
+    float32 round trip is the tolerance the triangles are matched within
+    (see _match_triangles), not any rounding done here. The normal is kept
+    alongside each corner rather than folded into the surface it belongs to:
+    Blender recomputes a loop's split normal from the surrounding topology on
+    every mesh edit, and reproduces it only to within about a tenth even for
+    a model that came back with the same surface - see
+    test_bin_round_trip_matches_the_original_geometry, which checks normals
+    on their own with a looser, majority-agreement tolerance instead of
+    demanding every one match.
 
     Corners are kept in the order the file gives them; the comparison itself
-    is order-independent and winding-independent (a triangle is matched by
-    the sorted multiset of its corner keys, see _unmatched_surfaces) because
-    a no-edit re-export is free to walk materials and strips in a different
+    is order-independent and winding-independent (see _shape) because a
+    no-edit re-export is free to walk materials and strips in a different
     corner order and still describe the same surface - triangle count is what
     has to match exactly, not corner order or count (see the module
     docstring).
@@ -135,98 +134,103 @@ def _decoded_triangles(bin_bytes):
     uvs = [(uv.u, 1.0 - uv.v) for uv in parsed.texcoords] if parsed.texcoords else None
 
     def corner(i):
-        uv = tuple(uvs[i]) if uvs else None
-        normal = tuple(round(v, 1) for v in normals[i]) if normals else None
+        uv = tuple(uvs[i]) if uvs else ()
+        normal = tuple(normals[i]) if normals else ()
         return (tuple(positions[i]), uv), normal
 
     return [tuple(corner(i) for i in triangle) for triangle in faces]
 
 
-# One raw unit at GLOBAL_SCALE, and the UV precision the file itself stores.
-POSITION_STEP = 0.001
-UV_STEP = 0.0001
+# A coordinate makes a float32 -> double -> float32 round trip on the way
+# through Blender and comes back a few ulps off, so nothing here is compared
+# for equality. These are the absolute tolerances a corner is matched
+# within - one raw unit of whatever the file itself stores, which is orders
+# of magnitude tighter than any scale, axis or UV regression and wide enough
+# that no value sits on a boundary where the round trip decides the answer.
+POSITION_TOLERANCE = 0.001
+UV_TOLERANCE = 0.0001
+NORMAL_TOLERANCE = 0.15
 
 
-def _corner_key(shape, offset):
-    """A corner's (position, UV) snapped to a grid, as integer cell indices.
+def _shape(triangle):
+    """A triangle's surface: its corner positions and UVs, sorted.
 
-    `offset` shifts the grid by that fraction of a cell, which is what makes
-    a coordinate sitting exactly on a cell boundary comparable at all: see
-    _unmatched_surfaces.
+    Sorted so that which corner the file listed first never decides a match -
+    a re-export is free to state the same triangle from a different corner or
+    in the opposite winding.
     """
-    position, uv = shape
-    key = [round(v / POSITION_STEP + offset) for v in position]
-    if uv is not None:
-        key.extend(round(v / UV_STEP + offset) for v in uv)
-    return tuple(key)
+    return tuple(sorted(position + uv for position, uv in
+                        (corner for corner, _normal in triangle)))
 
 
-def _surfaces(triangles):
-    """A triangle's shape alone (position + UV per corner), dropping its
-    normal - the strict part of the geometry comparison."""
-    return [tuple(shape for shape, _normal in triangle) for triangle in triangles]
+def _same_surface(one, other):
+    """Whether two surfaces (see _shape) are the same one within tolerance."""
+    if len(one) != len(other):
+        return False
+    for corner, other_corner in zip(one, other):
+        if len(corner) != len(other_corner):
+            return False
+        for i, (value, other_value) in enumerate(zip(corner, other_corner)):
+            tolerance = POSITION_TOLERANCE if i < 3 else UV_TOLERANCE
+            if abs(value - other_value) > tolerance:
+                return False
+    return True
 
 
-def _unmatched_surfaces(original_surfaces, exported_surfaces):
-    """The original triangles no exported triangle describes, matched one
-    for one.
+def _match_triangles(original_triangles, exported_triangles):
+    """Pair each original triangle with the exported triangle describing the
+    same surface, as (pairs, originals nothing matched).
 
-    A triangle is keyed by the sorted multiset of its corner keys, so which
-    corner the file happened to list first never decides a match.
-
-    Comparison is on a grid rather than on raw floats because a coordinate
-    makes a float32 -> double -> float32 round trip on the way through
-    Blender and comes back a few ulps off. A coordinate landing exactly on a
-    cell boundary - an exact half raw unit, which axis-aligned or
-    tool-quantized geometry produces readily - would then snap one way in the
-    shipped file and the other in the re-export, so whatever the first pass
-    leaves over is matched again on a grid shifted by half a cell, where
-    those same coordinates sit in the middle of a cell instead.
+    Both sides are sorted by surface and walked together, so a pair costs a
+    sort rather than a scan. Nothing is snapped to a grid on the way: a
+    quantized coordinate landing on a cell boundary - an exact half raw unit,
+    which axis-aligned or tool-quantized geometry produces readily - is
+    exactly the value an exact-key comparison cannot survive, since the round
+    trip alone decides which side of the boundary it lands on.
     """
-    from collections import defaultdict
+    original = sorted((_shape(t), t) for t in original_triangles)
+    exported = sorted((_shape(t), t) for t in exported_triangles)
 
-    remaining_original = list(original_surfaces)
-    remaining_exported = list(exported_surfaces)
-    for offset in (0.0, 0.5):
-        if not remaining_original:
-            break
-        def key(surface):
-            return tuple(sorted(_corner_key(shape, offset) for shape in surface))
-
-        pool = defaultdict(list)
-        for surface in remaining_exported:
-            pool[key(surface)].append(surface)
-        unmatched = []
-        for surface in remaining_original:
-            bucket = pool.get(key(surface))
-            if bucket:
-                bucket.pop()
-            else:
-                unmatched.append(surface)
-        remaining_original = unmatched
-        remaining_exported = [s for bucket in pool.values() for s in bucket]
-    return remaining_original
+    pairs = []
+    unmatched = []
+    i = j = 0
+    while i < len(original) and j < len(exported):
+        if _same_surface(original[i][0], exported[j][0]):
+            pairs.append((original[i][1], exported[j][1]))
+            i += 1
+            j += 1
+        elif original[i][0] < exported[j][0]:
+            unmatched.append(original[i][1])
+            i += 1
+        else:
+            j += 1
+    unmatched.extend(triangle for _surface, triangle in original[i:])
+    return pairs, unmatched
 
 
-def _normal_agreement(original_triangles, exported_triangles):
-    """The fraction of `original_triangles` whose exact triangle (surface and
-    rounded normal both) reappears in `exported_triangles`.
+def _normal_agreement(pairs):
+    """The fraction of matched triangles (see _match_triangles) that also
+    carry the normals they shipped with.
 
-    Every triangle here is already known to reappear by surface alone (see
-    the caller); this measures how many also carry the same normal, which -
-    unlike the surface - Blender does not reproduce exactly on every triangle
-    even for a model with no real regression (see _decoded_triangles).
+    Every triangle here already describes the surface it shipped with; this
+    measures how many also kept its normals, which - unlike the surface -
+    Blender does not reproduce on every triangle even for a model with no
+    real regression (see _decoded_triangles).
     """
-    from collections import Counter
+    if not pairs:
+        return 0.0
 
-    def key(triangle):
-        return tuple(sorted((_corner_key(shape, 0.0), normal)
-                            for shape, normal in triangle))
+    def normals(triangle):
+        return [normal for _corner, normal in sorted(triangle, key=lambda c: c[0])]
 
-    original_count = Counter(key(t) for t in original_triangles)
-    exported_count = Counter(key(t) for t in exported_triangles)
-    matched = sum(min(original_count[k], exported_count[k]) for k in original_count)
-    return matched / len(original_triangles)
+    agreed = 0
+    for original, exported in pairs:
+        if all(abs(a - b) <= NORMAL_TOLERANCE
+               for original_normal, exported_normal in zip(normals(original),
+                                                           normals(exported))
+               for a, b in zip(original_normal, exported_normal)):
+            agreed += 1
+    return agreed / len(pairs)
 
 
 def _texture_slots(bin_bytes):
@@ -349,17 +353,16 @@ def test_bin_round_trip_matches_the_original_geometry(
     assert len(exported_triangles) == len(original_triangles), (
         "the re-export does not describe as many triangles as the shipped file"
     )
-    unmatched = _unmatched_surfaces(
-        _surfaces(original_triangles), _surfaces(exported_triangles))
+    pairs, unmatched = _match_triangles(original_triangles, exported_triangles)
     assert not unmatched, (
         f"{len(unmatched)} of {len(original_triangles)} shipped triangles are not "
-        f"described by the re-export, e.g. {unmatched[0]}"
+        f"described by the re-export, e.g. {_shape(unmatched[0])}"
     )
 
     # Loose: normals agree for the large majority of triangles rather than
     # all of them - see _decoded_triangles for why an exact-match normal
     # check would fail even a faithful re-export.
-    agreement = _normal_agreement(original_triangles, exported_triangles)
+    agreement = _normal_agreement(pairs)
     assert agreement > 0.9, (
         f"only {agreement:.0%} of triangles kept the normals they shipped with"
     )
