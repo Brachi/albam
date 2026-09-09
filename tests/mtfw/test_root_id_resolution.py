@@ -114,27 +114,62 @@ def test_build_blender_textures_resolves_through_the_mod_files_own_root(two_root
     assert bytes(bl_image.albam_asset.original_bytes) == b"TEX-BYTES-ROOT-2"
 
 
-def test_infer_mrl_still_falls_back_when_only_reachable_through_another_root(
-        two_roots_same_path, monkeypatch):
+def test_infer_mrl_still_falls_back_to_a_shared_mrl_mounted_as_its_own_root(
+        mount_vfs_root, monkeypatch):
     """root_id is a preference, not a restriction (see get_vfile's own
     docstring): a shared .mrl mounted as its own archive, reachable only
-    through a *different* root than the .mod referencing it, must still
-    resolve rather than error out.
+    through a *different* root than the model referencing it, must still
+    resolve rather than error out. Neither of _infer_mrl's two passes (see
+    its own docstring) should tighten that - the strict pass finds nothing
+    under the model's own root and falls through to the tolerant one.
     """
-    root1, root2 = two_roots_same_path
-    vfs = bpy.context.scene.albam.vfs
-
     monkeypatch.setattr(
         mtfw_material, "parse",
         lambda cls, data, app_id: _FakeTex(materials=[data], textures=[data]),
     )
 
-    # A .mod with no matching .mrl in either root - only reachable through
-    # root1's namespace, so root_id="does-not-exist" can never match, and
-    # the lookup has to fall back to root1's .mrl instead of raising.
-    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root1.name)
+    model_root = mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.mod": b"MOD-BYTES",
+    }), display_name="dup-model.arc")
+    mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.mrl": b"SHARED-MRL-BYTES",
+    }), display_name="dup-shared-mrl.arc")
 
-    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id="does-not-exist")
+    vfs = bpy.context.scene.albam.vfs
+    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=model_root.name)
+
+    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=model_root.name)
 
     assert mrl is not None
-    assert mrl.materials[0] == b"MRL-BYTES-ROOT-1"
+    assert mrl.materials[0] == b"SHARED-MRL-BYTES"
+
+
+def test_infer_mrl_prefers_a_later_suffix_under_its_own_root_over_an_earlier_one_elsewhere(
+        mount_vfs_root, monkeypatch):
+    """The exact cross-root leak issue #294 (and review-1 on this fix) named:
+    archives A and B share a name; A (mounted first) holds "dup.mrl", B (the
+    model's own root) holds only "dup_1.mrl". A naive single tolerant pass
+    over suffixes would resolve ".mrl" cross-root to A and stop, never
+    reaching B's own "_1.mrl" - _infer_mrl's strict-then-tolerant two passes
+    (see its own docstring) must take B's "_1.mrl" instead.
+    """
+    monkeypatch.setattr(
+        mtfw_material, "parse",
+        lambda cls, data, app_id: _FakeTex(materials=[data], textures=[data]),
+    )
+
+    mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.mrl": b"MRL-FROM-ROOT-A",
+    }), display_name="dup.arc")
+    root_b = mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.mod": b"MOD-BYTES-B",
+        "models/dup_1.mrl": b"MRL-FROM-ROOT-B-SUFFIX-1",
+    }), display_name="dup.arc")
+
+    vfs = bpy.context.scene.albam.vfs
+    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root_b.name)
+
+    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=root_b.name)
+
+    assert mrl is not None
+    assert mrl.materials[0] == b"MRL-FROM-ROOT-B-SUFFIX-1"

@@ -289,7 +289,7 @@ def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
     return dds
 
 
-def build_blender_textures(app_id, context, parsed_mod, mrl=None, root_id=None):
+def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
     textures = []
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)

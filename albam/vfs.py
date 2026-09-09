@@ -144,7 +144,7 @@ class VirtualFileSystemBase:
     SEPARATOR = "::"
     VFS_ID = "vfs"
 
-    def get_vfile(self, app_id, relative_path, root_id=None):
+    def get_vfile(self, app_id, relative_path, root_id=None, strict=False):
         """The vfile at `relative_path`, preferring the one that also
         belongs to root `root_id` when given.
 
@@ -159,6 +159,16 @@ class VirtualFileSystemBase:
         root - e.g. a shared texture mounted as its own archive alongside
         the model that references it - still resolves via the same
         first-match fallback a plain lookup uses.
+
+        strict (opt-in, default False) turns that fallback off: only an
+        entry actually belonging to root_id resolves, raising KeyError
+        otherwise - every existing caller (root_id alone, or neither
+        argument) keeps the tolerant fallback above, byte-for-byte
+        unchanged. Meant for a caller trying several candidate paths for
+        the same logical file (e.g. mtfw's _infer_mrl trying multiple
+        suffixes): without it, a plain root_id lookup on the *first*
+        candidate can fall back cross-root and return before a *later*
+        candidate under the caller's own root is ever tried.
         """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
@@ -172,7 +182,7 @@ class VirtualFileSystemBase:
                 return vfile
             if fallback is None:
                 fallback = vfile
-        if fallback is not None:
+        if fallback is not None and not strict:
             return fallback
         raise KeyError(file_id)
 
