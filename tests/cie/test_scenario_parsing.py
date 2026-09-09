@@ -20,8 +20,6 @@ import os
 import bpy
 import pytest
 
-from albam.lib import fs_registry
-from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
@@ -78,21 +76,6 @@ def scenarios(archive_path):
         fs.close()
     assert found, "a room archive in this dataset should hold at least one scenario"
     return found
-
-
-@pytest.fixture
-def _clean_scene():
-    # bpy.data and the VFS are session-scoped state: register() runs once per
-    # pytest session, so a test leaving objects or roots behind changes what
-    # the next one sees.
-    before = fs_registry.keys()
-    before_roots = vfs_root_names()
-    yield
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=True)
-    remove_new_vfs_roots(before_roots)
-    bpy.context.scene.albam.exported.file_list.clear()
-    close_new_fs_roots(before)
 
 
 def _parse(data):
