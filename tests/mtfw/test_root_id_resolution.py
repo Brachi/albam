@@ -49,17 +49,17 @@ class _FakeTex:
 def two_roots_same_path(mount_vfs_root):
     """Two roots, same relative paths inside, distinct bytes - the exact
     setup issue #294 describes ("two same-named archives mounted")."""
-    root1 = mount_vfs_root(APP_ID, _memory_fs({
+    root1_id = mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mod": b"MOD-BYTES-ROOT-1",
         "models/dup.mrl": b"MRL-BYTES-ROOT-1",
         "models/dup.tex": b"TEX-BYTES-ROOT-1",
     }), display_name="dup.arc")
-    root2 = mount_vfs_root(APP_ID, _memory_fs({
+    root2_id = mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mod": b"MOD-BYTES-ROOT-2",
         "models/dup.mrl": b"MRL-BYTES-ROOT-2",
         "models/dup.tex": b"TEX-BYTES-ROOT-2",
     }), display_name="dup.arc")
-    return root1, root2
+    return root1_id, root2_id
 
 
 def test_infer_mrl_resolves_through_the_mod_files_own_root(two_roots_same_path, monkeypatch):
@@ -67,7 +67,7 @@ def test_infer_mrl_resolves_through_the_mod_files_own_root(two_roots_same_path, 
     imported (the second root here), not whichever same-path .mrl happened
     to be mounted first (the first root).
     """
-    root1, root2 = two_roots_same_path
+    _root1_id, root2_id = two_roots_same_path
     vfs = bpy.context.scene.albam.vfs
 
     monkeypatch.setattr(
@@ -75,7 +75,7 @@ def test_infer_mrl_resolves_through_the_mod_files_own_root(two_roots_same_path, 
         lambda cls, data, app_id: _FakeTex(materials=[data], textures=[data]),
     )
 
-    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root2.name)
+    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root2_id)
     assert mod_vfile.get_bytes() == b"MOD-BYTES-ROOT-2"
 
     mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=mod_vfile.tree_node.root_id)
@@ -89,7 +89,7 @@ def test_build_blender_textures_resolves_through_the_mod_files_own_root(two_root
     the .mod (and its .mrl) came from, not whichever same-path .tex
     happened to be mounted first.
     """
-    root1, root2 = two_roots_same_path
+    _root1_id, root2_id = two_roots_same_path
 
     monkeypatch.setattr(
         mtfw_texture, "parse",
@@ -106,7 +106,7 @@ def test_build_blender_textures_resolves_through_the_mod_files_own_root(two_root
         materials_data = _FakeMaterialsData()
 
     textures = mtfw_texture.build_blender_textures(
-        APP_ID, bpy.context, _FakeParsedMod(), root_id=root2.name)
+        APP_ID, bpy.context, _FakeParsedMod(), root_id=root2_id)
 
     assert len(textures) == 1
     bl_image = textures[0]
@@ -128,7 +128,7 @@ def test_infer_mrl_still_falls_back_to_a_shared_mrl_mounted_as_its_own_root(
         lambda cls, data, app_id: _FakeTex(materials=[data], textures=[data]),
     )
 
-    model_root = mount_vfs_root(APP_ID, _memory_fs({
+    model_root_id = mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mod": b"MOD-BYTES",
     }), display_name="dup-model.arc")
     mount_vfs_root(APP_ID, _memory_fs({
@@ -136,9 +136,9 @@ def test_infer_mrl_still_falls_back_to_a_shared_mrl_mounted_as_its_own_root(
     }), display_name="dup-shared-mrl.arc")
 
     vfs = bpy.context.scene.albam.vfs
-    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=model_root.name)
+    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=model_root_id)
 
-    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=model_root.name)
+    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=model_root_id)
 
     assert mrl is not None
     assert mrl.materials[0] == b"SHARED-MRL-BYTES"
@@ -161,15 +161,15 @@ def test_infer_mrl_prefers_a_later_suffix_under_its_own_root_over_an_earlier_one
     mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mrl": b"MRL-FROM-ROOT-A",
     }), display_name="dup.arc")
-    root_b = mount_vfs_root(APP_ID, _memory_fs({
+    root_b_id = mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mod": b"MOD-BYTES-B",
         "models/dup_1.mrl": b"MRL-FROM-ROOT-B-SUFFIX-1",
     }), display_name="dup.arc")
 
     vfs = bpy.context.scene.albam.vfs
-    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root_b.name)
+    mod_vfile = vfs.get_vfile(APP_ID, "models/dup.mod", root_id=root_b_id)
 
-    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=root_b.name)
+    mrl = mtfw_material._infer_mrl(bpy.context, mod_vfile, APP_ID, root_id=root_b_id)
 
     assert mrl is not None
     assert mrl.materials[0] == b"MRL-FROM-ROOT-B-SUFFIX-1"
@@ -192,7 +192,7 @@ def test_build_blender_textures_prefers_rtex_under_its_own_root_over_tex_elsewhe
     mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.tex": b"TEX-FROM-ROOT-A",
     }), display_name="dup.arc")
-    root_b = mount_vfs_root(APP_ID, _memory_fs({
+    root_b_id = mount_vfs_root(APP_ID, _memory_fs({
         "models/dup.mod": b"MOD-BYTES-B",
         "models/dup.rtex": b"RTEX-FROM-ROOT-B",
     }), display_name="dup.arc")
@@ -204,7 +204,7 @@ def test_build_blender_textures_prefers_rtex_under_its_own_root_over_tex_elsewhe
         materials_data = _FakeMaterialsData()
 
     textures = mtfw_texture.build_blender_textures(
-        APP_ID, bpy.context, _FakeParsedMod(), root_id=root_b.name)
+        APP_ID, bpy.context, _FakeParsedMod(), root_id=root_b_id)
 
     assert len(textures) == 1
     bl_image = textures[0]

@@ -168,6 +168,12 @@ def mount_vfs_root():
     failed: leaving the roots behind turns one real failure into a cascade of
     unrelated ones. Roots come out in reverse order, and only the ones actually
     mounted, so nothing has to be kept in sync by hand.
+
+    Returns the root_id *string*, not the VirtualFile: a reference taken
+    before further file_list.add() calls (any later mount) goes stale and
+    silently reads back as "" (see _expand_archive's comment in albam/vfs.py
+    and add_fs_root's own re-fetch), which a test would then pass root_id=""
+    around without noticing.
     """
     mounted = []
 
@@ -179,8 +185,9 @@ def mount_vfs_root():
         # mounted (see its own docstring), and reconstructing the unsuffixed
         # form here would then miss the real root at teardown, leaking it.
         # root_vfile.name is whatever key actually got used.
-        mounted.append(root_vfile.name)
-        return root_vfile
+        root_id = root_vfile.name
+        mounted.append(root_id)
+        return root_id
 
     yield mount
 
