@@ -1270,12 +1270,22 @@ def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
     see the .ksy comment on `symmetry`. A mirror target is an id in this
     file's own bone table, so one pointing outside `written_bone_ids` comes
     back as NO_MIRROR_BONE, the same as a bone the source never paired.
+
+    The table is positional in the file - row i belongs to bin.bones[i] -
+    and a bone id can repeat there (a known RE4UHD quirk, see PR #297), so
+    it is never safe to key a lookup by id alone: two different rows can
+    share one id and disagree. What breaks that tie here is
+    _build_armature's own collapse, `{b.bone_id: b for b in bin.bones}` -
+    only the LAST occurrence of a repeated id becomes that id's Blender
+    bone, carrying that occurrence's rest position and parent. `mirrors`
+    below applies the identical last-occurrence-wins rule, so the mirror
+    written for a bone always comes from the same source row as everything
+    else about that bone. When a source file's own table lists one id
+    twice with different data, only that last row's data survives the
+    round trip at all - a limitation of the bone table itself (the same
+    duplicate-id class as issue #265), not something this function can
+    recover on its own.
     """
-    # A bone id can repeat in the model's own table (two different bones
-    # given the same id - a known RE4UHD quirk, see PR #297), and the source
-    # array is positional, so two different mirror values can land on one
-    # id here. A real mirror wins over NO_MIRROR_BONE rather than whichever
-    # position happened to come first.
     mirrors = {}
     for bl_mesh_ob in bl_mesh_objs:
         own_ids = bl_mesh_ob.get(BONE_IDS_PROPERTY)
@@ -1283,8 +1293,7 @@ def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
         if not own_ids or not own_mirrors:
             continue
         for bone_id, mirror_id in zip(own_ids, own_mirrors):
-            if mirrors.get(bone_id, NO_MIRROR_BONE) == NO_MIRROR_BONE:
-                mirrors[bone_id] = mirror_id
+            mirrors[bone_id] = mirror_id
     if not mirrors or not dst_bones:
         return None
 
