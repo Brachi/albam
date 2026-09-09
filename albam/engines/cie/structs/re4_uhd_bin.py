@@ -1029,6 +1029,14 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             # from a bogus absolute offset. None of a several-hundred-file
             # sample of the shipped game uses a header this short, but a
             # reader has no business assuming that always holds.
+            #
+            # This branch is a deliberate hand edit that a straight
+            # regeneration from re4-uhd-bin.ksy does not produce: ksy's `if:`
+            # makes an absent field raise on access rather than read as 0,
+            # which is what every guard downstream (bone_pairs, adjacent,
+            # indexes, indexes2, and fs.py) needs, so the .ksy declares these
+            # four unconditionally and this reader carries the defaulting.
+            # Reapply it if this file is ever regenerated (see issue #271).
             if self.offset_bones > 0x40:
                 self.offset_bonepairs = self._io.read_u4le()
                 self.offset_adjacents = self._io.read_u4le()
