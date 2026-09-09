@@ -52,6 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- A model imported from the second of two same-named archives taking its
+  materials and textures from the first archive's `.mrl` and `.tex` files, so
+  the mesh was right but silently wore the other archive's look
 
 ### Changed
 

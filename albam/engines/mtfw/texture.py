@@ -289,7 +289,7 @@ def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
     return dds
 
 
-def build_blender_textures(app_id, context, parsed_mod, mrl=None):
+def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
     textures = []
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
@@ -306,18 +306,35 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         if RtexCls == Rtex157 and texture_type == 2013850128:
             is_rtex = True
             ext = ".rtex"
-        try:
-            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ext)
-            tex_bytes = texture_vfile.get_bytes()
-        except KeyError:
-            tex_bytes = None
-        if RtexCls == Rtex112 and not tex_bytes:
-            try:
-                texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".rtex")
-                tex_bytes = texture_vfile.get_bytes()
-                is_rtex = True
-            except KeyError:
-                tex_bytes = None
+        # Candidate extensions for the same logical texture, in preference
+        # order: re5/dmc4 (Rtex112) store it as either ".tex" or ".rtex".
+        candidates = [(ext, is_rtex)]
+        if RtexCls == Rtex112:
+            candidates.append((".rtex", True))
+        # Two passes, strict first, mirroring _infer_mrl: root_id prefers
+        # the model's own mounted root, but a tolerant lookup on the
+        # *first* candidate can fall back cross-root and win before the
+        # second candidate under the model's own root is ever tried (two
+        # same-named archives, one holding "x.tex", the model's own only
+        # "x.rtex") - exactly the failure issue #294 describes. The strict
+        # pass considers every candidate under root_id alone before any
+        # cross-root fallback; the tolerant pass then preserves
+        # get_vfile's fallback for a texture genuinely mounted as its own
+        # root elsewhere.
+        tex_bytes = None
+        for strict in (True, False):
+            for cand_ext, cand_is_rtex in candidates:
+                try:
+                    texture_vfile = context.scene.albam.vfs.get_vfile(
+                        app_id, texture_path + cand_ext, root_id=root_id, strict=strict)
+                    tex_bytes = texture_vfile.get_bytes()
+                except KeyError:
+                    continue
+                if tex_bytes:
+                    is_rtex = cand_is_rtex
+                    break
+            if tex_bytes:
+                break
         if not tex_bytes:
             # Both cases append None - assign_textures() tells them apart by
             # the path, and only the placeholder is skipped there.
