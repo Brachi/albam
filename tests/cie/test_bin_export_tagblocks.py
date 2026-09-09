@@ -101,7 +101,8 @@ def test_morphs_round_trip_through_export(game_root, local_app_id, local_archive
                                           _clean_scene):
     """A morph-carrying model keeps a morph block after export, and every
     entry id it writes is a valid corner index - the format question issue
-    #266 raised (see report.md item 1: the framing needed no import fix,
+    #266 raised, settled by the measurements recorded in the .ksy comments
+    on morph_group and morph_group_body (the framing needed no import fix,
     so this exercises only the writer)."""
     entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
     if "morphs" not in entry["carries"]:
@@ -130,11 +131,27 @@ def test_morphs_round_trip_through_export(game_root, local_app_id, local_archive
         for vertex in group.body.vertices:
             assert 0 <= vertex.id < reparsed.header.num_vertices
 
+    # The morph block is num_morph_groups (u4), the group table, then the
+    # bodies - and nothing else may be laid out inside that span, or the
+    # block that follows overwrites a morph the game is about to read.
+    header = reparsed.header
+    morph_body_size = 8 * sum(g.count for g in reparsed.morphs.morph_groups)
+    morph_end = (header.offset_morphs + 4 +
+                 8 * len(reparsed.morphs.morph_groups) + morph_body_size)
+    following = [offset for offset in (
+        header.offset_bones, header.offset_weights, header.offset_bonepairs,
+        header.offset_adjacents, header.offset_vertex_position,
+        header.offset_vertex_normals, header.offset_index_buffer,
+        header.offset_index_buffer2, header.offset_vertex_colors,
+        header.offset_vertex_texcoord, header.offset_materials)
+        if offset > header.offset_morphs]
+    assert morph_end <= min(following), (morph_end, min(following))
+
 
 def test_bone_pairs_round_trip_through_export(game_root, local_app_id, local_archive_path_hash,
                                               _clean_scene):
     """The DBL_JNT block survives an unedited round trip for every line whose
-    bones are still present (see report.md item 3)."""
+    bones are still present - see the .ksy comment on pair_line."""
     entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
     if "bone_pairs" not in entry["carries"]:
         pytest.skip("this archive carries no bone pairs")
@@ -170,7 +187,7 @@ def test_bone_pairs_round_trip_through_export(game_root, local_app_id, local_arc
 def test_symmetry_round_trips_through_export(game_root, local_app_id, local_archive_path_hash,
                                              _clean_scene):
     """The pXFlip mirror table survives an unedited round trip, decoded
-    big-endian as report.md item 4 established, for every bone still
+    big-endian as the .ksy comment on symmetry records, for every bone still
     written."""
     entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
     if "symmetry" not in entry["carries"]:

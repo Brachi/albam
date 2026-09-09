@@ -45,6 +45,12 @@ BIN_FLAG_BONEPAIRS = 0x00000100
 # bonepair and adjacency blocks are present, the second where they are not.
 VERSION_FLAGS_WITH_TAGS = 0x20030818
 VERSION_FLAGS_PLAIN = 0x20010801
+# unk_01 goes in step with the build stamp: measured across 184 shipped mesh
+# .bin files in 8 character archives, every tagged file pairs
+# VERSION_FLAGS_WITH_TAGS with 0x50 and every untagged one pairs
+# VERSION_FLAGS_PLAIN with 0, without exception.
+UNK_01_WITH_TAGS = 0x50
+UNK_01_PLAIN = 0
 
 NO_PARENT = 0xFF
 NO_TEXTURE = 0xFF
@@ -54,7 +60,7 @@ MAX_VERTICES = 0xFFFF
 # A morph delta is an s2, pre-multiplied by 2 ** vertex_scale.
 MORPH_DELTA_MIN = -32768
 MORPH_DELTA_MAX = 32767
-# u4 count + (u4 offset + u4 count) per group.
+# u4 offset + u4 count, per group.
 MORPH_GROUP_ENTRY_SIZE = 8
 # id (u2) + 3 * s2 delta.
 MORPH_VERTEX_SIZE = 8
@@ -1216,24 +1222,20 @@ def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
     return dst_material
 
 
-def _serialize_bone_pairs(dst_bin, bl_mesh_objs, resolvable_ids):
+def _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids):
     """The DBL_JNT block, from BONE_PAIRS_PROPERTY - see its comment.
 
-    `resolvable_ids` is every id the shared armature can name, not just the
-    ones this model's own bone table carries: measured on real files, a
-    helper joint's line can name a bone the model's own (possibly partial)
-    table leaves out - the same way a weight can (see _bones_to_write) - so
-    checking against the written table alone drops lines shipped files keep.
-    A line naming a bone the armature has lost entirely is dropped rather
-    than written broken.
+    A line's three ids are resolved against this file's own bone table, so
+    `written_bone_ids` is the ids that table is about to carry. A line naming
+    anything else is dropped rather than written pointing at nothing.
     """
     dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
     dst_lines = []
     for bl_mesh_ob in bl_mesh_objs:
         raw = bl_mesh_ob.get(BONE_PAIRS_PROPERTY) or ()
         for helper_id, bone_a_id, bone_b_id, percent in chunks(list(raw), 4):
-            if (helper_id not in resolvable_ids or bone_a_id not in resolvable_ids
-                    or bone_b_id not in resolvable_ids):
+            if (helper_id not in written_bone_ids or bone_a_id not in written_bone_ids
+                    or bone_b_id not in written_bone_ids):
                 print(f"[re4uhd] WARNING: dropping bone pair "
                       f"({helper_id}, {bone_a_id}, {bone_b_id}, {percent}) - "
                       f"a bone it names is not being exported")
@@ -1253,13 +1255,11 @@ def _serialize_bone_pairs(dst_bin, bl_mesh_objs, resolvable_ids):
     return dst_bone_pairs
 
 
-def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, resolvable_ids):
+def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
     """The pXFlip mirror table, one entry per written bone in table order -
-    see the .ksy comment on `symmetry`. `resolvable_ids` is every id the
-    shared armature can name - see _serialize_bone_pairs for why a mirror
-    target can be valid without being in this model's own bone table. A
-    mirror that points at a bone the armature has lost entirely comes back
-    as NO_MIRROR_BONE, the same as a bone the source never paired.
+    see the .ksy comment on `symmetry`. A mirror target is an id in this
+    file's own bone table, so one pointing outside `written_bone_ids` comes
+    back as NO_MIRROR_BONE, the same as a bone the source never paired.
     """
     # A bone id can repeat in the model's own table (two different bones
     # given the same id - a known RE4UHD quirk, see PR #297), and the source
@@ -1281,7 +1281,7 @@ def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, resolvable_ids):
     dst_symmetry = dst_bin.Symmetry(_parent=dst_bin, _root=dst_bin._root)
     dst_symmetry.num_bones = len(dst_bones)
     dst_symmetry.mirror_bone_ids = [
-        mirror_id if (mirror_id := mirrors.get(bone.bone_id, NO_MIRROR_BONE)) in resolvable_ids
+        mirror_id if (mirror_id := mirrors.get(bone.bone_id, NO_MIRROR_BONE)) in written_bone_ids
         else NO_MIRROR_BONE
         for bone in dst_bones
     ]
@@ -1313,18 +1313,23 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
     """Shape keys beyond Basis as morph groups - see the .ksy comments on
     morph_block / morph_group / morph_group_body.
 
-    One group per shape key name, ordered the way import names them ("000",
-    "001", ... - see _build_shape_keys), so an unedited model's morph order
-    survives the round trip. Within a group, one entry per corner whose
-    source vertex moved in that key - `id` is the corner's own index into
-    the model's flat per-corner arrays, exactly what building `positions`
-    already gave it (see _collect_geometry).
+    One group per shape key name, in Blender's own key_blocks order - the
+    order import creates them in ("000", "001", ..., see _build_shape_keys)
+    and the one the user sees and can reorder. The game addresses a morph by
+    its group index, so a key that moves nothing is still written, as an
+    empty group, rather than renumbering every key after it. Within a group,
+    one entry per corner whose source vertex moved in that key - `id` is the
+    corner's own index into the model's flat per-corner arrays, exactly what
+    building `positions` already gave it (see _collect_geometry).
     """
-    names = set()
+    names = []
     for bl_mesh_ob in bl_mesh_objs:
         keys = bl_mesh_ob.data.shape_keys
-        if keys:
-            names.update(key.name for key in keys.key_blocks[1:])
+        if not keys:
+            continue
+        for key in keys.key_blocks[1:]:
+            if key.name not in names:
+                names.append(key.name)
     if not names:
         return None
 
@@ -1335,12 +1340,16 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
     dst_morphs = dst_bin.MorphBlock(_parent=dst_bin, _root=dst_bin._root)
     clamped = False
     dst_groups = []
-    for name in sorted(names):
+    for name in names:
         entries = []
         for bl_mesh_ob in bl_mesh_objs:
             keys = bl_mesh_ob.data.shape_keys
             if not keys or name not in keys.key_blocks:
                 continue
+            # A delta is the difference of two positions, so it goes through
+            # the linear part of the same transform _collect_geometry bakes
+            # into those positions.
+            matrix = bl_mesh_ob.matrix_world.to_3x3()
             basis = keys.key_blocks[0]
             shape_key = keys.key_blocks[name]
             for vertex in bl_mesh_ob.data.vertices:
@@ -1348,7 +1357,7 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
                 shape_co = shape_key.data[vertex.index].co
                 if shape_co == basis_co:
                     continue
-                delta = shape_co - basis_co
+                delta = matrix @ (shape_co - basis_co)
                 raw = _zy_flip(delta.x, delta.y, delta.z)
                 deltas = [round(v * extra_scale) for v in raw]
                 if any(v < MORPH_DELTA_MIN or v > MORPH_DELTA_MAX for v in deltas):
@@ -1356,14 +1365,11 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
                 dx, dy, dz = (max(MORPH_DELTA_MIN, min(MORPH_DELTA_MAX, v)) for v in deltas)
                 for corner_index in corners_by_vertex.get((bl_mesh_ob, vertex.index), ()):
                     entries.append((corner_index, dx, dy, dz))
-        if entries:
-            dst_groups.append(_serialize_morph_group(dst_bin, dst_morphs, entries))
+        dst_groups.append(_serialize_morph_group(dst_bin, dst_morphs, entries))
 
     if clamped:
         print("[re4uhd] WARNING: a morph delta exceeded what vertex_scale allows "
               "and was clamped")
-    if not dst_groups:
-        return None
 
     dst_morphs.num_morph_groups = len(dst_groups)
     dst_morphs.morph_groups = dst_groups
@@ -1447,14 +1453,14 @@ def export_bin(bl_obj):
     if dst_morphs:
         dst_bin.morphs = dst_morphs
     if armature:
-        # Every id the shared armature can still name, which the DBL_JNT and
-        # symmetry blocks may reference beyond this model's own (possibly
-        # partial) bone table - see _serialize_bone_pairs.
-        resolvable_ids = {_bone_id(bone, i) for i, bone in enumerate(armature.data.bones)}
-        dst_bone_pairs = _serialize_bone_pairs(dst_bin, bl_mesh_objs, resolvable_ids)
+        # The DBL_JNT and symmetry blocks name bones by id, and the game
+        # resolves those against this file's own bone table - so they are
+        # checked against the ids that table actually writes.
+        written_bone_ids = {bone.bone_id for bone in dst_bin.bones}
+        dst_bone_pairs = _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids)
         if dst_bone_pairs:
             dst_bin.bone_pairs = dst_bone_pairs
-        dst_symmetry = _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bin.bones, resolvable_ids)
+        dst_symmetry = _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bin.bones, written_bone_ids)
         if dst_symmetry:
             dst_bin.symmetry_table = dst_symmetry
 
@@ -1617,9 +1623,9 @@ def _layout_and_write(dst_bin, num_vertices):
     header.flags = (BIN_FLAG_IS_MESH
                     | (BIN_FLAG_BONEPAIRS if has_bone_pairs else 0)
                     | (BIN_FLAG_ADJACENCY if has_symmetry else 0))
-    header.version_flags = (VERSION_FLAGS_WITH_TAGS if (has_bone_pairs or has_symmetry)
-                            else VERSION_FLAGS_PLAIN)
-    header.unk_01 = 0
+    tagged = has_bone_pairs or has_symmetry
+    header.version_flags = VERSION_FLAGS_WITH_TAGS if tagged else VERSION_FLAGS_PLAIN
+    header.unk_01 = UNK_01_WITH_TAGS if tagged else UNK_01_PLAIN
 
     offset = HEADER_SIZE
     header.offset_bones = HEADER_SIZE
@@ -1632,7 +1638,9 @@ def _layout_and_write(dst_bin, num_vertices):
     header.offset_morphs = offset if has_morphs else 0
     if has_morphs:
         morph_groups = dst_bin.morphs.morph_groups
-        morph_block_size = (MORPH_GROUP_ENTRY_SIZE * len(morph_groups)
+        # The leading u4 num_morph_groups, then the group table, then the
+        # bodies the table points at.
+        morph_block_size = (4 + MORPH_GROUP_ENTRY_SIZE * len(morph_groups)
                             + sum(MORPH_VERTEX_SIZE * len(g.body.vertices) for g in morph_groups))
         offset = _align(offset + morph_block_size)
 
