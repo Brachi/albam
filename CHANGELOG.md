@@ -55,6 +55,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- A model imported from the second of two same-named archives taking its
+  materials and textures from the first archive's `.mrl` and `.tex` files, so
+  the mesh was right but silently wore the other archive's look
 
 ### Changed
 
