@@ -1019,8 +1019,13 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self.num_vertex_normals = self._io.read_u2le()
             self.version_flags = self._io.read_u4le()
             # offset_bones doubles as the header's own size (0x40, 0x50 or
-            # 0x60 - see re4-uhd-bin.ksy): a 0x40 header stops right here,
-            # before these four trailing offsets exist in the file at all.
+            # 0x60 - see re4-uhd-bin.ksy). Everything above is exactly 0x40
+            # bytes, and these four trailing u4s bring it to exactly 0x50, so
+            # a 0x50 header does state all four and is read like a 0x60 one
+            # (0x60 is those same 0x50 bytes plus 16 of padding nothing
+            # reads, which is why size_ is 96 while _write__seq emits 80).
+            # Only a 0x40 header stops right here, before these four exist in
+            # the file at all.
             # Reading them unconditionally, as this generated file used to,
             # would consume the next 16 bytes of whatever actually follows
             # the header - bone data, for such a file - as if they were these
