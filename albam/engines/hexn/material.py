@@ -6,7 +6,7 @@ from kaitaistruct import KaitaiStream
 
 from .texture import build_blender_textures, _texture_suffix
 from .structs.hexane_matb import HexaneMatb
-from ...lib.blender import layout_node_chains
+from ...lib.blender import ensure_material_nodes, layout_node_chains
 
 # A .matb's texture paths end in a two-character suffix identifying their
 # role (e.g. "..._skel_d.dds", "..._skel_n.dds") - confirmed against a
@@ -68,7 +68,7 @@ def build_blender_materials(edgemodel, context, root_id=None):
             continue
 
         bl_material = bpy.data.materials.new(os.path.basename(material_path))
-        bl_material.use_nodes = True
+        ensure_material_nodes(bl_material)
         # Same as MT Framework's own materials (albam.engines.mtfw.material) -
         # a _d diffuse map's Alpha is wired below whenever the texture has
         # one (hair cards etc. use it as a cutout mask; solid DXT1 diffuse

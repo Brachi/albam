@@ -52,6 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- `Material.use_nodes` deprecation warnings on Blender 5.x, printed once per
+  material built on import. Materials are node-based unconditionally from 5.0
+  on, so the property is only touched now on the versions that still need it
 
 ### Changed
 
