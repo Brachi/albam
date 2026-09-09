@@ -172,19 +172,17 @@ class VirtualFileSystemBase:
         """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
-        if root_id is None:
-            return self.file_list[file_id]
-        fallback = None
+        first = self.file_list.get(file_id)
+        if first is None:
+            raise KeyError(file_id)
+        if root_id is None or first.tree_node.root_id == root_id:
+            return first
         for vfile in self.file_list:
-            if vfile.name != file_id:
-                continue
-            if vfile.tree_node.root_id == root_id:
+            if vfile.name == file_id and vfile.tree_node.root_id == root_id:
                 return vfile
-            if fallback is None:
-                fallback = vfile
-        if fallback is not None and not strict:
-            return fallback
-        raise KeyError(file_id)
+        if strict:
+            raise KeyError(file_id)
+        return first
 
     def select_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
