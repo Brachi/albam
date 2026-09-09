@@ -13,8 +13,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         super(Re4UhdBin, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
-        self._should_write_adjacent = False
-        self.adjacent__enabled = True
         self._should_write_bone_pairs = False
         self.bone_pairs__enabled = True
         self._should_write_bones = False
@@ -29,6 +27,8 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         self.morphs__enabled = True
         self._should_write_normals = False
         self.normals__enabled = True
+        self._should_write_symmetry_table = False
+        self.symmetry_table__enabled = True
         self._should_write_texcoords = False
         self.texcoords__enabled = True
         self._should_write_vertex_colors = False
@@ -47,11 +47,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
     def _fetch_instances(self):
         pass
         self.header._fetch_instances()
-        _ = self.adjacent
-        if hasattr(self, '_m_adjacent'):
-            pass
-            self._m_adjacent._fetch_instances()
-
         _ = self.bone_pairs
         if hasattr(self, '_m_bone_pairs'):
             pass
@@ -100,6 +95,11 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
                 self._m_normals[i]._fetch_instances()
 
 
+        _ = self.symmetry_table
+        if hasattr(self, '_m_symmetry_table'):
+            pass
+            self._m_symmetry_table._fetch_instances()
+
         _ = self.texcoords
         if hasattr(self, '_m_texcoords'):
             pass
@@ -136,7 +136,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
     def _write__seq(self, io=None):
         super(Re4UhdBin, self)._write__seq(io)
-        self._should_write_adjacent = self.adjacent__enabled
         self._should_write_bone_pairs = self.bone_pairs__enabled
         self._should_write_bones = self.bones__enabled
         self._should_write_indexes = self.indexes__enabled
@@ -144,6 +143,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         self._should_write_materials = self.materials__enabled
         self._should_write_morphs = self.morphs__enabled
         self._should_write_normals = self.normals__enabled
+        self._should_write_symmetry_table = self.symmetry_table__enabled
         self._should_write_texcoords = self.texcoords__enabled
         self._should_write_vertex_colors = self.vertex_colors__enabled
         self._should_write_vertex_positions = self.vertex_positions__enabled
@@ -156,16 +156,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"header", self._root, self.header._root)
         if self.header._parent != self:
             raise kaitaistruct.ConsistencyError(u"header", self, self.header._parent)
-        if self.adjacent__enabled:
-            pass
-            if self.header.offset_adjacents > 0:
-                pass
-                if self._m_adjacent._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"adjacent", self._root, self._m_adjacent._root)
-                if self._m_adjacent._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"adjacent", self, self._m_adjacent._parent)
-
-
         if self.bone_pairs__enabled:
             pass
             if self.header.offset_bonepairs > 0:
@@ -242,6 +232,16 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"normals", self._root, self._m_normals[i]._root)
                 if self._m_normals[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"normals", self, self._m_normals[i]._parent)
+
+
+        if self.symmetry_table__enabled:
+            pass
+            if self.header.offset_adjacents > 0:
+                pass
+                if self._m_symmetry_table._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"symmetry_table", self._root, self._m_symmetry_table._root)
+                if self._m_symmetry_table._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"symmetry_table", self, self._m_symmetry_table._parent)
 
 
         if self.texcoords__enabled:
@@ -333,70 +333,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _check(self):
             self._dirty = False
 
-
-    class BoneAdj(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Re4UhdBin.BoneAdj, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.count = []
-            for i in range(4):
-                self.count.append(self._io.read_u1())
-
-            self.adj = []
-            for i in range(self.count[3]):
-                self.adj.append(self._io.read_u2le())
-
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-            for i in range(len(self.count)):
-                pass
-
-            for i in range(len(self.adj)):
-                pass
-
-
-
-        def _write__seq(self, io=None):
-            super(Re4UhdBin.BoneAdj, self)._write__seq(io)
-            for i in range(len(self.count)):
-                pass
-                self._io.write_u1(self.count[i])
-
-            for i in range(len(self.adj)):
-                pass
-                self._io.write_u2le(self.adj[i])
-
-
-
-        def _check(self):
-            if len(self.count) != 4:
-                raise kaitaistruct.ConsistencyError(u"count", 4, len(self.count))
-            for i in range(len(self.count)):
-                pass
-
-            if len(self.adj) != self.count[3]:
-                raise kaitaistruct.ConsistencyError(u"adj", self.count[3], len(self.adj))
-            for i in range(len(self.adj)):
-                pass
-
-            self._dirty = False
-
-        @property
-        def size_(self):
-            if hasattr(self, '_m_size_'):
-                return self._m_size_
-
-            self._m_size_ = 4 + self.count[3] * 2
-            return getattr(self, '_m_size_', None)
-
-        def _invalidate_size_(self):
-            del self._m_size_
 
     class BonePair(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -767,7 +703,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.offset = self._io.read_u4le()
-            self.num_vertices = self._io.read_u4le()
+            self.count = self._io.read_u4le()
             self._dirty = False
 
 
@@ -784,7 +720,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             super(Re4UhdBin.MorphGroup, self)._write__seq(io)
             self._should_write_body = self.body__enabled
             self._io.write_u4le(self.offset)
-            self._io.write_u4le(self.num_vertices)
+            self._io.write_u4le(self.count)
 
 
         def _check(self):
@@ -808,7 +744,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self._root.header.offset_morphs + self.offset)
+            self._io.seek((self._root.header.offset_morphs + 4) + self.offset)
             self._m_body = Re4UhdBin.MorphGroupBody(self._io, self, self._root)
             self._m_body._read()
             self._io.seek(_pos)
@@ -822,7 +758,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _write_body(self):
             self._should_write_body = False
             _pos = self._io.pos()
-            self._io.seek(self._root.header.offset_morphs + self.offset)
+            self._io.seek((self._root.header.offset_morphs + 4) + self.offset)
             self._m_body._write__seq(self._io)
             self._io.seek(_pos)
 
@@ -834,9 +770,8 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.header = self._io.read_u4le()
             self.vertices = []
-            for i in range(self._parent.num_vertices):
+            for i in range(self._parent.count):
                 _t_vertices = Re4UhdBin.MorphVertex(self._io, self, self._root)
                 try:
                     _t_vertices._read()
@@ -856,7 +791,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.MorphGroupBody, self)._write__seq(io)
-            self._io.write_u4le(self.header)
             for i in range(len(self.vertices)):
                 pass
                 self.vertices[i]._write__seq(self._io)
@@ -864,8 +798,8 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if len(self.vertices) != self._parent.num_vertices:
-                raise kaitaistruct.ConsistencyError(u"vertices", self._parent.num_vertices, len(self.vertices))
+            if len(self.vertices) != self._parent.count:
+                raise kaitaistruct.ConsistencyError(u"vertices", self._parent.count, len(self.vertices))
             for i in range(len(self.vertices)):
                 pass
                 if self.vertices[i]._root != self._root:
@@ -915,7 +849,10 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.data = self._io.read_bytes(8)
+            self.helper_bone_id = self._io.read_u2le()
+            self.bone_a_id = self._io.read_u2le()
+            self.bone_b_id = self._io.read_u2le()
+            self.percent = self._io.read_u2le()
             self._dirty = False
 
 
@@ -925,12 +862,13 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Re4UhdBin.PairLine, self)._write__seq(io)
-            self._io.write_bytes(self.data)
+            self._io.write_u2le(self.helper_bone_id)
+            self._io.write_u2le(self.bone_a_id)
+            self._io.write_u2le(self.bone_b_id)
+            self._io.write_u2le(self.percent)
 
 
         def _check(self):
-            if len(self.data) != 8:
-                raise kaitaistruct.ConsistencyError(u"data", 8, len(self.data))
             self._dirty = False
 
 
@@ -989,6 +927,56 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
         def _check(self):
             self._dirty = False
 
+
+    class Symmetry(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Re4UhdBin.Symmetry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.num_bones = self._io.read_u4be()
+            self.mirror_bone_ids = []
+            for i in range(self.num_bones):
+                self.mirror_bone_ids.append(self._io.read_s2be())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.mirror_bone_ids)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Re4UhdBin.Symmetry, self)._write__seq(io)
+            self._io.write_u4be(self.num_bones)
+            for i in range(len(self.mirror_bone_ids)):
+                pass
+                self._io.write_s2be(self.mirror_bone_ids[i])
+
+
+
+        def _check(self):
+            if len(self.mirror_bone_ids) != self.num_bones:
+                raise kaitaistruct.ConsistencyError(u"mirror_bone_ids", self.num_bones, len(self.mirror_bone_ids))
+            for i in range(len(self.mirror_bone_ids)):
+                pass
+
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4 + self.num_bones * 2
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class UhdBinHeader(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1152,41 +1140,6 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
 
         def _check(self):
             self._dirty = False
-
-
-    @property
-    def adjacent(self):
-        if self._should_write_adjacent:
-            self._write_adjacent()
-        if hasattr(self, '_m_adjacent'):
-            return self._m_adjacent
-
-        if not self.adjacent__enabled:
-            return None
-
-        if self.header.offset_adjacents > 0:
-            pass
-            _pos = self._io.pos()
-            self._io.seek(self.header.offset_adjacents)
-            self._m_adjacent = Re4UhdBin.BoneAdj(self._io, self, self._root)
-            self._m_adjacent._read()
-            self._io.seek(_pos)
-
-        return getattr(self, '_m_adjacent', None)
-
-    @adjacent.setter
-    def adjacent(self, v):
-        self._dirty = True
-        self._m_adjacent = v
-
-    def _write_adjacent(self):
-        self._should_write_adjacent = False
-        if self.header.offset_adjacents > 0:
-            pass
-            _pos = self._io.pos()
-            self._io.seek(self.header.offset_adjacents)
-            self._m_adjacent._write__seq(self._io)
-            self._io.seek(_pos)
 
 
     @property
@@ -1452,6 +1405,41 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self._m_normals[i]._write__seq(self._io)
 
         self._io.seek(_pos)
+
+    @property
+    def symmetry_table(self):
+        if self._should_write_symmetry_table:
+            self._write_symmetry_table()
+        if hasattr(self, '_m_symmetry_table'):
+            return self._m_symmetry_table
+
+        if not self.symmetry_table__enabled:
+            return None
+
+        if self.header.offset_adjacents > 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_adjacents)
+            self._m_symmetry_table = Re4UhdBin.Symmetry(self._io, self, self._root)
+            self._m_symmetry_table._read()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_symmetry_table', None)
+
+    @symmetry_table.setter
+    def symmetry_table(self, v):
+        self._dirty = True
+        self._m_symmetry_table = v
+
+    def _write_symmetry_table(self):
+        self._should_write_symmetry_table = False
+        if self.header.offset_adjacents > 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(self.header.offset_adjacents)
+            self._m_symmetry_table._write__seq(self._io)
+            self._io.seek(_pos)
+
 
     @property
     def texcoords(self):
