@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- Resident Evil 4 UHD models whose bone table names the same bone id twice
+  exporting with one of the two entries missing, and the surviving one given
+  the other's position. Such a model could not be edited at all: the exporter
+  had no way to write back the table it came with
 
 ### Changed
 
