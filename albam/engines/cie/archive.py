@@ -47,7 +47,6 @@ PACK_ENTRY_HEADER_SIZE = 16
 # So this is both what a shipped layout looks like and what a rebuilt entry is
 # laid out by.
 PACK_DATA_ALIGNMENT = 128
-DDS_MAGIC = b"DDS "
 
 
 @blender_registry.register_fs_root_loader(app_id="re4uhd", extension="lfs")
@@ -236,16 +235,14 @@ def _build_pack_entry(entry, data):
     `unk_02` are that pack's own id split over two u2 fields in every one of
     them - so neither is guessed here, both are simply kept.
 
-    The DDS flag is kept too, and only cleared for a replacement that is not a
-    DDS. A shipped pack never flags an entry that isn't one, but it does leave
-    the flag clear over DDS bytes - 6650 of the 9882 such entries - so setting
-    it from the replacement's own magic would rewrite what those entries say
-    while nothing suggests the game reads it that way.
+    The DDS flag is the entry's own like every other header word. A shipped
+    pack leaves it clear over DDS bytes - 6650 of the 9882 such entries - so
+    setting it from the replacement's own bytes would rewrite what those
+    entries say while nothing suggests the game reads it that way.
     """
     body = entry.data
-    is_dds = body.is_dds if data[:4] == DDS_MAGIC else 0
     return struct.pack("<IIHHI", len(data), body.unk_00, body.unk_01, body.unk_02,
-                       is_dds) + bytes(data)
+                       body.is_dds) + bytes(data)
 
 
 def _pack_data_offset(end_of_previous):

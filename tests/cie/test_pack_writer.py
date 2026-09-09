@@ -30,8 +30,8 @@ DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 with open(os.path.join(DATASETS_DIR, "lfs_parsing_hashes.json")) as f:
     PACK_DATASET = [d for d in json.load(f) if d["payload_extension"] == ".pack"]
 
-# A DDS albam would never have to decode: the writer only ever looks at the
-# magic, to decide the entry's own DDS flag.
+# Payloads albam would never have to decode: the writer copies a replacement's
+# bytes through without reading them.
 FAKE_DDS = b"DDS " + b"\x7f" * 220
 FAKE_TGA = b"\x00\x00\x02\x00" + b"\x11" * 180
 
@@ -174,24 +174,21 @@ def test_the_last_entry_growing_leaves_no_trailing_bytes(pack):
         assert len(rebuilt) == last + PACK_ENTRY_HEADER_SIZE + len(replacement)
 
 
-def test_the_dds_flag_is_kept_and_only_ever_cleared(pack):
-    """A shipped pack never flags an entry that isn't a DDS, but it does leave
-    the flag clear over DDS bytes - so a DDS replacement keeps whatever the
-    entry said, and only a replacement that isn't one clears it.
+def test_the_dds_flag_is_always_carried_through_unchanged(pack):
+    """The flag is the entry's own, whatever the replacement's bytes are: a
+    shipped pack leaves it clear over DDS bytes just as often as it sets it, so
+    the replacement never gets a say in it.
 
     Read back through the entry names, which is what the flag decides.
     """
     flagged, unflagged, tga = _entries(pack)
+    names = [flagged[0], unflagged[0], tga[0]]
 
-    rebuilt = _rebuild_pack(pack, {flagged[0]: FAKE_DDS + b"\x03" * 8})
-    assert [n for n, _d in _entries(rebuilt)] == [flagged[0], unflagged[0], tga[0]]
-
-    rebuilt = _rebuild_pack(pack, {unflagged[0]: FAKE_DDS})
-    assert [n for n, _d in _entries(rebuilt)] == [flagged[0], unflagged[0], tga[0]]
-
-    rebuilt = _rebuild_pack(pack, {flagged[0]: FAKE_TGA})
-    assert [n for n, _d in _entries(rebuilt)] == \
-        ["0d104000_000.tga", unflagged[0], tga[0]]
+    for name, replacement in ((flagged[0], FAKE_DDS + b"\x03" * 8),
+                              (unflagged[0], FAKE_DDS),
+                              (flagged[0], FAKE_TGA)):
+        rebuilt = _rebuild_pack(pack, {name: replacement})
+        assert [n for n, _d in _entries(rebuilt)] == names
 
 
 def test_a_replacement_is_matched_by_its_number_not_its_archive_name(pack):
