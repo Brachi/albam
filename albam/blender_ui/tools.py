@@ -915,6 +915,10 @@ def set_image_albam_attr(blender_material, app_id, local_path):
 
 
 def rename_bones(armature_ob, app_id, body_type):
+    # A copy: BONE_NAMES holds the module-level BONES_BODY/BONES_HEAD dicts
+    # themselves, and a game's NAME_FIXES entry reassigns ids rather than just
+    # respelling them, so merging in place would corrupt the tables for every other
+    # game renamed later in the same session (see #245).
     names_preset = dict(BONE_NAMES.get(body_type))
     fixed_name = NAME_FIXES.get(body_type, {}).get(app_id)
     bone_name = None
