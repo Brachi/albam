@@ -4,8 +4,9 @@ Every other RE4UHD test reads a shipped model, which is the right way to
 check albam against the format. It cannot pin down a case the shipped data
 only sometimes contains, though, and a test that skips unless the archive it
 was handed happens to hold one proves nothing on the day it skips. A bone
-table naming the same id twice is such a case: 69 of 738 models have one, and
-none of them is in a dataset a CI run can reach.
+table naming the same id twice is such a case: a minority of models have one,
+and whether any is in a dataset a CI run can reach is not something the test
+should depend on.
 
 Built from the generated struct classes (albam/engines/cie/structs), so what
 this writes is the format definition's own idea of a .bin rather than a
