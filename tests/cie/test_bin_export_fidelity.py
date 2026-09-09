@@ -420,6 +420,10 @@ def test_moving_the_armature_does_not_desync_the_mesh_from_its_bones(
     unmoved_positions = _positions(unmoved_bytes)
     moved_positions = _positions(moved_bytes)
     assert moved_positions, "this model should have vertex positions to compare"
+    assert len(moved_positions) == len(unmoved_positions), (
+        f"moving the armature object changed the exported corner count "
+        f"({len(unmoved_positions)} -> {len(moved_positions)})"
+    )
     max_delta = max(
         math.dist(a, b) for a, b in zip(unmoved_positions, moved_positions))
     assert max_delta < 1.0, (

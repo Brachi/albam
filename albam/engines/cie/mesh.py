@@ -721,8 +721,10 @@ def _bone_ids_by_name(all_bones):
     stays inside the u1 the format allows. That position can be the very
     number an id-named bone elsewhere claims - a hand-added bone at index 5
     collides with one named "5" wherever it sits. Claimed ids are therefore
-    reserved up front, and anything colliding with one is nudged to the next
-    free id instead of silently doubling up.
+    reserved up front, and anything colliding with one takes the nearest free
+    id the format allows instead of silently doubling up - a model bound to
+    the upper half of a shared rig leaves the ids below it free, so the
+    search wraps rather than stopping at 254.
     """
     used = {claimed for claimed in (_claimed_id(bone.name) for bone in all_bones)
             if claimed is not None}
@@ -731,14 +733,14 @@ def _bone_ids_by_name(all_bones):
     for i, bone in enumerate(all_bones):
         bone_id = _claimed_id(bone.name)
         if bone_id is None or bone_id in taken:
-            bone_id = min(i, 254)
-            while bone_id in used or bone_id in taken:
-                if bone_id == 254:
-                    raise AlbamCheckFailure(
-                        f"Bone {bone.name!r} has no free bone id left: the format "
-                        "can only name 255 bones and this armature needs more"
-                    )
-                bone_id += 1
+            preferred = min(i, 254)
+            search = list(range(preferred, 255)) + list(range(preferred))
+            bone_id = next((c for c in search if c not in used and c not in taken), None)
+            if bone_id is None:
+                raise AlbamCheckFailure(
+                    f"Bone {bone.name!r} has no free bone id left: the format "
+                    "can only name 255 bones and this armature needs more"
+                )
         taken.add(bone_id)
         ids[bone.name] = bone_id
     return ids
