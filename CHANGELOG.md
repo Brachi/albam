@@ -52,6 +52,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- `.lmt` export retargeting bone ids through whichever armature the import
+  panel currently pointed at, instead of the one the animation was imported
+  onto, silently renumbering or dropping tracks when a second character had
+  been imported since. Export now also refuses a block whose action keys only
+  bones the rig has no "Anim Retarget" id for, instead of writing it out with
+  no tracks
 
 ### Changed
 
