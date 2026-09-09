@@ -173,3 +173,41 @@ def test_infer_mrl_prefers_a_later_suffix_under_its_own_root_over_an_earlier_one
 
     assert mrl is not None
     assert mrl.materials[0] == b"MRL-FROM-ROOT-B-SUFFIX-1"
+
+
+def test_build_blender_textures_prefers_rtex_under_its_own_root_over_tex_elsewhere(
+        mount_vfs_root, monkeypatch):
+    """The same cross-root leak one layer down, for re5/dmc4 (Rtex112), where
+    the same logical texture is either ".tex" or ".rtex": archives A and B
+    share a name; A (mounted first) holds "dup.tex", B (the model's own root)
+    holds only "dup.rtex". A naive tolerant ".tex" lookup would resolve
+    cross-root to A and never try B's own ".rtex" - the strict-then-tolerant
+    passes must take B's ".rtex" instead.
+    """
+    monkeypatch.setattr(
+        mtfw_texture, "parse",
+        lambda cls, data, app_id: _FakeTex(height=2, width=2),
+    )
+
+    mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.tex": b"TEX-FROM-ROOT-A",
+    }), display_name="dup.arc")
+    root_b = mount_vfs_root(APP_ID, _memory_fs({
+        "models/dup.mod": b"MOD-BYTES-B",
+        "models/dup.rtex": b"RTEX-FROM-ROOT-B",
+    }), display_name="dup.arc")
+
+    class _FakeMaterialsData:
+        textures = ["models/dup"]
+
+    class _FakeParsedMod:
+        materials_data = _FakeMaterialsData()
+
+    textures = mtfw_texture.build_blender_textures(
+        APP_ID, bpy.context, _FakeParsedMod(), root_id=root_b.name)
+
+    assert len(textures) == 1
+    bl_image = textures[0]
+    assert bl_image is not None
+    assert bl_image.albam_asset.extension == "rtex"
+    assert bl_image.albam_asset.relative_path == "models/dup.rtex"
