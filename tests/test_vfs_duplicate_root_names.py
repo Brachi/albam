@@ -79,11 +79,26 @@ def _add_duplicate_named_roots():
     return roots
 
 
-def _visible_rows(vfs):
-    """(display_name, root_id) of every row the file tree would draw."""
+def _visible_rows(vfs, root_ids):
+    """(display_name, root_id) of the rows the file tree would draw for
+    `root_ids`, in tree order.
+
+    Scoped to the roots under test on purpose: `vfs.file_list` is shared by
+    the whole session, and other suites' session-scoped game_fs_root
+    fixtures mount their own roots into it and never remove them (they run
+    under CI's --game-dir), so the whole visible list is not this test's to
+    assert on.
+    """
     flags, _ = _FileTreeUI().filter_items(bpy.context, vfs, "file_list")
-    return [(vfs.file_list[i].display_name, vfs.file_list[i].tree_node.root_id)
-            for i, flag in enumerate(flags) if flag]
+    rows = []
+    for i, flag in enumerate(flags):
+        if not flag:
+            continue
+        vfile = vfs.file_list[i]
+        owner = vfile.name if vfile.is_root else vfile.tree_node.root_id
+        if owner in root_ids:
+            rows.append((vfile.display_name, vfile.tree_node.root_id))
+    return rows
 
 
 def _index_of(vfs, root_id, display_name=None):
@@ -124,11 +139,14 @@ def test_expanding_one_of_two_same_named_roots_leaves_the_other_collapsed():
     vfs = bpy.context.scene.albam.vfs
     root_a, root_b = _add_duplicate_named_roots()
 
-    assert _visible_rows(vfs) == [(DUPLICATE_NAME, ""), (DUPLICATE_NAME, "")]
+    assert _visible_rows(vfs, (root_a, root_b)) == [
+        (DUPLICATE_NAME, ""),
+        (DUPLICATE_NAME, ""),
+    ]
 
     _toggle(vfs, root_b)
 
-    assert _visible_rows(vfs) == [
+    assert _visible_rows(vfs, (root_a, root_b)) == [
         (DUPLICATE_NAME, ""),
         (DUPLICATE_NAME, ""),
         ("effect", root_b),
@@ -155,7 +173,7 @@ def test_same_named_roots_expand_their_own_subfolders_independently():
 
     _toggle(vfs, root_b, "effect")
 
-    visible = _visible_rows(vfs)
+    visible = _visible_rows(vfs, (root_a, root_b))
     assert ("thing.mod", root_b) in visible
     assert ("thing.mod", root_a) not in visible
 
