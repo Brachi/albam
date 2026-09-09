@@ -265,15 +265,18 @@ def test_remove_root_unregisters_fs():
     before_size = len(vfs.file_list)
     root = vfs.add_fs_root("re5", _sample_fs(), display_name="removable-root")
     key = root.fs_key
+    # Copied out now: removing the item invalidates every reference into
+    # file_list, so reading root.name afterward reads freed memory.
+    root_name = root.name
     assert fs_registry.get(key) is not None
 
-    vfs.file_list_selected_index = vfs.file_list.find(root.name)
+    vfs.file_list_selected_index = vfs.file_list.find(root_name)
     ALBAM_OT_VirtualFileSystemRemoveRootVFile.execute(
         ALBAM_OT_VirtualFileSystemRemoveRootVFile, bpy.context
     )
 
     assert len(vfs.file_list) == before_size
-    assert vfs.file_list.find(root.name) == -1
+    assert vfs.file_list.find(root_name) == -1
     with pytest.raises(KeyError):
         fs_registry.get(key)
 
