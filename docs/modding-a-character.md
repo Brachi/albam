@@ -133,11 +133,18 @@ Anything you do to the mesh is what gets written:
   value. Note what this is and is not: it re-points the material at a texture
   **already in the archive's texture pack**. Bringing a new image into the game
   is not supported - see below.
+- **Facial morphs** - a model's morph targets arrive as shape keys named `000`,
+  `001`, ... and are written back, edits included.
 
-Two things to keep in mind:
+Three things to keep in mind:
 
 - **Keep the vertex groups.** They are the skinning, named after bone ids. A
   vertex in no group gets pinned to the first bone.
+- **Keep the shape keys in order.** The game asks for a morph by its position
+  in the list, so a key you delete or reorder renames every morph after it -
+  an animation asking for a smile gets whatever now sits at that index. Editing
+  a key in place is fine, and a key that moves nothing is still exported, as an
+  empty morph, rather than shifting the rest up.
 - **There is a size limit.** Both vertex counts in the format are 16-bit, so a
   model cannot exceed 65535 face corners. Corners are shared along a triangle
   strip but never across a UV seam or a shading split, so a mesh needs somewhere
@@ -216,8 +223,6 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 - **A model whose bone table names one bone id twice** cannot be exported
   faithfully; import collapses the two. 69 of 738 models are affected, and the
   build tool keeps their original bytes rather than shipping them wrong.
-- **Morph targets, bone pairs and adjacency** are not written back. A model with
-  facial morphs loses them on export.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
 - **New textures cannot be added.** Nothing writes a `.pack` or a `.tpl`, so a

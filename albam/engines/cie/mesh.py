@@ -1244,8 +1244,9 @@ def _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids):
             if tuple(line) in seen:
                 continue
             seen.add(tuple(line))
-            if (helper_id not in written_bone_ids or bone_a_id not in written_bone_ids
-                    or bone_b_id not in written_bone_ids):
+            if (helper_id not in written_bone_ids or
+                    bone_a_id not in written_bone_ids or
+                    bone_b_id not in written_bone_ids):
                 print(f"[re4uhd] WARNING: dropping bone pair "
                       f"({helper_id}, {bone_a_id}, {bone_b_id}, {percent}) - "
                       f"a bone it names is not being exported")
@@ -1650,9 +1651,9 @@ def _layout_and_write(dst_bin, num_vertices):
     # symmetry blocks are actually written - see the header's own comments.
     has_bone_pairs = bool(getattr(dst_bin, "bone_pairs", None))
     has_symmetry = bool(getattr(dst_bin, "symmetry_table", None))
-    header.flags = (BIN_FLAG_IS_MESH
-                    | (BIN_FLAG_BONEPAIRS if has_bone_pairs else 0)
-                    | (BIN_FLAG_ADJACENCY if has_symmetry else 0))
+    header.flags = (BIN_FLAG_IS_MESH |
+                    (BIN_FLAG_BONEPAIRS if has_bone_pairs else 0) |
+                    (BIN_FLAG_ADJACENCY if has_symmetry else 0))
     tagged = has_bone_pairs or has_symmetry
     header.version_flags = VERSION_FLAGS_WITH_TAGS if tagged else VERSION_FLAGS_PLAIN
     header.unk_01 = UNK_01_WITH_TAGS if tagged else UNK_01_PLAIN
@@ -1670,8 +1671,8 @@ def _layout_and_write(dst_bin, num_vertices):
         morph_groups = dst_bin.morphs.morph_groups
         # The leading u4 num_morph_groups, then the group table, then the
         # bodies the table points at.
-        morph_block_size = (4 + MORPH_GROUP_ENTRY_SIZE * len(morph_groups)
-                            + sum(MORPH_VERTEX_SIZE * len(g.body.vertices) for g in morph_groups))
+        morph_block_size = (4 + MORPH_GROUP_ENTRY_SIZE * len(morph_groups) +
+                            sum(MORPH_VERTEX_SIZE * len(g.body.vertices) for g in morph_groups))
         offset = _align(offset + morph_block_size)
 
     header.offset_bonepairs = offset if has_bone_pairs else 0

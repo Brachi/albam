@@ -177,10 +177,10 @@ def test_bone_pairs_round_trip_through_export(game_root, local_app_id, local_arc
     assert reparsed.header.offset_bonepairs > 0
     assert reparsed.header.flags & BIN_FLAG_BONEPAIRS
 
-    original = {(l.helper_bone_id, l.bone_a_id, l.bone_b_id, l.percent)
-                for l in parsed.bone_pairs.line}
-    exported = {(l.helper_bone_id, l.bone_a_id, l.bone_b_id, l.percent)
-                for l in reparsed.bone_pairs.line}
+    original = {(line.helper_bone_id, line.bone_a_id, line.bone_b_id, line.percent)
+                for line in parsed.bone_pairs.line}
+    exported = {(line.helper_bone_id, line.bone_a_id, line.bone_b_id, line.percent)
+                for line in reparsed.bone_pairs.line}
     # Every line whose three bones the model's own table already had must
     # survive; a line naming a bone that table never carried to begin with
     # (a known RE4UHD partial-table quirk) has nothing in Blender to write
