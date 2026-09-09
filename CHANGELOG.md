@@ -48,6 +48,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autorename Bones applying one game's name corrections to every rig renamed
   afterwards in the same Blender session, silently giving them plausible but
   wrong bone names
+- Two archives added under the same name sharing one file-tree state, so
+  expanding either one listed both archives' contents
+- "Batch import folder" importing a second, same-named archive's identically
+  placed files along with the selected folder's own
 
 ### Changed
 
