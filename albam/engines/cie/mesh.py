@@ -1285,6 +1285,13 @@ def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
     round trip at all - a limitation of the bone table itself (the same
     duplicate-id class as issue #265), not something this function can
     recover on its own.
+
+    Across mesh objects the rule is the other one: their tables are partial
+    and differ, so a mesh whose own table simply does not pair a bone must
+    not blank out a mirror another mesh does carry. Each object resolves
+    its own table first, then merges in preferring a real value over
+    NO_MIRROR_BONE, the way _own_bone_parents and _serialize_bone_pairs
+    already union partial tables.
     """
     mirrors = {}
     for bl_mesh_ob in bl_mesh_objs:
@@ -1292,8 +1299,12 @@ def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
         own_mirrors = bl_mesh_ob.get(BONE_MIRROR_IDS_PROPERTY)
         if not own_ids or not own_mirrors:
             continue
+        own = {}
         for bone_id, mirror_id in zip(own_ids, own_mirrors):
-            mirrors[bone_id] = mirror_id
+            own[bone_id] = mirror_id
+        for bone_id, mirror_id in own.items():
+            if mirrors.get(bone_id, NO_MIRROR_BONE) == NO_MIRROR_BONE:
+                mirrors[bone_id] = mirror_id
     if not mirrors or not dst_bones:
         return None
 
