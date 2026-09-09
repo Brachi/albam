@@ -21,9 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 - Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
+- Export of RE4 UHD facial morphs (as shape keys), the DBL_JNT double-joint bone table, and the pXFlip bone symmetry table. All three used to be read on import and silently dropped on export
 
 ### Fixed
 
+- RE4 UHD's `bone_adj` block was misread as a bone-adjacency table (`count[4]` + `count[3]` `u2`s); it is the game's pXFlip bone-mirror table, one big-endian `s16` per bone in an otherwise little-endian file. Re-reading it this way changes what `bin.symmetry_table` (formerly `bin.adjacent`) returns on import
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
