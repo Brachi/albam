@@ -1,0 +1,12 @@
+[
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "0b6d0ed70a35aeeb",
+    "carries": ["bone_pairs", "symmetry"]
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "b65161651d1791d1",
+    "carries": ["morphs"]
+  }
+]

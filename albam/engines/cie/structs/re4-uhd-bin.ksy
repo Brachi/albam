@@ -25,8 +25,8 @@ instances:
     {pos: header.offset_morphs, type: morph_block, if: header.offset_morphs > 0 }
   bone_pairs:
     {pos: header.offset_bonepairs, type: bone_pair, if: header.offset_bonepairs > 0}
-  adjacent:
-    {pos: header.offset_adjacents, type: bone_adj, if: header.offset_adjacents > 0}
+  symmetry_table:
+    {pos: header.offset_adjacents, type: symmetry, if: header.offset_adjacents > 0}
   vertex_positions:
     {pos: header.offset_vertex_position, type: vec3, repeat: expr, repeat-expr: header.num_vertices}
   normals:
@@ -102,16 +102,24 @@ types:
       size_:
         value: 96
 
-  bone_adj:
+  # The game's pXFlip / symmetry table: one entry per bone, the bone it
+  # mirrors to or -1. Stored big-endian in an otherwise little-endian file -
+  # a leftover of the format's GameCube origin (unverified against a
+  # GameCube .bin, but the byte order itself is measured across 5,709 RE4
+  # UHD models with no exception). Not adjacency: nothing here describes
+  # triangle or face relationships.
+  symmetry:
+    meta:
+      endian: be
     seq:
-      - {id: count, type: u1, repeat: expr, repeat-expr: 4}
-      - id: adj
-        type: u2
+      - {id: num_bones, type: u4}
+      - id: mirror_bone_ids
+        type: s2
         repeat: expr
-        repeat-expr: count[3] # num bones?
+        repeat-expr: num_bones
     instances:
       size_:
-        value: 4 + count[3] * 2
+        value: 4 + num_bones * 2
 
   morph_block:
     seq:
@@ -120,17 +128,19 @@ types:
 
   morph_group:
     seq:
+      # Relative to the group table's own start (offset_morphs + 4), not to
+      # offset_morphs - see morph_group_body.body below. Measured exact
+      # across 389 morph-carrying models, 9,468 non-final groups.
       - {id: offset, type: u4}
-      - {id: num_vertices, type: u4}
+      - {id: count, type: u4}
     instances:
       body:
-        pos: _root.header.offset_morphs + offset
+        pos: _root.header.offset_morphs + 4 + offset
         type: morph_group_body
 
   morph_group_body:
     seq:
-      - {id: header, type: u4}
-      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.num_vertices}
+      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.count}
 
   morph_vertex:
     seq:
@@ -148,10 +158,18 @@ types:
       size_:
         value: 4 + 8*num_pair
 
-  # Four bone ids; what the fourth is for is unknown.
+  # The game's DBL_JNT ("double joint") table: one line per helper bone that
+  # takes the blend-percent-of-the-way orientation between two other bones -
+  # the textbook "double joint" that keeps a bent elbow or knee from
+  # collapsing. `percent` is in the same 0-100 units the weight block uses;
+  # measured 50 in 7,950 of 7,954 lines across 2,643 models, with the four
+  # exceptions all real per-side variation on the same helper joint.
   pair_line:
     seq:
-      - {id: data, size: 8}
+      - {id: helper_bone_id, type: u2}
+      - {id: bone_a_id, type: u2}
+      - {id: bone_b_id, type: u2}
+      - {id: percent, type: u2}
 
   # Positions are local offsets from the parent, in the same units as
   # vertices. Bone ids are not guaranteed unique across a model.
