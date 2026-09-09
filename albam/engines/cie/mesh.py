@@ -1228,12 +1228,22 @@ def _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids):
     A line's three ids are resolved against this file's own bone table, so
     `written_bone_ids` is the ids that table is about to carry. A line naming
     anything else is dropped rather than written pointing at nothing.
+
+    The table is character-wide, so every mesh object exported together
+    carries the same lines: they are merged first-seen, the way
+    _serialize_symmetry merges its mirrors, rather than written once per
+    mesh sharing them.
     """
     dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
     dst_lines = []
+    seen = set()
     for bl_mesh_ob in bl_mesh_objs:
         raw = bl_mesh_ob.get(BONE_PAIRS_PROPERTY) or ()
-        for helper_id, bone_a_id, bone_b_id, percent in chunks(list(raw), 4):
+        for line in chunks(list(raw), 4):
+            helper_id, bone_a_id, bone_b_id, percent = line
+            if tuple(line) in seen:
+                continue
+            seen.add(tuple(line))
             if (helper_id not in written_bone_ids or bone_a_id not in written_bone_ids
                     or bone_b_id not in written_bone_ids):
                 print(f"[re4uhd] WARNING: dropping bone pair "

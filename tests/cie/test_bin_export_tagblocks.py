@@ -126,6 +126,12 @@ def test_morphs_round_trip_through_export(game_root, local_app_id, local_archive
     assert reparsed.morphs is not None
     assert reparsed.header.offset_morphs > 0
     assert reparsed.morphs.num_morph_groups == len(reparsed.morphs.morph_groups)
+    # The game addresses a morph by its group index, so an unedited round
+    # trip keeps every group where it was - none dropped, none renumbered.
+    assert reparsed.morphs.num_morph_groups == parsed.morphs.num_morph_groups
+    # And the deltas themselves came back: a block of empty groups satisfies
+    # every framing assertion below while losing exactly what #266 reports.
+    assert sum(group.count for group in reparsed.morphs.morph_groups) > 0
     for group in reparsed.morphs.morph_groups:
         assert group.count == len(group.body.vertices)
         for vertex in group.body.vertices:
