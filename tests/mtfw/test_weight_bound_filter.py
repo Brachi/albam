@@ -11,8 +11,9 @@ still rounds to 0, so the filter dropped a vertex the exporter kept.
 
 The mod-21 half-float formats encode weights differently again, so the
 filter mirrors whichever branch `_export_vertices` will take: there a
-normalized weight below 1/510 really does serialize to 0 and must not
-count towards that bone's bound.
+normalized weight below 1/510 really does serialize to 0, and the last
+slot is never serialized at all, so neither counts towards its bone's
+bound.
 
 Not reachable through an import/export round trip: importer-derived
 weights come from the file's already-quantized values, so none of them
@@ -185,19 +186,22 @@ def test_ordinary_vertex_is_unaffected(weight_bound_rig):
 
 
 # One 8-influence vertex: A..D are ordinary, E..H are the residue weights.
-# Ranked by weight, E lands in an 8-weight half-float slot that serializes
-# as round(w * 255), and its normalized weight (0.001) is below 1/510, so
-# the exported vertex carries a literal 0 for it.
+# Ranked by weight it fills all eight slots of an 8-weight mod-21 format,
+# so it exercises both ways that format declines to write a weight:
+# E lands in a slot serialized as round(w * 255) and its normalized weight
+# (0.001) is below 1/510, so a literal 0 goes into the file; H lands in the
+# eighth slot, which the vertex struct has no field for at all.
 HALF_FLOAT_RAW_WEIGHTS = {
     "A": 0.5, "B": 0.3, "C": 0.19, "D": 0.005,
     "E": 0.001, "F": 0.0009, "G": 0.0008, "H": 0.0007,
 }
 
 
-def test_half_float_zero_weight_is_not_counted(weight_bound_rig_8):
+def test_half_float_unwritten_weights_are_not_counted(weight_bound_rig_8):
     """The byte path floors every kept influence to at least 1/255, but the
-    mod-21 half-float path does not: a normalized weight under 1/510
-    serializes as 0, so that bone is not skinned and must not get a bound.
+    mod-21 half-float path does not: a weight that serializes as 0, and the
+    eighth weight that is never serialized at all, leave their bones
+    unskinned in the exported file, so neither may get a weight bound.
     """
     armature, mesh_obj = weight_bound_rig_8
     for name, weight in HALF_FLOAT_RAW_WEIGHTS.items():
@@ -205,32 +209,35 @@ def test_half_float_zero_weight_is_not_counted(weight_bound_rig_8):
 
     weights_data = _processed_weights(mesh_obj, max_bones_per_vertex=8, half_float=True)
     weight_values = [w for _, w in weights_data]
-    _, packed_weights, _ = _encode_half_float_weight_slots(weight_values, 8)
+    position_w, packed_weights, packed_weights_2 = _encode_half_float_weight_slots(
+        weight_values, 8)
 
-    bone_index_d = armature.pose.bones.find("D")
-    bone_index_e = armature.pose.bones.find("E")
-    # slots 1-4 of the vertex struct, i.e. D and E among others
-    assert dict(weights_data)[bone_index_d] > dict(weights_data)[bone_index_e]
+    bones = [armature.pose.bones.find(name) for name in "ABCDEFGH"]
+    # the influences rank in A..H order, so each bone lands in its own slot
+    assert [bone for bone, _ in weights_data] == bones
+    # position.w + weight_values[0:4] + weight_values2[0:2] is seven slots;
+    # the eighth (H) has nowhere to go in the vertex struct
+    assert position_w > 0
     assert packed_weights[2] == 1  # D
-    assert packed_weights[3] == 0  # E, nothing is written for it
+    assert packed_weights[3] == 0  # E, a literal zero goes into the file
+    assert len(packed_weights) + len(packed_weights_2) + 1 == 7
 
     bound_ids = _bound_bone_ids(
         armature, mesh_obj, max_bones_per_vertex=8, half_float=True)
-    assert bone_index_d in bound_ids
-    assert bone_index_e not in bound_ids
+    assert set(bones) - bound_ids == {bones[4], bones[7]}  # E and H
 
 
 def test_half_float_and_byte_paths_disagree_for_the_same_vertex():
     """The same vertex, exported by the two branches: the byte path's
-    `or 1` floor keeps E skinned, the half-float path drops it. The filter
-    has to follow whichever branch the format actually takes rather than
-    always assuming the byte one.
+    `or 1` floor keeps every influence skinned, the half-float path drops
+    the zero-quantized one and the never-written eighth. The filter has to
+    follow whichever branch the format actually takes rather than always
+    assuming the byte one.
     """
     influence_list = list(HALF_FLOAT_RAW_WEIGHTS.items())
 
     byte_bones = _bones_with_exported_weight(influence_list, 8, half_float=False)
     half_float_bones = _bones_with_exported_weight(influence_list, 8, half_float=True)
 
-    assert "E" in byte_bones
-    assert "E" not in half_float_bones
-    assert byte_bones - half_float_bones == {"E"}
+    assert byte_bones == set("ABCDEFGH")
+    assert byte_bones - half_float_bones == {"E", "H"}
