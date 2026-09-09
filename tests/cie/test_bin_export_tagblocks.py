@@ -9,6 +9,7 @@ import json
 import os
 
 import bpy
+import mathutils
 import pytest
 
 from albam.lib import fs_registry
@@ -16,6 +17,10 @@ from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_na
 from tests.cie.lfs_paths import resolve_archive_hashes
 from tests.cie.test_bin_serialization import _is_mesh_bin
 
+# Committed, hash-only, catalog-verified archives (see
+# test_dataset_hashes_are_in_catalog), same pattern as the other cie
+# datasets. Every entry has to carry both a DBL_JNT and a pXFlip table,
+# which is what the two round-trip tests below mount it for.
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 DATASET_PATH = os.path.join(DATASETS_DIR, "bin_export_tagblocks_hashes.json")
 with open(DATASET_PATH) as f:
@@ -97,26 +102,44 @@ def _import_first_model_carrying(game_root, local_app_id, archive_hash, block_at
     return bl_object, parsed
 
 
-def test_morphs_round_trip_through_export(game_root, local_app_id, local_archive_path_hash,
-                                          _clean_scene):
-    """A morph-carrying model keeps a morph block after export, and every
-    entry id it writes is a valid corner index - the format question issue
-    #266 raised, settled by the measurements recorded in the .ksy comments
-    on morph_group and morph_group_body (the framing needed no import fix,
-    so this exercises only the writer)."""
-    entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
-    if "morphs" not in entry["carries"]:
-        pytest.skip("this archive carries no morphs")
+def _mesh_child(bl_object):
+    if bl_object.type == "MESH":
+        return bl_object
+    return next(child for child in bl_object.children_recursive if child.type == "MESH")
 
+
+def test_morphs_are_written_from_shape_keys(game_root, local_app_id, local_archive_path_hash,
+                                            _clean_scene):
+    """Shape keys come back out as a morph block, framed the way the
+    measurements recorded in the .ksy comments on morph_group and
+    morph_group_body settled the format question issue #266 raised, with
+    every delta decoding to the movement Blender held.
+
+    The morphs are added here rather than imported from a morph-carrying
+    game model: none of the archives the committed datasets name carries
+    one, and export is the half #266 reports missing either way - the
+    framing needed no import fix, so this exercises only the writer.
+    """
     from albam.registry import blender_registry
+    from albam.engines.cie.mesh import _yz_flip
     from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
 
-    bl_object, parsed = _import_first_model_carrying(
-        game_root, local_app_id, local_archive_path_hash, "morphs")
-    bl_mesh_ob = bl_object if bl_object.type == "MESH" else next(
-        child for child in bl_object.children_recursive if child.type == "MESH")
-    assert bl_mesh_ob.data.shape_keys is not None
-    assert len(bl_mesh_ob.data.shape_keys.key_blocks) > 1, "Basis plus at least one morph"
+    bl_object, _parsed = _import_first_model_carrying(
+        game_root, local_app_id, local_archive_path_hash, "bone_pairs")
+    bl_mesh_ob = _mesh_child(bl_object)
+    assert bl_mesh_ob.data.shape_keys is None, "this model is expected to carry no morphs"
+
+    # Two moved vertices with distinct deltas, so the entries can be checked
+    # against what moved rather than only against each other, and a key that
+    # moves nothing after them.
+    moved = {0: (0.01, 0.02, -0.03), 1: (-0.05, 0.008, 0.04)}
+    bl_mesh_ob.shape_key_add(name="Basis", from_mix=False)
+    shape_key = bl_mesh_ob.shape_key_add(name="000", from_mix=False)
+    for vertex_index, (dx, dy, dz) in moved.items():
+        shape_key.data[vertex_index].co.x += dx
+        shape_key.data[vertex_index].co.y += dy
+        shape_key.data[vertex_index].co.z += dz
+    bl_mesh_ob.shape_key_add(name="001", from_mix=False)
 
     export_function = blender_registry.export_registry[(local_app_id, "bin")]
     vfiles = export_function(bl_object)
@@ -125,25 +148,34 @@ def test_morphs_round_trip_through_export(game_root, local_app_id, local_archive
 
     assert reparsed.morphs is not None
     assert reparsed.header.offset_morphs > 0
-    assert reparsed.morphs.num_morph_groups == len(reparsed.morphs.morph_groups)
-    # The game addresses a morph by its group index, so an unedited round
-    # trip keeps every group where it was - none dropped, none renumbered.
-    assert reparsed.morphs.num_morph_groups == parsed.morphs.num_morph_groups
-    # And the deltas themselves came back: a block of empty groups satisfies
-    # every framing assertion below while losing exactly what #266 reports.
-    assert sum(group.count for group in reparsed.morphs.morph_groups) > 0
-    for group in reparsed.morphs.morph_groups:
-        assert group.count == len(group.body.vertices)
-        for vertex in group.body.vertices:
-            assert 0 <= vertex.id < reparsed.header.num_vertices
+    groups = reparsed.morphs.morph_groups
+    assert reparsed.morphs.num_morph_groups == len(groups) == 2
+    # The game addresses a morph by its group index, so a key that moves
+    # nothing is still written - dropping it would renumber the keys after it.
+    assert groups[1].count == 0
+    assert groups[1].body.vertices == []
+    assert groups[0].count == len(groups[0].body.vertices) > 0
+
+    # Every entry addresses a corner of this model and decodes back to one of
+    # the two movements applied above - the deltas are written per corner, and
+    # a corner belongs to exactly one vertex (see _collect_geometry).
+    extra_scale = 2 ** reparsed.header.vertex_scale
+    world = bl_mesh_ob.matrix_world.to_3x3()
+    expected = {tuple(round(c, 3) for c in (world @ mathutils.Vector(delta)))
+                for delta in moved.values()}
+    decoded = set()
+    for vertex in groups[0].body.vertices:
+        assert 0 <= vertex.id < reparsed.header.num_vertices
+        position = _yz_flip(vertex.position.x, vertex.position.y, vertex.position.z)
+        decoded.add(tuple(round(c / extra_scale, 3) for c in position))
+    assert decoded == expected
 
     # The morph block is num_morph_groups (u4), the group table, then the
     # bodies - and nothing else may be laid out inside that span, or the
     # block that follows overwrites a morph the game is about to read.
     header = reparsed.header
-    morph_body_size = 8 * sum(g.count for g in reparsed.morphs.morph_groups)
-    morph_end = (header.offset_morphs + 4 +
-                 8 * len(reparsed.morphs.morph_groups) + morph_body_size)
+    morph_body_size = 8 * sum(g.count for g in groups)
+    morph_end = header.offset_morphs + 4 + 8 * len(groups) + morph_body_size
     following = [offset for offset in (
         header.offset_bones, header.offset_weights, header.offset_bonepairs,
         header.offset_adjacents, header.offset_vertex_position,
@@ -158,10 +190,6 @@ def test_bone_pairs_round_trip_through_export(game_root, local_app_id, local_arc
                                               _clean_scene):
     """The DBL_JNT block survives an unedited round trip for every line whose
     bones are still present - see the .ksy comment on pair_line."""
-    entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
-    if "bone_pairs" not in entry["carries"]:
-        pytest.skip("this archive carries no bone pairs")
-
     from albam.registry import blender_registry
     from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
 
@@ -195,10 +223,6 @@ def test_symmetry_round_trips_through_export(game_root, local_app_id, local_arch
     """The pXFlip mirror table survives an unedited round trip, decoded
     big-endian as the .ksy comment on symmetry records, for every bone still
     written."""
-    entry = next(d for d in TAGBLOCKS_DATASET if d["archive_path_hash"] == local_archive_path_hash)
-    if "symmetry" not in entry["carries"]:
-        pytest.skip("this archive carries no symmetry table")
-
     from albam.registry import blender_registry
     from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
 
