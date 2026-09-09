@@ -3,6 +3,7 @@ from kaitaistruct import KaitaiStream
 import bpy
 from mathutils import Vector
 import math
+import re
 import struct
 from ...registry import blender_registry
 from ...vfs import VirtualFile, VirtualFileData
@@ -47,6 +48,9 @@ VERSION_FLAGS_PLAIN = 0x20010801
 
 NO_PARENT = 0xFF
 NO_TEXTURE = 0xFF
+# What Blender appends to a name already taken in the same datablock - see
+# _bone_id.
+BLENDER_NAME_SUFFIX = re.compile(r"\.\d{3}$")
 MAX_BONE_INFLUENCES = 3
 # Both counts are u2, so a model cannot state more corners than this.
 MAX_VERTICES = 0xFFFF
@@ -165,6 +169,8 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         # weighted to are in nothing else here - see _bones_to_write.
         bl_mesh_ob[BONE_IDS_PROPERTY] = [bone.bone_id for bone in bin.bones]
         bl_mesh_ob[BONE_PARENTS_PROPERTY] = [bone.parent for bone in bin.bones]
+        bl_mesh_ob[BONE_OFFSETS_PROPERTY] = [
+            coordinate for bone in bin.bones for coordinate in (bone.x, bone.y, bone.z)]
         _apply_weights(bl_mesh_ob, bin)
         arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = skeleton
@@ -339,14 +345,32 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile):
 
 
 ARCHIVE_PROPERTY = "cie.source_archive"
-# The bone ids the model was imported with (see build_blender_model).
+# The bone ids the model was imported with, one per table entry and in the
+# order the table had them (see build_blender_model).
+#
+# A table may name the same id twice, and the armature cannot say so: a bone
+# is addressed by id everywhere it matters - the weights, the vertex groups
+# named after them, animation retargeting - so the scene has exactly one bone
+# per id and a second one would only be a bone named "5.001" that nothing
+# means. The repeats live here instead, and this list is what export writes
+# the table back from. The table is written in bone id order, which puts two
+# entries sharing an id next to each other, so their order here is the order
+# they are written in.
 BONE_IDS_PROPERTY = "cie.bone_ids"
-# The parent each of those bones had in this model's own table. A shared
+# The parent each of those entries had in this model's own table. A shared
 # armature cannot hold them: measured over one character archive, 10 of its
 # 119 bone ids are given different parents by different models, and some
 # models root a bone whose parent is present. Whatever the game reads them
 # for, they are the model's own and are carried rather than recomputed.
 BONE_PARENTS_PROPERTY = "cie.bone_parents"
+# The parent-relative offset each of those entries had, flattened to x, y, z
+# per entry - the raw values the file stores, not Blender's.
+#
+# Only a repeat reads them back. Every id the armature does have a bone for
+# is written from that bone, so moving it in Blender is an edit the export
+# sees; a repeat has no bone of its own to move, and writing back exactly
+# what it came with is the only answer that does not invent one.
+BONE_OFFSETS_PROPERTY = "cie.bone_offsets"
 
 
 def _find_reusable_armature(bin, context, archive_id):
@@ -388,7 +412,17 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
         return existing, False
 
-    bone_data = {b.bone_id: b for b in bin.bones}
+    # One bone per id, not one per table entry: see BONE_IDS_PROPERTY for
+    # why a repeated id has nowhere in the armature to go. The first entry
+    # is the one the bone stands for, and the repeats are carried on the mesh.
+    own_bones = []
+    seen_ids = set()
+    for bone in bin.bones:
+        if bone.bone_id not in seen_ids:
+            seen_ids.add(bone.bone_id)
+            own_bones.append(bone)
+
+    bone_data = {b.bone_id: b for b in own_bones}
 
     def world_pos(bone_id, visited=None):
         """Recursively accumulate local offsets (same unit as vertices) to world position."""
@@ -404,7 +438,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
             return local
         return world_pos(b.parent, visited) + local
 
-    world_positions = {b.bone_id: world_pos(b.bone_id) for b in bin.bones}
+    world_positions = {b.bone_id: world_pos(b.bone_id) for b in own_bones}
 
     arm_data = bpy.data.armatures.new(f"{bl_object_name}_armature")
     arm_ob = bpy.data.objects.new(f"{bl_object_name}_armature", arm_data)
@@ -419,12 +453,12 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
 
     edit_bone_map = {}
     # Create bones
-    for bone in bin.bones:
+    for bone in own_bones:
         blender_bone = arm_data.edit_bones.new(f"{bone.bone_id}")
         blender_bone['cie.anim_retarget'] = str(bone.bone_id)
         head = world_positions[bone.bone_id]
         blender_bone.head = head
-        children = [c for c in bin.bones
+        children = [c for c in own_bones
                     if c.parent == bone.bone_id and c.bone_id != bone.bone_id]
         if children:
             child_avg = sum((world_positions[c.bone_id] for c in children), Vector((0, 0, 0)))
@@ -436,7 +470,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
 
         edit_bone_map[bone.bone_id] = blender_bone
 
-    for bone in bin.bones:
+    for bone in own_bones:
         if bone.parent != bone.bone_id and bone.parent in edit_bone_map:
             edit_bone_map[bone.bone_id].parent = edit_bone_map[bone.parent]
             edit_bone_map[bone.bone_id].use_connect = False
@@ -707,8 +741,13 @@ def _bone_id(bl_bone, fallback):
     the id coming back. A bone the user added by hand won't be named that way;
     it gets its position in the armature instead, which at least stays inside
     the u1 the format allows.
+
+    Blender's own ".001" suffix is stripped first. Import used to make a bone
+    per table entry, so a scene saved before repeated ids were carried on the
+    mesh has a second bone named "5.001" for one named "5" - and reading that
+    as its position in the armature gave it some other bone's id entirely.
     """
-    name = bl_bone.name
+    name = BLENDER_NAME_SUFFIX.sub("", bl_bone.name)
     if name.isdigit() and int(name) < 255:
         return int(name)
     return min(fallback, 254)
@@ -771,11 +810,20 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
             kept.update(bone.name for bone in chain[shared:])
 
     # In the armature's own order, so the table is the same whichever order
-    # the weights happened to name their bones in.
-    return [bone for bone in all_bones if bone.name in kept]
+    # the weights happened to name their bones in. One bone per id: a scene
+    # saved before repeated ids were carried on the mesh has a "5.001"
+    # standing for the same id as its "5", and the repeats are written from
+    # what the model recorded, not from how many bones are named after an id.
+    written = []
+    seen = set()
+    for bone in all_bones:
+        if bone.name in kept and ids[bone.name] not in seen:
+            seen.add(ids[bone.name])
+            written.append(bone)
+    return written
 
 
-def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=None):
+def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_entries=None):
     """The bone table, as local offsets from each bone's parent.
 
     Holds the bones this model itself uses, not every bone of the armature it
@@ -783,8 +831,12 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
 
     Written in non-decreasing bone-id order, which every shipped model is
     laid out in. Blender's own bone order is not id order, and a table in any
-    other order does not read back as the same skeleton. Ids repeat in some
-    shipped tables, so the sort has to be stable rather than a sort of a set.
+    other order does not read back as the same skeleton.
+
+    Ids repeat in some shipped tables, and the armature has one bone per id,
+    so a bone is expanded into one entry per time the model's own table named
+    it - in the order it named them, which is what the sort puts them next to
+    each other for. See _own_bone_table.
 
     The file stores a parent-relative offset per bone, while Blender holds
     absolute rest positions, so each one is differenced against its parent on
@@ -792,40 +844,54 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
     absolute - which is how the bone the table starts at is written when the
     model hangs off part of a larger skeleton.
     """
+    own_entries = own_entries or {}
     all_bones = list(bl_armature.data.bones)
     ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
-    bones = _bones_to_write(bl_armature, ids, used_ids, own_ids)
+    bones = _bones_to_write(bl_armature, ids, used_ids, own_entries.keys())
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
         bones = all_bones
     kept = {bone.name for bone in bones}
 
-    own_parents = own_parents or {}
-    by_id = {ids[bone.name]: bone for bone in all_bones}
+    by_id = {}
+    for bone in all_bones:
+        by_id.setdefault(ids[bone.name], bone)
 
     dst_bones = []
     for bone in sorted(bones, key=lambda b: ids[b.name]):
-        dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
         bone_id = ids[bone.name]
-        dst_bone.bone_id = bone_id
+        # A bone the model never listed still gets one entry: it is weighted
+        # to now even if it was not before.
+        entries = own_entries.get(bone_id) or [(None, None)]
+        for occurrence, (recorded_parent, recorded_offset) in enumerate(entries):
+            dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
+            dst_bone.bone_id = bone_id
 
-        # The model's own parent for this bone if it recorded one, since the
-        # armature it is bound to may be shared and disagree; otherwise the
-        # armature's own hierarchy, clipped to the bones being written.
-        recorded = own_parents.get(bone_id)
-        if recorded is not None and (recorded == NO_PARENT or recorded in by_id):
-            dst_bone.parent = recorded
-            parent = None if recorded == NO_PARENT else by_id[recorded]
-        else:
-            parent = bone.parent if bone.parent and bone.parent.name in kept else None
-            dst_bone.parent = ids[parent.name] if parent else NO_PARENT
-        head = bone.head_local
-        if parent:
-            head = head - parent.head_local
-        dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
-        dst_bone.filler = 0
-        dst_bone._check()
-        dst_bones.append(dst_bone)
+            # The model's own parent for this entry if it recorded one, since
+            # the armature it is bound to may be shared and disagree;
+            # otherwise the armature's own hierarchy, clipped to the bones
+            # being written.
+            if (recorded_parent is not None and
+                    (recorded_parent == NO_PARENT or recorded_parent in by_id)):
+                dst_bone.parent = recorded_parent
+                parent = None if recorded_parent == NO_PARENT else by_id[recorded_parent]
+            else:
+                parent = bone.parent if bone.parent and bone.parent.name in kept else None
+                dst_bone.parent = ids[parent.name] if parent else NO_PARENT
+
+            if occurrence and recorded_offset is not None:
+                # A repeat has no bone of its own in the scene to read a
+                # position off, so it goes back exactly as it came in - see
+                # BONE_OFFSETS_PROPERTY.
+                dst_bone.x, dst_bone.y, dst_bone.z = recorded_offset
+            else:
+                head = bone.head_local
+                if parent:
+                    head = head - parent.head_local
+                dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
+            dst_bone.filler = 0
+            dst_bone._check()
+            dst_bones.append(dst_bone)
     return dst_bones
 
 
@@ -1227,7 +1293,7 @@ def export_bin(bl_obj):
     dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
     dst_bin.bones = (
         _serialize_bones(dst_bin, armature, _weighted_bone_ids(weight_table),
-                         _own_bone_ids(bl_mesh_objs), _own_bone_parents(bl_mesh_objs))
+                         _own_bone_table(bl_mesh_objs))
         if armature else [])
     # No armature means nothing to weight against, and a shipped model
     # without bones carries no weight block at all.
@@ -1272,34 +1338,41 @@ def _serialize_header(dst_bin, bl_mesh_ob):
     return header
 
 
-def _own_bone_ids(bl_mesh_objs):
-    """The bone ids the model was imported with, if it still says.
+def _own_bone_table(bl_mesh_objs):
+    """{bone id: [(parent, offset), ...]} as the model's own table had it.
 
-    Recorded on import (see BONE_IDS_PROPERTY) because a bone nothing is
-    weighted to is in nothing else on the Blender side, while the file it
-    came from listed it. Anything since weighted to a bone this does not name
-    is still written - the table is the union of the two.
+    One pair per time the table named that id, in the order it named them,
+    and `offset` is that entry's raw (x, y, z) or None where the model did
+    not record one. Recorded on import (see BONE_IDS_PROPERTY) because a bone
+    nothing is weighted to is in nothing else on the Blender side, while the
+    file it came from listed it, and because two entries can share an id -
+    which the armature, holding one bone per id, cannot express. Anything
+    since weighted to a bone this does not name is still written: the table
+    is the union of the two.
+
+    A scene saved before offsets were recorded has ids and parents but no
+    offsets, and gets None for every one of them.
     """
-    own = set()
+    table = {}
     for bl_mesh_ob in bl_mesh_objs:
-        own.update(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
-    return own
-
-
-def _own_bone_parents(bl_mesh_objs):
-    """{bone id: parent id} as the model's own table had them.
-
-    See BONE_PARENTS_PROPERTY: the same bone is parented differently by
-    different models of one character, so the armature they share cannot
-    answer this and the model has to say.
-    """
-    parents = {}
-    for bl_mesh_ob in bl_mesh_objs:
-        ids = bl_mesh_ob.get(BONE_IDS_PROPERTY) or ()
-        recorded = bl_mesh_ob.get(BONE_PARENTS_PROPERTY) or ()
-        for bone_id, parent in zip(ids, recorded):
-            parents.setdefault(bone_id, parent)
-    return parents
+        ids = list(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
+        parents = list(bl_mesh_ob.get(BONE_PARENTS_PROPERTY) or ())
+        offsets = list(bl_mesh_ob.get(BONE_OFFSETS_PROPERTY) or ())
+        counted = {}
+        for index, bone_id in enumerate(ids):
+            occurrence = counted.get(bone_id, 0)
+            counted[bone_id] = occurrence + 1
+            entries = table.setdefault(bone_id, [])
+            # Several meshes exporting as one model are merged the way their
+            # bone ids always were: the first to describe an occurrence is
+            # the one that describes it.
+            if occurrence != len(entries):
+                continue
+            parent = parents[index] if index < len(parents) else None
+            offset = (tuple(offsets[index * 3:index * 3 + 3])
+                      if len(offsets) >= index * 3 + 3 else None)
+            entries.append((parent, offset))
+    return table
 
 
 def _weighted_bone_ids(weight_table):

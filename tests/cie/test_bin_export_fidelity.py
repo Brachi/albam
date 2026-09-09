@@ -291,9 +291,10 @@ def test_model_sharing_an_armature_exports_its_own_bones(
         "no bone should be written that the model did not have")
     assert weighted <= set(exported_ids), (
         "every bone the weights name has to be in the table")
-    if len(set(original_ids)) == len(original_ids):
-        assert exported_ids == sorted(original_ids), (
-            "an unedited model should write back the bone table it came with")
+    # A table naming the same id twice was exempt from this until the repeats
+    # were carried through import - see tests/cie/test_bin_duplicate_bone_ids.py.
+    assert exported_ids == sorted(original_ids), (
+        "an unedited model should write back the bone table it came with")
     assert exported_ids == sorted(exported_ids), "the table is written in bone id order"
     # A bone names its parent by id, so a table that dropped one would leave
     # the bones under it unable to say where they hang from.
