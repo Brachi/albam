@@ -76,6 +76,22 @@ YZ2_HEADER_SIZE = 32
 YZ2_HEADER_PATTERN = re.compile(rb"^[0-9a-f]+\t[0-9a-f]+\n\x00*$")
 
 
+def pack_entry_extension(entry):
+    """The extension one pack entry is exposed under.
+
+    A pack names nothing, so this and the entry's index are the whole of the
+    name a caller ever sees it by (see LfsFS._split_container), which is also
+    what the writer matches a replacement against (see
+    albam.engines.cie.archive._rebuild_pack).
+
+    The flag it reads is not a reliable statement about the bytes: 6650 of the
+    9882 entries holding a DDS across the uncompressed packs of an install
+    leave it clear, so a DDS is often exposed under a ".tga" name. Reader and
+    writer agree on the name anyway by both asking here.
+    """
+    return "dds" if entry.data.is_dds else "tga"
+
+
 def read_udas_block_table(payload, byte_order):
     """The block descriptors of `payload` as [(type, size, offset)], read in
     `byte_order` ("<" or ">"), or None when it holds no table in that order.
@@ -286,7 +302,7 @@ class LfsFS(FS):
                 extension = extensions[i].ext.lower() or "null"
                 raw_data = entry.raw_data
             else:
-                extension = "dds" if entry.data.is_dds else "tga"
+                extension = pack_entry_extension(entry)
                 raw_data = entry.data.raw_data
             data[f"/{self._stem}_{i:03d}.{extension}"] = raw_data
         return data
