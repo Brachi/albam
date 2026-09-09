@@ -308,8 +308,6 @@ VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 # The versions mod-21.ksy covers, which size their index buffer as
 # num_faces * 2 rather than (num_faces * 2) - 2.
 VERSIONS_MOD_21 = {210, 211, 212}
-# Bone weights serialize as u1, so a weight is written as round(w * 255).
-WEIGHT_QUANTIZATION_STEPS = 255
 
 MAIN_LODS = {
     "re0": [1, 255],
@@ -1843,8 +1841,12 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         mesh._check()
         meshes_data.meshes.append(mesh)
+        # The same per-vertex bone limit `_export_vertices` used to truncate
+        # influences before normalizing, so the weight bound filter agrees
+        # with what actually got exported.
+        weight_bound_max_bones = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)
         mesh_weight_bounds = _calculate_weight_bounds(
-            bl_obj, bl_mesh, dst_mod, meshes_data)
+            bl_obj, bl_mesh, dst_mod, meshes_data, weight_bound_max_bones)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
         mesh.num_weight_bounds = len(mesh_weight_bounds)
 
@@ -2297,6 +2299,42 @@ def _apply_bbox_transforms(xyz_tuple, dst_mod, bbox_data):
     return (round(x), round(y), round(z))
 
 
+def _normalize_and_quantize_weights(influence_list, max_bones_per_vertex):
+    """
+    Reproduce, for a single vertex, the byte-weight arithmetic
+    `_process_weights_for_export` applies before serializing: keep the top
+    `max_bones_per_vertex` influences, normalize them to sum to 1, then
+    quantize each to a 0-255 byte with a floor of 1 (a kept influence can
+    never serialize to zero). Returns [(bone_index, weight_byte), ...] -
+    a bone_index is written with a non-zero weight for this vertex iff it
+    appears in the result. Used by both the exporter and the weight-bound
+    filter so the two agree by construction (see issue #253).
+    """
+    if len(influence_list) > max_bones_per_vertex:
+        influence_list = sorted(
+            influence_list, key=lambda t: t[1])[-max_bones_per_vertex:]
+
+    weight_data = {t[0]: t[1] for t in influence_list}
+    wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+    bone_indices = [bi for bi in wd_sorted.keys()]
+    weights = [w for w in wd_sorted.values()]
+    # normalize
+    total_weight = sum(weights)
+    if total_weight:
+        weights = [round((w / total_weight), 4) for w in weights]
+    # can't have zero values
+    weights = [round(w * 255) or 1 for w in weights]
+    if not weights:
+        return []
+    # correct precision
+    excess = sum(weights) - 255
+    if excess:
+        max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+        weights[max_index] -= excess
+
+    return list(zip(bone_indices, weights))
+
+
 def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half_float=False):
     """
     Given a dict `weights_per_vertex` with vertex_indices as keys and
@@ -2312,39 +2350,33 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
     new_weights_per_vertex = {}
     limit = max_bones_per_vertex
     for vertex_index, influence_list in weights_per_vertex.items():
-        # limit max bones
-        if len(influence_list) > limit:
-            influence_list = sorted(
-                influence_list, key=lambda t: t[1])[-limit:]
-
-        weight_data = {t[0]: t[1] for t in influence_list}
-        wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
-        bone_indices = [bi for bi in wd_sorted.keys()]
-        weights = [w for w in wd_sorted.values()]
-        # normalize
-        total_weight = sum(weights)
-        if total_weight:
-            weights = [round((w / total_weight), 4) for w in weights]
         if half_float:
+            # limit max bones
+            if len(influence_list) > limit:
+                influence_list = sorted(
+                    influence_list, key=lambda t: t[1])[-limit:]
+
+            weight_data = {t[0]: t[1] for t in influence_list}
+            wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+            bone_indices = [bi for bi in wd_sorted.keys()]
+            weights = [w for w in wd_sorted.values()]
+            # normalize
+            total_weight = sum(weights)
+            if total_weight:
+                weights = [round((w / total_weight), 4) for w in weights]
             weights = _check_weights(weights, limit)
+            new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
         else:
-            # can't have zero values
-            weights = [round(w * 255) or 1 for w in weights]
-            # correct precision
-            if not weights:
+            quantized = _normalize_and_quantize_weights(influence_list, limit)
+            if not quantized:
                 # XXX vertex_position_2 research, beware
                 continue
-            excess = sum(weights) - 255
-            if excess:
-                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
-                weights[max_index] -= excess
-
-        new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
+            new_weights_per_vertex[vertex_index] = quantized
 
     return new_weights_per_vertex
 
 
-def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
+def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data, max_bones_per_vertex=4):
     unsorted_weight_bounds = []
     if bl_obj.type != "ARMATURE":
         weight_bound = _set_static_mesh_weight_bounds(
@@ -2352,9 +2384,11 @@ def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
         unsorted_weight_bounds.append(weight_bound)
     else:
         mesh_vertex_groups = get_mesh_vertex_groups(bl_mesh)
+        weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
         for vg in bl_mesh.vertex_groups:
             weight_bound = _calculate_vertex_group_weight_bound(
-                mesh_vertex_groups, bl_obj, vg, dst_mod, meshes_data
+                mesh_vertex_groups, bl_obj, vg, dst_mod, meshes_data,
+                weights_per_vertex, max_bones_per_vertex,
             )
             if weight_bound:
                 unsorted_weight_bounds.append(weight_bound)
@@ -2454,27 +2488,28 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     return wb
 
 
-def _weight_in_group(bl_vertex, group_index):
-    for group in bl_vertex.groups:
-        if group.group == group_index:
-            return group.weight
-    return 0.0
+def _calculate_vertex_group_weight_bound(
+    mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data,
+    weights_per_vertex, max_bones_per_vertex,
+):
+    # A vertex counts towards a bone's bound exactly when the exporter
+    # writes a non-zero weight for that bone: mirror
+    # `_process_weights_for_export`'s truncate/normalize/quantize steps
+    # instead of testing the raw vertex-group weight. Normalizing a mesh's
+    # weights can lift a raw weight far below one quantization step up to a
+    # real exported byte value (see issue #253).
+    bone_index = armature.pose.bones.find(vertex_group.name)
 
+    vertices_in_group = []
+    for v in mesh_vertex_groups.get(vertex_group.index, ()):
+        influence_list = weights_per_vertex.get(v.index, ())
+        quantized = _normalize_and_quantize_weights(influence_list, max_bones_per_vertex)
+        if any(bi == bone_index for bi, _ in quantized):
+            vertices_in_group.append(v)
 
-def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data):
-    # Only vertices whose weight survives the format's 8 bit quantization
-    # count towards the bound. Normalizing a mesh's weights leaves residuals
-    # far below one step - a bone can end up holding ~2e-05 across every
-    # vertex - and a weight that serializes to 0 influences nothing, so a
-    # bound for it would describe a bone the exported mesh isn't bound to.
-    vertices_in_group = [
-        v for v in mesh_vertex_groups.get(vertex_group.index, ())
-        if round(_weight_in_group(v, vertex_group.index) * WEIGHT_QUANTIZATION_STEPS)
-    ]
     if not vertices_in_group:
         return
 
-    bone_index = armature.pose.bones.find(vertex_group.name)
     pose_bone = armature.pose.bones[bone_index]
     pose_bone_matrix = Matrix.Translation(pose_bone.head).inverted()
 
