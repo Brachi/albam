@@ -253,6 +253,42 @@ def test_a_scene_saved_before_this_still_writes_every_entry(tmp_path, _clean_sce
         build_mesh_bin(BONES, WEIGHTS, WEIGHT_INDICES)))
 
 
+def test_the_repeats_survive_a_trip_through_a_blend_file(tmp_path, _clean_scene):
+    """Saved and read back, the model still writes its own table.
+
+    Blender has to be the one holding this between sessions, so the repeats
+    are kept as plain custom properties on the mesh - the same kind of value
+    a .blend already stores for the ids and parents beside them. Written to a
+    library and appended back rather than saved and reopened as the main
+    file: that is the same trip through the .blend format, without resetting
+    the session every other test is sharing.
+    """
+    original = build_mesh_bin(BONES, WEIGHTS, WEIGHT_INDICES)
+    bl_object = _import_bin(tmp_path, original)
+    library = str(tmp_path / "saved.blend")
+    bpy.data.libraries.write(library, {bl_object, _mesh_of(bl_object)})
+
+    before = set(bpy.data.objects)
+    with bpy.data.libraries.load(library) as (source, target):
+        target.objects = list(source.objects)
+    loaded = [bl_ob for bl_ob in bpy.data.objects if bl_ob not in before]
+    for bl_ob in loaded:
+        bpy.context.collection.objects.link(bl_ob)
+
+    reloaded = next(bl_ob for bl_ob in loaded if bl_ob.type == "ARMATURE")
+    assert _mesh_of(reloaded).modifiers["Armature"].object is reloaded, (
+        "the appended mesh should be bound to the appended armature, not the original")
+    reloaded.albam_asset.app_id = APP_ID
+    reloaded.albam_asset.extension = "bin"
+    reloaded.albam_asset.relative_path = "repeated_bone_id.bin"
+    reloaded.albam_asset.original_bytes = original
+
+    exported = bone_table(_export(reloaded))
+    assert _identities(exported) == _identities(bone_table(original))
+    # The repeat is written back from what was saved, so it is bit-exact.
+    assert exported[3][2] == bone_table(original)[3][2]
+
+
 def test_shipped_models_with_a_repeated_bone_id_round_trip(
         game_root, local_app_id, local_archive_path_hash, _clean_scene):
     """The same thing, against whatever the game actually ships.
