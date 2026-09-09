@@ -95,15 +95,18 @@ types:
       # 0x20010801 where they are not, always in step with unk_01.
       - {id: version_flags, type: u4}
       # These four do not exist in a 0x40 header at all - offset_bones (see
-      # above) is what says so. The hand-maintained reader in
-      # re4_uhd_bin.py defaults each to 0 ("not present") on that branch,
-      # since every reader downstream of this struct - here and in fs.py -
-      # expects the field to exist and reads a nonzero value as "this
-      # optional block is present".
-      - {id: offset_bonepairs, type: u4, if: offset_bones > 0x40} # bonepair_offset
-      - {id: offset_adjacents, type: u4, if: offset_bones > 0x40} # adjacent_offset
-      - {id: offset_index_buffer, type: u4, if: offset_bones > 0x40} # vertex_weight_index_offset
-      - {id: offset_index_buffer2, type: u4, if: offset_bones > 0x40} # vertex_weight2_index_offset
+      # above) is what says so - and every reader downstream of this struct,
+      # here and in fs.py, expects the field to exist and reads a nonzero
+      # value as "this optional block is present". An `if:` here would make
+      # the field absent rather than 0, so those readers would raise instead
+      # of skipping the block; ksy has no way to say "defaults to 0 when
+      # absent". They are therefore declared as the plain unconditional
+      # reads they are, and re4_uhd_bin.py's _read carries the short-header
+      # branch by hand - see the comment there before regenerating.
+      - {id: offset_bonepairs, type: u4} # bonepair_offset
+      - {id: offset_adjacents, type: u4} # adjacent_offset
+      - {id: offset_index_buffer, type: u4} # vertex_weight_index_offset
+      - {id: offset_index_buffer2, type: u4} # vertex_weight2_index_offset
     instances:
       size_:
         value: 96
