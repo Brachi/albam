@@ -76,7 +76,15 @@ def _is_mesh_bin(data):
 
 
 def _model_state(bl_object):
-    """What has to survive a round trip."""
+    """What has to survive a round trip.
+
+    Vertex count is deliberately not part of this: it is only ever compared
+    between two re-imports (see the module docstring), where a strip restart
+    legitimately adds corners without changing the surface. Whether the
+    geometry itself - positions, normals, UVs - actually matches the shipped
+    file is test_bin_round_trip_matches_the_original_geometry's job, which
+    compares against the original bytes instead.
+    """
     meshes = [o for o in bl_object.children_recursive if o.type == "MESH"]
     if bl_object.type == "MESH":
         meshes.append(bl_object)
@@ -87,8 +95,75 @@ def _model_state(bl_object):
                          for o in meshes for polygon in o.data.polygons),
         "materials": len(materials),
         "bones": len(armatures[0].data.bones) if armatures else 0,
-        "vertices": sum(len(o.data.vertices) for o in meshes),
     }
+
+
+def _decoded_triangles(bin_bytes):
+    """Every triangle `bin_bytes` describes, as a multiset of
+    ((position, uv), normal) corners - decoded straight off the file's own
+    bytes through the same per-corner arrays and strip-to-triangle logic
+    import uses (see albam.engines.cie.mesh), not through Blender.
+
+    Position and UV are kept exact enough to catch a scale, axis or UV
+    regression: rounded only to absorb float32 round-tripping, not to hide
+    one. The normal is kept alongside each corner rather than folded into the
+    same comparison key: Blender recomputes a loop's split normal from the
+    surrounding topology on every mesh edit, and reproduces it only to
+    within about a tenth even for a model that came back with the same
+    surface - see test_bin_round_trip_matches_the_original_geometry, which
+    checks normals on their own with a looser, majority-agreement tolerance
+    instead of demanding every one match exactly.
+
+    Order-independent and winding-independent (each triangle's three corners
+    are sorted before comparison) because a no-edit re-export is free to walk
+    materials and strips in a different corner order and still describe the
+    same surface - triangle count is what has to match exactly, not corner
+    order or count (see the module docstring).
+    """
+    from albam.engines.cie.mesh import _build_faces, _decode_normal, _yz_flip
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    parsed = Re4UhdBin.from_bytes(bin_bytes)
+    parsed._read()
+    faces, _mat_face_ranges = _build_faces(parsed)
+
+    positions = [_yz_flip(v.x, v.y, v.z) for v in parsed.vertex_positions]
+    normals = [_decode_normal(n) for n in parsed.normals] if parsed.normals else None
+    uvs = [(uv.u, 1.0 - uv.v) for uv in parsed.texcoords] if parsed.texcoords else None
+
+    def corner(i):
+        position = tuple(round(v, 3) for v in positions[i])
+        uv = tuple(round(v, 4) for v in uvs[i]) if uvs else None
+        normal = tuple(round(v, 1) for v in normals[i]) if normals else None
+        return (position, uv), normal
+
+    triangles = []
+    for triangle in faces:
+        triangles.append(tuple(sorted(corner(i) for i in triangle)))
+    return triangles
+
+
+def _surfaces(triangles):
+    """A triangle's shape alone (position + UV per corner), dropping its
+    normal - the strict part of the geometry comparison."""
+    return [tuple(shape for shape, _normal in triangle) for triangle in triangles]
+
+
+def _normal_agreement(original_triangles, exported_triangles):
+    """The fraction of `original_triangles` whose exact triangle (surface and
+    rounded normal both) reappears in `exported_triangles`.
+
+    Every triangle here is already known to reappear by surface alone (see
+    the caller); this measures how many also carry the same normal, which -
+    unlike the surface - Blender does not reproduce exactly on every triangle
+    even for a model with no real regression (see _decoded_triangles).
+    """
+    from collections import Counter
+
+    original_count = Counter(original_triangles)
+    exported_count = Counter(exported_triangles)
+    matched = sum(min(original_count[key], exported_count[key]) for key in original_count)
+    return matched / len(original_triangles)
 
 
 def _texture_slots(bin_bytes):
@@ -157,6 +232,68 @@ def test_bin_round_trips_through_export(game_root, local_app_id,
     assert after["triangles"] == before["triangles"]
     assert after["materials"] == before["materials"]
     assert after["bones"] == before["bones"]
+
+
+def test_bin_round_trip_matches_the_original_geometry(
+        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+    """A no-edit re-export describes the same surface the shipped file did.
+
+    Every other geometry check in this module goes through a second import
+    of albam's own output, which cannot catch a bug that is consistent with
+    itself - a wrong scale, a flipped axis or a broken normal decoding would
+    still come back looking right, since the same (wrong) math reads it back
+    that wrote it. This instead decodes both files' raw per-corner arrays
+    independently (see _decoded_triangles) and compares them directly, which
+    is the only check here that touches the bytes the game actually shipped.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.registry import blender_registry
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+
+    models = [vf for vf in vfs.file_list
+              if vf.tree_node.root_id == root.name and not vf.is_root and
+              vf.display_name.lower().endswith(".bin") and _is_mesh_bin(vf.get_bytes())]
+    assert models, "this archive should hold a mesh .bin"
+    vfile = models[0]
+
+    import_function = blender_registry.import_registry[(local_app_id, "bin")]
+    export_function = blender_registry.export_registry[(local_app_id, "bin")]
+
+    vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+    original_bytes = vfile.get_bytes()
+    bl_object = import_function(vfile, bpy.context)
+
+    bl_object.albam_asset.app_id = local_app_id
+    bl_object.albam_asset.extension = "bin"
+    bl_object.albam_asset.relative_path = vfile.display_name
+    bl_object.albam_asset.original_bytes = original_bytes
+    exported_bytes = export_function(bl_object)[0].data_bytes
+
+    original_triangles = _decoded_triangles(original_bytes)
+    exported_triangles = _decoded_triangles(exported_bytes)
+    assert original_triangles, "this model should hold at least one triangle"
+
+    # Strict: position and UV, decoded straight off the bytes on both sides.
+    # This is what would catch a scale, axis or UV regression - the surface a
+    # re-exported model describes has to be exactly the one it shipped with.
+    assert sorted(_surfaces(exported_triangles)) == sorted(_surfaces(original_triangles)), (
+        "the re-exported geometry does not describe the same surface as the shipped file"
+    )
+
+    # Loose: normals agree for the large majority of triangles rather than
+    # all of them - see _decoded_triangles for why an exact-match normal
+    # check would fail even a faithful re-export.
+    agreement = _normal_agreement(original_triangles, exported_triangles)
+    assert agreement > 0.9, (
+        f"only {agreement:.0%} of triangles kept the normals they shipped with"
+    )
 
 
 def test_importing_several_models_from_one_archive(game_root, local_app_id,

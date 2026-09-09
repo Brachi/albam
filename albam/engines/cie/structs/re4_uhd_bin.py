@@ -1018,10 +1018,27 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self.num_vertices = self._io.read_u2le()
             self.num_vertex_normals = self._io.read_u2le()
             self.version_flags = self._io.read_u4le()
-            self.offset_bonepairs = self._io.read_u4le()
-            self.offset_adjacents = self._io.read_u4le()
-            self.offset_index_buffer = self._io.read_u4le()
-            self.offset_index_buffer2 = self._io.read_u4le()
+            # offset_bones doubles as the header's own size (0x40, 0x50 or
+            # 0x60 - see re4-uhd-bin.ksy): a 0x40 header stops right here,
+            # before these four trailing offsets exist in the file at all.
+            # Reading them unconditionally, as this generated file used to,
+            # would consume the next 16 bytes of whatever actually follows
+            # the header - bone data, for such a file - as if they were these
+            # fields, and a nonzero misread offset_bonepairs/offset_adjacents
+            # would then send albam.bone_pairs/.adjacent off to parse garbage
+            # from a bogus absolute offset. None of a several-hundred-file
+            # sample of the shipped game uses a header this short, but a
+            # reader has no business assuming that always holds.
+            if self.offset_bones > 0x40:
+                self.offset_bonepairs = self._io.read_u4le()
+                self.offset_adjacents = self._io.read_u4le()
+                self.offset_index_buffer = self._io.read_u4le()
+                self.offset_index_buffer2 = self._io.read_u4le()
+            else:
+                self.offset_bonepairs = 0
+                self.offset_adjacents = 0
+                self.offset_index_buffer = 0
+                self.offset_index_buffer2 = 0
             self._dirty = False
 
 

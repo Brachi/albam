@@ -350,3 +350,79 @@ def test_every_model_in_an_archive_keeps_its_texture_slots(
             f"{vfile.display_name} exported different texture slots than it came with")
         checked += 1
     assert checked == len(models)
+
+
+def _positions(bin_bytes):
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    parsed = Re4UhdBin.from_bytes(bin_bytes)
+    parsed._read()
+    return [(v.x, v.y, v.z) for v in parsed.vertex_positions]
+
+
+def test_moving_the_armature_does_not_desync_the_mesh_from_its_bones(
+        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+    """Repositioning the armature object - the thing import actually returns
+    and links into the scene for a skinned model - must not move the
+    exported vertex positions away from the bone table.
+
+    Before this was fixed, export baked the mesh's matrix_world outright: for
+    a mesh parented to its armature with an identity local transform (the
+    ordinary case), that matrix_world is inherited from the armature, so
+    moving, rotating or scaling the armature object moved the exported
+    vertices while the bone table - always written in the armature's own
+    local rest space, never premultiplied by its object transform - stayed
+    exactly where it started. The file still parsed and still imported back
+    looking fine (a second import bakes the same, now-doubled, transform into
+    both), which is exactly why the reimport-based checks in
+    test_bin_serialization.py could not have caught this.
+    """
+    import math
+
+    from mathutils import Euler, Matrix, Vector
+
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.registry import blender_registry
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+    models = _mesh_models(vfs, root)
+    assert models, "this archive should hold a mesh .bin"
+
+    import_function = blender_registry.import_registry[(local_app_id, "bin")]
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+
+    skinned = None
+    for vfile in models:
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+        original_bytes = vfile.get_bytes()
+        bl_object = import_function(vfile, bpy.context)
+        if bl_object.type == "ARMATURE":
+            skinned = (vfile, original_bytes, bl_object)
+            break
+    if skinned is None:
+        pytest.skip("no model in this archive imported as an armature")
+
+    vfile, original_bytes, armature_ob = skinned
+    unmoved_bytes = _export(armature_ob, vfile, original_bytes, local_app_id)
+
+    armature_ob.matrix_world = (
+        Matrix.Translation(Vector((1.5, -2.0, 0.75))) @
+        Euler((0.3, 0.1, 0.6), "XYZ").to_matrix().to_4x4()
+    )
+    bpy.context.view_layer.update()
+    moved_bytes = _export(armature_ob, vfile, original_bytes, local_app_id)
+
+    unmoved_positions = _positions(unmoved_bytes)
+    moved_positions = _positions(moved_bytes)
+    assert moved_positions, "this model should have vertex positions to compare"
+    max_delta = max(
+        math.dist(a, b) for a, b in zip(unmoved_positions, moved_positions))
+    assert max_delta < 1.0, (
+        f"moving the armature object should not change the exported model at all "
+        f"(largest vertex delta: {max_delta})"
+    )

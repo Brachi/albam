@@ -714,6 +714,34 @@ def _bone_id(bl_bone, fallback):
     return min(fallback, 254)
 
 
+def _bone_ids_by_name(all_bones):
+    """{bone name: id}, resolving every bone through _bone_id without two of
+    them landing on the same id.
+
+    A bone literally named after an id (say "5") claims it outright; a
+    hand-added bone falls back to its position in the armature, and that
+    position can be the very number an id-named bone elsewhere claims - a
+    hand-added bone at index 5 collides with one named "5" wherever it sits.
+    Digit names are therefore resolved first, reserving their ids, and a
+    colliding fallback is nudged to the next free one instead of silently
+    doubling up.
+    """
+    reserved = {int(bone.name) for bone in all_bones
+                if bone.name.isdigit() and int(bone.name) < 255}
+    used = set(reserved)
+    ids = {}
+    for i, bone in enumerate(all_bones):
+        if bone.name.isdigit() and int(bone.name) < 255:
+            ids[bone.name] = int(bone.name)
+            continue
+        candidate = min(i, 254)
+        while candidate in used and candidate < 254:
+            candidate += 1
+        used.add(candidate)
+        ids[bone.name] = candidate
+    return ids
+
+
 def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
     """The armature's bones this model needs: the ones it was imported with,
     the ones its weights name, and the ones between those.
@@ -793,7 +821,7 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
     model hangs off part of a larger skeleton.
     """
     all_bones = list(bl_armature.data.bones)
-    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
+    ids = _bone_ids_by_name(all_bones)
     bones = _bones_to_write(bl_armature, ids, used_ids, own_ids)
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
@@ -894,8 +922,7 @@ def _collect_geometry(bl_mesh_objs):
         armature = armature_modifier.object if armature_modifier else None
         group_ids = {}
         if armature:
-            bone_ids = {bone.name: _bone_id(bone, i)
-                        for i, bone in enumerate(armature.data.bones)}
+            bone_ids = _bone_ids_by_name(list(armature.data.bones))
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
                     group_ids[group.index] = bone_ids[group.name]
@@ -906,11 +933,25 @@ def _collect_geometry(bl_mesh_objs):
         slots = bl_mesh_ob.material_slots
 
         # Object-level transforms are baked in: moving, rotating or scaling
-        # the object itself is an edit like any other, and import leaves
+        # the mesh itself is an edit like any other, and import leaves
         # everything at the origin so this is the identity for an unmodified
         # model. Normals go through the inverse transpose, which is what
         # keeps them perpendicular under a non-uniform scale.
+        #
+        # Relative to the armature, not the mesh's own matrix_world outright:
+        # the file has no field for where the armature sits in the scene -
+        # that is scenario placement, a separate concern from the model
+        # itself (see scenario._place) - so bones are already written in the
+        # armature's own local rest space, unaffected by it. A mesh normally
+        # parented to its armature with an identity local transform inherits
+        # the armature's matrix_world, so baking that in outright moved,
+        # rotated or scaled the exported vertices by whatever the armature
+        # object's own placement in the scene happened to be, while the bones
+        # they are meant to bind to stayed exactly where they started -
+        # skinning a moved mesh to an unmoved skeleton.
         matrix = bl_mesh_ob.matrix_world
+        if armature:
+            matrix = armature.matrix_world.inverted_safe() @ matrix
         normal_matrix = matrix.to_3x3().inverted_safe().transposed()
 
         # Weights depend only on the vertex, while corners are visited once
