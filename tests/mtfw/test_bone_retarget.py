@@ -127,6 +127,55 @@ def test_autorenaming_bones_keeps_mirror_bone_pointing_at_a_real_bone():
         bpy.context.view_layer.objects.active = previous
 
 
+def test_autorenaming_bones_does_not_mutate_the_shared_name_tables():
+    """Autorename Bones must not corrupt BONES_BODY/BONES_HEAD for other games.
+
+    NAME_FIXES entries (e.g. re1's) reassign meanings, not just spellings: id
+    24 is thumb_01_r by default and knee_r under re1's fixes. rename_bones
+    used to build its working map as `BONE_NAMES.get(body_type)`, which is
+    the module-level dict itself, not a copy - so applying re1's fixes wrote
+    them straight into BONES_BODY, and the next rig renamed in the same
+    session (re5, which has no NAME_FIXES entry of its own) got re1's names.
+    See #245.
+    """
+    from albam.blender_ui.tools import rename_bones
+    from albam.engines.mtfw.bone import set_anim_retarget
+    from albam.lib.bone_names import BONES_BODY, BONES_HEAD
+
+    body_before = dict(BONES_BODY)
+    head_before = dict(BONES_HEAD)
+
+    armature_data = bpy.data.armatures.new("shared_table_rig")
+    armature = bpy.data.objects.new("shared_table_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit_bone = armature_data.edit_bones.new("24")
+        edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        set_anim_retarget(armature.pose.bones["24"], "re1", "24")
+
+        # re1 has a NAME_FIXES entry that reassigns id 24 away from BONES_BODY's
+        # default (thumb_01_r -> knee_r); this is what a fix must not leak.
+        rename_bones(armature, "re1", "Body")
+
+        assert armature.pose.bones[0].name == "knee_r"
+        assert BONES_BODY == body_before, (
+            "rename_bones must not mutate the shared BONES_BODY table"
+        )
+        assert BONES_HEAD == head_before, (
+            "rename_bones must not mutate the shared BONES_HEAD table"
+        )
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
 def test_a_rig_saved_before_the_move_still_maps_its_bones():
     """.blend files predating the move carry the id as a raw bone property.
 
