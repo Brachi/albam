@@ -1200,34 +1200,46 @@ def _create_mtfw_shader():
     return shader_group
 
 
-def _infer_mrl(context, mod_vfile, app_id, root_id=None):
+def _infer_mrl(context, mod_vfile, app_id, root_id):
     """
     Assuming mrl file is next to the .mod file with
     the same name. Or try with different suffixes
 
-    root_id prefers the model's own mounted root: two same-named archives
-    can each mount an .mrl under this same path, and without it a lookup
+    root_id is the model's own mounted root: two same-named archives can
+    each mount an .mrl under this same path, and without it a lookup
     could silently resolve to whichever root's copy was added first (see
     vfs.get_vfile's own docstring).
+
+    Two passes over `suffixes`: a strict one first, then the tolerant one.
+    A plain root_id-preferring lookup on a single suffix can still fall
+    back cross-root and resolve there before a *later* suffix under the
+    model's own root is ever tried (e.g. root A mounted first has
+    "x.mrl", root B - the model's own - only has "x_1.mrl": the ".mrl"
+    iteration would silently take A's file and stop, never reaching
+    "_1.mrl") - exactly the failure issue #294 describes. The strict pass
+    rules that out by considering every suffix under root_id alone before
+    any cross-root fallback is allowed; the second, tolerant pass then
+    preserves get_vfile's own fallback for a genuinely shared .mrl mounted
+    as its own root elsewhere.
     """
     vfs = context.scene.albam.vfs
     base = str(mod_vfile.relative_path_windows_no_ext)
     suffixes = [".mrl", "_0.mrl", "_1.mrl", "_2.mrl", "_3.mrl"]
-    mrl = None
 
-    for suffix in suffixes:
-        try:
-            mrl_vfile = vfs.get_vfile(app_id, base + suffix, root_id=root_id)
-            mrl_bytes = mrl_vfile.get_bytes()
-            mrl = parse(Mrl, mrl_bytes, app_id)
-            assert mrl.materials and mrl.textures
-            break
-        except KeyError:
-            pass
-        except AssertionError:
-            pass
+    for strict in (True, False):
+        for suffix in suffixes:
+            try:
+                mrl_vfile = vfs.get_vfile(app_id, base + suffix, root_id=root_id, strict=strict)
+                mrl_bytes = mrl_vfile.get_bytes()
+                mrl = parse(Mrl, mrl_bytes, app_id)
+                assert mrl.materials and mrl.textures
+                return mrl
+            except KeyError:
+                pass
+            except AssertionError:
+                pass
 
-    return mrl
+    return None
 
 
 def check_mtfw_shader_group(func):
