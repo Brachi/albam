@@ -2367,54 +2367,58 @@ def _encode_half_float_weight_slots(weight_values, max_bones_per_vertex):
     return None, None, None
 
 
-def _written_half_float_weights(weight_values, max_bones_per_vertex):
+def _reconstruct_half_float_weights(weight_values, max_bones_per_vertex):
     """
-    The weight of every slot `_encode_half_float_weight_slots` actually
-    writes into the vertex struct, in slot order, read back the way
-    `_get_weights` does. The last slot is not written - the game
-    reconstructs it as the remainder - so it has no entry here and the
-    result is one shorter than `max_bones_per_vertex`. A 1-weight format
-    carries no weight field at all: its single bone index is the whole
-    skinning, so it is reported as a full weight.
+    The weight each slot ends up with once a vertex encoded by
+    `_encode_half_float_weight_slots` is read back, per format, exactly the
+    way `_get_weights` reconstructs it. Every one of these formats derives
+    its last slot from the remainder rather than a written field, and a
+    1-weight format has no weight field at all, so its single slot is a
+    full weight.
     """
     if max_bones_per_vertex == 1:
         return [1.0]
     position_w, packed_weights, packed_weights_2 = _encode_half_float_weight_slots(
         weight_values, max_bones_per_vertex)
-    written = [position_w / 32767]
+    weights = [position_w / 32767]
     if max_bones_per_vertex == 8:
-        written.extend(w / 255 for w in packed_weights)
-        written.extend(unpack("e", w)[0] for w in packed_weights_2)
+        weights.extend(w / 255 for w in packed_weights)
+        weights.extend(unpack("e", w)[0] for w in packed_weights_2)
+        weights.append(1.0 - sum(weights))
     elif max_bones_per_vertex == 4:
-        written.extend(unpack("e", w)[0] for w in packed_weights)
-    return written
+        weights.extend(unpack("e", w)[0] for w in packed_weights)
+        weights.append(round(1.0 - sum(weights), 3))
+    else:
+        weights.append(1.0 - weights[0])
+    return weights
 
 
 def _bones_with_exported_weight(influence_list, max_bones_per_vertex, half_float):
     """
     The bone indices the exported vertex data really skins a vertex to.
 
-    A vertex counts towards a bone's weight bound exactly when the exporter
-    writes a non-zero weight for that bone into the file, so this runs the
-    exporter's own truncate/normalize/quantize instead of testing the raw
+    A vertex counts towards a bone's weight bound exactly when the game
+    ends up with a non-zero weight for that bone, so this runs the
+    exporter's own truncate/normalize/quantize and then reads the result
+    back the way `_get_weights` does, instead of testing the raw
     vertex-group weight: normalizing can lift a weight far below one
     quantization step into a substantial exported one, and quantizing can
-    drop a small one to nothing (see issue #253). The half-float formats
-    never write their last slot, so a bone that only holds it is not
-    skinned in the exported file and does not count.
+    drop a small one to nothing (see issue #253).
     """
     weights_data = _process_vertex_weights(
         influence_list, max_bones_per_vertex, half_float)
     if not weights_data:
         return set()
     if not half_float:
-        return {bone_index for bone_index, weight in weights_data if weight}
+        return {bone_index for bone_index, weight in weights_data if weight > 0}
 
     weight_values = [w for _, w in weights_data]
     weight_values.extend([0] * (max_bones_per_vertex - len(weight_values)))
-    written = _written_half_float_weights(weight_values, max_bones_per_vertex)
+    reconstructed = _reconstruct_half_float_weights(weight_values, max_bones_per_vertex)
     return {
-        bone_index for (bone_index, _), weight in zip(weights_data, written) if weight
+        bone_index
+        for (bone_index, _), weight in zip(weights_data, reconstructed)
+        if weight > 0
     }
 
 

@@ -10,10 +10,12 @@ can normalize each other up into a real exported byte while each raw value
 still rounds to 0, so the filter dropped a vertex the exporter kept.
 
 The mod-21 half-float formats encode weights differently again, so the
-filter mirrors whichever branch `_export_vertices` will take: there a
-normalized weight below 1/510 really does serialize to 0, and the last
-slot is never serialized at all, so neither counts towards its bone's
-bound.
+filter mirrors whichever branch `_export_vertices` will take and then
+reads the result back the way `_get_weights` does. There a normalized
+weight below 1/510 really does serialize to 0 and its bone is unskinned,
+while the final slot - which every one of those formats reconstructs from
+the remainder rather than a written field - is skinned whenever that
+remainder is positive.
 
 Not reachable through an import/export round trip: importer-derived
 weights come from the file's already-quantized values, so none of them
@@ -32,6 +34,7 @@ from albam.engines.mtfw.mesh import (
     _calculate_weight_bounds,
     _encode_half_float_weight_slots,
     _process_weights_for_export,
+    _reconstruct_half_float_weights,
 )
 from albam.engines.mtfw.structs.mod_156 import Mod156
 from albam.lib.blender import get_bone_indices_and_weights_per_vertex
@@ -94,6 +97,12 @@ def _rig(bone_names):
 @pytest.fixture
 def weight_bound_rig():
     with _rig(["A", "B"]) as rig:
+        yield rig
+
+
+@pytest.fixture
+def weight_bound_rig_4():
+    with _rig(["A", "B", "C", "D"]) as rig:
         yield rig
 
 
@@ -187,20 +196,21 @@ def test_ordinary_vertex_is_unaffected(weight_bound_rig):
 
 # One 8-influence vertex: A..D are ordinary, E..H are the residue weights.
 # Ranked by weight it fills all eight slots of an 8-weight mod-21 format,
-# so it exercises both ways that format declines to write a weight:
+# so it exercises both ways that format can leave a bone unskinned:
 # E lands in a slot serialized as round(w * 255) and its normalized weight
 # (0.001) is below 1/510, so a literal 0 goes into the file; H lands in the
-# eighth slot, which the vertex struct has no field for at all.
+# eighth slot, whose remainder comes back negative once the seven written
+# slots are quantized.
 HALF_FLOAT_RAW_WEIGHTS = {
     "A": 0.5, "B": 0.3, "C": 0.19, "D": 0.005,
     "E": 0.001, "F": 0.0009, "G": 0.0008, "H": 0.0007,
 }
 
 
-def test_half_float_unwritten_weights_are_not_counted(weight_bound_rig_8):
+def test_half_float_unskinned_weights_are_not_counted(weight_bound_rig_8):
     """The byte path floors every kept influence to at least 1/255, but the
-    mod-21 half-float path does not: a weight that serializes as 0, and the
-    eighth weight that is never serialized at all, leave their bones
+    mod-21 half-float path does not: a weight that serializes as 0, and a
+    final-slot remainder that comes back negative, leave their bones
     unskinned in the exported file, so neither may get a weight bound.
     """
     armature, mesh_obj = weight_bound_rig_8
@@ -209,18 +219,16 @@ def test_half_float_unwritten_weights_are_not_counted(weight_bound_rig_8):
 
     weights_data = _processed_weights(mesh_obj, max_bones_per_vertex=8, half_float=True)
     weight_values = [w for _, w in weights_data]
-    position_w, packed_weights, packed_weights_2 = _encode_half_float_weight_slots(
-        weight_values, 8)
+    _, packed_weights, _ = _encode_half_float_weight_slots(weight_values, 8)
+    reconstructed = _reconstruct_half_float_weights(weight_values, 8)
 
     bones = [armature.pose.bones.find(name) for name in "ABCDEFGH"]
     # the influences rank in A..H order, so each bone lands in its own slot
     assert [bone for bone, _ in weights_data] == bones
-    # position.w + weight_values[0:4] + weight_values2[0:2] is seven slots;
-    # the eighth (H) has nowhere to go in the vertex struct
-    assert position_w > 0
     assert packed_weights[2] == 1  # D
     assert packed_weights[3] == 0  # E, a literal zero goes into the file
-    assert len(packed_weights) + len(packed_weights_2) + 1 == 7
+    assert reconstructed[4] == 0.0  # so the game reads E as unweighted
+    assert reconstructed[7] < 0  # and H's remainder is not a real influence
 
     bound_ids = _bound_bone_ids(
         armature, mesh_obj, max_bones_per_vertex=8, half_float=True)
@@ -229,10 +237,9 @@ def test_half_float_unwritten_weights_are_not_counted(weight_bound_rig_8):
 
 def test_half_float_and_byte_paths_disagree_for_the_same_vertex():
     """The same vertex, exported by the two branches: the byte path's
-    `or 1` floor keeps every influence skinned, the half-float path drops
-    the zero-quantized one and the never-written eighth. The filter has to
-    follow whichever branch the format actually takes rather than always
-    assuming the byte one.
+    `or 1` floor keeps every influence skinned, the half-float path leaves
+    two of them unskinned. The filter has to follow whichever branch the
+    format actually takes rather than always assuming the byte one.
     """
     influence_list = list(HALF_FLOAT_RAW_WEIGHTS.items())
 
@@ -241,3 +248,57 @@ def test_half_float_and_byte_paths_disagree_for_the_same_vertex():
 
     assert byte_bones == set("ABCDEFGH")
     assert byte_bones - half_float_bones == {"E", "H"}
+
+
+# Every mod-21 half-float format derives its *last* slot from the remainder
+# instead of a written field (see _get_weights), so a bone that only ever
+# lands in that slot is still skinned in the exported file and still needs a
+# weight bound. A blanket "the last slot is never written, so it never
+# counts" rule silently deletes the 4th influence on 0x14D40020, the default
+# skinned format, and the 2nd influence on every 2-weight format.
+FULL_VERTEX_PER_FORMAT = [
+    pytest.param(1, {"A": 1.0}, id="1wt"),
+    pytest.param(2, {"A": 0.6, "B": 0.4}, id="2wt"),
+    pytest.param(4, {"A": 0.4, "B": 0.3, "C": 0.2, "D": 0.1}, id="4wt-default-skinned"),
+    pytest.param(8, dict.fromkeys("ABCDEFGH", 0.125), id="8wt"),
+]
+
+
+@pytest.mark.parametrize("max_bones_per_vertex, raw_weights", FULL_VERTEX_PER_FORMAT)
+def test_half_float_remainder_slot_is_still_skinned(max_bones_per_vertex, raw_weights):
+    """A vertex whose influences exactly fill its format: every bone,
+    including the one in the reconstructed final slot, is skinned in the
+    exported file, so every one of them counts.
+    """
+    influence_list = list(raw_weights.items())
+
+    reconstructed = _reconstruct_half_float_weights(
+        [w for _, w in _process_weights_for_export(
+            {0: influence_list}, max_bones_per_vertex, half_float=True)[0]],
+        max_bones_per_vertex,
+    )
+    assert len(reconstructed) == max_bones_per_vertex
+    assert all(w > 0 for w in reconstructed)
+    assert sum(reconstructed) == pytest.approx(1.0, abs=1e-3)
+
+    assert _bones_with_exported_weight(
+        influence_list, max_bones_per_vertex, half_float=True) == set(raw_weights)
+
+
+def test_fourth_influence_on_the_default_skinned_format_gets_a_bound(weight_bound_rig_4):
+    """The findings trace end to end: on 0x14D40020's 4-weight half-float
+    layout the game reconstructs D as 1 - w1 - w2 - w3 = 0.1, so a bone
+    that is only ever a 4th influence is genuinely skinned and must get a
+    weight bound.
+    """
+    armature, mesh_obj = weight_bound_rig_4
+    for name, weight in {"A": 0.4, "B": 0.3, "C": 0.2, "D": 0.1}.items():
+        mesh_obj.vertex_groups[name].add([0], weight, "REPLACE")
+
+    weights_data = _processed_weights(mesh_obj, max_bones_per_vertex=4, half_float=True)
+    reconstructed = _reconstruct_half_float_weights([w for _, w in weights_data], 4)
+    assert reconstructed[3] == pytest.approx(0.1, abs=1e-3)
+
+    bound_ids = _bound_bone_ids(
+        armature, mesh_obj, max_bones_per_vertex=4, half_float=True)
+    assert bound_ids == {armature.pose.bones.find(name) for name in "ABCD"}
