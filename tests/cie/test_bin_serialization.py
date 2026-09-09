@@ -115,11 +115,13 @@ def _decoded_triangles(bin_bytes):
     checks normals on their own with a looser, majority-agreement tolerance
     instead of demanding every one match exactly.
 
-    Order-independent and winding-independent (each triangle's three corners
-    are sorted before comparison) because a no-edit re-export is free to walk
-    materials and strips in a different corner order and still describe the
-    same surface - triangle count is what has to match exactly, not corner
-    order or count (see the module docstring).
+    Corners are kept in the order the file gives them; the comparison itself
+    is order-independent and winding-independent (a triangle is matched by
+    the sorted multiset of its corner keys, see _unmatched_surfaces) because
+    a no-edit re-export is free to walk materials and strips in a different
+    corner order and still describe the same surface - triangle count is what
+    has to match exactly, not corner order or count (see the module
+    docstring).
     """
     from albam.engines.cie.mesh import _build_faces, _decode_normal, _yz_flip
     from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
@@ -137,11 +139,7 @@ def _decoded_triangles(bin_bytes):
         normal = tuple(round(v, 1) for v in normals[i]) if normals else None
         return (tuple(positions[i]), uv), normal
 
-    triangles = []
-    for triangle in faces:
-        corners = [corner(i) for i in triangle]
-        triangles.append(tuple(sorted(corners, key=lambda c: _corner_key(c[0], 0.0))))
-    return triangles
+    return [tuple(corner(i) for i in triangle) for triangle in faces]
 
 
 # One raw unit at GLOBAL_SCALE, and the UV precision the file itself stores.
@@ -173,6 +171,9 @@ def _unmatched_surfaces(original_surfaces, exported_surfaces):
     """The original triangles no exported triangle describes, matched one
     for one.
 
+    A triangle is keyed by the sorted multiset of its corner keys, so which
+    corner the file happened to list first never decides a match.
+
     Comparison is on a grid rather than on raw floats because a coordinate
     makes a float32 -> double -> float32 round trip on the way through
     Blender and comes back a few ulps off. A coordinate landing exactly on a
@@ -189,12 +190,15 @@ def _unmatched_surfaces(original_surfaces, exported_surfaces):
     for offset in (0.0, 0.5):
         if not remaining_original:
             break
+        def key(surface):
+            return tuple(sorted(_corner_key(shape, offset) for shape in surface))
+
         pool = defaultdict(list)
         for surface in remaining_exported:
-            pool[tuple(_corner_key(shape, offset) for shape in surface)].append(surface)
+            pool[key(surface)].append(surface)
         unmatched = []
         for surface in remaining_original:
-            bucket = pool.get(tuple(_corner_key(shape, offset) for shape in surface))
+            bucket = pool.get(key(surface))
             if bucket:
                 bucket.pop()
             else:
@@ -216,7 +220,8 @@ def _normal_agreement(original_triangles, exported_triangles):
     from collections import Counter
 
     def key(triangle):
-        return tuple((_corner_key(shape, 0.0), normal) for shape, normal in triangle)
+        return tuple(sorted((_corner_key(shape, 0.0), normal)
+                            for shape, normal in triangle))
 
     original_count = Counter(key(t) for t in original_triangles)
     exported_count = Counter(key(t) for t in exported_triangles)

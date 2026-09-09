@@ -65,3 +65,16 @@ def test_an_armature_with_no_free_id_left_errors_instead_of_doubling_up():
 
     with pytest.raises(AlbamCheckFailure):
         _bone_ids_by_name(bones)
+
+
+def test_a_model_bound_to_the_upper_half_of_a_rig_still_gets_an_id():
+    """An armature can hold only the upper part of a shared rig (see
+    _bones_to_write), leaving every id below it free. Nudging upward alone
+    ran out at 254 and errored while those lower ids were still available.
+    """
+    bones = [_FakeBone(str(i)) for i in range(60, 255)] + [_FakeBone("helper")]
+
+    ids = _bone_ids_by_name(bones)
+
+    assert len(set(ids.values())) == len(ids), f"id collision in {ids}"
+    assert ids["helper"] < 60
