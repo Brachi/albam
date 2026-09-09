@@ -237,6 +237,14 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                                     (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
+            if not track_attrs:
+                raise ValueError(
+                    f"Exporting {bl_obj.name!r} resolved zero tracks: none of its action's "
+                    f"bone names matched an Anim Retarget id on {armature.name!r}. Writing "
+                    "this block out would silently produce num_tracks = 0 with a non-zero "
+                    "ofs_frame - check the armature this .lmt was imported onto against the "
+                    "bones the action actually keys."
+                )
             _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
 
 
@@ -581,7 +589,17 @@ def export_lmt(bl_obj):
     vfiles = []
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
     bl_objects = _lmt_blocks(bl_obj, app_id)
-    armature = bpy.context.scene.albam.import_options_lmt.armature
+    # The armature this .lmt was actually imported onto (#254), not whichever
+    # one the import panel currently points at - that changes every time a
+    # later import runs, while this asset stays tied to its own rig. Only a
+    # scene saved before this property existed falls back to the panel.
+    armature = bl_obj.albam_lmt_armature or bpy.context.scene.albam.import_options_lmt.armature
+    if armature is None:
+        raise ValueError(
+            f"Can't export {bl_obj.name!r}: it doesn't remember which armature it was "
+            "imported onto, and the LMT Options panel has none selected either. Select "
+            "the armature in the import panel and export again."
+        )
     dst_lmt = Lmt(app_id)
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
