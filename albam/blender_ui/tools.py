@@ -915,13 +915,15 @@ def set_image_albam_attr(blender_material, app_id, local_path):
 
 
 def rename_bones(armature_ob, app_id, body_type):
-    names_preset = BONE_NAMES.get(body_type)
-    fixes_preset = NAME_FIXES.get(body_type)
-    fixed_name = fixes_preset.get(app_id, None)
+    # A copy: BONE_NAMES holds the module-level BONES_BODY/BONES_HEAD dicts
+    # themselves, and a game's NAME_FIXES entry reassigns ids rather than just
+    # respelling them, so merging in place would corrupt the tables for every other
+    # game renamed later in the same session (see #245).
+    names_preset = dict(BONE_NAMES.get(body_type))
+    fixed_name = NAME_FIXES.get(body_type, {}).get(app_id)
     bone_name = None
     if fixed_name:
-        for k, v in fixed_name.items():
-            names_preset[k] = v
+        names_preset.update(fixed_name)
     renamed = {}
     for pose_bone in armature_ob.pose.bones:
         reference_bone_id = get_anim_retarget(pose_bone, app_id)
