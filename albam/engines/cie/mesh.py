@@ -164,9 +164,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         archive_id=root_vfile.name if root_vfile else "")
 
     if skeleton:
-        # Which bones the model itself had. An armature it shares with the
-        # rest of its archive is not its skeleton, and bones nothing is
-        # weighted to are in nothing else here - see _bones_to_write.
+        # The model's own bone table, entry for entry. An armature it shares
+        # with the rest of its archive is not its skeleton, bones nothing is
+        # weighted to are in nothing else here (see _bones_to_write), and an
+        # id the table names twice has one bone between the two of them - so
+        # this is the only place the table itself survives.
         bl_mesh_ob[BONE_IDS_PROPERTY] = [bone.bone_id for bone in bin.bones]
         bl_mesh_ob[BONE_PARENTS_PROPERTY] = [bone.parent for bone in bin.bones]
         bl_mesh_ob[BONE_OFFSETS_PROPERTY] = [
