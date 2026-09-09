@@ -144,6 +144,21 @@ def test_a_repeated_bone_id_is_written_back(tmp_path, _clean_scene):
     assert _offsets(bone_table(exported)) == pytest.approx(_offsets(bone_table(original)))
 
 
+def test_a_table_without_repeats_is_unchanged(tmp_path, _clean_scene):
+    """The control: carrying the repeats must not move anything else.
+
+    Every entry of a table with no repeat is written from the armature bone
+    it stands for, exactly as before, so a model the old code round-tripped
+    has to come out the same way.
+    """
+    bones = [entry for entry in BONES if entry[:2] != (2, 0)]
+    original = build_mesh_bin(bones, WEIGHTS, WEIGHT_INDICES)
+    exported = _export(_import_bin(tmp_path, original))
+
+    assert _identities(bone_table(exported)) == _identities(bone_table(original))
+    assert _offsets(bone_table(exported)) == pytest.approx(_offsets(bone_table(original)))
+
+
 @pytest.mark.parametrize("swapped", [False, True])
 def test_repeated_entries_keep_the_order_they_came_in(tmp_path, swapped, _clean_scene):
     """Not just the count of them.
@@ -264,22 +279,37 @@ def test_shipped_models_with_a_repeated_bone_id_round_trip(
     import_function = blender_registry.import_registry[(local_app_id, "bin")]
     bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
 
+    # Every model, in order, not only the ones with a repeat: import binds a
+    # model to an armature another already brought in, and a repeated id has
+    # to survive that too.
     repeated = []
     for vfile in models:
+        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
         original_bytes = vfile.get_bytes()
-        ids = [bone_id for bone_id, _parent, _offset in bone_table(original_bytes)]
+        bl_object = import_function(vfile, bpy.context)
+        original = bone_table(original_bytes)
+        ids = [bone_id for bone_id, _parent, _offset in original]
         if len(set(ids)) == len(ids):
             continue
-        vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
-        bl_object = import_function(vfile, bpy.context)
+
         bl_object.albam_asset.app_id = local_app_id
         bl_object.albam_asset.extension = "bin"
         bl_object.albam_asset.relative_path = vfile.display_name
         bl_object.albam_asset.original_bytes = original_bytes
-        exported_bytes = _export(bl_object)
-        assert _identities(bone_table(exported_bytes)) == _identities(
-            bone_table(original_bytes)), (
+        exported = bone_table(_export(bl_object))
+        assert _identities(exported) == _identities(original), (
             f"{vfile.display_name} did not write back the bone table it came with")
+
+        # A repeat is written back verbatim, so it matches to the bit - unlike
+        # an entry read off an armature bone, whose position has been through
+        # Blender's floats and back.
+        counted = {}
+        for (bone_id, _parent, offset), (_id, _p, written) in zip(original, exported):
+            occurrence = counted.get(bone_id, 0)
+            counted[bone_id] = occurrence + 1
+            if occurrence:
+                assert written == offset, (
+                    f"{vfile.display_name} moved a repeated entry for bone {bone_id}")
         repeated.append(vfile.display_name)
 
     if not repeated:
