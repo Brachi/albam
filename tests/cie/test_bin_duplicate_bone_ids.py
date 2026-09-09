@@ -88,8 +88,13 @@ def _import_bin(tmp_path, bin_bytes, name="repeated_bone_id.bin"):
 
     vfs = bpy.context.scene.albam.vfs
     bpy.context.scene.albam.apps.app_selected = APP_ID
+    before = vfs_root_names()
     vfs.add_real_file(APP_ID, str(tmp_path))
-    vfile = next(vf for vf in vfs.file_list if vf.display_name == name)
+    # Scoped to the root this call added: another test's leftover root can
+    # hold a file of the same name, and tests do not run in a fixed order.
+    added = vfs_root_names() - before
+    vfile = next(vf for vf in vfs.file_list
+                 if vf.display_name == name and vf.tree_node.root_id in added)
     vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
     bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
 
