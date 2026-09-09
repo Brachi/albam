@@ -92,7 +92,9 @@ types:
       - {id: num_vertex_normals, type: u2} # vertex_normal_count
       # A build stamp, shipped as one of exactly two date-shaped values:
       # 0x20030818 where the adjacency and bone-pair blocks are present,
-      # 0x20010801 where they are not, always in step with unk_01.
+      # 0x20010801 where they are not, always in step with unk_01: measured
+      # across 184 mesh .bin files in 8 character archives, the first always
+      # pairs with unk_01 = 0x50 and the second with unk_01 = 0.
       - {id: version_flags, type: u4}
       - {id: offset_bonepairs, type: u4} # bonepair_offset
       - {id: offset_adjacents, type: u4} # adjacent_offset
