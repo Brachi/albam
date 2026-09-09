@@ -289,7 +289,7 @@ def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
     return dds
 
 
-def build_blender_textures(app_id, context, parsed_mod, mrl=None):
+def build_blender_textures(app_id, context, parsed_mod, mrl=None, root_id=None):
     textures = []
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
@@ -307,13 +307,19 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             is_rtex = True
             ext = ".rtex"
         try:
-            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ext)
+            # root_id prefers the model's own mounted root: two same-named
+            # archives can each mount a texture under this same path, and
+            # without it a lookup could silently resolve to whichever
+            # root's copy was added first (see vfs.get_vfile's own
+            # docstring).
+            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ext, root_id=root_id)
             tex_bytes = texture_vfile.get_bytes()
         except KeyError:
             tex_bytes = None
         if RtexCls == Rtex112 and not tex_bytes:
             try:
-                texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".rtex")
+                texture_vfile = context.scene.albam.vfs.get_vfile(
+                    app_id, texture_path + ".rtex", root_id=root_id)
                 tex_bytes = texture_vfile.get_bytes()
                 is_rtex = True
             except KeyError:

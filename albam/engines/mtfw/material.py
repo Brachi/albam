@@ -175,12 +175,13 @@ MRL_RASTERIZER_STATE_STR = {
 
 def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="material"):
     app_id = mod_file_item.app_id
+    root_id = mod_file_item.tree_node.root_id
     materials = {}
-    mrl = _infer_mrl(context, mod_file_item, app_id)
+    mrl = _infer_mrl(context, mod_file_item, app_id, root_id)
     if parsed_mod.header.version in VERSION_USES_MRL and not mrl:
         return materials
 
-    textures = build_blender_textures(app_id, context, parsed_mod, mrl)
+    textures = build_blender_textures(app_id, context, parsed_mod, mrl, root_id=root_id)
     if parsed_mod.header.version in VERSION_USES_MRL:
         src_materials = mrl.materials
     else:
@@ -1199,10 +1200,15 @@ def _create_mtfw_shader():
     return shader_group
 
 
-def _infer_mrl(context, mod_vfile, app_id):
+def _infer_mrl(context, mod_vfile, app_id, root_id=None):
     """
     Assuming mrl file is next to the .mod file with
     the same name. Or try with different suffixes
+
+    root_id prefers the model's own mounted root: two same-named archives
+    can each mount an .mrl under this same path, and without it a lookup
+    could silently resolve to whichever root's copy was added first (see
+    vfs.get_vfile's own docstring).
     """
     vfs = context.scene.albam.vfs
     base = str(mod_vfile.relative_path_windows_no_ext)
@@ -1211,7 +1217,7 @@ def _infer_mrl(context, mod_vfile, app_id):
 
     for suffix in suffixes:
         try:
-            mrl_vfile = vfs.get_vfile(app_id, base + suffix)
+            mrl_vfile = vfs.get_vfile(app_id, base + suffix, root_id=root_id)
             mrl_bytes = mrl_vfile.get_bytes()
             mrl = parse(Mrl, mrl_bytes, app_id)
             assert mrl.materials and mrl.textures
