@@ -1353,7 +1353,10 @@ def _own_bone_table(bl_mesh_objs):
     is the union of the two.
 
     A scene saved before offsets were recorded has ids and parents but no
-    offsets, and gets None for every one of them.
+    offsets, and gets None for every one of them. Its repeats are then
+    written from the one bone the scene has for that id - not what each
+    entry came in with, but every entry is at least there, and re-importing
+    the model records them properly.
     """
     table = {}
     for bl_mesh_ob in bl_mesh_objs:
