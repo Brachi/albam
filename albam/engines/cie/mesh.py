@@ -18,9 +18,10 @@ GLOBAL_SCALE = 0.001  # same raw unit as vertex positions
 GLOBAL_NORMAL_FIX_EXTENDED = 545460800000
 GLOBAL_NORMAL_FIX_REDUCED = 16384
 
-# Header layout. The format allows 0x40, 0x50 and 0x60 headers - the shorter
-# ones simply stop before the trailing offsets - and offset_bones doubles as
-# the header's own size.
+# Header layout. The format allows 0x40, 0x50 and 0x60 headers - a 0x40 one
+# stops before the four trailing offsets, a 0x50 one is exactly those four
+# present and a 0x60 one adds 16 bytes of padding nothing reads - and
+# offset_bones doubles as the header's own size.
 HEADER_SIZE = 0x60
 BONE_SIZE = 16
 WEIGHT_SIZE = 8
@@ -1432,8 +1433,9 @@ def _layout_and_write(dst_bin, num_vertices):
     Offsets are all explicit in the header, so the file's layout is ours to
     choose rather than something to reproduce; blocks go in the order shipped
     files use them, each aligned to 16. The header is a fixed 0x60 here - the
-    format allows 0x40 and 0x50 too, which simply stop before the four
-    trailing offsets, and writing the largest means never having to decide.
+    format allows 0x40, which stops before the four trailing offsets, and
+    0x50, which is exactly those four present - and writing the largest means
+    never having to decide.
     """
     header = dst_bin.header
     header.num_bones = len(dst_bin.bones)
