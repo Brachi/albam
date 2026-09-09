@@ -899,8 +899,13 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
     return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _collect_geometry(bl_mesh_objs):
+def _collect_geometry(bl_mesh_objs, armature):
     """Everything per-corner the format needs, in the order it stores it.
+
+    `armature` is the one the bone table is written from (see export_bin),
+    which is what every mesh is baked relative to and what names its vertex
+    groups' bones - a mesh parented under it without an Armature modifier of
+    its own is part of the same model and has to land in the same space.
 
     The format is non-indexed: positions, normals, UVs and weight indices are
     all one entry per face corner, consumed sequentially by each material's
@@ -920,13 +925,12 @@ def _collect_geometry(bl_mesh_objs):
     weight_table = []
     weight_lookup = {}
 
+    bone_ids = _bone_ids_by_name(list(armature.data.bones)) if armature else {}
+
     for bl_mesh_ob in bl_mesh_objs:
         bl_mesh = bl_mesh_ob.data
-        armature_modifier = bl_mesh_ob.modifiers.get("Armature")
-        armature = armature_modifier.object if armature_modifier else None
         group_ids = {}
         if armature:
-            bone_ids = _bone_ids_by_name(list(armature.data.bones))
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
                     group_ids[group.index] = bone_ids[group.name]
@@ -1255,7 +1259,7 @@ def export_bin(bl_obj):
         armature = bl_obj
 
     (groups, positions, normals, uvs,
-     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs)
+     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs, armature)
 
     num_vertices = len(positions)
     if num_vertices > MAX_VERTICES:
