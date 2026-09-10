@@ -73,12 +73,16 @@ ANIM_CLIP_EXTENSION = ".animclip"
 # the "DDS " magic, TPKD the real texture under the same name.
 #
 # Mounting one makes its files readable, which is not the same as
-# importable: their 108 .edgemodel entries are all format version 15, and
-# structs/edgemodel.ksy models 17/18 (the only versions the current
-# archives hold). Version 15 is a pre-existing gap, not one mounting these
-# opens - 129 more of them are already reachable as loose files on disk,
-# and parsing any of the 189 runs off the end of the file today. Their
-# .matb/.dds/.hkx entries do read normally.
+# importable: the 108 .edgemodel entries these archives hold are all
+# format version 15, and structs/edgemodel.ksy models 17/18 (the only
+# versions the current archives hold). Version 15 is a pre-existing gap,
+# not one mounting these opens: only 60 of the 108 win their path in a
+# full mount, the other 48 staying behind a current archive's version-17/18
+# copy (id_magic 5 mounts below current content - see _ssg_priority), and
+# 129 more version-15 files already resolve to loose files on disk. All
+# 189 version-15 paths a full mount resolves - those 60 plus those 129 -
+# run off the end of the file when parsed today. Their .matb/.dds/.hkx
+# entries do read normally.
 #
 # An allowlist rather than a denylist because the offsets an id_magic 5
 # archive is read by are only as trustworthy as the census that established
