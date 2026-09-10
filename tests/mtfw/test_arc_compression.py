@@ -9,6 +9,21 @@ the block header and the bit reader's alignment, but not the Huffman path.
 The dataset-driven half at the bottom is what puts real Devil May Cry 4
 entries - megabytes of them, spanning many frames - through the encoder, and
 what checks albam's own decoder against one that is not albam's.
+
+Two parts of the DMC4 story are deliberately not covered here, because
+neither can be executed rather than because nobody got to them:
+
+* Whether the game itself loads an archive albam repacked. Nothing automated
+  can answer that, which is why the encoder is checked against a second,
+  independent LZX decoder instead (see tests/xcompress_cab.py) - strong
+  evidence that the stream is real LZX, and not the same thing as the game
+  accepting it.
+* Editing a DMC4 model in Blender and writing it back. That story stops
+  before the packer: exporting any DMC4 .mod fails in mod_153 serialization
+  (`ConsistencyError: index_buffer`), on 5 of 5 models tried and identically
+  on the commit this branch started from, so it is a defect of the mesh
+  exporter and not of packing. What reaches the writer in these tests is a
+  payload taken back out of an archive.
 """
 import json
 import os
