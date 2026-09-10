@@ -257,6 +257,104 @@ def test_packing_gives_a_new_entry_its_own_version_s_file_type_id(tmp_path):
     assert FILE_ID_TO_EXTENSION.get(DMC4_LMT) is None
 
 
+def test_a_new_entry_s_payload_reads_back_through_both_decoders(tmp_path):
+    """Adding a file a DMC4 archive does not already hold: the payload has to
+    survive, not just get the right label.
+
+    The label is what test_packing_gives_a_new_entry_its_own_version_s_file_type_id
+    covers. This is the other half - that what lands in the archive is a
+    stream the archive's own codec reads, all the way back out through the
+    ordinary reading path.
+    """
+    from albam.engines.mtfw.arc_fs import ArcFS
+
+    arc_path = tmp_path / "test.arc"
+    arc_path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, b"the entry already there\n" * 200, 2)]))
+
+    payload = b"a texture albam added\n" * 900
+    rebuilt_bytes = update_arc(str(arc_path), [
+        FakeVFile("chr\\albam\\newly_added.tex", payload)])
+    rebuilt = parse_arc(rebuilt_bytes)
+
+    assert len(rebuilt.file_entries) == 2
+    added = next(e for e in rebuilt.file_entries
+                 if e.file_path == "chr\\albam\\newly_added")
+    assert added.file_type == DMC4_TEX
+    assert added.size == len(payload)
+    assert decompress_entry(ARC_VERSION_DMC4, added.raw_data, added.size) == payload
+
+    out = tmp_path / "rebuilt.arc"
+    out.write_bytes(rebuilt_bytes)
+    assert ArcFS(str(out)).readbytes("/chr/albam/newly_added.tex") == payload
+
+
+@pytest.mark.skipif(sevenzip() is None,
+                    reason="p7zip is not installed (see tests/xcompress_cab.py)")
+def test_a_new_entry_s_payload_reads_back_through_an_independent_decoder(tmp_path):
+    """The same entry, read by a decoder albam did not write.
+
+    albam agreeing with itself says the encoder and the decoder match; it
+    does not say the stream is LZX. This is what says that much, short of
+    the game itself.
+    """
+    arc_path = tmp_path / "test.arc"
+    arc_path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, b"the entry already there\n" * 200, 2)]))
+
+    payload = b"a texture albam added\n" * 900
+    rebuilt = parse_arc(update_arc(str(arc_path), [
+        FakeVFile("chr\\albam\\newly_added.tex", payload)]))
+
+    added = next(e for e in rebuilt.file_entries
+                 if e.file_path == "chr\\albam\\newly_added")
+    assert independent_decompress(added.raw_data, added.size) == payload
+
+
+def test_an_entry_spanning_many_frames_survives_the_write_path(tmp_path):
+    """A payload of several frames packed through the archive writer, not
+    through the encoder on its own.
+
+    An .lfs chunk is two frames holding one block, so nothing on that side
+    ever asked the encoder for a stream that runs frame after frame. The
+    dataset tests put real multi-megabyte entries through `xmem_compress`
+    directly; this puts one through `update_arc`, which is what a user
+    actually reaches, and checks the stream it wrote has the frame shape the
+    game's own entries have.
+    """
+    arc_path = tmp_path / "test.arc"
+    arc_path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, b"small\n" * 10, 2)]))
+
+    payload = (b"a line that repeats itself, mostly\n" * 30000)[:5 * FRAME_SIZE + 4321]
+    rebuilt = parse_arc(update_arc(str(arc_path), [
+        FakeVFile("chr\\pl000\\pl000.tex", payload)]))
+
+    written = rebuilt.file_entries[0]
+    assert written.size == len(payload)
+    frames, trailing = frames_of(written.raw_data)
+    assert len(frames) == 6
+    assert [f[0] for f in frames] == [2] * 5 + [5]
+    assert sum(f[1] for f in frames) == len(payload)
+    assert trailing == b""
+    assert decompress_entry(ARC_VERSION_DMC4, written.raw_data, written.size) == payload
+
+
+@pytest.mark.skipif(sevenzip() is None,
+                    reason="p7zip is not installed (see tests/xcompress_cab.py)")
+def test_a_many_frame_entry_reads_back_through_an_independent_decoder(tmp_path):
+    arc_path = tmp_path / "test.arc"
+    arc_path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, b"small\n" * 10, 2)]))
+
+    payload = (b"a line that repeats itself, mostly\n" * 30000)[:5 * FRAME_SIZE + 4321]
+    rebuilt = parse_arc(update_arc(str(arc_path), [
+        FakeVFile("chr\\pl000\\pl000.tex", payload)]))
+
+    written = rebuilt.file_entries[0]
+    assert independent_decompress(written.raw_data, written.size) == payload
+
+
 DMC4_CHR_TBL = 0x19DDF06A  # rCharTbl, one of the two types called "bin"
 DMC4_PL_PARAM_TBL = 0x7A5DCF86  # rPlParamTbl, the other
 
