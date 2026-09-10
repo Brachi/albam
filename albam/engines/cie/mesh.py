@@ -940,7 +940,9 @@ def _collect_geometry(bl_mesh_objs, armature):
     weight_table = []
     weight_lookup = {}
 
-    bone_ids = _bone_ids_by_name(list(armature.data.bones)) if armature else {}
+    all_bones = list(armature.data.bones) if armature else []
+    bone_ids = _bone_ids_by_name(all_bones)
+    bone_names = {bone.name for bone in all_bones}
 
     for bl_mesh_ob in bl_mesh_objs:
         bl_mesh = bl_mesh_ob.data
@@ -949,6 +951,17 @@ def _collect_geometry(bl_mesh_objs, armature):
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
                     group_ids[group.index] = bone_ids[group.name]
+                elif group.name in bone_names:
+                    raise AlbamCheckFailure(
+                        f"{bl_mesh_ob.name} is weighted to {group.name!r}, a bone the "
+                        f"format cannot name",
+                        details="A bone is named by a single byte, so an armature can "
+                                "only hand out 255 ids, and this one has more bones "
+                                "than that. Weights on a bone left without an id would "
+                                "otherwise fall onto the first bone instead.",
+                        solution="Remove bones the model does not need, so every bone "
+                                 "it is weighted to can be named",
+                    )
                 elif group.name.isdigit():
                     group_ids[group.index] = int(group.name)
 
