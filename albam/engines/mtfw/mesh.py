@@ -4,8 +4,10 @@ import ctypes
 from functools import reduce
 from itertools import chain
 from io import BytesIO
+import os
 from struct import pack, unpack
 import math
+import traceback
 try:
     from math import dist as get_dist
 except ImportError:
@@ -38,6 +40,7 @@ from ...lib.common_op import (
 from ...lib.export_checks import check_all_objects_have_materials
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
+from ...blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
 from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
@@ -406,8 +409,18 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             else:
                 print(f"[{bl_object_name}] material {material_hash} not found")
 
-        except Exception as err:
-            print(f"[{bl_object_name}] error building mesh {i} {err}")
+        except Exception:
+            # A submesh that fails to build disappears from the model, and
+            # everything downstream - the export round trip included - then
+            # measures geometry that was never there. Tolerated rather than
+            # fatal, since one bad submesh should not cost a user the rest of
+            # a model, but never silent: the full traceback goes to the
+            # console, and under ALBAM_RERAISE_ERRORS (which the test suite
+            # sets - see tests/conftest.py) it is re-raised instead, so CI
+            # sees the failure rather than a quietly smaller model.
+            print(f"[{bl_object_name}] error building mesh {i}\n{traceback.format_exc()}")
+            if os.environ.get(RERAISE_ERRORS_ENV_VAR):
+                raise
             continue
 
     return bl_object
@@ -501,7 +514,7 @@ def _process_normals(vertex, normals_out):
 def _process_tangents(vertex, tangents_out):
     if not hasattr(vertex, "tangent"):
         return
-    # from [0, 255] o [-1, 1]
+    # from [0, 255] to [-1, 1]
     x = ((vertex.tangent.x / 255) * 2) - 1
     y = ((vertex.tangent.y / 255) * 2) - 1
     z = ((vertex.tangent.z / 255) * 2) - 1
