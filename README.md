@@ -70,6 +70,11 @@ one command rather than a per-file split that nothing in a `.ksy` records. It im
 `from_bytes()`) no longer parses anything on its own, so every call site follows it with an
 explicit `_read()`.
 
+One generated parser is not purely generated: `albam/engines/cie/structs/re4_uhd_bin.py`
+carries a hand-written short-header branch the compiler does not produce, because a `.ksy`
+cannot say "this field reads as 0 when it is absent". Regenerating that file drops the branch;
+the comment at the edit itself says what to reapply and why.
+
 A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
 a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both
 cases and does the `_read()` for you. Every MT Framework model and texture struct takes an
