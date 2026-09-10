@@ -1,8 +1,10 @@
 """The .lmt keyframe codec: a track's bytes to poses and back again.
 
 Every buffer type the format uses is decoded and encoded here, along with the
-quantization each one applies. Nothing in this module touches Blender beyond
-mathutils, which is what lets the codec tests drive it directly.
+quantization each one applies - except v51's buffer type 5 (quadratic_vector3),
+which decode_framedata() skips for want of a real sample to verify its record
+layout against. Nothing in this module touches Blender beyond mathutils, which
+is what lets the codec tests drive it directly.
 """
 import math
 from io import BytesIO
@@ -130,6 +132,17 @@ class LMTKeyFrames:
         kfcls = KEYFRAME_TYPES[version].get(key_type, None)
         if kfcls is None:
             print("Unknown keyframe type:", key_type)
+            return
+        if kfcls is Lmt.QuadraticVector3:
+            # size_ is a constant that only covers the fixed part of the
+            # record (see lmt.ksy); the tangent fields it can carry are
+            # unverified against any real file, so a record that has them
+            # would be misread rather than just yielding a wrong pose. No
+            # buffer_type 5 (v51) sample has turned up to check against -
+            # see https://github.com/Brachi/albam/issues/255 - so skip the
+            # track instead of guessing.
+            print(f"albam: buffer type {key_type} (quadratic_vector3) is not verified for "
+                  f"reading; skipping this track")
             return
         keyframe = kfcls()  # hack to get the size before reading
         for start in range(0, len(data), keyframe.size_):

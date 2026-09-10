@@ -1345,7 +1345,7 @@ class Lmt(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = self.size
+            self._m_size_ = 16
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):

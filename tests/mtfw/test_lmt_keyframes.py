@@ -259,6 +259,35 @@ def test_a_rotation_that_misses_unit_norm_still_round_trips():
     assert drift < 0.05, f"rotation drifted {drift:.4f} deg"
 
 
+def test_quadratic_vector3_size_is_constant_before_reading():
+    """decode_framedata() builds an unread instance purely to learn its size.
+
+    QuadraticVector3.size_ used to alias `size`, a field that only exists
+    after `_read()` runs - so an unread instance raised AttributeError and
+    took the whole import down with it. See
+    https://github.com/Brachi/albam/issues/255.
+    """
+    from albam.engines.mtfw.structs.lmt import Lmt
+
+    assert Lmt.QuadraticVector3().size_ == 16
+
+
+def test_buffer_type_5_skips_its_track_instead_of_aborting_the_import():
+    """No real buffer_type 5 (v51) sample exists to verify the tangent-flag
+    reading against, so decode_framedata() refuses the type rather than
+    risk misdecoding a record that carries tangents - leaving the track's
+    pose empty, which animation_import.py already treats as "skip".
+    """
+    from albam.engines.mtfw.animation import LMTKeyFrames
+
+    decoder = LMTKeyFrames()
+    decoder.version = 51
+    decoder.track_type = "location"
+    decoder.decode_framedata(51, 5, b"\x00" * 32)
+
+    assert decoder.decoded_frames == []
+
+
 def test_an_unknown_track_type_raises_something_catchable():
     """The diagnostic has to reach the caller as an exception.
 

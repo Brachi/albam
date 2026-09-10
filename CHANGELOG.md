@@ -52,6 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- A `.lmt` track using buffer type 5 (quadratic_vector3) aborting the whole
+  animation import instead of just that track
 
 ### Changed
 
