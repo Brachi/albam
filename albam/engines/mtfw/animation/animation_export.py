@@ -244,8 +244,8 @@ def _align(value, alignment):
     return (value + alignment - 1) & ~(alignment - 1)
 
 
-def _block_is_used(bl_obj, app_id):
-    """Whether this slot holds a real block, rather than a placeholder empty.
+def _block_tracks(bl_obj, app_id):
+    """The block's tracks; a slot holds a real block iff this is non-empty.
 
     An .lmt is an index-addressed table of block slots, and an empty slot is
     a real thing a file can hold - there is no separate "is this slot used"
@@ -254,10 +254,16 @@ def _block_is_used(bl_obj, app_id):
     at import, or by _generate_track_from_action from a chosen action) is an
     exact stand-in, and unlike a stored flag it cannot go stale or be hand-set
     wrong - see issue #272.
+
+    This derivation silently drops a block whenever generation clears its
+    tracks and produces none - e.g. its action does not match the armature it
+    was imported onto. Issue #254 / PR #296 (branch fm/albam-mtfw-lmt-armature-k2)
+    adds a loud ValueError refusal for exactly that case, before the tracks
+    collection is cleared. Whichever of the two merges second must confirm that
+    refusal still runs before this has-tracks check fires.
     """
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-    tracks = getattr(second_props["tracks"], "tracks")
-    return len(tracks) > 0
+    return getattr(second_props["tracks"], "tracks")
 
 
 def _calculate_offsets_lmt51(bl_objects, app_id):
@@ -291,9 +297,9 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
     headers_start = _align(HEADER_SIZE + block_offsets_table_size, BLOCK_HEADER_ALIGNMENT)
     cur_ofc_bloc_offsets = headers_start
     for bl_obj in bl_objects:
-        second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-        tracks = getattr(second_props["tracks"], "tracks")
+        tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             ofc = cur_ofc_bloc_offsets
             block_offsets.append(ofc)
             cur_ofc_bloc_offsets += MOTION_HEADER_SIZE
@@ -396,9 +402,9 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         block_body_size = 0
         track_raw_sizes = []
         bounds_size = 0
-        second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-        tracks = getattr(second_props["tracks"], "tracks")
+        tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             total_headers_size += MOTION_HEADER_SIZE
 
             t_size = len(tracks) * TRACK_SIZE
@@ -468,7 +474,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     block_offsets = []
     cur_offset = motion_headers_start
     for bl_obj in bl_objects:
-        if _block_is_used(bl_obj, app_id):
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
             block_offsets.append(cur_offset)
             cur_offset += MOTION_HEADER_SIZE
         else:
@@ -486,7 +493,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     # Second pass
     cur_tracks_section_offset = motion_body_start
     for i, bl_obj in enumerate(bl_objects):
-        if _block_is_used(bl_obj, app_id):
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
             # track start
             _ofs = cur_tracks_section_offset
             track_section_offsets.append(_ofs)
@@ -619,9 +627,9 @@ def export_lmt(bl_obj):
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-        tracks = getattr(second_props["tracks"], "tracks")
+        tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
                 col_events_attr = getattr(col_events, "attributes")
