@@ -55,6 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- A `.lmt` track using buffer type 5 (quadratic_vector3) aborting the whole
+  animation import instead of just that track
 
 ### Changed
 

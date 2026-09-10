@@ -195,7 +195,17 @@ types:
       - {id: nextframeintangent_z, type: f4, if: flags >> 32 > 0}
     instances:
       size_:
-        value: size
+        # A constant, like every other keyframe type here: keyframes.py
+        # builds an unread instance (`kfcls()`) to learn a type's size
+        # before reading, so this cannot alias `size`, a parsed field.
+        # 16 is the record's fixed part (size + flags + duration + x/y/z);
+        # unlike its siblings this type's on-disk records can run longer
+        # when tangents are present, which this constant does not account
+        # for - no real buffer_type-5 (v51) sample has turned up to verify
+        # the tangent fields against, so decode_framedata() refuses this
+        # type rather than read past a tangent-bearing record on a wrong
+        # offset. See https://github.com/Brachi/albam/issues/255.
+        value: 16
 
   vec3_frame12:
     seq:
