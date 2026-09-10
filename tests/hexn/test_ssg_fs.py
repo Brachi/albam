@@ -332,6 +332,45 @@ def test_ssg_v5_reads_every_entry_from_its_own_offset(tmp_path):
     assert ssg_fs.readbytes("/weapons/textures/gun_d.dds") == V5_ENTRIES[3][1]
 
 
+def test_ssg_v5_dds_resolves_to_tpkd_whatever_order_the_pair_is_stored_in(tmp_path):
+    """A .dds is filed as a TPKH stub and the real TPKD texture under one
+    entry name. Which of the two wins that path has to be decided by
+    content type, not by which happens to come last: with the stub stored
+    later, reading the .dds by store order would hand back its 4-byte
+    "DDS " magic and report a size of 4, with nothing raised.
+    """
+    stub, real = V5_ENTRIES[2], V5_ENTRIES[3]
+    entries = [V5_ENTRIES[0], V5_ENTRIES[1], real, stub]
+    ssg_path = tmp_path / "weapon.ssg"
+    ssg_path.write_bytes(_build_ssg_v5_bytes(entries))
+
+    ssg_fs = SsgFS(str(ssg_path))
+    assert ssg_fs.readbytes("/weapons/textures/gun_d.dds") == real[1]
+    info = ssg_fs.getinfo("/weapons/textures/gun_d.dds", namespaces=["details"])
+    assert info.size == len(real[1])
+
+
+def test_ssg_v5_refuses_an_entry_running_past_the_end_of_the_buffer(tmp_path):
+    """An entry whose stored offset plus size overruns buffer_chunks slices
+    short rather than raising, so openbin() would hand back truncated
+    bytes. Refused up front instead - no real archive stores one.
+    """
+    from fs.errors import CreateFailed
+
+    ssg_bytes = bytearray(_build_ssg_v5_bytes(V5_ENTRIES))
+    # Push the last entry's ofs_in_buffer_chunks past the buffer's end.
+    # Header is 8 words, each file_info 8 words, ofs_in_buffer_chunks the
+    # 5th of them - see _build_ssg_v5_bytes.
+    ofs_field = 32 + (len(V5_ENTRIES) - 1) * 32 + 16
+    size_buffer = struct.unpack_from("<I", ssg_bytes, 16)[0]
+    struct.pack_into("<I", ssg_bytes, ofs_field, size_buffer)
+    ssg_path = tmp_path / "overrun.ssg"
+    ssg_path.write_bytes(bytes(ssg_bytes))
+
+    with pytest.raises(CreateFailed) as excinfo:
+        SsgFS(str(ssg_path))
+    assert "past the end" in str(excinfo.value)
+
 def test_ssg_v5_refuses_content_types_it_does_not_model(tmp_path):
     """The cutscene/mocap archives sharing id_magic 5 parse just as cleanly
     as the weapon ones, so nothing about the header tells them apart -

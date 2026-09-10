@@ -194,8 +194,12 @@ class SsgFS(FS):
             # file_info.size until the first read and the real size after
             # would make getinfo() answer differently depending on whether
             # anything had been read yet.
-            self._sizes[path] = archive_size if is_skeleton else file_info.size
-            self._offsets[path] = file_info.ofs_in_buffer_chunks if is_v5 else offset
+            # A .dds is filed as a TPKH/TPKD pair sharing one entry name
+            # (see SSG_V5_CONTENT_TYPES): the stub never wins the path off
+            # the real texture, whichever order the two are stored in.
+            if not (path in self._sizes and _content_type(file_info) == b"TPKH"):
+                self._sizes[path] = archive_size if is_skeleton else file_info.size
+                self._offsets[path] = file_info.ofs_in_buffer_chunks if is_v5 else offset
 
             parts = path.strip("/").split("/")
             for i in range(len(parts)):
@@ -223,7 +227,7 @@ class SsgFS(FS):
         """Refuse an id_magic 5 archive this reader has no evidence it can
         serve correctly, before any of it is exposed as files.
 
-        Both conditions below hold for every id_magic 5 archive on a full
+        Every condition below holds for every id_magic 5 archive on a full
         install (135 of them, 881 entries), and each one failing would mean
         `file_info.ofs_in_buffer_chunks` no longer points where this class
         reads from:
@@ -236,6 +240,9 @@ class SsgFS(FS):
         * every entry's `file_type` is one of SSG_V5_CONTENT_TYPES, which is
           what tells the model-data family apart from the cutscene/mocap one
           sharing this id_magic - see that constant.
+        * no entry runs past the end of `buffer_chunks`. Slicing one that
+          does yields short bytes with nothing raised, i.e. the wrong
+          content served silently.
 
         Raises rather than mounting what it can: `HexnFS` collects the
         failure per-archive and surfaces it (see HexnFS.skipped_archives()),
@@ -255,6 +262,14 @@ class SsgFS(FS):
                 f"id_magic 5 archive holds content types this reader doesn't model "
                 f"({tags}) - not mounted rather than served on the model-data layout's "
                 f"assumptions"
+            )
+        overrun = max(
+            (fi.ofs_in_buffer_chunks + fi.size for fi in ssg.files_info), default=0)
+        if overrun > ssg.size_chunks_buffer:
+            raise CreateFailed(
+                f"id_magic 5 archive has an entry running past the end of its buffer "
+                f"({overrun} > size_chunks_buffer={ssg.size_chunks_buffer}), which no "
+                f"known one does - its file_info offsets would slice short bytes"
             )
 
     def _open_and_parse(self, struct_cls):

@@ -52,12 +52,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
-- Resident Evil: Operation Raccoon City weapon archives (135 of ~2100 on a
+- Resident Evil: Operation Raccoon City weapon archives (130 of ~2100 on a
   full install) being rejected outright and their contents silently missing
   from the file browser. They use a second `.ssg` layout that locates each
-  entry by its own stored offset instead of packing them end to end
+  entry by its own stored offset instead of packing them end to end. Five
+  more archives share that layout but hold cutscene/mocap streams rather
+  than model data, and are still refused on purpose
 - Adding a game folder no longer skips archives it cannot read in silence -
-  the ones left out, and why, are now reported
+  the ones left out, and why, are now reported, so those five cutscene
+  archives are listed as skipped instead of just going missing
 
 ### Changed
 
