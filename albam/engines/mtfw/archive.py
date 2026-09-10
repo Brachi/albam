@@ -349,7 +349,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 show_message_box("File: {} was found and replaced in the archive".format(file_name))
                 found = True
                 vf_data = vfile.get_bytes()
-                chunk = compress_entry(arc_version, vf_data, path)
+                chunk = compress_entry(arc_version, vf_data, path + "." + extension)
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)
                 fe.raw_data = chunk

@@ -70,7 +70,7 @@ def decompress_entry(arc_version, raw, size):
     return zlib.decompress(raw)
 
 
-def compress_entry(arc_version, data, entry_path="<unknown>"):
+def compress_entry(arc_version, data, entry_path):
     """One .arc file entry's payload, encoded with the codec its archive uses.
 
     The counterpart of decompress_entry, and the reason a version 17 archive
