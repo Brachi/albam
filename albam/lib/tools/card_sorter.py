@@ -1,7 +1,23 @@
 import bpy
 import bmesh
+from math import ceil
 from ..common_op import _get_mesh_albam_props
 from mathutils import Vector, bvhtree
+
+
+def _world_space_bmesh(obj, depsgraph):
+    """Return the evaluated mesh of *obj* in the same (world) space as rays.
+
+    ``BMesh.from_object`` produces coordinates local to the object.  The sorter
+    casts rays from world-space vertices, so leaving a BVH in local space works
+    only accidentally for objects with identity transforms.
+    """
+    bm = bmesh.new()
+    bm.from_object(obj, depsgraph)
+    bm.transform(obj.evaluated_get(depsgraph).matrix_world)
+    bm.verts.ensure_lookup_table()
+    bm.faces.ensure_lookup_table()
+    return bm
 
 
 def _debug_draw_bvh_rays(rays, ob_name):
@@ -32,13 +48,10 @@ def _debug_draw_bvh_rays(rays, ob_name):
 
 # Get minimal distance to the head
 def _min_distance_to_target(obj, target_bvh):
-    bm = bmesh.new()
-    bm.from_object(obj, bpy.context.evaluated_depsgraph_get())
-    bm.verts.ensure_lookup_table()
+    bm = _world_space_bmesh(obj, bpy.context.evaluated_depsgraph_get())
     min_dist = float('inf')
     for v in bm.verts:
-        world_v = obj.matrix_world @ v.co
-        hit = target_bvh.find_nearest(world_v)
+        hit = target_bvh.find_nearest(v.co)
         if hit:
             loc, normal, index, dist = hit
             min_dist = min(min_dist, dist)
@@ -118,20 +131,16 @@ def sort_hair_cards(body_ob, cards_objs):
     debug_draw = albam_settings.sorting_dbg_draw
 
     deps = bpy.context.evaluated_depsgraph_get()
-    body_bm = bmesh.new()
-    body_bm.from_object(body_ob, deps)
-    body_bm.verts.ensure_lookup_table()
-    body_bm.faces.ensure_lookup_table()
+    # All BVHs and samples must use world coordinates.  The ray tests below
+    # operate on world-space points, so a local-space BVH is inconsistent.
+    body_bm = _world_space_bmesh(body_ob, deps)
     body_bvh = bvhtree.BVHTree.FromBMesh(body_bm)
     body_bm.free()
 
     # Build the BVH tree for cards
     bvh_list = []
     for card_ob in cards_objs:
-        bm = bmesh.new()
-        bm.from_object(card_ob, deps)
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
+        bm = _world_space_bmesh(card_ob, deps)
         bvh = bvhtree.BVHTree.FromBMesh(bm)
         bvh_list.append((bvh, card_ob))
         bm.free()
@@ -139,20 +148,20 @@ def sort_hair_cards(body_ob, cards_objs):
     def compute_blockers(card_ob, debug_draw=False):
         debug_rays = []
 
-        bm = bmesh.new()
-        bm.from_object(card_ob, deps)
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
+        bm = _world_space_bmesh(card_ob, deps)
 
         sample_points = []
         # Add vertices as sample points
         for v in bm.verts:
-            sample_points.append(card_ob.matrix_world @ v.co)
+            sample_points.append(v.co.copy())
         # Add centers of faces as sample points
         for face in bm.faces:
-            center = sum((card_ob.matrix_world @ v.co for v in face.verts), Vector()) / len(face.verts)
+            center = sum((v.co for v in face.verts), Vector()) / len(face.verts)
             sample_points.append(center)
 
+        # Store both coverage and hit distance.  An isolated crossing of two
+        # cards should not turn into a global ordering constraint for the
+        # entire objects.
         blockers_cache = {}
         for world_v in sample_points:
             hit = body_bvh.find_nearest(world_v)
@@ -163,17 +172,25 @@ def sort_hair_cards(body_ob, cards_objs):
                 blocked = _get_blocked_objs(card_ob, world_v, loc, bvh_list)
                 if blocked:
                     for bobj, bdist in blocked.items():
-                        #
                         blockers_cache[bobj] = blockers_cache.get(bobj, []) + bdist
-        # If few rays hit the same blocker, average the distance to it
-        blockers_cache = {k: sum(v) / len(v) for k, v in blockers_cache.items()}
-        # Sort by minimal distances to the head, reverse because the ray casts from the card
-        blocked_objs = sorted(blockers_cache, key=blockers_cache.get)
+        # A single hit is normally a local overlap, not evidence that one card
+        # must be drawn in front of another.  Keep a constraint only when it
+        # covers at least two samples or 20% of the card, whichever is lower.
+        min_hits = min(2, max(1, ceil(len(sample_points) * 0.2)))
+        blockers_cache = {
+            obj: distances for obj, distances in blockers_cache.items()
+            if len(distances) >= min_hits
+        }
+        # Prefer broad occlusion; use hit distance as a stable tie breaker.
+        blocked_objs = sorted(
+            blockers_cache,
+            key=lambda obj: (-len(blockers_cache[obj]), sum(blockers_cache[obj]) / len(blockers_cache[obj])),
+        )
         bm.free()
         print("Card {} is blocked by {}".format(card_ob.name, blocked_objs))
         if debug_draw:
             _debug_draw_bvh_rays(debug_rays, card_ob.name)
-        return blocked_objs
+        return blocked_objs, {obj: len(distances) for obj, distances in blockers_cache.items()}
 
     def sorting_pass(cards_objs):
         # Collect blocker info for each card
@@ -183,12 +200,30 @@ def sort_hair_cards(body_ob, cards_objs):
         card_info = {}  # {card_ob: {'distance': float, 'blockers': [list]}}
         for card_ob in cards_objs_sorted:
             dist = _min_distance_to_target(card_ob, body_bvh)
-            blockers = compute_blockers(card_ob, debug_draw)
+            blockers, blocker_hits = compute_blockers(card_ob, debug_draw)
             card_info[card_ob] = {
                 'distance': dist,
                 'blockers': blockers,
+                'blocker_hits': blocker_hits,
                 'priority': 0
             }
+
+        # Intersecting cards can make A block B and B block A.  A single alpha
+        # priority per object cannot represent that geometry exactly, but a
+        # directed graph is still possible when the weaker direction is
+        # discarded.  For equal evidence, favour the card nearer to the body.
+        for card_ob, info in card_info.items():
+            for blocker in list(info['blockers']):
+                if card_ob not in card_info[blocker]['blockers']:
+                    continue
+                card_hits = info['blocker_hits'][blocker]
+                blocker_hits = card_info[blocker]['blocker_hits'][card_ob]
+                remove_from = blocker if card_hits > blocker_hits else card_ob
+                if card_hits == blocker_hits:
+                    remove_from = blocker if info['distance'] <= card_info[blocker]['distance'] else card_ob
+                card_info[remove_from]['blockers'].remove(
+                    blocker if remove_from == card_ob else card_ob
+                )
 
         def _get_total_blocker_depth(card_ob, visited=None):
             """Recursively count total blocker depth including blockers of blockers"""
@@ -248,20 +283,23 @@ def sort_hair_cards(body_ob, cards_objs):
                         iteration, card_ob.name, max_blocker_priority, priority))
 
             if not assigned_this_pass and unassigned:
-                # Fallback: assign remaining (cycle detection)
-                print("Warning: Cycle or missing blockers detected. Assigning remaining cards with fallback.")
-                for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
-                    blockers = card_info[card_ob]['blockers']
-                    assigned_priorities = [card_info[b]['priority']
-                                           for b in blockers if card_info[b]['priority'] > 0]
-                    if assigned_priorities:
-                        priority = max(assigned_priorities) + 1
-                    else:
-                        priority = 1
-                    card_info[card_ob]['priority'] = priority
-                    unassigned.remove(card_ob)
-                    print("Fallback: {} → priority={}".format(card_ob.name, priority))
-                break
+                # A true geometry intersection can form a longer dependency
+                # cycle.  Break just one weakest-in-practice constraint and
+                # continue sorting the rest, instead of assigning every card
+                # in the cycle an arbitrary priority in one fallback pass.
+                cycle_breaker = min(unassigned, key=lambda c: card_info[c]['distance'])
+                cyclic_blockers = [
+                    blocker for blocker in card_info[cycle_breaker]['blockers']
+                    if blocker in unassigned
+                ]
+                card_info[cycle_breaker]['blockers'] = [
+                    blocker for blocker in card_info[cycle_breaker]['blockers']
+                    if blocker not in unassigned
+                ]
+                print(
+                    "Warning: cyclic intersections detected. Removing {} blockers from {}."
+                    .format(len(cyclic_blockers), cycle_breaker.name)
+                )
 
         # Apply priorities to objects
         print("\n=== Final Priorities ===")
