@@ -171,3 +171,71 @@ def test_mod_import_textures_are_resolved(imported_mod):
                 if node.type == "TEX_IMAGE" and node.image is None:
                     missing.append(f"{bl_mat.name}/{node.name}")
     assert not missing, f"image nodes with no image: {sorted(set(missing))}"
+
+
+def _source_vertex_of(bl_mesh, mod):
+    """A representative source vertex of the submesh a built object came
+    from, for asking what its vertex format carries. None for a submesh
+    with no vertices at all.
+
+    build_blender_model() names each object "<model>_<index zero-padded to
+    4>" off the submesh's own index, and the fixture turns LOD filtering
+    off, so the suffix is a direct index into meshes_data.
+    """
+    vertices = mod.meshes_data.meshes[int(bl_mesh.name.rsplit("_", 1)[1])].vertices
+    return vertices[0] if vertices else None
+
+
+def test_mod_import_shades_smooth(imported_mod):
+    """Imported geometry must be smooth-shaded.
+
+    The custom split normals the importer sets are only used for shading
+    while the polygon they belong to is smooth; a flat polygon takes its
+    face normal instead and the model renders faceted no matter how good
+    the imported normals are. Blender < 4.1 was told this twice - through
+    use_auto_smooth and through the polygons themselves - and only the
+    first survived into 4.1, which is why this has to be asserted rather
+    than assumed.
+    """
+    mod, bl_meshes, _bl_armatures = imported_mod
+
+    flat = []
+    for bl_mesh in bl_meshes:
+        if not hasattr(_source_vertex_of(bl_mesh, mod), "normal"):
+            # Nothing to shade smoothly against - no normals were imported.
+            continue
+        use_smooth = [False] * len(bl_mesh.data.polygons)
+        bl_mesh.data.polygons.foreach_get("use_smooth", use_smooth)
+        if not all(use_smooth):
+            flat.append(f"{bl_mesh.name}: {use_smooth.count(False)}/{len(use_smooth)} flat")
+    assert not flat, "flat-shaded polygons: " + ", ".join(flat)
+
+
+def test_mod_import_builds_tangents(imported_mod):
+    """A submesh whose vertex format carries a tangent must arrive with one.
+
+    Stored as a plain FLOAT_VECTOR point attribute, not through Blender's
+    own tangent slot: that one is computed by calc_tangents() from the UVs
+    and normals and cannot be written to. So this is the file's own tangent
+    kept for inspection and round-trip comparison, one per vertex.
+    """
+    mod, bl_meshes, _bl_armatures = imported_mod
+
+    checked = 0
+    for bl_mesh in bl_meshes:
+        if not hasattr(_source_vertex_of(bl_mesh, mod), "tangent"):
+            continue
+        checked += 1
+        attribute = bl_mesh.data.attributes.get("tangent")
+        assert attribute is not None, f"{bl_mesh.name} has no tangent attribute"
+        assert attribute.domain == "POINT"
+        assert attribute.data_type == "FLOAT_VECTOR"
+        assert len(attribute.data) == len(bl_mesh.data.vertices)
+        # Decoded from one byte per axis, so every component lands in
+        # [-1, 1] - a component outside it means the decode is wrong.
+        components = [0.0] * (len(attribute.data) * 3)
+        attribute.data.foreach_get("vector", components)
+        assert all(-1.0 <= c <= 1.0 for c in components), (
+            f"{bl_mesh.name} has tangent components outside [-1, 1]")
+    if not checked:
+        pytest.skip("no submesh in this model carries a tangent")

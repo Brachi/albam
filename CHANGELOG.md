@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 - Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
+- Import of the tangent an MT Framework vertex format carries, as a `tangent`
+  point attribute on the mesh. Blender computes its own tangents from the UVs
+  and normals, so this is the file's own value kept for inspection and
+  round-trip comparison rather than something Blender shades with
 
 ### Fixed
 
@@ -55,6 +59,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- MT Framework models importing flat-shaded on Blender 4.1 and later. The
+  imported custom split normals were correct but unused, because nothing marked
+  the polygons smooth once `use_auto_smooth` was removed from Blender
 
 ### Changed
 
