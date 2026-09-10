@@ -9,10 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Tex157(ReadWriteKaitaiStruct):
-    def __init__(self, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Tex157, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self.app_id = app_id
 
     def _read(self):
         self.id_magic = self._io.read_bytes(4)
@@ -45,7 +46,16 @@ class Tex157(ReadWriteKaitaiStruct):
 
         self.mipmap_offsets = []
         for i in range(self.num_mipmaps_per_image * self.num_images):
-            self.mipmap_offsets.append(self._io.read_u4le())
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.mipmap_offsets.append(self._io.read_u4le())
+            elif _on == True:
+                pass
+                self.mipmap_offsets.append(self._io.read_u8le())
+            else:
+                pass
+                self.mipmap_offsets.append(self._io.read_u4le())
 
         self.dds_data = self._io.read_bytes_full()
         self._dirty = False
@@ -62,6 +72,13 @@ class Tex157(ReadWriteKaitaiStruct):
 
         for i in range(len(self.mipmap_offsets)):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
 
 
 
@@ -91,7 +108,16 @@ class Tex157(ReadWriteKaitaiStruct):
 
         for i in range(len(self.mipmap_offsets)):
             pass
-            self._io.write_u4le(self.mipmap_offsets[i])
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.mipmap_offsets[i])
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.mipmap_offsets[i])
+            else:
+                pass
+                self._io.write_u4le(self.mipmap_offsets[i])
 
         self._io.write_bytes(self.dds_data)
         if not self._io.is_eof():
@@ -119,6 +145,13 @@ class Tex157(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"mipmap_offsets", self.num_mipmaps_per_image * self.num_images, len(self.mipmap_offsets))
         for i in range(len(self.mipmap_offsets)):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
 
         self._dirty = False
 
@@ -209,9 +242,29 @@ class Tex157(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_before_data_'):
             return self._m_size_before_data_
 
-        self._m_size_before_data_ = (16 + (4 * self.num_mipmaps_per_image) * self.num_images if self.num_images == 1 else (16 + (4 * self.num_mipmaps_per_image) * self.num_images) + 36 * 3)
+        self._m_size_before_data_ = (16 + (self.size_mipmap_offset * self.num_mipmaps_per_image) * self.num_images if self.num_images == 1 else (16 + (self.size_mipmap_offset * self.num_mipmaps_per_image) * self.num_images) + 36 * 3)
         return getattr(self, '_m_size_before_data_', None)
 
     def _invalidate_size_before_data_(self):
         del self._m_size_before_data_
+    @property
+    def size_mipmap_offset(self):
+        if hasattr(self, '_m_size_mipmap_offset'):
+            return self._m_size_mipmap_offset
+
+        self._m_size_mipmap_offset = (8 if self._root.use_64bit_ofs == True else 4)
+        return getattr(self, '_m_size_mipmap_offset', None)
+
+    def _invalidate_size_mipmap_offset(self):
+        del self._m_size_mipmap_offset
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
 

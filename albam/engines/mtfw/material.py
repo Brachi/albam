@@ -8,7 +8,7 @@ from kaitaistruct import KaitaiStream
 
 from ...exceptions import AlbamCheckFailure
 from ...lib.blender import get_bl_materials, ShaderGroupCompat
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from .defines import get_shader_objects
@@ -20,7 +20,6 @@ from .texture import (
     TextureType,
     NODE_NAMES_TO_TYPES,
     TEX_TYPE_MAP_2,
-
 )
 
 MTFW_SHADER_NODEGROUP_NAME = "MT Framework shader"
@@ -42,6 +41,7 @@ MRL_DEFAULT_VERSION = {
     "rev1": 32,
     "rev2": 34,
     "dd": 32,
+    "umvc3": 34,
 }
 MRL_FILLER = 0xDCDC
 MRL_PAD = 16
@@ -52,8 +52,8 @@ MRL_SHADER_VERSION = {
     "rev1": 0xe333fde9,
     "rev2": 0x478ed2d7,
     "dd": 0xb46006d5,
+    "umvc3": 0xe588940a,
 }
-
 
 MRL_CBGLOBALS_MAP = {
     "re0": Mrl.CbGlobals1,
@@ -62,6 +62,7 @@ MRL_CBGLOBALS_MAP = {
     "rev1": Mrl.CbGlobals1,
     "rev2": Mrl.CbGlobals2,
     "dd": Mrl.CbGlobals4,
+    "umvc3": Mrl.CbGlobals5,
 }
 MRL_MATERIAL_TYPE_STR = {
     # 0x315ECCA9: "TYPE_nDraw__MaterialNull",
@@ -71,6 +72,11 @@ MRL_MATERIAL_TYPE_STR = {
     0x1CAB245E: "TYPE_nDraw__DDMaterialStd",  # nDraw::DDMaterialStd
     0x26D9BA5C: "TYPE_nDraw__DDMaterialInner",  # nDraw::DDMaterialInner
     0x30DBA54F: "TYPE_nDraw__DDMaterialWater",  # nDraw::DDMaterialWater
+    0x21617F54: "TYPE_nDraw__MaterialChar",  # nDraw::MaterialChar
+    0x6C468C46: "TYPE_nDraw__MaterialCharAlpha",  # nDraw::MaterialCharAlpha
+    0x6EBE0B47: "TYPE_nDraw__MaterialStgSimple",  # nDraw::MaterialStgSimple
+    0x20813BB8: "TYPE_nDraw__MaterialStgSimple2",  # nDraw::MaterialStgSimple2
+    0x3B5107CA: "TYPE_nDraw__MaterialUI",  # nDraw::MaterialUI
 }
 
 MRL_MATERIAL_TYPE_STR_TO_ID = {ext_desc: h for h, ext_desc in MRL_MATERIAL_TYPE_STR.items()}
@@ -122,13 +128,32 @@ MRL_BLEND_STATE_STR = {
     0xc4064: "BSRevSubAlpha",
 }
 
+# Keys are the low 20 bits of crcjam32(name) - the same digest the format
+# uses elsewhere - which is how DSDefault below was recovered: it is not a
+# literal in the executable, but UserShaderPackage.mfx names all 44 DS
+# states, and hashing those finds the one umvc3 uses.
 MRL_DEPTH_STENCIL_STATE_STR = {
     0x7d2f6: "DSZTest",
     0xb8139: "DSZTestWrite",
     0xc80a6: "DSZTestWriteStencilWrite",
     0x30511: "DSZTestStencilWrite",
     0xa967c: "DSZWrite",
+    0xeab42: "DSDefault",
 }
+
+
+def _state_enum_items(mapping):
+    """EnumProperty items for a state table, derived from the table itself.
+
+    Typed out by hand until now, with a comment saying which table they came
+    from - and they drifted: adding DSDefault to the table left the property
+    rejecting it, so a model using it still failed to import, just one line
+    further on. Deriving them means a new state needs one entry, not two.
+    Order follows the table, so the first item - the property's default -
+    is unchanged.
+    """
+    return [(name, name, "", i) for i, name in enumerate(mapping.values(), 1)]
+
 
 MRL_RASTERIZER_STATE_STR = {
     0x108cf: "RSMesh",
@@ -161,7 +186,8 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
     else:
         src_materials = parsed_mod.materials_data.materials
 
-    material_names_available = parsed_mod.header.version in VERSION_USES_MATERIAL_NAMES
+    mod_version = parsed_mod.header.version
+    material_names_available = mod_version in VERSION_USES_MATERIAL_NAMES or app_id == "umvc3"
     mat_inverse_hashes = {}
     if material_names_available:
         mat_inverse_hashes = {
@@ -230,7 +256,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         link = blender_material.node_tree.links.new
         link(shader_node_group.outputs[0], material_output.inputs[0])
 
-        assign_textures(material, blender_material, textures, mrl=mrl)
+        assign_textures(app_id, material, blender_material, textures, mrl=mrl)
 
         if not bool(mrl):
             materials[idx_material] = blender_material
@@ -369,6 +395,15 @@ def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, 
         mat.func_reserved2 = 0
         mat.reserved1 = 0
         mat.reserved2 = 0
+        if app_id == "re5":
+            # Constant across every re5 material checked (42856); dmc4 not checked and
+            # keeps its own values (its parallax_factor is a different size).
+            mat.htechnique = 0x8727e606
+            mat.uvscroll_enable = False
+            mat.ztest = True
+            mat.zwrite = True
+            mat.heightmap_occ = 0.2
+            mat.parallax_factor = [0.0, 0.0]
         dst_mod.materials_data.materials.append(mat)
         exported_materials_map[bl_mat.name] = mat_idx
 
@@ -385,7 +420,7 @@ def _serialize_materials_data_21(model_asset, bl_materials, exported_textures, s
     app_id = model_asset.app_id
     export_settings = bpy.context.scene.albam.export_settings
 
-    mrl = Mrl(app_id=app_id)
+    mrl = Mrl(app_id)
     mrl.id_magic = b"MRL\x00"
     mrl.version = MRL_DEFAULT_VERSION[app_id]
     mrl.shader_version = MRL_SHADER_VERSION[app_id]
@@ -578,7 +613,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
-    MF = MRL_PER_MATERIAL_FEATURES[mrl_mat.type_hash]
+    MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
         set_constant_buffer("CBDDMaterialParamInnerCorrect", onlyif="CBDDMaterialParamInnerCorrect" in MF),
@@ -709,17 +744,23 @@ def _create_resource_generic(cmd_type, app_id, mat, resource_name, param_name=No
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     so = Mrl.ShaderObject(_parent=resource, _root=resource._root)
     if not param_name:
         so.index = shader_obj_index
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly)
+        if app_id == "umvc3":
+            so.filling = 0
     else:
         shader_obj_data_2 = shader_objects[param_name]
         shader_obj_index_2 = shader_obj_data_2["apps"][app_id]["shader_object_index"]
         shader_obj_name_friendly_2 = shader_obj_data_2["friendly_name"]
         so.index = shader_obj_index_2
         so.name_hash = getattr(Mrl.ShaderObjectHash, shader_obj_name_friendly_2)
+        if app_id == "umvc3":
+            so.filling = 0
 
     resource.value_cmd = so
 
@@ -751,6 +792,8 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=T
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     set_texture = Mrl.CmdTexIdx(_parent=resource, _root=resource._root)
     set_texture.tex_idx = texture_index + 1  # zero is used for "dummy texture"
@@ -784,6 +827,8 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     resource.unused = MRL_FILLER
     resource.shader_obj_idx = shader_obj_index
     resource.shader_object_id = shader_obj_id
+    if app_id == "umvc3":
+        resource.filling = 0
 
     cb_offset = Mrl.CmdOfsBuffer(_parent=resource, _root=resource._root)
     cb_offset.ofs_float_buff = 0  # will be set later
@@ -877,6 +922,16 @@ def _create_cb_resource(app_id, mrl_mat, custom_props, cb_name, onlyif=True):
     return resource
 
 
+# The byte left in the unused tail of a texture path slot. 0xCD is MSVC's
+# uninitialised-heap fill, so what a real file carries there is whatever the
+# game's own tools happened to leave in memory rather than anything the
+# format requires. Measured on real files: re1 writes 0xCD throughout,
+# umvc3 zeroes the buffer instead. Only those two are measured, so anything
+# else keeps the long-standing default.
+TEXTURE_PATH_FILLER_BYTE = {"umvc3": 0x00}
+DEFAULT_TEXTURE_PATH_FILLER_BYTE = 0xCD
+
+
 def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id=None):
     tex_types = {}
     image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
@@ -914,7 +969,9 @@ def _gather_tex_types(bl_mat, exported_textures, textures_list, mrl=None, app_id
                 tex.unk_02 = 0  # TODO: research
                 tex.unk_03 = 0  # TODO: research
                 tex.texture_path = relative_path_no_ext
-                tex.filler = [0xcd] * (64 - len(tex.texture_path) - 1)
+                filler_byte = TEXTURE_PATH_FILLER_BYTE.get(
+                    app_id, DEFAULT_TEXTURE_PATH_FILLER_BYTE)
+                tex.filler = [filler_byte] * (64 - len(tex.texture_path) - 1)
 
                 textures_list.append(tex)
                 real_tex_idx = len(textures_list) - 1
@@ -973,6 +1030,12 @@ def _create_mtfw_shader():
     sg.new_socket("Hair Shift", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Height Map", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Emission", in_out="INPUT", socket_type="NodeSocketColor", )
+    # Held, not wired into the BSDF: these carry data albam preserves for
+    # export but the preview shader doesn't model - same as Emission,
+    # Height Map and the displacement sockets above.
+    sg.new_socket("Toon Ramp", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Toon Ramp Reverse", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Indirect User", in_out="INPUT", socket_type="NodeSocketColor")
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -1150,8 +1213,7 @@ def _infer_mrl(context, mod_vfile, app_id):
         try:
             mrl_vfile = vfs.get_vfile(app_id, base + suffix)
             mrl_bytes = mrl_vfile.get_bytes()
-            mrl = Mrl(app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
-            mrl._read()
+            mrl = parse(Mrl, mrl_bytes, app_id)
             assert mrl.materials and mrl.textures
             break
         except KeyError:
@@ -1329,23 +1391,17 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         options=set()
     )
     fog_enable: bpy.props.BoolProperty(name="Fog Enable", default=True, options=set())  # noqa: F821
-    zwrite: bpy.props.BoolProperty(name="Z-write", default=True, options=set())  # noqa: F821
     attr: attr_enum
     num: bpy.props.IntProperty(name="Material Number", default=0, options=set())  # noqa: F821
     envmap_bias: bpy.props.IntProperty(name="Environmental Bias",
                                        default=4, options=set())  # noqa: F821
     vtype: vtype_enum
-    uvscroll_enable: bpy.props.BoolProperty(name="UV scroll enable",
-                                            default=False, options=set())  # noqa: F821
-    ztest: bpy.props.BoolProperty(name="Z-test", default=True, options=set())  # noqa: F821
     func_skin: func_skin_enum
     func_lighting: func_lighting_enum
     func_normalmap: func_normalmap_enum
     func_specular: func_specular_enum
     func_lightmap: func_lightmap_enum
     func_multitexture: func_multitexture_enum
-    htechnique: bpy.props.StringProperty(name="H-technique",  # noqa: F821
-                                         default="0x8727e606", options=set())  # noqa: F821
     pipeline: bpy.props.IntProperty(name="Pipline", default=379, options=set())  # noqa: F821
     pvdeclbase: bpy.props.IntProperty(name="PV declaration base", default=0, options=set())  # noqa: F821
     pvdecl: bpy.props.StringProperty(name="PV declaration", default="0x0", options=set())  # noqa: F821
@@ -1358,11 +1414,7 @@ class Mod156MaterialCustomProperties(bpy.types.PropertyGroup):
         size=4, default=(1.0, 1.0, 1.0, 0), options=set(), subtype="COLOR")  # noqa: F821
     detail_factor: bpy.props.FloatVectorProperty(
         name="DetailFactor", size=4, default=(0.5, 10, 0.0, 0.5), options=set())  # noqa: F821
-    parallax_factor: bpy.props.FloatVectorProperty(
-        name="ParalaxFactor", size=2, default=(0.0, 0.0), options=set())  # noqa: F821
     flip_binormal: bpy.props.FloatProperty(name="Flip Binormals", default=1.0, options=set())  # noqa: F821
-    heightmap_occ: bpy.props.FloatProperty(name="Heightmap Occlusion",
-                                           default=0.2, options=set())  # noqa: F821
     blend_state: bpy.props.IntProperty(name="Blend State", default=44172837, options=set())  # noqa: F821
     alpha_ref: bpy.props.IntProperty(name="Alpha Reference", default=8, options=set())  # noqa: F821
 
@@ -1563,7 +1615,7 @@ class Mod153MaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material("mrl_params",
-                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd"))
+                                                      ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     material_type_enum = bpy.props.EnumProperty(
@@ -1575,6 +1627,11 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             ("TYPE_nDraw__DDMaterialStd", "DDMaterialStd", "", 4),
             ("TYPE_nDraw__DDMaterialInner", "DDMaterialInne", "", 5),
             ("type_n_draw__dd_material_water", "DDMaterialWater", "", 6),
+            ("TYPE_nDraw__MaterialChar", "MaterialChar", "", 7),
+            ("TYPE_nDraw__MaterialCharAlpha", "MaterialCharAlpha", "", 8),
+            ("TYPE_nDraw__MaterialStgSimple", "MaterialStgSimple", "", 9),
+            ("TYPE_nDraw__MaterialStgSimple2", "MaterialStgSimple2", "", 10),
+            ("TYPE_nDraw__MaterialUI", "MaterialUI", "", 11),
         ],
         default="TYPE_nDraw__MaterialStd",
         options=set()
@@ -1591,16 +1648,9 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
         default="BSSolid",
         options=set()
     )
-    # from MRL_DEPTH_STENCIL_STATE_STR
     depth_stencil_enum = bpy.props.EnumProperty(
         name="Depth Stencil State",
-        items=[
-            ("DSZTest", "DSZTest", "", 1),
-            ("DSZTestWrite", "DSZTestWrite", "", 2),
-            ("DSZTestWriteStencilWrite", "DSZTestWriteStencilWrite", "", 3),
-            ("DSZTestStencilWrite", "DSZTestStencilWrite", "", 4),
-            ("DSZWrite", "DSZWrite", "", 5)
-        ],
+        items=_state_enum_items(MRL_DEPTH_STENCIL_STATE_STR),
         options=set()
     )
     # from MRL_RASTERIZER_STATE_STR
@@ -1693,7 +1743,7 @@ class MrlMaterialCustomProperties(bpy.types.PropertyGroup):  # noqa: F821
 
 
 @blender_registry.register_custom_properties_material(
-    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "features", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="Features")
 @blender_registry.register_blender_prop
 class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -1769,6 +1819,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 2),  # noqa: F821
             ("FUVIndirect", "FUVIndirect", "", 3),  # noqa: F821
+            ("FUVExtend", "FUVExtend", "", 4),  # noqa: F821
         ],
         options=set()
     )
@@ -1841,6 +1892,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDamageSimpleAlbedoMapBurnMap", "FDamageSimpleAlbedoMapBurnMap", "", 18),  # noqa: F821
             ("FBurnAlbedoMapBurnMap", "FBurnAlbedoMapBurnMap", "", 19),  # noqa: F821
             ("FBlendRateAlbedoMap", "FBlendRateAlbedoMap", "", 20),  # noqa: F821
+            ("FUserAlbedoMapIndirect", "FUserAlbedoMapIndirect", "", 21),  # noqa: F821
+            ("FUserAlbedoMapNoAlpha", "FUserAlbedoMapNoAlpha", "", 22),  # noqa: F821
         ],
         options=set()
     )
@@ -1888,6 +1941,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FTransparencyMap", "FTransparencyMap", "", 5),  # noqa: F821
             ("FColorMaskTransparencyMap", "FColorMaskTransparencyMap", "", 6),  # noqa: F821
             ("FTransparencyDodgeMap", "FTransparencyDodgeMap", "", 7),  # noqa: F821
+            ("FTransparencyMapClamp", "FTransparencyMapClamp", "", 8),  # noqa: F821
         ],
         options=set()
     )
@@ -1922,6 +1976,10 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBRDFHairHalfLambert", "FBRDFHairHalfLambert", "", 3),  # noqa: F821
             ("FBRDFHalfLambert", "FBRDFHalfLambert", "", 4),  # noqa: F821
             ("FBRDFFur", "FBRDFFur", "", 5),  # noqa: F821
+            ("FToonShader", "FToonShader", "", 6),  # noqa: F821
+            ("FToonShaderHigh", "FToonShaderHigh", "", 7),  # noqa: F821
+            ("FToonShaderNormal", "FToonShaderNormal", "", 8),  # noqa: F821
+            ("FToonShaderUroko", "FToonShaderUroko", "", 9),  # noqa: F821
         ],
         options=set()
     )
@@ -1935,7 +1993,12 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FDiffuseSH", "FDiffuseSH", "", 5),  # noqa: F821
             ("FDiffuseVertexColor", "FDiffuseVertexColor", "", 6),  # noqa: F821
             ("FDiffuseVertexColorOcclusion", "FDiffuseVertexColorOcclusion", "", 7),  # noqa: F821
-            ("FDiffuseThin", "FDiffuseThin", "", 8)  # noqa: F821
+            ("FDiffuseThin", "FDiffuseThin", "", 8),  # noqa: F821
+            ("FDiffuseColorCorectSimple", "FDiffuseColorCorectSimple", "", 9),  # noqa: F821
+            ("FDiffuseColorCorect", "FDiffuseColorCorect", "", 10),  # noqa: F821
+            ("FDiffuseConstantSRGB", "FDiffuseConstantSRGB", "", 11),  # noqa: F821
+            ("FUserDiffuseConstantMul", "FUserDiffuseConstantMul", "", 12),  # noqa: F821
+            ("FUserDiffuseStageFloor", "FUserDiffuseStageFloor", "", 13),  # noqa: F821
         ],
         options=set()
     )
@@ -1956,6 +2019,8 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FBlendSpecularMap", "FBlendSpecularMap", "", 4),  # noqa: F821
             ("FSpecularDisable", "FSpecularDisable", "", 5),  # noqa: F821
             ("FDamageSpecularMap", "FDamageSpecularMap", "", 6),  # noqa: F821
+            ("FSpecularMaskToon", "FSpecularMaskToon", "", 7),  # noqa: F821
+            ("FUserSpecularMapIndirect", "FUserSpecularMapIndirect", "", 8),  # noqa: F821
         ],
         options=set(),
     )
@@ -1965,6 +2030,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVPrimary", "FUVPrimary", "", 1),  # noqa: F821
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
+            ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
         ],
         options=set()
     )
@@ -2036,7 +2102,7 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd"),
+    "cb_material", ("re0", "re1", "rev1", "rev2", "re6", "dd", "umvc3"),
     is_secondary=True, display_name="CB Material")
 @blender_registry.register_blender_prop
 class CBMaterialCustomProperties(bpy.types.PropertyGroup):
@@ -2067,7 +2133,7 @@ class CBMaterialCustomProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement")
 @blender_registry.register_blender_prop
 class CBVtxDisp(bpy.types.PropertyGroup):
@@ -2098,7 +2164,7 @@ class CBVtxDisp(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_vertex_disp2", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Vertex Displacement 2")
 @blender_registry.register_blender_prop
 class CBVtxDisp2(bpy.types.PropertyGroup):
@@ -2123,7 +2189,7 @@ class CBVtxDisp2(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_custom_properties_material(
-    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6"),
+    "cb_color_mask", ("re0", "re1", "rev1", "rev2", "re6", "umvc3"),
     is_secondary=True, display_name="CB Color Mask")
 @blender_registry.register_blender_prop
 class CBColorMaskCustomProperties(bpy.types.PropertyGroup):
@@ -2873,6 +2939,106 @@ class GlobalsCustomProperties4(bpy.types.PropertyGroup):
     padding_5: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
     xyzw_sepalate: bpy.props.FloatVectorProperty(
         name="xyzwSepalate", size=16, options=set())  # noqa: F821
+
+    # FIXME: dedupe
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    # FIXME: dedupe
+    def copy_custom_properties_from(self, src_obj):
+        # TODO: warning of missing attributes
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except AttributeError:
+                print(f"{attr_name} not found on source object {src_obj}")
+
+
+@blender_registry.register_custom_properties_material(
+    "globals",
+    ("umvc3",), is_secondary=True, display_name="$Globals")
+@blender_registry.register_blender_prop
+class GlobalsCustomProperties5(bpy.types.PropertyGroup):
+    f_alpha_clip_threshold: bpy.props.FloatProperty(
+        name="fAlphaClipThreshold", default=0, options=set())  # noqa: F821
+    f_albedo_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_albedo_blend_color: bpy.props.FloatVectorProperty(
+        name="fAlbedoBlendColor", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_detail_normal_power: bpy.props.FloatProperty(
+        name="fDetailNormalPower", default=1, options=set())  # noqa: F821
+    f_detail_normal_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormalUVScale", default=1, options=set())  # noqa: F821
+    f_detail_normal2_power: bpy.props.FloatProperty(
+        name="fDetailNormal2Power", default=1, options=set())  # noqa: F821
+    f_detail_normal2_uv_scale: bpy.props.FloatProperty(
+        name="fDetailNormal2UVScale", default=1, options=set())  # noqa: F821
+    f_primary_shift: bpy.props.FloatProperty(
+        name="fPrimaryShift", default=0, options=set())  # noqa: F821
+    f_secondary_shift: bpy.props.FloatProperty(
+        name="fSecondaryShift", default=0.6, options=set())  # noqa: F821
+    f_parallax_factor: bpy.props.FloatProperty(
+        name="fParallaxFactor", default=0.01, options=set())  # noqa: F821
+    f_parallax_self_occlusion: bpy.props.FloatProperty(
+        name="fParallaxSelfOcclusion", default=1, options=set())  # noqa: F821
+    f_parallax_min_sample: bpy.props.FloatProperty(
+        name="fParallaxMinSample", default=4, options=set())  # noqa: F821
+    f_parallax_max_sample: bpy.props.FloatProperty(
+        name="fParallaxMaxSample", default=64, options=set())  # noqa: F821
+    padding_1: bpy.props.FloatVectorProperty(size=2, default=(0, 0), options={"HIDDEN"})  # noqa: F821
+    f_light_map_color: bpy.props.FloatVectorProperty(
+        name="fLightMapColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_2: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_thin_map_color: bpy.props.FloatVectorProperty(
+        name="fThinMapColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_thin_scattering: bpy.props.FloatProperty(
+        name="fThinScattering", default=0.1, options=set())  # noqa: F821
+    f_screen_uv_scale: bpy.props.FloatVectorProperty(
+        name="fScreenUVScale", size=2, default=(1, 1), options=set())  # noqa: F821
+    f_screen_uv_offset: bpy.props.FloatVectorProperty(
+        name="fScreenUVOffset", size=2, default=(0, 0), options=set())  # noqa: F821
+    f_indirect_offset: bpy.props.FloatVectorProperty(
+        name="fIndirectOffset", size=2, default=(0, 0), options=set())  # noqa: F821
+    f_indirect_scale: bpy.props.FloatVectorProperty(
+        name="fIndirectScale", size=2, default=(0.05, 0.05), options=set())  # noqa: F821
+    f_fresnel_schlick: bpy.props.FloatProperty(
+        name="fFresnelSchlick", default=1, options=set())  # noqa: F821
+    f_fresnel_schlick_rgb: bpy.props.FloatVectorProperty(
+        name="fFresnelSchlickRGB", size=3, default=(1, 1, 1), options=set())  # noqa: F821
+    f_specular_color: bpy.props.FloatVectorProperty(
+        name="fSpecularColor", size=3, default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    f_shininess: bpy.props.FloatProperty(
+        name="fShininess", default=30, options=set())  # noqa: F821
+    f_emission_color: bpy.props.FloatVectorProperty(
+        name="fEmissionColor", size=3, default=(0.5, 0.5, 0.5), subtype="COLOR", options=set())  # noqa: F821
+    padding_3: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_constant_color: bpy.props.FloatVectorProperty(
+        name="fConstantColor", size=4, default=(1, 1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_roughness: bpy.props.FloatProperty(
+        name="fRoughness", default=1, options=set())  # noqa: F821
+    f_roughness_rgb: bpy.props.FloatVectorProperty(
+        name="fRoughnessRGB", size=3, default=(0.3, 0.3, 0.3), options=set())  # noqa: F821
+    f_anisotoropic_direction: bpy.props.FloatVectorProperty(
+        name="fAnisotoropicDirection", size=3, default=(0, 1, 0), options=set())  # noqa: F821
+    f_smoothness: bpy.props.FloatProperty(
+        name="fSmoothness", default=1, options=set())  # noqa: F821
+    f_anistropic_uv: bpy.props.FloatVectorProperty(
+        name="fAnistropicUV", size=2, default=(0.3333, 1), options=set())  # noqa: F821
+    f_primary_expo: bpy.props.FloatProperty(
+        name="fPrimaryExpo", default=1, options=set())  # noqa: F821
+    f_secondary_expo: bpy.props.FloatProperty(
+        name="fSecondaryExpo", default=0.2, options=set())  # noqa: F821
+    f_primary_color: bpy.props.FloatVectorProperty(
+        name="fPrimaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    padding_4: bpy.props.FloatProperty(default=0, options={"HIDDEN"})  # noqa: F821
+    f_secondary_color: bpy.props.FloatVectorProperty(
+        name="fSecondaryColor", size=3, default=(1, 1, 1), subtype="COLOR", options=set())  # noqa: F821
+    f_fresnel_legacy_factor: bpy.props.FloatProperty(
+        name="fFresnelLegacyFactor", default=1, options=set())  # noqa: F821
+    f_fresnel_legacy_bias: bpy.props.FloatProperty(
+        name="fFresnelLegacyBias", default=1, options=set())  # noqa: F821
+    padding_5: bpy.props.FloatVectorProperty(size=3, default=(0, 0, 0), options={"HIDDEN"})  # noqa: F821
 
     # FIXME: dedupe
     def copy_custom_properties_to(self, dst_obj):

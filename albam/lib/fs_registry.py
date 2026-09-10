@@ -32,6 +32,16 @@ def get(key):
     return _REGISTRY[key]
 
 
+def keys():
+    """Every key currently registered.
+
+    Lets a caller close exactly the roots it opened - clear() closes every
+    filesystem in the process, including ones another part of the program
+    (or another test module) is still using.
+    """
+    return list(_REGISTRY)
+
+
 def unregister(key):
     """Remove and close the FS instance stored under `key`, if any."""
     fs_instance = _REGISTRY.pop(key, None)

@@ -2,5 +2,17 @@
     {
         "app_id": "re5",
         "tex_path_hash": "25fd3a1459ed66d6"
+    },
+    {
+        "app_id": "umvc3",
+        "tex_path_hash": "8033b48db0352ce3"
+    },
+    {
+        "app_id": "dmc4",
+        "tex_path_hash": "7873864357b675af"
+    },
+    {
+        "app_id": "dmc4",
+        "tex_path_hash": "1b2ecdf2c05f6714"
     }
 ]

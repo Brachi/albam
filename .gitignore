@@ -9,8 +9,13 @@ Albam.egg-info/
 build/
 dist/
 
+# render comparison outputs (see tools/render_shading_compare.py) - big
+# binaries, throwaway visual diffs, not meant to be committed
+tools/renders/
+
 # local-only debug dumps (real, plain-text game asset paths - never commit)
 *_tree_dump.txt
 
 # real credentials (R2, etc) - see .env.example for the expected keys
 .env
+.env2

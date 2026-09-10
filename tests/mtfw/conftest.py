@@ -98,3 +98,96 @@ def import_export(local_app_id, local_path):
     result = bpy.ops.albam.export()  # FIXME: won't capture failures
     assert result == {"FINISHED"}
     return vfile
+
+
+def import_vfile(local_app_id, local_path):
+    """Select local_path (already resolved from a committed hash, and
+    already mounted into the VFS via game_fs_root) and run it through the
+    real Blender import_vfile() operator.
+
+    The import-only half of import_export() above, for the tests that only
+    care about what a file turns into in Blender - most notably apps albam
+    can import but not yet export.
+    """
+    vfs = bpy.context.scene.albam.vfs
+    try:
+        vfile = vfs.select_vfile(local_app_id, local_path)
+    except KeyError:
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+
+    result = bpy.ops.albam.import_vfile()
+    assert result == {"FINISHED"}
+    return vfile
+
+
+def clear_scene():
+    """Drops everything a previous import left behind.
+
+    Imports accumulate in bpy.data otherwise, so a per-model assertion like
+    "this model built some materials" would really be reading the sum of
+    every model imported before it - and a whole game's worth of models in
+    one session would exhaust memory. Deleting objects only unlinks the
+    meshes/images they used; orphans_purge is what actually frees them.
+    """
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=True)
+    for _ in range(3):
+        bpy.ops.outliner.orphans_purge(
+            do_local_ids=True, do_linked_ids=True, do_recursive=True)
+
+
+def action_fcurves(action):
+    """Every fcurve an action holds, whichever Blender version made it.
+
+    The flat Action.fcurves shortcut is gone from 5.0 on - the same removal
+    the LMT import tests exist to catch - so reading it directly here would
+    break the tests exactly where it broke the code.
+    """
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [
+        fcurve
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+        for fcurve in channelbag.fcurves
+    ]
+
+
+@pytest.fixture
+def mount_vfs_root():
+    """Mount VFS roots and take them back out again afterwards.
+
+    The VFS lives in Blender's scene data, which is process-global and outlives
+    any one test, while the filesystems behind its roots do not. Node ids are
+    `app_id::relative_path` with no scoping per root, so a root left mounted is
+    one a later test can resolve a path to and then fail to read - and the
+    failure surfaces in that later test, nowhere near the cause.
+
+    Teardown runs whether the test passed or not, which matters most when it
+    failed: leaving the roots behind turns one real failure into a cascade of
+    unrelated ones. Roots come out in reverse order, and only the ones actually
+    mounted, so nothing has to be kept in sync by hand.
+    """
+    mounted = []
+
+    def mount(app_id, fs_instance, display_name, **kwargs):
+        root_vfile = bpy.context.scene.albam.vfs.add_fs_root(
+            app_id, fs_instance, display_name=display_name, **kwargs)
+        # Not f"{app_id}::{display_name}": _unique_root_name() suffixes that
+        # same key with "#1", "#2", ... when a same-named root is already
+        # mounted (see its own docstring), and reconstructing the unsuffixed
+        # form here would then miss the real root at teardown, leaking it.
+        # root_vfile.name is whatever key actually got used.
+        mounted.append(root_vfile.name)
+        return root_vfile
+
+    yield mount
+
+    vfs = bpy.context.scene.albam.vfs
+    for root_id in reversed(mounted):
+        index = vfs.file_list.find(root_id)
+        if index == -1:
+            continue  # the test removed it itself
+        vfs.file_list_selected_index = index
+        bpy.ops.albam.remove_imported()

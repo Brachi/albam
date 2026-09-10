@@ -54,6 +54,32 @@ def set_path_list_file_config(self, context):
     config_mgr.save()
 
 
+def folder_descendants(vfs, folder_item):
+    """Every non-folder vfile under `folder_item`, scoped to the root
+    `folder_item` itself belongs to.
+
+    A node id is `app_id::<path parts>` with no root in it (see
+    albam.vfs.Tree), so two archives mounted under the same name - and
+    therefore holding the same internal paths - give their identically
+    placed folders the *same* node id, and give the files under either one
+    an ancestor list naming that shared id. Matching on the ancestor id
+    alone then batch-imports both archives' copies when the user picked one
+    archive's folder in the file tree (#275). `tree_node.root_id` is unique
+    per root (VirtualFileSystemBase._unique_root_name), so it is what tells
+    the two apart; a root node carries its own id in `name` instead, with
+    `tree_node.root_id` left empty.
+    """
+    root_id = folder_item.name if folder_item.is_root else folder_item.tree_node.root_id
+    folder_node_id = folder_item.name
+    for item in vfs.file_list:
+        if item.is_expandable or item.is_root:
+            continue
+        if item.tree_node.root_id != root_id:
+            continue
+        if any(anc.node_id == folder_node_id for anc in item.tree_node_ancestors):
+            yield item
+
+
 @blender_registry.register_blender_prop_albam(name="apps")
 class AlbamApps(bpy.types.PropertyGroup):
     app_selected : bpy.props.EnumProperty(name="", items=APPS, update=get_app_dir_from_config)
@@ -104,23 +130,13 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
     def _execute_batch(self, folder_item, context):
         vfs = context.scene.albam.vfs
-        folder_node_id = folder_item.name
         imported_count = 0
         failed = []
 
-        for item in vfs.file_list:
-            if item.is_expandable:
-                continue
+        for item in folder_descendants(vfs, folder_item):
             if not item.display_name.lower().endswith(".mod"):
                 continue
             if (item.app_id, item.extension) not in blender_registry.importable_extensions:
-                continue
-            is_child = False
-            for ancestor in item.tree_node_ancestors:
-                if ancestor.node_id == folder_node_id:
-                    is_child = True
-                    break
-            if not is_child:
                 continue
             try:
                 bl_object = self._execute(item, context)
@@ -165,8 +181,15 @@ class ALBAM_OT_Import(bpy.types.Operator):
             return
 
         if bl_container.type != "ARMATURE" and bl_container.type != "IMAGE":
-            # armature building needs it linked to for building
-            bpy.context.collection.objects.link(bl_container)
+            try:
+                # An import function may have linked it already - armature
+                # building needs that, and an engine whose container is not
+                # an armature can have the same reason. Linking twice raises,
+                # and it means the object is where it needs to be, which is
+                # the same reason the children below are guarded.
+                bpy.context.collection.objects.link(bl_container)
+            except RuntimeError:
+                pass
         for child in getattr(bl_container, "children_recursive", {}):
             try:
                 # already linked
@@ -497,18 +520,9 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
             self.report({'WARNING'}, 'Select a folder, not a file')
             return {'CANCELLED'}
 
-        selected_node_id = selected.name
-
         # Find all .mod children of the selected folder
-        mod_items = []
-        for item in vfs.file_list:
-            if item.is_expandable:
-                continue
-            if item.display_name.lower().endswith(".mod"):
-                for ancestor in item.tree_node_ancestors:
-                    if ancestor.node_id == selected_node_id:
-                        mod_items.append(item)
-                        break
+        mod_items = [item for item in folder_descendants(vfs, selected)
+                     if item.display_name.lower().endswith(".mod")]
 
         if not mod_items:
             self.report({'WARNING'}, 'No .mod files found in selected folder')

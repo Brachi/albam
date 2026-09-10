@@ -4,6 +4,7 @@ import os
 import bpy
 from .lib.tools import face_attr_editor as overlay
 
+from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
@@ -41,6 +42,12 @@ def register():
     importlib.import_module(".engines.mtfw.archive", __package__)
     importlib.import_module(".engines.mtfw.mesh", __package__)
     importlib.import_module(".engines.mtfw.navmesh", __package__)
+    importlib.import_module(".engines.hexn.archive", __package__)
+    importlib.import_module(".engines.hexn.mesh", __package__)
+    importlib.import_module(".engines.hexn.animation", __package__)
+    importlib.import_module(".engines.cie.archive", __package__)
+    importlib.import_module(".engines.cie.mesh", __package__)
+    importlib.import_module(".engines.cie.scenario", __package__)
     if os.getenv("ALBAM_ENABLE_REEN"):
         importlib.import_module(".engines.reng.archive", __package__)
         importlib.import_module(".engines.reng.mesh", __package__)
@@ -57,12 +64,14 @@ def register():
     AlbamCustomPropertiesMesh = AlbamCustomPropertiesFactory("mesh")
     AlbamCustomPropertiesImage = AlbamCustomPropertiesFactory("image")
     AlbamCustomPropertiesObject = AlbamCustomPropertiesFactory("object")
+    AlbamCustomPropertiesBone = AlbamCustomPropertiesFactory("bone")
     bpy.utils.register_class(AlbamData)
     _CUSTOM_PROPERTIES_CLASSES[:] = [
         AlbamCustomPropertiesMaterial,
         AlbamCustomPropertiesMesh,
         AlbamCustomPropertiesImage,
         AlbamCustomPropertiesObject,
+        AlbamCustomPropertiesBone,
     ]
     for cls in _CUSTOM_PROPERTIES_CLASSES:
         bpy.utils.register_class(cls)
@@ -76,6 +85,8 @@ def register():
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
     bpy.types.Image.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesImage)
     bpy.types.Object.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesObject)
+    # PoseBone, not Bone: see BlenderRegistry.register_custom_properties_bone
+    bpy.types.PoseBone.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesBone)
 
     register_workspace_tools()
     overlay.register_overlay()

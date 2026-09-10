@@ -70,6 +70,12 @@ one command rather than a per-file split that nothing in a `.ksy` records. It im
 `from_bytes()`) no longer parses anything on its own, so every call site follows it with an
 explicit `_read()`.
 
+A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
+a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both
+cases and does the `_read()` for you. Every MT Framework model and texture struct takes an
+`app_id`, since some of their fields differ per app rather than per format version - UMVC3, for
+one, is a 64-bit build whose offsets are `u8` where every other app's are `u4`.
+
 
 ## Supported Engines
 

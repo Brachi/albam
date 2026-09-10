@@ -41,14 +41,13 @@ def test_dataset_hashes_are_in_catalog():
 @pytest.fixture(scope="session")
 def parsed_rtex(game_fs_root, local_app_id, local_rtex_path_hash):
     from albam.engines.mtfw.texture import APPID_RTEXCLS_MAP
+    from albam.lib.kaitai_utils import parse
 
     path = resolve_hashes(game_fs_root, {local_rtex_path_hash})[local_rtex_path_hash]
     rtex_bytes = game_fs_root.readbytes(path)
     Rtex = APPID_RTEXCLS_MAP[local_app_id]
 
-    parsed = Rtex.from_bytes(rtex_bytes)
-    parsed._read()
-    return parsed
+    return parse(Rtex, rtex_bytes, local_app_id)
 
 
 def test_parse_rtex(parsed_rtex):

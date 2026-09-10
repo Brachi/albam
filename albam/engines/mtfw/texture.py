@@ -14,7 +14,7 @@ from ...lib.blender import (
     is_blimage_dds,
 )
 from ...lib.dds import DDSHeader
-from ...lib.kaitai_utils import check_recursive
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 # from .defines import get_shader_objects
@@ -23,6 +23,9 @@ from .structs.tex_157 import Tex157
 from .structs.rtex_112 import Rtex112
 from .structs.rtex_157 import Rtex157
 from .structs.mrl import Mrl
+
+
+APP_USES_64BIT_OFS = {"umvc3"}
 
 
 class TextureType2(Enum):  # TODO: unify
@@ -56,6 +59,12 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     NORMAL_DETAIL_2 = 20
     INDIRECT = 21
     SPECULAR_BLEND = 22
+    # UMVC3's cel-shading LUTs: ttoonmap/ttoonrevmap are the lit/unlit
+    # ramps nDraw::MaterialChar samples, tindirectmapuser its user-supplied
+    # indirect map.
+    TOON = 23
+    TOON_REVERSE = 24
+    INDIRECT_USER = 25
 
 
 TEX_TYPE_MAP_2 = {
@@ -88,6 +97,9 @@ TEX_TYPE_MAP_2 = {
     "tspheremap": TextureType.SPHERE,
     "tindirectmap": TextureType.INDIRECT,
     "tspecularblendmap": TextureType.SPECULAR_BLEND,
+    "ttoonmap": TextureType.TOON,
+    "ttoonrevmap": TextureType.TOON_REVERSE,
+    "tindirectmapuser": TextureType.INDIRECT_USER,
 }
 
 
@@ -108,6 +120,9 @@ NODE_NAMES_TO_TYPES = {
     'Hair Shift': TextureType.HAIR_SHIFT,
     'Height Map': TextureType.HEIGHTMAP,
     'Emission': TextureType.EMISSION,
+    'Toon Ramp': TextureType.TOON,
+    'Toon Ramp Reverse': TextureType.TOON_REVERSE,
+    'Indirect User': TextureType.INDIRECT_USER,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -123,15 +138,18 @@ TEX_FORMAT_MAPPER = {
     14: b"",  # uncompressed
     19: b"DXT1",  # BM/Diffuse without alpha
     20: b"DXT1",  # ? env cubemap in RE1, env spheremap in RE0
+    21: b"DXT5",  # BM/Diffuse, effect textures
     23: b"DXT5",  # BM/Diffuse with alpha
     24: b"DXT5",  # BM/Diffuse (UI?)
     25: b"DXT1",  # MM/Specular
+    30: b"DXT1",  # DM/Damage
     31: b"DXT5",  # NM/Normal
     32: b"DXT5",
     35: b"DXT5",
     37: b"DXT1",  # FIXME: unchecked
     39: b"",  # uncompressed
     40: b"",  # uncompressed
+    42: b"DXT5",  # BM/Diffuse, UI sprites
     43: b"DXT1",  # FIXME: unchecked
     47: b"DXT1",  # FIXME: unchecked
     "DXT1": b"DXT1",
@@ -155,6 +173,7 @@ APPID_SERIALIZE_MAPPER = {
     "rev2": lambda: _serialize_texture_21,
     "dd": lambda: _serialize_texture_21,
     "dmc4": lambda: _serialize_texture_156,
+    "umvc3": lambda: _serialize_texture_21,
 }
 
 APPID_TEXCLS_MAP = {
@@ -166,6 +185,7 @@ APPID_TEXCLS_MAP = {
     "rev2": Tex157,
     "dd": Tex157,
     "dmc4": Tex112,
+    "umvc3": Tex157,
 }
 
 APPID_RTEXCLS_MAP = {
@@ -177,6 +197,7 @@ APPID_RTEXCLS_MAP = {
     "rev2": Rtex157,
     "dd": Rtex157,
     "dmc4": Rtex112,
+    "umvc3": Rtex157,
 }
 
 TEX_TYPE_MAPPER = {
@@ -211,16 +232,36 @@ TEX_TYPE_MAPPER = {
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
 
+# The FTransparency feature value meaning "this material is opaque". Its
+# albedo map's alpha channel is then not opacity - it carries whatever the
+# shader wants there - so wiring that channel to the shader group's alpha
+# renders the mesh away. Every other FTransparency* value does describe some
+# form of transparency, so those keep the alpha link.
+FTRANSPARENCY_OPAQUE = "FTransparency"
+
+# The engine's placeholder textures. A material binding one of these is
+# saying the map is deliberately absent - the same thing tex_idx 0 says, but
+# spelled as a path at a real index instead, so the tex_index == 0 check in
+# assign_textures() never sees it. They exist in no .arc, so they resolve to
+# None like a genuinely missing texture does; matching on the path is what
+# tells the two apart. Anything else that fails to resolve keeps building an
+# empty image node, so a real gap still surfaces (see
+# test_mod_import_textures_are_resolved) instead of being skipped silently
+# alongside the placeholders.
+DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
+
+
+def is_dummy_texture_path(texture_path):
+    if not texture_path:
+        return False
+    return texture_path.replace("\\", "/").lower().startswith(DUMMY_TEXTURE_PATH_PREFIX)
+
 
 @blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
     app_id = vfile.app_id
     TexCls = APPID_TEXCLS_MAP[app_id]
-    stream = KaitaiStream(io.BytesIO(vfile.get_bytes()))
-    args = [stream] if TexCls is Tex112 else [app_id, stream]
-
-    tex = TexCls(*args)
-    tex._read()
+    tex = parse(TexCls, vfile.get_bytes(), app_id)
     dds = convert_tex_to_dds(tex)
 
     bl_image = bpy.data.images.new(f"{vfile.display_name}.dds", tex.width, tex.height)
@@ -278,15 +319,14 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
             except KeyError:
                 tex_bytes = None
         if not tex_bytes:
-            print(f"texture_path {texture_path} not found in arc")
+            # Both cases append None - assign_textures() tells them apart by
+            # the path, and only the placeholder is skipped there.
+            if not is_dummy_texture_path(texture_path):
+                print(f"texture_path {texture_path} not found in arc")
             textures.append(None)
-            # TODO: handle missing texture
             continue
-        if is_rtex:
-            tex = RtexCls.from_bytes(tex_bytes)
-        else:
-            tex = TexCls.from_bytes(tex_bytes)
-        tex._read()
+        TexOrRtexCls = RtexCls if is_rtex else TexCls
+        tex = parse(TexOrRtexCls, tex_bytes, app_id)
         if not is_rtex:
             try:
                 compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
@@ -337,10 +377,15 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
     return textures
 
 
-def assign_textures(mtfw_material, bl_material, textures, mrl):
+def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
     if not mrl:
         old_assignment(mtfw_material, bl_material, textures)
         return
+    features = (bl_material.albam_custom_properties
+                .get_custom_properties_secondary_for_appid(app_id)
+                .get("features"))
+    link_albedo_alpha = (
+        features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
 
@@ -360,15 +405,26 @@ def assign_textures(mtfw_material, bl_material, textures, mrl):
                 print("         Unknown tex type: ", tex_type_mtfw)
                 continue
 
-            if tex_index > 0:
-                texture_target = textures[real_tex_index]
-            else:
-                texture_target = None
+            if tex_index == 0:
+                # Index 0 is the engine's dummy texture: the material is
+                # saying this map is deliberately absent. Leave the socket
+                # on the shader group's own default - an empty image node
+                # would drive it with black, which for a normal map is not
+                # the neutral value. old_assignment() skips these too.
+                continue
+            texture_target = textures[real_tex_index]
+            if texture_target is None and is_dummy_texture_path(
+                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                # Same case as tex_index == 0 above, just spelled as a path:
+                # leave the socket on the shader group's default rather than
+                # driving it with an empty image node.
+                continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
-            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material)
+            texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material,
+                                            link_albedo_alpha=link_albedo_alpha)
             if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
@@ -413,12 +469,15 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     return tex_index
 
 
-def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material):
+def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material,
+                                    link_albedo_alpha=True):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
     blender_texture_node : image texture node
     blender_material : shader material
+    link_albedo_alpha : whether the albedo map's alpha channel is this
+        material's opacity (see FTRANSPARENCY_OPAQUE)
     """
     # blender_texture_node.use_map_alpha = True
     shader_node_grp = blender_material.node_tree.nodes.get("MTFrameworkGroup")
@@ -427,7 +486,8 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     if texture_code == 1:
         # Diffuse _BM
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Diffuse BM"])
-        link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
+        if link_albedo_alpha:
+            link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha BM"])
         blender_texture_node.location = (-300, 350)
         # blender_texture_node.use_map_color_diffuse = True
     elif texture_code == 2:
@@ -524,6 +584,18 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Detail 2 DNM"])
         blender_texture_node.location = (-600, -800)
 
+    elif texture_code == 23:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp"])
+        blender_texture_node.location = (-600, -2000)
+
+    elif texture_code == 24:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Toon Ramp Reverse"])
+        blender_texture_node.location = (-600, -2050)
+
+    elif texture_code == 25:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
+        blender_texture_node.location = (-600, -2100)
+
     else:
         print("texture_code not supported", texture_code)
 
@@ -573,7 +645,7 @@ def _serialize_texture_156(app_id, dict_tex):
     _check_is_power_of_two(bl_im)
 
     if is_rtex:
-        tex = Rtex112()
+        tex = Rtex112(app_id)
         tex.id_magic = b"RTX\x00"
         tex.version = 112
         # tex.revision = 514
@@ -586,7 +658,7 @@ def _serialize_texture_156(app_id, dict_tex):
         dds_data_len = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex112()
+        tex = Tex112(app_id)
         tex.id_magic = b"TEX\x00"
         tex.version = 112
         #  revision = 34
@@ -626,14 +698,14 @@ def _serialize_texture_21(app_id, dict_tex):
     # compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
-        tex = Rtex157()
+        tex = Rtex157(app_id)
         tex.id_magic = b"RTX\x00"
         # tex.num_mipmaps_per_image = int(math.log(max(bl_im.size[0], bl_im.size[1]), 2)) + 1
         tex.num_mipmaps_per_image = 1
         dds_data_size = 0
     else:
         dds_header = DDSHeader.from_bl_image(bl_im)
-        tex = Tex157()
+        tex = Tex157(app_id)
         tex.id_magic = b"TEX\x00"
 
     tex.width = bl_im.size[0]
@@ -827,7 +899,8 @@ TEX_VERSION = {
 tex_version_enum_items = [(key, str(label), "", idx) for idx, (key, label) in enumerate(TEX_VERSION.items())]
 
 
-@blender_registry.register_custom_properties_image("tex_157", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_custom_properties_image("tex_157",
+                                                   ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
     unk: bpy.props.IntProperty(  # noqa: F821
