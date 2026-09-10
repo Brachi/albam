@@ -726,6 +726,12 @@ def _bone_ids_by_name(all_bones):
     id the format allows instead of silently doubling up - a model bound to
     the upper half of a shared rig leaves the ids below it free, so the
     search wraps rather than stopping at 254.
+
+    An armature can hold more bones than the format can name, since only some
+    of them are ever written (see _bones_to_write) - a rig carrying control
+    and IK bones nothing is weighted to, say. A bone left with no free id is
+    simply absent from the mapping; whether that matters is decided where the
+    table is written, not here.
     """
     used = {claimed for claimed in (_claimed_id(bone.name) for bone in all_bones)
             if claimed is not None}
@@ -738,10 +744,7 @@ def _bone_ids_by_name(all_bones):
             search = list(range(preferred, 255)) + list(range(preferred))
             bone_id = next((c for c in search if c not in used and c not in taken), None)
             if bone_id is None:
-                raise AlbamCheckFailure(
-                    f"Bone {bone.name!r} has no free bone id left: the format "
-                    "can only name 255 bones and this armature needs more"
-                )
+                continue
         taken.add(bone_id)
         ids[bone.name] = bone_id
     return ids
@@ -776,7 +779,8 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
     all_bones = list(bl_armature.data.bones)
     by_id = {}
     for bone in all_bones:
-        by_id.setdefault(ids[bone.name], bone)
+        if bone.name in ids:
+            by_id.setdefault(ids[bone.name], bone)
 
     kept = set()
     for bone_id in own_ids:
@@ -831,10 +835,20 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
         bones = all_bones
+    unnamed = [bone.name for bone in bones if bone.name not in ids]
+    if unnamed:
+        raise AlbamCheckFailure(
+            f"{bl_armature.name} needs to write more bones than the format can name",
+            details=f"A bone is named by a single byte, so an exported table holds at "
+                    f"most 255 of them, and {len(unnamed)} of the bones this model "
+                    f"writes have no id left: {', '.join(unnamed[:5])}",
+            solution="Remove bones the model does not need, or unweight the ones it "
+                     "does not use",
+        )
     kept = {bone.name for bone in bones}
 
     own_parents = own_parents or {}
-    by_id = {ids[bone.name]: bone for bone in all_bones}
+    by_id = {ids[bone.name]: bone for bone in all_bones if bone.name in ids}
 
     dst_bones = []
     for bone in sorted(bones, key=lambda b: ids[b.name]):
