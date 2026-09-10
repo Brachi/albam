@@ -31,7 +31,7 @@ from . import (
 from .structs.arc import Arc
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 from ...lib.xcompress import xmem_decompress
-from ...lib.xcompress_encode import xmem_compress
+from ...lib.xcompress_encode import FrameTooLarge, xmem_compress
 
 
 # The archive version this app writes. Every other app albam reads writes
@@ -70,16 +70,22 @@ def decompress_entry(arc_version, raw, size):
     return zlib.decompress(raw)
 
 
-def compress_entry(arc_version, data):
+def compress_entry(arc_version, data, entry_path="<unknown>"):
     """One .arc file entry's payload, encoded with the codec its archive uses.
 
     The counterpart of decompress_entry, and the reason a version 17 archive
     can be written at all: its entries are XMemCompress streams, and zlib
     chunks written into one would leave an archive that parses fine and that
     the game cannot read.
+
+    An entry the LZX encoder cannot encode correctly is refused rather than
+    written, and `entry_path` is what says which file that was.
     """
     if arc_version == ARC_VERSION_DMC4:
-        return xmem_compress(data)
+        try:
+            return xmem_compress(data)
+        except FrameTooLarge as err:
+            raise FrameTooLarge(f'cannot pack "{entry_path}": {err}') from err
     return zlib.compress(data)
 
 
