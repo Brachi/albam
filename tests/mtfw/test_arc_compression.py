@@ -1,24 +1,47 @@
 """The two things that differ between an .arc's versions: how an entry's
-payload is compressed, and which table names its file type.
+payload is compressed, and which table names its file type - and, since
+version 17 can now be written as well as read, that packing one produces
+entries in its own codec.
 
-Nothing here needs game data. The stream these tests decode is built by
+Most of this needs no game data: the streams those tests decode are built by
 hand out of one uncompressed LZX block, which exercises the frame header,
-the block header and the bit reader's alignment, but not the Huffman path -
-that is what the dataset-driven tests over real archives cover.
+the block header and the bit reader's alignment, but not the Huffman path.
+The dataset-driven half at the bottom is what puts real Devil May Cry 4
+entries - megabytes of them, spanning many frames - through the encoder, and
+what checks albam's own decoder against one that is not albam's.
 """
+import json
+import os
 import struct
 import zlib
 
 import pytest
 
-from albam.engines.mtfw import FILE_ID_TO_EXTENSION, FILE_ID_TO_EXTENSION_DMC4
+from albam.engines.mtfw import (
+    EXTENSION_TO_FILE_ID,
+    FILE_ID_TO_EXTENSION,
+    FILE_ID_TO_EXTENSION_DMC4,
+)
 from albam.engines.mtfw.archive import update_arc
 from albam.engines.mtfw.arc_fs import (
     ARC_VERSION_DMC4,
     decompress_entry,
     file_type_extensions,
 )
+from albam.engines.mtfw.structs.arc import Arc
 from albam.lib.xcompress import _BitReader, xmem_decompress
+from albam.lib.xcompress_encode import (
+    FRAME_SIZE,
+    _lz77_tokens,
+    _operations,
+    _split_blocks,
+    compress_frames,
+    frame_stream,
+    xmem_compress,
+)
+from tests.mtfw.scripts.catalog_paths import resolve_hashes
+from tests.xcompress_cab import independent_decompress, sevenzip
+from tests.xcompress_frames import frames_of
 
 ARC_VERSION_ZLIB = 7
 
@@ -95,16 +118,133 @@ def test_the_two_tables_number_the_same_types_differently():
         assert FILE_ID_TO_EXTENSION.get(dmc4[0]) is None, extension
 
 
-def test_writing_refuses_an_archive_it_can_only_read(tmp_path):
-    """albam has a decoder for these entries but no encoder, so packing into
-    one has to fail rather than write an archive the game cannot read."""
-    path = tmp_path / "test.arc"
-    # the smallest well-formed .arc: a header, no entries, and the padding
-    # arc.ksy expects before what would be the first payload
-    path.write_bytes(struct.pack("<4shh", b"ARC\x00", ARC_VERSION_DMC4, 0) + b"\x00" * 32760)
+class FakeVFile:
+    """The four things update_arc asks a vfile for."""
 
-    with pytest.raises(ValueError, match="cannot be written back"):
-        update_arc(str(path), [])
+    def __init__(self, relative_path, data, app_id="dmc4"):
+        self.relative_path = relative_path
+        self.extension = relative_path.rsplit(".", 1)[-1]
+        self.app_id = app_id
+        self._data = data
+
+    def get_bytes(self):
+        return self._data
+
+
+def build_arc(version, entries):
+    """An .arc holding `entries` as (path, file type id, payload, flags).
+
+    Written out by hand rather than through _serialize_arc, so that a test of
+    the writer is not reading back the writer's own idea of the layout: a
+    header, one 80 byte record per entry, padding out to where the first
+    payload starts, and then the payloads back to back.
+    """
+    table = bytearray()
+    body = bytearray()
+    padding = 32760 - (len(entries) * 80) % 32768
+    offset = 8 + len(entries) * 80 + padding
+    for path, file_type, payload, flags in entries:
+        table += path.encode("ascii").ljust(64, b"\x00")
+        table += struct.pack("<iIII", file_type, len(payload),
+                             len(payload) | (flags << 29), offset)
+        body += payload
+        offset += len(payload)
+    header = struct.pack("<4shh", b"ARC\x00", version, len(entries))
+    return header + bytes(table) + b"\x00" * padding + bytes(body)
+
+
+def parse_arc(data):
+    parsed = Arc.from_bytes(data)
+    parsed._read()
+    return parsed
+
+
+DMC4_TEX = 0x3CAD8076  # rTexture, as a version 17 archive numbers it
+DMC4_LMT = 0x139EE51D  # rMotionList
+
+
+def test_packing_a_version_17_archive_writes_xmemcompress_entries(tmp_path):
+    """The point of the encoder existing: a DMC4 archive packs like any
+    other, and what lands in it is a stream the archive's own codec reads.
+
+    Before there was an encoder this had to be refused outright, because the
+    alternative was writing zlib into an archive the game reads as LZX.
+    """
+    replaced = b"the payload that gets replaced\n" * 500
+    untouched = b"the payload nothing happens to\n" * 500
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(replaced), 1),
+        ("chr\\pl000\\pl001", DMC4_TEX, stored_frame(untouched), 2),
+    ]))
+
+    new_payload = b"albam wrote this one\n" * 2000
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\pl000.tex", new_payload)]))
+
+    assert rebuilt.header.version == ARC_VERSION_DMC4
+    entries = {e.file_path: e for e in rebuilt.file_entries}
+    assert len(entries) == 2
+
+    written = entries["chr\\pl000\\pl000"]
+    assert written.size == len(new_payload)
+    assert written.zsize == len(written.raw_data)
+    assert decompress_entry(ARC_VERSION_DMC4, written.raw_data, written.size) == new_payload
+    with pytest.raises(zlib.error):
+        zlib.decompress(written.raw_data)
+
+    kept = entries["chr\\pl000\\pl001"]
+    assert kept.raw_data == stored_frame(untouched)
+
+
+def test_packing_leaves_an_entry_s_flags_alone(tmp_path):
+    """Every entry of every version 7 archive carries flags 2, but a DMC4
+    archive uses 0 and 1 as well - only ever on a tex, so the value says
+    something about the texture, and rewriting it would be inventing an
+    answer."""
+    payload = b"a texture, supposedly\n" * 200
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        (f"chr\\tex{flags}", DMC4_TEX, stored_frame(payload), flags)
+        for flags in (0, 1, 2)
+    ]))
+
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\tex0.tex", b"replaced\n" * 100)]))
+
+    assert [e.flags for e in rebuilt.file_entries] == [0, 1, 2]
+
+
+def test_packing_gives_a_new_entry_its_own_version_s_file_type_id(tmp_path):
+    """The two versions number the same resource classes from different
+    hashes, so an entry albam adds has to be labelled with the id the archive
+    it is going into uses - the shared table's id would name nothing there."""
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(b"x" * 100), 2)]))
+
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\motion.lmt", b"a motion list\n" * 100)]))
+
+    added = {e.file_path: e for e in rebuilt.file_entries}["chr\\pl000\\motion"]
+    assert added.file_type == DMC4_LMT
+    assert FILE_ID_TO_EXTENSION.get(DMC4_LMT) is None
+
+
+def test_packing_a_version_7_archive_still_writes_zlib(tmp_path):
+    """The other side of the same switch: nothing changes for the archives
+    albam already wrote."""
+    path = tmp_path / "test.arc"
+    zlib_tex = EXTENSION_TO_FILE_ID["tex"]
+    path.write_bytes(build_arc(ARC_VERSION_ZLIB, [
+        ("chr\\pl000\\pl000", zlib_tex, zlib.compress(b"old\n" * 100), 2)]))
+
+    payload = b"albam wrote this one\n" * 200
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\pl000.tex", payload, app_id="re5")]))
+
+    entry = rebuilt.file_entries[0]
+    assert zlib.decompress(entry.raw_data) == payload
 
 
 def _bits_msb_first(data):
@@ -132,3 +272,196 @@ def test_bit_reader_matches_the_bit_sequence(skip):
         assert reader.read(skip) == int(bits[:skip], 2)
     assert reader.read(24) == int(bits[skip:skip + 24], 2)
     assert reader.read(16) == int(bits[skip + 24:skip + 40], 2)
+
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified entries to
+# put through the encoder (see test_dataset_hashes_are_in_catalog below).
+# Chosen to span the sizes an .arc holds, from a stream that is one short
+# frame to one of several megabytes and eighty of them.
+ARC_COMPRESSION_DATASET_PATH = os.path.join(
+    os.path.dirname(__file__), "datasets", "arc_compression_hashes.json")
+with open(ARC_COMPRESSION_DATASET_PATH) as f:
+    ARC_COMPRESSION_DATASET = json.load(f)
+
+# Below this an entry is one frame and one block, and forcing a second block
+# out of it says nothing.
+SEVERAL_BLOCKS_CAP = 100000
+
+
+# The archive the repack test rewrites is whichever one holds this entry.
+REPACK_ENTRY_HASH = "829d4caf886bc448"
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_entry_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_entry_path_hash")
+        argvalues = [(d["app_id"], d["entry_path_hash"]) for d in ARC_COMPRESSION_DATASET]
+        ids = [f"{d['app_id']}-{d['entry_path_hash']}" for d in ARC_COMPRESSION_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+    elif "local_app_id" in metafunc.fixturenames:
+        # game_fs_root is session scoped, so what it is parametrized on has
+        # to be too.
+        metafunc.parametrize("local_app_id", ["dmc4"], scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by ARC_COMPRESSION_DATASET must be in that app_id's committed catalog, so
+    this file only ever exercises real, unmodified, hash-verified game files.
+    CI-safe: reads two committed JSON files, no --game-dir needed.
+    """
+    for entry in ARC_COMPRESSION_DATASET:
+        catalog_path = os.path.join(
+            os.path.dirname(__file__), "datasets", f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog_hashes = {e["path_hash"] for e in json.load(f)}
+        assert entry["entry_path_hash"] in catalog_hashes, (
+            f"{entry['entry_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def entry_payload(game_fs_root, local_entry_path_hash):
+    """One real archived entry, decoded - what the encoder has to write back."""
+    path = resolve_hashes(game_fs_root, {local_entry_path_hash})[local_entry_path_hash]
+    return game_fs_root.readbytes(path)
+
+
+@pytest.fixture(scope="session")
+def shipped_stream(game_fs_root, local_entry_path_hash):
+    """The same entry as its archive stores it: the stream the game reads."""
+    from albam.engines.mtfw.arc_fs import ArcFS, _entry_path
+
+    path = resolve_hashes(game_fs_root, {local_entry_path_hash})[local_entry_path_hash]
+    arc_path = game_fs_root.origin_absolute_path(path)
+    if arc_path is None:
+        # A loose file on disk shadows the archived one of the same path, so
+        # there is no shipped stream behind it in this install.
+        pytest.skip(f"{local_entry_path_hash} resolves to a loose file here")
+    arc = ArcFS(arc_path)
+    extensions = file_type_extensions(arc.version)
+    parsed = Arc.from_file(arc_path)
+    parsed._read()
+    for file_entry in parsed.file_entries:
+        if _entry_path(file_entry, extensions) == path:
+            return file_entry.raw_data
+    raise AssertionError(f"{path!r} is not an entry of {arc_path!r}")
+
+
+@pytest.mark.skipif(sevenzip() is None,
+                    reason="p7zip is not installed (see tests/xcompress_cab.py)")
+def test_a_shipped_stream_decodes_the_same_through_an_independent_decoder(
+        shipped_stream, entry_payload):
+    """What makes the independent decoder worth anything: it reads the
+    game's own streams, and reads them the way the game's archives say they
+    decode.
+
+    Without this the transplant into a CAB folder would be an assumption,
+    and a test built on it would only be comparing albam against a second
+    guess. With it, the two decoders agreeing on what albam writes means
+    something.
+    """
+    assert independent_decompress(shipped_stream, len(entry_payload)) == entry_payload
+
+
+def test_a_real_entry_round_trips_through_the_encoder(entry_payload):
+    """A real entry, compressed by albam and decoded back byte for byte.
+
+    Real payloads are what put real entropy through the trees, and real
+    entries are what put a stream across many frames - which is the one thing
+    an .lfs chunk, two frames holding one block, never asks of the encoder.
+    """
+    stream = xmem_compress(entry_payload)
+    assert xmem_decompress(stream, len(entry_payload)) == entry_payload
+    if len(entry_payload) > 4 * FRAME_SIZE:
+        assert len(stream) < len(entry_payload)
+
+
+@pytest.mark.skipif(sevenzip() is None,
+                    reason="p7zip is not installed (see tests/xcompress_cab.py)")
+def test_a_real_entry_round_trips_through_an_independent_decoder(entry_payload):
+    """The same thing, read by a decoder albam did not write. Round-tripping
+    through albam's own proves the encoder and the decoder agree; this is the
+    closest a test gets to asking whether the stream is really LZX."""
+    stream = xmem_compress(entry_payload)
+    assert independent_decompress(stream, len(entry_payload)) == entry_payload
+
+
+def test_a_real_entry_frames_the_way_the_game_s_own_streams_do(entry_payload):
+    """Frame for frame the shape every shipped entry has: full frames under
+    the short header, a last frame under the long one, nothing behind it."""
+    stream = xmem_compress(entry_payload)
+    frames, trailing = frames_of(stream)
+    assert [f[0] for f in frames] == [2] * (len(frames) - 1) + [5]
+    assert [f[1] for f in frames[:-1]] == [FRAME_SIZE] * (len(frames) - 1)
+    assert sum(f[1] for f in frames) == len(entry_payload)
+    assert trailing == b""
+
+
+def test_a_real_entry_round_trips_when_forced_into_several_blocks(entry_payload):
+    """The case only a 16MB entry reaches on its own: a block header landing
+    in the middle of a frame, at whatever bit offset the symbols before it
+    ended on.
+
+    That is where the decoder's block-length field is read - 24 bits, out of
+    a buffer that can be nearly empty - and reading it wrong puts the block's
+    end in the wrong place and turns everything after it into noise. It went
+    unnoticed until entries were decoded whole (see xcompress._BitReader.read),
+    so it gets a test that reaches it with a real payload rather than a
+    16MB one.
+    """
+    blocks = _split_blocks(_operations(entry_payload, _lz77_tokens(entry_payload)),
+                           SEVERAL_BLOCKS_CAP)
+    if len(entry_payload) > SEVERAL_BLOCKS_CAP:
+        assert len(blocks) > 1
+
+    stream = frame_stream(compress_frames(entry_payload, max_block_size=SEVERAL_BLOCKS_CAP))
+    assert xmem_decompress(stream, len(entry_payload)) == entry_payload
+
+
+def test_packing_a_real_archive_rewrites_one_entry_and_nothing_else(
+        game_fs_root, local_app_id, tmp_path):
+    """A whole shipped archive through the writer, not a two entry stand-in.
+
+    What the synthetic tests cannot say is whether an archive of sixty real
+    entries comes back out intact: the entries albam did not touch have to
+    arrive byte for byte, in the same order, with their sizes, type ids and
+    flags as they were, and the one it did has to be readable through the
+    ordinary reading path.
+    """
+    from albam.engines.mtfw.arc_fs import ArcFS, _entry_path
+
+    path = resolve_hashes(game_fs_root, {REPACK_ENTRY_HASH})[REPACK_ENTRY_HASH]
+    arc_path = game_fs_root.origin_absolute_path(path)
+    if arc_path is None:
+        pytest.skip(f"{REPACK_ENTRY_HASH} resolves to a loose file here")
+
+    original = Arc.from_file(arc_path)
+    original._read()
+    extensions = file_type_extensions(original.header.version)
+    target = next(e for e in original.file_entries if _entry_path(e, extensions) == path)
+
+    payload = b"albam wrote this one\n" * 500
+    rebuilt_bytes = update_arc(arc_path, [FakeVFile(
+        target.file_path + "." + extensions[target.file_type], payload)])
+    rebuilt = parse_arc(rebuilt_bytes)
+
+    assert rebuilt.header.version == original.header.version == ARC_VERSION_DMC4
+    assert len(rebuilt.file_entries) == len(original.file_entries)
+    for before, after in zip(original.file_entries, rebuilt.file_entries):
+        assert after.file_path == before.file_path
+        assert after.file_type == before.file_type
+        assert after.flags == before.flags
+        if before is target:
+            continue
+        assert after.size == before.size
+        assert after.raw_data == before.raw_data
+
+    written = next(e for e in rebuilt.file_entries if e.file_path == target.file_path)
+    assert written.size == len(payload)
+    assert decompress_entry(ARC_VERSION_DMC4, written.raw_data, written.size) == payload
+
+    out = tmp_path / "rebuilt.arc"
+    out.write_bytes(rebuilt_bytes)
+    assert ArcFS(str(out)).readbytes(path) == payload
