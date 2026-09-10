@@ -55,7 +55,7 @@ def test_autorenaming_bones_keeps_them_addressable_by_animation_id():
     which answer to "<id>_<n>" and belong to no body part; reading one as a
     number used to be a ValueError that took the whole tool down.
     """
-    from albam.blender_ui.tools import rename_bones
+    from albam.blender_ui.tools_panel import rename_bones
     from albam.engines.mtfw.animation.animation_import import _create_bone_mapping
     from albam.engines.mtfw.bone import set_anim_retarget
 
@@ -95,7 +95,7 @@ def test_autorenaming_bones_keeps_mirror_bone_pointing_at_a_real_bone():
     longer exists, which export (mesh.py's _derive_mirror_ids) rejects with an
     AlbamCheckFailure the moment "Export bones" is on. See #285.
     """
-    from albam.blender_ui.tools import rename_bones
+    from albam.blender_ui.tools_panel import rename_bones
     from albam.engines.mtfw.bone import get_mirror, set_anim_retarget, set_mirror
 
     armature_data = bpy.data.armatures.new("mirror_rename_rig")
@@ -138,7 +138,7 @@ def test_autorenaming_bones_does_not_mutate_the_shared_name_tables():
     session (re5, which has no NAME_FIXES entry of its own) got re1's names.
     See #245.
     """
-    from albam.blender_ui.tools import rename_bones
+    from albam.blender_ui.tools_panel import rename_bones
     from albam.engines.mtfw.bone import set_anim_retarget
     from albam.lib.bone_names import BONES_BODY, BONES_HEAD
 
