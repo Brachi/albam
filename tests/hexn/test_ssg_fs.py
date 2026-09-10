@@ -371,6 +371,7 @@ def test_ssg_v5_refuses_an_entry_running_past_the_end_of_the_buffer(tmp_path):
         SsgFS(str(ssg_path))
     assert "past the end" in str(excinfo.value)
 
+
 def test_ssg_v5_refuses_content_types_it_does_not_model(tmp_path):
     """The cutscene/mocap archives sharing id_magic 5 parse just as cleanly
     as the weapon ones, so nothing about the header tells them apart -
