@@ -672,3 +672,9 @@ FILE_ID_TO_EXTENSION_DMC4 = {
 
 
 EXTENSION_TO_FILE_ID = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION.items()}
+# The reverse of the table above it, so a new archive entry can be given the
+# id its own archive's version numbers that extension with. Neither table is
+# quite injective - two ids share "shp" here and two share "bin" for DMC4 -
+# and the reverse keeps the last of each, which is only ever consulted for a
+# file albam itself writes.
+EXTENSION_TO_FILE_ID_DMC4 = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION_DMC4.items()}

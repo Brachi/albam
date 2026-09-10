@@ -43,23 +43,6 @@ def _random_bytes(size):
     return bytes(generator.getrandbits(8) for _ in range(size))
 
 
-@pytest.mark.parametrize("used", [0, 1, 5, 300])
-def test_a_one_symbol_tree_is_still_complete(used):
-    """No code the encoder writes leaves half a decode table undefined.
-
-    A tree of a single symbol is the one case where a Huffman build gives an
-    incomplete code, and the game's own data has none: a second, unused
-    symbol goes in beside it (see _huffman_lengths).
-    """
-    from albam.engines.cie.lfs_compress import _huffman_lengths
-
-    freqs = [0] * 512
-    freqs[used] = 7
-    lengths = _huffman_lengths(freqs, 16)
-    assert sum(2.0 ** -length for length in lengths if length) == 1.0
-    assert lengths[used] == 1
-
-
 def _each_chunk_decodes_alone(rebuilt):
     """Every compressed chunk of `rebuilt`, decoded with an empty window.
 

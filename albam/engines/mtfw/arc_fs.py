@@ -22,10 +22,16 @@ from fs.osfs import OSFS
 from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
-from . import FILE_ID_TO_EXTENSION, FILE_ID_TO_EXTENSION_DMC4
+from . import (
+    EXTENSION_TO_FILE_ID,
+    EXTENSION_TO_FILE_ID_DMC4,
+    FILE_ID_TO_EXTENSION,
+    FILE_ID_TO_EXTENSION_DMC4,
+)
 from .structs.arc import Arc
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 from ...lib.xcompress import xmem_decompress
+from ...lib.xcompress_encode import xmem_compress
 
 
 # The archive version this app writes. Every other app albam reads writes
@@ -46,11 +52,35 @@ def file_type_extensions(arc_version):
     return FILE_ID_TO_EXTENSION
 
 
+def extension_file_ids(arc_version):
+    """The extension -> file-type-id table an archive of this version uses.
+
+    The reverse of file_type_extensions(), for giving a file albam adds to an
+    archive the id that archive's own version knows it by.
+    """
+    if arc_version == ARC_VERSION_DMC4:
+        return EXTENSION_TO_FILE_ID_DMC4
+    return EXTENSION_TO_FILE_ID
+
+
 def decompress_entry(arc_version, raw, size):
     """One .arc file entry's payload, decoded with the codec its archive uses."""
     if arc_version == ARC_VERSION_DMC4:
         return xmem_decompress(raw, size)
     return zlib.decompress(raw)
+
+
+def compress_entry(arc_version, data):
+    """One .arc file entry's payload, encoded with the codec its archive uses.
+
+    The counterpart of decompress_entry, and the reason a version 17 archive
+    can be written at all: its entries are XMemCompress streams, and zlib
+    chunks written into one would leave an archive that parses fine and that
+    the game cannot read.
+    """
+    if arc_version == ARC_VERSION_DMC4:
+        return xmem_compress(data)
+    return zlib.compress(data)
 
 
 def _entry_path(file_entry, extensions=FILE_ID_TO_EXTENSION):
