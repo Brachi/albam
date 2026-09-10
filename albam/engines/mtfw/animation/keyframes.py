@@ -131,6 +131,17 @@ class LMTKeyFrames:
         if kfcls is None:
             print("Unknown keyframe type:", key_type)
             return
+        if kfcls is Lmt.QuadraticVector3:
+            # size_ is a constant that only covers the fixed part of the
+            # record (see lmt.ksy); the tangent fields it can carry are
+            # unverified against any real file, so a record that has them
+            # would be misread rather than just yielding a wrong pose. No
+            # buffer_type 5 (v51) sample has turned up to check against -
+            # see https://github.com/Brachi/albam/issues/255 - so skip the
+            # track instead of guessing.
+            print(f"albam: buffer type {key_type} (quadratic_vector3) is not verified for "
+                  f"reading; skipping this track")
+            return
         keyframe = kfcls()  # hack to get the size before reading
         for start in range(0, len(data), keyframe.size_):
             chunk = data[start: start + keyframe.size_]
