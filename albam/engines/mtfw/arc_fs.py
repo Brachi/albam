@@ -23,7 +23,7 @@ from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
 from . import (
-    EXTENSION_TO_FILE_IDS,
+    EXTENSION_TO_FILE_ID,
     EXTENSION_TO_FILE_IDS_DMC4,
     FILE_ID_TO_EXTENSION,
     FILE_ID_TO_EXTENSION_DMC4,
@@ -53,8 +53,8 @@ def file_type_extensions(arc_version):
 
 
 class AmbiguousExtension(Exception):
-    """An extension that names more than one of an archive version's resource
-    classes, so the id a file albam is adding should carry is not knowable."""
+    """An extension that names more than one of version 17's resource classes,
+    so the id a file albam is adding should carry is not knowable."""
 
 
 def new_entry_file_type(arc_version, extension):
@@ -63,22 +63,26 @@ def new_entry_file_type(arc_version, extension):
     The reverse of file_type_extensions(), for giving a file albam adds to an
     archive the id that archive's own version knows it by. Raises KeyError if
     the version's table does not name the extension at all - callers take the
-    extension for a literal id then - and AmbiguousExtension if it names it
-    more than once, which no extension a user hands albam can disambiguate.
+    extension for a literal id then.
 
-    Existing entries never come through here: they keep the file type they
-    were parsed with, which is an answer and not a guess.
+    A version 17 extension that names more than one resource class is refused
+    rather than guessed at: nothing has been written on that guess yet, and
+    an extension is all a user's file tells albam. The shared table resolves
+    the one extension it doubles up on the way it always has, because version
+    7 archives have been written that way for as long as albam has existed.
+
+    Existing entries never come through here either way: they keep the file
+    type they were parsed with, which is an answer and not a guess.
     """
-    if arc_version == ARC_VERSION_DMC4:
-        file_ids = EXTENSION_TO_FILE_IDS_DMC4[extension]
-    else:
-        file_ids = EXTENSION_TO_FILE_IDS[extension]
+    if arc_version != ARC_VERSION_DMC4:
+        return EXTENSION_TO_FILE_ID[extension]
+    file_ids = EXTENSION_TO_FILE_IDS_DMC4[extension]
     if len(file_ids) > 1:
-        candidates = " and ".join(f"0x{h:08X}" for h in file_ids)
+        candidates = ", ".join(f"0x{h:08X}" for h in file_ids)
         raise AmbiguousExtension(
-            f'cannot add a ".{extension}" to this archive: its version numbers '
-            f"{candidates} with that extension, and which of the two this file "
-            "is cannot be told from its name")
+            f'cannot add a ".{extension}" to this archive: version 17 numbers '
+            f"it {candidates}, and which of those this file is cannot be told "
+            "from its name")
     return file_ids[0]
 
 

@@ -671,16 +671,22 @@ FILE_ID_TO_EXTENSION_DMC4 = {
 }
 
 
-def _extension_to_file_ids(table):
-    """The reverse of one of the tables above: extension -> every file type
-    id that names it, so a new archive entry can be given the id its own
-    archive's version numbers that extension with.
+# The reverse of the shared table, so a new archive entry can be given the id
+# its own archive's version numbers that extension with. Not quite injective -
+# two ids share "shp" - and the reverse keeps the last of the two, as it has
+# for every version 7 archive albam has ever written.
+EXTENSION_TO_FILE_ID = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION.items()}
 
-    Neither table is quite injective - two ids share "shp" in the shared one
-    and two share "bin" for DMC4 - so an extension can name more than one
-    resource class. Keeping every id rather than the last of each is what
-    lets that be refused instead of guessed at, since an extension is all
-    albam knows about a file a user hands it.
+
+def _extension_to_file_ids(table):
+    """The same reverse, but keeping every file type id that names an
+    extension rather than the last of them.
+
+    The DMC4 table is not injective either - 0x19DDF06A (rCharTbl) and
+    0x7A5DCF86 (rPlParamTbl) are both "bin" - and version 17 is new enough
+    to albam that nothing has been written on the strength of a guess yet.
+    Keeping both ids lets an ambiguous extension be refused instead, since
+    an extension is all albam knows about a file a user hands it.
     """
     file_ids = {}
     for h, ext_desc in table.items():
@@ -688,5 +694,4 @@ def _extension_to_file_ids(table):
     return {ext_desc: tuple(ids) for ext_desc, ids in file_ids.items()}
 
 
-EXTENSION_TO_FILE_IDS = _extension_to_file_ids(FILE_ID_TO_EXTENSION)
 EXTENSION_TO_FILE_IDS_DMC4 = _extension_to_file_ids(FILE_ID_TO_EXTENSION_DMC4)

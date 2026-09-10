@@ -33,7 +33,7 @@ import zlib
 import pytest
 
 from albam.engines.mtfw import (
-    EXTENSION_TO_FILE_IDS,
+    EXTENSION_TO_FILE_ID,
     FILE_ID_TO_EXTENSION,
     FILE_ID_TO_EXTENSION_DMC4,
 )
@@ -298,11 +298,27 @@ def test_replacing_an_entry_whose_extension_names_two_types_keeps_its_own(tmp_pa
     assert decompress_entry(ARC_VERSION_DMC4, entry.raw_data, entry.size) == payload
 
 
+def test_adding_an_entry_to_a_version_7_archive_resolves_its_extension(tmp_path):
+    """The shared table doubles up on one extension too - two ids are "shp" -
+    but version 7 archives have been written with the last of the two since
+    long before version 17 could be written at all, so that keeps resolving
+    rather than becoming a refusal."""
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_ZLIB, [
+        ("chr\\pl000\\pl000", EXTENSION_TO_FILE_ID["tex"], b"x" * 100, 2)]))
+
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\shape.shp", b"a shape\n" * 100, app_id="re5")]))
+
+    added = {e.file_path: e for e in rebuilt.file_entries}["chr\\pl000\\shape"]
+    assert added.file_type == 0x5204D557
+
+
 def test_packing_a_version_7_archive_still_writes_zlib(tmp_path):
     """The other side of the same switch: nothing changes for the archives
     albam already wrote."""
     path = tmp_path / "test.arc"
-    zlib_tex = EXTENSION_TO_FILE_IDS["tex"][0]
+    zlib_tex = EXTENSION_TO_FILE_ID["tex"]
     path.write_bytes(build_arc(ARC_VERSION_ZLIB, [
         ("chr\\pl000\\pl000", zlib_tex, b"old\n" * 100, 2)]))
 
