@@ -7,7 +7,7 @@ from io import BytesIO
 import os
 from struct import pack, unpack
 import math
-import traceback
+import sys
 try:
     from math import dist as get_dist
 except ImportError:
@@ -40,7 +40,7 @@ from ...lib.common_op import (
 from ...lib.export_checks import check_all_objects_have_materials
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
-from ...blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR
+from ...blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR, format_error_report
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
 from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
@@ -418,7 +418,8 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             # console, and under ALBAM_RERAISE_ERRORS (which the test suite
             # sets - see tests/conftest.py) it is re-raised instead, so CI
             # sees the failure rather than a quietly smaller model.
-            print(f"[{bl_object_name}] error building mesh {i}\n{traceback.format_exc()}")
+            print(f"[{bl_object_name}] error building mesh {i}\n"
+                  f"{format_error_report(*sys.exc_info())}")
             if os.environ.get(RERAISE_ERRORS_ENV_VAR):
                 raise
             continue
