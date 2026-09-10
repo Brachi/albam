@@ -201,6 +201,12 @@ def _entry_matrices(entry):
     scale and cannot be folded in, and as None when the whole placement is
     one object transform.
     """
+    # The rotation-vs-identity comparison below is exact rather than
+    # tolerant, which issue #271 lists as a latent defect worth checking.
+    # Tried and not reproduced: zero angles, angles that are whole multiples
+    # of 2*pi and very small angles all classify correctly through the change
+    # of basis. Getting it wrong would only ever cost an extra placement
+    # Empty, never wrong geometry, so the comparison is left as it is.
     to_blender = Matrix.Rotation(math.radians(90), 4, "X")
     rotation = Euler((entry.angles.x, entry.angles.y, entry.angles.z), "XYZ").to_matrix().to_4x4()
     scale = Matrix.Diagonal(Vector((entry.scale.x, entry.scale.y, entry.scale.z, 1.0)))

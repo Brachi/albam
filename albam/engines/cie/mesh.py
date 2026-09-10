@@ -18,9 +18,10 @@ GLOBAL_SCALE = 0.001  # same raw unit as vertex positions
 GLOBAL_NORMAL_FIX_EXTENDED = 545460800000
 GLOBAL_NORMAL_FIX_REDUCED = 16384
 
-# Header layout. The format allows 0x40, 0x50 and 0x60 headers - the shorter
-# ones simply stop before the trailing offsets - and offset_bones doubles as
-# the header's own size.
+# Header layout. The format allows 0x40, 0x50 and 0x60 headers - a 0x40 one
+# stops before the four trailing offsets, a 0x50 one is exactly those four
+# present and a 0x60 one adds 16 bytes of padding nothing reads - and
+# offset_bones doubles as the header's own size.
 HEADER_SIZE = 0x60
 BONE_SIZE = 16
 WEIGHT_SIZE = 8
@@ -700,18 +701,53 @@ def _classify_mesh_ob(bl_mesh_ob):
         return bin_type, armature
 
 
-def _bone_id(bl_bone, fallback):
-    """The .bin bone id a Blender bone stands for.
+def _claimed_id(bone_name):
+    """The .bin bone id a Blender bone name claims outright, or None.
 
     Import names each bone after its id (see _build_armature), so the name is
-    the id coming back. A bone the user added by hand won't be named that way;
-    it gets its position in the armature instead, which at least stays inside
-    the u1 the format allows.
+    the id coming back. A zero-padded spelling names the same id its
+    canonical form does, so "05" and "5" claim one id between them rather
+    than one each.
     """
-    name = bl_bone.name
-    if name.isdigit() and int(name) < 255:
-        return int(name)
-    return min(fallback, 254)
+    if bone_name.isdigit() and int(bone_name) < 255:
+        return int(bone_name)
+    return None
+
+
+def _bone_ids_by_name(all_bones):
+    """{bone name: id}, with no two bones landing on the same id.
+
+    A bone named after an id claims it (see _claimed_id); a bone the user
+    added by hand falls back to its position in the armature, which at least
+    stays inside the u1 the format allows. That position can be the very
+    number an id-named bone elsewhere claims - a hand-added bone at index 5
+    collides with one named "5" wherever it sits. Claimed ids are therefore
+    reserved up front, and anything colliding with one takes the nearest free
+    id the format allows instead of silently doubling up - a model bound to
+    the upper half of a shared rig leaves the ids below it free, so the
+    search wraps rather than stopping at 254.
+
+    An armature can hold more bones than the format can name, since only some
+    of them are ever written (see _bones_to_write) - a rig carrying control
+    and IK bones nothing is weighted to, say. A bone left with no free id is
+    simply absent from the mapping; whether that matters is decided where the
+    table is written, not here.
+    """
+    used = {claimed for claimed in (_claimed_id(bone.name) for bone in all_bones)
+            if claimed is not None}
+    taken = set()
+    ids = {}
+    for i, bone in enumerate(all_bones):
+        bone_id = _claimed_id(bone.name)
+        if bone_id is None or bone_id in taken:
+            preferred = min(i, 254)
+            search = list(range(preferred, 255)) + list(range(preferred))
+            bone_id = next((c for c in search if c not in used and c not in taken), None)
+            if bone_id is None:
+                continue
+        taken.add(bone_id)
+        ids[bone.name] = bone_id
+    return ids
 
 
 def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
@@ -743,7 +779,8 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
     all_bones = list(bl_armature.data.bones)
     by_id = {}
     for bone in all_bones:
-        by_id.setdefault(ids[bone.name], bone)
+        if bone.name in ids:
+            by_id.setdefault(ids[bone.name], bone)
 
     kept = set()
     for bone_id in own_ids:
@@ -793,15 +830,25 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
     model hangs off part of a larger skeleton.
     """
     all_bones = list(bl_armature.data.bones)
-    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
+    ids = _bone_ids_by_name(all_bones)
     bones = _bones_to_write(bl_armature, ids, used_ids, own_ids)
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
         bones = all_bones
+    unnamed = [bone.name for bone in bones if bone.name not in ids]
+    if unnamed:
+        raise AlbamCheckFailure(
+            f"{bl_armature.name} needs to write more bones than the format can name",
+            details=f"A bone is named by a single byte, so an exported table holds at "
+                    f"most 255 of them, and {len(unnamed)} of the bones this model "
+                    f"writes have no id left: {', '.join(unnamed[:5])}",
+            solution="Remove bones the model does not need, or unweight the ones it "
+                     "does not use",
+        )
     kept = {bone.name for bone in bones}
 
     own_parents = own_parents or {}
-    by_id = {ids[bone.name]: bone for bone in all_bones}
+    by_id = {ids[bone.name]: bone for bone in all_bones if bone.name in ids}
 
     dst_bones = []
     for bone in sorted(bones, key=lambda b: ids[b.name]):
@@ -867,8 +914,13 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
     return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _collect_geometry(bl_mesh_objs):
+def _collect_geometry(bl_mesh_objs, armature):
     """Everything per-corner the format needs, in the order it stores it.
+
+    `armature` is the one the bone table is written from (see export_bin),
+    which is what every mesh is baked relative to and what names its vertex
+    groups' bones - a mesh parented under it without an Armature modifier of
+    its own is part of the same model and has to land in the same space.
 
     The format is non-indexed: positions, normals, UVs and weight indices are
     all one entry per face corner, consumed sequentially by each material's
@@ -888,17 +940,28 @@ def _collect_geometry(bl_mesh_objs):
     weight_table = []
     weight_lookup = {}
 
+    all_bones = list(armature.data.bones) if armature else []
+    bone_ids = _bone_ids_by_name(all_bones)
+    bone_names = {bone.name for bone in all_bones}
+
     for bl_mesh_ob in bl_mesh_objs:
         bl_mesh = bl_mesh_ob.data
-        armature_modifier = bl_mesh_ob.modifiers.get("Armature")
-        armature = armature_modifier.object if armature_modifier else None
         group_ids = {}
         if armature:
-            bone_ids = {bone.name: _bone_id(bone, i)
-                        for i, bone in enumerate(armature.data.bones)}
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
                     group_ids[group.index] = bone_ids[group.name]
+                elif group.name in bone_names:
+                    raise AlbamCheckFailure(
+                        f"{bl_mesh_ob.name} is weighted to {group.name!r}, a bone the "
+                        f"format cannot name",
+                        details="A bone is named by a single byte, so an armature can "
+                                "only hand out 255 ids, and this one has more bones "
+                                "than that. Weights on a bone left without an id would "
+                                "otherwise fall onto the first bone instead.",
+                        solution="Remove bones the model does not need, so every bone "
+                                 "it is weighted to can be named",
+                    )
                 elif group.name.isdigit():
                     group_ids[group.index] = int(group.name)
 
@@ -906,11 +969,25 @@ def _collect_geometry(bl_mesh_objs):
         slots = bl_mesh_ob.material_slots
 
         # Object-level transforms are baked in: moving, rotating or scaling
-        # the object itself is an edit like any other, and import leaves
+        # the mesh itself is an edit like any other, and import leaves
         # everything at the origin so this is the identity for an unmodified
         # model. Normals go through the inverse transpose, which is what
         # keeps them perpendicular under a non-uniform scale.
+        #
+        # Relative to the armature, not the mesh's own matrix_world outright:
+        # the file has no field for where the armature sits in the scene -
+        # that is scenario placement, a separate concern from the model
+        # itself (see scenario._place) - so bones are already written in the
+        # armature's own local rest space, unaffected by it. A mesh normally
+        # parented to its armature with an identity local transform inherits
+        # the armature's matrix_world, so baking that in outright moved,
+        # rotated or scaled the exported vertices by whatever the armature
+        # object's own placement in the scene happened to be, while the bones
+        # they are meant to bind to stayed exactly where they started -
+        # skinning a moved mesh to an unmoved skeleton.
         matrix = bl_mesh_ob.matrix_world
+        if armature:
+            matrix = armature.matrix_world.inverted_safe() @ matrix
         normal_matrix = matrix.to_3x3().inverted_safe().transposed()
 
         # Weights depend only on the vertex, while corners are visited once
@@ -1210,7 +1287,7 @@ def export_bin(bl_obj):
         armature = bl_obj
 
     (groups, positions, normals, uvs,
-     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs)
+     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs, armature)
 
     num_vertices = len(positions)
     if num_vertices > MAX_VERTICES:
@@ -1383,8 +1460,9 @@ def _layout_and_write(dst_bin, num_vertices):
     Offsets are all explicit in the header, so the file's layout is ours to
     choose rather than something to reproduce; blocks go in the order shipped
     files use them, each aligned to 16. The header is a fixed 0x60 here - the
-    format allows 0x40 and 0x50 too, which simply stop before the four
-    trailing offsets, and writing the largest means never having to decide.
+    format allows 0x40, which stops before the four trailing offsets, and
+    0x50, which is exactly those four present - and writing the largest means
+    never having to decide.
     """
     header = dst_bin.header
     header.num_bones = len(dst_bin.bones)
