@@ -1,8 +1,10 @@
 """The .lmt keyframe codec: a track's bytes to poses and back again.
 
 Every buffer type the format uses is decoded and encoded here, along with the
-quantization each one applies. Nothing in this module touches Blender beyond
-mathutils, which is what lets the codec tests drive it directly.
+quantization each one applies - except v51's buffer type 5 (quadratic_vector3),
+which decode_framedata() skips for want of a real sample to verify its record
+layout against. Nothing in this module touches Blender beyond mathutils, which
+is what lets the codec tests drive it directly.
 """
 import math
 from io import BytesIO
