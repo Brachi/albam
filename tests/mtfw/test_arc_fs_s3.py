@@ -22,7 +22,7 @@ pytest.importorskip("smart_open")
 
 from moto import mock_aws  # noqa: E402
 
-from albam.engines.mtfw import EXTENSION_TO_FILE_ID  # noqa: E402
+from albam.engines.mtfw import EXTENSION_TO_FILE_IDS  # noqa: E402
 from albam.engines.mtfw.arc_fs import MTFW_FS  # noqa: E402
 from albam.engines.mtfw.structs.arc import Arc  # noqa: E402
 from kaitaistruct import BytesIO, KaitaiStream  # noqa: E402
@@ -110,12 +110,12 @@ def _build_arc_bytes(entries):
 
 FIXTURE_ARC_BYTES = {
     "uPl00ChrisNormal.arc": _build_arc_bytes(
-        [(SAMPLE_RAW_PATH, EXTENSION_TO_FILE_ID["mod"], SAMPLE_CONTENT)]
+        [(SAMPLE_RAW_PATH, EXTENSION_TO_FILE_IDS["mod"][0], SAMPLE_CONTENT)]
     ),
     # content doesn't matter here - only used as a second, distinct arc for
     # count-based assertions (test_from_s3_loads_arcs and friends).
     "s400.arc": _build_arc_bytes(
-        [("stage\\s400\\placeholder", EXTENSION_TO_FILE_ID["mod"], b"MOD\x00PLACEHOLDER")]
+        [("stage\\s400\\placeholder", EXTENSION_TO_FILE_IDS["mod"][0], b"MOD\x00PLACEHOLDER")]
     ),
 }
 FIXTURE_ARCS = tuple(FIXTURE_ARC_BYTES)

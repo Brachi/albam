@@ -671,10 +671,22 @@ FILE_ID_TO_EXTENSION_DMC4 = {
 }
 
 
-EXTENSION_TO_FILE_ID = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION.items()}
-# The reverse of the table above it, so a new archive entry can be given the
-# id its own archive's version numbers that extension with. Neither table is
-# quite injective - two ids share "shp" here and two share "bin" for DMC4 -
-# and the reverse keeps the last of each, which is only ever consulted for a
-# file albam itself writes.
-EXTENSION_TO_FILE_ID_DMC4 = {ext_desc: h for h, ext_desc in FILE_ID_TO_EXTENSION_DMC4.items()}
+def _extension_to_file_ids(table):
+    """The reverse of one of the tables above: extension -> every file type
+    id that names it, so a new archive entry can be given the id its own
+    archive's version numbers that extension with.
+
+    Neither table is quite injective - two ids share "shp" in the shared one
+    and two share "bin" for DMC4 - so an extension can name more than one
+    resource class. Keeping every id rather than the last of each is what
+    lets that be refused instead of guessed at, since an extension is all
+    albam knows about a file a user hands it.
+    """
+    file_ids = {}
+    for h, ext_desc in table.items():
+        file_ids.setdefault(ext_desc, []).append(h)
+    return {ext_desc: tuple(ids) for ext_desc, ids in file_ids.items()}
+
+
+EXTENSION_TO_FILE_IDS = _extension_to_file_ids(FILE_ID_TO_EXTENSION)
+EXTENSION_TO_FILE_IDS_DMC4 = _extension_to_file_ids(FILE_ID_TO_EXTENSION_DMC4)
