@@ -33,13 +33,14 @@ import zlib
 import pytest
 
 from albam.engines.mtfw import (
-    EXTENSION_TO_FILE_ID,
+    EXTENSION_TO_FILE_IDS,
     FILE_ID_TO_EXTENSION,
     FILE_ID_TO_EXTENSION_DMC4,
 )
 from albam.engines.mtfw.archive import update_arc
 from albam.engines.mtfw.arc_fs import (
     ARC_VERSION_DMC4,
+    AmbiguousExtension,
     decompress_entry,
     file_type_extensions,
 )
@@ -149,23 +150,30 @@ class FakeVFile:
 
 
 def build_arc(version, entries):
-    """An .arc holding `entries` as (path, file type id, payload, flags).
+    """An .arc holding `entries` as (path, file type id, payload, flags),
+    each payload given uncompressed and encoded here in the archive's codec.
 
     Written out by hand rather than through _serialize_arc, so that a test of
     the writer is not reading back the writer's own idea of the layout: a
     header, one 80 byte record per entry, padding out to where the first
-    payload starts, and then the payloads back to back.
+    payload starts, and then the payloads back to back. Encoding here is what
+    keeps `size` the decompressed length and `zsize` the encoded one, so an
+    entry of the fixture reads back the way a real archive's does.
     """
     table = bytearray()
     body = bytearray()
     padding = 32760 - (len(entries) * 80) % 32768
     offset = 8 + len(entries) * 80 + padding
     for path, file_type, payload, flags in entries:
+        if version == ARC_VERSION_DMC4:
+            chunk = stored_frame(payload)
+        else:
+            chunk = zlib.compress(payload)
         table += path.encode("ascii").ljust(64, b"\x00")
-        table += struct.pack("<iIII", file_type, len(payload),
+        table += struct.pack("<iIII", file_type, len(chunk),
                              len(payload) | (flags << 29), offset)
-        body += payload
-        offset += len(payload)
+        body += chunk
+        offset += len(chunk)
     header = struct.pack("<4shh", b"ARC\x00", version, len(entries))
     return header + bytes(table) + b"\x00" * padding + bytes(body)
 
@@ -191,8 +199,8 @@ def test_packing_a_version_17_archive_writes_xmemcompress_entries(tmp_path):
     untouched = b"the payload nothing happens to\n" * 500
     path = tmp_path / "test.arc"
     path.write_bytes(build_arc(ARC_VERSION_DMC4, [
-        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(replaced), 1),
-        ("chr\\pl000\\pl001", DMC4_TEX, stored_frame(untouched), 2),
+        ("chr\\pl000\\pl000", DMC4_TEX, replaced, 1),
+        ("chr\\pl000\\pl001", DMC4_TEX, untouched, 2),
     ]))
 
     new_payload = b"albam wrote this one\n" * 2000
@@ -212,6 +220,7 @@ def test_packing_a_version_17_archive_writes_xmemcompress_entries(tmp_path):
 
     kept = entries["chr\\pl000\\pl001"]
     assert kept.raw_data == stored_frame(untouched)
+    assert decompress_entry(ARC_VERSION_DMC4, kept.raw_data, kept.size) == untouched
 
 
 def test_packing_leaves_an_entry_s_flags_alone(tmp_path):
@@ -222,7 +231,7 @@ def test_packing_leaves_an_entry_s_flags_alone(tmp_path):
     payload = b"a texture, supposedly\n" * 200
     path = tmp_path / "test.arc"
     path.write_bytes(build_arc(ARC_VERSION_DMC4, [
-        (f"chr\\tex{flags}", DMC4_TEX, stored_frame(payload), flags)
+        (f"chr\\tex{flags}", DMC4_TEX, payload, flags)
         for flags in (0, 1, 2)
     ]))
 
@@ -238,7 +247,7 @@ def test_packing_gives_a_new_entry_its_own_version_s_file_type_id(tmp_path):
     it is going into uses - the shared table's id would name nothing there."""
     path = tmp_path / "test.arc"
     path.write_bytes(build_arc(ARC_VERSION_DMC4, [
-        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(b"x" * 100), 2)]))
+        ("chr\\pl000\\pl000", DMC4_TEX, b"x" * 100, 2)]))
 
     rebuilt = parse_arc(update_arc(str(path), [
         FakeVFile("chr\\pl000\\motion.lmt", b"a motion list\n" * 100)]))
@@ -248,13 +257,54 @@ def test_packing_gives_a_new_entry_its_own_version_s_file_type_id(tmp_path):
     assert FILE_ID_TO_EXTENSION.get(DMC4_LMT) is None
 
 
+DMC4_CHR_TBL = 0x19DDF06A  # rCharTbl, one of the two types called "bin"
+DMC4_PL_PARAM_TBL = 0x7A5DCF86  # rPlParamTbl, the other
+
+
+def test_adding_an_entry_whose_extension_names_two_types_is_refused(tmp_path):
+    """A DMC4 ".bin" is either an rCharTbl or an rPlParamTbl, and an
+    extension is all albam is told about a file a user hands it. Labelling
+    the entry with whichever of the two the reverse table happened to keep
+    would hand the engine a resource class the file is not, silently, so the
+    pack stops and names both candidates instead."""
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, b"x" * 100, 2)]))
+
+    with pytest.raises(AmbiguousExtension) as excinfo:
+        update_arc(str(path), [
+            FakeVFile("chr\\pl000\\param.bin", b"a table\n" * 100)])
+
+    message = str(excinfo.value)
+    assert ".bin" in message
+    assert "0x19DDF06A" in message
+    assert "0x7A5DCF86" in message
+
+
+def test_replacing_an_entry_whose_extension_names_two_types_keeps_its_own(tmp_path):
+    """The other side of that refusal: an entry the archive already holds
+    has an answer rather than a guess - the type it was parsed with - so
+    replacing an rCharTbl "bin" packs, and stays an rCharTbl."""
+    path = tmp_path / "test.arc"
+    path.write_bytes(build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\param", DMC4_CHR_TBL, b"a table\n" * 100, 2)]))
+
+    payload = b"a replacement table\n" * 100
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\param.bin", payload)]))
+
+    entry = rebuilt.file_entries[0]
+    assert entry.file_type == DMC4_CHR_TBL
+    assert decompress_entry(ARC_VERSION_DMC4, entry.raw_data, entry.size) == payload
+
+
 def test_packing_a_version_7_archive_still_writes_zlib(tmp_path):
     """The other side of the same switch: nothing changes for the archives
     albam already wrote."""
     path = tmp_path / "test.arc"
-    zlib_tex = EXTENSION_TO_FILE_ID["tex"]
+    zlib_tex = EXTENSION_TO_FILE_IDS["tex"][0]
     path.write_bytes(build_arc(ARC_VERSION_ZLIB, [
-        ("chr\\pl000\\pl000", zlib_tex, zlib.compress(b"old\n" * 100), 2)]))
+        ("chr\\pl000\\pl000", zlib_tex, b"old\n" * 100, 2)]))
 
     payload = b"albam wrote this one\n" * 200
     rebuilt = parse_arc(update_arc(str(path), [
@@ -275,7 +325,7 @@ def test_an_entry_the_encoder_cannot_write_is_refused_by_name(tmp_path, monkeypa
     """
     arc_path = tmp_path / "test.arc"
     original = build_arc(ARC_VERSION_DMC4, [
-        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(b"old\n" * 100), 2)])
+        ("chr\\pl000\\pl000", DMC4_TEX, b"old\n" * 100, 2)])
     arc_path.write_bytes(original)
 
     def oversized_frames(payload, **kwargs):
