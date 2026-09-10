@@ -132,7 +132,7 @@ def _populated_block(bl_object, app_id):
     anim_blocks = [c for c in bl_object.children_recursive if c.type == "EMPTY"]
     populated = [
         block for block in anim_blocks
-        if block.albam_custom_properties.get_custom_properties_for_appid(app_id).ofs_frame != 0
+        if block.albam_custom_properties.get_custom_properties_for_appid(app_id).action
     ]
     assert len(populated) == 1, (
         f"expected exactly one populated animation block, got {len(populated)}"

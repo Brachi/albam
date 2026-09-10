@@ -177,7 +177,7 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
     populated = []
     for block in anim_blocks:
         custom_props = block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
-        if custom_props.ofs_frame != 0 and custom_props.action:
+        if custom_props.action:
             populated.append((block, custom_props))
 
     assert len(populated) == 1, (
