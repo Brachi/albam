@@ -13,32 +13,37 @@ class Sdl156(ReadWriteKaitaiStruct):
         super(Sdl156, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
-        self._should_write_tracks = False
-        self.tracks__enabled = True
 
     def _read(self):
         self.header = Sdl156.BaseHeader(self._io, self, self._root)
         self.header._read()
+        self.tracks = []
+        for i in range(self.header.num_tracks):
+            _t_tracks = Sdl156.Track(self._io, self, self._root)
+            try:
+                _t_tracks._read()
+            finally:
+                self.tracks.append(_t_tracks)
+
         self._dirty = False
 
 
     def _fetch_instances(self):
         pass
         self.header._fetch_instances()
-        _ = self.tracks
-        if hasattr(self, '_m_tracks'):
+        for i in range(len(self.tracks)):
             pass
-            for i in range(len(self._m_tracks)):
-                pass
-                self._m_tracks[i]._fetch_instances()
-
+            self.tracks[i]._fetch_instances()
 
 
 
     def _write__seq(self, io=None):
         super(Sdl156, self)._write__seq(io)
-        self._should_write_tracks = self.tracks__enabled
         self.header._write__seq(self._io)
+        for i in range(len(self.tracks)):
+            pass
+            self.tracks[i]._write__seq(self._io)
+
 
 
     def _check(self):
@@ -46,17 +51,14 @@ class Sdl156(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"header", self._root, self.header._root)
         if self.header._parent != self:
             raise kaitaistruct.ConsistencyError(u"header", self, self.header._parent)
-        if self.tracks__enabled:
+        if len(self.tracks) != self.header.num_tracks:
+            raise kaitaistruct.ConsistencyError(u"tracks", self.header.num_tracks, len(self.tracks))
+        for i in range(len(self.tracks)):
             pass
-            if len(self._m_tracks) != self.header.num_tracks:
-                raise kaitaistruct.ConsistencyError(u"tracks", self.header.num_tracks, len(self._m_tracks))
-            for i in range(len(self._m_tracks)):
-                pass
-                if self._m_tracks[i]._root != self._root:
-                    raise kaitaistruct.ConsistencyError(u"tracks", self._root, self._m_tracks[i]._root)
-                if self._m_tracks[i]._parent != self:
-                    raise kaitaistruct.ConsistencyError(u"tracks", self, self._m_tracks[i]._parent)
-
+            if self.tracks[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"tracks", self._root, self.tracks[i]._root)
+            if self.tracks[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"tracks", self, self.tracks[i]._parent)
 
         self._dirty = False
 
@@ -73,8 +75,8 @@ class Sdl156(ReadWriteKaitaiStruct):
             self.version = self._io.read_u2le()
             self.num_tracks = self._io.read_u2le()
             self.frames = self._io.read_u4le()
-            self.dti_table_offset = self._io.read_u4le()
-            self.name_offset = self._io.read_u4le()
+            self.ofs_dti_table = self._io.read_u4le()
+            self.ofs_names = self._io.read_u4le()
             self._dirty = False
 
 
@@ -88,8 +90,8 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.version)
             self._io.write_u2le(self.num_tracks)
             self._io.write_u4le(self.frames)
-            self._io.write_u4le(self.dti_table_offset)
-            self._io.write_u4le(self.name_offset)
+            self._io.write_u4le(self.ofs_dti_table)
+            self._io.write_u4le(self.ofs_names)
 
 
         def _check(self):
@@ -99,6 +101,40 @@ class Sdl156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ValidationNotEqualError(b"\x53\x44\x4C\x00", self.magic, None, u"/types/base_header/seq/0")
             self._dirty = False
 
+
+    class Bool(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.Bool, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u1()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.Bool, self)._write__seq(io)
+            self._io.write_u1(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Color(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -129,6 +165,84 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _check(self):
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class F32(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.F32, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_f4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.F32, self)._write__seq(io)
+            self._io.write_f4le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class F64(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.F64, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_f8le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.F64, self)._write__seq(io)
+            self._io.write_f8le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 8
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Float2(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -485,6 +599,46 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
+    class Quaternion(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.Quaternion, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.x = self._io.read_f4le()
+            self.y = self._io.read_f4le()
+            self.z = self._io.read_f4le()
+            self.w = self._io.read_f4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.Quaternion, self)._write__seq(io)
+            self._io.write_f4le(self.x)
+            self._io.write_f4le(self.y)
+            self._io.write_f4le(self.z)
+            self._io.write_f4le(self.w)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class Rect(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sdl156.Rect, self).__init__(_io)
@@ -552,11 +706,17 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _check(self):
             if self.ref_dti__enabled:
                 pass
+                if self.ref_ofs != 0:
+                    pass
+
 
             if self.ref_path__enabled:
                 pass
-                if KaitaiStream.byte_array_index_of((self._m_ref_path).encode(u"UTF-8"), 0) != -1:
-                    raise kaitaistruct.ConsistencyError(u"ref_path", -1, KaitaiStream.byte_array_index_of((self._m_ref_path).encode(u"UTF-8"), 0))
+                if self.ref_ofs != 0:
+                    pass
+                    if KaitaiStream.byte_array_index_of((self._m_ref_path).encode(u"UTF-8"), 0) != -1:
+                        raise kaitaistruct.ConsistencyError(u"ref_path", -1, KaitaiStream.byte_array_index_of((self._m_ref_path).encode(u"UTF-8"), 0))
+
 
             self._dirty = False
 
@@ -570,10 +730,13 @@ class Sdl156(ReadWriteKaitaiStruct):
             if not self.ref_dti__enabled:
                 return None
 
-            _pos = self._io.pos()
-            self._io.seek(self.ref_ofs + self._root.header.name_offset)
-            self._m_ref_dti = self._io.read_u4le()
-            self._io.seek(_pos)
+            if self.ref_ofs != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ref_ofs + self._root.header.ofs_names)
+                self._m_ref_dti = self._io.read_u4le()
+                self._io.seek(_pos)
+
             return getattr(self, '_m_ref_dti', None)
 
         @ref_dti.setter
@@ -583,10 +746,13 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _write_ref_dti(self):
             self._should_write_ref_dti = False
-            _pos = self._io.pos()
-            self._io.seek(self.ref_ofs + self._root.header.name_offset)
-            self._io.write_u4le(self._m_ref_dti)
-            self._io.seek(_pos)
+            if self.ref_ofs != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.ref_ofs + self._root.header.ofs_names)
+                self._io.write_u4le(self._m_ref_dti)
+                self._io.seek(_pos)
+
 
         @property
         def ref_path(self):
@@ -598,10 +764,13 @@ class Sdl156(ReadWriteKaitaiStruct):
             if not self.ref_path__enabled:
                 return None
 
-            _pos = self._io.pos()
-            self._io.seek((self.ref_ofs + self._root.header.name_offset) + 4)
-            self._m_ref_path = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
-            self._io.seek(_pos)
+            if self.ref_ofs != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek((self.ref_ofs + self._root.header.ofs_names) + 4)
+                self._m_ref_path = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self._io.seek(_pos)
+
             return getattr(self, '_m_ref_path', None)
 
         @ref_path.setter
@@ -611,12 +780,151 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _write_ref_path(self):
             self._should_write_ref_path = False
-            _pos = self._io.pos()
-            self._io.seek((self.ref_ofs + self._root.header.name_offset) + 4)
-            self._io.write_bytes((self._m_ref_path).encode(u"UTF-8"))
-            self._io.write_u1(0)
-            self._io.seek(_pos)
+            if self.ref_ofs != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek((self.ref_ofs + self._root.header.ofs_names) + 4)
+                self._io.write_bytes((self._m_ref_path).encode(u"UTF-8"))
+                self._io.write_u1(0)
+                self._io.seek(_pos)
 
+
+
+    class S16(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.S16, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_s2le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.S16, self)._write__seq(io)
+            self._io.write_s2le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class S32(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.S32, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_s4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.S32, self)._write__seq(io)
+            self._io.write_s4le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class S64(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.S64, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_s8le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.S64, self)._write__seq(io)
+            self._io.write_s8le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 8
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class S8(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.S8, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_s1()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.S8, self)._write__seq(io)
+            self._io.write_s1(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Size(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -651,7 +959,8 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.val = self._io.read_s4le()
+            self.frame = self._io.read_bits_int_le(24)
+            self.type = self._io.read_bits_int_le(8)
             self._dirty = False
 
 
@@ -661,32 +970,13 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Sdl156.TimingFrame, self)._write__seq(io)
-            self._io.write_s4le(self.val)
+            self._io.write_bits_int_le(24, self.frame)
+            self._io.write_bits_int_le(8, self.type)
 
 
         def _check(self):
             self._dirty = False
 
-        @property
-        def frame(self):
-            if hasattr(self, '_m_frame'):
-                return self._m_frame
-
-            self._m_frame = self.val & 16777215
-            return getattr(self, '_m_frame', None)
-
-        def _invalidate_frame(self):
-            del self._m_frame
-        @property
-        def type(self):
-            if hasattr(self, '_m_type'):
-                return self._m_type
-
-            self._m_type = self.val >> 24
-            return getattr(self, '_m_type', None)
-
-        def _invalidate_type(self):
-            del self._m_type
 
     class Track(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -701,14 +991,14 @@ class Sdl156(ReadWriteKaitaiStruct):
             self.timing_frames__enabled = True
 
         def _read(self):
-            self.type = self._io.read_u1()
+            self.track_type = self._io.read_u1()
             self.prop_type = self._io.read_u1()
             self.num_frames = self._io.read_u2le()
             self.parent = self._io.read_u4le()
-            self.name_ofs = self._io.read_u4le()
+            self.ofs_name = self._io.read_u4le()
             self.dti_ref = self._io.read_u4le()
-            self.timing_ref = self._io.read_u4le()
-            self.data_ref = self._io.read_u4le()
+            self.ofs_timing = self._io.read_u4le()
+            self.ofs_data = self._io.read_u4le()
             self._dirty = False
 
 
@@ -722,12 +1012,16 @@ class Sdl156(ReadWriteKaitaiStruct):
                     _on = self.prop_type
                     if _on == 10:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 11:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 12:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 13:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 14:
                         pass
                         self._m_data[i]._fetch_instances()
@@ -743,8 +1037,13 @@ class Sdl156(ReadWriteKaitaiStruct):
                     elif _on == 22:
                         pass
                         self._m_data[i]._fetch_instances()
+                    elif _on == 24:
+                        pass
+                    elif _on == 28:
+                        pass
                     elif _on == 3:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 34:
                         pass
                         self._m_data[i]._fetch_instances()
@@ -761,17 +1060,25 @@ class Sdl156(ReadWriteKaitaiStruct):
                         self._m_data[i]._fetch_instances()
                     elif _on == 5:
                         pass
+                        self._m_data[i]._fetch_instances()
+                    elif _on == 55:
+                        pass
+                    elif _on == 57:
+                        pass
                     elif _on == 58:
                         pass
                         self._m_data[i]._fetch_instances()
                     elif _on == 6:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 7:
                         pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 8:
                         pass
                     elif _on == 9:
                         pass
+                        self._m_data[i]._fetch_instances()
 
 
             _ = self.name
@@ -793,20 +1100,20 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._should_write_data = self.data__enabled
             self._should_write_name = self.name__enabled
             self._should_write_timing_frames = self.timing_frames__enabled
-            self._io.write_u1(self.type)
+            self._io.write_u1(self.track_type)
             self._io.write_u1(self.prop_type)
             self._io.write_u2le(self.num_frames)
             self._io.write_u4le(self.parent)
-            self._io.write_u4le(self.name_ofs)
+            self._io.write_u4le(self.ofs_name)
             self._io.write_u4le(self.dti_ref)
-            self._io.write_u4le(self.timing_ref)
-            self._io.write_u4le(self.data_ref)
+            self._io.write_u4le(self.ofs_timing)
+            self._io.write_u4le(self.ofs_data)
 
 
         def _check(self):
             if self.data__enabled:
                 pass
-                if  ((self.data_ref > 0) and (self.type > 5)) :
+                if  ((self.ofs_data > 0) and (self.track_type > 5)) :
                     pass
                     if len(self._m_data) != self.num_frames:
                         raise kaitaistruct.ConsistencyError(u"data", self.num_frames, len(self._m_data))
@@ -815,12 +1122,28 @@ class Sdl156(ReadWriteKaitaiStruct):
                         _on = self.prop_type
                         if _on == 10:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 11:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 12:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 13:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 14:
                             pass
                             if self._m_data[i]._root != self._root:
@@ -851,8 +1174,16 @@ class Sdl156(ReadWriteKaitaiStruct):
                                 raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
                             if self._m_data[i]._parent != self:
                                 raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
+                        elif _on == 24:
+                            pass
+                        elif _on == 28:
+                            pass
                         elif _on == 3:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 34:
                             pass
                             if self._m_data[i]._root != self._root:
@@ -881,6 +1212,14 @@ class Sdl156(ReadWriteKaitaiStruct):
                                 raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 5:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
+                        elif _on == 55:
+                            pass
+                        elif _on == 57:
+                            pass
                         elif _on == 58:
                             pass
                             if self._m_data[i]._root != self._root:
@@ -889,12 +1228,24 @@ class Sdl156(ReadWriteKaitaiStruct):
                                 raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 6:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 7:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 8:
                             pass
                         elif _on == 9:
                             pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
 
 
 
@@ -927,25 +1278,41 @@ class Sdl156(ReadWriteKaitaiStruct):
             if not self.data__enabled:
                 return None
 
-            if  ((self.data_ref > 0) and (self.type > 5)) :
+            if  ((self.ofs_data > 0) and (self.track_type > 5)) :
                 pass
                 _pos = self._io.pos()
-                self._io.seek(self.data_ref)
+                self._io.seek(self.ofs_data)
                 self._m_data = []
                 for i in range(self.num_frames):
                     _on = self.prop_type
                     if _on == 10:
                         pass
-                        self._m_data.append(self._io.read_s4le())
+                        _t__m_data = Sdl156.S32(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 11:
                         pass
-                        self._m_data.append(self._io.read_s8le())
+                        _t__m_data = Sdl156.S64(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 12:
                         pass
-                        self._m_data.append(self._io.read_f4le())
+                        _t__m_data = Sdl156.F32(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 13:
                         pass
-                        self._m_data.append(self._io.read_f8le())
+                        _t__m_data = Sdl156.F64(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 14:
                         pass
                         _t__m_data = Sdl156.MtStr(self._io, self, self._root)
@@ -976,14 +1343,24 @@ class Sdl156(ReadWriteKaitaiStruct):
                             self._m_data.append(_t__m_data)
                     elif _on == 22:
                         pass
-                        _t__m_data = Sdl156.Vec4(self._io, self, self._root)
+                        _t__m_data = Sdl156.Quaternion(self._io, self, self._root)
                         try:
                             _t__m_data._read()
                         finally:
                             self._m_data.append(_t__m_data)
+                    elif _on == 24:
+                        pass
+                        self._m_data.append(self._io.read_u4le())
+                    elif _on == 28:
+                        pass
+                        self._m_data.append(self._io.read_u4le())
                     elif _on == 3:
                         pass
-                        self._m_data.append(self._io.read_u1())
+                        _t__m_data = Sdl156.Bool(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 34:
                         pass
                         _t__m_data = Sdl156.Float2(self._io, self, self._root)
@@ -1007,7 +1384,7 @@ class Sdl156(ReadWriteKaitaiStruct):
                             self._m_data.append(_t__m_data)
                     elif _on == 4:
                         pass
-                        self._m_data.append(self._io.read_u1())
+                        self._m_data.append(self._io.read_u8le())
                     elif _on == 40:
                         pass
                         _t__m_data = Sdl156.MtEasecurve(self._io, self, self._root)
@@ -1017,7 +1394,17 @@ class Sdl156(ReadWriteKaitaiStruct):
                             self._m_data.append(_t__m_data)
                     elif _on == 5:
                         pass
-                        self._m_data.append(self._io.read_u2le())
+                        _t__m_data = Sdl156.U16(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
+                    elif _on == 55:
+                        pass
+                        self._m_data.append(self._io.read_u4le())
+                    elif _on == 57:
+                        pass
+                        self._m_data.append(self._io.read_u4le())
                     elif _on == 58:
                         pass
                         _t__m_data = Sdl156.Resource(self._io, self, self._root)
@@ -1027,16 +1414,28 @@ class Sdl156(ReadWriteKaitaiStruct):
                             self._m_data.append(_t__m_data)
                     elif _on == 6:
                         pass
-                        self._m_data.append(self._io.read_u4le())
+                        _t__m_data = Sdl156.U32(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 7:
                         pass
-                        self._m_data.append(self._io.read_u8le())
+                        _t__m_data = Sdl156.U64(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 8:
                         pass
-                        self._m_data.append(self._io.read_s1())
+                        self._m_data.append(self._io.read_s8le())
                     elif _on == 9:
                         pass
-                        self._m_data.append(self._io.read_s2le())
+                        _t__m_data = Sdl156.S16(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
 
                 self._io.seek(_pos)
 
@@ -1049,25 +1448,25 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _write_data(self):
             self._should_write_data = False
-            if  ((self.data_ref > 0) and (self.type > 5)) :
+            if  ((self.ofs_data > 0) and (self.track_type > 5)) :
                 pass
                 _pos = self._io.pos()
-                self._io.seek(self.data_ref)
+                self._io.seek(self.ofs_data)
                 for i in range(len(self._m_data)):
                     pass
                     _on = self.prop_type
                     if _on == 10:
                         pass
-                        self._io.write_s4le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 11:
                         pass
-                        self._io.write_s8le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 12:
                         pass
-                        self._io.write_f4le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 13:
                         pass
-                        self._io.write_f8le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 14:
                         pass
                         self._m_data[i]._write__seq(self._io)
@@ -1083,9 +1482,15 @@ class Sdl156(ReadWriteKaitaiStruct):
                     elif _on == 22:
                         pass
                         self._m_data[i]._write__seq(self._io)
+                    elif _on == 24:
+                        pass
+                        self._io.write_u4le(self._m_data[i])
+                    elif _on == 28:
+                        pass
+                        self._io.write_u4le(self._m_data[i])
                     elif _on == 3:
                         pass
-                        self._io.write_u1(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 34:
                         pass
                         self._m_data[i]._write__seq(self._io)
@@ -1097,28 +1502,34 @@ class Sdl156(ReadWriteKaitaiStruct):
                         self._m_data[i]._write__seq(self._io)
                     elif _on == 4:
                         pass
-                        self._io.write_u1(self._m_data[i])
+                        self._io.write_u8le(self._m_data[i])
                     elif _on == 40:
                         pass
                         self._m_data[i]._write__seq(self._io)
                     elif _on == 5:
                         pass
-                        self._io.write_u2le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
+                    elif _on == 55:
+                        pass
+                        self._io.write_u4le(self._m_data[i])
+                    elif _on == 57:
+                        pass
+                        self._io.write_u4le(self._m_data[i])
                     elif _on == 58:
                         pass
                         self._m_data[i]._write__seq(self._io)
                     elif _on == 6:
                         pass
-                        self._io.write_u4le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 7:
                         pass
-                        self._io.write_u8le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
                     elif _on == 8:
                         pass
-                        self._io.write_s1(self._m_data[i])
+                        self._io.write_s8le(self._m_data[i])
                     elif _on == 9:
                         pass
-                        self._io.write_s2le(self._m_data[i])
+                        self._m_data[i]._write__seq(self._io)
 
                 self._io.seek(_pos)
 
@@ -1134,7 +1545,7 @@ class Sdl156(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self.name_ofs + self._root.header.name_offset)
+            self._io.seek(self.ofs_name + self._root.header.ofs_names)
             self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
             self._io.seek(_pos)
             return getattr(self, '_m_name', None)
@@ -1147,7 +1558,7 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _write_name(self):
             self._should_write_name = False
             _pos = self._io.pos()
-            self._io.seek(self.name_ofs + self._root.header.name_offset)
+            self._io.seek(self.ofs_name + self._root.header.ofs_names)
             self._io.write_bytes((self._m_name).encode(u"UTF-8"))
             self._io.write_u1(0)
             self._io.seek(_pos)
@@ -1173,7 +1584,7 @@ class Sdl156(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self.timing_ref)
+            self._io.seek(self.ofs_timing)
             self._m_timing_frames = []
             for i in range(self.num_frames):
                 _t__m_timing_frames = Sdl156.TimingFrame(self._io, self, self._root)
@@ -1193,13 +1604,149 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _write_timing_frames(self):
             self._should_write_timing_frames = False
             _pos = self._io.pos()
-            self._io.seek(self.timing_ref)
+            self._io.seek(self.ofs_timing)
             for i in range(len(self._m_timing_frames)):
                 pass
                 self._m_timing_frames[i]._write__seq(self._io)
 
             self._io.seek(_pos)
 
+
+    class U16(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.U16, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u2le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.U16, self)._write__seq(io)
+            self._io.write_u2le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class U32(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.U32, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.U32, self)._write__seq(io)
+            self._io.write_u4le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class U64(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.U64, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u8le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.U64, self)._write__seq(io)
+            self._io.write_u8le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 8
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
+    class U8(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.U8, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u1()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.U8, self)._write__seq(io)
+            self._io.write_u1(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec3(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1211,7 +1758,6 @@ class Sdl156(ReadWriteKaitaiStruct):
             self.x = self._io.read_f4le()
             self.y = self._io.read_f4le()
             self.z = self._io.read_f4le()
-            self.padding = self._io.read_f4le()
             self._dirty = False
 
 
@@ -1224,12 +1770,21 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._io.write_f4le(self.x)
             self._io.write_f4le(self.y)
             self._io.write_f4le(self.z)
-            self._io.write_f4le(self.padding)
 
 
         def _check(self):
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
 
     class Vec4(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -1260,43 +1815,15 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _check(self):
             self._dirty = False
 
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
 
-    @property
-    def tracks(self):
-        if self._should_write_tracks:
-            self._write_tracks()
-        if hasattr(self, '_m_tracks'):
-            return self._m_tracks
+            self._m_size_ = 16
+            return getattr(self, '_m_size_', None)
 
-        if not self.tracks__enabled:
-            return None
-
-        _pos = self._io.pos()
-        self._io.seek(20)
-        self._m_tracks = []
-        for i in range(self.header.num_tracks):
-            _t__m_tracks = Sdl156.Track(self._io, self, self._root)
-            try:
-                _t__m_tracks._read()
-            finally:
-                self._m_tracks.append(_t__m_tracks)
-
-        self._io.seek(_pos)
-        return getattr(self, '_m_tracks', None)
-
-    @tracks.setter
-    def tracks(self, v):
-        self._dirty = True
-        self._m_tracks = v
-
-    def _write_tracks(self):
-        self._should_write_tracks = False
-        _pos = self._io.pos()
-        self._io.seek(20)
-        for i in range(len(self._m_tracks)):
-            pass
-            self._m_tracks[i]._write__seq(self._io)
-
-        self._io.seek(_pos)
+        def _invalidate_size_(self):
+            del self._m_size_
 
 

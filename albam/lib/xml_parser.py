@@ -24,19 +24,7 @@ SDL_TRACK_ENUM = {
     13: 'event_track'
 }
 
-RV_SDL_TRACK_ENUM = {
-    'root_track': 1,
-    'classref_track': 2,  # unit track ?
-    'class_track': 4,
-    'object_track': 5,
-    'int_track': 6,
-    'vector_track': 7,
-    'float_track': 8,
-    'bool_track': 9,
-    'ref_track': 10,
-    'resource_track': 11,  # 0xB in decimal
-    'event_track': 13      # 0xD in decimal
-}
+RV_SDL_TRACK_ENUM = {v: k for k, v in SDL_TRACK_ENUM.items()}
 
 PLA_TRACK_ENUM = {
     1: 'root_track',
@@ -51,18 +39,7 @@ PLA_TRACK_ENUM = {
     11: 'resource_track',
 }
 
-RV_PLA_TRACK_ENUM = {
-    'root_track': 1,
-    'group_track': 3,  # unit track ?
-    'unit_track': 4,
-    'object_track': 5,
-    'bool_track': 6,
-    'int_track': 7,
-    'float_track': 8,
-    'vector_track': 9,
-    'ref_track': 10,
-    'resource_track': 11,  # 0xB in decimal
-}
+RV_PLA_TRACK_ENUM = {v: k for k, v in PLA_TRACK_ENUM.items()}
 
 SYMBOL_ORDER = {
     'x': 0,
@@ -84,18 +61,18 @@ def from_sdl(sdl_file):
     # parents = defaultdict(list)
     elements = []
 
-    for i, track in enumerate(sdl_file.tracks[1:]):  # skips Root node
+    for i, track in enumerate(sdl_file.tracks[1:]):  # skips Root node?
         # parents[track.parent].append(i)
-        track_type = SDL_TRACK_ENUM[track.type]
-        e = ET.Element(SDL_TRACK_ENUM[track.type], attrib={})
+        # track_type = SDL_TRACK_ENUM[track.track_type]
+        e = ET.Element(SDL_TRACK_ENUM[track.track_type], attrib={})
         e.attrib['prop_type'] = RV_MtPropertyType[track.prop_type]
         e.attrib['org_dti_ofs'] = hex(track.dti_ref)
-        e.attrib['org_data_ofs'] = hex(track.data_ref)
+        e.attrib['org_data_ofs'] = hex(track.ofs_data)
         e.attrib['name'] = track.name
-        if track.type == 2:
+        if track.track_type == 2:
             e.attrib['dti'] = RV_DTI_HASHES.get(track.dti_ref, str(hex(track.dti_ref)))
 
-        if track.type == 5:
+        if track.track_type == 5:
             e.attrib['obj_order'] = f'{track.dti_ref}'
 
         if track.num_frames > 0:
@@ -105,9 +82,9 @@ def from_sdl(sdl_file):
                     'timermarker': str(track.timing_frames[j].frame),
                     'marker_type': str(track.timing_frames[j].type)
                 })
-                if track.type in [6, 8, 9]:
+                if track.track_type in [6, 8, 9]:
                     value.attrib['value'] = str(track.data[j])
-                if track.type == 7:
+                if track.track_type == 7:
                     print("type:", 7, "name:", track.name, "track num", i + 1, "frame num", j)
                     # if track.prop_type == 0x28:
                     #     value.attrib['vec_type'] = 'mt_easecurve'
@@ -139,13 +116,13 @@ def from_sdl(sdl_file):
                     for k in val.__annotations__:
                         it = ET.SubElement(value, k, attrib={})
                         it.text = str(getattr(val, k))
-                if track.type == 11:  # 0xb
+                if track.track_type == 11:  # 0xb
                     #print("name:", track.name, "track num", i + 1, "frame num", j)
                     if track.data[j].ref_ofs:
                         value.attrib['ref_path'] = track.data[j].ref_path
                         value.attrib['ref_dti'] = RV_DTI_HASHES.get(track.data[j].ref_dti, str(track.data[j].ref_dti))
 
-        if track.type in [2, 4]:
+        if track.track_type in [2, 4]:
             root.append(e)
         else:
             elements[track.parent - 1].append(e)
@@ -220,7 +197,7 @@ def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index=0, 
     track.name__to_write = False
 
     if 'dti' in node.attrib:
-        track.dti_ref = DTI_HASHES[node.attrib['dti']]
+        track.dti_ref = DTI_HASHES.get(node.attrib['dti'], int(node.attrib['dti'], 16))
 
     if RV_SDL_TRACK_ENUM[node.tag] > 5:
         if node.tag == 'int_track' or node.tag == 'bool_track':
@@ -255,7 +232,10 @@ def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index=0, 
             track.data_ref += val_buffer.getbuffer().nbytes
             for i in range(len(time_val)):
                 val_buffer.write(struct.pack('I', name_buffer.tell()))
-                name_buffer.write(struct.pack('I', DTI_HASHES[items[i].attrib['ref_dti']]))
+                print(items[i].attrib['ref_dti'])
+                dti_hash = DTI_HASHES.get(items[i].attrib['ref_dti'], int(items[i].attrib['ref_dti']))
+                print(dti_hash)
+                name_buffer.write(struct.pack('I', dti_hash))
                 name_buffer.write(bytes(items[i].attrib['ref_path'], 'utf-8'))
                 name_buffer.write(b'\0')
             track.num_frames += len(time_val)
@@ -274,15 +254,15 @@ def traverse_tree(node, dst_sdl, val_buffer, name_buffer, name_dict, p_index=0, 
     return track
 
 
-def to_sdl(root):
-    dst_sdl = sdl_156.Sdl()
+def to_sdl(xml):
+    dst_sdl = sdl_156.Sdl156()
     name = defaultdict()
 
     header = dst_sdl.BaseHeader(_parent=dst_sdl, _root=dst_sdl._root)
     header.magic = b'SDL\x00'
     header.dti_table_offset = 0
     header.version = 0x10
-    header.frames = int(root.attrib['frames'])
+    header.frames = int(xml.attrib['frames'])
 
     val_buffer = io.BytesIO()
     name_buffer = io.BytesIO()
@@ -290,7 +270,7 @@ def to_sdl(root):
     tracks = []
 
     node_list = []
-    flatten_tree(root, node_list, 0)
+    flatten_tree(xml, node_list, 0)
     name_set = set([x[0].attrib['name'] for x in node_list[1:]])
     name_dict = write_name(name_buffer, name_set)
     num_tracks = len(node_list)
@@ -334,6 +314,7 @@ def to_sdl(root):
     #     ref_track.type = 2
     #     ref_track.prop_type = 2/
     return stream.to_byte_array()
+
 
 def from_pla(pla_file):
     root = ET.Element('root')
