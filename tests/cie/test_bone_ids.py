@@ -7,7 +7,7 @@ albam/engines/cie/mesh.py).
 import pytest
 
 from albam.engines.cie.mesh import (_bone_ids_by_name, _bones_to_write,
-                                    _serialize_bones)
+                                    _collect_geometry, _serialize_bones)
 from albam.exceptions import AlbamCheckFailure
 
 
@@ -132,5 +132,37 @@ def test_writing_a_bone_the_format_cannot_name_fails_with_a_clear_error():
     with pytest.raises(AlbamCheckFailure) as raised:
         _serialize_bones(None, _FakeArmature(bones))
 
+    assert raised.value.details
+    assert raised.value.solution
+
+
+class _FakeVertexGroup:
+    def __init__(self, index, name):
+        self.index = index
+        self.name = name
+
+
+class _FakeMeshObject:
+    def __init__(self, name, vertex_groups):
+        self.name = name
+        self.data = None
+        self.vertex_groups = vertex_groups
+
+
+def test_weighting_a_mesh_to_a_bone_the_format_cannot_name_fails_loudly():
+    """A rig larger than the id space is fine as long as the bones past it
+    carry no weights (see the test above). One that does carry them cannot
+    be written: dropping the vertex group would pin those vertices to the
+    first bone instead, which exports cleanly and deforms wrongly.
+    """
+    bones = [_FakeBoneWithParent(f"bone_{i}") for i in range(300)]
+    unnamed = next(bone.name for bone in bones
+                   if bone.name not in _bone_ids_by_name(bones))
+    mesh_ob = _FakeMeshObject("body", [_FakeVertexGroup(0, unnamed)])
+
+    with pytest.raises(AlbamCheckFailure) as raised:
+        _collect_geometry([mesh_ob], _FakeArmature(bones))
+
+    assert unnamed in raised.value.message
     assert raised.value.details
     assert raised.value.solution
