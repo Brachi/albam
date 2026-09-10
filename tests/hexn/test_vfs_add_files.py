@@ -11,7 +11,7 @@ _build_ssg_bytes, no real game data needed (see that file's own docstring).
 import bpy
 import pytest
 
-from .test_ssg_fs import _build_ssg_bytes
+from .test_ssg_fs import V5_ENTRIES, V5_MOCAP_ENTRIES, _build_ssg_bytes, _build_ssg_v5_bytes
 
 
 @pytest.fixture
@@ -46,3 +46,43 @@ def test_add_files_two_ssgs_with_the_same_name_read_their_own_bytes(tmp_path, ad
 
     assert vfs.get_vfile("reorc", "dup_addfiles/models/dup.edgemodel").get_bytes() == b"MESH-BYTES"
     assert vfs.get_vfile("reorc", "dup_addfiles/skel/dup").get_bytes() == b"SKEL-BYTES"
+
+
+def test_add_folder_reports_archives_it_skipped(tmp_path, added_roots):
+    """Mounting a game folder keeps going past a .ssg it can't read, so one
+    bad archive doesn't cost the user the other ~2000 - but the operator
+    has to say which ones, or those files are just missing from the tree
+    with nothing to explain it.
+    """
+    from albam.vfs import ALBAM_OT_VirtualFileSystemAddFolder
+
+    (tmp_path / "weapon.ssg").write_bytes(_build_ssg_v5_bytes(V5_ENTRIES))
+    (tmp_path / "cutscene.ssg").write_bytes(_build_ssg_v5_bytes(V5_MOCAP_ENTRIES))
+
+    app_selected = bpy.context.scene.albam.apps.app_selected
+    bpy.context.scene.albam.apps.app_selected = "reorc"
+    try:
+        warnings = ALBAM_OT_VirtualFileSystemAddFolder._execute(
+            bpy.context, str(tmp_path), [])
+    finally:
+        bpy.context.scene.albam.apps.app_selected = app_selected
+
+    assert warnings
+    assert "1 archive(s) skipped" in warnings[0]
+    assert any("cutscene.ssg" in line for line in warnings[1:])
+
+
+def test_add_folder_reports_nothing_when_every_archive_mounts(tmp_path, added_roots):
+    from albam.vfs import ALBAM_OT_VirtualFileSystemAddFolder
+
+    (tmp_path / "weapon.ssg").write_bytes(_build_ssg_v5_bytes(V5_ENTRIES))
+
+    app_selected = bpy.context.scene.albam.apps.app_selected
+    bpy.context.scene.albam.apps.app_selected = "reorc"
+    try:
+        warnings = ALBAM_OT_VirtualFileSystemAddFolder._execute(
+            bpy.context, str(tmp_path), [])
+    finally:
+        bpy.context.scene.albam.apps.app_selected = app_selected
+
+    assert warnings == []

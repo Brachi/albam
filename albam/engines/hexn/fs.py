@@ -3,16 +3,23 @@ PyFilesystem2 adapter for Hexane Engine (RE:ORC) .ssg archives.
 
 An .ssg bundles every file's bytes into one contiguous "solid" compressed
 stream (see structs/ssg.ksy): fixed-size file-info entries record each
-file's name and *uncompressed* size, but not its own compressed range - only
-the whole `buffer_chunks` blob (itself split into independently
+file's name and *uncompressed* size, but not its own compressed range -
+only the whole `buffer_chunks` blob (itself split into independently
 zlib-compressed chunks) decompresses to a stream that files are sliced out
-of sequentially, each padded up to `size_padding`. That solid layout means -
-unlike ArcFS/PakFS, where openbin() seeks straight to one entry's own
-compressed range - resolving any single file's bytes means decompressing
-the *whole* archive's `buffer_chunks` together. `SsgFS` defers that to the
-first file actually requested from a given archive rather than doing it in
-__init__ (see `_ensure_decompressed()`) - a real game install has ~2000
-.ssg, and a typical session only ever touches a handful of them.
+of. That solid layout means - unlike ArcFS/PakFS, where openbin() seeks
+straight to one entry's own compressed range - resolving any single file's
+bytes means decompressing the *whole* archive's `buffer_chunks` together.
+`SsgFS` defers that to the first file actually requested from a given
+archive rather than doing it in __init__ (see `_ensure_decompressed()`) - a
+real game install has ~2000 .ssg, and a typical session only ever touches a
+handful of them.
+
+Where in that stream a given entry lands depends on the archive's
+`id_magic`: 6 slices them out sequentially, each padded up to
+`size_padding`, while 5 gives every entry its own `ofs_in_buffer_chunks`
+and is read by that instead (structs/ssg.ksy documents both layouts;
+SSG_V5_CONTENT_TYPES below covers which id_magic 5 archives are mounted at
+all).
 
 `SsgFS` exposes a single .ssg as a read-only PyFilesystem2 filesystem;
 `HexnFS` overlays every .ssg under a game root - plus loose files - into one
@@ -27,11 +34,12 @@ little-endian format already registered here (archive.py), so there's no
 second registry slot to hang a separate `AnimsFS` off of. `_parse_header()`
 tries the regular little-endian `HexaneSsg` first (matches every real
 non-anims .ssg) and only falls back to the big-endian `HexaneAnims` if
-that raises (the two magics don't overlap - the same 4 bytes read as
-`contents: [0x06, 0x00, 0x00, 0x00]` little-endian vs. a big-endian u4
-can't both validate). Each clip entry is exposed as its own virtual leaf
-file, named `<file_info.name>.animclip` - a synthetic extension (no real
-file on disk ever has one) so the import registry can key an
+that raises (a big-endian archive can't be mistaken for a little-endian
+one - `HexaneSsg` accepts an `id_magic` of only 5 or 6, and a big-endian
+archive's own 5 or 6 reads back little-endian as 0x05000000/0x06000000).
+Each clip entry is exposed as its own virtual leaf file, named
+`<file_info.name>.animclip` - a synthetic extension (no real file on disk
+ever has one) so the import registry can key an
 `albam.engines.hexn.animation` import function off of it, the same way
 every other importable leaf here is dispatched by extension.
 """
@@ -55,9 +63,48 @@ from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 ANIM_CLIP_EXTENSION = ".animclip"
 
+# file_info.file_type is a fourcc stored as a little-endian word, so the
+# readable tag is its big-endian view - see structs/ssg.ksy.
+#
+# The content types an id_magic 5 archive is read as. A full install's 130
+# such archives (all under dlc/pack1/Weapons/) carry exactly these five and
+# nothing else: MODL (.edgemodel), MATB (.matb), HAVK (.hkx), and the
+# TPKH/TPKD pair a .dds is filed as - TPKH being a 4-byte stub holding just
+# the "DDS " magic, TPKD the real texture under the same name.
+#
+# Mounting one makes its files readable, which is not the same as
+# importable: the 108 .edgemodel entries these archives hold are all
+# format version 15, and structs/edgemodel.ksy models 17/18 (the only
+# versions the current archives hold). Version 15 is a pre-existing gap,
+# not one mounting these opens: only 60 of the 108 win their path in a
+# full mount, the other 48 staying behind a current archive's version-17/18
+# copy (id_magic 5 mounts below current content - see _ssg_priority), and
+# 129 more version-15 files already resolve to loose files on disk. All
+# 189 version-15 paths a full mount resolves - those 60 plus those 129 -
+# run off the end of the file when parsed today. Their .matb/.dds/.hkx
+# entries do read normally.
+#
+# An allowlist rather than a denylist because the offsets an id_magic 5
+# archive is read by are only as trustworthy as the census that established
+# them (see structs/ssg.ksy): a content type never seen in one gets refused
+# and reported instead of mounted on the assumption it behaves like these.
+# What it refuses today is the other id_magic 5 family - 5 archives under
+# NIS/ holding cutscene/mocap streams (STMH, MCPH, SANM, SCAM, LAYO), which
+# no part of albam parses and whose entry names repeat within one archive
+# (31 entries under 7 names in one), so mounting them would file several
+# entries' bytes under one path and serve whichever won.
+SSG_V5_CONTENT_TYPES = frozenset({b"MODL", b"MATB", b"HAVK", b"TPKH", b"TPKD"})
+
 
 def _local_opener(path):
     return open(path, "rb")
+
+
+def _content_type(file_info):
+    """`file_info.file_type` as its readable fourcc - the field is a signed
+    word holding a fourcc stored little-endian, so the tag is its
+    big-endian view (0x4d4f444c -> b"MODL"). See SSG_V5_CONTENT_TYPES."""
+    return (file_info.file_type & 0xFFFFFFFF).to_bytes(4, "big")
 
 
 class SsgFS(FS):
@@ -129,6 +176,16 @@ class SsgFS(FS):
         # file_info.size/offset here yields bytes that don't even start at
         # skel.ksy's own magic).
         is_be_container = self._struct_cls is HexaneAnims
+        # This archive's own layout version, exposed for _ssg_priority() -
+        # None for the big-endian container, whose id_magic is 5 or 6 too
+        # but means nothing comparable (see structs/anims.ksy).
+        self.id_magic = None if is_be_container else ssg.id_magic
+        # An id_magic 5 archive stores each entry's own offset rather than
+        # laying them out end to end, so the sequential walk below never
+        # applies to it - see _check_v5_supported() and structs/ssg.ksy.
+        is_v5 = self.id_magic == 5
+        if is_v5:
+            self._check_v5_supported(ssg)
         for file_info in ssg.files_info:
             name = file_info.name.replace("\\", "/").lstrip("/")
             is_anim_clip = is_be_container and file_info.file_type == 5
@@ -141,8 +198,12 @@ class SsgFS(FS):
             # file_info.size until the first read and the real size after
             # would make getinfo() answer differently depending on whether
             # anything had been read yet.
-            self._sizes[path] = archive_size if is_skeleton else file_info.size
-            self._offsets[path] = offset
+            # A .dds is filed as a TPKH/TPKD pair sharing one entry name
+            # (see SSG_V5_CONTENT_TYPES): the stub never wins the path off
+            # the real texture, whichever order the two are stored in.
+            if not (path in self._sizes and _content_type(file_info) == b"TPKH"):
+                self._sizes[path] = archive_size if is_skeleton else file_info.size
+                self._offsets[path] = file_info.ofs_in_buffer_chunks if is_v5 else offset
 
             parts = path.strip("/").split("/")
             for i in range(len(parts)):
@@ -151,17 +212,69 @@ class SsgFS(FS):
                 if i < len(parts) - 1:
                     self._known_dirs.add(parent.rstrip("/") + "/" + parts[i])
 
-            # Both formats sharing the big-endian container pack their
-            # entries with no padding at all, unlike the regular
-            # little-endian format's size_padding-driven gaps (see
-            # structs/anims.ksy). id_magic 5 archives are unpadded too -
-            # they carry size_padding == 0.
-            padding = (0 if is_be_container or not ssg.size_padding
-                       else -file_info.size % ssg.size_padding)
-            offset += file_info.size + padding
+            if not is_v5:
+                # Both formats sharing the big-endian container pack their
+                # entries with no padding at all, unlike the regular
+                # little-endian format's size_padding-driven gaps (see
+                # structs/anims.ksy). An id_magic 5 archive looks unpadded
+                # by the same test - it carries size_padding == 0 - while
+                # really padding to 16, which is why it is read by its own
+                # stored offsets instead of by this walk.
+                padding = (0 if is_be_container or not ssg.size_padding
+                           else -file_info.size % ssg.size_padding)
+                offset += file_info.size + padding
 
         self._data = None  # populated lazily - see _ensure_decompressed()
         self._decompress_lock = threading.Lock()
+
+    def _check_v5_supported(self, ssg):
+        """Refuse an id_magic 5 archive this reader has no evidence it can
+        serve correctly, before any of it is exposed as files.
+
+        Every condition below holds for every id_magic 5 archive on a full
+        install (135 of them, 881 entries), and each one failing would mean
+        `file_info.ofs_in_buffer_chunks` no longer points where this class
+        reads from:
+
+        * `size_chunks_info` == 0, i.e. `buffer_chunks` is stored
+          uncompressed. That offset is a position in the *stored* buffer;
+          for a chunk-compressed archive it is a zlib chunk boundary rather
+          than a position in the decompressed stream (see structs/ssg.ksy),
+          so it would slice the wrong bytes out.
+        * every entry's `file_type` is one of SSG_V5_CONTENT_TYPES, which is
+          what tells the model-data family apart from the cutscene/mocap one
+          sharing this id_magic - see that constant.
+        * no entry runs past the end of `buffer_chunks`. Slicing one that
+          does yields short bytes with nothing raised, i.e. the wrong
+          content served silently.
+
+        Raises rather than mounting what it can: `HexnFS` collects the
+        failure per-archive and surfaces it (see HexnFS.skipped_archives()),
+        so an archive left out says so instead of just going missing.
+        """
+        if ssg.size_chunks_info:
+            raise CreateFailed(
+                f"id_magic 5 archive is chunk-compressed "
+                f"(size_chunks_info={ssg.size_chunks_info}), which no known one is - its "
+                f"file_info offsets index the stored buffer, not the decompressed stream"
+            )
+        unsupported = sorted(
+            {_content_type(fi) for fi in ssg.files_info} - SSG_V5_CONTENT_TYPES)
+        if unsupported:
+            tags = ", ".join(t.decode("ascii", "replace") for t in unsupported)
+            raise CreateFailed(
+                f"id_magic 5 archive holds content types this reader doesn't model "
+                f"({tags}) - not mounted rather than served on the model-data layout's "
+                f"assumptions"
+            )
+        overrun = max(
+            (fi.ofs_in_buffer_chunks + fi.size for fi in ssg.files_info), default=0)
+        if overrun > ssg.size_chunks_buffer:
+            raise CreateFailed(
+                f"id_magic 5 archive has an entry running past the end of its buffer "
+                f"({overrun} > size_chunks_buffer={ssg.size_chunks_buffer}), which no "
+                f"known one does - its file_info offsets would slice short bytes"
+            )
 
     def _open_and_parse(self, struct_cls):
         """Open the archive and read everything up to (not including)
@@ -366,27 +479,40 @@ def _is_info_only_ssg(ssg_path):
     return basename == "modelinfos.ssg" or basename.endswith(".minfo.ssg")
 
 
-def _ssg_priority(ssg_path):
+def _ssg_priority(ssg_path, ssg_fs):
     """MultiFS priority for one discovered .ssg (see HexnFS.__init__).
 
-    All real content archives share the default priority (0), resolved by
-    MultiFS's own reverse-add-order tie-break - fine on its own, except an
-    info-only archive (see _is_info_only_ssg() above) sorts alphabetically
-    after some real content archives too, so with everything at the same
-    priority it can silently shadow them: a lookup for a shared path
-    returns the tiny info stub instead of the real mesh. Confirmed on a
-    real install: without this priority ordering, across the 4
-    ModelInfos.ssg archives alone, 103 of 171 virtual paths they share
-    with a real content archive would resolve to the wrong stub (the 36
-    per-level .minfo.ssg archives add more of the same, unquantified).
+    Current-content archives share the default priority (0), resolved by
+    MultiFS's own reverse-add-order tie-break - fine on its own, except
+    two kinds of archive re-use the very same virtual paths and would
+    otherwise shadow the real thing depending on nothing but where they
+    sorted:
 
-    Giving info-only archives a strictly lower priority means one only
-    ever resolves a path no other (real-priority) archive already claims -
-    real content always wins on a shared path, while any path that turns
-    out to exist *only* inside an info-only archive still resolves
-    instead of disappearing outright.
+    * an info-only archive (see _is_info_only_ssg() above), whose entry at
+      a shared path is a tiny "IM6S" metadata stub rather than the mesh.
+      Confirmed on a real install: without this ordering, across the 4
+      ModelInfos.ssg archives alone, 103 of 171 virtual paths they share
+      with a real content archive would resolve to the wrong stub (the 36
+      per-level .minfo.ssg archives add more of the same, unquantified).
+    * an id_magic 5 archive, which holds a superseded revision of what it
+      shares with the current archives - the 130 on a real install are all
+      per-weapon copies under dlc/pack1/Weapons/, and where one shares a
+      path with the shipped aggregate dlc/pack1/Weapons/weapons.ssg, its
+      .edgemodel is format version 15 against that one's 17/18. Left at
+      the same priority they win 141 of the 469 virtual paths they claim,
+      29 of those .edgemodel paths that resolve to a version-18 mesh
+      today - a straight downgrade of what is already there.
+
+    Ordering them strictly below current content means one only ever
+    resolves a path no higher-priority archive already claims, so nothing
+    that resolves today changes and a path that exists *only* in one still
+    resolves instead of disappearing. id_magic 5 outranks info-only in
+    turn: both can claim the same path, and a superseded-but-real mesh
+    beats a metadata stub.
     """
     if _is_info_only_ssg(ssg_path):
+        return -2
+    if ssg_fs.id_magic == 5:
         return -1
     return 0
 
@@ -439,7 +565,7 @@ class HexnFS(MultiFS):
             except Exception as e:
                 self.failed_ssgs.append((ssg_path, e))
                 continue
-            self.add_fs(ssg_path, ssg_fs, priority=_ssg_priority(ssg_path))
+            self.add_fs(ssg_path, ssg_fs, priority=_ssg_priority(ssg_path, ssg_fs))
 
         # added last -> highest default priority -> wins over packed archives
         self.add_fs("<loose>", OSFS(game_root))
@@ -496,12 +622,40 @@ class HexnFS(MultiFS):
             except Exception as e:
                 self.failed_ssgs.append((ssg_key, e))
                 continue
-            self.add_fs(ssg_key, ssg_fs, priority=_ssg_priority(ssg_key))
+            self.add_fs(ssg_key, ssg_fs, priority=_ssg_priority(ssg_key, ssg_fs))
 
         if include_loose:
             # added last -> highest default priority -> wins over packed archives
             self.add_fs("<loose>", S3LooseFS(client, bucket, prefix))
         return self
+
+    def skipped_archives(self):
+        """(path relative to the game root, reason) for every .ssg found
+        under it that could not be mounted - the readable form of
+        `failed_ssgs`.
+
+        Construction deliberately keeps going past an archive it can't
+        read, so one unreadable .ssg out of ~2000 doesn't cost the user
+        every other one. Nothing said so, though: the failures were
+        collected here and never read by anything, leaving a silently
+        incomplete tree - files simply absent, with no hint they were ever
+        there. albam.vfs surfaces this list when a root is added (see
+        skipped_source_warnings() there); the same shape works for any FS
+        that overlays many sources.
+        """
+        return [
+            (self._display_path(path), str(exc) or type(exc).__name__)
+            for path, exc in self.failed_ssgs
+        ]
+
+    def _display_path(self, ssg_path):
+        """`ssg_path` as origin_of() would report it - relative to the game
+        root locally, to `prefix` for a from_s3() instance."""
+        if self._s3_prefix is not None:
+            if self._s3_prefix and ssg_path.startswith(self._s3_prefix + "/"):
+                return ssg_path[len(self._s3_prefix) + 1:]
+            return ssg_path
+        return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
 
     def _owning_ssg_fs(self, path):
         self.check()
@@ -521,12 +675,7 @@ class HexnFS(MultiFS):
         owner_fs = self._owning_ssg_fs(path)
         if owner_fs is None:
             return None
-        ssg_path = owner_fs.ssg_path
-        if self._s3_prefix is not None:
-            if self._s3_prefix and ssg_path.startswith(self._s3_prefix + "/"):
-                return ssg_path[len(self._s3_prefix) + 1:]
-            return ssg_path
-        return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
+        return self._display_path(owner_fs.ssg_path)
 
     # listdir()/scandir(): MultiFS's own versions (see fs.multifs.MultiFS)
     # aggregate every overlaid sub-filesystem's listing for `path` and only

@@ -382,6 +382,48 @@ class VirtualFileSystemBase:
         return vfile
 
 
+# How many individually-named skipped archives one root's warning lists
+# before collapsing the rest into a count - see skipped_source_warnings().
+# A handful is enough to act on; a badly broken install could otherwise
+# push hundreds of lines into Blender's info log.
+MAX_SKIPPED_SOURCES_REPORTED = 5
+
+
+def skipped_source_warnings(root_vf):
+    """Warning lines for the archives an FS-backed root mounted *around*,
+    ready to be handed to `Operator.report({'WARNING'}, ...)`.
+
+    An FS overlaying a whole install deliberately keeps going when one of
+    the hundreds of archives under the game root won't parse, so a single
+    bad one doesn't cost the user every other one. Nothing said which ones,
+    though: the skipped list was collected and never read, so the user got
+    a silently incomplete tree - files simply missing, with no hint they
+    had ever been there.
+
+    Duck-typed on a `skipped_archives()` method returning (source, reason)
+    pairs, so nothing here needs to know which engine's FS it was handed.
+    `HexnFS` has one; a root whose FS doesn't (a single archive, an export
+    root, and `MTFW_FS` with its own equally-unread `failed_arcs` until it
+    grows one) warns about nothing.
+    """
+    if root_vf is None or not root_vf.fs_key:
+        return []
+    skipped_archives = getattr(fs_registry.get(root_vf.fs_key), "skipped_archives", None)
+    if skipped_archives is None:
+        return []
+    skipped = list(skipped_archives())
+    if not skipped:
+        return []
+
+    lines = [f"{root_vf.display_name}: {len(skipped)} archive(s) skipped, not mounted"]
+    for source, reason in skipped[:MAX_SKIPPED_SOURCES_REPORTED]:
+        lines.append(f"skipped {source}: {reason}")
+    remaining = len(skipped) - MAX_SKIPPED_SOURCES_REPORTED
+    if remaining > 0:
+        lines.append(f"...and {remaining} more skipped")
+    return lines
+
+
 def _fs_root_loader(vf):
     """The registered fs_root_loader able to rebuild root `vf`'s FS: keyed by
     the root's own extension for an archive root ("Add Files"), falling back
@@ -490,17 +532,23 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):  # pragma: no cover
-        self._execute(context, self.directory, self.files)
+        for warning in self._execute(context, self.directory, self.files):
+            self.report({'WARNING'}, warning)
         context.scene.albam.vfs.file_list.update()
         return {"FINISHED"}
 
     @staticmethod
     def _execute(context, directory, files):
+        """Returns the warning lines execute() reports - see
+        skipped_source_warnings()."""
         app_id = context.scene.albam.apps.app_selected
         vfs = context.scene.albam.vfs
+        warnings = []
         for f in files:
             absolute_path = os.path.join(directory, f.name)
-            vfs.add_real_file(app_id, absolute_path)
+            root_vf = vfs.add_real_file(app_id, absolute_path)
+            warnings.extend(skipped_source_warnings(root_vf))
+        return warnings
 
 
 @blender_registry.register_blender_type
@@ -517,14 +565,17 @@ class ALBAM_OT_VirtualFileSystemAddFolder(bpy.types.Operator):
 
     def execute(self, context):  # pragma: no cover
         self.report({'INFO'}, f"Selected directory: {self.directory}")
-        self._execute(context, self.directory, self.files)
+        for warning in self._execute(context, self.directory, self.files):
+            self.report({'WARNING'}, warning)
         return {"FINISHED"}
 
     @staticmethod
     def _execute(context, directory, files):
+        """Returns the warning lines execute() reports - see
+        skipped_source_warnings()."""
         app_id = context.scene.albam.apps.app_selected
         vfs = context.scene.albam.vfs
-        vfs.add_real_file(app_id, directory)
+        return skipped_source_warnings(vfs.add_real_file(app_id, directory))
 
 
 class ALBAM_OT_VirtualFileSystemSaveFileBase:
