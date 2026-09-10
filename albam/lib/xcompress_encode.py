@@ -59,7 +59,6 @@ LZX_MAX_MATCH = 257
 LZX_NUM_POSITION_SLOTS = 34
 LZX_NUM_SECONDARY_LENGTHS = 249
 LZX_BLOCKTYPE_VERBATIM = 1
-LZX_BLOCKTYPE_UNCOMPRESSED = 3
 LZX_MAIN_SYMBOLS = LZX_NUM_CHARS + LZX_NUM_POSITION_SLOTS * 8
 LZX_PRETREE_SYMBOLS = 20
 # Code lengths are read as 4-bit fields for the pretree and are capped at 16
@@ -613,39 +612,13 @@ def _frame(data, uncompressed_size, last):
     size = len(data)
     if size > 0xFFFF:
         # Both header forms hold the compressed size in a u2.
-        raise FrameTooLarge()
+        raise FrameTooLarge(
+            f"a frame holding {uncompressed_size} bytes came to {size} compressed, "
+            f"more than the {0xFFFF} a frame header can count"
+        )
     if not last and uncompressed_size == FRAME_SIZE and (size >> 8) != SHORT_FRAME_HEADER_MARKER:
         return struct.pack(">H", size) + data
     return struct.pack(">BHH", SHORT_FRAME_HEADER_MARKER, uncompressed_size, size) + data
-
-
-def _stored_frames(payload):
-    """`payload` as frames of one uncompressed block each.
-
-    The fallback for data a verbatim block would somehow write into a frame
-    too large for its own header. Nothing measurable reaches it - a frame
-    holds 32768 bytes and Huffman coding them cannot come near the 65535 a
-    frame header can count - but an .arc entry has no "stored" flag to fall
-    back on the way an .lfs chunk does, so the encoder needs some way to
-    write any input at all. Block type 3 is that way, and the game's own
-    archives do use it.
-    """
-    out = bytearray()
-    for start in range(0, len(payload), FRAME_SIZE):
-        chunk = payload[start:start + FRAME_SIZE]
-        writer = _BitWriter()
-        if start == 0:
-            writer.write(0, 1)  # no x86 call transform, once per stream
-        writer.write(LZX_BLOCKTYPE_UNCOMPRESSED, 3)
-        writer.write(len(chunk), 24)
-        # The decoder aligns to a whole word before reading the three
-        # repeated offsets, which are u4 written low half first.
-        body = bytearray(writer.finish())
-        for _ in range(3):
-            body += struct.pack("<HH", 1, 0)
-        body += chunk
-        out += _frame(bytes(body), len(chunk), last=start + FRAME_SIZE >= len(payload))
-    return bytes(out)
 
 
 def frame_stream(frames):
@@ -661,11 +634,12 @@ def xmem_compress(payload):
 
     The size is not in the stream; whatever points at it stores that (an
     .arc file entry's `size`), and xcompress.xmem_decompress takes it back.
+
+    Raises FrameTooLarge if a frame will not fit its own header's size
+    field, the way compress_frames raises on a size mismatch: a stream that
+    cannot be encoded correctly is refused rather than written.
     """
     payload = bytes(payload)
     if not payload:
         return b""
-    try:
-        return frame_stream(compress_frames(payload))
-    except FrameTooLarge:
-        return _stored_frames(payload)
+    return frame_stream(compress_frames(payload))

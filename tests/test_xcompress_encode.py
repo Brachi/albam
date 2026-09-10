@@ -27,7 +27,6 @@ from albam.lib.xcompress_encode import (
     _lz77_tokens,
     _operations,
     _split_blocks,
-    _stored_frames,
     compress_frames,
     frame_stream,
     xmem_compress,
@@ -186,20 +185,6 @@ def test_a_block_ends_where_its_header_says_it_does():
     assert sum(emitted for _block, emitted in blocks) == len(payload)
     for operations, emitted in blocks:
         assert sum(operation[4] for operation in operations) == emitted
-
-
-@pytest.mark.parametrize("size", [1, 100, FRAME_SIZE, FRAME_SIZE + 1, 3 * FRAME_SIZE - 3])
-def test_stored_frames_round_trip(size):
-    """The fallback for a frame that would not fit its own header's size
-    field. Nothing measurable reaches it, so it is tested directly rather
-    than through an input that provokes it."""
-    payload = _random_bytes(size)
-    stream = _stored_frames(payload)
-    assert xmem_decompress(stream, size) == payload
-    frames, trailing = frames_of(stream)
-    assert [f[0] for f in frames] == [2] * (len(frames) - 1) + [5]
-    assert sum(f[1] for f in frames) == size
-    assert trailing == b""
 
 
 needs_p7zip = pytest.mark.skipif(sevenzip() is None,

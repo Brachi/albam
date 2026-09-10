@@ -78,8 +78,8 @@ def _sort_arc_entries(entries, arc_version=None):
 
 def _get_file_entry(vfile, arc_version):
     vf_data = vfile.get_bytes()
-    chunk = compress_entry(arc_version, vf_data)
     path = ntpath.normpath(vfile.relative_path)
+    chunk = compress_entry(arc_version, vf_data, path)
     file_path = ntpath.splitext(path)[0]
     try:
         file_type = extension_file_ids(arc_version)[vfile.extension]
@@ -90,6 +90,9 @@ def _get_file_entry(vfile, arc_version):
     item.file_type = file_type
     item.zsize = len(chunk)
     item.size = len(vf_data)
+    # Unverified for DMC4, whose own textures are observed carrying 0 and 1
+    # as well; there is nothing to carry over for an entry the archive does
+    # not already have. See the comment in _serialize_arc.
     item.flags = 2
     item.offset = 0
     item.raw_data = chunk
@@ -261,8 +264,8 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     # patch dictionary with imported files
     for vf in vf_sorted:
         vf_data = vf.get_bytes()
-        chunk = compress_entry(arc_version, vf_data)
         path = ntpath.normpath(vf.relative_path)
+        chunk = compress_entry(arc_version, vf_data, path)
         file_path = ntpath.splitext(path)[0]
         try:
             file_type = extension_file_ids(arc_version)[vf.extension]
@@ -298,6 +301,9 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
             item.file_type = file_type
             item.zsize = len(chunk)
             item.size = len(vf_data)
+            # Unverified for DMC4, whose own textures are observed carrying
+            # 0 and 1 as well; there is nothing to carry over for an entry
+            # the archive does not already have. See _serialize_arc.
             item.flags = 2
             item.offset = 0
             item.raw_data = chunk
@@ -343,7 +349,7 @@ def find_and_replace_in_arc(filepath, vfile, file_name, add_new):
                 show_message_box("File: {} was found and replaced in the archive".format(file_name))
                 found = True
                 vf_data = vfile.get_bytes()
-                chunk = compress_entry(arc_version, vf_data)
+                chunk = compress_entry(arc_version, vf_data, path)
                 fe.zsize = len(chunk)
                 fe.size = len(vf_data)
                 fe.raw_data = chunk

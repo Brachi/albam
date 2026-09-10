@@ -29,9 +29,11 @@ from albam.engines.mtfw.arc_fs import (
     file_type_extensions,
 )
 from albam.engines.mtfw.structs.arc import Arc
+from albam.lib import xcompress_encode
 from albam.lib.xcompress import _BitReader, xmem_decompress
 from albam.lib.xcompress_encode import (
     FRAME_SIZE,
+    FrameTooLarge,
     _lz77_tokens,
     _operations,
     _split_blocks,
@@ -245,6 +247,36 @@ def test_packing_a_version_7_archive_still_writes_zlib(tmp_path):
 
     entry = rebuilt.file_entries[0]
     assert zlib.decompress(entry.raw_data) == payload
+
+
+def test_an_entry_the_encoder_cannot_write_is_refused_by_name(tmp_path, monkeypatch):
+    """A payload the encoder cannot frame stops the pack and says which
+    entry it was, rather than half-writing an archive or leaving the user
+    with a bare internal traceback.
+
+    No real payload gets a frame past what its header can count, so the
+    encoder is made to produce one; everything from there on is the real
+    write path.
+    """
+    arc_path = tmp_path / "test.arc"
+    original = build_arc(ARC_VERSION_DMC4, [
+        ("chr\\pl000\\pl000", DMC4_TEX, stored_frame(b"old\n" * 100), 2)])
+    arc_path.write_bytes(original)
+
+    def oversized_frames(payload, **kwargs):
+        return [(b"\x00" * 0x10000, len(payload))]
+
+    monkeypatch.setattr(xcompress_encode, "compress_frames", oversized_frames)
+
+    payload = b"albam wrote this one\n" * 20
+    with pytest.raises(FrameTooLarge) as excinfo:
+        update_arc(str(arc_path), [FakeVFile("chr\\pl000\\pl000.tex", payload)])
+
+    message = str(excinfo.value)
+    assert "chr\\pl000\\pl000.tex" in message
+    assert str(len(payload)) in message
+    assert "65535" in message
+    assert arc_path.read_bytes() == original
 
 
 def _bits_msb_first(data):
