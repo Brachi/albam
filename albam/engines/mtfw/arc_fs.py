@@ -22,10 +22,16 @@ from fs.osfs import OSFS
 from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
-from . import FILE_ID_TO_EXTENSION, FILE_ID_TO_EXTENSION_DMC4
+from . import (
+    EXTENSION_TO_FILE_ID,
+    EXTENSION_TO_FILE_IDS_DMC4,
+    FILE_ID_TO_EXTENSION,
+    FILE_ID_TO_EXTENSION_DMC4,
+)
 from .structs.arc import Arc
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 from ...lib.xcompress import xmem_decompress
+from ...lib.xcompress_encode import FrameTooLarge, xmem_compress
 
 
 # The archive version this app writes. Every other app albam reads writes
@@ -46,11 +52,64 @@ def file_type_extensions(arc_version):
     return FILE_ID_TO_EXTENSION
 
 
+class AmbiguousExtension(Exception):
+    """An extension that names more than one of version 17's resource classes,
+    so the id a file albam is adding should carry is not knowable."""
+
+
+def new_entry_file_type(arc_version, extension):
+    """The file type id to label a file albam adds to an archive with.
+
+    The reverse of file_type_extensions(), for giving a file albam adds to an
+    archive the id that archive's own version knows it by. Raises KeyError if
+    the version's table does not name the extension at all - callers take the
+    extension for a literal id then.
+
+    A version 17 extension that names more than one resource class is refused
+    rather than guessed at: nothing has been written on that guess yet, and
+    an extension is all a user's file tells albam. The shared table resolves
+    the one extension it doubles up on the way it always has, because version
+    7 archives have been written that way for as long as albam has existed.
+
+    Existing entries never come through here either way: they keep the file
+    type they were parsed with, which is an answer and not a guess.
+    """
+    if arc_version != ARC_VERSION_DMC4:
+        return EXTENSION_TO_FILE_ID[extension]
+    file_ids = EXTENSION_TO_FILE_IDS_DMC4[extension]
+    if len(file_ids) > 1:
+        candidates = ", ".join(f"0x{h:08X}" for h in file_ids)
+        raise AmbiguousExtension(
+            f'cannot add a ".{extension}" to this archive: version 17 numbers '
+            f"it {candidates}, and which of those this file is cannot be told "
+            "from its name")
+    return file_ids[0]
+
+
 def decompress_entry(arc_version, raw, size):
     """One .arc file entry's payload, decoded with the codec its archive uses."""
     if arc_version == ARC_VERSION_DMC4:
         return xmem_decompress(raw, size)
     return zlib.decompress(raw)
+
+
+def compress_entry(arc_version, data, entry_path):
+    """One .arc file entry's payload, encoded with the codec its archive uses.
+
+    The counterpart of decompress_entry, and the reason a version 17 archive
+    can be written at all: its entries are XMemCompress streams, and zlib
+    chunks written into one would leave an archive that parses fine and that
+    the game cannot read.
+
+    An entry the LZX encoder cannot encode correctly is refused rather than
+    written, and `entry_path` is what says which file that was.
+    """
+    if arc_version == ARC_VERSION_DMC4:
+        try:
+            return xmem_compress(data)
+        except FrameTooLarge as err:
+            raise FrameTooLarge(f'cannot pack "{entry_path}": {err}') from err
+    return zlib.compress(data)
 
 
 def _entry_path(file_entry, extensions=FILE_ID_TO_EXTENSION):
