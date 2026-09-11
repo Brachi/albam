@@ -55,9 +55,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
-- `Material.use_nodes` deprecation warnings on Blender 5.x, printed once per
-  material built on import. Materials are node-based unconditionally from 5.0
-  on, so the property is only touched now on the versions that still need it
 
 ### Changed
 
