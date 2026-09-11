@@ -1,5 +1,5 @@
 import bpy
-from ...lib.blender import BaseMaterialCustomProperties, ShaderGroupCompat
+from ...lib.blender import BaseMaterialCustomProperties, ensure_material_nodes, ShaderGroupCompat
 from ...registry import blender_registry
 from .textures import _process_tpls, _create_blender_image_from_tex
 
@@ -19,7 +19,7 @@ def build_blender_materials(bl_mesh, bin, tpl_vfile):
         albam_custom_props = blender_material.albam_custom_properties
         custom_props_top_level = albam_custom_props.get_custom_properties_for_appid(app_id)
         custom_props_top_level.copy_custom_properties_from(mat)
-        blender_material.use_nodes = True
+        ensure_material_nodes(blender_material)
         blender_material.blend_method = "CLIP"
 
         node_to_delete = None
