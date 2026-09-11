@@ -115,11 +115,17 @@ def _serialize_arc(exported, version=7):
         file_entry.file_type = fe.file_type
         file_entry.zsize = fe.zsize
         file_entry.size = fe.size
-        # Carried over rather than fixed at 2: every entry of every version 7
-        # archive albam reads has 2, but a DMC4 one uses 0 and 1 as well -
-        # only ever on a tex, so it says something about the texture the
-        # engine is being handed, and rewriting it would be inventing an
-        # answer.
+        # Carried over rather than fixed at 2. Measured over every .arc of
+        # the seven version 7 games on hand (Dragon's Dogma, Resident Evil
+        # Revelations, Resident Evil 0, Resident Evil 5, Resident Evil 6,
+        # Resident Evil HD Remaster, Ultimate Marvel vs. Capcom 3): 29690
+        # archives, 788014 entries, 788013 of them carrying 2 and exactly one
+        # carrying 4 - "dlc\model\chara\wp\wp1070\wp1070" in Revelations'
+        # wp21.arc. That one entry is why carrying the parsed value through is
+        # the fix and writing a fixed 2 was the bug: its own value now
+        # survives a repack instead of being replaced by a guess. DMC4 makes
+        # the same point louder, using 0 and 1 as well - only ever on a tex,
+        # so it says something about the texture the engine is being handed.
         file_entry.flags = fe.flags
         file_entry.offset = file_offset
         file_entry.raw_data = fe.raw_data

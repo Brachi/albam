@@ -224,10 +224,9 @@ def test_packing_a_version_17_archive_writes_xmemcompress_entries(tmp_path):
 
 
 def test_packing_leaves_an_entry_s_flags_alone(tmp_path):
-    """Every entry of every version 7 archive carries flags 2, but a DMC4
-    archive uses 0 and 1 as well - only ever on a tex, so the value says
-    something about the texture, and rewriting it would be inventing an
-    answer."""
+    """Nearly every version 7 entry carries flags 2, but a DMC4 archive uses
+    0 and 1 as well - only ever on a tex, so the value says something about
+    the texture, and rewriting it would be inventing an answer."""
     payload = b"a texture, supposedly\n" * 200
     path = tmp_path / "test.arc"
     path.write_bytes(build_arc(ARC_VERSION_DMC4, [
@@ -426,6 +425,23 @@ def test_packing_a_version_7_archive_still_writes_zlib(tmp_path):
 
     entry = rebuilt.file_entries[0]
     assert zlib.decompress(entry.raw_data) == payload
+
+
+def test_packing_a_version_7_archive_keeps_an_unusual_flags_value(tmp_path):
+    """Version 7 entries are not all flags 2 either: of the 788014 entries in
+    the archives on hand exactly one carries 4, and a repack has to hand that
+    entry back its own value rather than the 2 the writer used to assume."""
+    path = tmp_path / "test.arc"
+    zlib_tex = EXTENSION_TO_FILE_ID["tex"]
+    path.write_bytes(build_arc(ARC_VERSION_ZLIB, [
+        ("dlc\\model\\chara\\wp\\wp1070\\wp1070", zlib_tex, b"old\n" * 100, 4),
+        ("chr\\pl000\\pl000", zlib_tex, b"old\n" * 100, 2)]))
+
+    rebuilt = parse_arc(update_arc(str(path), [
+        FakeVFile("chr\\pl000\\pl000.tex", b"albam wrote this one\n" * 200,
+                  app_id="re5")]))
+
+    assert [e.flags for e in rebuilt.file_entries] == [4, 2]
 
 
 def test_an_entry_the_encoder_cannot_write_is_refused_by_name(tmp_path, monkeypatch):
