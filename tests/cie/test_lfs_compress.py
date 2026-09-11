@@ -1,6 +1,8 @@
 """
-The LZX encoder (albam/engines/cie/lfs_compress.py) against the decoder that
-is its specification.
+The .lfs side of the LZX encoder (albam/engines/cie/lfs_compress.py) against
+the decoder that is its specification. The stream encoder underneath it is
+covered on its own in tests/test_xcompress_encode.py; what is here is the
+chunking around it.
 
 Round-tripping through albam's own decoder is most of the test: the encoder
 is correct when what it writes decodes back to what it was given. Half of
