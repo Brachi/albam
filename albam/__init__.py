@@ -2,11 +2,13 @@ import importlib
 import os
 
 import bpy
+from .lib.tools import face_attr_editor as overlay
 
 from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
 from .blender_ui.data import AlbamDataFactory
 from .blender_ui.asset import AlbamAsset
 from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
+from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
 from .data_loading import populate_albam_data
 from .lib import fs_registry
 from .registry import blender_registry
@@ -86,17 +88,21 @@ def register():
     # PoseBone, not Bone: see BlenderRegistry.register_custom_properties_bone
     bpy.types.PoseBone.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesBone)
 
+    register_workspace_tools()
+    overlay.register_overlay()
+
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
 
 
 def unregister():
+    overlay.unregister_overlay()
+
     for handler in LOAD_POST_HANDLERS:
         try:
             bpy.app.handlers.load_post.remove(handler)
         except ValueError:
             pass  # already removed, e.g. a previous unregister() call
-
     fs_registry.clear()
 
     for _, cls in reversed(blender_registry.props):
@@ -104,6 +110,8 @@ def unregister():
 
     for cls in reversed(blender_registry.types):
         bpy.utils.unregister_class(cls)
+
+    unregister_workspace_tools()
 
     for cls in reversed(_CUSTOM_PROPERTIES_CLASSES):
         bpy.utils.unregister_class(cls)
