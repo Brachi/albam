@@ -190,7 +190,14 @@ def sort_hair_cards(body_ob, cards_objs):
         print("Card {} is blocked by {}".format(card_ob.name, blocked_objs))
         if debug_draw:
             _debug_draw_bvh_rays(debug_rays, card_ob.name)
-        return blocked_objs, {obj: len(distances) for obj, distances in blockers_cache.items()}
+        evidence = {
+            obj: {
+                'coverage': len(distances) / len(sample_points),
+                'distance': sum(distances) / len(distances),
+            }
+            for obj, distances in blockers_cache.items()
+        }
+        return blocked_objs, evidence
 
     def sorting_pass(cards_objs):
         # Collect blocker info for each card
@@ -200,105 +207,82 @@ def sort_hair_cards(body_ob, cards_objs):
         card_info = {}  # {card_ob: {'distance': float, 'blockers': [list]}}
         for card_ob in cards_objs_sorted:
             dist = _min_distance_to_target(card_ob, body_bvh)
-            blockers, blocker_hits = compute_blockers(card_ob, debug_draw)
+            blockers, blocker_evidence = compute_blockers(card_ob, debug_draw)
             card_info[card_ob] = {
                 'distance': dist,
                 'blockers': blockers,
-                'blocker_hits': blocker_hits,
+                'blocker_evidence': blocker_evidence,
                 'priority': 0
             }
 
-        # Intersecting cards can make A block B and B block A.  A single alpha
-        # priority per object cannot represent that geometry exactly, but a
-        # directed graph is still possible when the weaker direction is
-        # discarded.  For equal evidence, favour the card nearer to the body.
-        for card_ob, info in card_info.items():
-            for blocker in list(info['blockers']):
-                if card_ob not in card_info[blocker]['blockers']:
-                    continue
-                card_hits = info['blocker_hits'][blocker]
-                blocker_hits = card_info[blocker]['blocker_hits'][card_ob]
-                remove_from = blocker if card_hits > blocker_hits else card_ob
-                if card_hits == blocker_hits:
-                    remove_from = blocker if info['distance'] <= card_info[blocker]['distance'] else card_ob
-                card_info[remove_from]['blockers'].remove(
-                    blocker if remove_from == card_ob else card_ob
-                )
+        def _find_cycle(unassigned):
+            """Return one cycle as ``(card, blocker)`` edges, if present."""
+            state = {}
+            path = []
 
-        def _get_total_blocker_depth(card_ob, visited=None):
-            """Recursively count total blocker depth including blockers of blockers"""
-            if visited is None:
-                visited = set()
-            if card_ob in visited:
-                return 0
-            visited.add(card_ob)
-            blockers = card_info[card_ob]['blockers']
-            total = len(blockers)
-            for blocker in blockers:
-                total += _get_total_blocker_depth(blocker, visited)
-            return total
+            def visit(card_ob):
+                state[card_ob] = 1
+                path.append(card_ob)
+                for blocker in card_info[card_ob]['blockers']:
+                    if blocker not in unassigned:
+                        continue
+                    if state.get(blocker) == 1:
+                        start = path.index(blocker)
+                        nodes = path[start:] + [blocker]
+                        return list(zip(nodes, nodes[1:]))
+                    if state.get(blocker) is None:
+                        cycle = visit(blocker)
+                        if cycle:
+                            return cycle
+                path.pop()
+                state[card_ob] = 2
+                return None
 
-        # Check for intersections of cards (cycles in blocker dependencies)
-        print("\n=== Checking for Intersections ===")
-        for card_ob in card_info.keys():
-            blockers = card_info[card_ob]['blockers']
-            # Check if any blocker has this card in its blockers (direct cycle)
-            for blocker in blockers:
-                if card_ob in card_info[blocker]['blockers']:
-                    print("WARNING: Intersection detected between {} and {}".format(
-                        card_ob.name, blocker.name))
+            for card_ob in sorted(unassigned, key=lambda card: card.name):
+                if state.get(card_ob) is None:
+                    cycle = visit(card_ob)
+                    if cycle:
+                        return cycle
+            return None
 
-        # Topological sorting: priority = max(priority of blockers) + 1
-        # Iterate until all priorities are assigned
-        max_iterations = len(cards_objs) + 1
-        iteration = 0
-        unassigned = set(card_info.keys())
+        # Topological sorting: priority = max(priority of blockers) + 1.
+        # For a cycle, retain every card and remove only its weakest edge.
+        unassigned = set(card_info)
 
         print("\n=== Topological Sorting ===")
-        while unassigned and iteration < max_iterations:
-            iteration += 1
+        while unassigned:
             assigned_this_pass = False
 
-            for card_ob in sorted(list(unassigned), key=lambda c: _get_total_blocker_depth(c)):
+            for card_ob in sorted(unassigned, key=lambda card: card.name):
                 blockers = card_info[card_ob]['blockers']
+                if not all(card_info[blocker]['priority'] > 0 for blocker in blockers):
+                    continue
+                priority = max((card_info[blocker]['priority'] for blocker in blockers), default=0) + 1
+                card_info[card_ob]['priority'] = priority
+                unassigned.remove(card_ob)
+                assigned_this_pass = True
 
-                # check if all blockers have priority assigned
-                all_blockers_assigned = all(card_info[blocker]['priority'] > 0 for blocker in blockers)
+            if not assigned_this_pass:
+                cycle = _find_cycle(unassigned)
+                if not cycle:
+                    raise RuntimeError("Unable to locate a cycle in the hair-card blocker graph")
 
-                if not blockers:
-                    # No blockers - priority 1
-                    card_info[card_ob]['priority'] = 1
-                    assigned_this_pass = True
-                    unassigned.remove(card_ob)
-                    print("Pass {}: {} - no blockers → priority=1".format(iteration, card_ob.name))
+                def edge_sort_key(edge):
+                    card_ob, blocker = edge
+                    evidence = card_info[card_ob]['blocker_evidence'][blocker]
+                    # An edge pointing towards a card farther from the body is
+                    # less plausible than one pointing towards a nearer card.
+                    depth_conflict = card_info[card_ob]['distance'] <= card_info[blocker]['distance']
+                    return evidence['coverage'], not depth_conflict, evidence['distance']
 
-                elif all_blockers_assigned:
-                    # All blockers have priority - take max + 1
-                    max_blocker_priority = max(card_info[b]['priority'] for b in blockers)
-                    priority = max_blocker_priority + 1
-                    card_info[card_ob]['priority'] = priority
-                    assigned_this_pass = True
-                    unassigned.remove(card_ob)
-                    print("Pass {}: {} - max(blockers)={} → priority={}".format(
-                        iteration, card_ob.name, max_blocker_priority, priority))
-
-            if not assigned_this_pass and unassigned:
-                # A true geometry intersection can form a longer dependency
-                # cycle.  Break just one weakest-in-practice constraint and
-                # continue sorting the rest, instead of assigning every card
-                # in the cycle an arbitrary priority in one fallback pass.
-                cycle_breaker = min(unassigned, key=lambda c: card_info[c]['distance'])
-                cyclic_blockers = [
-                    blocker for blocker in card_info[cycle_breaker]['blockers']
-                    if blocker in unassigned
-                ]
-                card_info[cycle_breaker]['blockers'] = [
-                    blocker for blocker in card_info[cycle_breaker]['blockers']
-                    if blocker not in unassigned
-                ]
+                card_ob, blocker = min(cycle, key=edge_sort_key)
+                card_info[card_ob]['blockers'].remove(blocker)
                 print(
-                    "Warning: cyclic intersections detected. Removing {} blockers from {}."
-                    .format(len(cyclic_blockers), cycle_breaker.name)
+                    "Cyclic intersection: removed weak edge {} -> {} (coverage {:.1%})".format(
+                        card_ob.name,
+                        blocker.name,
+                        card_info[card_ob]['blocker_evidence'][blocker]['coverage'],
+                    )
                 )
 
         # Apply priorities to objects
