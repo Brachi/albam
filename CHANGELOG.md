@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
