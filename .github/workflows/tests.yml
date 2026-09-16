@@ -115,6 +115,21 @@ jobs:
         path: .coverage.${{ matrix.bpy.bpy-version }}
         include-hidden-files: true
         if-no-files-found: error
+    - name: Build and smoke-test the extension zip
+      # What gets published is the zip, not this checkout: it carries its
+      # dependencies as bundled wheels, and a dependency missing from
+      # pylock.toml breaks every install while leaving CI green. So install
+      # the zip into a Blender that has none of albam's dependencies -
+      # reusing this job's venv would import them from there and pass on a
+      # zip missing every wheel. The second venv is hardlinked out of the uv
+      # cache the install step above already filled, so it costs seconds.
+      run: |
+        "$pythonLocation/bin/python" -m pip install --quiet packaging
+        "$pythonLocation/bin/python" scripts/build_extension.py --output-dir dist
+        uv venv --python "${{ matrix.bpy.python-version }}" "$RUNNER_TEMP/venv-smoke"
+        uv pip install --python "$RUNNER_TEMP/venv-smoke/bin/python" \
+          "bpy==${{ matrix.bpy.bpy-version }}" --extra-index-url https://download.blender.org/pypi/
+        "$RUNNER_TEMP/venv-smoke/bin/python" scripts/smoke_test_extension.py dist/albam-*.zip
   coverage:
     # thanks: https://nedbatchelder.com/blog/202209/making_a_coverage_badge.html
     runs-on: ubuntu-latest
