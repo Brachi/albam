@@ -127,6 +127,35 @@ def pytest_configure(config):
                 )
 
 
+def detach_fs_registry():
+    """Take every registered filesystem out of fs_registry *without* closing
+    it, returning {key: fs} for reattach_fs_registry().
+
+    For the tests that call fs_registry.clear() themselves to simulate a
+    fresh Blender process: clear() closes every filesystem in the process,
+    other suites' session-scoped game roots included. Serially those tests
+    happened to run last, so nothing was left to notice; split across xdist
+    workers they share a worker with suites still using theirs, and closing
+    one fails every later test on that worker with FilesystemClosed.
+
+    Reaches into the registry's own dict because popping without closing is
+    exactly what its public API refuses to offer - see unregister().
+    """
+    detached = {key: fs_registry.get(key) for key in fs_registry.keys()}
+    for key in detached:
+        fs_registry._REGISTRY.pop(key)
+    return detached
+
+
+def reattach_fs_registry(detached):
+    """Put back what detach_fs_registry() took out, under the same keys, and
+    only where nothing has since claimed the key (a .blend reload remounts
+    roots through albam's own load_post handler)."""
+    for key, fs_instance in detached.items():
+        if key not in fs_registry.keys():
+            fs_registry.reconnect(key, fs_instance)
+
+
 def close_new_fs_roots(before):
     """Close the FS roots registered since `before` was taken.
 
