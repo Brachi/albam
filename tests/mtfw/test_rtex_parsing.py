@@ -4,7 +4,6 @@ import os
 import pytest
 
 from albam.engines.mtfw.texture import TEX_FORMAT_MAPPER, TEX_VERSION
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -39,11 +38,11 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_rtex(game_fs_root, local_app_id, local_rtex_path_hash):
+def parsed_rtex(game_fs_root, hash_to_path, local_app_id, local_rtex_path_hash):
     from albam.engines.mtfw.texture import APPID_RTEXCLS_MAP
     from albam.lib.kaitai_utils import parse
 
-    path = resolve_hashes(game_fs_root, {local_rtex_path_hash})[local_rtex_path_hash]
+    path = hash_to_path[local_rtex_path_hash]
     rtex_bytes = game_fs_root.readbytes(path)
     Rtex = APPID_RTEXCLS_MAP[local_app_id]
 

@@ -5,7 +5,6 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from albam.engines.mtfw.animation import USAGE, LMTKeyFrames, LMTKeyframeBounds
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -48,13 +47,13 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
+def lmt_export_local(hash_to_path, local_app_id, local_mod_path_hash, local_lmt_path_hash):
     from albam.engines.mtfw.structs.lmt import Lmt
     from albam.lib.kaitai_utils import parse
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
-    local_mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
+    local_mod_path = hash_to_path[local_mod_path_hash].lstrip("/")
     vfile_mod = bpy.context.scene.albam.vfs.select_vfile(local_app_id, local_mod_path)
     assert vfile_mod
     result = bpy.ops.albam.import_vfile()
@@ -70,7 +69,7 @@ def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_
     assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
-    local_lmt_path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash].lstrip("/")
+    local_lmt_path = hash_to_path[local_lmt_path_hash].lstrip("/")
     vfile_lmt = bpy.context.scene.albam.vfs.select_vfile(local_app_id, local_lmt_path)
     assert vfile_lmt
     result = bpy.ops.albam.import_vfile()

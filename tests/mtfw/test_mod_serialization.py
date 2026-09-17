@@ -8,7 +8,6 @@ import pytest
 from mathutils import Matrix
 
 from tests.mtfw.conftest import import_export
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -67,7 +66,7 @@ def _bones_data_error(src_mod, dst_mod):
 
 
 @pytest.fixture(scope="session")
-def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
+def mod_export_local(hash_to_path, local_app_id, local_mod_path_hash):
     from albam.engines.mtfw.mesh import APPID_CLASS_MAPPER
     from albam.lib.kaitai_utils import parse
 
@@ -77,11 +76,11 @@ def mod_export_local(game_fs_root, local_app_id, local_mod_path_hash):
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
     bpy.context.scene.albam.export_settings.export_bones = True
 
-    # resolve_hashes() returns MTFW_FS's own canonical form (leading "/"),
+    # The index holds MTFW_FS's own canonical form (leading "/"),
     # but vfs.add_fs_root() builds its tree with that stripped (see
     # albam.vfs.VirtualFileSystemBase.add_fs_root) - select_vfile()/
     # get_vfile() expect the stripped form.
-    local_mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
+    local_mod_path = hash_to_path[local_mod_path_hash].lstrip("/")
 
     vfile_mod = import_export(local_app_id, local_mod_path)
     vfile_mod_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_mod_path)

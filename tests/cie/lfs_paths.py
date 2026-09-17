@@ -10,7 +10,11 @@ archive (see albam/engines/cie/fs.py).
 """
 import os
 
-from tests.mtfw.scripts.catalog_paths import hash_identity, to_portable_relative_path
+from tests.mtfw.scripts.catalog_paths import (
+    HashIndex,
+    hash_identity,
+    to_portable_relative_path,
+)
 
 
 def find_lfs_archives(game_root):
@@ -46,3 +50,18 @@ def resolve_archive_hashes(game_root, target_hashes):
     if missing:
         raise KeyError(f"hash(es) not found in this game install: {sorted(missing)}")
     return found
+
+
+def index_archive_hashes(game_root):
+    """{hash: absolute .lfs path} for every archive under game_root, for a
+    caller resolving hashes repeatedly (a session-scoped fixture serving
+    many parametrized tests) rather than once for a known set - the
+    counterpart of tests.mtfw.scripts.catalog_paths.index_by_hash.
+
+    First hit wins and a missing hash still raises a KeyError naming it,
+    exactly as resolve_archive_hashes above does.
+    """
+    index = HashIndex()
+    for identity, absolute_path in find_lfs_archives(game_root):
+        index.setdefault(hash_identity(identity), absolute_path)
+    return index

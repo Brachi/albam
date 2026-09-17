@@ -4,7 +4,6 @@ import os
 import pytest
 
 from albam.engines.mtfw.collision import KNOWN_RUNTIME_ATTR
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -39,10 +38,10 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_sbc(game_fs_root, local_app_id, local_sbc_path_hash):
+def parsed_sbc(game_fs_root, hash_to_path, local_app_id, local_sbc_path_hash):
     from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
 
-    path = resolve_hashes(game_fs_root, {local_sbc_path_hash})[local_sbc_path_hash]
+    path = hash_to_path[local_sbc_path_hash]
     sbc_bytes = game_fs_root.readbytes(path)
     SBC = APPID_SBC_CLASS_MAPPER[local_app_id]
 

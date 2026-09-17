@@ -23,7 +23,6 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import action_fcurves
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # pl00action.lmt is the one sampled file that declares three-joint chains - it
 # carries them in 5 of its 111 blocks, on the arms.
@@ -55,12 +54,11 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def chain_rig(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
+def chain_rig(hash_to_path, local_app_id, local_mod_path_hash, local_lmt_path_hash):
     bpy.context.scene.albam.apps.app_selected = local_app_id
-    resolved = resolve_hashes(game_fs_root, {local_mod_path_hash, local_lmt_path_hash})
 
     assert bpy.context.scene.albam.vfs.select_vfile(
-        local_app_id, resolved[local_mod_path_hash].lstrip("/"))
+        local_app_id, hash_to_path[local_mod_path_hash].lstrip("/"))
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
     latest = len(bpy.context.scene.albam.exportable.file_list) - 1
     armature = bpy.context.scene.albam.exportable.file_list[latest].bl_object
@@ -68,7 +66,7 @@ def chain_rig(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_ha
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
     assert bpy.context.scene.albam.vfs.select_vfile(
-        local_app_id, resolved[local_lmt_path_hash].lstrip("/"))
+        local_app_id, hash_to_path[local_lmt_path_hash].lstrip("/"))
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
     actions = [a for a in bpy.data.actions if a.name.startswith(f"{armature.name}.")]
     assert actions
@@ -135,7 +133,7 @@ def test_chain_goal_is_the_joints_own_position(chain_rig):
 
 
 @pytest.fixture(scope="session")
-def reimported_actions(chain_rig, game_fs_root, local_app_id, local_lmt_path_hash):
+def reimported_actions(chain_rig, hash_to_path, local_app_id, local_lmt_path_hash):
     """The actions a second import of the same .lmt onto the same rig produces.
 
     Shuffling animations means loading more than one .lmt onto a character, and
@@ -144,12 +142,11 @@ def reimported_actions(chain_rig, game_fs_root, local_app_id, local_lmt_path_has
     is inactive.
     """
     armature, first_actions = chain_rig
-    resolved = resolve_hashes(game_fs_root, {local_lmt_path_hash})
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
     before = set(bpy.data.actions)
     assert bpy.context.scene.albam.vfs.select_vfile(
-        local_app_id, resolved[local_lmt_path_hash].lstrip("/"))
+        local_app_id, hash_to_path[local_lmt_path_hash].lstrip("/"))
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
     return armature, [a for a in bpy.data.actions if a not in before]
 

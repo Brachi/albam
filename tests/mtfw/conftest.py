@@ -12,6 +12,39 @@ R2_PROTOCOL_PREFIX = "r2://"
 # the same game folder twice would create ambiguous duplicate entries).
 _GAME_FS_INSTANCES = {}
 
+# app_id -> {path_hash: virtual path} for its whole install, built once per
+# session by hash_index() below.
+_HASH_INDEXES = {}
+
+
+def hash_index(game_fs, app_id):
+    """{path_hash: virtual path} for every file in app_id's install, from a
+    single walk shared by every test in this directory.
+
+    Each test resolving its own hashes used to walk the whole install again,
+    once per parametrized case. On the R2 backend that was ~2000 list calls
+    and roughly three minutes of the suite's wall time, since S3 listings
+    aren't cached the way object ranges are. Lookups are plain dict lookups
+    against this index instead.
+
+    Keyed by app_id, not by filesystem instance: every MTFW_FS this suite
+    builds for one app_id is mounted from that app_id's single --game-dir,
+    so they all walk the same tree in the same order. Resolution stays
+    forward-match-only and first-hit-wins, and a missing hash still raises a
+    KeyError naming it - see tests/mtfw/scripts/catalog_paths.py.
+    """
+    from tests.mtfw.scripts.catalog_paths import index_by_hash
+
+    if app_id not in _HASH_INDEXES:
+        _HASH_INDEXES[app_id] = index_by_hash(game_fs)
+    return _HASH_INDEXES[app_id]
+
+
+@pytest.fixture(scope="session")
+def hash_to_path(game_fs_root, local_app_id):
+    """hash_index() for the mounted install - see there."""
+    return hash_index(game_fs_root, local_app_id)
+
 
 def _game_dirs(pytestconfig):
     # Already validated (well-formed "<app-id>::<value>[::<extra>]", once, at

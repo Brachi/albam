@@ -8,7 +8,6 @@ import os
 
 import pytest
 
-from tests.cie.lfs_paths import resolve_archive_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified archives
 # (see test_dataset_hashes_are_in_catalog below), same pattern as
@@ -65,10 +64,10 @@ def local_payload_extension(local_archive_path_hash):
 
 
 @pytest.fixture(scope="session")
-def lfs_fs(game_root, local_archive_path_hash):
+def lfs_fs(hash_to_archive, local_archive_path_hash):
     from albam.engines.cie.fs import LfsFS
 
-    path = resolve_archive_hashes(game_root, {local_archive_path_hash})[local_archive_path_hash]
+    path = hash_to_archive[local_archive_path_hash]
     fs = LfsFS(path)
     yield fs
     fs.close()

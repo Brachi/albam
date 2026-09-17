@@ -4,7 +4,6 @@ import os
 import pytest
 
 from albam.engines.mtfw.animation import USAGE
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -39,11 +38,11 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_lmt(game_fs_root, local_app_id, local_lmt_path_hash):
+def parsed_lmt(game_fs_root, hash_to_path, local_app_id, local_lmt_path_hash):
     from albam.engines.mtfw.structs.lmt import Lmt
     from albam.lib.kaitai_utils import parse
 
-    path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash]
+    path = hash_to_path[local_lmt_path_hash]
     src_bytes = game_fs_root.readbytes(path)
 
     lmt = parse(Lmt, src_bytes, local_app_id)

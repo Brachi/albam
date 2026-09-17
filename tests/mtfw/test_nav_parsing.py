@@ -3,7 +3,6 @@ import os
 
 import pytest
 
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -38,10 +37,10 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_nav(game_fs_root, local_nav_path_hash):
+def parsed_nav(game_fs_root, hash_to_path, local_nav_path_hash):
     from albam.engines.mtfw.structs.nav_156 import Nav156
 
-    path = resolve_hashes(game_fs_root, {local_nav_path_hash})[local_nav_path_hash]
+    path = hash_to_path[local_nav_path_hash]
     src_bytes = game_fs_root.readbytes(path)
 
     parsed = Nav156.from_bytes(src_bytes)

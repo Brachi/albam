@@ -4,7 +4,6 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import action_fcurves
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 
 def _block_index(block):
@@ -40,14 +39,14 @@ def pytest_generate_tests(metafunc):
 
 
 def test_edited_keyframe_survives_export(
-    game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash
+    hash_to_path, local_app_id, local_mod_path_hash, local_lmt_path_hash
 ):
     from albam.engines.mtfw.structs.lmt import Lmt
     from albam.lib.kaitai_utils import parse
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
-    mod_path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash].lstrip("/")
+    mod_path = hash_to_path[local_mod_path_hash].lstrip("/")
     vfile_mod = bpy.context.scene.albam.vfs.select_vfile(local_app_id, mod_path)
     assert vfile_mod
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
@@ -56,7 +55,7 @@ def test_edited_keyframe_survives_export(
     assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
-    lmt_path = resolve_hashes(game_fs_root, {local_lmt_path_hash})[local_lmt_path_hash].lstrip("/")
+    lmt_path = hash_to_path[local_lmt_path_hash].lstrip("/")
     vfile_lmt = bpy.context.scene.albam.vfs.select_vfile(local_app_id, lmt_path)
     assert vfile_lmt
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
@@ -170,7 +169,7 @@ def _block_action_swapped(custom_props, action):
 
 
 @pytest.fixture(scope="module")
-def imported_lmt_blocks(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash):
+def imported_lmt_blocks(hash_to_path, local_app_id, local_mod_path_hash, local_lmt_path_hash):
     """Import the .mod and its .lmt once, and hand back the per-block empties
     export reads its actions from (the same setup the test above opens with).
 
@@ -181,7 +180,7 @@ def imported_lmt_blocks(game_fs_root, local_app_id, local_mod_path_hash, local_l
     app_id, mod_path_hash, lmt_path_hash = local_app_id, local_mod_path_hash, local_lmt_path_hash
     bpy.context.scene.albam.apps.app_selected = app_id
 
-    mod_path = resolve_hashes(game_fs_root, {mod_path_hash})[mod_path_hash].lstrip("/")
+    mod_path = hash_to_path[mod_path_hash].lstrip("/")
     assert bpy.context.scene.albam.vfs.select_vfile(app_id, mod_path)
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
     latest_mod = len(bpy.context.scene.albam.exportable.file_list) - 1
@@ -189,7 +188,7 @@ def imported_lmt_blocks(game_fs_root, local_app_id, local_mod_path_hash, local_l
     assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
-    lmt_path = resolve_hashes(game_fs_root, {lmt_path_hash})[lmt_path_hash].lstrip("/")
+    lmt_path = hash_to_path[lmt_path_hash].lstrip("/")
     assert bpy.context.scene.albam.vfs.select_vfile(app_id, lmt_path)
     assert bpy.ops.albam.import_vfile() == {"FINISHED"}
 

@@ -20,7 +20,6 @@ import pytest
 
 from albam.lib import fs_registry
 from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
-from tests.cie.lfs_paths import resolve_archive_hashes
 from tests.cie.test_bin_serialization import _is_mesh_bin, _texture_slots
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
@@ -119,7 +118,7 @@ def _image_nodes(bl_object):
 
 
 def test_texture_slots_survive_textures_not_resolving(
-        game_root, local_app_id, local_archive_path_hash, tmp_path,
+        hash_to_archive, local_app_id, local_archive_path_hash, tmp_path,
         _forget_texture_packs, _clean_scene):
     """Exporting a model whose textures were not found keeps its texture
     references.
@@ -133,8 +132,7 @@ def test_texture_slots_survive_textures_not_resolving(
     from albam.engines.cie.mesh import AUTO_TPL
     from albam.registry import blender_registry
 
-    archive_path = resolve_archive_hashes(
-        game_root, {local_archive_path_hash})[local_archive_path_hash]
+    archive_path = hash_to_archive[local_archive_path_hash]
     # Away from the install, where nothing can find the texture packs. Named
     # after the test rather than copied under its own name: nothing about the
     # archive's own name is what makes this work.
@@ -169,7 +167,7 @@ def test_texture_slots_survive_textures_not_resolving(
 
 
 def test_texture_slot_follows_the_image_bound_to_it(
-        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+        hash_to_archive, local_app_id, local_archive_path_hash, _clean_scene):
     """Swapping a texture in Blender is still what gets written.
 
     The fallback above must not turn the stored index into the answer: an
@@ -179,8 +177,7 @@ def test_texture_slot_follows_the_image_bound_to_it(
     from albam.engines.cie.mesh import AUTO_TPL
     from albam.registry import blender_registry
 
-    archive_path = resolve_archive_hashes(
-        game_root, {local_archive_path_hash})[local_archive_path_hash]
+    archive_path = hash_to_archive[local_archive_path_hash]
 
     vfs = bpy.context.scene.albam.vfs
     bpy.context.scene.albam.apps.app_selected = local_app_id
@@ -243,7 +240,7 @@ def _bone_table(bin_bytes):
 
 
 def test_model_sharing_an_armature_exports_its_own_bones(
-        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+        hash_to_archive, local_app_id, local_archive_path_hash, _clean_scene):
     """A model bound to a shared armature writes its own bone table.
 
     Import binds a model to an armature already brought in from the same
@@ -255,8 +252,7 @@ def test_model_sharing_an_armature_exports_its_own_bones(
     from albam.engines.cie.mesh import AUTO_TPL
     from albam.registry import blender_registry
 
-    archive_path = resolve_archive_hashes(
-        game_root, {local_archive_path_hash})[local_archive_path_hash]
+    archive_path = hash_to_archive[local_archive_path_hash]
 
     vfs = bpy.context.scene.albam.vfs
     bpy.context.scene.albam.apps.app_selected = local_app_id
@@ -312,7 +308,7 @@ def _bone_parents(bin_bytes):
 
 
 def test_every_model_in_an_archive_keeps_its_texture_slots(
-        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+        hash_to_archive, local_app_id, local_archive_path_hash, _clean_scene):
     """Not just the first one imported.
 
     The round trip in test_bin_serialization.py checks the first model of an
@@ -328,8 +324,7 @@ def test_every_model_in_an_archive_keeps_its_texture_slots(
     from albam.engines.cie.mesh import AUTO_TPL
     from albam.registry import blender_registry
 
-    archive_path = resolve_archive_hashes(
-        game_root, {local_archive_path_hash})[local_archive_path_hash]
+    archive_path = hash_to_archive[local_archive_path_hash]
 
     vfs = bpy.context.scene.albam.vfs
     bpy.context.scene.albam.apps.app_selected = local_app_id

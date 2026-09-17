@@ -11,7 +11,6 @@ from albam.engines.mtfw.material import (
     MRL_RASTERIZER_STATE_STR,
     MRL_MATERIAL_TYPE_STR,
 )
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # parse (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -46,10 +45,10 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_mrl(game_fs_root, local_app_id, local_mrl_path_hash):
+def parsed_mrl(game_fs_root, hash_to_path, local_app_id, local_mrl_path_hash):
     from kaitaistruct import KaitaiStream
 
-    path = resolve_hashes(game_fs_root, {local_mrl_path_hash})[local_mrl_path_hash]
+    path = hash_to_path[local_mrl_path_hash]
     mrl_bytes = game_fs_root.readbytes(path)
     parsed = Mrl(local_app_id, KaitaiStream(io.BytesIO(mrl_bytes)))
     parsed.app_id = local_app_id
