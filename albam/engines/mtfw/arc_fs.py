@@ -344,8 +344,8 @@ class MTFW_FS(MultiFS):
         layered filesystem per directory visited - O(directories x
         filesystems), ~9.5M calls / ~70s for a full RE5 walk over ~1200
         archives. Replaced with one upfront O(total entries) pass and O(1)
-        lookups after, for listdir/scandir/walk only - point lookups already
-        go through MultiFS's own _delegate and stay fast without this.
+        lookups after, for listdir/scandir/walk and, once built, the point
+        lookups _delegate() resolves.
         """
         if self._owner is not None:
             return
