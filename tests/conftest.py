@@ -1,4 +1,6 @@
+import collections
 import os
+import sys
 
 import bpy
 import pytest
@@ -72,6 +74,67 @@ def _record_exit_status(exitstatus):
             f.write(str(int(exitstatus)))
     except OSError as err:  # never let bookkeeping fail the run
         print(f"Could not write {path!r}: {err}")
+
+
+# Timing visibility for CI (see pytest_terminal_summary below). Session-scoped
+# parametrized fixtures interleave every file's tests, so a log read top to
+# bottom attributes nothing to a file; these totals do.
+_FILE_DURATIONS = collections.defaultdict(lambda: [0.0, 0])
+_TEST_DURATIONS = collections.defaultdict(float)
+SLOWEST_TESTS_REPORTED = 25
+
+
+def pytest_runtest_logreport(report):
+    path = report.nodeid.split("::")[0]
+    entry = _FILE_DURATIONS[path]
+    entry[0] += report.duration  # setup + call + teardown, the file's real cost
+    if report.when == "call":
+        entry[1] += 1
+    _TEST_DURATIONS[report.nodeid] += report.duration
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Publish a timing table to the GitHub Actions job summary.
+
+    Nothing to read from a CI log today: --durations (pyproject.toml) covers
+    individual tests, and this covers where the wall clock actually goes, per
+    file. No-op outside Actions.
+    """
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path or not _FILE_DURATIONS:
+        return
+
+    by_file = sorted(_FILE_DURATIONS.items(), key=lambda kv: kv[1][0], reverse=True)
+    total = sum(seconds for seconds, _ in _FILE_DURATIONS.values())
+    slowest = sorted(_TEST_DURATIONS.items(), key=lambda kv: kv[1], reverse=True)
+
+    lines = [
+        f"### Test timing (Python {sys.version_info.major}.{sys.version_info.minor})",
+        "",
+        f"{total:.0f}s of test time across {len(by_file)} files.",
+        "",
+        "| Test file | Time | Tests | Share |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for path, (seconds, count) in by_file:
+        share = 100 * seconds / total if total else 0
+        lines.append(f"| `{path}` | {seconds:.1f}s | {count} | {share:.1f}% |")
+    lines += [
+        "",
+        f"<details><summary>{SLOWEST_TESTS_REPORTED} slowest tests</summary>",
+        "",
+        "| Test | Time |",
+        "| --- | ---: |",
+    ]
+    for nodeid, seconds in slowest[:SLOWEST_TESTS_REPORTED]:
+        lines.append(f"| `{nodeid}` | {seconds:.1f}s |")
+    lines += ["", "</details>", ""]
+
+    try:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as err:  # never let bookkeeping fail the run
+        print(f"Could not write {summary_path!r}: {err}")
 
 
 def pytest_addoption(parser):
