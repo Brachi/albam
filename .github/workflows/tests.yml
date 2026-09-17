@@ -38,8 +38,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11"},
-              {"bpy-version": "5.2.0", "python-version": "3.13"}
+        # Only one leg measures coverage. Running it on both bought 6 covered
+        # lines - 2 of them in albam/, the Blender 4.x sides of the two
+        # `hasattr(action, "fcurves")` branches - and the combined total is
+        # 61.72% either way, against a quarter of this leg's runtime. The
+        # 3.13 leg is the one that keeps it, since the sys.monitoring core
+        # that makes it cheap (pyproject.toml) needs Python 3.12+.
+        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11", "coverage": false},
+              {"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
              ]
     steps:
     - uses: actions/checkout@v5
@@ -115,7 +121,14 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
+          # Same pytest invocation either way, only the runner in front of
+          # it differs - see the matrix for why one leg goes without.
+          if [ "${{ matrix.bpy.coverage }}" == "true" ]; then
+            runner=(coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest)
+          else
+            runner=(python -m pytest)
+          fi
+          "${runner[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
@@ -128,6 +141,7 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
+      if: matrix.bpy.coverage
       uses: actions/upload-artifact@v5
       with:
         name: .coverage.${{ matrix.bpy.bpy-version }}
