@@ -38,12 +38,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Only one leg measures coverage. Running it on both bought 6 covered
-        # lines - 2 of them in albam/, the Blender 4.x sides of the two
-        # `hasattr(action, "fcurves")` branches - and the combined total is
-        # 61.72% either way, against a quarter of this leg's runtime. The
-        # 3.13 leg is the one that keeps it, since the sys.monitoring core
-        # that makes it cheap (pyproject.toml) needs Python 3.12+.
+        # Only the 3.13 leg measures coverage: the 4.2 leg contributed 2
+        # covered lines in albam/, and the sys.monitoring core that makes it
+        # cheap (pyproject.toml) needs Python 3.12+.
         bpy: [{"bpy-version": "4.2.0", "python-version": "3.11", "coverage": false},
               {"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
              ]
@@ -84,13 +81,6 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --show-source --statistics
-    # Runs across 4 xdist workers, one per vCPU a public repo's
-    # ubuntu-latest runner has. --dist loadfile keeps each test file whole on
-    # one worker: the Blender scene and the VFS are process-global, and the
-    # suite's session/module fixtures are written around a file's tests
-    # sharing them, so splitting a file across processes is not safe.
-    # Coverage comes from pytest-cov rather than `coverage run`, which would
-    # only measure the controller process and none of the workers.
     - name: Test with pytest
       env:
         # Credentials + bucket for --game-dir=<app>::r2://<bucket>/<prefix>
@@ -109,10 +99,10 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          # Both legs run across 4 xdist workers; only the 3.13 leg
-          # measures coverage (see the matrix for why). --cov rather than
-          # `coverage run`, which would measure only the controller process
-          # and none of the workers.
+          # One worker per runner vCPU. --dist loadfile keeps a file's
+          # tests in one process: the Blender scene and the VFS are
+          # process-global. --cov rather than `coverage run`, which would
+          # measure the controller process only.
           cov=()
           if [ "${{ matrix.bpy.coverage }}" == "true" ]; then
             export COVERAGE_FILE=.coverage.${{ matrix.bpy.bpy-version }}
