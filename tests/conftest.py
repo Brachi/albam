@@ -98,13 +98,18 @@ def _file_total(phases):
     return phases["setup"] + phases["call"] + phases["teardown"]
 
 
-def pytest_terminal_summary(terminalreporter):
+def pytest_terminal_summary(terminalreporter, config):
     """Publish a timing table to the GitHub Actions job summary.
 
     Nothing to read from a CI log today: --durations (pyproject.toml) covers
     individual tests, and this covers where the wall clock actually goes, per
     file. No-op outside Actions.
     """
+    # Workers run this too, each holding only the files it was given; the
+    # controller receives every report, so its table is the complete one.
+    if hasattr(config, "workerinput"):
+        return
+
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path or not _FILE_DURATIONS:
         return
