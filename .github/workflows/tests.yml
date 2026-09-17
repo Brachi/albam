@@ -74,6 +74,25 @@ jobs:
         uv pip install --python .venv/bin/python \
           "bpy==${{ matrix.bpy.bpy-version }}" --extra-index-url https://download.blender.org/pypi/ \
           ".[tests,s3,reen]"
+    - name: Cache R2 test data
+      # albam/lib/s3.py caches every fetched object range on disk, which is
+      # what makes repeat local runs fast; without this the bucket's curated
+      # subset was re-downloaded cold on both matrix legs, every run. The
+      # path is the cache's own default location, so nothing has to tell
+      # pytest where it is. Restoring a stale entry is safe: entries are
+      # keyed by (bucket, key, range) and ETag-validated once per object per
+      # process, so a re-uploaded object is re-fetched rather than served
+      # stale. The key tracks the committed hash datasets, which decide
+      # which objects a run touches; restore-keys lets a dataset change
+      # start from the previous entry instead of from nothing. Keyed per
+      # matrix leg too, so the two legs never race to save one entry: a full
+      # run caches ~700MB, so two entries sit well inside the repo's 10GB
+      # cache budget and the cache's own 2GiB cap never binds.
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/albam/s3
+        key: albam-s3-${{ matrix.bpy.bpy-version }}-${{ hashFiles('tests/*/datasets/*_hashes.json') }}
+        restore-keys: albam-s3-${{ matrix.bpy.bpy-version }}-
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
