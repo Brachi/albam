@@ -71,19 +71,24 @@ def _record_exit_status(exitstatus):
 
 # Timing visibility for CI (see pytest_terminal_summary below). Session-scoped
 # parametrized fixtures interleave every file's tests, so a log read top to
-# bottom attributes nothing to a file; these totals do.
-_FILE_DURATIONS = collections.defaultdict(lambda: [0.0, 0])
+# bottom attributes nothing to a file; these totals do. Fixture setup, not
+# the tests themselves, is where most of this suite's time goes, so setup and
+# call are always reported apart - a call-only reading is badly misleading.
+_FILE_DURATIONS = collections.defaultdict(lambda: collections.defaultdict(float))
 _TEST_DURATIONS = collections.defaultdict(float)
 SLOWEST_TESTS_REPORTED = 25
 
 
 def pytest_runtest_logreport(report):
-    path = report.nodeid.split("::")[0]
-    entry = _FILE_DURATIONS[path]
-    entry[0] += report.duration  # setup + call + teardown, the file's real cost
+    entry = _FILE_DURATIONS[report.nodeid.split("::")[0]]
+    entry[report.when] += report.duration
     if report.when == "call":
-        entry[1] += 1
-    _TEST_DURATIONS[report.nodeid] += report.duration
+        entry["tests"] += 1
+    _TEST_DURATIONS[f"{report.when} {report.nodeid}"] += report.duration
+
+
+def _file_total(phases):
+    return phases["setup"] + phases["call"] + phases["teardown"]
 
 
 def pytest_terminal_summary(terminalreporter):
@@ -97,8 +102,8 @@ def pytest_terminal_summary(terminalreporter):
     if not summary_path or not _FILE_DURATIONS:
         return
 
-    by_file = sorted(_FILE_DURATIONS.items(), key=lambda kv: kv[1][0], reverse=True)
-    total = sum(seconds for seconds, _ in _FILE_DURATIONS.values())
+    by_file = sorted(_FILE_DURATIONS.items(), key=lambda kv: _file_total(kv[1]), reverse=True)
+    total = sum(_file_total(phases) for phases in _FILE_DURATIONS.values())
     slowest = sorted(_TEST_DURATIONS.items(), key=lambda kv: kv[1], reverse=True)
 
     lines = [
@@ -106,21 +111,25 @@ def pytest_terminal_summary(terminalreporter):
         "",
         f"{total:.0f}s of test time across {len(by_file)} files.",
         "",
-        "| Test file | Time | Tests | Share |",
-        "| --- | ---: | ---: | ---: |",
+        "| Test file | Total | Setup | Call | Tests | Share |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for path, (seconds, count) in by_file:
+    for path, phases in by_file:
+        seconds = _file_total(phases)
         share = 100 * seconds / total if total else 0
-        lines.append(f"| `{path}` | {seconds:.1f}s | {count} | {share:.1f}% |")
+        lines.append(
+            f"| `{path}` | {seconds:.1f}s | {phases['setup']:.1f}s | {phases['call']:.1f}s "
+            f"| {int(phases['tests'])} | {share:.1f}% |"
+        )
     lines += [
         "",
-        f"<details><summary>{SLOWEST_TESTS_REPORTED} slowest tests</summary>",
+        f"<details><summary>{SLOWEST_TESTS_REPORTED} slowest phases</summary>",
         "",
-        "| Test | Time |",
+        "| Phase and test | Time |",
         "| --- | ---: |",
     ]
-    for nodeid, seconds in slowest[:SLOWEST_TESTS_REPORTED]:
-        lines.append(f"| `{nodeid}` | {seconds:.1f}s |")
+    for label, seconds in slowest[:SLOWEST_TESTS_REPORTED]:
+        lines.append(f"| `{label}` | {seconds:.1f}s |")
     lines += ["", "</details>", ""]
 
     try:
