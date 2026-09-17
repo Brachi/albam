@@ -94,6 +94,10 @@ jobs:
         R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
         R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        # Via PYTEST_ADDOPTS rather than the command line below, which
+        # changes shape between branches. Uploaded whatever the outcome:
+        # a failing run is when the report is worth most.
+        PYTEST_ADDOPTS: --junitxml=junit-${{ matrix.bpy.bpy-version }}.xml
       run: |
         set +e
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
@@ -120,6 +124,13 @@ jobs:
           exitcode="$(cat "$ALBAM_PYTEST_EXIT_STATUS_FILE" 2>/dev/null || echo 139)"
         fi
         exit "$exitcode"
+    - name: "Upload test results"
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: junit-${{ matrix.bpy.bpy-version }}
+        path: junit-${{ matrix.bpy.bpy-version }}.xml
+        if-no-files-found: error
     - name: "Upload coverage data"
       if: matrix.bpy.coverage
       uses: actions/upload-artifact@v5
