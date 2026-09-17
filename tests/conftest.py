@@ -25,8 +25,15 @@ def pytest_sessionstart():
     register()
 
 
-def pytest_sessionfinish(exitstatus):
-    _record_exit_status(exitstatus)
+def pytest_sessionfinish(session, exitstatus):
+    # Under xdist every worker runs this too, with its own exitstatus - 0
+    # whatever the controller concluded. Which of the two writes lands last
+    # is not ours to rely on (workers shut down in parallel with the
+    # controller's own teardown), and a worker's 0 landing last would turn a
+    # failing run into a green build, the exact failure mode this file
+    # exists to prevent. Only the controller writes.
+    if not hasattr(session.config, "workerinput"):
+        _record_exit_status(exitstatus)
     unregister()
 
     # bpy (the pip package, not the full Blender application) segfaults
