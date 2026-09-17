@@ -12,7 +12,13 @@ from fs.memoryfs import MemoryFS
 
 from albam.lib import fs_registry
 from albam.vfs import VirtualFileData
-from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
+from tests.conftest import (
+    close_new_fs_roots,
+    detach_fs_registry,
+    reattach_fs_registry,
+    remove_new_vfs_roots,
+    vfs_root_names,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -29,11 +35,18 @@ def _clean_vfs_state():
     # and close_new_fs_roots's own docstrings for what a wholesale
     # .clear() there broke.
     before_roots = vfs_root_names()
+    # Several tests below call fs_registry.clear() to simulate a fresh
+    # Blender process. That closes every filesystem in this one, so anything
+    # another suite sharing the process (or, under xdist, the worker) still
+    # holds is taken out of the registry first and put back afterwards,
+    # unclosed - see detach_fs_registry().
+    detached = detach_fs_registry()
     before_fs = fs_registry.keys()
     yield
     remove_new_vfs_roots(before_roots)
     bpy.context.scene.albam.exported.file_list.clear()
     close_new_fs_roots(before_fs)
+    reattach_fs_registry(detached)
 
 
 def _sample_fs():
