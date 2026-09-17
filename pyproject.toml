@@ -26,6 +26,11 @@ dependencies = [
 tests = [
   "pytest==9.1.1",
   "pytest-subtests==0.15.0",
+  # CI runs the suite across 4 worker processes (see .github/workflows/tests.yml).
+  "pytest-xdist==3.8.0",
+  # `coverage run -m pytest -n <N>` would only measure the controller process;
+  # pytest-cov starts coverage inside each xdist worker and combines the data.
+  "pytest-cov==7.1.0",
   "coverage[toml]==7.15.4",
   "flake8-pyproject==1.2.4",
   "moto[s3]==5.2.2",
