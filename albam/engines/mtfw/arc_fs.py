@@ -384,6 +384,24 @@ class MTFW_FS(MultiFS):
             child_path = join(_path, info.name)
             yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
 
+    def _delegate(self, path):
+        """Whichever layered filesystem owns `path`, from the index when one
+        has been built.
+
+        MultiFS asks every layer exists() in priority order. The loose layer
+        has the highest priority, so over S3 every read of a packed file
+        first costs a head_object plus a list_objects_v2 against the loose
+        layer - ~190ms of round trips per read, measured against R2, for a
+        file that was never loose. The index resolves the same precedence
+        (built in the same priority order, first owner wins) without asking
+        anything.
+        """
+        if self._owner is not None:
+            owner_fs = self._owner.get(self.validatepath(path))
+            if owner_fs is not None:
+                return owner_fs
+        return super()._delegate(path)
+
     def _owning_arc_fs(self, path):
         """The ArcFS `path` resolves to, or None if it's a loose/real file.
         Uses the lazy index (O(1)) if already built by a prior

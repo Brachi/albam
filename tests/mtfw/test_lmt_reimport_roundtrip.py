@@ -33,9 +33,8 @@ import bpy
 import pytest
 from mathutils import Euler, Quaternion
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves, hash_index
 from tests.mtfw.r2_config import resolve_r2_source
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Same committed dataset as test_lmt_single_arc_import.py - one re5
 # model + pose pair, hash-only, verified against the app_id's catalog by
@@ -152,7 +151,7 @@ def test_reimport_through_import_operator(
     bpy.context.scene.albam.apps.app_selected = app_id
     vfs = bpy.context.scene.albam.vfs
 
-    resolved = resolve_hashes(local_game_fs, {local_mod_path_hash, local_lmt_path_hash})
+    resolved = hash_index(local_game_fs, local_app_id)
     mod_virtual_path = resolved[local_mod_path_hash]
     lmt_virtual_path = resolved[local_lmt_path_hash]
     # The ArcFS each file already lives in, rather than building a new one

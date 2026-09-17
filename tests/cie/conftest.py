@@ -92,3 +92,22 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
     if not os.path.isdir(root):
         pytest.skip(f"--game-dir={local_app_id}::{root} does not exist")
     return root
+
+
+# app_id -> {hash: absolute .lfs path}, built once per session.
+_ARCHIVE_INDEXES = {}
+
+
+@pytest.fixture(scope="session")
+def hash_to_archive(game_root, local_app_id):
+    """{hash: absolute .lfs path} for every archive under game_root, from a
+    single walk shared by every test in this directory, rather than one walk
+    per parametrized case - the counterpart of tests/mtfw/conftest.py's
+    hash_to_path. Cheap against the curated set fetched from R2, but a real
+    install root is a large tree to rewalk per test.
+    """
+    from tests.cie.lfs_paths import index_archive_hashes
+
+    if local_app_id not in _ARCHIVE_INDEXES:
+        _ARCHIVE_INDEXES[local_app_id] = index_archive_hashes(game_root)
+    return _ARCHIVE_INDEXES[local_app_id]

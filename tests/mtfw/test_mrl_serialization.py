@@ -9,7 +9,6 @@ from kaitaistruct import KaitaiStream
 from albam.engines.mtfw.structs.mrl import Mrl
 from albam.engines.mtfw.material import MRL_BLEND_STATE_STR
 from tests.mtfw.conftest import import_export
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -53,20 +52,19 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def mrl_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_mrl_path_hash):
+def mrl_export_local(hash_to_path, local_app_id, local_mod_path_hash, local_mrl_path_hash):
     bpy.context.scene.albam.apps.app_selected = local_app_id
     if local_app_id == "dd":
         bpy.context.scene.albam.export_settings.no_vf_grouping = True
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
     bpy.context.scene.albam.export_settings.export_bones = True
 
-    # resolve_hashes() returns MTFW_FS's own canonical form (leading "/"),
+    # The index holds MTFW_FS's own canonical form (leading "/"),
     # but vfs.add_fs_root() builds its tree with that stripped (see
     # albam.vfs.VirtualFileSystemBase.add_fs_root) - select_vfile()/
     # get_vfile() expect the stripped form.
-    resolved = resolve_hashes(game_fs_root, {local_mod_path_hash, local_mrl_path_hash})
-    local_mod_path = resolved[local_mod_path_hash].lstrip("/")
-    local_mrl_path = resolved[local_mrl_path_hash].lstrip("/")
+    local_mod_path = hash_to_path[local_mod_path_hash].lstrip("/")
+    local_mrl_path = hash_to_path[local_mrl_path_hash].lstrip("/")
 
     # a mrl is never imported/exported standalone - it comes along with its
     # mod (see _infer_mrl() in albam/engines/mtfw/material.py), so the

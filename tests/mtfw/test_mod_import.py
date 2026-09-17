@@ -15,7 +15,6 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import clear_scene, import_vfile
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # import (see test_dataset_hashes_are_in_catalog below). Extend this directly
@@ -52,7 +51,7 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="module")
-def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
+def imported_mod(hash_to_path, local_app_id, local_mod_path_hash):
     """One import per model, into a scene emptied of the previous one, so
     every assertion below reads only this model's own data.
 
@@ -68,11 +67,11 @@ def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
 
     clear_scene()
 
-    # resolve_hashes() returns MTFW_FS's own canonical form (leading "/"),
+    # The index holds MTFW_FS's own canonical form (leading "/"),
     # but vfs.add_fs_root() builds its tree with that stripped (see
     # albam.vfs.VirtualFileSystemBase.add_fs_root) - select_vfile()
     # expects the stripped form.
-    path = resolve_hashes(game_fs_root, {local_mod_path_hash})[local_mod_path_hash]
+    path = hash_to_path[local_mod_path_hash]
     bpy.context.scene.albam.import_settings.import_only_main_lods = False
 
     vfile = import_vfile(local_app_id, path.lstrip("/"))

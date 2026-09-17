@@ -5,7 +5,6 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import import_export
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -45,12 +44,12 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def nav_export_local(game_fs_root, local_app_id, local_nav_path_hash):
+def nav_export_local(hash_to_path, local_app_id, local_nav_path_hash):
     from albam.engines.mtfw.structs.nav_156 import Nav156
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
-    local_nav_path = resolve_hashes(game_fs_root, {local_nav_path_hash})[local_nav_path_hash].lstrip("/")
+    local_nav_path = hash_to_path[local_nav_path_hash].lstrip("/")
     vfile_nav = import_export(local_app_id, local_nav_path)
     vfile_nav_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_nav_path)
     assert vfile_nav_exported

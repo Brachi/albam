@@ -26,9 +26,8 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves, hash_index
 from tests.mtfw.r2_config import resolve_r2_source
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # import (see test_dataset_hashes_are_in_catalog below). Extend this
@@ -99,7 +98,7 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     bpy.context.scene.albam.apps.app_selected = local_app_id
     vfs = bpy.context.scene.albam.vfs
 
-    resolved = resolve_hashes(local_game_fs, {local_mod_path_hash, local_lmt_path_hash})
+    resolved = hash_index(local_game_fs, local_app_id)
     mod_path = resolved[local_mod_path_hash]
     lmt_path = resolved[local_lmt_path_hash]
     # The ArcFS each file already lives in, rather than building a new one

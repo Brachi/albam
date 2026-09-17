@@ -112,6 +112,16 @@ def resolve_hashes(game_fs, target_hashes):
     return found
 
 
+class HashIndex(dict):
+    """{hash: path} for a whole tree, raising the same named KeyError
+    resolve_hashes() does: a test resolving a committed hash that isn't in
+    this install has to fail loudly, not skip quietly.
+    """
+
+    def __missing__(self, path_hash):
+        raise KeyError(f"hash(es) not found in this game install: {[path_hash]}")
+
+
 def index_by_hash(game_fs):
     """
     Walk game_fs once and return {hash: path} for *every* file in it - the
@@ -121,8 +131,8 @@ def index_by_hash(game_fs):
 
     Same forward-match-only rule as resolve_hashes: a hash is never turned
     back into a path any other way, this just keeps the result of the walk
-    instead of throwing it away. Missing hashes surface as a plain KeyError
-    on lookup, since there's no requested set to name them against here.
+    instead of throwing it away. A missing hash raises the same named
+    KeyError resolve_hashes() raises, via HashIndex above.
 
     First hit wins, exactly as resolve_hashes' own early exit does. That
     is not academic: a hash is over the lowercased path, and a real
@@ -131,7 +141,7 @@ def index_by_hash(game_fs):
     genuinely different sizes. Letting the last hit win would hand a test
     a different file than the one its hash was catalogued from.
     """
-    index = {}
+    index = HashIndex()
     for path in game_fs.walk.files():
         index.setdefault(hash_virtual_path(path), path)
     return index

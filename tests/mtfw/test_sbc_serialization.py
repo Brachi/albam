@@ -5,7 +5,6 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import import_export
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -45,12 +44,12 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def sbc_export_local(game_fs_root, local_app_id, local_sbc_path_hash):
+def sbc_export_local(hash_to_path, local_app_id, local_sbc_path_hash):
     from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
-    local_sbc_path = resolve_hashes(game_fs_root, {local_sbc_path_hash})[local_sbc_path_hash].lstrip("/")
+    local_sbc_path = hash_to_path[local_sbc_path_hash].lstrip("/")
     vfile_sbc = import_export(local_app_id, local_sbc_path)
     vfile_sbc_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_sbc_path)
     assert vfile_sbc_exported
