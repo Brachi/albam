@@ -427,24 +427,18 @@ def layout_node_chains(sink, chains, x_gap=300.0, y_gap=350.0):
 
 
 class ShaderGroupCompat:
+    """Name-keyed access to a node group's input sockets, which the
+    interface API only exposes as a flat mixed items_tree."""
 
-    def __init__(self, shader_group, compat="NEW"):
+    def __init__(self, shader_group):
         self.shader_group = shader_group
-        self.compat = compat
 
     def new_socket(self, name, description="", in_out='INPUT', socket_type='DEFAULT', parent=None):
-        if self.compat == "NEW":
-            return self.shader_group.interface.new_socket(
-                name, description=description, in_out=in_out, socket_type=socket_type, parent=parent)
-        elif in_out == "INPUT":
-            return self.shader_group.inputs.new(socket_type, name)
-        elif in_out == "OUTPUT":
-            return self.shader_group.outputs.new(socket_type, name)
+        return self.shader_group.interface.new_socket(
+            name, description=description, in_out=in_out, socket_type=socket_type, parent=parent)
 
     @property
     def inputs(self):
-        if self.compat != "NEW":
-            return self.shader_group.inputs
         return {item.name: item for item in self.shader_group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"}
 

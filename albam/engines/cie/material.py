@@ -111,10 +111,7 @@ def _create_cie_shader():
     shader_group = bpy.data.node_groups.new(REUHD_SHADER_NODEGROUP_NAME, "ShaderNodeTree")
     group_inputs = shader_group.nodes.new("NodeGroupInput")
     group_inputs.location = (-2000, -200)
-    bl_major, _, _ = bpy.app.version
-    compat = "OLD" if bl_major <= 3 else "NEW"
-
-    sg = ShaderGroupCompat(shader_group, compat)
+    sg = ShaderGroupCompat(shader_group)
     # Create group inputs
     sg.new_socket("Diffuse BM", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Alpha BM", in_out="INPUT", socket_type="NodeSocketFloat")
