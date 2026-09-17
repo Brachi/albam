@@ -38,8 +38,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11"},
-              {"bpy-version": "5.2.0", "python-version": "3.13"}
+        # Only the 3.13 leg measures coverage: the 4.2 leg contributed 2
+        # covered lines in albam/, and the sys.monitoring core that makes it
+        # cheap (pyproject.toml) needs Python 3.12+.
+        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11", "coverage": false},
+              {"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
              ]
     steps:
     - uses: actions/checkout@v5
@@ -78,7 +81,7 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --show-source --statistics
-    - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
+    - name: Test with pytest
       env:
         # Credentials + bucket for --game-dir=<app>::r2://<bucket>/<prefix>
         # below (see .env.example). Passed via env, not interpolated
@@ -96,7 +99,16 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
+          # One worker per runner vCPU. --dist loadfile keeps a file's
+          # tests in one process: the Blender scene and the VFS are
+          # process-global. --cov rather than `coverage run`, which would
+          # measure the controller process only.
+          cov=()
+          if [ "${{ matrix.bpy.coverage }}" == "true" ]; then
+            export COVERAGE_FILE=.coverage.${{ matrix.bpy.bpy-version }}
+            cov=(--cov --cov-report=)
+          fi
+          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
@@ -109,6 +121,7 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
+      if: matrix.bpy.coverage
       uses: actions/upload-artifact@v5
       with:
         name: .coverage.${{ matrix.bpy.bpy-version }}

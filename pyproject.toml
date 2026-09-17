@@ -26,6 +26,11 @@ dependencies = [
 tests = [
   "pytest==9.1.1",
   "pytest-subtests==0.15.0",
+  # CI runs the suite across 4 worker processes (see .github/workflows/tests.yml).
+  "pytest-xdist==3.8.0",
+  # `coverage run -m pytest -n <N>` would only measure the controller process;
+  # pytest-cov starts coverage inside each xdist worker and combines the data.
+  "pytest-cov==7.1.0",
   "coverage[toml]==7.15.4",
   "flake8-pyproject==1.2.4",
   "moto[s3]==5.2.2",
@@ -83,3 +88,11 @@ exclude = [".venv", "structs", "tests/data", "build"]
 # ```
 # W503 and W504 seem to contradict each other
 ignore = ["E203", "F722", "W504"]
+
+[tool.coverage.run]
+# sys.monitoring rather than coverage's C trace core. Measured on the full
+# suite: 911s against 1130s, for line-for-line identical data (173 files,
+# 35048 covered lines, 62% both ways). Needs Python 3.12+; on 3.11 coverage
+# falls back to the C core on its own, so this stays safe to leave set.
+core = "sysmon"
+disable_warnings = ["no-sysmon"]
