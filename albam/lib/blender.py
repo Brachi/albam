@@ -323,6 +323,37 @@ def get_colors_per_loop(blender_mesh):
     return colors
 
 
+def ensure_material_nodes(bl_material):
+    """Give `bl_material` a node tree, on every Blender version albam supports.
+
+    Up to 4.5, `bpy.data.materials.new()` returns a material with `use_nodes`
+    off and no `node_tree` at all, so the assignment here is what builds the
+    tree the callers immediately start adding nodes to. From 5.0 on materials
+    are node-based unconditionally: the tree is already there, and `use_nodes`
+    only survives as a deprecated no-op that warns on both read and write
+    ("'Material.use_nodes' is expected to be removed in Blender 6.0"). Testing
+    `node_tree` rather than `use_nodes` is what keeps 4.2/4.5 working without
+    touching the deprecated property on 5.x.
+    """
+    if bl_material.node_tree is None:
+        bl_material.use_nodes = True
+
+
+def material_uses_nodes(bl_material):
+    """Whether `bl_material` renders from its node tree.
+
+    The counterpart to `ensure_material_nodes` for reads. Before 5.0 this is
+    exactly `use_nodes`, and it has to stay that way: unticking "Use Nodes" in
+    the UI leaves `node_tree` populated, so a material with nodes disabled but
+    a tree still hanging off it must read as not node-based. From 5.0 on the
+    toggle is gone in all but name - it reads True always and warns - so the
+    tree itself is the only thing left to ask about.
+    """
+    if bpy.app.version >= (5, 0, 0):
+        return bl_material.node_tree is not None
+    return bl_material.use_nodes
+
+
 def get_bl_teximage_nodes(bl_materials):
     images = {}
     default = {
