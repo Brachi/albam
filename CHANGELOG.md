@@ -55,6 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- Added BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
+- Added Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 
 ### Changed
 
@@ -62,7 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   bone, shown as "Anim Retarget" in the Bone tab, instead of the raw
   `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
   property are migrated the first time they are used
-
+- Contex-related tools such as Handshaker, Face Attribute Editor. VertexGroupsMerger moved to Blender tools tab
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically
