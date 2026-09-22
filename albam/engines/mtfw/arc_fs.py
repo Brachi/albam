@@ -344,8 +344,8 @@ class MTFW_FS(MultiFS):
         layered filesystem per directory visited - O(directories x
         filesystems), ~9.5M calls / ~70s for a full RE5 walk over ~1200
         archives. Replaced with one upfront O(total entries) pass and O(1)
-        lookups after, for listdir/scandir/walk only - point lookups already
-        go through MultiFS's own _delegate and stay fast without this.
+        lookups after, for listdir/scandir/walk and, once built, the point
+        lookups _delegate() resolves.
         """
         if self._owner is not None:
             return
@@ -383,6 +383,24 @@ class MTFW_FS(MultiFS):
             # info (size, etc.) from whichever filesystem actually owns it.
             child_path = join(_path, info.name)
             yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
+
+    def _delegate(self, path):
+        """Whichever layered filesystem owns `path`, from the index when one
+        has been built.
+
+        MultiFS asks every layer exists() in priority order. The loose layer
+        has the highest priority, so over S3 every read of a packed file
+        first costs a head_object plus a list_objects_v2 against the loose
+        layer - ~190ms of round trips per read, measured against R2, for a
+        file that was never loose. The index resolves the same precedence
+        (built in the same priority order, first owner wins) without asking
+        anything.
+        """
+        if self._owner is not None:
+            owner_fs = self._owner.get(self.validatepath(path))
+            if owner_fs is not None:
+                return owner_fs
+        return super()._delegate(path)
 
     def _owning_arc_fs(self, path):
         """The ArcFS `path` resolves to, or None if it's a loose/real file.

@@ -52,6 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
   placed files along with the selected folder's own
+- Export of a texture whose relative path doesn't fit a material file's
+  64-byte path field failing with an unreadable "Check failed: filler" error
+  instead of naming the images to shorten
 
 ### Changed
 
