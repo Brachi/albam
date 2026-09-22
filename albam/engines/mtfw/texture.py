@@ -250,6 +250,11 @@ FTRANSPARENCY_OPAQUE = "FTransparency"
 # alongside the placeholders.
 DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
 
+# An .mrl texture slot stores its path in a fixed 64-byte field, ASCII and
+# nul-terminated, so 63 characters is all that fits. The path stored there
+# carries no extension.
+MRL_TEXTURE_PATH_MAX_LEN = 63
+
 
 def is_dummy_texture_path(texture_path):
     if not texture_path:
@@ -608,12 +613,17 @@ def serialize_textures(app_id, bl_materials):
     bad_appid = []
     texture_paths = []
     duplicated_paths = []
+    too_long = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
         if data["image"].albam_asset.relative_path in texture_paths:
             duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
         texture_paths.append(data["image"].albam_asset.relative_path)
+        # the extension doesn't matter here, only what goes in the .mrl slot
+        path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
+        if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
+            too_long.append((im_name, path_no_ext))
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
@@ -624,6 +634,17 @@ def serialize_textures(app_id, bl_materials):
             f"The following images have duplicated relative paths: {duplicated_paths}\n"
             "Go to Image Editor -> Albam and select a unique relative path for each."
         )
+    if too_long:
+        paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]
+        raise AlbamCheckFailure(
+            "Some images have a relative path too long to store in a material file "
+            f"(max {MRL_TEXTURE_PATH_MAX_LEN} characters, without the extension)",
+            details=f"Images: {paths}",
+            solution=("Go to Image Editor -> Albam and shorten the relative path of each image "
+                      "listed above. Images with no relative path set use their image name "
+                      "instead, so renaming the image also works"),
+        )
+
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
