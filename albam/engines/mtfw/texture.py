@@ -231,6 +231,16 @@ TEX_TYPE_MAPPER = {
 }
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
+DETAIL_SCALE_PATH = {
+    "re0": "albam_custom_properties.re0__globals.f_detail_normal_uv_scale",
+    "re1": "albam_custom_properties.re1__globals.f_detail_normal_uv_scale",
+    "re5": "albam_custom_properties.re5__mod_156_material.detail_factor[1]",
+    "re6": "albam_custom_properties.re6__globals.f_detail_normal_uv_scale",
+    "rev1": "albam_custom_properties.rev1__globals.f_detail_normal_uv_scale",
+    "rev2": "albam_custom_properties.rev2__globals.f_detail_normal_uv_scale",
+    "dd": "albam_custom_properties.dd__globals.f_detail_normal_uv_scale",
+    "umvc3": "albam_custom_properties.umvc3__globals.f_detail_normal_uv_scale",
+}
 
 # The FTransparency feature value meaning "this material is opaque". Its
 # albedo map's alpha channel is then not opacity - it carries whatever the
@@ -378,8 +388,9 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
 
 
 def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
+    detail_scale = DETAIL_SCALE_PATH.get(app_id, None)
     if not mrl:
-        old_assignment(mtfw_material, bl_material, textures)
+        old_assignment(mtfw_material, bl_material, textures, detail_scale)
         return
     features = (bl_material.albam_custom_properties
                 .get_custom_properties_secondary_for_appid(app_id)
@@ -388,7 +399,6 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
         features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
-
     assert len(mrl.textures) == len(textures), f"{len(mrl.textures)} != {len(textures)}"
     for ri, (resource, i) in enumerate(set_texture_resources):
         tex_index = resource.value_cmd.tex_idx
@@ -424,7 +434,7 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
             if texture_target is not None:
                 texture_node.image = texture_target
             texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material,
-                                            link_albedo_alpha=link_albedo_alpha)
+                                            link_albedo_alpha=link_albedo_alpha, detail_scale=detail_scale)
             if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
@@ -435,7 +445,7 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
             continue
 
 
-def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
+def old_assignment(mtfw_material, bl_material, textures, from_mrl=False, detail_scale=None):
     for texture_type in TextureType:
         if texture_type.value > 8:
             break
@@ -452,7 +462,7 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
+        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, detail_scale)
         # change color settings for normal and detail maps
         if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
@@ -469,8 +479,21 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     return tex_index
 
 
+def _link_detail_factor_driver(mapping_node, blender_material, data_path):
+    """Set blender driver for detail map UV scale from material props"""
+    for axis in range(3):
+        driver = mapping_node.inputs[3].driver_add("default_value", axis)
+        variable = driver.driver.variables.new()
+        variable.name = "detail_multiplier"
+        target = variable.targets[0]
+        target.id_type = "MATERIAL"
+        target.id = blender_material
+        target.data_path = data_path
+        driver.driver.expression = variable.name
+
+
 def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material,
-                                    link_albedo_alpha=True):
+                                    link_albedo_alpha=True, detail_scale=None):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
@@ -541,16 +564,12 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha DNM"])
 
         shader_node_grp.inputs["Use Detail Map"].default_value = 1
-        # TODO move it to function
-        # Link the material properites value
-        for x in range(3):
-            d = mapping_node.inputs[3].driver_add("default_value", x)
-            var1 = d.driver.variables.new()
-            var1.name = "detail_multiplier"
-            var1.targets[0].id_type = "MATERIAL"
-            var1.targets[0].id = blender_material
-            var1.targets[0].data_path = 'albam_custom_properties.re5__mod_156_material.detail_factor[1]'
-            d.driver.expression = var1.name
+        if detail_scale:
+            _link_detail_factor_driver(
+                mapping_node,
+                blender_material,
+                detail_scale,
+            )
 
     elif texture_code == 9:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend BM"])
