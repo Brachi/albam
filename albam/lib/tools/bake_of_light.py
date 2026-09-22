@@ -45,7 +45,7 @@ def _find_mesh_objects_by_parent(bl_objects):
         if not parent_ob:
             continue
         parent_objects.add(parent_ob)
-    scene_objects = [ob for ob in bpy.context.scene.objects if ob.type == 'MESH' and ob.parent is None]
+    scene_objects = [ob for ob in bpy.context.scene.objects if ob.type == 'MESH' and ob.parent is not None]
     for parent_ob in parent_objects:
         for bl_ob in scene_objects:
             if bl_ob.parent == parent_ob:

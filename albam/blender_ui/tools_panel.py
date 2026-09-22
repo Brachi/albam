@@ -2,6 +2,8 @@ import bmesh
 import bpy
 import re
 from pathlib import Path
+from bpy_extras import view3d_utils
+from mathutils.bvhtree import BVHTree
 
 
 from ..registry import blender_registry
@@ -10,7 +12,6 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.tools.face_attr_editor import overlay_enable
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -258,19 +259,6 @@ class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
         return {'FINISHED'}
 
 
-@blender_registry.register_blender_type
-class ALBAM_OT_FaceAttrEditor(bpy.types.Operator):
-    bl_idname = "albam.set_face_attr_editor"
-    bl_label = "Enable Face Attribute Editor"
-
-    def execute(self, context):
-        selected = context.active_object
-        region = context.region
-        rv3d = context.space_data.region_3d
-        overlay_enable(selected, region, rv3d)
-
-        return {'FINISHED'}
-
 
 @blender_registry.register_blender_type
 class ALBAM_OT_TransferNormal(bpy.types.Operator):
@@ -328,7 +316,7 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class MergeVertexGroups(bpy.types.Operator):
+class ALBAM_OT_MergeVertexGroups(bpy.types.Operator):
     '''
     Merges weights from groups A and B to group A
     The B group will be removed
@@ -770,6 +758,93 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
             return False
 
 
+@blender_registry.register_blender_type
+class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
+    """Modal operator for face painter"""
+    bl_idname = "albam.material_paint_modal"
+    bl_label = "Paint Material ID"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        if context.area.type != 'VIEW_3D' or context.mode != 'EDIT_MESH':
+            self.report({'WARNING'}, "The tool works only in Edit Mode!")
+            return {'CANCELLED'}
+
+        # Store the original shading type and color type to restore later
+        self.space = context.space_data
+        self.orig_shading_type = self.space.shading.type
+        self.orig_color_type = self.space.shading.color_type
+
+        # 2. Увімкнення відображення кольорів матеріалів у SOLID режимі
+        self.space.shading.type = 'MATERIAL'
+
+        # paint on LMB press
+        self.paint_face(context, event)
+
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def paint_face(self, context, event):
+        """Raycast with BVHTree to BMesh"""
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            return
+
+        region = context.region
+        rv3d = context.region_data
+        coord = (event.mouse_region_x, event.mouse_region_y)
+
+        # Covert 2D mouse coordinates to 3D ray
+        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, coord)
+        ray_dir = view3d_utils.region_2d_to_vector_3d(region, rv3d, coord)
+
+        # Get local coordinates of the ray in the object's space
+        inv_matrix = obj.matrix_world.inverted()
+        origin_local = inv_matrix @ ray_origin
+        dir_local = inv_matrix.to_3x3() @ ray_dir
+
+        # BMesh + BVHTree
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        bvh = BVHTree.FromBMesh(bm)
+
+        location, normal, face_index, distance = bvh.ray_cast(origin_local, dir_local)
+
+        if face_index is not None:
+            active_mat_idx = obj.active_material_index
+
+            if not obj.data.materials:
+                self.report({'WARNING'}, "The object has no materials assigned!")
+                return
+
+            if bm.faces[face_index].material_index != active_mat_idx:
+                bm.faces[face_index].material_index = active_mat_idx
+                bmesh.update_edit_mesh(obj.data)
+                context.area.tag_redraw()
+
+    def modal(self, context, event):
+        if event.type == 'MOUSEMOVE':
+            self.paint_face(context, event)
+            return {'RUNNING_MODAL'}
+
+        elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            # self.restore_viewport()
+            return {'FINISHED'}  # <- Ключова зміна: миттєво відпускає систему
+
+        elif event.type in {'ESC', 'RIGHTMOUSE'}:
+            self.restore_viewport()
+            return {'CANCELLED'}
+
+        # Allows to use camera navigation while the tool is active
+        return {'PASS_THROUGH'}
+
+    def restore_viewport(self):
+        """Restore Viewport"""
+        if hasattr(self, 'space') and self.space:
+            self.space.shading.type = self.orig_shading_type
+            self.space.shading.color_type = self.orig_color_type
+
+
 class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
     bl_space_type = 'VIEW_3D'
     bl_context_mode = 'OBJECT'
@@ -824,7 +899,20 @@ class ALBAM_WT_FacePropEdit(bpy.types.WorkSpaceTool):
         layout.prop(scn, 'surface_attr')
         layout.prop(scn, 'special_attr')
         layout.operator("albam.apply_face_props")
-        # layout.operator("albam.set_face_attr_editor")
+
+
+class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
+    bl_space_type = 'VIEW_3D'
+    bl_context_mode = 'EDIT_MESH'
+    bl_idname = "albam.material_painter_tool"
+    bl_label = "Face Painter"
+    bl_description = "Paint Active Material ID on faces"
+    bl_icon = str(
+        Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_paint")
+    bl_keymap = (
+        ("albam.material_paint_modal", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+    )
+    after = "albam.face_prop_edit"
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
@@ -891,6 +979,7 @@ WORKSPACE_TOOLS.extend([
     ALBAM_WT_Handshaker,
     ALBAM_WT_BakeOfLight,
     ALBAM_WT_FacePropEdit,
+    ALBAM_WT_FacePainter,
 ])
 
 
