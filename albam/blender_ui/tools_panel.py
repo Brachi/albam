@@ -259,7 +259,6 @@ class ALBAM_OT_ApplyFaceProps(bpy.types.Operator):
         return {'FINISHED'}
 
 
-
 @blender_registry.register_blender_type
 class ALBAM_OT_TransferNormal(bpy.types.Operator):
     '''Transfer normals from a unified mesh to its parts'''
