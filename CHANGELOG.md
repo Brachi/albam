@@ -55,18 +55,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
-- Resident Evil: Operation Raccoon City weapon archives (130 of ~2100 on a
-  full install) being rejected outright and their contents silently missing
-  from the file browser. They use a second `.ssg` layout that locates each
-  entry by its own stored offset instead of packing them end to end. Five
-  more archives share that layout but hold cutscene/mocap streams rather
-  than model data, and are still refused on purpose
-- Adding a game folder no longer skips archives it cannot read in silence -
-  the ones left out, and why, are now reported, so those five cutscene
-  archives are listed as skipped instead of just going missing
-- Resident Evil: Operation Raccoon City weapon models in those archives
-  failing to import. They use `.edgemodel` version 15, which has a shorter
-  header and stores each mesh's material offset before its LOD
 
 ### Changed
 
