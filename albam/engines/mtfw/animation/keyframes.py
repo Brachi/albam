@@ -50,9 +50,6 @@ KEYFRAME_TYPES_51 = {
     2: Lmt.Vec3Frame12,
     3: Lmt.Vec3Frame16,
     4: Lmt.Quat3Frame,  # Lmt.Quatized16Vec3 for ver55+
-    # 5 is QuadraticVector3 before ver55 (Lmt.Quatized8Vec3 from there on).
-    # No supported v51 game uses it, so it is left out: a track of that
-    # type is skipped as unknown instead of aborting the import (#255).
     6: Lmt.QuatFramev14,  # Lmt.PolarFrame for ver50-
     7: Lmt.Quatized32Quat,
     9: Lmt.Vec3Frame16,
