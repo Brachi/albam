@@ -117,7 +117,7 @@ class SsgFS(FS):
         """Refuse an id_magic 5 archive whose entry offsets can't be trusted:
         chunk-compressed (the offsets index the stored buffer), holding a
         content type outside SSG_V5_CONTENT_TYPES, or with an entry running
-        past the buffer. HexnFS reports the refusal (skipped_archives()).
+        past the buffer. HexnFS records the refusal in `failed_ssgs`.
         """
         if ssg.size_chunks_info:
             raise CreateFailed(
@@ -373,7 +373,7 @@ class HexnFS(MultiFS):
         MultiFS.__init__(self, auto_close=auto_close)
         self.failed_ssgs = []
         self.game_root = f"s3://{bucket}/{prefix}"
-        # Keys are rooted under prefix; _display_path() strips it.
+        # Keys are rooted under prefix; origin_of() strips it.
         self._s3_prefix = prefix.strip("/")
 
         opener = s3_opener(client, bucket)
@@ -389,23 +389,6 @@ class HexnFS(MultiFS):
             self.add_fs("<loose>", S3LooseFS(client, bucket, prefix))
         return self
 
-    def skipped_archives(self):
-        """(path relative to the game root, reason) for every .ssg that
-        failed to mount. albam.vfs reports these when a root is added.
-        """
-        return [
-            (self._display_path(path), str(exc) or type(exc).__name__)
-            for path, exc in self.failed_ssgs
-        ]
-
-    def _display_path(self, ssg_path):
-        """`ssg_path` relative to the game root, or to `prefix` on S3."""
-        if self._s3_prefix is not None:
-            if self._s3_prefix and ssg_path.startswith(self._s3_prefix + "/"):
-                return ssg_path[len(self._s3_prefix) + 1:]
-            return ssg_path
-        return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
-
     def _owning_ssg_fs(self, path):
         self.check()
         _path = self.validatepath(path)
@@ -413,13 +396,18 @@ class HexnFS(MultiFS):
         return owner_fs if isinstance(owner_fs, SsgFS) else None
 
     def origin_of(self, path):
-        """The .ssg `path` resolves to (as _display_path() gives it), or None
-        for a loose or missing file.
+        """The .ssg `path` resolves to, relative to the game root (or to
+        `prefix` on S3), or None for a loose or missing file.
         """
         owner_fs = self._owning_ssg_fs(path)
         if owner_fs is None:
             return None
-        return self._display_path(owner_fs.ssg_path)
+        ssg_path = owner_fs.ssg_path
+        if self._s3_prefix is not None:
+            if self._s3_prefix and ssg_path.startswith(self._s3_prefix + "/"):
+                return ssg_path[len(self._s3_prefix) + 1:]
+            return ssg_path
+        return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
 
     # Unlike MultiFS's versions, skip a sub-fs that has `path` as a file
     # instead of failing: an archive and the loose files can disagree on

@@ -406,24 +406,6 @@ def test_ssg_v5_refuses_a_chunk_compressed_archive(tmp_path):
     assert "compressed" in str(excinfo.value)
 
 
-def test_hexn_fs_surfaces_skipped_archives(tmp_path):
-    """A .ssg that can't be mounted is skipped so the other ~2000 still
-    are - but it has to say so, or its files just silently aren't there.
-    """
-    (tmp_path / "weapon.ssg").write_bytes(_build_ssg_v5_bytes(V5_ENTRIES))
-    (tmp_path / "sub").mkdir()
-    (tmp_path / "sub" / "cutscene.ssg").write_bytes(_build_ssg_v5_bytes(V5_MOCAP_ENTRIES))
-
-    game_fs = HexnFS(str(tmp_path))
-    assert game_fs.readbytes("/weapons/models/gun.edgemodel") == V5_ENTRIES[0][1]
-
-    skipped = game_fs.skipped_archives()
-    assert len(skipped) == 1
-    source, reason = skipped[0]
-    assert source == "sub/cutscene.ssg"
-    assert "MCPH" in reason
-
-
 def test_hexn_fs_v5_archive_does_not_shadow_current_content(tmp_path):
     """The id_magic 5 archives on a real install hold a superseded revision
     of paths the current archives also carry (their .edgemodel is format
