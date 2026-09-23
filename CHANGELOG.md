@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
 - Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
+- BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
+- Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 
 ### Fixed
 
@@ -55,8 +57,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
-- Added BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
-- Added Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 
 ### Changed
 
