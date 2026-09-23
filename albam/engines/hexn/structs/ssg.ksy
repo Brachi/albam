@@ -7,35 +7,17 @@ meta:
   ks-version: '0.11'
 
 doc: |
-  Two little-endian layouts share this header and file table, told apart by
-  `id_magic`, and they differ only in how an entry's bytes are found inside
-  `buffer_chunks`:
+  Two little-endian layouts, told apart by `id_magic`, share this header and
+  file table and differ only in where an entry's bytes are in `buffer_chunks`:
 
-  * 6 packs every entry end to end in file-table order, each padded up to
-    `size_padding`. `file_info.ofs_in_buffer_chunks` is not usable for that
-    walk when the archive is chunk-compressed - see its own doc.
-  * 5 leaves `size_padding` 0 and is never chunk-compressed
-    (`size_chunks_info` is 0 in all 135 on a full install), so
-    `file_info.ofs_in_buffer_chunks` addresses the stored buffer and the
-    data itself alike, and is what locates an entry. Walking these end to
-    end the way 6 is walked lands on another entry's bytes rather than
-    failing - the offsets are real gaps, not padding this header describes.
+  * 6 packs entries end to end in file-table order, each padded to
+    `size_padding`.
+  * 5 is never chunk-compressed and locates each entry at
+    `file_info.ofs_in_buffer_chunks`; there are gaps between entries.
 
-  Verified on all 135 id_magic 5 archives of a full install (881 entries):
-  read at `ofs_in_buffer_chunks`, every entry whose `file_type` names a
-  format with a magic of its own starts on that magic exactly - "FM6S"
-  (108/108 MODL), "MAT\\x07" (148/148 MATB), "DDS " (244/244 TPKD and
-  244/244 TPKH), Havok's 57 e0 e0 57 (71/71 HAVK) - with no entry running
-  past the end of the buffer and no two entries overlapping.
-
-  `file_type` is a fourcc stored as a little-endian word, so the readable
-  tag is its big-endian view. Two content families carry id_magic 5, and
-  no archive mixes them: 130 weapon archives holding MODL/MATB/TPKD/TPKH/
-  HAVK, and 5 under NIS/ holding cutscene/mocap streams (STMH/MCPH/SANM/
-  SCAM/LAYO) instead - see albam.engines.hexn.fs, which mounts the former
-  and refuses the latter. A TPKH entry is a 4-byte stub holding just the
-  "DDS " magic; the real texture is the TPKD entry filed under the same
-  name, which is the later of the two in every archive of either magic.
+  `file_type` is a fourcc stored as a little-endian word. A TPKH entry is a
+  4-byte stub holding just the "DDS " magic; the real texture is the TPKD
+  entry filed under the same name.
 
 seq:
   - id: id_magic
