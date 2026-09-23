@@ -179,24 +179,6 @@ types:
         {pos: ofs_events, type: attr, repeat: expr, repeat-expr: num_events}
   
   
-  quadratic_vector3:
-    seq:
-      - {id: size, type: u1}
-      - {id: flags, type: u1}
-      - {id: duration, type: u2}
-      - {id: x, type: f4}
-      - {id: y, type: f4}
-      - {id: z, type: f4}
-      - {id: outtangent_x, type: f4, if: flags >> 1 > 0}
-      - {id: outtangent_y, type: f4, if: flags >> 2 > 0}
-      - {id: outtangent_z, type: f4, if: flags >> 4 > 0}
-      - {id: nextframeintangent_x, type: f4, if: flags >> 8 > 0}
-      - {id: nextframeintangent_y, type: f4, if: flags >> 16 > 0}
-      - {id: nextframeintangent_z, type: f4, if: flags >> 32 > 0}
-    instances:
-      size_:
-        value: size
-
   vec3_frame12:
     seq:
       - {id: x, type: f4}
