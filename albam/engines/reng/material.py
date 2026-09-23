@@ -6,6 +6,7 @@ from kaitaistruct import KaitaiStream
 from .structs.reengine_mdf import ReengineMdf
 from .texture import build_blender_images, assign_textures
 from .apps import APPS_TODO
+from ...lib.blender import ensure_material_nodes
 
 
 def build_blender_materials(mesh_vfile, context):
@@ -35,7 +36,7 @@ def build_blender_materials(mesh_vfile, context):
 
     for mdf_material in mdf.materials:
         blender_material = bpy.data.materials.new(mdf_material.name)
-        blender_material.use_nodes = True
+        ensure_material_nodes(blender_material)
         blender_material.blend_method = "HASHED" if mdf_material.alpha_flags.alpha_mask_used else "OPAQUE"
         assign_textures(blender_material, mdf_material, blender_images)
         blender_materials[mdf_material.name] = blender_material
