@@ -217,7 +217,9 @@ def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, local_payl
     carries the archive's own filename.
     """
     if local_payload_extension != ".udas":
-        pytest.skip("only .udas containers are rebuilt")
+        # A .pack is rebuilt too, by tests/cie/test_pack_writer.py; nothing
+        # else is.
+        pytest.skip("this test covers the .udas rebuild")
 
     from albam.engines.cie.archive import _read_payload, _rebuild_udas
     from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,

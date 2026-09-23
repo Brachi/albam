@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autosorter tool to automatically set `alpha priority` values for hair cards
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
+- Writing Resident Evil 4 UHD texture packs: a `.pack` archive rebuilt with one
+  texture's bytes replaced by a supplied DDS, leaving every other texture in it
+  byte for byte. Not reachable from the panels yet, since nothing puts a
+  replacement DDS into the export list; see `docs/modding-a-character.md`
 - Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
 
 ### Fixed
