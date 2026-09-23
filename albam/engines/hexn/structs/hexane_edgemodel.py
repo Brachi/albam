@@ -86,12 +86,24 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self.num_models = self._io.read_u4le()
             self.num_meshes = self._io.read_u4le()
             self.ofs_meshes_start = self._io.read_u4le()
-            self.ofs_meshes_end = self._io.read_u4le()
-            self.ofs_meshes_info = self._io.read_u4le()
+            if self.version >= 17:
+                pass
+                self.ofs_meshes_end = self._io.read_u4le()
+
+            if self.version >= 17:
+                pass
+                self.ofs_meshes_info = self._io.read_u4le()
+
             self.num_bones = self._io.read_u4le()
             self.ofs_bones = self._io.read_u4le()
-            self.reserved_01 = self._io.read_u4le()
-            self.reserved_02 = self._io.read_u4le()
+            if self.version >= 17:
+                pass
+                self.reserved_01 = self._io.read_u4le()
+
+            if self.version >= 17:
+                pass
+                self.reserved_02 = self._io.read_u4le()
+
             self.reserved_03 = self._io.read_u4le()
             self.unk_matrix_1 = []
             for i in range(8):
@@ -103,29 +115,65 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self.ofs_unk_01 = self._io.read_u4le()
             self.ofs_unk_02 = self._io.read_u4le()
             self.reserved_04 = self._io.read_u4le()
-            self.ofs_models_start = []
-            for i in range(5):
-                self.ofs_models_start.append(self._io.read_u4le())
+            if self.version >= 17:
+                pass
+                self.ofs_models_start = []
+                for i in range(5):
+                    self.ofs_models_start.append(self._io.read_u4le())
 
-            self.ofs_models_end = []
-            for i in range(5):
-                self.ofs_models_end.append(self._io.read_u4le())
 
-            self.reserved_05 = self._io.read_u4le()
-            self.reserved_06 = self._io.read_u4le()
+            if self.version >= 17:
+                pass
+                self.ofs_models_end = []
+                for i in range(5):
+                    self.ofs_models_end.append(self._io.read_u4le())
+
+
+            if self.version >= 17:
+                pass
+                self.reserved_05 = self._io.read_u4le()
+
+            if self.version >= 17:
+                pass
+                self.reserved_06 = self._io.read_u4le()
+
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
             for i in range(len(self.unk_matrix_1)):
                 pass
 
             self.unk_matrix_2._fetch_instances()
-            for i in range(len(self.ofs_models_start)):
+            if self.version >= 17:
+                pass
+                for i in range(len(self.ofs_models_start)):
+                    pass
+
+
+            if self.version >= 17:
+                pass
+                for i in range(len(self.ofs_models_end)):
+                    pass
+
+
+            if self.version >= 17:
                 pass
 
-            for i in range(len(self.ofs_models_end)):
+            if self.version >= 17:
                 pass
 
             _ = self.bones_data
@@ -162,12 +210,24 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.num_models)
             self._io.write_u4le(self.num_meshes)
             self._io.write_u4le(self.ofs_meshes_start)
-            self._io.write_u4le(self.ofs_meshes_end)
-            self._io.write_u4le(self.ofs_meshes_info)
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.ofs_meshes_end)
+
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.ofs_meshes_info)
+
             self._io.write_u4le(self.num_bones)
             self._io.write_u4le(self.ofs_bones)
-            self._io.write_u4le(self.reserved_01)
-            self._io.write_u4le(self.reserved_02)
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.reserved_01)
+
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.reserved_02)
+
             self._io.write_u4le(self.reserved_03)
             for i in range(len(self.unk_matrix_1)):
                 pass
@@ -178,16 +238,28 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self._io.write_u4le(self.ofs_unk_01)
             self._io.write_u4le(self.ofs_unk_02)
             self._io.write_u4le(self.reserved_04)
-            for i in range(len(self.ofs_models_start)):
+            if self.version >= 17:
                 pass
-                self._io.write_u4le(self.ofs_models_start[i])
+                for i in range(len(self.ofs_models_start)):
+                    pass
+                    self._io.write_u4le(self.ofs_models_start[i])
 
-            for i in range(len(self.ofs_models_end)):
+
+            if self.version >= 17:
                 pass
-                self._io.write_u4le(self.ofs_models_end[i])
+                for i in range(len(self.ofs_models_end)):
+                    pass
+                    self._io.write_u4le(self.ofs_models_end[i])
 
-            self._io.write_u4le(self.reserved_05)
-            self._io.write_u4le(self.reserved_06)
+
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.reserved_05)
+
+            if self.version >= 17:
+                pass
+                self._io.write_u4le(self.reserved_06)
+
 
 
         def _check(self):
@@ -195,6 +267,18 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"id_magic", 4, len(self.id_magic))
             if not self.id_magic == b"\x46\x4D\x36\x53":
                 raise kaitaistruct.ValidationNotEqualError(b"\x46\x4D\x36\x53", self.id_magic, None, u"/types/edge_header/seq/0")
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
+            if self.version >= 17:
+                pass
+
             if len(self.unk_matrix_1) != 8:
                 raise kaitaistruct.ConsistencyError(u"unk_matrix_1", 8, len(self.unk_matrix_1))
             for i in range(len(self.unk_matrix_1)):
@@ -204,14 +288,26 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"unk_matrix_2", self._root, self.unk_matrix_2._root)
             if self.unk_matrix_2._parent != self:
                 raise kaitaistruct.ConsistencyError(u"unk_matrix_2", self, self.unk_matrix_2._parent)
-            if len(self.ofs_models_start) != 5:
-                raise kaitaistruct.ConsistencyError(u"ofs_models_start", 5, len(self.ofs_models_start))
-            for i in range(len(self.ofs_models_start)):
+            if self.version >= 17:
+                pass
+                if len(self.ofs_models_start) != 5:
+                    raise kaitaistruct.ConsistencyError(u"ofs_models_start", 5, len(self.ofs_models_start))
+                for i in range(len(self.ofs_models_start)):
+                    pass
+
+
+            if self.version >= 17:
+                pass
+                if len(self.ofs_models_end) != 5:
+                    raise kaitaistruct.ConsistencyError(u"ofs_models_end", 5, len(self.ofs_models_end))
+                for i in range(len(self.ofs_models_end)):
+                    pass
+
+
+            if self.version >= 17:
                 pass
 
-            if len(self.ofs_models_end) != 5:
-                raise kaitaistruct.ConsistencyError(u"ofs_models_end", 5, len(self.ofs_models_end))
-            for i in range(len(self.ofs_models_end)):
+            if self.version >= 17:
                 pass
 
             if self.bones_data__enabled:
@@ -898,8 +994,15 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
         def _read(self):
             self.num_groups = self._io.read_u4le()
             self.ofs_data = self._io.read_u4le()
-            self.lod = self._io.read_u4le()
+            if self._root.header.version >= 17:
+                pass
+                self.lod_v17 = self._io.read_u4le()
+
             self.ofs_materials = self._io.read_u4le()
+            if self._root.header.version < 17:
+                pass
+                self.lod_v15 = self._io.read_u4le()
+
             self.matrix_4x2_unk = []
             for i in range(8):
                 self.matrix_4x2_unk.append(self._io.read_f4le())
@@ -919,6 +1022,12 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
+            if self._root.header.version >= 17:
+                pass
+
+            if self._root.header.version < 17:
+                pass
+
             for i in range(len(self.matrix_4x2_unk)):
                 pass
 
@@ -981,8 +1090,15 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
             self._should_write_unk3_trailing = self.unk3_trailing__enabled
             self._io.write_u4le(self.num_groups)
             self._io.write_u4le(self.ofs_data)
-            self._io.write_u4le(self.lod)
+            if self._root.header.version >= 17:
+                pass
+                self._io.write_u4le(self.lod_v17)
+
             self._io.write_u4le(self.ofs_materials)
+            if self._root.header.version < 17:
+                pass
+                self._io.write_u4le(self.lod_v15)
+
             for i in range(len(self.matrix_4x2_unk)):
                 pass
                 self._io.write_f4le(self.matrix_4x2_unk[i])
@@ -999,6 +1115,12 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
 
 
         def _check(self):
+            if self._root.header.version >= 17:
+                pass
+
+            if self._root.header.version < 17:
+                pass
+
             if len(self.matrix_4x2_unk) != 8:
                 raise kaitaistruct.ConsistencyError(u"matrix_4x2_unk", 8, len(self.matrix_4x2_unk))
             for i in range(len(self.matrix_4x2_unk)):
@@ -1102,6 +1224,16 @@ class HexaneEdgemodel(ReadWriteKaitaiStruct):
 
         def _invalidate_gap_end(self):
             del self._m_gap_end
+        @property
+        def lod(self):
+            if hasattr(self, '_m_lod'):
+                return self._m_lod
+
+            self._m_lod = (self.lod_v17 if self._root.header.version >= 17 else self.lod_v15)
+            return getattr(self, '_m_lod', None)
+
+        def _invalidate_lod(self):
+            del self._m_lod
         @property
         def materials(self):
             if self._should_write_materials:
