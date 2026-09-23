@@ -18,8 +18,6 @@ import shutil
 import bpy
 import pytest
 
-from albam.lib import fs_registry
-from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
 from tests.cie.test_bin_serialization import _is_mesh_bin, _texture_slots
 
@@ -51,21 +49,6 @@ def test_dataset_hashes_are_in_catalog():
         assert entry["archive_path_hash"] in catalog, (
             f"{entry['archive_path_hash']!r} is not in {catalog_path!r}"
         )
-
-
-@pytest.fixture
-def _clean_scene():
-    # vfs, exported and bpy.data are session-scoped state: register() runs
-    # once per pytest session, so a test that leaves objects or roots behind
-    # changes what the next one sees.
-    before = fs_registry.keys()
-    before_roots = vfs_root_names()
-    yield
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=True)
-    remove_new_vfs_roots(before_roots)
-    bpy.context.scene.albam.exported.file_list.clear()
-    close_new_fs_roots(before)
 
 
 @pytest.fixture
@@ -291,9 +274,10 @@ def test_model_sharing_an_armature_exports_its_own_bones(
         "no bone should be written that the model did not have")
     assert weighted <= set(exported_ids), (
         "every bone the weights name has to be in the table")
-    if len(set(original_ids)) == len(original_ids):
-        assert exported_ids == sorted(original_ids), (
-            "an unedited model should write back the bone table it came with")
+    # A table naming the same id twice was exempt from this until the repeats
+    # were carried through import - see tests/cie/test_bin_duplicate_bone_ids.py.
+    assert exported_ids == sorted(original_ids), (
+        "an unedited model should write back the bone table it came with")
     assert exported_ids == sorted(exported_ids), "the table is written in bone id order"
     # A bone names its parent by id, so a table that dropped one would leave
     # the bones under it unable to say where they hang from.
