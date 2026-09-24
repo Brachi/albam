@@ -828,7 +828,7 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
 
         elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
             # self.restore_viewport()
-            return {'FINISHED'}  # <- Ключова зміна: миттєво відпускає систему
+            return {'FINISHED'}
 
         elif event.type in {'ESC', 'RIGHTMOUSE'}:
             self.restore_viewport()
@@ -929,15 +929,14 @@ class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
     def draw_settings(context, layout, tool):
         scn = context.scene.albam.tools_settings
         obj = context.active_object
-
         row = layout.row()
-        row.operator("albam.vg_merge")
         if obj:
             row = layout.row()
             row.prop_search(scn, "vg_a", context.active_object, "vertex_groups", text="Merge to")
             row = layout.row()
             row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
-        else:
+        row.operator("albam.vg_merge")
+        if not obj:
             row = layout.row()
             row.label(text="No active object selected")
 
