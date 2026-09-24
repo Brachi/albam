@@ -558,7 +558,13 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
         vfs = self.get_vfs(self, context)
         vfile = vfs.selected_vfile
         from ..engines.mtfw.archive import find_and_replace_in_arc
-        arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
+        from ..engines.mtfw.arc_fs import AmbiguousExtension
+        from ..lib.xcompress_encode import FrameTooLarge
+        try:
+            arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
+        except (AmbiguousExtension, FrameTooLarge) as err:
+            self.report({'ERROR'}, str(err))
+            return {'CANCELLED'}
         if arc:
             with open(self.filepath, "wb") as f:
                 f.write(arc)

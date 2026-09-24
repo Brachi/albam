@@ -8,12 +8,7 @@ are sized, stored and written back.
 
 import struct
 
-from ...lib.xcompress import (  # noqa: F401 - re-exported for lfs_compress
-    EXTRA_BITS,
-    POSITION_BASE,
-    _LzxState,
-    _lzx_inflate,
-)
+from ...lib.xcompress import _LzxState, _lzx_inflate
 
 LFS_MAGIC1 = 0x584C4452
 LFS_CHUNK_SIZE = 0x10000
