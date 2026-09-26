@@ -61,8 +61,12 @@ Binary formats are described by `.ksy` files under each engine's `structs/` dire
 to the `*.py` next to them with [Kaitai Struct](https://kaitai.io/) (currently 0.11):
 
 ```
-kaitai-struct-compiler --target python -w --outdir . <file>.ksy
+python scripts/ksc.py --target python -w --outdir . <file>.ksy
 ```
+
+`scripts/ksc.py` downloads the pinned compiler on first use (checksum-verified, cached per version)
+and passes every argument through, so nothing needs installing beyond Java. The compiler version
+lives there and has to match `pyproject.toml`'s `kaitaistruct` pin.
 
 `-w`/`--read-write` applies to every parser, including formats albam only reads today, so there is
 one command rather than a per-file split that nothing in a `.ksy` records. It implies
