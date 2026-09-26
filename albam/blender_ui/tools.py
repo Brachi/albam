@@ -797,17 +797,25 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
     def execute(self, context):
         selected_objects = context.selected_objects
         selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
-        for ob in selected_objects:
-            albam_props = _get_mesh_albam_props(ob)
-            if not albam_props:
-                print(f"The object {ob.name} has no Albam properties")
+        for bl_ob in selected_objects:
+            armature_modifier = None
+            for modifier in bl_ob.modifiers:
+                if modifier.type == 'ARMATURE':
+                    armature_modifier = modifier
+                    break
+            if armature_modifier is None:
+                print(f"Can't guess vertex format for object {bl_ob.name} without armature modifier")
                 continue
-            albam_asset = ob.data.albam_custom_properties.get_parent_albam_asset()
+            albam_mat_props = _get_mesh_albam_props(bl_ob)
+            if not albam_mat_props:
+                print(f"The object {bl_ob.name} has no Albam properties")
+                continue
+            albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
             app_id = albam_asset.app_id
             if app_id in ("re0", "re1" "re6", "rev1", "rev2", "dd"):
                 max_bones = 0
 
-                for v in ob.data.vertices:
+                for v in bl_ob.data.vertices:
                     cur_bones = sum(1 for g in v.groups if g.weight > 0)
                     if cur_bones > max_bones:
                         max_bones = cur_bones
@@ -821,8 +829,32 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                 elif max_bones > 4:
                     vf = "0xbb424024"  # "SkinTB8wt"
                 else:
-                    raise RuntimeError(f"Something is wrong with {ob.name}")
-                albam_props.vertex_format = vf
+                    raise RuntimeError(
+                        f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
+                albam_mat_props.vertex_format = vf
+            elif app_id == "re5":
+                try:
+                    bl_mat = bl_ob.data.materials[0]
+                except IndexError:
+                    print(f"The object {bl_ob.name} has no materials")
+                    continue
+                albam_mat_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+                albam_mat_props.vtype = "0x0"
+                if max_bones == 1:
+                    albam_mat_props.func_skin = "0x1"
+                elif max_bones == 2:
+                    albam_mat_props.func_skin = "0x2"
+                elif max_bones <= 4:
+                    albam_mat_props.func_skin = "0x3"
+                elif max_bones > 4:
+                    albam_mat_props.vtype = "0x1"
+                    albam_mat_props.func_skin = "0x4"
+                    albam_mesh_props = bl_ob.albam_custom_properties.get_custom_properties_for_appid(app_id)
+                    albam_mesh_props.vdelcbase = "0x7"
+                    albam_mesh_props.vdelc = "0x7"
+                else:
+                    raise RuntimeError(
+                        f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
         show_message_box(message=f"Vertex format was set for {len(selected_objects)} meshes")
         return {'FINISHED'}
 
