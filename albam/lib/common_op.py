@@ -202,13 +202,13 @@ def _get_mesh_albam_props(bl_ob):
 
 
 def _get_albam_mat_props(bl_ob, app_id):
+    custom_props = None
     try:
         bl_mat = bl_ob.data.materials[0]
     except IndexError:
-        print(f"Material not found for object: {bl_ob.name}")
-        return None
+        raise IndexError(f"Material not found for object: {bl_ob.name}")
     try:
-        custom_properties = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
     except AttributeError:
-        print(f"That isn't albam material:{bl_ob.name}")
-    return custom_properties
+        raise AttributeError(f"Material {bl_mat.name} does not have albam_custom_properties attribute.")
+    return custom_props

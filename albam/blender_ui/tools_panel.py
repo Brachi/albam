@@ -741,6 +741,7 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
         lm_size = int(custom_props.lm_resolution)
         lm_mode = custom_props.lm_mode
         app_id = context.scene.albam.apps.app_selected
+        assert app_id == "re5", "Bake of Light is only supported for RE5 for now"
         bake_light(selected_objects, lm_size, lm_mode, app_id)
 
         for ob in selected_objects:
