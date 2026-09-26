@@ -833,8 +833,8 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
             if armature_modifier is None:
                 print(f"Can't guess vertex format for object {bl_ob.name} without armature modifier")
                 continue
-            albam_mat_props = _get_mesh_albam_props(bl_ob)
-            if not albam_mat_props:
+            albam_mesh_props = _get_mesh_albam_props(bl_ob)
+            if not albam_mesh_props:
                 print(f"The object {bl_ob.name} has no Albam properties")
                 continue
             albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
@@ -859,7 +859,7 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                 else:
                     raise RuntimeError(
                         f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
-                albam_mat_props.vertex_format = vf
+                albam_mesh_props.vertex_format = vf
             elif app_id == "re5":
                 try:
                     bl_mat = bl_ob.data.materials[0]
@@ -867,7 +867,6 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                     print(f"The object {bl_ob.name} has no materials")
                     continue
                 albam_mat_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
-                albam_mesh_props = bl_ob.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
                 albam_mat_props.vtype = "0x0"
                 if max_bones == 1:
                     albam_mat_props.func_skin = "0x1"
