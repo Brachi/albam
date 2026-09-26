@@ -839,13 +839,14 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                 continue
             albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
             app_id = albam_asset.app_id
-            if app_id in ("re0", "re1" "re6", "rev1", "rev2", "dd"):
-                max_bones = 0
 
-                for v in bl_ob.data.vertices:
-                    cur_bones = sum(1 for g in v.groups if g.weight > 0)
-                    if cur_bones > max_bones:
-                        max_bones = cur_bones
+            max_bones = 0
+            for v in bl_ob.data.vertices:
+                cur_bones = sum(1 for g in v.groups if g.weight > 0)
+                if cur_bones > max_bones:
+                    max_bones = cur_bones
+
+            if app_id in ("re0", "re1" "re6", "rev1", "rev2", "dd"):
 
                 if max_bones == 1:
                     vf = "0xa8fab018"  # "SkinTB1wt"
@@ -866,6 +867,7 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                     print(f"The object {bl_ob.name} has no materials")
                     continue
                 albam_mat_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+                albam_mesh_props = bl_ob.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
                 albam_mat_props.vtype = "0x0"
                 if max_bones == 1:
                     albam_mat_props.func_skin = "0x1"
@@ -876,9 +878,8 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                 elif max_bones > 4:
                     albam_mat_props.vtype = "0x1"
                     albam_mat_props.func_skin = "0x4"
-                    albam_mesh_props = bl_ob.albam_custom_properties.get_custom_properties_for_appid(app_id)
-                    albam_mesh_props.vdelcbase = "0x7"
-                    albam_mesh_props.vdelc = "0x7"
+                    albam_mesh_props.vdeclbase = "0x7"
+                    albam_mesh_props.vdecl = "0x2"
                 else:
                     raise RuntimeError(
                         f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
