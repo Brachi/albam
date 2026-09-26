@@ -1,45 +1,45 @@
 name: Test
 on:
   push:
-    # Every branch, not just main: a branch used to get no CI at all until a
-    # PR was opened for it. The duplicate runs this would normally cause on
-    # an open PR are suppressed by the tests job's own condition below.
-    branches: [ "**" ]
-    tags: [ "v*" ]
-  pull_request:
-    branches: [ "main" ]
+    # Every branch except main: a branch used to get no CI at all until a PR
+    # was opened for it, and a PR from a branch in this repo is covered by
+    # that same push run. main and v* tags run this through main.yml and
+    # release.yml instead, so their publish jobs sit in workflows that only
+    # trigger when they will actually run - a job skipped by its own `if:`
+    # still shows up on every PR as a skipped check.
+    #
+    # No pull_request trigger: it only added coverage for PRs from forks,
+    # and fork runs get none of the R2 secrets, so the game-file tests skip
+    # there anyway. Run a fork's PR by pushing its branch here.
+    branches-ignore: [ "main" ]
   # Re-run on demand without pushing anything, e.g. to retry a flaky job:
   # `gh workflow run tests.yml --ref <branch>`. Only offered once this file
   # is on the default branch - GitHub reads the trigger list from there.
   workflow_dispatch:
+  # main.yml and release.yml gate their publish jobs on this.
+  workflow_call:
 
 # A burst of pushes to one branch used to leave every intermediate commit
 # running both matrix legs to completion; only the newest is worth the
-# runner. main and tags are excluded: publish-latest-main and publish-release
-# hang off this workflow, so cancelling a superseded run there would skip a
-# release build.
+# runner. main and tags are excluded: a cancelled run there would skip its
+# publish job. The group is not keyed on github.workflow: when called, that
+# is the caller's name, and sharing a group with the caller deadlocks it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.ref }}
   cancel-in-progress: >-
     ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   tests:
-    # A branch in this repo is already covered by the push trigger above, so
-    # its PR would otherwise run the whole matrix a second time on the same
-    # commit. A fork's branch produces no push event here, so fork PRs - the
-    # only ones this skips for - still need the pull_request trigger. A
-    # skipped job satisfies a required status check, so this stays usable
-    # with branch protection.
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11"},
-              {"bpy-version": "5.2.0", "python-version": "3.13"}
+        # Only the 3.13 leg measures coverage: the 4.2 leg contributed 2
+        # covered lines in albam/, and the sys.monitoring core that makes it
+        # cheap (pyproject.toml) needs Python 3.12+.
+        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11", "coverage": false},
+              {"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
              ]
     steps:
     - uses: actions/checkout@v5
@@ -78,7 +78,7 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --show-source --statistics
-    - name: Test with pytest  # don't use xdist (-n auto) without checking coverage report
+    - name: Test with pytest
       env:
         # Credentials + bucket for --game-dir=<app>::r2://<bucket>/<prefix>
         # below (see .env.example). Passed via env, not interpolated
@@ -96,7 +96,16 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          coverage run --data-file=.coverage.${{ matrix.bpy.bpy-version }} -m pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd
+          # One worker per runner vCPU. --dist loadfile keeps a file's
+          # tests in one process: the Blender scene and the VFS are
+          # process-global. --cov rather than `coverage run`, which would
+          # measure the controller process only.
+          cov=()
+          if [ "${{ matrix.bpy.coverage }}" == "true" ]; then
+            export COVERAGE_FILE=.coverage.${{ matrix.bpy.bpy-version }}
+            cov=(--cov --cov-report=)
+          fi
+          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
@@ -109,12 +118,28 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Upload coverage data"
-      uses: actions/upload-artifact@v5
+      if: matrix.bpy.coverage
+      uses: actions/upload-artifact@v7
       with:
         name: .coverage.${{ matrix.bpy.bpy-version }}
         path: .coverage.${{ matrix.bpy.bpy-version }}
         include-hidden-files: true
         if-no-files-found: error
+    - name: Build and smoke-test the extension zip
+      # What gets published is the zip, not this checkout: it carries its
+      # dependencies as bundled wheels, and a dependency missing from
+      # pylock.toml breaks every install while leaving CI green. So install
+      # the zip into a Blender that has none of albam's dependencies -
+      # reusing this job's venv would import them from there and pass on a
+      # zip missing every wheel. The second venv is hardlinked out of the uv
+      # cache the install step above already filled, so it costs seconds.
+      run: |
+        "$pythonLocation/bin/python" -m pip install --quiet packaging
+        "$pythonLocation/bin/python" scripts/build_extension.py --output-dir dist
+        uv venv --python "${{ matrix.bpy.python-version }}" "$RUNNER_TEMP/venv-smoke"
+        uv pip install --python "$RUNNER_TEMP/venv-smoke/bin/python" \
+          "bpy==${{ matrix.bpy.bpy-version }}" --extra-index-url https://download.blender.org/pypi/
+        "$RUNNER_TEMP/venv-smoke/bin/python" scripts/smoke_test_extension.py dist/albam-*.zip
   coverage:
     # thanks: https://nedbatchelder.com/blog/202209/making_a_coverage_badge.html
     runs-on: ubuntu-latest
@@ -132,7 +157,7 @@ jobs:
         run: |
           python -m pip install coverage
       - name: "Download coverage data"
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           path: .covdata
           pattern: .coverage.*
@@ -153,7 +178,7 @@ jobs:
         # step summary. Without this the job had no branch condition at all,
         # and a branch run would overwrite the badge with that branch's number.
         if: github.ref == 'refs/heads/main'
-        uses: schneegans/dynamic-badges-action@v1.4.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           # GIST_TOKEN is a GitHub personal access token with scope "gist".
           auth: ${{ secrets.GIST_TOKEN }}
@@ -164,147 +189,3 @@ jobs:
           minColorRange: 50
           maxColorRange: 90
           valColorRange: ${{ env.total }}
-  publish-latest-main:
-    # Rebuilds the extension zip on every successful merge to main and
-    # publishes it as a rolling pre-release ("latest-main") - a stable,
-    # no-login download of the current tip of main, distinct from the real
-    # tagged Releases (e.g. v0.5.0) which are still cut by hand. Never runs
-    # on pull_request (only push to main), and needs: tests so a build that
-    # fails CI never gets published.
-    runs-on: ubuntu-latest
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          # `git describe`/`rev-list --count` below need full history and
-          # tags to compute the commit-count-since-last-release suffix -
-          # actions/checkout defaults to a shallow, tag-less clone.
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: 'pip'
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install packaging
-      - name: Compute dev version (base version + commits since last tag + branch)
-        id: version
-        run: |
-          set -e
-          base_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
-          if [ -n "$last_tag" ]; then
-            commit_count="$(git rev-list "${last_tag}..HEAD" --count)"
-          else
-            commit_count="$(git rev-list --count HEAD)"
-          fi
-          # SemVer build-metadata only allows [0-9a-zA-Z-] - safe here since
-          # this job is gated to refs/heads/main, so GITHUB_REF_NAME is
-          # always literally "main" (never a slash-containing branch name).
-          echo "value=${base_version}+${commit_count}.${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-      - name: Build extension zip
-        run: python scripts/build_extension.py --version "${{ steps.version.outputs.value }}"
-      - name: Build release notes
-        # Points at the built extension zip explicitly, since GitHub attaches
-        # its own auto-generated "Source code" archives to every release and
-        # those are not installable in Blender. The changelog's [unreleased]
-        # section doubles as the list of what this build has over the last
-        # tagged release.
-        run: |
-          set -e
-          {
-            echo "Automated build of the current tip of \`main\` ($GITHUB_SHA)."
-            echo
-            echo "**This is a development build, not a stable release.** It may be"
-            echo "unstable, and anything in it may change or break before it ships."
-            echo "For a tested build, use the [latest tagged release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest)."
-            echo
-            echo "## Install"
-            echo
-            echo "Download \`albam-${{ steps.version.outputs.value }}.zip\` from the assets below,"
-            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
-            echo "The \"Source code\" archives are generated automatically by GitHub and"
-            echo "cannot be installed as an extension."
-            echo
-            echo "<details>"
-            echo "<summary><b>Upcoming changes</b> - already in this build, slated for the next release</summary>"
-            echo
-          } > release_notes.md
-          if ! python scripts/extract_changelog_section.py unreleased >> release_notes.md; then
-            echo "_Nothing recorded in CHANGELOG.md's [unreleased] section yet._" >> release_notes.md
-          fi
-          printf '\n</details>\n' >> release_notes.md
-      - name: Publish rolling "latest main" pre-release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          gh release delete latest-main --yes --cleanup-tag || true
-          gh release create latest-main dist/albam-*.zip \
-            --title "Latest main build (${{ steps.version.outputs.value }})" \
-            --notes-file release_notes.md \
-            --prerelease \
-            --latest=false \
-            --target "$GITHUB_SHA"
-  publish-release:
-    # Publishes the official GitHub Release when a version tag (vX.Y.Z) is
-    # pushed: verifies the tag matches pyproject.toml's version (catches a
-    # forgotten version bump before it ships), builds the zip via the
-    # default `build_extension.py` (no --version override - the manifest's
-    # own version should already equal the tag), and publishes with release
-    # notes pulled straight from CHANGELOG.md's matching dated section.
-    # Auto-published (not a draft) since the changelog is already
-    # maintainer-written by the time a release is tagged.
-    runs-on: ubuntu-latest
-    needs: tests
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: 'pip'
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install packaging
-      - name: Verify tag matches pyproject.toml version
-        run: |
-          set -e
-          tag_version="${GITHUB_REF_NAME#v}"
-          pyproject_version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          if [ "$tag_version" != "$pyproject_version" ]; then
-            echo "Tag $GITHUB_REF_NAME (version $tag_version) doesn't match pyproject.toml's version ($pyproject_version)" >&2
-            exit 1
-          fi
-      - name: Build extension zip
-        run: python scripts/build_extension.py
-      - name: Build release notes from CHANGELOG.md
-        # The install note names the built zip explicitly: GitHub attaches its
-        # own auto-generated "Source code" archives to every release, and those
-        # are not installable in Blender.
-        run: |
-          set -e
-          {
-            echo "## Install"
-            echo
-            echo "Download \`albam-${GITHUB_REF_NAME#v}.zip\` from the assets below,"
-            echo "then in Blender: Edit > Preferences > Add-ons > Install from Disk."
-            echo "The \"Source code\" archives are generated automatically by GitHub and"
-            echo "cannot be installed as an extension."
-            echo
-          } > release_notes.md
-          python scripts/extract_changelog_section.py "${GITHUB_REF_NAME#v}" >> release_notes.md
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/albam-*.zip \
-            --title "Albam $GITHUB_REF_NAME" \
-            --notes-file release_notes.md

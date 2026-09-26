@@ -9,6 +9,7 @@ import contextlib
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
+from ....lib.blender import get_action_channels
 from ....lib.kaitai_utils import parse
 from ....registry import blender_registry
 from ..bone import get_anim_retarget, set_anim_retarget, set_chain_target
@@ -49,19 +50,6 @@ def get_block_index(anim_object, app_id):
     """
     block_index = _block_props(anim_object, app_id).block_index
     return block_index if block_index >= 0 else 0
-
-
-def _get_action_channels(action, armature):
-    """The container an action keeps its fcurves and groups in.
-
-    Blender 4.4 moved both behind an action's layers and slots, and 5.0
-    removed the flat Action.fcurves/Action.groups shortcuts altogether.
-    """
-    if hasattr(action, "fcurves"):
-        return action
-    slot = action.slots.new(id_type='OBJECT', name=armature.name)
-    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
-    return strip.channelbag(slot, ensure=True)
 
 
 # re5 only, which is what main registered before any of this. Version 67 - re0,
@@ -105,7 +93,7 @@ def load_lmt(vfile, context):
         name = f"{armature.name}.{vfile.display_name}.{str(block_index).zfill(4)}"
         action = bpy.data.actions.new(name)
         action.use_fake_user = True
-        channels = _get_action_channels(action, armature)
+        channels = get_action_channels(action, armature.name)
 
         tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
             "tracks"]

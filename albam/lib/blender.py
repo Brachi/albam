@@ -12,6 +12,24 @@ BoundingBox = namedtuple('bounding_box', (
 ))
 
 
+def get_action_channels(action, slot_name):
+    """The container a freshly-created action keeps its fcurves and groups
+    in, across every Blender version this addon supports.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether - the
+    container returned here (the action itself, or a channelbag) exposes the
+    same .fcurves.new()/.groups API either way, so a caller doesn't need its
+    own version check. `slot_name` only matters on 4.4+, where a slot names
+    the datablock (e.g. an armature) the channels animate.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=slot_name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 def strip_triangles_to_triangles_list(strip_indices_array):
     indices = []
 
@@ -305,6 +323,37 @@ def get_colors_per_loop(blender_mesh):
     return colors
 
 
+def ensure_material_nodes(bl_material):
+    """Give `bl_material` a node tree, on every Blender version albam supports.
+
+    Up to 4.5, `bpy.data.materials.new()` returns a material with `use_nodes`
+    off and no `node_tree` at all, so the assignment here is what builds the
+    tree the callers immediately start adding nodes to. From 5.0 on materials
+    are node-based unconditionally: the tree is already there, and `use_nodes`
+    only survives as a deprecated no-op that warns on both read and write
+    ("'Material.use_nodes' is expected to be removed in Blender 6.0"). Testing
+    `node_tree` rather than `use_nodes` is what keeps 4.2/4.5 working without
+    touching the deprecated property on 5.x.
+    """
+    if bl_material.node_tree is None:
+        bl_material.use_nodes = True
+
+
+def material_uses_nodes(bl_material):
+    """Whether `bl_material` renders from its node tree.
+
+    The counterpart to `ensure_material_nodes` for reads. Before 5.0 this is
+    exactly `use_nodes`, and it has to stay that way: unticking "Use Nodes" in
+    the UI leaves `node_tree` populated, so a material with nodes disabled but
+    a tree still hanging off it must read as not node-based. From 5.0 on the
+    toggle is gone in all but name - it reads True always and warns - so the
+    tree itself is the only thing left to ask about.
+    """
+    if bpy.app.version >= (5, 0, 0):
+        return bl_material.node_tree is not None
+    return bl_material.use_nodes
+
+
 def get_bl_teximage_nodes(bl_materials):
     images = {}
     default = {
@@ -372,6 +421,40 @@ def get_dist(point_a, point_b):
     z3 = z1 - z2
     magnitude = math.sqrt((x3 * x3) + (y3 * y3) + (z3 * z3))
     return magnitude
+
+
+def layout_node_chains(sink, chains, x_gap=300.0, y_gap=350.0):
+    """
+    Place upstream node chains left-to-right into an already-positioned `sink`
+    node (e.g. a Principled BSDF), each chain stacked into its own row so
+    parallel inputs (e.g. Base Color, Normal, Specular) don't collide.
+
+    New nodes have no `.location` set by Blender until something positions
+    them, so a loop that does `nodes.new(...)` per texture/input without ever
+    touching `.location` leaves every node stacked at the same default spot.
+    This is a small hand-rolled layered layout rather than a call into some
+    node-arrange operator: stock Blender has no core `bpy.ops.node.*` for it,
+    and the one third-party add-on commonly cited for this (Node Wrangler)
+    isn't enabled by default even though it ships bundled, and its operators
+    require a live NODE_EDITOR context (area/space/pinned node tree) that
+    doesn't exist in the headless `bpy`-as-pip-package environment this
+    importer also has to run under (see CLAUDE.md). For graphs this shallow
+    (a texture, optionally through one converter node, into a fixed sink) a
+    few lines of arithmetic are simpler and more predictable than depending
+    on either.
+
+    `sink`'s own location is the anchor and is left untouched.
+    `chains` is an iterable of node lists ordered from the most upstream node
+    to the one feeding directly into `sink` (e.g. [texture_node,
+    normal_map_node]); a chain with no intermediate nodes is just
+    [texture_node].
+    """
+    for row, chain in enumerate(chains):
+        y = sink.location.y - row * y_gap
+        depth = len(chain)
+        for index, node in enumerate(chain):
+            distance_to_sink = depth - index
+            node.location = (sink.location.x - distance_to_sink * x_gap, y)
 
 
 class ShaderGroupCompat:

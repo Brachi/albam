@@ -88,6 +88,94 @@ def test_autorenaming_bones_keeps_them_addressable_by_animation_id():
         bpy.context.view_layer.objects.active = previous
 
 
+def test_autorenaming_bones_keeps_mirror_bone_pointing_at_a_real_bone():
+    """Mirror Bone is held by name, which Autorename Bones changes.
+
+    Renaming without updating it leaves Mirror Bone pointing at a name that no
+    longer exists, which export (mesh.py's _derive_mirror_ids) rejects with an
+    AlbamCheckFailure the moment "Export bones" is on. See #285.
+    """
+    from albam.blender_ui.tools import rename_bones
+    from albam.engines.mtfw.bone import get_mirror, set_anim_retarget, set_mirror
+
+    armature_data = bpy.data.armatures.new("mirror_rename_rig")
+    armature = bpy.data.objects.new("mirror_rename_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name in ("0", "1"):
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for name, anim_id in (("0", "0"), ("1", "1")):
+            set_anim_retarget(armature.pose.bones[name], "re5", anim_id)
+        set_mirror(armature.pose.bones["0"], "re5", "1")
+        set_mirror(armature.pose.bones["1"], "re5", "0")
+
+        rename_bones(armature, "re5", "Body")
+
+        # BONES_BODY names ids 0 and 1 "root" and "spine_lower"
+        assert get_mirror(armature.pose.bones["root"], "re5") == "spine_lower"
+        assert get_mirror(armature.pose.bones["spine_lower"], "re5") == "root"
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
+def test_autorenaming_bones_does_not_mutate_the_shared_name_tables():
+    """Autorename Bones must not corrupt BONES_BODY/BONES_HEAD for other games.
+
+    NAME_FIXES entries (e.g. re1's) reassign meanings, not just spellings: id
+    24 is thumb_01_r by default and knee_r under re1's fixes. rename_bones
+    used to build its working map as `BONE_NAMES.get(body_type)`, which is
+    the module-level dict itself, not a copy - so applying re1's fixes wrote
+    them straight into BONES_BODY, and the next rig renamed in the same
+    session (re5, which has no NAME_FIXES entry of its own) got re1's names.
+    See #245.
+    """
+    from albam.blender_ui.tools import rename_bones
+    from albam.engines.mtfw.bone import set_anim_retarget
+    from albam.lib.bone_names import BONES_BODY, BONES_HEAD
+
+    body_before = dict(BONES_BODY)
+    head_before = dict(BONES_HEAD)
+
+    armature_data = bpy.data.armatures.new("shared_table_rig")
+    armature = bpy.data.objects.new("shared_table_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit_bone = armature_data.edit_bones.new("24")
+        edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        set_anim_retarget(armature.pose.bones["24"], "re1", "24")
+
+        # re1 has a NAME_FIXES entry that reassigns id 24 away from BONES_BODY's
+        # default (thumb_01_r -> knee_r); this is what a fix must not leak.
+        rename_bones(armature, "re1", "Body")
+
+        assert armature.pose.bones[0].name == "knee_r"
+        assert BONES_BODY == body_before, (
+            "rename_bones must not mutate the shared BONES_BODY table"
+        )
+        assert BONES_HEAD == head_before, (
+            "rename_bones must not mutate the shared BONES_HEAD table"
+        )
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
 def test_a_rig_saved_before_the_move_still_maps_its_bones():
     """.blend files predating the move carry the id as a raw bone property.
 
@@ -165,3 +253,65 @@ def test_a_created_root_motion_bone_carries_the_id_it_was_created_for():
         bpy.data.objects.remove(armature, do_unlink=True)
         bpy.data.armatures.remove(armature_data)
         bpy.context.view_layer.objects.active = previous
+
+
+def test_guessing_bone_mirrors_from_the_rest_pose():
+    """Mirrors are found by reflection, and ambiguity is broken by parentage.
+
+    A joint's counterpart sits at its own position reflected across x. That is
+    exact in the data, so it identifies a pair outright whenever only one joint
+    sits at the reflected point. When several do - which is common, since joints
+    pile up at the same spot - the tie is broken by requiring the candidate to
+    hang off the mirror of the bone's own parent.
+
+    Joints on the midline reflect onto themselves, and a joint whose reflection
+    is empty gets no answer at all rather than a wrong one.
+    """
+    from albam.engines.mtfw.bone import guess_mirrors
+
+    # A spine on the midline, a limb either side, and a pair of tips that share
+    # a position with each other so only their parents tell them apart.
+    layout = {
+        "spine": ((0.0, 0.0, 0.0), None),
+        "arm.L": ((1.0, 0.0, 0.0), "spine"),
+        "arm.R": ((-1.0, 0.0, 0.0), "spine"),
+        "tip.L": ((2.0, 1.0, 0.0), "arm.L"),
+        "tip.R": ((-2.0, 1.0, 0.0), "arm.R"),
+        "spur.L": ((2.0, 1.0, 0.0), "spine"),
+        "spur.R": ((-2.0, 1.0, 0.0), "spine"),
+        "lonely": ((5.0, 3.0, 0.0), "spine"),
+    }
+    armature_data = bpy.data.armatures.new("mirror_rig")
+    armature = bpy.data.objects.new("mirror_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name, (head, _parent) in layout.items():
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.head = head
+            edit_bone.tail = (head[0], head[1], head[2] + 0.1)
+        for name, (_head, parent) in layout.items():
+            if parent:
+                armature_data.edit_bones[name].parent = armature_data.edit_bones[parent]
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        guessed = guess_mirrors(armature)
+
+        assert guessed["arm.L"] == "arm.R"
+        assert guessed["arm.R"] == "arm.L"
+        # On the midline, so its own reflection.
+        assert guessed["spine"] == "spine"
+        # tip.* and spur.* sit on each other's positions; only the parent tells
+        # them apart, and getting this wrong is what a reflection-only rule does.
+        assert guessed["tip.L"] == "tip.R"
+        assert guessed["tip.R"] == "tip.L"
+        assert guessed["spur.L"] == "spur.R"
+        assert guessed["spur.R"] == "spur.L"
+        # Nothing sits at (-5, 3, 0), so there is no answer to give.
+        assert "lonely" not in guessed
+    finally:
+        bpy.context.view_layer.objects.active = previous
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data, do_unlink=True)

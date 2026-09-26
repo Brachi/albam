@@ -144,16 +144,69 @@ class VirtualFileSystemBase:
     SEPARATOR = "::"
     VFS_ID = "vfs"
 
-    def get_vfile(self, app_id, relative_path):
+    def get_vfile(self, app_id, relative_path, root_id=None):
+        """The vfile at `relative_path`, preferring the one that also
+        belongs to root `root_id` when given.
+
+        A plain lookup resolves to whichever root's entry was added first
+        when two mounted roots happen to share this same relative path
+        (see _unique_root_name's own docstring) - fine for a caller that
+        only ever has one root of this app_id mounted, wrong for one that
+        needs a path resolved against a *specific* root (e.g. a shared
+        material path that two different packs each happen to also use for
+        an unrelated file of their own). root_id is a preference, not a
+        restriction: a path genuinely only reachable through a different
+        root - e.g. a shared texture mounted as its own archive alongside
+        the model that references it - still resolves via the same
+        first-match fallback a plain lookup uses.
+        """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
-        return self.file_list[file_id]
+        if root_id is None:
+            return self.file_list[file_id]
+        fallback = None
+        for vfile in self.file_list:
+            if vfile.name != file_id:
+                continue
+            if vfile.tree_node.root_id == root_id:
+                return vfile
+            if fallback is None:
+                fallback = vfile
+        if fallback is not None:
+            return fallback
+        raise KeyError(file_id)
 
     def select_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
         self.file_list_selected_index = self.file_list.find(file_id)
         return self.file_list[file_id]
+
+    def _unique_root_name(self, app_id, display_name):
+        """Root nodes are keyed by name in `file_list`, and two roots can
+        easily share a display name - e.g. "Add Files" on both
+        Characters/<name>.ssg and Characters/skel/<name>.ssg, two different
+        archives with the same basename. A CollectionProperty happily holds
+        duplicate names but resolves a lookup to the first match only, so
+        without disambiguating here every child of the second root would
+        resolve its `tree_node.root_id` back to the *first* root - reading
+        its bytes from the wrong FS (ResourceNotFound) and listing its
+        children under the wrong node in the tree UI.
+
+        Node ids themselves are still `app_id::<path parts>` with no root
+        in them (see Tree), so two roots holding the *same* internal path
+        still give a plain get_vfile()/select_vfile() only the first
+        root's copy - reading either one's bytes works, but addressing the
+        second by path alone does not. get_vfile()'s own root_id parameter
+        is the way out for a caller that needs the second root's copy.
+        """
+        root_name = f"{app_id}{self.SEPARATOR}{display_name}"
+        if root_name not in self.file_list:
+            return root_name
+        suffix = 1
+        while f"{root_name}#{suffix}" in self.file_list:
+            suffix += 1
+        return f"{root_name}#{suffix}"
 
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
@@ -172,7 +225,7 @@ class VirtualFileSystemBase:
 
         vf = self.file_list.add()
         vf.is_root = True
-        vf.name = f"{app_id}::{path.name}"
+        vf.name = self._unique_root_name(app_id, path.name)
         vf.vfs_id = self.VFS_ID
         vf.app_id = app_id
         vf.display_name = path.name
@@ -200,7 +253,7 @@ class VirtualFileSystemBase:
         """
         fs_key = fs_registry.register(fs_instance)
 
-        root_id = f"{app_id}::{display_name}"
+        root_id = self._unique_root_name(app_id, display_name)
         vf = self.file_list.add()
         vf.is_root = True
         vf.name = root_id
@@ -429,7 +482,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
     # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.lfs", options={"HIDDEN"})  # NOQA
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.ssg;*.lfs", options={"HIDDEN"})  # NOQA
 
     def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager

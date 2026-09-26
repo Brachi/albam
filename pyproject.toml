@@ -16,6 +16,9 @@ dependencies = [
   "setuptools==80.10.2",
   "kaitaistruct==0.11",
   "pymorton==1.0.5",
+  # albam.engines.hexn.texture: unpack_dds(..., unswizzle="agnm") to decode
+  # RE:ORC's DXT5nm-swizzled normal maps.
+  "bc7enc-py==0.1.0a1",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +26,11 @@ dependencies = [
 tests = [
   "pytest==9.1.1",
   "pytest-subtests==0.15.0",
+  # CI runs the suite across 4 worker processes (see .github/workflows/tests.yml).
+  "pytest-xdist==3.8.0",
+  # `coverage run -m pytest -n <N>` would only measure the controller process;
+  # pytest-cov starts coverage inside each xdist worker and combines the data.
+  "pytest-cov==7.1.0",
   "coverage[toml]==7.15.4",
   "flake8-pyproject==1.2.4",
   "moto[s3]==5.2.2",
@@ -37,11 +45,11 @@ s3 = [
 ]
 
 # albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
-# of a default install): bc7enc-py for BC7 DDS texture decode (.tex
-# import), zstd for PakFS.openbin()'s zstd-compressed .pak entries, pymmh3
-# for PakFS/ReenFS's virtual-path hashing.
+# of a default install): zstd for PakFS.openbin()'s zstd-compressed .pak
+# entries, pymmh3 for PakFS/ReenFS's virtual-path hashing. bc7enc-py is also
+# used here (BC7 DDS texture decode, .tex import) but lives in the base
+# dependencies now - albam.engines.hexn needs it unconditionally too.
 reen = [
-  "bc7enc-py==0.1.0a1",
   "zstd==1.5.7.2",
   "pymmh3==0.0.5",
 ]
@@ -66,7 +74,12 @@ line-length = 110
 
 [tool.flake8]
 max-line-length = 110
-exclude = [".venv", "structs", "build"]
+# Neither holds this repo's own source, and linting them buries its real
+# findings: tests/data is local, gitignored working files (real game bytes
+# never get committed, see CLAUDE.md) including reference scripts nobody here
+# wrote or maintains; build/ is a packaging artifact holding a second copy of
+# albam/, vendored code included.
+exclude = [".venv", "structs", "tests/data", "build"]
 
 # F722: needed for Blender props annotations such as
 # ```
@@ -75,3 +88,11 @@ exclude = [".venv", "structs", "build"]
 # ```
 # W503 and W504 seem to contradict each other
 ignore = ["E203", "F722", "W504"]
+
+[tool.coverage.run]
+# sys.monitoring rather than coverage's C trace core. Measured on the full
+# suite: 911s against 1130s, for line-for-line identical data (173 files,
+# 35048 covered lines, 62% both ways). Needs Python 3.12+; on 3.11 coverage
+# falls back to the C core on its own, so this stays safe to leave set.
+core = "sysmon"
+disable_warnings = ["no-sysmon"]

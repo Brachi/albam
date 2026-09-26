@@ -347,11 +347,13 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         vfs = context.scene.albam.vfs
         index = vfs.file_list_selected_index
         item = vfs.file_list[index]
-        parent_node = ""
-        if item .is_archive:
+        if item.is_archive:
             parent_node = item.display_name
         else:
-            parent_node = (item.tree_node_ancestors[0].node_id).split("::")[1]
+            # Ancestor 0 is the root node; its display_name is the archive's
+            # own file name - the root's `name` isn't (it's app-id-prefixed,
+            # and suffixed when two roots share a display name).
+            parent_node = vfs.file_list[item.tree_node_ancestors[0].node_id].display_name
         self.filepath = parent_node
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -387,10 +389,10 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             else:
                 path_i = item_i.absolute_path
         else:
-            arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
-            arc_node = [item for item in vfs_i.file_list
-                        if item.is_archive is True and item.display_name == arc_name]
-            path_i = arc_node[0].absolute_path
+            # The root node this item came from, looked up directly rather
+            # than by matching display names - two roots can share one (see
+            # VirtualFileSystemBase._unique_root_name).
+            path_i = vfs_i.file_list[item_i.tree_node_ancestors[0].node_id].absolute_path
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
