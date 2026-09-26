@@ -326,23 +326,23 @@ class ALBAM_OT_MergeVertexGroups(bpy.types.Operator):
 
     @classmethod
     def poll(self, context):
-        ob = bpy.context.active_object
-        if ob is None or ob.type != 'MESH':
+        bl_ob = bpy.context.active_object
+        if bl_ob is None or bl_ob.type != 'MESH':
             return False
-        scn = bpy.context.scene.albam.tools_settings
-        if scn.vg_a == "" or scn.vg_b == "":
+        albam_settings = bpy.context.scene.albam.tools_settings
+        if albam_settings.vg_a == "" or albam_settings.vg_b == "":
             return False
-        elif scn.vg_a == scn.vg_b:
+        elif albam_settings.vg_a == albam_settings.vg_b:
             return False
-        elif not (scn.vg_a in ob.vertex_groups and scn.vg_b in ob.vertex_groups):
+        elif not (albam_settings.vg_a in bl_ob.vertex_groups and albam_settings.vg_b in bl_ob.vertex_groups):
             return False
         else:
             return True
 
     def execute(self, context):
-        scn = bpy.context.scene.albam.tools_settings
-        merge_vgroups(scn.vg_a, scn.vg_b)
-        scn.vg_b = ""
+        albam_settings = bpy.context.scene.albam.tools_settings
+        merge_vgroups(albam_settings.vg_a, albam_settings.vg_b)
+        albam_settings.vg_b = ""
         return {'FINISHED'}
 
 
