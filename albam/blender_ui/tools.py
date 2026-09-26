@@ -887,25 +887,6 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def split_seams(me):
-    bm = bmesh.from_edit_mesh(me)
-    bpy.context.scene.tool_settings.use_uv_select_sync = True
-    # old seams
-    old_seams = [e for e in bm.edges if e.seam]
-    # unmark
-    for e in old_seams:
-        e.seam = False
-    # mark seams from uv islands
-    bpy.ops.uv.seams_from_islands()
-    seams = [e for e in bm.edges if e.seam]
-    # split on seams
-    bmesh.ops.split_edges(bm, edges=seams)
-    # re instate old seams.. could clear new seams.
-    for e in old_seams:
-        e.seam = True
-    bmesh.update_edit_mesh(me)
-
-
 def transfer_normals(source_obj, target_objs):
     for obj in target_objs:
         if obj != source_obj:
