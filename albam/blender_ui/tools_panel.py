@@ -327,6 +327,8 @@ class ALBAM_OT_MergeVertexGroups(bpy.types.Operator):
     @classmethod
     def poll(self, context):
         ob = bpy.context.active_object
+        if ob is None or ob.type != 'MESH':
+            return False
         scn = bpy.context.scene.albam.tools_settings
         if scn.vg_a == "" or scn.vg_b == "":
             return False
