@@ -774,7 +774,6 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
         self.orig_shading_type = self.space.shading.type
         self.orig_color_type = self.space.shading.color_type
 
-        # 2. Увімкнення відображення кольорів матеріалів у SOLID режимі
         self.space.shading.type = 'MATERIAL'
 
         # paint on LMB press
@@ -827,7 +826,6 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             return {'RUNNING_MODAL'}
 
         elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
-            # self.restore_viewport()
             return {'FINISHED'}
 
         elif event.type in {'ESC', 'RIGHTMOUSE'}:
@@ -979,25 +977,6 @@ WORKSPACE_TOOLS.extend([
     ALBAM_WT_FacePropEdit,
     ALBAM_WT_FacePainter,
 ])
-
-
-def split_seams(me):
-    bm = bmesh.from_edit_mesh(me)
-    bpy.context.scene.tool_settings.use_uv_select_sync = True
-    # old seams
-    old_seams = [e for e in bm.edges if e.seam]
-    # unmark
-    for e in old_seams:
-        e.seam = False
-    # mark seams from uv islands
-    bpy.ops.uv.seams_from_islands()
-    seams = [e for e in bm.edges if e.seam]
-    # split on seams
-    bmesh.ops.split_edges(bm, edges=seams)
-    # re instate old seams.. could clear new seams.
-    for e in old_seams:
-        e.seam = True
-    bmesh.update_edit_mesh(me)
 
 
 def transfer_normals(source_obj, target_objs):
