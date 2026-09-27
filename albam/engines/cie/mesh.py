@@ -6,6 +6,7 @@ import math
 import struct
 from ...registry import blender_registry
 from ...vfs import VirtualFile, VirtualFileData
+from ...lib.blender import material_uses_nodes
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
@@ -1100,7 +1101,7 @@ def _texture_slot(bl_material, input_name, app_id):
 
     No image bound is not the same as no texture - see _serialize_material.
     """
-    if not bl_material.use_nodes:
+    if not material_uses_nodes(bl_material):
         return SLOT_EMPTY
     found = SLOT_EMPTY
     for node in bl_material.node_tree.nodes:

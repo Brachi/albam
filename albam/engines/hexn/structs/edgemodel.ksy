@@ -17,13 +17,18 @@ types:
       - {id: version, type: u4}
       - {id: num_models, type: u4}
       - {id: num_meshes, type: u4}
+      # Version 15 (the dlc/pack1/Weapons models in id_magic 5 .ssg archives)
+      # has a 144-byte header against 17/18's 208: the same fields in the
+      # same order, minus the ones guarded by `version >= 17` below. Its
+      # ofs_meshes_start points straight at the mesh headers, which follow
+      # the header directly.
       - {id: ofs_meshes_start, type: u4}
-      - {id: ofs_meshes_end, type: u4}
-      - {id: ofs_meshes_info, type: u4}
+      - {id: ofs_meshes_end, type: u4, if: version >= 17}
+      - {id: ofs_meshes_info, type: u4, if: version >= 17}
       - {id: num_bones, type: u4}
       - {id: ofs_bones, type: u4}
-      - {id: reserved_01, type: u4}
-      - {id: reserved_02, type: u4}
+      - {id: reserved_01, type: u4, if: version >= 17}
+      - {id: reserved_02, type: u4, if: version >= 17}
       - {id: reserved_03, type: u4}
       - {id: unk_matrix_1, type: f4, repeat: expr, repeat-expr: 8}
       - {id: unk_matrix_2, type: matrix4x4}
@@ -31,10 +36,10 @@ types:
       - {id: ofs_unk_01, type: u4}
       - {id: ofs_unk_02, type: u4}
       - {id: reserved_04, type: u4}
-      - {id: ofs_models_start, type: u4, repeat: expr, repeat-expr: 5} # TODO: better name
-      - {id: ofs_models_end, type: u4, repeat: expr, repeat-expr: 5}  # TODO: better name
-      - {id: reserved_05, type: u4}
-      - {id: reserved_06, type: u4}
+      - {id: ofs_models_start, type: u4, repeat: expr, repeat-expr: 5, if: version >= 17} # TODO: better name
+      - {id: ofs_models_end, type: u4, repeat: expr, repeat-expr: 5, if: version >= 17}  # TODO: better name
+      - {id: reserved_05, type: u4, if: version >= 17}
+      - {id: reserved_06, type: u4, if: version >= 17}
     instances:
       # The data between the last mesh's own buffers and ofs_bones (or
       # ofs_unk_02, when there's no bones section): the last mesh's own
@@ -105,8 +110,12 @@ types:
     seq:
       - {id: num_groups, type: u4}
       - {id: ofs_data, type: u4}
-      - {id: lod, type: u4}
+      # Version 15 stores ofs_materials before the lod word, 17/18 after it.
+      # The version 15 word is 0 in every mesh header of the 108 files that
+      # use it, so it is read as the lod - see the `lod` instance.
+      - {id: lod_v17, type: u4, if: _root.header.version >= 17}
       - {id: ofs_materials, type: u4}
+      - {id: lod_v15, type: u4, if: _root.header.version < 17}
       - {id: matrix_4x2_unk, type: f4, repeat: expr, repeat-expr: 8}
       - {id: matrix_4x4_unk, type: matrix4x4}
       - {id: unk_ofs_1, type: u4}
@@ -118,6 +127,8 @@ types:
       - {id: unk_ofs_6, type: u4}
       - {id: reserved_01, type: u4}
     instances:
+      lod:
+        value: "_root.header.version >= 17 ? lod_v17 : lod_v15"
       # Shared/default 48 bytes for every mesh but the first in a file
       # (identical regardless of the mesh's own content); the first
       # mesh's own version instead holds real-looking floats/offsets. Not

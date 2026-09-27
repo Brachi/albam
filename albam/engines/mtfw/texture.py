@@ -391,6 +391,12 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
                 .get("features"))
     link_albedo_alpha = (
         features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
+    # Export only writes a set_texture command for a slot that has an image
+    # node linked, so an app that exports needs an (empty) node for every
+    # dummy slot too - dropping the command breaks the shader in game.
+    # Import-only apps skip them, so the socket keeps the shader group's
+    # default instead of an empty node driving it with black.
+    keep_dummy_slots = (app_id, "mod") in blender_registry.export_registry
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
 
@@ -412,18 +418,16 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
 
             if tex_index == 0:
                 # Index 0 is the engine's dummy texture: the material is
-                # saying this map is deliberately absent. Leave the socket
-                # on the shader group's own default - an empty image node
-                # would drive it with black, which for a normal map is not
-                # the neutral value. old_assignment() skips these too.
-                continue
-            texture_target = textures[real_tex_index]
-            if texture_target is None and is_dummy_texture_path(
-                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
-                # Same case as tex_index == 0 above, just spelled as a path:
-                # leave the socket on the shader group's default rather than
-                # driving it with an empty image node.
-                continue
+                # saying this map is deliberately absent.
+                if not keep_dummy_slots:
+                    continue
+                texture_target = None
+            else:
+                texture_target = textures[real_tex_index]
+                if texture_target is None and not keep_dummy_slots and is_dummy_texture_path(
+                        getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                    # Same case as tex_index == 0 above, just spelled as a path.
+                    continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:

@@ -7,7 +7,7 @@ import bpy
 from kaitaistruct import KaitaiStream
 
 from ...exceptions import AlbamCheckFailure
-from ...lib.blender import get_bl_materials, ShaderGroupCompat
+from ...lib.blender import ensure_material_nodes, get_bl_materials, ShaderGroupCompat
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
@@ -236,7 +236,7 @@ def build_blender_materials(mod_file_item, context, parsed_mod, name_prefix="mat
         else:
             custom_props_top_level.copy_custom_properties_from(material)
 
-        blender_material.use_nodes = True
+        ensure_material_nodes(blender_material)
         blender_material.blend_method = "CLIP"
         node_to_delete = None
         for node in blender_material.node_tree.nodes:
