@@ -472,11 +472,11 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False, detail_
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
         texture_code_to_blender_texture(
-                                        texture_type.value,
-                                        texture_node,
-                                        bl_material,
-                                        detail_scale=detail_scale
-                                        )
+            texture_type.value,
+            texture_node,
+            bl_material,
+            detail_scale=detail_scale
+        )
         # change color settings for normal and detail maps
         if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
