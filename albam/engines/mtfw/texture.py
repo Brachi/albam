@@ -390,7 +390,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
 def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
     detail_scale = DETAIL_SCALE_PATH.get(app_id, None)
     if not mrl:
-        old_assignment(mtfw_material, bl_material, textures, detail_scale)
+        old_assignment(mtfw_material, bl_material, textures, detail_scale=detail_scale)
         return
     features = (bl_material.albam_custom_properties
                 .get_custom_properties_secondary_for_appid(app_id)
@@ -462,7 +462,12 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False, detail_
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material, detail_scale)
+        texture_code_to_blender_texture(
+                                        texture_type.value,
+                                        texture_node,
+                                        bl_material,
+                                        detail_scale=detail_scale
+                                        )
         # change color settings for normal and detail maps
         if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
