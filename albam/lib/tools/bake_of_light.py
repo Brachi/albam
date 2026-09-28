@@ -1,7 +1,78 @@
 from contextlib import contextmanager
+import os
+import tempfile
 
 import bpy
+from bc7enc import pack_dds
+
 from ..common_op import _get_albam_mat_props
+from ..dds import DDSHeader
+
+
+def _new_bake_target(lightmap_name, size):
+    """Temporal image used only as Cycles' bake target."""
+    return bpy.data.images.new(f"__albam_bake__{lightmap_name}", size, size)
+
+
+def _image_to_dds(bl_image):
+    """Encode Blender RGBA image as DXT1 DDS"""
+    width, height = bl_image.size
+    rgba = bytes(max(0, min(255, round(value * 255))) for value in bl_image.pixels[:])
+    row_size = width * 4
+    rgba = b"".join(
+        rgba[row * row_size:(row + 1) * row_size]
+        for row in range(height - 1, -1, -1)
+    )
+    blocks = pack_dds(rgba, width, height, "DXT1", mipmaps=True)
+    mipmap_count = max(width, height).bit_length()
+    header = DDSHeader(
+        dwHeight=height,
+        dwWidth=width,
+        dwMipMapCount=mipmap_count,
+        pixelfmt_dwFourCC=b"DXT1",
+    )
+    header.set_constants()
+    header.set_variables()
+    return bytes(header) + blocks
+
+
+def _replace_bake_target(bake_image, replaced_image, lightmap_name):
+    """Make the baked result a DDS image and remap every reference to it.
+
+    ``bake_image`` is deliberately never used as the final texture: a
+    generated Cycles target and a packed DDS have different lifecycles.  A
+    copy of the image being replaced keeps its Albam custom properties and
+    texture path in update mode; a copy of the bake target is sufficient for a
+    newly created lightmap.
+    """
+    final_image = replaced_image.copy() if replaced_image else bake_image.copy()
+    final_image.name = f"__albam_dxt1__{lightmap_name}"
+    final_image.scale(*bake_image.size)
+    final_image.pixels.foreach_set(bake_image.pixels[:])
+    final_image.update()
+
+    dds = _image_to_dds(final_image)
+    original_filepath = final_image.filepath_raw
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".png")
+    os.close(temp_fd)
+    try:
+        final_image.filepath_raw = temp_path
+        final_image.file_format = "PNG"
+        final_image.save()
+    finally:
+        final_image.filepath_raw = original_filepath
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+    final_image.source = "FILE"
+    final_image.pack(data=dds, data_len=len(dds))
+
+    bake_image.user_remap(final_image)
+    if replaced_image:
+        bpy.data.images.remove(replaced_image)
+    bpy.data.images.remove(bake_image)
+    final_image.name = lightmap_name
+    return final_image
 
 
 def _generate_lm_name(key, lm_mode):
@@ -39,12 +110,12 @@ def _setup_lightmaps(bl_objects, app_id):
         _rename_uv_layers(bl_ob)
 
 
-def _is_texture_lightmap_object(bl_ob, app_id):
+def _has_lightmap_props(bl_ob, app_id):
     if not bl_ob.data.materials:
         return False
     custom_properties = _get_albam_mat_props(bl_ob, app_id)
     return (
-        custom_properties.vtype in ("0x3", "0x2") and
+        custom_properties.vtype in ("0x3", "0x2") and  # Should nonskin_col be here?
         custom_properties.func_lightmap in ("0x1", "0x2", "0x3", "0x4")
     )
 
@@ -58,9 +129,9 @@ def _find_mesh_objects_by_parent(bl_objects, app_id):
             continue
         parent_objects.add(parent_ob)
     scene_objects = [
-        ob for ob in bpy.context.scene.objects
-        if ob.type == 'MESH' and ob.parent is not None and
-        _is_texture_lightmap_object(ob, app_id)
+        bl_ob for bl_ob in bpy.context.scene.objects
+        if bl_ob.type == 'MESH' and bl_ob.parent is not None and
+        _has_lightmap_props(bl_ob, app_id)
     ]
     for parent_ob in parent_objects:
         for bl_ob in scene_objects:
@@ -83,7 +154,7 @@ def _find_mesh_objects_by_lightmaps(bl_objects, app_id):
     scene_objects = [
         ob for ob in bpy.context.scene.objects
         if ob.type == 'MESH' and ob.parent is not None and
-        _is_texture_lightmap_object(ob, app_id)
+        _has_lightmap_props(ob, app_id)
     ]
 
     for bl_ob in scene_objects:
@@ -160,34 +231,45 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
     for key, lm_objects in lm_ob.items():
         _setup_lightmaps(lm_objects, app_id)
         lmap_name = _generate_lm_name(key, lm_mode)
-        lm_mats = []
-        for bl_ob in lm_objects:
-            if not bl_ob.data.materials:
-                continue
-            mat = bl_ob.data.materials[0]
-            if mat and mat not in lm_mats:
-                lm_mats.append(mat)
-        if not lm_mats:
-            continue
-        baked_images = {
-            _setup_mtfw_material(mat, lmap_name, lm_size)
-            for mat in lm_mats
-        }
+        replaced_image = bpy.data.images.get(lmap_name)
+        bake_image = _new_bake_target(lmap_name, lm_size)
+        if replaced_image:
+            # This updates every material that shared the old lightmap, not
+            # just the materials in the current selection.
+            replaced_image.user_remap(bake_image)
 
-        bpy.ops.object.select_all(action='DESELECT')
-        for bl_ob in lm_objects:
-            bl_ob.select_set(True)
-            custom_properties = _get_albam_mat_props(bl_ob, app_id)
-            uv_name = "uv2" if custom_properties.func_normalmap == "0x0" else "uv3"
-            for uv in bl_ob.data.uv_layers:
-                uv.active = (uv.name == uv_name)
-        bpy.context.view_layer.objects.active = next(
-            bl_ob for bl_ob in lm_objects
-        )
-        with _without_lightmap_inputs(lm_mats):
-            _render_lightmaps()
-        for bimage in baked_images:
-            bimage.pack()
+        try:
+            lm_mats = []
+            for bl_ob in lm_objects:
+                for slot in bl_ob.material_slots:
+                    mat = slot.material
+                    if mat and mat not in lm_mats:
+                        lm_mats.append(mat)
+            if not lm_mats:
+                raise RuntimeError("No materials found for the lightmap bake")
+            for mat in lm_mats:
+                _setup_mtfw_material(mat, bake_image)
+
+            bpy.ops.object.select_all(action='DESELECT')
+            for bl_ob in lm_objects:
+                bl_ob.select_set(True)
+                custom_properties = _get_albam_mat_props(bl_ob, app_id)
+                uv_name = "uv2" if custom_properties.func_normalmap == "0x0" else "uv3"
+                for uv in bl_ob.data.uv_layers:
+                    uv.active = (uv.name == uv_name)
+            bpy.context.view_layer.objects.active = next(
+                bl_ob for bl_ob in lm_objects
+            )
+            with _without_lightmap_inputs(lm_mats):
+                _render_lightmaps()
+            _replace_bake_target(bake_image, replaced_image, lmap_name)
+        except Exception:
+            # Do not leave materials pointing at a temporary generated image
+            # when Cycles cancels or the DDS encoder fails.
+            if replaced_image:
+                bake_image.user_remap(replaced_image)
+            bpy.data.images.remove(bake_image)
+            raise
         bpy.ops.object.select_all(action='DESELECT')
         for bl_ob in lm_objects:
             for uv in bl_ob.data.uv_layers:
@@ -241,18 +323,9 @@ def _rename_uv_layers(ob):
                         node.uv_map = uv_name
 
 
-def _setup_mtfw_material(bl_mat, lmap_name='Lightmap LM', size=1024):
+def _setup_mtfw_material(bl_mat, bake_image):
     bl_mat_nodes = bl_mat.node_tree.nodes
     image_nodes = [node for node in bl_mat_nodes if node.type == "TEX_IMAGE"]
-    bake_image = bpy.data.images.get(lmap_name)
-    if bake_image is None:
-        bake_image = bpy.data.images.new(
-            lmap_name,
-            size,
-            size,
-        )
-    elif tuple(bake_image.size) != (size, size):
-        bake_image.scale(size, size)
     lm_found = False
     for img_node in image_nodes:
         links = img_node.outputs["Color"].links
