@@ -44,8 +44,8 @@ def _is_texture_lightmap_object(bl_ob, app_id):
         return False
     custom_properties = _get_albam_mat_props(bl_ob, app_id)
     return (
-        custom_properties.vtype in ("0x3", "0x2")
-        and custom_properties.func_lightmap in ("0x1", "0x2", "0x3", "0x4")
+        custom_properties.vtype in ("0x3", "0x2") and
+        custom_properties.func_lightmap in ("0x1", "0x2", "0x3", "0x4")
     )
 
 
@@ -59,8 +59,8 @@ def _find_mesh_objects_by_parent(bl_objects, app_id):
         parent_objects.add(parent_ob)
     scene_objects = [
         ob for ob in bpy.context.scene.objects
-        if ob.type == 'MESH' and ob.parent is not None
-        and _is_texture_lightmap_object(ob, app_id)
+        if ob.type == 'MESH' and ob.parent is not None and
+        _is_texture_lightmap_object(ob, app_id)
     ]
     for parent_ob in parent_objects:
         for bl_ob in scene_objects:
@@ -82,8 +82,8 @@ def _find_mesh_objects_by_lightmaps(bl_objects, app_id):
             lm_names.append(lm.name)
     scene_objects = [
         ob for ob in bpy.context.scene.objects
-        if ob.type == 'MESH' and ob.parent is not None
-        and _is_texture_lightmap_object(ob, app_id)
+        if ob.type == 'MESH' and ob.parent is not None and
+        _is_texture_lightmap_object(ob, app_id)
     ]
 
     for bl_ob in scene_objects:
@@ -313,9 +313,9 @@ def _without_lightmap_inputs(bl_mats):
                 saved_use_lightmap.append((use_lightmap, use_lightmap.default_value))
                 use_lightmap.default_value = False
             for link in list(node_tree.links):
-                if (link.from_node.type == "TEX_IMAGE"
-                        and link.to_node == shader_node_grp
-                        and link.to_socket.name == "Lightmap LM"):
+                if (link.from_node.type == "TEX_IMAGE" and
+                    link.to_node == shader_node_grp and
+                        link.to_socket.name == "Lightmap LM"):
                     saved_links.append((node_tree.links, link.from_socket, link.to_socket))
                     node_tree.links.remove(link)
         yield
