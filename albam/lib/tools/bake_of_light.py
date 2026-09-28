@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import bpy
 from ..common_op import _get_albam_mat_props
 
@@ -37,7 +39,17 @@ def _setup_lightmaps(bl_objects, app_id):
         _rename_uv_layers(bl_ob)
 
 
-def _find_mesh_objects_by_parent(bl_objects):
+def _is_texture_lightmap_object(bl_ob, app_id):
+    if not bl_ob.data.materials:
+        return False
+    custom_properties = _get_albam_mat_props(bl_ob, app_id)
+    return (
+        custom_properties.vtype in ("0x3", "0x2")
+        and custom_properties.func_lightmap in ("0x1", "0x2", "0x3", "0x4")
+    )
+
+
+def _find_mesh_objects_by_parent(bl_objects, app_id):
     lm_objects = {}
     parent_objects = set()
     for bl_ob in bl_objects:
@@ -45,7 +57,11 @@ def _find_mesh_objects_by_parent(bl_objects):
         if not parent_ob:
             continue
         parent_objects.add(parent_ob)
-    scene_objects = [ob for ob in bpy.context.scene.objects if ob.type == 'MESH' and ob.parent is not None]
+    scene_objects = [
+        ob for ob in bpy.context.scene.objects
+        if ob.type == 'MESH' and ob.parent is not None
+        and _is_texture_lightmap_object(ob, app_id)
+    ]
     for parent_ob in parent_objects:
         for bl_ob in scene_objects:
             if bl_ob.parent == parent_ob:
@@ -56,7 +72,7 @@ def _find_mesh_objects_by_parent(bl_objects):
     return lm_objects
 
 
-def _find_mesh_objects_by_lightmaps(bl_objects):
+def _find_mesh_objects_by_lightmaps(bl_objects, app_id):
     lm_objects = {}
     lm_names = []
     for bl_ob in bl_objects:
@@ -64,7 +80,11 @@ def _find_mesh_objects_by_lightmaps(bl_objects):
         lm = _find_and_select_lightmap(bl_mat)
         if lm:
             lm_names.append(lm.name)
-    scene_objects = [ob for ob in bpy.context.scene.objects if ob.type == 'MESH' and ob.parent is not None]
+    scene_objects = [
+        ob for ob in bpy.context.scene.objects
+        if ob.type == 'MESH' and ob.parent is not None
+        and _is_texture_lightmap_object(ob, app_id)
+    ]
 
     for bl_ob in scene_objects:
         for slot in bl_ob.material_slots:
@@ -112,23 +132,21 @@ def _group_lm_objects(bl_objects, lm_mode, app_id):
             continue
         if custom_properties.func_lightmap in ("0x5", "0x6"):
             vc_objects.append(bl_ob)
-        elif custom_properties.func_lightmap in ("0x1", "0x2", "0x3" "0x4"):
+        elif custom_properties.func_lightmap in ("0x1", "0x2", "0x3", "0x4"):
             lm_objects.append(bl_ob)
     match lm_mode:
         case "0":
-            lm_groups = _find_mesh_objects_by_parent(bl_objects)
+            lm_groups = _find_mesh_objects_by_parent(lm_objects, app_id)
         case "1":
-            lm_groups = _find_mesh_objects_by_lightmaps(bl_objects)
+            lm_groups = _find_mesh_objects_by_lightmaps(lm_objects, app_id)
         case "2":
-            lm_groups["selected"] = bl_objects
+            lm_groups["selected"] = lm_objects
         case _:
             print(f"The lightmap mode {lm_mode} isn't correct")
     return vc_objects, lm_groups
 
 
 def bake_light(bl_objects, lm_size, lm_mode, app_id):
-    baked_img_cache = set()
-    lm_mats = []
     vc_ob, lm_ob = _group_lm_objects(bl_objects, lm_mode, app_id)
     bpy.ops.object.select_all(action='DESELECT')
 
@@ -136,36 +154,44 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
         _setup_vertex_colors(vc_ob)
         for bl_ob in vc_ob:
             bl_ob.select_set(True)
+        bpy.context.view_layer.objects.active = vc_ob[0]
         _render_lightmaps('VERTEX_COLORS')
 
-    if lm_ob:
-        for k, lm_objects in lm_ob.items():
-            _setup_lightmaps(lm_objects, app_id)
-            lmap_name = _generate_lm_name(k, lm_mode)
-            for bl_ob in lm_objects:
-                mat = bl_ob.data.materials[0]
-                if mat not in lm_mats:
-                    lm_mats.append(mat)
-            for mat in lm_mats:
-                baked_img_cache.add(_setup_mtfw_material(mat, lmap_name, lm_size))
+    for key, lm_objects in lm_ob.items():
+        _setup_lightmaps(lm_objects, app_id)
+        lmap_name = _generate_lm_name(key, lm_mode)
+        lm_mats = []
+        for bl_ob in lm_objects:
+            if not bl_ob.data.materials:
+                continue
+            mat = bl_ob.data.materials[0]
+            if mat and mat not in lm_mats:
+                lm_mats.append(mat)
+        if not lm_mats:
+            continue
+        baked_images = {
+            _setup_mtfw_material(mat, lmap_name, lm_size)
+            for mat in lm_mats
+        }
 
-    bpy.ops.object.select_all(action='DESELECT')
-    if lm_mats:
-        for lm_objects in lm_ob.values():
-            for bl_ob in lm_objects:
-                bl_ob.select_set(True)
-                custom_properties = _get_albam_mat_props(bl_ob, app_id)
-                uv_name = "uv2" if custom_properties.func_normalmap == "0x0" else "uv3"
-                for uv in bl_ob.data.uv_layers:
-                    uv.active = (uv.name == uv_name)
-        _render_lightmaps()
-        for bimage in baked_img_cache:
+        bpy.ops.object.select_all(action='DESELECT')
+        for bl_ob in lm_objects:
+            bl_ob.select_set(True)
+            custom_properties = _get_albam_mat_props(bl_ob, app_id)
+            uv_name = "uv2" if custom_properties.func_normalmap == "0x0" else "uv3"
+            for uv in bl_ob.data.uv_layers:
+                uv.active = (uv.name == uv_name)
+        bpy.context.view_layer.objects.active = next(
+            bl_ob for bl_ob in lm_objects
+        )
+        with _without_lightmap_inputs(lm_mats):
+            _render_lightmaps()
+        for bimage in baked_images:
             bimage.pack()
         bpy.ops.object.select_all(action='DESELECT')
-        for lm_objects in lm_ob.values():
-            for bl_ob in lm_objects:
-                for uv in bl_ob.data.uv_layers:
-                    uv.active = (uv.name == "uv1")
+        for bl_ob in lm_objects:
+            for uv in bl_ob.data.uv_layers:
+                uv.active = (uv.name == "uv1")
 
 
 def _duplicate_uv_for_normal_map(ob):
@@ -225,6 +251,8 @@ def _setup_mtfw_material(bl_mat, lmap_name='Lightmap LM', size=1024):
             size,
             size,
         )
+    elif tuple(bake_image.size) != (size, size):
+        bake_image.scale(size, size)
     lm_found = False
     for img_node in image_nodes:
         links = img_node.outputs["Color"].links
@@ -238,6 +266,7 @@ def _setup_mtfw_material(bl_mat, lmap_name='Lightmap LM', size=1024):
             for node in bl_mat_nodes:
                 node.select = False
             bl_mat_nodes.active = img_node
+            img_node.select = True
             break
     if not lm_found:
         shader_node_grp = bl_mat.node_tree.nodes.get("MTFrameworkGroup")
@@ -253,6 +282,7 @@ def _setup_mtfw_material(bl_mat, lmap_name='Lightmap LM', size=1024):
         for node in bl_mat_nodes:
             node.select = False
         bl_mat_nodes.active = img_node
+        img_node.select = True
     return bake_image
 
 
@@ -262,4 +292,35 @@ def _render_lightmaps(mode='IMAGE_TEXTURES'):
     bake_settings.target = mode
     bpy.context.scene.render.engine = 'CYCLES'
     bpy.context.scene.cycles.device = 'GPU'
-    bpy.ops.object.bake(type='DIFFUSE')
+    result = bpy.ops.object.bake(type='DIFFUSE')
+    if 'FINISHED' not in result:
+        raise RuntimeError(f"Lightmap bake was cancelled: {result}")
+
+
+# Suppress Blender warnings by unlinking the lightmap from shader node, then link it back
+@contextmanager
+def _without_lightmap_inputs(bl_mats):
+    saved_links = []
+    saved_use_lightmap = []
+    try:
+        for bl_mat in bl_mats:
+            node_tree = bl_mat.node_tree
+            shader_node_grp = node_tree.nodes.get("MTFrameworkGroup")
+            if shader_node_grp is None:
+                continue
+            use_lightmap = shader_node_grp.inputs.get("Use Lightmap")
+            if use_lightmap is not None:
+                saved_use_lightmap.append((use_lightmap, use_lightmap.default_value))
+                use_lightmap.default_value = False
+            for link in list(node_tree.links):
+                if (link.from_node.type == "TEX_IMAGE"
+                        and link.to_node == shader_node_grp
+                        and link.to_socket.name == "Lightmap LM"):
+                    saved_links.append((node_tree.links, link.from_socket, link.to_socket))
+                    node_tree.links.remove(link)
+        yield
+    finally:
+        for links, from_socket, to_socket in saved_links:
+            links.new(from_socket, to_socket)
+        for socket, value in saved_use_lightmap:
+            socket.default_value = value
