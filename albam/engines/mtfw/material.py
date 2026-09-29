@@ -1051,7 +1051,7 @@ def _create_mtfw_shader():
     multiply_diff_light.name = "mult_diff_and_light"
     multiply_diff_light.label = "Multiply with Lightmap"
     multiply_diff_light.blend_type = "MULTIPLY"
-    multiply_diff_light.inputs[0].default_value = 0.8
+    multiply_diff_light.inputs[0].default_value = 0.95
     multiply_diff_light.location = (-450, -100)
 
     # RGB nodes
