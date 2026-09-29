@@ -1,10 +1,9 @@
-from contextlib import contextmanager
+import bpy
 import os
 import tempfile
+from contextlib import contextmanager
 
-import bpy
 from bc7enc import pack_dds
-
 from ..common_op import _get_albam_mat_props
 from ..dds import DDSHeader
 
@@ -36,7 +35,7 @@ def _image_to_dds(bl_image):
     return bytes(header) + blocks
 
 
-def _replace_bake_target(bake_image, replaced_image, lightmap_name):
+def _replace_bake_target(baked_image, replaced_image, lightmap_name):
     """Make the baked result a DDS image and remap every reference to it.
 
     ``bake_image`` is deliberately never used as the final texture: a
@@ -45,13 +44,15 @@ def _replace_bake_target(bake_image, replaced_image, lightmap_name):
     texture path in update mode; a copy of the bake target is sufficient for a
     newly created lightmap.
     """
-    final_image = replaced_image.copy() if replaced_image else bake_image.copy()
+    final_image = replaced_image.copy() if replaced_image else baked_image.copy()
     final_image.name = f"__albam_dxt1__{lightmap_name}"
-    final_image.scale(*bake_image.size)
-    final_image.pixels.foreach_set(bake_image.pixels[:])
+    final_image.scale(*baked_image.size)
+    final_image.pixels.foreach_set(baked_image.pixels[:])
     final_image.update()
 
     dds = _image_to_dds(final_image)
+    # Workaround for strange Blender behavior: it rises Save/Discard dialog in Image tab
+    # if we update the image data directly. Swapping with the temporary file prevents this.
     original_filepath = final_image.filepath_raw
     temp_fd, temp_path = tempfile.mkstemp(suffix=".png")
     os.close(temp_fd)
@@ -67,10 +68,10 @@ def _replace_bake_target(bake_image, replaced_image, lightmap_name):
     final_image.source = "FILE"
     final_image.pack(data=dds, data_len=len(dds))
 
-    bake_image.user_remap(final_image)
+    baked_image.user_remap(final_image)
     if replaced_image:
         bpy.data.images.remove(replaced_image)
-    bpy.data.images.remove(bake_image)
+    bpy.data.images.remove(baked_image)
     final_image.name = lightmap_name
     return final_image
 
@@ -232,11 +233,11 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
         _setup_lightmaps(lm_objects, app_id)
         lmap_name = _generate_lm_name(key, lm_mode)
         replaced_image = bpy.data.images.get(lmap_name)
-        bake_image = _new_bake_target(lmap_name, lm_size)
+        image_for_bake = _new_bake_target(lmap_name, lm_size)
         if replaced_image:
             # This updates every material that shared the old lightmap, not
             # just the materials in the current selection.
-            replaced_image.user_remap(bake_image)
+            replaced_image.user_remap(image_for_bake)
 
         try:
             lm_mats = []
@@ -248,7 +249,7 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
             if not lm_mats:
                 raise RuntimeError("No materials found for the lightmap bake")
             for mat in lm_mats:
-                _setup_mtfw_material(mat, bake_image)
+                _setup_mtfw_material(mat, image_for_bake)
 
             bpy.ops.object.select_all(action='DESELECT')
             for bl_ob in lm_objects:
@@ -262,13 +263,13 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
             )
             with _without_lightmap_inputs(lm_mats):
                 _render_lightmaps()
-            _replace_bake_target(bake_image, replaced_image, lmap_name)
+            _replace_bake_target(image_for_bake, replaced_image, lmap_name)
         except Exception:
             # Do not leave materials pointing at a temporary generated image
             # when Cycles cancels or the DDS encoder fails.
             if replaced_image:
-                bake_image.user_remap(replaced_image)
-            bpy.data.images.remove(bake_image)
+                image_for_bake.user_remap(replaced_image)
+            bpy.data.images.remove(image_for_bake)
             raise
         bpy.ops.object.select_all(action='DESELECT')
         for bl_ob in lm_objects:
