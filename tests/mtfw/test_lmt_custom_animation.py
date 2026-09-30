@@ -74,7 +74,7 @@ def test_edited_keyframe_survives_export(
     target_fcurve = None
     for candidate in bl_objects:
         custom_props = candidate.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
-        if custom_props.ofs_frame == 0 or not custom_props.action:
+        if not custom_props.action:
             continue
         action = custom_props.action
         if int(bpy.app.version_string[0]) >= 5:
@@ -206,7 +206,7 @@ def _first_block_with_location_action(bl_objects, app_id):
     """
     for candidate in bl_objects:
         custom_props = candidate.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if custom_props.ofs_frame == 0 or not custom_props.action:
+        if not custom_props.action:
             continue
         action = custom_props.action
         for fcurve in action_fcurves(action):
