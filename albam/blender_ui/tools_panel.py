@@ -849,32 +849,28 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
 import gpu
 from gpu_extras.batch import batch_for_shader
 GRID_COLUMNS = 8
-CELL_SIZE = 32
+CELL_SIZE = 20
 GAP = 4
 
 
 def draw_rect(x, y, w, h, color):
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-
     vertices = (
         (x,     y),
         (x + w, y),
         (x + w, y + h),
         (x,     y + h),
     )
-
     indices = (
         (0, 1, 2),
         (0, 2, 3),
     )
-
     batch = batch_for_shader(
         shader,
         'TRIS',
         {"pos": vertices},
         indices=indices,
     )
-
     shader.bind()
     shader.uniform_float("color", color)
 
@@ -887,18 +883,27 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
     bl_label = "Material Palette"
 
     _draw_handler = None
-    palette = [
-        0x12345678,
-        0xDEADBEEF,
-        0xCAFEBABE,
-    ]
-
 
     def invoke(self, context, event):
+        self.palette_x = event.mouse_region_x
+        self.palette_y = event.mouse_region_y
         self.mouse_x = event.mouse_region_x
         self.mouse_y = event.mouse_region_y
-
         self.hover = -1
+
+        bl_ob = bpy.context.object
+        self.palette = []
+        if bl_ob and bl_ob.type == 'MESH':
+            for mat in bl_ob.data.materials:
+                if mat:
+                    mat_name = mat.name
+                    print(mat.name)
+                    #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+                    mat_name = mat_name.replace("_", ".").split(".")[0]
+                    try:
+                        self.palette.append(int(mat_name[len("Type "):]))
+                    except ValueError:
+                        continue
 
         self._draw_handler = bpy.types.SpaceView3D.draw_handler_add(
             self.draw_palette,
@@ -914,7 +919,15 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
     def modal(self, context, event):
 
-        if event.type == 'MOUSEMOVE':
+        if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
+            self.palette_x = event.mouse_region_x
+            self.palette_y = event.mouse_region_y
+            self.mouse_x = event.mouse_region_x
+            self.mouse_y = event.mouse_region_y
+            self.hover = -1
+            context.area.tag_redraw()
+
+        elif event.type == 'MOUSEMOVE':
             self.mouse_x = event.mouse_region_x
             self.mouse_y = event.mouse_region_y
 
@@ -929,7 +942,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             self.finish(context)
             return {'FINISHED'}
 
-        elif event.type in {'ESC', 'RIGHTMOUSE'}:
+        elif event.type in {'ESC', }:  # , 'RIGHTMOUSE'
             self.finish(context)
             return {'CANCELLED'}
 
@@ -947,16 +960,38 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         context.area.tag_redraw()
 
     def update_hover(self):
-        # буде реалізовано нижче
-        pass
+        x0 = self.palette_x
+        y0 = self.palette_y
+
+        self.hover = -1
+
+        for i in range(len(self.palette)):
+            column = i % GRID_COLUMNS
+            row = i // GRID_COLUMNS
+
+            x = x0 + column * (CELL_SIZE + GAP)
+            y = y0 + row * (CELL_SIZE + GAP)
+
+            if (
+                x <= self.mouse_x <= x + CELL_SIZE
+                and
+                y <= self.mouse_y <= y + CELL_SIZE
+            ):
+                self.hover = i
+                break
 
     def select_material(self, index):
+        mat_id = self.palette[index]
+        bl_ob = bpy.context.object
+        if bl_ob and bl_ob.type == 'MESH':
+            for i, mat in enumerate(bl_ob.data.materials):
+                if mat and mat.name.startswith(f"Type {mat_id}"):
+                    bl_ob.active_material_index = i
         print("Selected:", index)
 
     def draw_palette(self):
-        print("Drawing palette at mouse position:", self.mouse_x, self.mouse_y)
-        x0 = self.mouse_x
-        y0 = self.mouse_y
+        x0 = self.palette_x
+        y0 = self.palette_y
 
         for i, hash_value in enumerate(self.palette):
 
