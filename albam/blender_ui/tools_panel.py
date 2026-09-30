@@ -12,6 +12,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
+from ..lib.misc import number_to_color
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -761,7 +762,7 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
+class ALBAM_OT_face_paint_modal(bpy.types.Operator):
     """Modal operator for face painter"""
     bl_idname = "albam.material_paint_modal"
     bl_label = "Paint Material ID"
@@ -845,6 +846,138 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             self.space.shading.color_type = self.orig_color_type
 
 
+import gpu
+from gpu_extras.batch import batch_for_shader
+GRID_COLUMNS = 8
+CELL_SIZE = 32
+GAP = 4
+
+
+def draw_rect(x, y, w, h, color):
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+
+    vertices = (
+        (x,     y),
+        (x + w, y),
+        (x + w, y + h),
+        (x,     y + h),
+    )
+
+    indices = (
+        (0, 1, 2),
+        (0, 2, 3),
+    )
+
+    batch = batch_for_shader(
+        shader,
+        'TRIS',
+        {"pos": vertices},
+        indices=indices,
+    )
+
+    shader.bind()
+    shader.uniform_float("color", color)
+
+    batch.draw(shader)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_MaterialPalette(bpy.types.Operator):
+    bl_idname = "albam.mat_palette_popup"
+    bl_label = "Material Palette"
+
+    _draw_handler = None
+    palette = [
+        0x12345678,
+        0xDEADBEEF,
+        0xCAFEBABE,
+    ]
+
+
+    def invoke(self, context, event):
+        self.mouse_x = event.mouse_region_x
+        self.mouse_y = event.mouse_region_y
+
+        self.hover = -1
+
+        self._draw_handler = bpy.types.SpaceView3D.draw_handler_add(
+            self.draw_palette,
+            (),
+            'WINDOW',
+            'POST_PIXEL',
+        )
+
+        context.window_manager.modal_handler_add(self)
+        context.area.tag_redraw()
+
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+
+        if event.type == 'MOUSEMOVE':
+            self.mouse_x = event.mouse_region_x
+            self.mouse_y = event.mouse_region_y
+
+            self.update_hover()
+
+            context.area.tag_redraw()
+
+        elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+            if self.hover >= 0:
+                self.select_material(self.hover)
+
+            self.finish(context)
+            return {'FINISHED'}
+
+        elif event.type in {'ESC', 'RIGHTMOUSE'}:
+            self.finish(context)
+            return {'CANCELLED'}
+
+        return {'RUNNING_MODAL'}
+
+    def finish(self, context):
+        if self._draw_handler is not None:
+            bpy.types.SpaceView3D.draw_handler_remove(
+                self._draw_handler,
+                'WINDOW',
+            )
+
+            self._draw_handler = None
+
+        context.area.tag_redraw()
+
+    def update_hover(self):
+        # буде реалізовано нижче
+        pass
+
+    def select_material(self, index):
+        print("Selected:", index)
+
+    def draw_palette(self):
+        print("Drawing palette at mouse position:", self.mouse_x, self.mouse_y)
+        x0 = self.mouse_x
+        y0 = self.mouse_y
+
+        for i, hash_value in enumerate(self.palette):
+
+            column = i % GRID_COLUMNS
+            row = i // GRID_COLUMNS
+
+            x = x0 + column * (CELL_SIZE + GAP)
+            y = y0 + row * (CELL_SIZE + GAP)
+
+            color = number_to_color(hash_value)
+
+            draw_rect(
+                x,
+                y,
+                CELL_SIZE,
+                CELL_SIZE,
+                color,
+            )
+        pass
+
+
 class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
     bl_space_type = 'VIEW_3D'
     bl_context_mode = 'OBJECT'
@@ -911,6 +1044,7 @@ class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
         Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_paint")
     bl_keymap = (
         ("albam.material_paint_modal", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        ("albam.mat_palette_popup", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
     )
     after = "albam.face_prop_edit"
 
