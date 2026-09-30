@@ -79,10 +79,11 @@ Three things follow, and they are what catches people out:
 - **Textures live outside the archive you are modding**, so the archive alone
   is not enough to import a textured model. Step 3 covers what to do when you
   are working from a copy.
-- **A pack is shared by many models**, and about a third carry an extra YZ2
-  compression layer albam cannot read. That, plus there being no `.pack` or
-  `.tpl` writer, is why new textures cannot be added - see the end of this
-  guide.
+- **A pack is shared by many models**, so anything done to a texture is done to
+  every model using it. About a third of the packs are named `*.pack.yz2.lfs`;
+  that extra segment is bookkeeping, and the payload is a plain pack like any
+  other - true of every one in an install. Textures still cannot be changed from
+  the panels, though; see the end of this guide.
 
 The parts of a character also share one skeleton, which is why the order you
 import them in matters - again, step 3.
@@ -220,8 +221,17 @@ Add one layer of albam at a time, and whichever fails first names the layer:
   facial morphs loses them on export.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
-- **New textures cannot be added.** Nothing writes a `.pack` or a `.tpl`, so a
-  model can only address textures its archive already ships. Retexturing - the
-  usual reason to mod a character - needs that, and it needs a DDS encoder
-  (albam only reads DDS) plus a decoder for the YZ2 layer that about a third of
-  the packs carry.
+- **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
+  address the slots its texture list already has, and a mod that adds one would
+  also have to renumber the material indices addressing it.
+- **Replacing a texture has no route through the panels yet.** The pack writer
+  itself is done: given a pack archive and a replacement DDS it produces a pack
+  laid out the way the shipped ones are, leaving every other texture in it byte
+  for byte. Unlike the rest of this guide, that last step has not yet been
+  confirmed in the running game. What is missing in front of it is the step that
+  would make it usable: a pack is a different archive from the model, and nothing
+  yet puts a replacement DDS into the export list for **Pack item** to
+  substitute, so the writer is reachable from
+  `albam.engines.cie.archive.update_lfs` and not from the UI. Encoding an
+  arbitrary Blender image as a DDS is a separate gap again: albam only reads DDS
+  today, so the replacement has to be a DDS you supply.
