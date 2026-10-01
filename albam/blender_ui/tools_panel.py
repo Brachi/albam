@@ -1,9 +1,12 @@
 import bmesh
 import bpy
 import re
+import gpu
+import blf
 from pathlib import Path
 from bpy_extras import view3d_utils
 from mathutils.bvhtree import BVHTree
+from gpu_extras.batch import batch_for_shader
 
 
 from ..registry import blender_registry
@@ -13,6 +16,7 @@ from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
 from ..lib.misc import number_to_color
+from ..lib.tools.face_painter import SBC_COLOR_PALETTE
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -846,20 +850,29 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
             self.space.shading.color_type = self.orig_color_type
 
 
-import gpu
-from gpu_extras.batch import batch_for_shader
 GRID_COLUMNS = 8
 CELL_SIZE = 20
 GAP = 4
+PANEL_W = 196
+PANEL_H = 260
+
+PANEL_BG = (0.08, 0.08, 0.08, 0.97)
+PANEL_BORDER = (0.25, 0.25, 0.25, 1.0)
 
 
-def draw_rect(x, y, w, h, color):
+def _gpu_draw_rect(x, y, w, h, color):
+    """
+    Draw a rectangle in the 3D view using GPU shader.
+    x, y: bottom-left corner coordinates
+    w, h: width and height of the rectangle
+    color: RGBA tuple for the rectangle color
+    """
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
     vertices = (
-        (x,     y),
+        (x, y),
         (x + w, y),
         (x + w, y + h),
-        (x,     y + h),
+        (x, y + h),
     )
     indices = (
         (0, 1, 2),
@@ -875,6 +888,12 @@ def draw_rect(x, y, w, h, color):
     shader.uniform_float("color", color)
 
     batch.draw(shader)
+
+
+def _blf_draw_text(font_id, x, y, text, size=12):
+    blf.position(font_id, x, y, 0)
+    blf.size(font_id, size)
+    blf.draw(font_id, text)
 
 
 @blender_registry.register_blender_type
@@ -898,7 +917,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
                 if mat:
                     mat_name = mat.name
                     print(mat.name)
-                    #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+                    # Snippet from collision.py, exctrac numeric id from the mat name
                     mat_name = mat_name.replace("_", ".").split(".")[0]
                     try:
                         self.palette.append(int(mat_name[len("Type "):]))
@@ -962,7 +981,6 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
     def update_hover(self):
         x0 = self.palette_x
         y0 = self.palette_y
-
         self.hover = -1
 
         for i in range(len(self.palette)):
@@ -970,8 +988,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             row = i // GRID_COLUMNS
 
             x = x0 + column * (CELL_SIZE + GAP)
-            y = y0 + row * (CELL_SIZE + GAP)
-
+            y = y0 - row * (CELL_SIZE + GAP)
             if (
                 x <= self.mouse_x <= x + CELL_SIZE
                 and
@@ -993,17 +1010,62 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         x0 = self.palette_x
         y0 = self.palette_y
 
-        for i, hash_value in enumerate(self.palette):
+        # Draw border
+        _gpu_draw_rect(x0 - 2, y0 - 202, PANEL_W + 4, PANEL_H + 4, PANEL_BORDER)
 
+        # Draw background panel
+        _gpu_draw_rect(x0, y0 - 200, PANEL_W, PANEL_H, PANEL_BG, )
+        self.panel_x = x0
+        self.panel_y = y0 - 200
+        # Draw header text
+        font_id = 0
+        _blf_draw_text(
+            font_id,
+            self.panel_x + 12,
+            self.panel_y + PANEL_H - 24,
+            "Albam Material Palette",
+            13,
+        )
+        # Draw hover highlight
+        if self.hover >= 0:
+            i = self.hover
             column = i % GRID_COLUMNS
             row = i // GRID_COLUMNS
 
-            x = x0 + column * (CELL_SIZE + GAP)
-            y = y0 + row * (CELL_SIZE + GAP)
+            x = x0 + column * (CELL_SIZE + GAP) + GAP
+            y = y0 - row * (CELL_SIZE + GAP)
 
-            color = number_to_color(hash_value)
+            color = (1.0, 1.0, 1.0, 1.0)
+            _gpu_draw_rect(
+                x - 2,
+                y - 2,
+                CELL_SIZE + 4,
+                CELL_SIZE + 4,
+                (1.0, 1.0, 1.0, 1.0),
+            )
+            """
+            _gpu_draw_rect(
+                x,
+                y,
+                CELL_SIZE,
+                CELL_SIZE,
+                color,
+            )
+            """
+        # Draw color cells
+        for i, hash_value in enumerate(self.palette):
+            column = i % GRID_COLUMNS
+            row = i // GRID_COLUMNS
 
-            draw_rect(
+            x = x0 + column * (CELL_SIZE + GAP) + GAP
+            y = y0 - row * (CELL_SIZE + GAP)
+
+            try:
+                color = SBC_COLOR_PALETTE[hash_value]
+            except KeyError:
+                color = number_to_color(hash_value)
+
+            _gpu_draw_rect(
                 x,
                 y,
                 CELL_SIZE,
