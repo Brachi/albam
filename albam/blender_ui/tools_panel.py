@@ -1032,8 +1032,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         for index in range(len(self.palette)):
             x, y = self.cell_position(index)
             if (
-                x <= self.mouse_x <= x + CELL_SIZE
-                and
+                x <= self.mouse_x <= x + CELL_SIZE and
                 y <= self.mouse_y <= y + CELL_SIZE
             ):
                 self.hover = index
