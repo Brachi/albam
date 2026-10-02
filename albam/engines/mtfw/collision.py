@@ -1,7 +1,6 @@
 import bpy
 import bmesh
 from kaitaistruct import KaitaiStream
-import colorsys
 import numpy as np
 from mathutils import Vector
 from io import BytesIO
@@ -18,7 +17,7 @@ from ...lib import primitive_geometry as geo
 from ...lib import bvh_construction as bvh
 from ...lib import common_op as common
 from ...lib.kaitai_utils import check_recursive
-from ...lib.misc import number_to_color
+from ...lib.misc import number_to_color, base_palette
 
 SBC_CLASS_MAPPER = {
     49: Sbc156,
@@ -130,27 +129,6 @@ class SBCObject156():
                       'special_attr': f.special_attr,
                       'surface_attr': f.surface_attr} for f in faces]
         self.vertices = vertices
-
-
-# Very smartass(?) way to dynamically create a list with 44 colors
-class counter():
-    def __init__(self):
-        self.i = 0
-
-    def count(self):
-        self.i += 1
-        return self.i
-
-
-i = counter()
-
-
-def cycle():
-    return [0.4, 0.6, 0.8, 1.0][i.count() % 4]
-
-
-palette = [colorsys.hsv_to_rgb(c / 55, 1.0, cycle()) for c in range(44)]
-palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 
 @blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
@@ -309,14 +287,14 @@ def create_sbc_mesh(name, meshpart, app_id):
 
     # Store type/runtime_attr as material indices
     for ix, material in enumerate(meshpart["materials"]):
-        mat = bpy.data.materials.get("Type %03d" % material)
+        mat = bpy.data.materials.get("SBC %03d" % material)
         if not mat:
-            mat = bpy.data.materials.new(name="Type %03d" % material)
+            mat = bpy.data.materials.new(name="SBC %03d" % material)
         try:
             if app_id in ("re5", "dmc4"):
-                mat.diffuse_color = palette[KNOWN_RUNTIME_ATTR.index(material)]
+                mat.diffuse_color = base_palette[KNOWN_RUNTIME_ATTR.index(material)]
             else:
-                mat.diffuse_color = palette[material]
+                mat.diffuse_color = base_palette[material]
         except (IndexError, ValueError):
             mat.diffuse_color = number_to_color(material)
             print("Unknown colision type: %d" % material)
@@ -911,9 +889,9 @@ class SemiTri():
             ix = face.material_index
             slot = mesh.material_slots[ix]
             mat_name = slot.material.name
-            #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+            #  extract id from mat name, clamp SBC prefix and possible suffix and then converto to int
             mat_name = mat_name.replace("_", ".").split(".")[0]
-            return int(mat_name[len("Type "):])
+            return int(mat_name[len("SBC "):])
         except IndexError:
             raise MaterialMissingError
 
