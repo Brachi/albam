@@ -15,7 +15,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.tools.face_painter import SBC_COLOR_PALETTE, NAV_FACE_FLAGS_DESCRIPTION, SBC_RUNTIME_ATTR_DESCRIPTION
+from ..lib.tools.face_painter import SBC_COLOR_PALETTE, NAV_FACE_FLAGS_DESC, SBC_RUNTIME_ATTR_DESC
 from ..lib.misc import number_to_color
 
 BONE_NAMES = {
@@ -806,10 +806,11 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
             self.report({'WARNING'}, "The tool works only in Edit Mode!")
             return {'CANCELLED'}
 
+        bpy.ops.mesh.select_all(action='DESELECT')
+
         mode = get_active_face_paint_mode(context)
         context.scene.albam.tools_settings.face_paint_mode = mode
 
-        context.space_data.overlay.show_faces = False
         # Store the original shading type and color type to restore later
         self.space = context.space_data
         self.orig_shading_type = self.space.shading.type
@@ -883,7 +884,6 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
         if hasattr(self, 'space') and self.space:
             self.space.shading.type = self.orig_shading_type
             self.space.shading.color_type = self.orig_color_type
-        bpy.context.space_data.overlay.show_faces = True
 
 
 HEADER_H = 40
@@ -892,7 +892,6 @@ GRID_COLUMNS = 8
 CELL_SIZE = 20
 GAP = 4
 PANEL_W = 196
-
 PANEL_BG = (0.08, 0.08, 0.08, 0.97)
 PANEL_BORDER = (0.25, 0.25, 0.25, 1.0)
 
@@ -928,6 +927,7 @@ def _gpu_draw_rect(x, y, w, h, color):
 
 
 def _blf_draw_text(font_id, x, y, text, size=12):
+    """Draw text in the 3D view using BLF."""
     blf.position(font_id, x, y, 0)
     blf.size(font_id, size)
     blf.draw(font_id, text)
@@ -946,22 +946,10 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         self.mouse_x = event.mouse_region_x
         self.mouse_y = event.mouse_region_y
         self.hover = -1
-
-        bl_ob = bpy.context.object
+        self.object = context.active_object
         self.paint_mode = get_active_face_paint_mode(context)
         context.scene.albam.tools_settings.face_paint_mode = self.paint_mode
-        self.palette = []
-        if bl_ob and bl_ob.type == 'MESH':
-            for mat in bl_ob.data.materials:
-                if mat:
-                    mat_name = mat.name
-
-                    # Snippet from collision.py, exctrac numeric id from the mat name
-                    mat_name = mat_name.replace("_", ".").split(".")[0]
-                    try:
-                        self.palette.append(int(mat_name[4:]))
-                    except ValueError:
-                        continue
+        self.palette = self.get_material_ids()
 
         self._draw_handler = bpy.types.SpaceView3D.draw_handler_add(
             self.draw_palette,
@@ -975,6 +963,23 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
         return {'RUNNING_MODAL'}
 
+    def get_material_ids(self):
+        if not self.object or self.object.type != 'MESH':
+            return []
+
+        material_ids = []
+        for material in self.object.data.materials:
+            if not material:
+                continue
+
+            material_name = material.name.replace("_", ".").split(".")[0]
+            try:
+                material_ids.append(int(material_name[4:]))
+            except ValueError:
+                continue
+
+        return material_ids
+
     def modal(self, context, event):
         if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
             self.palette_x = event.mouse_region_x
@@ -987,9 +992,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         elif event.type == 'MOUSEMOVE':
             self.mouse_x = event.mouse_region_x
             self.mouse_y = event.mouse_region_y
-
             self.update_hover()
-
             context.area.tag_redraw()
 
         elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':
@@ -1006,7 +1009,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def finish(self, context):
-        if self._draw_handler is not None:
+        if self._draw_handler:
             bpy.types.SpaceView3D.draw_handler_remove(
                 self._draw_handler,
                 'WINDOW',
@@ -1016,128 +1019,96 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
         context.area.tag_redraw()
 
-    def update_hover(self):
-        x0 = self.palette_x
+    def cell_position(self, index):
+        column = index % GRID_COLUMNS
+        row = index // GRID_COLUMNS
+        x = self.palette_x + GAP + column * (CELL_SIZE + GAP)
         panel_top = self.palette_y + HEADER_H + CELL_SIZE
+        y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
+        return x, y
+
+    def update_hover(self):
         self.hover = -1
-
-        for i in range(len(self.palette)):
-            column = i % GRID_COLUMNS
-            row = i // GRID_COLUMNS
-
-            x = x0 + GAP + column * (CELL_SIZE + GAP)
-            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
+        for index in range(len(self.palette)):
+            x, y = self.cell_position(index)
             if (
                 x <= self.mouse_x <= x + CELL_SIZE
                 and
                 y <= self.mouse_y <= y + CELL_SIZE
             ):
-                self.hover = i
+                self.hover = index
                 break
 
     def select_material(self, index):
-        "Set the active material for the object"
-        mat_id = self.palette[index]
-        bl_ob = bpy.context.object
-        mode = self.paint_mode
-        if bl_ob and bl_ob.type == 'MESH':
-            for i, mat in enumerate(bl_ob.data.materials):
-                if mat and mat.name.startswith(f"{mode} {mat_id}"):
-                    bl_ob.active_material_index = i
+        material_id = self.palette[index]
+        if not self.object or self.object.type != 'MESH':
+            return
 
-    def draw_palette(self):
-        x0 = self.palette_x
-        y0 = self.palette_y
+        for material_index, material in enumerate(self.object.data.materials):
+            if material and material.name.startswith(f"{self.paint_mode} {material_id}"):
+                self.object.active_material_index = material_index
 
+    def panel_geometry(self):
         row_count = max(1, (len(self.palette) + GRID_COLUMNS - 1) // GRID_COLUMNS)
         grid_height = row_count * CELL_SIZE + (row_count - 1) * GAP
         panel_height = HEADER_H + grid_height + FOOTER_H
-        panel_top = y0 + HEADER_H + CELL_SIZE
-        panel_bottom = panel_top - panel_height
+        panel_top = self.palette_y + HEADER_H + CELL_SIZE
+        return panel_top, panel_top - panel_height, panel_height
 
-        # Draw border
+    def draw_palette(self):
+        panel_top, panel_bottom, panel_height = self.panel_geometry()
+        self.panel_x = self.palette_x
+        self.panel_y = panel_bottom
+
         _gpu_draw_rect(
-            x0 - 2,
+            self.panel_x - 2,
             panel_bottom - 2,
             PANEL_W + 4,
             panel_height + 4,
             PANEL_BORDER,
         )
+        _gpu_draw_rect(self.panel_x, panel_bottom, PANEL_W, panel_height, PANEL_BG)
+        self.draw_header(panel_top)
+        self.draw_cells()
+        self.draw_footer()
 
-        # Draw background panel
-        _gpu_draw_rect(x0, panel_bottom, PANEL_W, panel_height, PANEL_BG)
-        self.panel_x = x0
-        self.panel_y = panel_bottom
-        # Draw header text
-        font_id = 0
+    def draw_header(self, panel_top):
         _blf_draw_text(
-            font_id,
+            0,
             self.panel_x + 12,
             panel_top - 24,
             "Albam Material Palette",
             13,
         )
-        # Draw hover highlight
-        if self.hover >= 0:
-            i = self.hover
-            column = i % GRID_COLUMNS
-            row = i // GRID_COLUMNS
-            x = x0 + column * (CELL_SIZE + GAP) + GAP
-            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
 
-            color = (1.0, 1.0, 1.0, 1.0)
+    def draw_cells(self):
+        if self.hover >= 0:
+            x, y = self.cell_position(self.hover)
             _gpu_draw_rect(
                 x - 2,
                 y - 2,
                 CELL_SIZE + 4,
                 CELL_SIZE + 4,
-                color,
+                (1.0, 1.0, 1.0, 1.0),
             )
 
-        # Draw color cells
-        for i, hash_value in enumerate(self.palette):
-            column = i % GRID_COLUMNS
-            row = i // GRID_COLUMNS
-            x = x0 + column * (CELL_SIZE + GAP) + GAP
-            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
+        for index, material_id in enumerate(self.palette):
+            x, y = self.cell_position(index)
             if self.paint_mode == "SBC":
-                try:
-                    color = SBC_COLOR_PALETTE[hash_value]
-                except KeyError:
-                    color = number_to_color(hash_value)
+                color = SBC_COLOR_PALETTE.get(material_id, number_to_color(material_id))
             else:
-                color = number_to_color(hash_value)
-            _gpu_draw_rect(
-                x,
-                y,
-                CELL_SIZE,
-                CELL_SIZE,
-                color,
-            )
-        # Draw footer text
+                color = number_to_color(material_id)
+            _gpu_draw_rect(x, y, CELL_SIZE, CELL_SIZE, color)
+
+    def draw_footer(self):
         if self.hover >= 0:
-            mat_id = self.palette[self.hover]
-            tooltip_text = f"Material ID: {mat_id}"
-            _blf_draw_text(
-                font_id,
-                self.panel_x + 12,
-                self.panel_y + 36,
-                tooltip_text,
-                12,
-            )
+            material_id = self.palette[self.hover]
+            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 36, f"Material ID: {material_id}", 12)
             if self.paint_mode == "SBC":
-                purpose = SBC_RUNTIME_ATTR_DESCRIPTION.get(mat_id, "Unregistered")
+                purpose = SBC_RUNTIME_ATTR_DESC.get(material_id, "Unregistered")
             else:
-                purpose = NAV_FACE_FLAGS_DESCRIPTION.get(mat_id, "Unregistered")
-            description_text = f"Purpose: {purpose }"
-            _blf_draw_text(
-                font_id,
-                self.panel_x + 12,
-                self.panel_y + 12,
-                description_text,
-                12,
-            )
-        pass
+                purpose = NAV_FACE_FLAGS_DESC.get(material_id, "Unregistered")
+            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 12, f"Purpose: {purpose}", 12)
 
 
 class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
@@ -1213,8 +1184,6 @@ class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
     @staticmethod
     def draw_settings(context, layout, tool):
         row = layout.row()
-        # Keep UI read-only: the active mesh asset type is the source of truth,
-        # while the scene property is only updated from operator lifecycle code.
         row.label(text=f"Painting mode: {get_active_face_paint_mode(context)}")
 
 

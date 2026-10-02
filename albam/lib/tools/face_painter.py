@@ -37,7 +37,7 @@ NAV_FACE_FLAGS = [0, 1, 2, 3, 4, 8, 256, 1024, 1296, 1536, 2048, 2049, 2050, 205
                   25176832, 25239808, 25272576, 25305344, 25320192, 25377536, 25402112, 25444608, 25640192,
                   1073743872, 1073747968]
 
-NAV_FACE_FLAGS_DESCRIPTION = {
+NAV_FACE_FLAGS_DESC = {
     0: "Default",
     2560: "Climb Enter",
     8448: "Climable Wall",
@@ -45,12 +45,12 @@ NAV_FACE_FLAGS_DESCRIPTION = {
 }
 
 for nav_flag in NAV_FACE_FLAGS:
-    if nav_flag not in NAV_FACE_FLAGS_DESCRIPTION:
-        NAV_FACE_FLAGS_DESCRIPTION[nav_flag] = "Unknown"
+    if nav_flag not in NAV_FACE_FLAGS_DESC:
+        NAV_FACE_FLAGS_DESC[nav_flag] = "Unknown"
 
-SBC_RUNTIME_ATTR_DESCRIPTION = {}
+SBC_RUNTIME_ATTR_DESC = {}
 
 for attr in KNOWN_RUNTIME_ATTR:
-    SBC_RUNTIME_ATTR_DESCRIPTION[attr] = "Unknown"
+    SBC_RUNTIME_ATTR_DESC[attr] = "Unknown"
 
 SBC_COLOR_PALETTE = {attr: base_palette[i] for i, attr in enumerate(KNOWN_RUNTIME_ATTR)}
