@@ -287,9 +287,9 @@ def create_sbc_mesh(name, meshpart, app_id):
 
     # Store type/runtime_attr as material indices
     for ix, material in enumerate(meshpart["materials"]):
-        mat = bpy.data.materials.get("Type %03d" % material)
+        mat = bpy.data.materials.get("SBC %03d" % material)
         if not mat:
-            mat = bpy.data.materials.new(name="Type %03d" % material)
+            mat = bpy.data.materials.new(name="SBC %03d" % material)
         try:
             if app_id in ("re5", "dmc4"):
                 mat.diffuse_color = base_palette[KNOWN_RUNTIME_ATTR.index(material)]
@@ -889,9 +889,9 @@ class SemiTri():
             ix = face.material_index
             slot = mesh.material_slots[ix]
             mat_name = slot.material.name
-            #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+            #  extract id from mat name, clamp SBC prefix and possible suffix and then converto to int
             mat_name = mat_name.replace("_", ".").split(".")[0]
-            return int(mat_name[len("Type "):])
+            return int(mat_name[len("SBC "):])
         except IndexError:
             raise MaterialMissingError
 

@@ -15,8 +15,8 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.misc import number_to_color
 from ..lib.tools.face_painter import SBC_COLOR_PALETTE
+from ..lib.misc import number_to_color
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -69,6 +69,25 @@ def face_preset_update(self, context):
     sur, spec = presets[id]
     context.scene.albam.tools_settings.surface_attr = sur
     context.scene.albam.tools_settings.special_attr = spec
+
+
+def get_active_face_paint_mode(context):
+    obj = context.active_object
+    if obj and obj.type == 'MESH':
+        try:
+            albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+        except Exception:
+            albam_asset = None
+        if albam_asset is not None:
+            asset_type = str(getattr(albam_asset, 'asset_type', '')).upper()
+            mode_map = {
+                'COLLISION': 'SBC',
+                'NAVMESH': 'Nav',
+            }
+            if asset_type in mode_map:
+                return mode_map[asset_type]
+
+    return context.scene.albam.tools_settings.face_paint_mode
 
 
 @blender_registry.register_blender_prop_albam(name="meshes")
@@ -142,6 +161,16 @@ class ToolsSettings(bpy.types.PropertyGroup):
     )
     lm_mode: lm_mode_enum
     lm_name: bpy.props.StringProperty(default='generic_LM')  # noqa: F821
+    face_paint_mode_enum = bpy.props.EnumProperty(
+        name="Face Paint Mode",
+        description="Mode for painting face properties",
+        items=[
+            ("SBC", "Collision", "Paint with collision materials", 1),
+            ("Nav", "Navmesh", "Paint with navmesh materials", 2),
+        ],
+        default="SBC",
+    )
+    face_paint_mode: face_paint_mode_enum
 
 
 @blender_registry.register_blender_type
@@ -777,12 +806,17 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
             self.report({'WARNING'}, "The tool works only in Edit Mode!")
             return {'CANCELLED'}
 
+        mode = get_active_face_paint_mode(context)
+        context.scene.albam.tools_settings.face_paint_mode = mode
+
+        context.space_data.overlay.show_faces = False
         # Store the original shading type and color type to restore later
         self.space = context.space_data
         self.orig_shading_type = self.space.shading.type
         self.orig_color_type = self.space.shading.color_type
 
-        self.space.shading.type = 'MATERIAL'
+        # Set shading mode and face selection mode for painting
+        self.space.shading.type = 'SOLID'
 
         # paint on LMB press
         self.paint_face(context, event)
@@ -792,8 +826,8 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
 
     def paint_face(self, context, event):
         """Raycast with BVHTree to BMesh"""
-        obj = context.active_object
-        if not obj or obj.type != 'MESH':
+        bl_ob = context.active_object
+        if not bl_ob or bl_ob.type != 'MESH':
             return
 
         region = context.region
@@ -805,30 +839,31 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
         ray_dir = view3d_utils.region_2d_to_vector_3d(region, rv3d, coord)
 
         # Get local coordinates of the ray in the object's space
-        inv_matrix = obj.matrix_world.inverted()
+        inv_matrix = bl_ob.matrix_world.inverted()
         origin_local = inv_matrix @ ray_origin
         dir_local = inv_matrix.to_3x3() @ ray_dir
 
         # BMesh + BVHTree
-        bm = bmesh.from_edit_mesh(obj.data)
+        bm = bmesh.from_edit_mesh(bl_ob.data)
         bm.faces.ensure_lookup_table()
         bvh = BVHTree.FromBMesh(bm)
 
         location, normal, face_index, distance = bvh.ray_cast(origin_local, dir_local)
 
         if face_index is not None:
-            active_mat_idx = obj.active_material_index
+            active_mat_idx = bl_ob.active_material_index
 
-            if not obj.data.materials:
+            if not bl_ob.data.materials:
                 self.report({'WARNING'}, "The object has no materials assigned!")
                 return
 
             if bm.faces[face_index].material_index != active_mat_idx:
                 bm.faces[face_index].material_index = active_mat_idx
-                bmesh.update_edit_mesh(obj.data)
+                bmesh.update_edit_mesh(bl_ob.data)
                 context.area.tag_redraw()
 
     def modal(self, context, event):
+        context.tool_settings.mesh_select_mode = (False, False, True)
         if event.type == 'MOUSEMOVE':
             self.paint_face(context, event)
             return {'RUNNING_MODAL'}
@@ -848,6 +883,7 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
         if hasattr(self, 'space') and self.space:
             self.space.shading.type = self.orig_shading_type
             self.space.shading.color_type = self.orig_color_type
+        bpy.context.space_data.overlay.show_faces = True
 
 
 GRID_COLUMNS = 8
@@ -911,16 +947,18 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         self.hover = -1
 
         bl_ob = bpy.context.object
+        self.paint_mode = get_active_face_paint_mode(context)
+        context.scene.albam.tools_settings.face_paint_mode = self.paint_mode
         self.palette = []
         if bl_ob and bl_ob.type == 'MESH':
             for mat in bl_ob.data.materials:
                 if mat:
                     mat_name = mat.name
-                    print(mat.name)
+
                     # Snippet from collision.py, exctrac numeric id from the mat name
                     mat_name = mat_name.replace("_", ".").split(".")[0]
                     try:
-                        self.palette.append(int(mat_name[len("Type "):]))
+                        self.palette.append(int(mat_name[4:]))
                     except ValueError:
                         continue
 
@@ -937,7 +975,6 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-
         if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
             self.palette_x = event.mouse_region_x
             self.palette_y = event.mouse_region_y
@@ -961,7 +998,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             self.finish(context)
             return {'FINISHED'}
 
-        elif event.type in {'ESC', }:  # , 'RIGHTMOUSE'
+        elif event.type in {'ESC', }:
             self.finish(context)
             return {'CANCELLED'}
 
@@ -998,13 +1035,14 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
                 break
 
     def select_material(self, index):
+        "Set the active material for the object"
         mat_id = self.palette[index]
         bl_ob = bpy.context.object
+        mode = self.paint_mode
         if bl_ob and bl_ob.type == 'MESH':
             for i, mat in enumerate(bl_ob.data.materials):
-                if mat and mat.name.startswith(f"Type {mat_id}"):
+                if mat and mat.name.startswith(f"{mode} {mat_id}"):
                     bl_ob.active_material_index = i
-        print("Selected:", index)
 
     def draw_palette(self):
         x0 = self.palette_x
@@ -1031,7 +1069,6 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             i = self.hover
             column = i % GRID_COLUMNS
             row = i // GRID_COLUMNS
-
             x = x0 + column * (CELL_SIZE + GAP) + GAP
             y = y0 - row * (CELL_SIZE + GAP)
 
@@ -1043,7 +1080,20 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
                 CELL_SIZE + 4,
                 (1.0, 1.0, 1.0, 1.0),
             )
-            """
+
+        # Draw color cells
+        for i, hash_value in enumerate(self.palette):
+            column = i % GRID_COLUMNS
+            row = i // GRID_COLUMNS
+            x = x0 + column * (CELL_SIZE + GAP) + GAP
+            y = y0 - row * (CELL_SIZE + GAP)
+            if self.paint_mode == "SBC":
+                try:
+                    color = SBC_COLOR_PALETTE[hash_value]
+                except KeyError:
+                    color = number_to_color(hash_value)
+            else:
+                color = number_to_color(hash_value)
             _gpu_draw_rect(
                 x,
                 y,
@@ -1051,26 +1101,16 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
                 CELL_SIZE,
                 color,
             )
-            """
-        # Draw color cells
-        for i, hash_value in enumerate(self.palette):
-            column = i % GRID_COLUMNS
-            row = i // GRID_COLUMNS
-
-            x = x0 + column * (CELL_SIZE + GAP) + GAP
-            y = y0 - row * (CELL_SIZE + GAP)
-
-            try:
-                color = SBC_COLOR_PALETTE[hash_value]
-            except KeyError:
-                color = number_to_color(hash_value)
-
-            _gpu_draw_rect(
-                x,
-                y,
-                CELL_SIZE,
-                CELL_SIZE,
-                color,
+        # Draw footer text
+        if self.hover >= 0:
+            mat_id = self.palette[self.hover]
+            tooltip_text = f"Material ID: {mat_id}"
+            _blf_draw_text(
+                font_id,
+                self.panel_x + 12,
+                self.panel_y + 12,
+                tooltip_text,
+                12,
             )
         pass
 
@@ -1144,6 +1184,13 @@ class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
         ("albam.mat_palette_popup", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
     )
     after = "albam.face_prop_edit"
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        row = layout.row()
+        # Keep UI read-only: the active mesh asset type is the source of truth,
+        # while the scene property is only updated from operator lifecycle code.
+        row.label(text=f"Painting mode: {get_active_face_paint_mode(context)}")
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
