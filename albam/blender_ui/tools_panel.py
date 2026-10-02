@@ -15,7 +15,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
-from ..lib.tools.face_painter import SBC_COLOR_PALETTE
+from ..lib.tools.face_painter import SBC_COLOR_PALETTE, NAV_FACE_FLAGS_DESCRIPTION, SBC_RUNTIME_ATTR_DESCRIPTION
 from ..lib.misc import number_to_color
 
 BONE_NAMES = {
@@ -886,11 +886,12 @@ class ALBAM_OT_face_paint_modal(bpy.types.Operator):
         bpy.context.space_data.overlay.show_faces = True
 
 
+HEADER_H = 40
+FOOTER_H = 60
 GRID_COLUMNS = 8
 CELL_SIZE = 20
 GAP = 4
 PANEL_W = 196
-PANEL_H = 260
 
 PANEL_BG = (0.08, 0.08, 0.08, 0.97)
 PANEL_BORDER = (0.25, 0.25, 0.25, 1.0)
@@ -1017,15 +1018,15 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
     def update_hover(self):
         x0 = self.palette_x
-        y0 = self.palette_y
+        panel_top = self.palette_y + HEADER_H + CELL_SIZE
         self.hover = -1
 
         for i in range(len(self.palette)):
             column = i % GRID_COLUMNS
             row = i // GRID_COLUMNS
 
-            x = x0 + column * (CELL_SIZE + GAP)
-            y = y0 - row * (CELL_SIZE + GAP)
+            x = x0 + GAP + column * (CELL_SIZE + GAP)
+            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
             if (
                 x <= self.mouse_x <= x + CELL_SIZE
                 and
@@ -1048,19 +1049,31 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         x0 = self.palette_x
         y0 = self.palette_y
 
+        row_count = max(1, (len(self.palette) + GRID_COLUMNS - 1) // GRID_COLUMNS)
+        grid_height = row_count * CELL_SIZE + (row_count - 1) * GAP
+        panel_height = HEADER_H + grid_height + FOOTER_H
+        panel_top = y0 + HEADER_H + CELL_SIZE
+        panel_bottom = panel_top - panel_height
+
         # Draw border
-        _gpu_draw_rect(x0 - 2, y0 - 202, PANEL_W + 4, PANEL_H + 4, PANEL_BORDER)
+        _gpu_draw_rect(
+            x0 - 2,
+            panel_bottom - 2,
+            PANEL_W + 4,
+            panel_height + 4,
+            PANEL_BORDER,
+        )
 
         # Draw background panel
-        _gpu_draw_rect(x0, y0 - 200, PANEL_W, PANEL_H, PANEL_BG, )
+        _gpu_draw_rect(x0, panel_bottom, PANEL_W, panel_height, PANEL_BG)
         self.panel_x = x0
-        self.panel_y = y0 - 200
+        self.panel_y = panel_bottom
         # Draw header text
         font_id = 0
         _blf_draw_text(
             font_id,
             self.panel_x + 12,
-            self.panel_y + PANEL_H - 24,
+            panel_top - 24,
             "Albam Material Palette",
             13,
         )
@@ -1070,7 +1083,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             column = i % GRID_COLUMNS
             row = i // GRID_COLUMNS
             x = x0 + column * (CELL_SIZE + GAP) + GAP
-            y = y0 - row * (CELL_SIZE + GAP)
+            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
 
             color = (1.0, 1.0, 1.0, 1.0)
             _gpu_draw_rect(
@@ -1078,7 +1091,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
                 y - 2,
                 CELL_SIZE + 4,
                 CELL_SIZE + 4,
-                (1.0, 1.0, 1.0, 1.0),
+                color,
             )
 
         # Draw color cells
@@ -1086,7 +1099,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             column = i % GRID_COLUMNS
             row = i // GRID_COLUMNS
             x = x0 + column * (CELL_SIZE + GAP) + GAP
-            y = y0 - row * (CELL_SIZE + GAP)
+            y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
             if self.paint_mode == "SBC":
                 try:
                     color = SBC_COLOR_PALETTE[hash_value]
@@ -1108,8 +1121,20 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             _blf_draw_text(
                 font_id,
                 self.panel_x + 12,
-                self.panel_y + 12,
+                self.panel_y + 36,
                 tooltip_text,
+                12,
+            )
+            if self.paint_mode == "SBC":
+                purpose = SBC_RUNTIME_ATTR_DESCRIPTION.get(mat_id, "Unregistered")
+            else:
+                purpose = NAV_FACE_FLAGS_DESCRIPTION.get(mat_id, "Unregistered")
+            description_text = f"Purpose: {purpose }"
+            _blf_draw_text(
+                font_id,
+                self.panel_x + 12,
+                self.panel_y + 12,
+                description_text,
                 12,
             )
         pass
