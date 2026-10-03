@@ -1,7 +1,10 @@
 import os
 
+import bpy
 import pytest
 
+from albam.lib import fs_registry
+from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.mtfw.r2_config import R2_PROTOCOL_PREFIX, resolve_r2_source
 
 # app_id -> the directory its archives were fetched into this session.
@@ -92,3 +95,18 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
     if not os.path.isdir(root):
         pytest.skip(f"--game-dir={local_app_id}::{root} does not exist")
     return root
+
+
+@pytest.fixture
+def _clean_scene():
+    # vfs, exported and bpy.data are session-scoped state: register() runs
+    # once per pytest session, so a test that leaves objects or roots behind
+    # changes what the next one sees.
+    before = fs_registry.keys()
+    before_roots = vfs_root_names()
+    yield
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=True)
+    remove_new_vfs_roots(before_roots)
+    bpy.context.scene.albam.exported.file_list.clear()
+    close_new_fs_roots(before)

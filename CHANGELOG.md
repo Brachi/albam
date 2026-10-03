@@ -55,6 +55,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- Resident Evil 4 UHD models whose bone table names the same bone id twice
+  exporting with one of the two entries missing, and the surviving one given
+  the other's position. Such a model could not be edited at all: the exporter
+  had no way to write back the table it came with
 
 ### Changed
 
