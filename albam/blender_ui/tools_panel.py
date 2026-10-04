@@ -82,6 +82,20 @@ class ALBAM_UL_MergeVertexGroups(bpy.types.UIList):
         row.prop(item, "selected", text="")
         row.label(text=item.vertex_group_name)
 
+    def filter_items(self, context, data, propname):
+        items = getattr(data, propname)
+        if self.filter_name:
+            flags = bpy.types.UI_UL_list.filter_items_by_name(
+                self.filter_name,
+                self.bitflag_filter_item,
+                items,
+                "vertex_group_name",
+                reverse=self.use_filter_sort_reverse,
+            )
+        else:
+            flags = []
+        return flags, []
+
 
 @blender_registry.register_blender_prop_albam(name="meshes")
 class AlbamMeshes(bpy.types.PropertyGroup):
