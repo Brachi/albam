@@ -341,9 +341,9 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         tools_settings = context.scene.albam.tools_settings
         local_path = tools_settings.asettr_relative_path_to_textures
         use_custom_path = tools_settings.asettr_use_custom_path
-        bl_objects = {ob for ob in bpy.context.selected_objects if ob.type == 'MESH'}
+        bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
         if not bl_objects:
-            bl_objects = {child for child in bpy.context.selected_objects[0].children
+            bl_objects = {child for child in context.selected_objects[0].children
                           if child.type == 'MESH'}
         for bl_ob in bl_objects:
             parent = bl_ob.parent
@@ -1181,8 +1181,8 @@ def set_image_albam_attr(blender_material, app_id, local_path):
                 if is_blimage_dds(tn.image):
                     dds_header = DDSHeader.from_bl_image(tn.image)
                     has_alpha_channel = (
-                        dds_header.pixelfmt_dwFourCC in (b"DXT3", b"DXT5")
-                        or bool(dds_header.pixelfmt_dwFlags & DDSHeader.DDPF_ALPHAPIXELS)
+                        dds_header.pixelfmt_dwFourCC in (b"DXT3", b"DXT5") or
+                        bool(dds_header.pixelfmt_dwFlags & DDSHeader.DDPF_ALPHAPIXELS)
                     )
                 else:
                     has_alpha_channel = tn.image.channels > 3
