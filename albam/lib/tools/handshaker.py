@@ -72,7 +72,7 @@ HANDS_GROUP_ID = {
 }
 
 frames_folder = "stored_frames\\"
-frames_path = os.path.join(os.path.dirname(__file__), frames_folder)
+frames_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), frames_folder)
 
 
 def _get_bone_rotation(bone):
