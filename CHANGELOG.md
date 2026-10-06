@@ -57,6 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- Autosetter compression format value for Diffuse maps with alpha transparency
 
 ### Changed
 
@@ -65,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
   property are migrated the first time they are used
 - Contex-related tools such as Handshaker, Face Attribute Editor. VertexGroupsMerger moved to Blender tools tab
+- Custom texture path field in now hidden, Autosetter uses .mod file directory
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically

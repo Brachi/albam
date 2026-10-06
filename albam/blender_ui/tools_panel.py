@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from bpy_extras import view3d_utils
 from mathutils.bvhtree import BVHTree
 
@@ -20,7 +20,7 @@ BONE_NAMES = {
     "Head": BONES_HEAD
 }
 
-DEV_MODE = True
+DEV_MODE = False
 WORKSPACE_TOOLS = []
 
 
@@ -343,14 +343,14 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         use_custom_path = tools_settings.asettr_use_custom_path
         bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
         if not bl_objects:
-            bl_objects = {child for child in context.selected_objects[0].children
-                          if child.type == 'MESH'}
+            show_message_box(message="There is no mesh in selection")
+            return {'CANCELLED'}
         for bl_ob in bl_objects:
             parent = bl_ob.parent
             if parent is not None and not use_custom_path:
                 local_path = getattr(parent.albam_asset, "relative_path", None)
                 if local_path:
-                    local_path = f"{Path(local_path).parent.as_posix()}/"
+                    local_path = f"{PureWindowsPath(local_path).parent}\\"
             mat = bl_ob.data.materials[0]
             set_image_albam_attr(mat, app_id, local_path)
         show_message_box(message=f"Texture params were autoset for {len(bl_objects)} meshes")
