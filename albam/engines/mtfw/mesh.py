@@ -1,5 +1,6 @@
 from binascii import crc32
 from collections import namedtuple, OrderedDict
+from contextlib import contextmanager
 import ctypes
 from functools import reduce
 from itertools import chain
@@ -886,6 +887,34 @@ def _get_material_hash(mod, mesh, app_id):
     return material_hash
 
 
+@contextmanager
+def _autofix_meshes(bl_meshes, enabled):
+    if not enabled:
+        yield bl_meshes
+        return
+
+    duplicates = []
+    try:
+        temp_collection = bpy.data.collections.get("AlbamTemp")
+        if temp_collection:
+            for ob in list(temp_collection.objects):
+                delete_ob(ob)
+
+        for mesh in bl_meshes:
+            duplicates.append(_duplicate_mesh_object(mesh))
+        move_to_collection(duplicates, "AlbamTemp")
+        apply_transform(duplicates)
+        yield duplicates
+    finally:
+        try:
+            for ob in duplicates:
+                delete_ob(ob)
+        finally:
+            temp_collection = bpy.data.collections.get("AlbamTemp")
+            if temp_collection:
+                bpy.data.collections.remove(temp_collection)
+
+
 @blender_registry.register_export_function(app_id="re0", extension="mod")
 @blender_registry.register_export_function(app_id="re1", extension="mod")
 @blender_registry.register_export_function(app_id="re5", extension="mod")
@@ -927,42 +956,26 @@ def export_mod(bl_obj):
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
 
-    if export_settings.export_autofix:
-        # Vertex splitting (one exported vertex per unique attribute
-        # combination, see _build_export_vertex_table) and triangulation
-        # (see mesh.calc_loop_triangles() in that same function) happen
-        # unconditionally at buffer-build time without touching the
-        # Blender mesh, so the only "mistake" left to autofix here is an
-        # un-applied object transform - which does need a throwaway copy,
-        # since applying it is a real mutation.
-        if bpy.data.collections.get("AlbamTemp"):
-            for ob in bpy.data.collections["AlbamTemp"].objects:
-                delete_ob(ob)
-        bl_meshes = [_duplicate_mesh_object(mesh) for mesh in bl_meshes]
-        move_to_collection(bl_meshes, "AlbamTemp")
-        apply_transform(bl_meshes)
+    with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
+        _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
+        _init_mod_header(bl_obj, src_mod, dst_mod)
 
-    _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
-    _init_mod_header(bl_obj, src_mod, dst_mod)
+        bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
+        bones_data = _serialize_bones_data(
+            bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes)
+        if bones_data is not None:
+            # Only assign when there is one. Assigning None still *creates* the
+            # attribute, and the generated _fetch_instances() guards optional
+            # instances with hasattr(), which is true for an attribute holding
+            # None - so a model with no armature would crash on write instead of
+            # skipping the section it doesn't have.
+            dst_mod.bones_data = bones_data
+        dst_mod.groups = _serialize_groups(src_mod, dst_mod)
+        materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
-    bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    bones_data = _serialize_bones_data(
-        bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes)
-    if bones_data is not None:
-        # Only assign when there is one. Assigning None still *creates* the
-        # attribute, and the generated _fetch_instances() guards optional
-        # instances with hasattr(), which is true for an attribute holding
-        # None - so a model with no armature would crash on write instead of
-        # skipping the section it doesn't have.
-        dst_mod.bones_data = bones_data
-    dst_mod.groups = _serialize_groups(src_mod, dst_mod)
-    materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
+        meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
+            _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
 
-    meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
-        _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    if export_settings.export_autofix:
-        for ob in bl_meshes:
-            delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
