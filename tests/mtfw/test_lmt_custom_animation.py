@@ -10,16 +10,15 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 def _block_index(block):
     """Where export will write this block, not where it sits in the tree.
 
-    Export orders blocks by the index import stamped on them, because
-    `children_recursive` is name order and a second import in the same session
-    renames every block it creates. Reading the tree order here agrees with the
-    file only until something else has been imported first.
+    Export orders blocks by the index import stamped on them, because the tree
+    order is name order and names stop agreeing with block order once anything
+    has been renamed or re-imported. See _lmt_blocks.
     """
-    from albam.engines.mtfw.animation import BLOCK_INDEX_PROP
+    from albam.engines.mtfw.animation import get_block_index
 
-    index = block.get(BLOCK_INDEX_PROP)
-    assert index is not None, f"{block.name} carries no block index"
-    return int(index)
+    props = block.albam_custom_properties.get_custom_properties_for_appid("re5")
+    assert props.block_index >= 0, f"{block.name} carries no block index"
+    return get_block_index(block, "re5")
 
 
 # The same pl00 pair lmt_serialization_hashes.json uses. Only re5: writing a

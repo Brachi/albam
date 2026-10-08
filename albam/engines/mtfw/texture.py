@@ -250,6 +250,11 @@ FTRANSPARENCY_OPAQUE = "FTransparency"
 # alongside the placeholders.
 DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
 
+# An .mrl texture slot stores its path in a fixed 64-byte field, ASCII and
+# nul-terminated, so 63 characters is all that fits. The path stored there
+# carries no extension.
+MRL_TEXTURE_PATH_MAX_LEN = 63
+
 
 def is_dummy_texture_path(texture_path):
     if not texture_path:
@@ -386,6 +391,12 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
                 .get("features"))
     link_albedo_alpha = (
         features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
+    # Export only writes a set_texture command for a slot that has an image
+    # node linked, so an app that exports needs an (empty) node for every
+    # dummy slot too - dropping the command breaks the shader in game.
+    # Import-only apps skip them, so the socket keeps the shader group's
+    # default instead of an empty node driving it with black.
+    keep_dummy_slots = (app_id, "mod") in blender_registry.export_registry
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
 
@@ -407,18 +418,16 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
 
             if tex_index == 0:
                 # Index 0 is the engine's dummy texture: the material is
-                # saying this map is deliberately absent. Leave the socket
-                # on the shader group's own default - an empty image node
-                # would drive it with black, which for a normal map is not
-                # the neutral value. old_assignment() skips these too.
-                continue
-            texture_target = textures[real_tex_index]
-            if texture_target is None and is_dummy_texture_path(
-                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
-                # Same case as tex_index == 0 above, just spelled as a path:
-                # leave the socket on the shader group's default rather than
-                # driving it with an empty image node.
-                continue
+                # saying this map is deliberately absent.
+                if not keep_dummy_slots:
+                    continue
+                texture_target = None
+            else:
+                texture_target = textures[real_tex_index]
+                if texture_target is None and not keep_dummy_slots and is_dummy_texture_path(
+                        getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                    # Same case as tex_index == 0 above, just spelled as a path.
+                    continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
@@ -608,12 +617,17 @@ def serialize_textures(app_id, bl_materials):
     bad_appid = []
     texture_paths = []
     duplicated_paths = []
+    too_long = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
         if data["image"].albam_asset.relative_path in texture_paths:
             duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
         texture_paths.append(data["image"].albam_asset.relative_path)
+        # the extension doesn't matter here, only what goes in the .mrl slot
+        path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
+        if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
+            too_long.append((im_name, path_no_ext))
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
@@ -624,6 +638,17 @@ def serialize_textures(app_id, bl_materials):
             f"The following images have duplicated relative paths: {duplicated_paths}\n"
             "Go to Image Editor -> Albam and select a unique relative path for each."
         )
+    if too_long:
+        paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]
+        raise AlbamCheckFailure(
+            "Some images have a relative path too long to store in a material file "
+            f"(max {MRL_TEXTURE_PATH_MAX_LEN} characters, without the extension)",
+            details=f"Images: {paths}",
+            solution=("Go to Image Editor -> Albam and shorten the relative path of each image "
+                      "listed above. Images with no relative path set use their image name "
+                      "instead, so renaming the image also works"),
+        )
+
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile

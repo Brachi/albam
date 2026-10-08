@@ -107,7 +107,12 @@ def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, lo
 
     # Two separate single-.arc roots under the same app_id - safe because
     # their internal paths don't collide.
-    vfs.add_fs_root(local_app_id, mod_arc_fs, display_name="single-arc-mod")
+    #
+    # .name captured right away, not the vfile itself: the second
+    # add_fs_root() call below does its own file_list.add() calls, which
+    # can invalidate this reference the same way add_fs_root()'s own
+    # docstring warns about for its internal loop.
+    mod_root_name = vfs.add_fs_root(local_app_id, mod_arc_fs, display_name="single-arc-mod").name
     vfile_mod = vfs.select_vfile(local_app_id, mod_virtual_path.lstrip("/"))
     assert vfile_mod
     result = bpy.ops.albam.import_vfile()
@@ -119,7 +124,7 @@ def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, lo
     assert armature and armature.type == 'ARMATURE'
     bpy.context.scene.albam.import_options_lmt.armature = armature
 
-    vfs.add_fs_root(local_app_id, lmt_arc_fs, display_name="single-arc-lmt")
+    lmt_root_name = vfs.add_fs_root(local_app_id, lmt_arc_fs, display_name="single-arc-lmt").name
     vfile_lmt = vfs.select_vfile(local_app_id, lmt_virtual_path.lstrip("/"))
     assert vfile_lmt
     result = bpy.ops.albam.import_vfile()
@@ -135,8 +140,13 @@ def single_arc_import_local(local_game_fs, local_app_id, local_mod_path_hash, lo
     # down. Node ids are app_id::relative_path only, so a later test
     # selecting these same paths would resolve to one of those dead roots and
     # fail with fs.errors.FilesystemClosed.
-    for display_name in ("single-arc-lmt", "single-arc-mod"):
-        root_id = f"{local_app_id}::{display_name}"
+    #
+    # The real root names captured above, not f"{local_app_id}::{display_name}":
+    # _unique_root_name() suffixes that same key with "#1", "#2", ... when a
+    # same-named root is already mounted (see its own docstring), and
+    # reconstructing the unsuffixed form here would then miss the real
+    # root, leaking it.
+    for root_id in (lmt_root_name, mod_root_name):
         index = vfs.file_list.find(root_id)
         if index == -1:
             continue

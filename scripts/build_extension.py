@@ -25,13 +25,13 @@ Either way, the resulting wheels + a blender_manifest.toml with `wheels =
 [...]` filled in get zipped into dist/albam-<version>.zip. Aborts if
 pyproject.toml's version and albam/__version__.py disagree.
 
-Assumes every resolved dependency ships a universal ("py3-none-any") wheel -
-true for everything under [project.dependencies] today. If a future
-dependency needs platform-specific wheels, this script's single
-`pip download`/`pip lock` pass (no --platform/--python-version pins) would
-need to become one pass per target platform instead.
+Wheels are downloaded once per (platform, Python version) target, so a
+dependency shipping platform-specific wheels (bc7enc-py) ends up in the zip
+for every platform blender_manifest.toml declares, not just the machine that
+built it. Blender picks the matching wheel at install time.
 """
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -65,6 +65,25 @@ MANIFEST_VERSION_LINE_RE = re.compile(r'^version\s*=\s*"[^"]*"', re.MULTILINE)
 # confirmed by pip silently mis-parsing a differently-named file as a plain
 # requirements.txt instead of erroring.
 LOCK_PATH = REPO_ROOT / "pylock.toml"
+# blender_manifest.toml's platform ids mapped to the wheel platform tags pip
+# accepts for each. Blender installs a bundled wheel by matching these tags,
+# so every declared platform needs its own wheel for any dependency that
+# isn't pure Python.
+PLATFORM_TAGS = {
+    "linux-x64": (
+        "manylinux2014_x86_64",
+        "manylinux_2_17_x86_64",
+        "manylinux_2_28_x86_64",
+        "linux_x86_64",
+    ),
+    "windows-x64": ("win_amd64",),
+    "macos-x64": ("macosx_10_9_x86_64", "macosx_11_0_x86_64"),
+    "macos-arm64": ("macosx_11_0_arm64",),
+}
+# The Python versions Blender bundles across the releases this addon supports
+# (4.2 ships 3.11, 5.2 ships 3.13), mirroring pyproject.toml's bpy pins. A
+# dependency with cp-tagged wheels resolves to a different file for each.
+TARGET_PYTHON_VERSIONS = ("3.11", "3.13")
 
 
 def _load_pyproject():
@@ -118,25 +137,83 @@ def _generate_lock_file(requirement_strings, lock_path):
     subprocess.run(cmd, check=True, cwd=REPO_ROOT)
 
 
-def _wheel_names_from_lock(lock_path):
+def _locked_packages(lock_path):
     with open(lock_path, "rb") as f:
         lock = tomllib.load(f)
-    return [wheel["name"] for package in lock.get("packages", []) for wheel in package.get("wheels", [])]
+    return lock.get("packages", [])
 
 
-def _download_wheels_from_lock(lock_path, wheels_dir):
-    cmd = [
-        sys.executable,
-        "-m",
-        "pip",
-        "download",
-        "--dest",
-        str(wheels_dir),
-        "--only-binary=:all:",
-        "-r",
-        str(lock_path),
-    ]
-    subprocess.run(cmd, check=True, cwd=REPO_ROOT)
+def _locked_wheel_hashes(lock_path):
+    return {
+        wheel["name"]: wheel.get("hashes", {}).get("sha256")
+        for package in _locked_packages(lock_path)
+        for wheel in package.get("wheels", [])
+    }
+
+
+def _manifest_platforms():
+    with open(MANIFEST_PATH, "rb") as f:
+        platforms = tomllib.load(f)["platforms"]
+    unknown = [p for p in platforms if p not in PLATFORM_TAGS]
+    if unknown:
+        raise SystemExit(
+            f"{MANIFEST_PATH} declares platform(s) {', '.join(sorted(unknown))} with no wheel tags "
+            f"in PLATFORM_TAGS - add them there so their wheels get bundled"
+        )
+    return platforms
+
+
+def _normalize(name):
+    return re.sub(r"[-_.]+", "_", name).lower()
+
+
+def _wheel_platform_tags(wheel_filename):
+    # name-version(-build)?-python-abi-platform.whl, where each of the last
+    # three is a dot-separated tag set ("py2.py3-none-any").
+    return set(wheel_filename[: -len(".whl")].split("-")[-1].split("."))
+
+
+def _download_wheels(lock_path, wheels_dir, platforms):
+    # The lock is the full resolved closure, so each package is downloaded by
+    # pinned version with --no-deps: no resolution happens per target, only
+    # wheel selection. pip picks wheels for this machine unless told
+    # otherwise, hence one pass per (platform, Python version).
+    requirements = [f"{p['name']}=={p['version']}" for p in _locked_packages(lock_path)]
+    for platform in platforms:
+        for python_version in TARGET_PYTHON_VERSIONS:
+            cmd = [
+                sys.executable,
+                "-m",
+                "pip",
+                "download",
+                "--dest",
+                str(wheels_dir),
+                "--only-binary=:all:",
+                "--no-deps",
+                "--python-version",
+                python_version,
+            ]
+            for tag in PLATFORM_TAGS[platform]:
+                cmd += ["--platform", tag]
+            subprocess.run(cmd + requirements, check=True, cwd=REPO_ROOT)
+
+
+def _verify_wheel_hashes(wheels_dir, lock_path):
+    # pip checks hashes itself when installing from a lock file; downloading
+    # by pinned version doesn't, so check here. The lock only records the
+    # environment it was generated in, so the other platforms' wheels have no
+    # hash to check against.
+    locked_hashes = _locked_wheel_hashes(lock_path)
+    for wheel_path in sorted(wheels_dir.glob("*.whl")):
+        expected = locked_hashes.get(wheel_path.name)
+        if expected is None:
+            continue
+        digest = hashlib.sha256(wheel_path.read_bytes()).hexdigest()
+        if digest != expected:
+            raise SystemExit(
+                f"Hash mismatch for {wheel_path.name}: {lock_path.name} has {expected}, "
+                f"downloaded file is {digest}"
+            )
 
 
 def _write_manifest(wheel_filenames, dest_path, version_override=None):
@@ -163,24 +240,24 @@ def _stage_addon(staging_root):
     shutil.copytree(ADDON_DIR, staging_root, ignore=ignore)
 
 
-def _check_universal_wheels(wheel_filenames):
-    # blender_manifest.toml declares both windows-x64 and linux-x64, and
-    # Blender itself spans multiple bundled Python versions (3.11 for
-    # bpy==4.2.0, 3.13 for bpy==5.2.0) - a single `pip download` pass (no
-    # --platform/--abi/--python-version pins) only ever fetches wheels
-    # compatible with *this* machine. That's fine as long as every resolved
-    # wheel is universal ("none-any"); a platform/abi-specific wheel slipping
-    # through would silently work here and silently break everywhere else.
-    universal_suffixes = ("-py3-none-any.whl", "-py2.py3-none-any.whl")
-    non_universal = [name for name in wheel_filenames if not name.endswith(universal_suffixes)]
-    if non_universal:
-        names = ", ".join(sorted(non_universal))
+def _check_wheel_coverage(wheel_filenames, lock_path, platforms):
+    # A package missing a wheel for one platform would produce a zip that
+    # installs fine on the machine that built it and fails on import
+    # everywhere else - which is how bc7enc-py went missing entirely.
+    missing = []
+    for package in _locked_packages(lock_path):
+        name = _normalize(package["name"])
+        candidates = [w for w in wheel_filenames if _normalize(w.split("-")[0]) == name]
+        for platform in platforms:
+            accepted = {"any", *PLATFORM_TAGS[platform]}
+            if not any(_wheel_platform_tags(w) & accepted for w in candidates):
+                missing.append(f"{package['name']} ({platform})")
+    if missing:
         raise SystemExit(
-            f"Refusing to bundle non-universal wheel(s): {names}\n"
-            "These were built for this machine's platform/Python only and would silently "
-            "break on other declared platforms (windows-x64/linux-x64) or Blender's other "
-            "bundled Python version. This script needs a --platform/--abi/--python-version "
-            "pinned `pip download` pass per target instead of the current single pass."
+            "No wheel for: " + ", ".join(missing) + "\n"
+            "Every dependency needs a wheel for every platform blender_manifest.toml declares. "
+            "If one genuinely has none, drop that platform from the manifest or the dependency "
+            "from pyproject.toml."
         )
 
 
@@ -191,7 +268,14 @@ def generate_lock():
     for r in requirement_strings:
         print(f"  - {r}")
     _generate_lock_file(requirement_strings, LOCK_PATH)
-    _check_universal_wheels(_wheel_names_from_lock(LOCK_PATH))
+    # Downloaded and thrown away here purely to fail now, rather than at the
+    # next build, if the new resolution has nothing to offer some platform.
+    platforms = _manifest_platforms()
+    with tempfile.TemporaryDirectory(prefix="albam-lock-check-") as tmp:
+        tmp = Path(tmp)
+        print(f"Checking every locked package has a wheel for {', '.join(platforms)} ...")
+        _download_wheels(LOCK_PATH, tmp, platforms)
+        _check_wheel_coverage([w.name for w in tmp.glob("*.whl")], LOCK_PATH, platforms)
     print(f"Wrote {LOCK_PATH} - review and commit it.")
 
 
@@ -226,14 +310,16 @@ def build(extras, output_dir, version_override=None):
                 raise SystemExit(f"{LOCK_PATH} not found - run with --generate-lock first")
             lock_path = LOCK_PATH
 
-        print(f"Downloading wheels from {lock_path} ...")
+        platforms = _manifest_platforms()
+        print(f"Downloading wheels from {lock_path} for {', '.join(platforms)} ...")
         wheels_dir.mkdir(exist_ok=True)
-        _download_wheels_from_lock(lock_path, wheels_dir)
+        _download_wheels(lock_path, wheels_dir, platforms)
 
         wheel_filenames = [p.name for p in wheels_dir.glob("*.whl")]
         if not wheel_filenames:
             raise SystemExit(f"pip download produced no wheels from {lock_path} - aborting")
-        _check_universal_wheels(wheel_filenames)
+        _verify_wheel_hashes(wheels_dir, lock_path)
+        _check_wheel_coverage(wheel_filenames, lock_path, platforms)
         print(f"Bundled {len(wheel_filenames)} wheel(s):")
         for name in sorted(wheel_filenames):
             print(f"  - {name}")

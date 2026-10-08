@@ -76,20 +76,21 @@ def chain_rig(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_ha
 
 
 def test_chain_goal_is_the_joints_own_position(chain_rig):
-    from albam.engines.mtfw.animation import CHAIN_LENGTH_PROP, CHAIN_TARGET_PROP
+    from albam.engines.mtfw.bone import get_anim_retarget, get_chain_length, get_chain_target
 
     armature, actions = chain_rig
+    app_id = armature.albam_asset.app_id
     by_anim_id = {}
-    for bone in armature.data.bones:
-        anim_id = bone.get("mtfw.anim_retarget")
-        if anim_id is not None and "_" not in str(anim_id):
-            by_anim_id[str(anim_id)] = bone
+    for pose_bone in armature.pose.bones:
+        anim_id = get_anim_retarget(pose_bone, app_id)
+        if anim_id and "_" not in anim_id:
+            by_anim_id[anim_id] = pose_bone.bone
 
     exact = []
-    for control in armature.data.bones:
-        if not control.get(CHAIN_TARGET_PROP) or control.get(CHAIN_LENGTH_PROP) != 2:
+    for control in armature.pose.bones:
+        if not get_chain_target(control, app_id) or get_chain_length(control, app_id) != 2:
             continue  # only the exactly determined chains pin the space down
-        target_id = int(str(control["mtfw.anim_retarget"]).split("_")[0])
+        target_id = int(get_anim_retarget(control, app_id).split("_")[0])
         middle, target = by_anim_id.get(str(target_id - 1)), by_anim_id.get(str(target_id))
         if middle is None or target is None:
             continue
