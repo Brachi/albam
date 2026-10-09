@@ -144,7 +144,7 @@ class VirtualFileSystemBase:
     SEPARATOR = "::"
     VFS_ID = "vfs"
 
-    def get_vfile(self, app_id, relative_path, root_id=None):
+    def get_vfile(self, app_id, relative_path, root_id=None, strict=False):
         """The vfile at `relative_path`, preferring the one that also
         belongs to root `root_id` when given.
 
@@ -159,22 +159,30 @@ class VirtualFileSystemBase:
         root - e.g. a shared texture mounted as its own archive alongside
         the model that references it - still resolves via the same
         first-match fallback a plain lookup uses.
+
+        strict (opt-in, default False) turns that fallback off: only an
+        entry actually belonging to root_id resolves, raising KeyError
+        otherwise - every existing caller (root_id alone, or neither
+        argument) keeps the tolerant fallback above, byte-for-byte
+        unchanged. Meant for a caller trying several candidate paths for
+        the same logical file (e.g. mtfw's _infer_mrl trying multiple
+        suffixes): without it, a plain root_id lookup on the *first*
+        candidate can fall back cross-root and return before a *later*
+        candidate under the caller's own root is ever tried.
         """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
-        if root_id is None:
-            return self.file_list[file_id]
-        fallback = None
+        first = self.file_list.get(file_id)
+        if first is None:
+            raise KeyError(file_id)
+        if root_id is None or first.tree_node.root_id == root_id:
+            return first
         for vfile in self.file_list:
-            if vfile.name != file_id:
-                continue
-            if vfile.tree_node.root_id == root_id:
+            if vfile.name == file_id and vfile.tree_node.root_id == root_id:
                 return vfile
-            if fallback is None:
-                fallback = vfile
-        if fallback is not None:
-            return fallback
-        raise KeyError(file_id)
+        if strict:
+            raise KeyError(file_id)
+        return first
 
     def select_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
