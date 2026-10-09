@@ -75,6 +75,7 @@ def load_lmt(vfile, context):
     # onto, rather than whichever one the import panel happens to point at
     # by the time export runs (#254).
     bl_object.albam_lmt_armature = armature
+    bl_object.albam_lmt_armature_name = armature.name if armature else ""
     # A chain is declared per block, but the constraint that serves it lives on
     # the rig for good. Remember both so every action can say whether its chains
     # are active - see _key_chain_influence.

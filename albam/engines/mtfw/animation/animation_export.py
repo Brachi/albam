@@ -595,7 +595,18 @@ def export_lmt(bl_obj):
     # one the import panel currently points at - that changes every time a
     # later import runs, while this asset stays tied to its own rig. Only a
     # scene saved before this property existed falls back to the panel.
-    armature = bl_obj.albam_lmt_armature or bpy.context.scene.albam.import_options_lmt.armature
+    armature = bl_obj.albam_lmt_armature
+    if armature is None and bl_obj.albam_lmt_armature_name:
+        # Recorded, then deleted - the panel's rig may be another character's,
+        # which is the silent renumbering #254 is about.
+        raise ValueError(
+            f"{bl_obj.name!r} was imported onto armature "
+            f"{bl_obj.albam_lmt_armature_name!r}, which no longer exists. Re-import "
+            "the .lmt onto the current rig, or point it at one from the Python console: "
+            f"bpy.data.objects[{bl_obj.name!r}].albam_lmt_armature = bpy.data.objects['<armature>']"
+        )
+    if armature is None:
+        armature = bpy.context.scene.albam.import_options_lmt.armature
     dst_lmt = Lmt(app_id)
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]

@@ -59,6 +59,7 @@ def _make_lmt_block(armature_obj, action):
     bl_object.albam_asset.asset_type = "ANIMATION"
     bl_object.albam_asset.relative_path = "synthetic/anim.lmt"
     bl_object.albam_lmt_armature = armature_obj
+    bl_object.albam_lmt_armature_name = armature_obj.name
 
     anim_object = bpy.data.objects.new("synthetic_lmt.0000", None)
     bpy.context.collection.objects.link(anim_object)
@@ -127,6 +128,7 @@ def test_export_falls_back_to_the_panel_when_the_property_is_unset(two_armatures
     action = _make_action("SyntheticActionFallback", armature_a, "hip")
     bl_object = _make_lmt_block(armature_a, action)
     bl_object.albam_lmt_armature = None  # simulate a pre-existing scene
+    bl_object.albam_lmt_armature_name = ""
 
     bpy.context.scene.albam.import_options_lmt.armature = armature_a
 
@@ -166,3 +168,22 @@ def test_export_accepts_a_block_whose_action_has_no_channels_at_all(two_armature
     vfiles = export_lmt(bl_object)
     dst_lmt = parse(Lmt, vfiles[0].data_bytes, APP_ID)
     assert dst_lmt.block_offsets[0].block_header.num_tracks == 0
+
+
+def test_export_refuses_when_the_recorded_armature_is_gone(two_armatures):
+    """Deleting the rig an .lmt was imported onto clears albam_lmt_armature,
+    which must not read as a scene saved before the property existed:
+    falling back to the panel's armature would retarget through another
+    character's ids (#254 again). Export must refuse instead.
+    """
+    _armature_a, armature_b = two_armatures
+    armature_gone = _make_armature("SyntheticArmatureGone", "hip", "10")
+    action = _make_action("SyntheticActionGone", armature_gone, "hip")
+    bl_object = _make_lmt_block(armature_gone, action)
+    bpy.context.scene.albam.import_options_lmt.armature = armature_b
+
+    bpy.data.objects.remove(armature_gone, do_unlink=True)
+    assert bl_object.albam_lmt_armature is None
+
+    with pytest.raises(ValueError, match="SyntheticArmatureGone"):
+        export_lmt(bl_object)
