@@ -84,7 +84,7 @@ def lmt_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_
     bl_objects = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
     for bl_obj in bl_objects:
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
-        if custom_props.ofs_frame != 0:
+        if custom_props.action:
             custom_props.generate_new = True
 
     result = bpy.ops.albam.export()  # FIXME: won't capture failures

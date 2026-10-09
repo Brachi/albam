@@ -154,8 +154,9 @@ def test_export_refuses_a_block_that_resolves_zero_tracks(two_armatures):
 
 def test_export_accepts_a_block_whose_action_has_no_channels_at_all(two_armatures):
     """A genuinely empty action has no bone channels to resolve, so nothing has
-    gone wrong and export must keep writing the block - the zero-track refusal
-    is only for an action that had bone channels and resolved none of them.
+    gone wrong and export must not refuse it - the zero-track refusal is only
+    for an action that had bone channels and resolved none of them. With no
+    tracks the slot is written empty (#272): no shipped block has zero tracks.
     """
     armature_a, _armature_b = two_armatures
     empty_action = bpy.data.actions.new("SyntheticActionEmpty")
@@ -167,7 +168,7 @@ def test_export_accepts_a_block_whose_action_has_no_channels_at_all(two_armature
 
     vfiles = export_lmt(bl_object)
     dst_lmt = parse(Lmt, vfiles[0].data_bytes, APP_ID)
-    assert dst_lmt.block_offsets[0].block_header.num_tracks == 0
+    assert dst_lmt.block_offsets[0].offset == 0
 
 
 def test_export_refuses_when_the_recorded_armature_is_gone(two_armatures):
