@@ -887,19 +887,38 @@ def _get_material_hash(mod, mesh, app_id):
     return material_hash
 
 
+def _purge_autofix_leftovers():
+    """
+    Remove an AlbamTemp left behind by an export that died before cleaning
+    up (e.g. a .blend saved after a failure on 0.5.0). Its copies keep their
+    original's parent, so they would otherwise be picked up as meshes to
+    export; and the collection itself may be excluded from the view layer or
+    linked to another scene, which makes apply_transform fail. Dropping the
+    whole collection lets move_to_collection create a fresh one.
+    """
+    temp_collection = bpy.data.collections.get("AlbamTemp")
+    if not temp_collection:
+        return
+    for ob in list(temp_collection.objects):
+        delete_ob(ob)
+    bpy.data.collections.remove(temp_collection)
+
+
 @contextmanager
 def _autofix_meshes(bl_meshes, enabled):
+    # Vertex splitting (one exported vertex per unique attribute
+    # combination, see _build_export_vertex_table) and triangulation
+    # (see mesh.calc_loop_triangles() in that same function) happen
+    # unconditionally at buffer-build time without touching the
+    # Blender mesh, so the only "mistake" left to autofix here is an
+    # un-applied object transform - which does need a throwaway copy,
+    # since applying it is a real mutation.
     if not enabled:
         yield bl_meshes
         return
 
     duplicates = []
     try:
-        temp_collection = bpy.data.collections.get("AlbamTemp")
-        if temp_collection:
-            for ob in list(temp_collection.objects):
-                delete_ob(ob)
-
         for mesh in bl_meshes:
             duplicates.append(_duplicate_mesh_object(mesh))
         move_to_collection(duplicates, "AlbamTemp")
@@ -949,6 +968,8 @@ def export_mod(bl_obj):
     ModCls = APPID_CLASS_MAPPER[app_id]
     src_mod = parse(ModCls, asset.original_bytes, app_id)
     dst_mod = ModCls(app_id)
+    # Before collecting meshes, so stale copies are not among them.
+    _purge_autofix_leftovers()
     # TODO: export options like visibility
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
