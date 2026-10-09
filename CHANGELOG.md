@@ -59,6 +59,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   materials and textures from the first archive's `.mrl` and `.tex` files, so
   the mesh was right but silently wore the other archive's look
 - Fix hardcoded UV scale factor for detail maps
+- `.lmt` export retargeting bone ids through whichever armature the import
+  panel currently pointed at, instead of the one the animation was imported
+  onto, silently renumbering or dropping tracks when a second character had
+  been imported since. Export now also refuses a block whose action keys only
+  bones the rig has no "Anim Retarget" id for, instead of writing it out with
+  no tracks
 
 ### Changed
 
