@@ -78,6 +78,14 @@ def register():
 
     bpy.types.Object.albam_asset = bpy.props.PointerProperty(type=AlbamAsset)
     bpy.types.Image.albam_asset = bpy.props.PointerProperty(type=AlbamAsset)
+    # Which armature a .lmt was actually imported onto, so export can retarget
+    # bone ids through that rig instead of whatever the import panel currently
+    # points at (#254). Unset on a .blend saved before this existed - export
+    # falls back to the panel's armature in that case.
+    bpy.types.Object.albam_lmt_armature = bpy.props.PointerProperty(type=bpy.types.Object)
+    # The same rig's name. Deleting the rig clears the pointer above, and only
+    # this tells that apart from a .blend that never recorded one.
+    bpy.types.Object.albam_lmt_armature_name = bpy.props.StringProperty()
 
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
