@@ -339,3 +339,41 @@ def test_shipped_models_with_a_repeated_bone_id_round_trip(
 
     if not repeated:
         pytest.skip(f"none of this archive's {len(models)} models repeats a bone id")
+
+
+def test_a_bone_duplicated_in_blender_stays_its_own_bone(tmp_path, _clean_scene):
+    """A bone the user duplicates (Shift+D on "3" gives "3.001") is a new
+    bone, not a leftover of a repeated id: only an id the model's own table
+    named twice is collapsed. Read as "3" it would be dropped from the table
+    and the vertices weighted to it would silently move to bone 3.
+    """
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    bones = [entry for entry in BONES if entry[:2] != (2, 0)]
+    bl_object = _import_bin(tmp_path, build_mesh_bin(bones, WEIGHTS, WEIGHT_INDICES))
+
+    armature = _armature_of(bl_object)
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode="EDIT")
+    original = armature.data.edit_bones["3"]
+    duplicate = armature.data.edit_bones.new("3")
+    duplicate.parent = original.parent
+    duplicate.head = original.head + Vector((0.5, 0.0, 0.0))
+    duplicate.tail = original.tail + Vector((0.5, 0.0, 0.0))
+    bpy.ops.object.mode_set(mode="OBJECT")
+    assert "3.001" in armature.data.bones
+
+    mesh_ob = _mesh_of(bl_object)
+    for group in mesh_ob.vertex_groups:
+        group.remove([0])
+    mesh_ob.vertex_groups.new(name="3.001").add([0], 1.0, "REPLACE")
+
+    exported = _export(bl_object)
+    table_ids = [bone_id for bone_id, _parent, _offset in bone_table(exported)]
+    new_ids = set(table_ids) - {bone_id for bone_id, *_ in bones}
+    assert len(new_ids) == 1, f"the duplicated bone is missing from the table {table_ids}"
+
+    parsed = Re4UhdBin.from_bytes(exported)
+    parsed._read()
+    weighted = {w.bone_ids[i] for w in parsed.weights for i in range(w.count)}
+    assert new_ids <= weighted, "vertex 0's weight went to some other bone"

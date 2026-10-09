@@ -737,7 +737,7 @@ def _classify_mesh_ob(bl_mesh_ob):
         return bin_type, armature
 
 
-def _bone_id(bl_bone, fallback):
+def _bone_id(bl_bone, fallback, repeated_ids=()):
     """The .bin bone id a Blender bone stands for.
 
     Import names each bone after its id (see _build_armature), so the name is
@@ -745,12 +745,18 @@ def _bone_id(bl_bone, fallback):
     it gets its position in the armature instead, which at least stays inside
     the u1 the format allows.
 
-    Blender's own ".001" suffix is stripped first. Import used to make a bone
-    per table entry, so a scene saved before repeated ids were carried on the
-    mesh has a second bone named "5.001" for one named "5" - and reading that
-    as its position in the armature gave it some other bone's id entirely.
+    Blender's own ".001" suffix is stripped for an id in `repeated_ids`, the
+    ones the model's own table named more than once. Import used to make a
+    bone per table entry, so a scene saved before repeated ids were carried
+    on the mesh has a second bone named "5.001" for one named "5" - and
+    reading that as its position in the armature gave it some other bone's id
+    entirely. Any other suffixed bone is one the user made, duplicating "12"
+    into "12.001" say, and stays a bone of its own.
     """
-    name = BLENDER_NAME_SUFFIX.sub("", bl_bone.name)
+    name = bl_bone.name
+    stripped = BLENDER_NAME_SUFFIX.sub("", name)
+    if stripped != name and stripped.isdigit() and int(stripped) in repeated_ids:
+        name = stripped
     if name.isdigit() and int(name) < 255:
         return int(name)
     return min(fallback, 254)
@@ -849,7 +855,8 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_entries=None):
     """
     own_entries = own_entries or {}
     all_bones = list(bl_armature.data.bones)
-    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
+    repeated_ids = {bone_id for bone_id, entries in own_entries.items() if len(entries) > 1}
+    ids = {bone.name: _bone_id(bone, i, repeated_ids) for i, bone in enumerate(all_bones)}
     bones = _bones_to_write(bl_armature, ids, used_ids, own_entries.keys())
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
@@ -963,7 +970,9 @@ def _collect_geometry(bl_mesh_objs):
         armature = armature_modifier.object if armature_modifier else None
         group_ids = {}
         if armature:
-            bone_ids = {bone.name: _bone_id(bone, i)
+            recorded_ids = list(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
+            repeated_ids = {bone_id for bone_id in recorded_ids if recorded_ids.count(bone_id) > 1}
+            bone_ids = {bone.name: _bone_id(bone, i, repeated_ids)
                         for i, bone in enumerate(armature.data.bones)}
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
