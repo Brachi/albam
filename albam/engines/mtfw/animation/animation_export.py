@@ -187,18 +187,20 @@ def _generate_track_from_action(armature, bl_objects, app_id):
             action = custom_props.action
             fcurves = _get_action_fcurves(action, armature)
             num_frames = _block_length(action, fcurves, custom_props)
+            num_bone_channels = 0
             for fcurve in fcurves:
                 path = fcurve.data_path
                 index = fcurve.array_index
                 if path.startswith('pose.bones["'):
                     bone_name = path.split('"')[1]
-                    if mapping.get(bone_name, None) is None:
-                        continue
                     track_type = path.split(".")[-1]
                     if track_type not in BONE_TRACK_TYPES:
                         # an action also carries channels that are not a bone's
                         # transform - a chain constraint's influence, say - and
                         # none of them is a track
+                        continue
+                    num_bone_channels += 1
+                    if mapping.get(bone_name, None) is None:
                         continue
                     joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
                     joint_types[(track_type, mapping.get(bone_name))] = joint_type
@@ -237,11 +239,39 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                                     (1.0, 0.0, 0.0, 0.0))
                             tracks[bone_name][frame].rotation_quaternion[index] = value
             track_attrs = _serialize_lmt_track(armature, tracks, mapping, app_id)
+            if num_bone_channels and not track_attrs:
+                raise ValueError(
+                    f"Exporting {bl_obj.name!r} resolved zero tracks: none of its action's "
+                    f"bone names matched an Anim Retarget id on {armature.name!r}. Writing "
+                    "this block out would silently produce num_tracks = 0 with a non-zero "
+                    "ofs_frame - check the armature this .lmt was imported onto against the "
+                    "bones the action actually keys."
+                )
             _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
 
 
 def _align(value, alignment):
     return (value + alignment - 1) & ~(alignment - 1)
+
+
+def _block_tracks(bl_obj, app_id):
+    """The block's tracks; a slot holds a real block iff this is non-empty.
+
+    An .lmt is an index-addressed table of block slots, and an empty slot is
+    a real thing a file can hold - there is no separate "is this slot used"
+    bit anywhere, on disk or on the object. Measured over 400 RE5 .lmt files,
+    8533 used blocks: none has zero tracks, so "this block has tracks" (set
+    at import, or by _generate_track_from_action from a chosen action) is an
+    exact stand-in, and unlike a stored flag it cannot go stale or be hand-set
+    wrong - see issue #272.
+
+    A block whose action keys bones the armature has no id for never gets
+    here: _generate_track_from_action refuses it (#254) before its tracks are
+    cleared. One whose action keys no bone at all comes out with no tracks and
+    is written as an empty slot - the only thing a block without tracks can be.
+    """
+    second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+    return getattr(second_props["tracks"], "tracks")
 
 
 def _calculate_offsets_lmt51(bl_objects, app_id):
@@ -275,15 +305,14 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
     headers_start = _align(HEADER_SIZE + block_offsets_table_size, BLOCK_HEADER_ALIGNMENT)
     cur_ofc_bloc_offsets = headers_start
     for bl_obj in bl_objects:
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if custom_props.ofs_frame != 0:
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             ofc = cur_ofc_bloc_offsets
             block_offsets.append(ofc)
             cur_ofc_bloc_offsets += MOTION_HEADER_SIZE
             total_headers_size += MOTION_HEADER_SIZE
 
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-            tracks = getattr(second_props["tracks"], "tracks")
             t_size = len(tracks) * TRACK_SIZE
             raw_data_size = sum(len(track.raw_data) for track in tracks)
             tracks_headers_sizes.append(t_size)
@@ -381,12 +410,11 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         block_body_size = 0
         track_raw_sizes = []
         bounds_size = 0
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if getattr(custom_props, "ofs_frame", 0) != 0:
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             total_headers_size += MOTION_HEADER_SIZE
 
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-            tracks = getattr(second_props["tracks"], "tracks")
             t_size = len(tracks) * TRACK_SIZE
             raw_data_size = 0
             track_bounds = []
@@ -454,8 +482,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     block_offsets = []
     cur_offset = motion_headers_start
     for bl_obj in bl_objects:
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if getattr(custom_props, "ofs_frame", 0) != 0:
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
             block_offsets.append(cur_offset)
             cur_offset += MOTION_HEADER_SIZE
         else:
@@ -473,8 +501,8 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
     # Second pass
     cur_tracks_section_offset = motion_body_start
     for i, bl_obj in enumerate(bl_objects):
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if getattr(custom_props, "ofs_frame", 0) != 0:
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
             # track start
             _ofs = cur_tracks_section_offset
             track_section_offsets.append(_ofs)
@@ -581,7 +609,22 @@ def export_lmt(bl_obj):
     vfiles = []
     print(f"Exporting LMT for {bl_obj.name} with app_id {app_id}")
     bl_objects = _lmt_blocks(bl_obj, app_id)
-    armature = bpy.context.scene.albam.import_options_lmt.armature
+    # The armature this .lmt was actually imported onto (#254), not whichever
+    # one the import panel currently points at - that changes every time a
+    # later import runs, while this asset stays tied to its own rig. Only a
+    # scene saved before this property existed falls back to the panel.
+    armature = bl_obj.albam_lmt_armature
+    if armature is None and bl_obj.albam_lmt_armature_name:
+        # Recorded, then deleted - the panel's rig may be another character's,
+        # which is the silent renumbering #254 is about.
+        raise ValueError(
+            f"{bl_obj.name!r} was imported onto armature "
+            f"{bl_obj.albam_lmt_armature_name!r}, which no longer exists. Re-import "
+            "the .lmt onto the current rig, or point it at one from the Python console: "
+            f"bpy.data.objects[{bl_obj.name!r}].albam_lmt_armature = bpy.data.objects['<armature>']"
+        )
+    if armature is None:
+        armature = bpy.context.scene.albam.import_options_lmt.armature
     dst_lmt = Lmt(app_id)
     dst_lmt.id_magic = b"LMT\x00"
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
@@ -607,9 +650,9 @@ def export_lmt(bl_obj):
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-        if custom_props.ofs_frame != 0:
+        tracks = _block_tracks(bl_obj, app_id)
+        if len(tracks) > 0:
             second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
-            tracks = getattr(second_props["tracks"], "tracks")
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
                 col_events_attr = getattr(col_events, "attributes")
