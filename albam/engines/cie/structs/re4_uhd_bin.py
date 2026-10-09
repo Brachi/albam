@@ -1018,10 +1018,40 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             self.num_vertices = self._io.read_u2le()
             self.num_vertex_normals = self._io.read_u2le()
             self.version_flags = self._io.read_u4le()
-            self.offset_bonepairs = self._io.read_u4le()
-            self.offset_adjacents = self._io.read_u4le()
-            self.offset_index_buffer = self._io.read_u4le()
-            self.offset_index_buffer2 = self._io.read_u4le()
+            # offset_bones doubles as the header's own size (0x40, 0x50 or
+            # 0x60 - see re4-uhd-bin.ksy). Everything above is exactly 0x40
+            # bytes, and these four trailing u4s bring it to exactly 0x50, so
+            # a 0x50 header does state all four and is read like a 0x60 one
+            # (0x60 is those same 0x50 bytes plus 16 of padding nothing
+            # reads, which is why size_ is 96 while _write__seq emits 80).
+            # Only a 0x40 header stops right here, before these four exist in
+            # the file at all.
+            # Reading them unconditionally, as this generated file used to,
+            # would consume the next 16 bytes of whatever actually follows
+            # the header - bone data, for such a file - as if they were these
+            # fields, and a nonzero misread offset_bonepairs/offset_adjacents
+            # would then send albam.bone_pairs/.adjacent off to parse garbage
+            # from a bogus absolute offset. None of a several-hundred-file
+            # sample of the shipped game uses a header this short, but a
+            # reader has no business assuming that always holds.
+            #
+            # This branch is a deliberate hand edit that a straight
+            # regeneration from re4-uhd-bin.ksy does not produce: ksy's `if:`
+            # makes an absent field raise on access rather than read as 0,
+            # which is what every guard downstream (bone_pairs, adjacent,
+            # indexes, indexes2, and fs.py) needs, so the .ksy declares these
+            # four unconditionally and this reader carries the defaulting.
+            # Reapply it if this file is ever regenerated (see issue #271).
+            if self.offset_bones > 0x40:
+                self.offset_bonepairs = self._io.read_u4le()
+                self.offset_adjacents = self._io.read_u4le()
+                self.offset_index_buffer = self._io.read_u4le()
+                self.offset_index_buffer2 = self._io.read_u4le()
+            else:
+                self.offset_bonepairs = 0
+                self.offset_adjacents = 0
+                self.offset_index_buffer = 0
+                self.offset_index_buffer2 = 0
             self._dirty = False
 
 

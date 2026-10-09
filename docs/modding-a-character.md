@@ -126,15 +126,19 @@ override for when you want a specific one.
 Anything you do to the mesh is what gets written:
 
 - **Vertex edits** - move, scale, sculpt, add or remove geometry.
-- **Object transforms** - moving, rotating or scaling the object itself is baked
-  in on export, so you do not need to apply transforms first.
+- **Object transforms** - moving, rotating or scaling the mesh itself is baked
+  in on export, so you do not need to apply transforms first. What is baked is
+  the mesh's placement *relative to its armature*, so moving the armature
+  object carries the whole model with it in Blender and changes nothing in the
+  exported file - where a model sits in the world is the room's data, not the
+  model's.
 - **Materials** - swapping the image in a texture node changes which texture the
   model uses, because the exporter reads the binding back rather than a stored
   value. Note what this is and is not: it re-points the material at a texture
   **already in the archive's texture pack**. Bringing a new image into the game
   is not supported - see below.
 
-Two things to keep in mind:
+Three things to keep in mind:
 
 - **Keep the vertex groups.** They are the skinning, named after bone ids. A
   vertex in no group gets pinned to the first bone.
@@ -143,6 +147,12 @@ Two things to keep in mind:
   strip but never across a UV seam or a shading split, so a mesh needs somewhere
   between one and three per triangle. Exceeding it is reported, not silently
   truncated. Only one model in the whole game is near it.
+- **There is a bone limit as well.** A bone is named by a single byte, so a
+  model can write at most 255 of them. Only the bones the model actually needs
+  count - the ones it was imported with, plus the ones its weights name - so
+  control and IK bones nothing is weighted to are free, however many of them a
+  rig carries. Going past the limit is reported too, rather than exported with
+  bones silently sharing an id.
 
 ## 5. Export the model
 
