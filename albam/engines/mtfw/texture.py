@@ -231,6 +231,8 @@ TEX_TYPE_MAPPER = {
 }
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
+# TODO: add dmc4 - "albam_custom_properties.dmc4__mod_153_material.detail_factor[1]",
+# laid out like re5's. Without it DMC4 detail maps get no driver and stay at UV scale 1.
 DETAIL_SCALE_PATH = {
     "re0": "albam_custom_properties.re0__globals.f_detail_normal_uv_scale",
     "re1": "albam_custom_properties.re1__globals.f_detail_normal_uv_scale",
