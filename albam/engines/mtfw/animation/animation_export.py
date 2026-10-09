@@ -265,12 +265,10 @@ def _block_tracks(bl_obj, app_id):
     exact stand-in, and unlike a stored flag it cannot go stale or be hand-set
     wrong - see issue #272.
 
-    This derivation silently drops a block whenever generation clears its
-    tracks and produces none - e.g. its action does not match the armature it
-    was imported onto. Issue #254 / PR #296 (branch fm/albam-mtfw-lmt-armature-k2)
-    adds a loud ValueError refusal for exactly that case, before the tracks
-    collection is cleared. Whichever of the two merges second must confirm that
-    refusal still runs before this has-tracks check fires.
+    A block whose action keys bones the armature has no id for never gets
+    here: _generate_track_from_action refuses it (#254) before its tracks are
+    cleared. One whose action keys no bone at all comes out with no tracks and
+    is written as an empty slot - the only thing a block without tracks can be.
     """
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     return getattr(second_props["tracks"], "tracks")
