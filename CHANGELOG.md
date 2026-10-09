@@ -71,6 +71,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
+- Resident Evil 4 UHD models whose bone table names the same bone id twice
+  exporting with one of the two entries missing, and the surviving one given
+  the other's position. Such a model could not be edited at all: the exporter
+  had no way to write back the table it came with
 
 ### Changed
 
