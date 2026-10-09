@@ -1,4 +1,6 @@
+import collections
 import os
+import sys
 
 import bpy
 import pytest
@@ -72,6 +74,81 @@ def _record_exit_status(exitstatus):
             f.write(str(int(exitstatus)))
     except OSError as err:  # never let bookkeeping fail the run
         print(f"Could not write {path!r}: {err}")
+
+
+# Timing visibility for CI (see pytest_terminal_summary below). Session-scoped
+# parametrized fixtures interleave every file's tests, so a log read top to
+# bottom attributes nothing to a file; these totals do. Fixture setup, not
+# the tests themselves, is where most of this suite's time goes, so setup and
+# call are always reported apart - a call-only reading is badly misleading.
+_FILE_DURATIONS = collections.defaultdict(lambda: collections.defaultdict(float))
+_TEST_DURATIONS = collections.defaultdict(float)
+SLOWEST_TESTS_REPORTED = 25
+
+
+def pytest_runtest_logreport(report):
+    entry = _FILE_DURATIONS[report.nodeid.split("::")[0]]
+    entry[report.when] += report.duration
+    if report.when == "call":
+        entry["tests"] += 1
+    _TEST_DURATIONS[f"{report.when} {report.nodeid}"] += report.duration
+
+
+def _file_total(phases):
+    return phases["setup"] + phases["call"] + phases["teardown"]
+
+
+def pytest_terminal_summary(terminalreporter, config):
+    """Publish a timing table to the GitHub Actions job summary.
+
+    Nothing to read from a CI log today: --durations (pyproject.toml) covers
+    individual tests, and this covers where the wall clock actually goes, per
+    file. No-op outside Actions.
+    """
+    # Workers run this too, each holding only the files it was given; the
+    # controller receives every report, so its table is the complete one.
+    if hasattr(config, "workerinput"):
+        return
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path or not _FILE_DURATIONS:
+        return
+
+    by_file = sorted(_FILE_DURATIONS.items(), key=lambda kv: _file_total(kv[1]), reverse=True)
+    total = sum(_file_total(phases) for phases in _FILE_DURATIONS.values())
+    slowest = sorted(_TEST_DURATIONS.items(), key=lambda kv: kv[1], reverse=True)
+
+    lines = [
+        f"### Test timing (Python {sys.version_info.major}.{sys.version_info.minor})",
+        "",
+        f"{total:.0f}s of test time across {len(by_file)} files.",
+        "",
+        "| Test file | Total | Setup | Call | Tests | Share |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for path, phases in by_file:
+        seconds = _file_total(phases)
+        share = 100 * seconds / total if total else 0
+        lines.append(
+            f"| `{path}` | {seconds:.1f}s | {phases['setup']:.1f}s | {phases['call']:.1f}s "
+            f"| {int(phases['tests'])} | {share:.1f}% |"
+        )
+    lines += [
+        "",
+        f"<details><summary>{SLOWEST_TESTS_REPORTED} slowest phases</summary>",
+        "",
+        "| Phase and test | Time |",
+        "| --- | ---: |",
+    ]
+    for label, seconds in slowest[:SLOWEST_TESTS_REPORTED]:
+        lines.append(f"| `{label}` | {seconds:.1f}s |")
+    lines += ["", "</details>", ""]
+
+    try:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as err:  # never let bookkeeping fail the run
+        print(f"Could not write {summary_path!r}: {err}")
 
 
 def pytest_addoption(parser):
