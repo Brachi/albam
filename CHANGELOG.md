@@ -65,6 +65,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   been imported since. Export now also refuses a block whose action keys only
   bones the rig has no "Anim Retarget" id for, instead of writing it out with
   no tracks
+- An animation block created rather than imported exporting as an empty slot,
+  so a new animation could not be added to an `.lmt`. Whether a slot holds a
+  block is now derived from the block having tracks, so the block's "Offset"
+  field is gone: it no longer has to be hand-edited to a non-zero number to
+  add an animation, and setting it to 0 can no longer delete the block from
+  the exported file
 
 ### Changed
 
