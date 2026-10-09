@@ -58,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - A model imported from the second of two same-named archives taking its
   materials and textures from the first archive's `.mrl` and `.tex` files, so
   the mesh was right but silently wore the other archive's look
+- Fix hardcoded UV scale factor for detail maps
 - `.lmt` export retargeting bone ids through whichever armature the import
   panel currently pointed at, instead of the one the animation was imported
   onto, silently renumbering or dropping tracks when a second character had
