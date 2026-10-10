@@ -8,7 +8,7 @@ import pytest
 from tests.mtfw.conftest import import_export
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from albam.engines.mtfw.config_assets import (
-    _SDL_SERIALIZED_VALUE_SIZES,
+    SDL_DATA_STRUCT_SIZES,
     _sdl_to_xml,
 )
 
@@ -19,7 +19,7 @@ from albam.engines.mtfw.config_assets import (
 # tests/mtfw/datasets/<app_id>_catalog.json - see test_dataset_hashes_are_in_catalog
 # below, which enforces it.
 SDL_SERIALIZATION_DATASET_PATH = os.path.join(
-    os.path.dirname(__file__), "datasets", "sbc_serialization_hashes.json"
+    os.path.dirname(__file__), "datasets", "sdl_serialization_hashes.json"
 )
 with open(SDL_SERIALIZATION_DATASET_PATH) as f:
     SDL_SERIALIZATION_DATASET = json.load(f)
@@ -28,7 +28,7 @@ with open(SDL_SERIALIZATION_DATASET_PATH) as f:
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_sdl_path_hash" in metafunc.fixturenames):
-        argnames = ("local_app_id", "local_sbc_path_hash")
+        argnames = ("local_app_id", "local_sdl_path_hash")
         argvalues = [(d["app_id"], d["sdl_path_hash"]) for d in SDL_SERIALIZATION_DATASET]
         ids = [f"{d['app_id']}-{d['sdl_path_hash']}" for d in SDL_SERIALIZATION_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
@@ -51,7 +51,7 @@ def test_dataset_hashes_are_in_catalog():
 
 @pytest.fixture(scope="session")
 def sdl_export_local(game_fs_root, local_app_id, local_sdl_path_hash):
-    from albam.engines.mtfw.collision import APPID_SBC_CLASS_MAPPER
+    from albam.engines.mtfw.structs.sdl_156 import Sdl156
 
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
@@ -60,9 +60,9 @@ def sdl_export_local(game_fs_root, local_app_id, local_sdl_path_hash):
     vfile_sdl_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_sbc_path)
     assert vfile_sdl_exported
 
-    Sbc = APPID_SBC_CLASS_MAPPER[local_app_id]
-    src_sdl = Sbc.from_bytes(vfile_sdl.get_bytes())
-    dst_sdl = Sbc.from_bytes(vfile_sdl_exported.get_bytes())
+    Sdl = Sdl156
+    src_sdl = Sdl.from_bytes(vfile_sdl.get_bytes())
+    dst_sdl = Sdl.from_bytes(vfile_sdl_exported.get_bytes())
     src_sdl._read()
     dst_sdl._read()
     return src_sdl, dst_sdl
@@ -79,14 +79,15 @@ def sdl_exported_local(sdl_export_local):
 
 
 def test_real_sdl_xml_serialization_roundtrip(sdl_imported_local, sdl_exported_local):
-    original = sdl_imported_local
-    serialized = sdl_exported_local
+    src = sdl_imported_local
+    dst = sdl_exported_local
 
-    assert serialized.header.version == original.header.version
-    assert serialized.header.frame_max == original.header.frame_max
-    assert serialized.header.floor_frame == original.header.floor_frame
-    assert len(serialized.tracks) == len(original.tracks)
-    for source_track, exported_track in zip(original.tracks, serialized.tracks):
+    assert dst.header.version == src.header.version
+    assert dst.header.frame_max == src.header.frame_max
+    assert dst.header.floor_frame == src.header.floor_frame
+    assert dst.header.ofs_names == src.header.ofs_names
+    assert len(dst.tracks) == len(src.tracks)
+    for source_track, exported_track in zip(src.tracks, dst.tracks):
         assert exported_track.track_type == source_track.track_type
         assert exported_track.prop_type == source_track.prop_type
         assert exported_track.parent == source_track.parent
@@ -100,7 +101,6 @@ def test_real_sdl_xml_serialization_roundtrip(sdl_imported_local, sdl_exported_l
 
         if (
             source_track.track_type > 5
-            and source_track.prop_type not in _SDL_SERIALIZED_VALUE_SIZES
+            and source_track.prop_type not in SDL_DATA_STRUCT_SIZES
         ):
             assert exported_track.ofs_data == 0
-    assert ET.tostring(_sdl_to_xml(serialized).getroot()) == ET.tostring(xml)

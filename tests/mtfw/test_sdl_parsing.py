@@ -1,12 +1,8 @@
+from bisect import bisect_right
 import json
 import os
-import xml.etree.ElementTree as ET
+
 import pytest
-from albam.engines.mtfw.config_assets import (
-    _SDL_SERIALIZED_VALUE_SIZES,
-    _sdl_to_xml,
-    _sdl_xml_to_bytes,
-)
 from albam.engines.mtfw.structs.sdl_156 import Sdl156
 
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
@@ -67,32 +63,72 @@ def test_parsed_sdl_type(parsed_sdl):
         assert track.prop_type in PROP_TYPES, (f"the error at the track {i} file {path}")
 
 
-def test_real_sdl_xml_serialization_roundtrip(parsed_sdl):
-    original = parsed_sdl["parsed"]
-    xml = _sdl_to_xml(original).getroot()
+def test_sdl_data_block_boundaries_from_offsets(parsed_sdl):
+    """Infer value-size candidates from each data block's next section offset."""
+    sdl = parsed_sdl["parsed"]
+    path = parsed_sdl["path"]
+    section_offsets = sorted({
+        sdl.header.ofs_names,
+        *(
+            offset
+            for track in sdl.tracks
+            for offset in (track.ofs_timing, track.ofs_data)
+            if offset > 0
+        ),
+    })
+    size_candidates_by_type = {}
+    observations_by_type = {}
 
-    serialized = Sdl156.from_bytes(_sdl_xml_to_bytes(xml))
-    serialized._read()
+    for track_index, track in enumerate(sdl.tracks):
+        if track.track_type <= 5 or track.num_frames == 0 or track.ofs_data == 0:
+            continue
 
-    assert serialized.header.version == original.header.version
-    assert serialized.header.frame_max == original.header.frame_max
-    assert serialized.header.floor_frame == original.header.floor_frame
-    assert len(serialized.tracks) == len(original.tracks)
-    for source_track, exported_track in zip(original.tracks, serialized.tracks):
-        assert exported_track.track_type == source_track.track_type
-        assert exported_track.prop_type == source_track.prop_type
-        assert exported_track.parent == source_track.parent
-        assert exported_track.num_frames == source_track.num_frames
-        assert exported_track.name == source_track.name
-        assert [
-            (frame.frame, frame.type) for frame in exported_track.timing_frames
-        ] == [
-            (frame.frame, frame.type) for frame in source_track.timing_frames
-        ]
+        data_end_index = bisect_right(section_offsets, track.ofs_data)
+        data_end = (
+            section_offsets[data_end_index]
+            if data_end_index < len(section_offsets)
+            else sdl.header.ofs_names
+        )
+        timing_end = track.ofs_timing + track.num_frames * 4
+        data_size = data_end - track.ofs_data
 
-        if (
-            source_track.track_type > 5
-            and source_track.prop_type not in _SDL_SERIALIZED_VALUE_SIZES
-        ):
-            assert exported_track.ofs_data == 0
-    assert ET.tostring(_sdl_to_xml(serialized).getroot()) == ET.tostring(xml)
+        assert timing_end <= track.ofs_data, (
+            f"track {track_index} ({track.name!r}, type {track.prop_type}) "
+            f"timing ends at {timing_end}, after data begins at {track.ofs_data} "
+            f"in {path}"
+        )
+        assert track.ofs_data < data_end <= sdl.header.ofs_names, (
+            f"track {track_index} ({track.name!r}, type {track.prop_type}) "
+            f"has invalid data boundary {track.ofs_data}:{data_end} "
+            f"(ofs_names={sdl.header.ofs_names}) in {path}"
+        )
+        assert data_size % 4 == 0, (
+            f"track {track_index} ({track.name!r}, type {track.prop_type}) "
+            f"data block size {data_size} is not 4-byte aligned in {path}"
+        )
+
+        candidates = {
+            value_size
+            for value_size in range(1, data_size // track.num_frames + 2)
+            if ((track.num_frames * value_size + 3) // 4) * 4 == data_size
+        }
+        observation = (
+            f"track {track_index} {track.name!r}: "
+            f"frames={track.num_frames}, data={track.ofs_data}:{data_end}, "
+            f"block_size={data_size}, candidate_value_sizes={sorted(candidates)}"
+        )
+        assert candidates, f"No aligned value size fits {observation} in {path}"
+
+        prop_type = track.prop_type
+        if prop_type not in size_candidates_by_type:
+            size_candidates_by_type[prop_type] = candidates
+            observations_by_type[prop_type] = []
+        else:
+            size_candidates_by_type[prop_type] &= candidates
+        observations_by_type[prop_type].append(observation)
+
+    for prop_type, candidates in size_candidates_by_type.items():
+        assert candidates, (
+            f"Inconsistent measured data boundaries for property type {prop_type} "
+            f"in {path}: {'; '.join(observations_by_type[prop_type])}"
+        )
