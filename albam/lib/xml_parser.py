@@ -437,7 +437,78 @@ def read_chunk(buffer: KaitaiStream, layouts, parent):
 
 def from_xfs(xml, extension):
     root = ET.Element('root',attrib={'extension': extension})
-    read_chunk(KaitaiStream(io.BytesIO(xml.data_buffer)), xml.objects, root)
+
+    if xml.data.num_roots != 1:
+        raise ValueError(f'Expected one XFS root object, got {xml.data.num_roots}')
+
+    def append_class(body, class_index, parent):
+        class_def = xml.class_defs[class_index]
+        class_name = RV_DTI_HASHES.get(class_def.type_hash, str(hex(class_def.type_hash)))
+        class_xml = ET.SubElement(parent, 'class', attrib={'name': class_name})
+
+        for property_values in body.properties:
+            prop = property_values.property
+            prop_type = int(prop.type)
+            prop_attrib = {
+                'type': RV_MtPropertyType.get(prop_type, f'TYPE_UNKNOWN_{prop_type}'),
+                'name': prop.name,
+            }
+
+            if prop_type in (1, 2):
+                prop_xml = ET.SubElement(class_xml, 'classref', attrib=prop_attrib)
+                for value in property_values.values:
+                    if value.is_null:
+                        ET.SubElement(prop_xml, 'class', attrib={'name': 'null'})
+                    elif value.is_inline:
+                        append_class(value.body, value.class_index, prop_xml)
+                    else:
+                        reference_class = xml.class_defs[value.class_index]
+                        reference_name = RV_DTI_HASHES.get(
+                            reference_class.type_hash,
+                            str(hex(reference_class.type_hash)),
+                        )
+                        ET.SubElement(
+                            prop_xml,
+                            'class',
+                            attrib={
+                                'name': reference_name,
+                                'reference_index': str(value.index),
+                            },
+                        )
+            elif prop_type == int(xfs.Xfs.PropertyType.string):
+                prop_xml = ET.SubElement(class_xml, 'string', attrib=prop_attrib)
+                for value in property_values.values:
+                    ET.SubElement(prop_xml, 'item', attrib={'val': value.value})
+            elif prop_type == int(xfs.Xfs.PropertyType.resource):
+                prop_xml = ET.SubElement(class_xml, 'resource', attrib=prop_attrib)
+                for value in property_values.values:
+                    ET.SubElement(prop_xml, 'item', attrib={'val': value.class_name})
+                    ET.SubElement(prop_xml, 'item', attrib={'val': value.path})
+            elif prop_type in mt.type_to_class:
+                prop_xml = ET.SubElement(class_xml, 'vector', attrib=prop_attrib)
+                for value in property_values.values:
+                    vec_xml = ET.SubElement(prop_xml, 'vec')
+                    if len(value.value) % 4:
+                        raise ValueError(
+                            f'XFS vector property {prop.name!r} has a value size '
+                            f'of {len(value.value)} bytes, not divisible by 4'
+                        )
+                    for offset in range(0, len(value.value), 4):
+                        component = struct.unpack_from('<f', value.value, offset)[0]
+                        ET.SubElement(vec_xml, 'item', attrib={'val': str(component)})
+            else:
+                prop_xml = ET.SubElement(class_xml, 'scalar', attrib=prop_attrib)
+                scalar_reader = mt.scalar_type_map.get(prop_type)
+                for value in property_values.values:
+                    if scalar_reader is None:
+                        scalar_value = value.value.hex()
+                    else:
+                        scalar_value = str(
+                            scalar_reader(KaitaiStream(io.BytesIO(value.value)))
+                        )
+                    ET.SubElement(prop_xml, 'item', attrib={'val': scalar_value})
+
+    append_class(xml.data.root, 0, root)
     tree = ET.ElementTree(root)
     return tree
 

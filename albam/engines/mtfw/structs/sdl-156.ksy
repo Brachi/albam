@@ -229,7 +229,7 @@ types:
       - {id: ptr, type: u4}
     instances:
       string:
-        pos: ptr
+        pos: ptr + _root.header.ofs_names
         type: str
         encoding: UTF-8
         terminator: 0

@@ -74,7 +74,9 @@ class Sdl156(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ValidationNotEqualError(b"\x53\x44\x4C\x00", self.magic, self._io, u"/types/base_header/seq/0")
             self.version = self._io.read_u2le()
             self.num_tracks = self._io.read_u2le()
-            self.frames = self._io.read_u4le()
+            self.frame_max = self._io.read_bits_int_le(24)
+            self.floor_frame = self._io.read_bits_int_le(1) != 0
+            self.reserved = self._io.read_bits_int_le(7)
             self.ofs_dti_table = self._io.read_u4le()
             self.ofs_names = self._io.read_u4le()
             self._dirty = False
@@ -89,7 +91,9 @@ class Sdl156(ReadWriteKaitaiStruct):
             self._io.write_bytes(self.magic)
             self._io.write_u2le(self.version)
             self._io.write_u2le(self.num_tracks)
-            self._io.write_u4le(self.frames)
+            self._io.write_bits_int_le(24, self.frame_max)
+            self._io.write_bits_int_le(1, int(self.floor_frame))
+            self._io.write_bits_int_le(7, self.reserved)
             self._io.write_u4le(self.ofs_dti_table)
             self._io.write_u4le(self.ofs_names)
 
@@ -554,7 +558,7 @@ class Sdl156(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self.ptr)
+            self._io.seek(self.ptr + self._root.header.ofs_names)
             self._m_string = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
             self._io.seek(_pos)
             return getattr(self, '_m_string', None)
@@ -567,7 +571,7 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _write_string(self):
             self._should_write_string = False
             _pos = self._io.pos()
-            self._io.seek(self.ptr)
+            self._io.seek(self.ptr + self._root.header.ofs_names)
             self._io.write_bytes((self._m_string).encode(u"UTF-8"))
             self._io.write_u1(0)
             self._io.seek(_pos)
@@ -1825,5 +1829,4 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
-
 
