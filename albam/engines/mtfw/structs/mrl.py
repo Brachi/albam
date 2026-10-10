@@ -30,6 +30,8 @@ class Mrl(ReadWriteKaitaiStruct):
         flinearcolor = 144
         getbiasedviewposition = 543
         fbaselightscattering = 1145
+        cs_tilemax = 1219
+        fshadowfiltermask1 = 1598
         bsaddrwrite = 2367
         ps_ambientshadow = 3207
         fmrtnormalcombinear = 4069
@@ -37,6 +39,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fgpuparticletonemapdefault = 5927
         fappoutline = 5987
         cbprimitiveparticletess = 6540
+        fuvintegratedoutlineinnermap = 6648
         fheightfogmodelvtf = 6720
         calcfog = 6726
         fprojectiontexturecolor = 6902
@@ -58,6 +61,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tambientshadowmap = 11996
         ps_tattoo = 12198
         makedirectionfromuv = 12964
+        fimageblendmul = 13315
         ssborderpoint = 13386
         fvdgetmask = 13446
         fbrdfgrassdefault = 14661
@@ -72,7 +76,9 @@ class Mrl(ReadWriteKaitaiStruct):
         vs_filter = 17758
         cbprimitivemetadatafresnel = 18433
         fencodersmparameter = 19835
+        fconvertenvelopeworldcoordinate = 20347
         bsadd = 20370
+        vs_neighborhoodblending = 20573
         cboutlineex = 20690
         vs_infparticle = 20872
         dsprimzwritestenciltestneq = 21054
@@ -93,9 +99,11 @@ class Mrl(ReadWriteKaitaiStruct):
         tdofmap = 25075
         filtercascadevlsm = 26314
         tssaonormalmap = 26412
+        ps_materialdebugfill = 26704
         iatetradeform = 26946
         ia_simwater_for_view_vs_input = 27265
         cbguiglobal = 27312
+        ssmvc3albedomapclamp = 27477
         cbdynamiclightingdl = 27762
         ia_nonskin_b = 27824
         fprimitivescenesamplerrefractzblur = 27973
@@ -108,11 +116,13 @@ class Mrl(ReadWriteKaitaiStruct):
         fmiragesamplescenerefractionmap = 30195
         ia_skin_velocity_edge = 30560
         cbshadowfrustum = 30873
+        ffilterantiedgebrightnessdetectionfast = 30892
         fswingdefaultviewi = 30894
         ia_nonskin_tbc = 31124
         finfparticlerandomizepos = 32664
         primitiveconsths = 32914
         fsamplecount18 = 33067
+        ps_materialstgsimple2 = 33348
         ps_bloomconeblur = 33587
         dsguistencilwrite = 34237
         treflectiveshadowmap = 34288
@@ -124,15 +134,18 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowreceiveattnviewdistance = 36716
         tocclusiondepth = 36941
         vs_gsdoffilter = 36983
+        ps_combinefilter = 37180
         fimageblendexclusion = 37276
         getdeveloptexcubeface = 37581
         bsaadd = 37741
         falphatestless = 37803
         ps_deferredlighting_bilateralblurv_size16 = 37892
         dsguiztestwritestencilapply = 37966
+        fimageblendsub = 38782
         ia_grass = 38881
         fskinningpf2weight = 39094
         fshadowisoutofrange2 = 39123
+        ps_dddeferredlighting_gbufferpass = 39440
         rsmeshbias8 = 39599
         ps_tangentfilter_blur8 = 39691
         fxaafilter = 40287
@@ -147,6 +160,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tbasemap = 44852
         fdeferredlightinggetlightingresult = 44913
         cbmark = 45028
+        fburnemissionblend = 45072
         vs_cubicblend = 45251
         ffiltercolorcorrect = 45399
         bsrevsubalphargb = 45475
@@ -158,6 +172,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivecalcnormalmapmask = 46342
         cbskystar = 46392
         foutlinedetectordepth = 46527
+        ssmvc3albedomap = 46845
         calcparticleintensity = 47210
         sbboxconstraint = 47276
         tlutshininess = 47512
@@ -173,12 +188,16 @@ class Mrl(ReadWriteKaitaiStruct):
         focclusionambient = 48841
         fshaderattributesvtf = 49152
         getatmospheredepth = 50330
+        fddmaterialbumpsand = 50433
         ffilteredgeantialiasinggetdepth = 50967
         fskinningpf8weight = 51192
+        fcalcrimlightnone = 51706
         iaskinbridge4wt = 52072
         dynamicedit_input = 52163
         ia_grass_hicomp = 52654
         fchannelb = 52847
+        ffilterantiedgebrightnessedgecoloronly = 53218
+        cbdynamiclightingdl2 = 53756
         cbsbextrapolation = 54006
         cbssaoffilterintensity = 54096
         ps_deferredlighting_lightvolume_nolighting_lightgroup = 54156
@@ -186,8 +205,11 @@ class Mrl(ReadWriteKaitaiStruct):
         iasoftbodyvertexps3 = 54499
         bsshadowrecvtransparentgroup1 = 54662
         freflectglobalcubemap = 54716
+        fworldcoordinatesimple2 = 55051
         fdiffusethin = 55623
         iaskintbn2wt = 55784
+        fuvshininessblendmap = 56252
+        ftoonlightrevcalchalf = 56570
         fprocedural2d4e1 = 56624
         fdynamiceditmapscalingenable = 56658
         ps_grass = 56754
@@ -204,19 +226,24 @@ class Mrl(ReadWriteKaitaiStruct):
         foutputencodesrgbrcrgb = 59941
         bsshadowrecvsolidgroup0 = 60114
         tspecularmap = 60699
+        cbdynamiclighting1 = 60750
         cblightscattering = 61293
         bsblendblendalpha = 61595
         fprimitivescenesamplerdistortion = 61598
+        fspecularmapalphamap = 61669
         creatematerialcontextexest = 62717
         water_ripple_output = 62802
         twatercaustics = 62858
         ia_instancing = 62968
+        fburncalceditblendcolor = 63896
         fvertexdisplacementdirv = 64190
         swing_input = 64299
         cbviewprojectionpf = 65324
+        fuseralbedomapfrozen = 65742
         fwinddirection = 66373
         cbbloomfilter = 66408
         fmaterialstdvertexocclusiondefault = 66503
+        tmaterialchar = 66720
         tprocedural1d3 = 66795
         ia_nonskin_tbn = 66857
         fvariancemakemiplevelcube = 66870
@@ -242,6 +269,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fbokehcalculation = 72045
         cbcolormodifieropticalcamouflage = 72328
         ssclamplinear = 73134
+        dsdeferredlightingstencilwritedepthfail = 73279
         cbprimitiveparallaxtess = 73938
         easein = 73954
         ps_deferredlighting_indirectlighting = 74734
@@ -253,6 +281,8 @@ class Mrl(ReadWriteKaitaiStruct):
         fbokehmaskvalue = 75823
         fdynamiclocalwind3 = 75868
         fguicalccoloralphamaskwrite = 75952
+        tddmaterialspecularmapex = 76121
+        fdiffusecolorcorectlightmap = 76791
         cbshadowlight = 77035
         ffiltergodraysthreshold3dboundmaskweightzero = 77037
         ps_materialoutline = 77345
@@ -276,12 +306,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivelevelcorrectionlinear = 81095
         fddmaterialalbedo = 81695
         fprocedural3e = 81744
+        fuseralbedomapnoalpha = 81760
         tpointlighttexture1 = 81868
         system_mrt3 = 81973
         iagpupolylineparticle = 82067
         builder_ps_input = 82223
         fuvunique = 82449
         ssprimocclusionmap = 83195
+        ssmvc3normalmapclamp = 84053
         fskymapbeginendrayleigh = 84183
         calcwaveheight = 85176
         iaskintb4wt = 85312
@@ -291,6 +323,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbvertexdisplacement = 87065
         fbrdfanisotropicphong = 88108
         fdynamiclightdl2 = 88166
+        fcombinefilterimageplanecubeenable = 88373
         sbsolveedgeconst2ps = 89185
         fswingadjustposition = 89359
         ps_systemdepthcopy = 89512
@@ -299,11 +332,13 @@ class Mrl(ReadWriteKaitaiStruct):
         bsmrtwrite0101 = 89939
         ffilteroutlinesample = 90593
         bsambientmaskalphagroup1 = 91128
+        tbhddepthwrite = 91349
         fdevelopdecode_rgbn = 91415
         fwaterbubbletexturecoordinate = 91475
         vs_ambientshadow = 91491
         bssubbwrite = 91612
         gs_gpuparticle = 92283
+        ps_bhdbgwrite = 92485
         cbmaterialsssblend = 92535
         ttransparencymap = 92554
         fsamplecount21 = 92748
@@ -330,6 +365,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitive2dcalctexcoord = 96878
         ps_systemdepthvmax = 97037
         ia_softbody_vertex = 97076
+        fddcalcborderrate = 97586
         ffilterdeferredrendering = 97755
         tshadowcast = 97813
         cbblendfactor = 98214
@@ -345,10 +381,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fdissolvepatterntexture = 102314
         ldnormalunpackf32 = 102694
         fgpuparticlecalcposlineparticle = 103088
+        fdamagealbedomapburnmap = 103516
         ffilterhazedepth = 104037
         fcuboidlightd = 104086
         fshadowreceiveattndistancefade = 104717
         frsmgetindirectlighting = 104731
+        cbsmaa = 105514
         ffogdistancecolortable = 106045
         flightmaskshadowmultirt1 = 106155
         cbshadowreceive2 = 106302
@@ -372,6 +410,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fheightfogmodel = 111142
         fmiragemodcolordebug = 111432
         fshadowreceivecascadessmlite = 111452
+        fdeferredlightingshinessdecode = 112289
         ds_primitivetessellate = 112362
         calcscattering = 112406
         ps_deferredlighting_bilateralblurh_size16 = 112413
@@ -401,6 +440,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffiltertexcoord = 119499
         flightmaskrtsolid1 = 119820
         vs_skystarryskycolor = 119826
+        fblendfoguber = 120933
         cbcolorcorrectfilter = 121343
         setuplightbalance = 122184
         vs_dof_input = 122829
@@ -419,6 +459,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sb_psmrtout3 = 127212
         fshadowmultireceivespotvsmrt = 128466
         cbgodraysiterator = 128984
+        vs_combinefilter = 129240
         ps_grassshadowreceivetransparent = 130330
         ps_modelnormalize = 130438
         fsamplecount15 = 130454
@@ -448,6 +489,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbgrassmaterial = 136705
         forennayarmodel = 136813
         fvariancefiltercubev = 137192
+        iatvnoiseprimitive = 137528
         ps_infparticle = 137790
         fmaterialstdreflectiontypeextend2mask = 138125
         rsguiscissorenable = 139008
@@ -465,12 +507,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fdeferredlightingencodeoutput = 141464
         ia_lightshaft_input = 141759
         ps_systemfillstencilrouting = 141959
+        tvnoiseprimitive_output = 142401
         toonshadowmaskenable = 143130
         ffilteroutlineblur = 143141
         ffiltermotionblurneighbormax = 143402
         ftonemapexposure = 143437
         fmaterialstdspecularmaskexaddproc = 143686
         tindirectlighting = 143935
+        tfrozennoizemapuser = 143972
         fcuboidlightb = 144291
         vs_imageplanefilter = 144403
         unpacku8u8 = 144445
@@ -488,11 +532,15 @@ class Mrl(ReadWriteKaitaiStruct):
         fdeferredlightinglightvolumelightmasksolid0 = 147307
         ps_reflectiveshadowmapest = 147334
         fbeckmannmodel = 147389
+        cbcustomworldcoord = 147446
         finstancingenable = 147472
+        fburnsimplealbedomapaddburnmap = 147477
         fdeferredlightingencodeparameter = 147634
+        fshininessmapmodulate = 147930
         vs_tangentfilter = 148079
         rsmeshbias3 = 148263
         fspecularmap = 148864
+        sstoonmap = 149257
         cbuvrotationoffset = 149486
         vs_shadowreceive = 149918
         fupperposydiscardcolormodifier = 149955
@@ -507,6 +555,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbsoftbodysim = 152653
         ps_deferredlighting_lightvolume_nolighting_mrt = 153018
         softbody_input = 153142
+        ps_appcubicblend = 153291
         ps_deferredlighting_bilinearupsampling = 153567
         bsblendblendalphargb = 153595
         fsamplecount13 = 153763
@@ -517,17 +566,20 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivedepthcomparisonenable = 154631
         ssnormalmap = 154742
         fmaterialstdspecularmaskexaddextend = 154822
+        smaasearchxright = 155132
         fshadowreceivesmoothcascadessm = 155355
         fdistancefog = 155419
         tmaterialstd = 155599
         fprimitivecalcposparticlent = 155783
         falbedotextureblendmap = 155798
         ps_materialoutline2 = 155888
+        ffilteredgeantialiasingtwopoint = 155949
         fgrassposition = 156510
         ps_develop = 156885
         fwaterbubblemask = 157688
         fwaterwposprot = 158478
         ssshadowdepth = 158524
+        fshadowmaskg0 = 159308
         ftonemaplinear = 159379
         ffiltercolorcorrectvolumeinterpolatehq = 160510
         vs_grassshadowdummy = 160528
@@ -543,6 +595,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffiltergodraysthresholdwithz = 162464
         fuvalbedoblend2map = 162554
         fdynamiceditmapfadeenable = 163020
+        smaadetecthorizontalcornerpattern = 163832
         fshadowfilter3 = 164039
         iaprimitivent = 164229
         sspoint = 164559
@@ -550,12 +603,14 @@ class Mrl(ReadWriteKaitaiStruct):
         mrtoutput = 165397
         vs_systemdownsample16 = 166284
         bsrgbwrite = 166858
+        fdiffusecolorcorectbone = 166971
         occlusion_query_vs_output = 167064
         fdynamiclocalwind5 = 167273
         fwaterunitprot = 167281
         cbsoftbodycollision = 167631
         sbpositiontotexcoord = 167772
         fuvproj = 167775
+        ia_bhd_depth_write = 168112
         fdevelopdecode_rgb = 168584
         calczoffset2d = 169581
         rsscissormesh = 170115
@@ -588,8 +643,10 @@ class Mrl(ReadWriteKaitaiStruct):
         flddeformerwithprev = 178711
         flightmasktransparent01 = 179339
         fsimwatersimpletexvs = 179763
+        fappoutlineadd = 179840
         fcuboidlight = 180499
         ffogvtfdistancecolortable = 180797
+        fburncalcblendcolor = 180972
         ps_materialstdest = 181669
         fwrinkledetailnormalmap = 182363
         maskoutlinegeometry = 182461
@@ -611,6 +668,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffiltermotionblur4median = 186839
         fshadowlightfacepoint = 186894
         fprimitivelevelcorrection = 187139
+        ssfrozennoizemapuser = 187168
         fscheuermannmodel = 187231
         ps_gsdoffilter = 187329
         vs_out_gui = 187412
@@ -624,12 +682,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fvtxdispgenwave = 190196
         fgrasspervertexlightmask = 190767
         fwindtrianglecurve = 190805
+        ffiltercopycolorwhiteblackuser = 190834
         fbrdf_toon_lite = 191039
         fshadowfilterpoint1 = 191715
         flocalwindpoint = 192312
         cbradialblurfilter = 192448
         twcvtfprevpos1 = 192494
         ps_systemclear = 192691
+        tdetailnormalburnmap = 192827
         ffogvtfdistancecolortableest = 192965
         fshadowreceivespotvsmrt = 193111
         ia_nonskin_ba = 193254
@@ -641,10 +701,13 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_proceduraltextureunorm = 195646
         bsblendrevsub = 195722
         fdynamiclightdl4 = 195923
+        ps_ddmaterialstd = 195952
         sbapplyworldoffsetps = 196090
         ps_ssaomakenormal = 196756
         vs_mirror = 196873
         fdegamma = 197395
+        fmaterialnop = 197480
+        fcalcuvrotation = 197608
         hs_primitivetessellate = 197610
         dszteststencilwrite = 197905
         ps_skymoonbody = 198216
@@ -657,6 +720,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffogdistancecolortableest = 201044
         fshadowreceivespotvsm = 201657
         fgpuparticlecalcdepthblendnone = 201800
+        fuseralbedomapindirect = 202048
         texture_blend_output = 202357
         ia_nonskin_tb = 202379
         tfilter = 202413
@@ -700,6 +764,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fdynamiceditmapfade = 214081
         cbquantcompress = 214932
         tspotlighttexture6 = 214993
+        cbdynamiclighting7 = 215163
         ttangentmap = 215314
         tsssdiffusemap1 = 215794
         fgpuparticlefogpsdefault = 216377
@@ -707,10 +772,12 @@ class Mrl(ReadWriteKaitaiStruct):
         sblodtransps_xbox = 216692
         fquaternioninverse = 217243
         sbnormalunpackf32 = 217706
+        fdiffusecolorcorect = 217955
         fskymapbeginendmie = 217972
         ia_swing2 = 218013
         bsmrtwrite1010 = 218070
         fchannelshininessmap = 218514
+        dorgb2hsv = 218761
         ftattoouvnormalmap = 219110
         ps_deferredlighting_gbufferpassmrt = 219288
         twaterreflection = 219759
@@ -718,6 +785,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fldtexturesampler3 = 220759
         doadhesioneachlighting = 221057
         fshadowreceivefaceattn = 221409
+        fshininessmapblend = 221563
         fprimitivecalceyedefault = 222162
         fjointmatrixpf = 222377
         bsnvmodelblendalpha = 223032
@@ -727,8 +795,11 @@ class Mrl(ReadWriteKaitaiStruct):
         fuvnormalblendmap = 224357
         fgpuparticlevsalphaclipdefault = 224966
         grass_reflection = 225115
+        ffilteranaglyphedge = 225297
         fguicalcposition3d = 225436
         inf_particle_vs_input = 225515
+        cbdynamiclightingdl4 = 226505
+        cbuvtransformrotationoffset = 226896
         fspecularsh = 227029
         tdepthmap = 227254
         iabokeh = 227287
@@ -747,9 +818,11 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_nonskin_bl = 233051
         rsm_param = 233787
         fprimitivecloudcolor = 234347
+        vs_ddmaterialstd = 234644
         shadowcast_output = 235394
         ia_skin_tbnla_8wt = 235566
         ffiltergodraysp2o = 236176
+        dd_material_output = 236492
         fmaterialvelocitywposnml = 236641
         fvdgetmaskfromao = 237090
         twaterdepthmap = 237568
@@ -758,6 +831,8 @@ class Mrl(ReadWriteKaitaiStruct):
         iatetradeform2 = 237909
         flocalwindreference = 238842
         fgrasscompressedinput = 239366
+        ps_bhddepthwriteblend = 240050
+        fintegratedoutlinetwocolor = 240064
         fquaternionaxis = 240222
         ds_materialdm = 240249
         fsamplecount6 = 240413
@@ -771,6 +846,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprocedural1d2e3 = 244350
         prim_fog_out = 244607
         mrtoutput3t = 244958
+        fuvsecondaryrotation = 245129
         tcomparisontexture = 245345
         fwaterrefractionscene = 245529
         getadaptivefactor = 245599
@@ -780,6 +856,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fbokehdefaultfarz = 245950
         fskyfog = 246064
         fshadowlightface3 = 246262
+        fcombinefiltertvnoiseenable = 246745
         ttablemap = 247168
         tshadowmapcombine1 = 247731
         fbuildersample = 248091
@@ -794,6 +871,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbcloudmetadata = 251955
         fprimitivecalctexcoordtexel = 252059
         cubemap_filter_output = 252123
+        fdiffusecolorcorectsh = 252236
         fdynamiceditmapreject = 252465
         fchromaticaberrationfilter = 252724
         ssfilter = 252945
@@ -806,6 +884,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fmaterialstdalbedoprocblendvertexalpha = 255384
         treflectiveshadowmap1 = 255867
         bsmultiplycoloralpha = 256018
+        fddmaterialalbedosand = 256377
         ia_nonskin_tbnca = 257509
         fchannelemissionmap = 257524
         tmaterialconstantlite = 257777
@@ -829,6 +908,7 @@ class Mrl(ReadWriteKaitaiStruct):
         grass_output = 265703
         fskymapoutputselectmie = 265826
         fgrassbillboardnormal = 266380
+        fburnsimplealbedomapburnmapex = 266385
         getprojectiontexture = 266521
         prim_eye_out = 267012
         sswrappoint = 267138
@@ -842,12 +922,15 @@ class Mrl(ReadWriteKaitaiStruct):
         fuvemissionmap = 269265
         ia_skin_tbnla_2wt = 269816
         material_input = 269933
+        fmaterialvelocitywposnmlfromtexture = 270090
         foutlineblendmodulate = 270160
         ssshadowdepthcomp = 270978
+        computevals = 271425
         freconstructworldpositiondualpalaboloid = 271490
         fdoffilterlight = 272217
         cbgodraysfilter = 272231
         ps_cubemapvariancefilter = 272399
+        ps_bhddepthwrite = 273285
         fprimitivetransparency = 273410
         fsamplecount = 273547
         ds_materialpn = 273558
@@ -858,14 +941,18 @@ class Mrl(ReadWriteKaitaiStruct):
         ianonskintbn_4m = 275034
         ps_grassshadowreceivezpass = 275192
         cbsoftbodyworldoffset = 275463
+        fimageblendmax = 276267
         fmaterialstdalbedoextendblendconstantalpha = 276427
         vs_grassdummy = 276639
         cbprimitivecoord = 276821
         fgpuparticlelevelcorrectionneg = 276887
         getaerosoldepth = 277164
+        vs_tvnoiseprimitive = 277335
         iafilter1 = 277933
         finfparticlevsalphaclipdefault = 278295
         ps_materialdummy = 278668
+        ffiltercopycolormono = 279474
+        cbdynamiclightingdl5 = 279647
         fcolormasktransparencymap = 280304
         fwaterbubblenormal = 280497
         falphatestequal = 280920
@@ -873,12 +960,14 @@ class Mrl(ReadWriteKaitaiStruct):
         bsblendcolor = 281132
         material_velocity_output = 281169
         fprimitivecalcfresneldefault = 282084
+        tmaterialui = 282267
         fambientshadowdecay = 282290
         bsshadowrecvmultisolidgroup0 = 282478
         ffiltergodraysalphaocclusion = 282901
         fshadowreceivesmoothcascadessmrt = 283550
         fshadowreceivesmoothcascadelsmrt = 283597
         bsrgwrite = 283897
+        fddmaterialbumpoil = 284300
         vs_skymap = 284812
         dsstencilwrite = 285419
         fprimitive2dcalcpos = 285712
@@ -886,6 +975,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tnoise = 286651
         fvertexdisplacementcurvev = 287372
         dsoutlineztestwritestenciltest = 287421
+        fgetmaterialshadowrt = 287524
         bsmrtwrite1011 = 287552
         ffilterhaze = 287811
         ffilteredgeantialiasinggetedgeweightfast = 288467
@@ -895,10 +985,12 @@ class Mrl(ReadWriteKaitaiStruct):
         bsawrite = 290211
         cbsystemgamma = 290772
         ffiltervelocity = 290927
+        smaasearchydown = 291316
         dsguistencilapply = 291837
         vs_dynamicedit = 292591
         tspotlighttexture7 = 292679
         fadhesionalbedosubtract = 292761
+        cbdynamiclighting6 = 293101
         foutlinesample12 = 293135
         ssshadowvariancemip0 = 293458
         tsssdiffusemap0 = 293476
@@ -914,11 +1006,13 @@ class Mrl(ReadWriteKaitaiStruct):
         fprocedural1d2e2 = 297704
         frsmgatherindirectlightingvariable = 298052
         fgpuparticlelevelcorrection = 298075
+        fddmaterialuvoil = 298401
         rsdefault = 299193
         tvtxdisplacement = 299850
         fcalcprimarycolortoonuber = 299913
         bsblendalphaex = 300446
         fditheringbayer8bit = 300560
+        smaadetectverticalcornerpattern = 300940
         fmiedepthmap = 301575
         treflectwatermap = 301875
         ianonskintbc = 301903
@@ -966,11 +1060,14 @@ class Mrl(ReadWriteKaitaiStruct):
         bsdefault = 316104
         samplevariance = 316260
         calclightmask = 316868
+        ffiltercopyblue = 317202
         fbruteforcelightingnulllighttexture = 317210
         treflectiveshadowmap0 = 317421
+        fddmaterialuvsand = 317871
         fprimitive2dlensflareintensity = 318015
         fdeferredlightingencodeparametermrthalflambert = 318964
         cbchannelblend = 319532
+        ffrontfacereversenormal = 319831
         fgpuparticlecalctexcoord = 320225
         fbokehreductionblend = 321319
         cbjointmatrix = 321525
@@ -983,6 +1080,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowreceivefaceattn3 = 323736
         finstancingmultiplyenable = 323912
         fshadowlightface2 = 323936
+        cbtoon2 = 324072
         ia_softbody_vertex_novtf = 324776
         ps_fxaa3hq = 325318
         fimageblenddifference = 325350
@@ -999,9 +1097,11 @@ class Mrl(ReadWriteKaitaiStruct):
         iaambientshadow = 329700
         mirage_filter_ps_input = 329786
         ffogvtfdistance = 330074
+        ps_materialstgsimple = 330196
         dsztestwritegt = 330248
         fmaterialstdspecularmaskexmodulateproc = 330432
         fradialblurwidth = 330522
+        ssindirectmapuser = 331228
         fprimitive2dcalctexcoordnormalize = 331256
         fspecular = 331450
         fdeferredlightinglightvolumelightmasksolid1 = 331773
@@ -1018,9 +1118,13 @@ class Mrl(ReadWriteKaitaiStruct):
         bssubawrite = 333682
         fswingoriginfromworld = 333797
         cbvertexdisplacement2 = 333844
+        fgetnormal = 333878
+        fddmaterialbumpfreeze = 334073
+        ttoonrevmap = 334146
         foutlineblendadd = 334327
         fappclip = 334970
         ffresnelschlickrgb = 336182
+        iatvnoiseprimitivevcolor = 336759
         bsnowrite = 337176
         fimageblendscreen = 337365
         vs_materialdummy = 338280
@@ -1036,11 +1140,13 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_skin_tb_1wt = 341904
         sbnormalpackf16 = 342234
         calcpcf4x4 = 342297
+        ftoonshaderhigh = 342312
         fshadowreceivecascadessmrtlite = 342412
         ftrianglevertex2 = 343601
         tdummy = 343707
         cbsoftbodylwmatrix = 343858
         ianonskintbnl_la = 344111
+        vs_bhddepthwrite = 344673
         vs_vertexoutput = 344744
         tmaterialvelocityedge = 344979
         tambientshadow = 345047
@@ -1065,6 +1171,9 @@ class Mrl(ReadWriteKaitaiStruct):
         doadhesiondynamiclighting = 351482
         ps_primitive = 351914
         setuplightspecular = 351919
+        fshadowmaskg1 = 351962
+        fuserspecularmapindirect = 351995
+        fddmaterialalbedooptcamo = 352074
         dsprimstenciltestneq = 352183
         finfinitelight = 352882
         dsprimzteststenciltestneq = 354031
@@ -1080,6 +1189,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivescenesamplerblurnotex = 356311
         rsmeshbias2 = 357297
         fvdmaskuvtransformoffset = 357487
+        fblurmaskdistancemask = 357732
         fuvdetailnormalmap2 = 358111
         ffiltercopy = 359053
         cbjointmatrixex = 359209
@@ -1093,18 +1203,23 @@ class Mrl(ReadWriteKaitaiStruct):
         dsprimztestwritestenciltestneq = 361234
         ssenvmaplodbias4 = 361245
         fgpuparticlecalcposparticle = 361617
+        fspecularmapmodulate = 362799
         dsprimstenciltesteq = 362912
         ffiltermotionblurtilemax = 363627
         ssborderlinear = 364198
         tinfparticle = 364986
         cbdualparaboloid = 365180
+        fspecularmapburnmap = 365186
+        fimageblendalpha = 365703
         flocalwindloopslot2 = 365794
         flocalwind = 366205
         finfparticlesample = 366372
         sbplaneconstraint = 366718
         cbinfparticletexture = 366873
+        ttoonmap = 367154
         ps_bloomfinalout = 367404
         freflectcubemapshadowlight = 367507
+        ffilterdistortioncolor = 368153
         ffilteroutlinesamplecomposite = 368288
         bsguiaddinvcolor = 368533
         fshadowreceivecascadevssmrt = 368669
@@ -1115,12 +1230,14 @@ class Mrl(ReadWriteKaitaiStruct):
         vs_shadowreceivedeferredrectangle = 370266
         tpointlighttexture6 = 371311
         dsdeferredlightingzteststencilwritedepthpass = 371859
+        ffilteranaglyphedgegrayscale = 372053
         ia_cubemap_filter = 372177
         fgrassglobalwind = 372683
         fshadowfilter2 = 372817
         cbmorph = 373517
         fbrdffur = 373737
         sbpsskinningaddposps = 374148
+        cbindirectuser = 375655
         fswing1weight = 375707
         ia_primitive_polygon = 375751
         fdeferredlightinglightvolumelightmask = 375994
@@ -1136,8 +1253,10 @@ class Mrl(ReadWriteKaitaiStruct):
         fradialfiltermask = 377902
         fdeferredlightingsamplinglight = 380048
         fdynamiclightdl5 = 380357
+        fburnemission = 380557
         fwaterdetailcoodinate = 380918
         fshadowreceivecascadevssm = 381119
+        ffoguber = 381505
         ps_materialstd = 382027
         system_mrt4 = 382358
         iaskinbridge4wt4m = 382381
@@ -1149,6 +1268,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffilterlightscatteringmulrc = 383816
         fshadowfilterpoint0 = 384117
         fuvtransformoffset = 384155
+        tcombinefilter = 384620
         tlutfresnel = 384705
         fguicalccoloralphamaskapply = 384752
         fgpuparticleintensitydefault = 385529
@@ -1184,11 +1304,13 @@ class Mrl(ReadWriteKaitaiStruct):
         ssdistortionmap = 395126
         foutlinedetector3 = 395293
         bsaddbwrite = 396196
+        cbddmaterialparamoil = 396711
         sb_input = 396731
         tpointlighttexture0 = 397146
         correctdepthsub = 397168
         fbumpdetailnormalmap = 397477
         fworldcoordinatelatticedeformedge = 397520
+        vs_materialstdcld = 397541
         astral_body_vs_out = 398187
         cbcolorcorrectcolor = 398240
         ftransparencymapalphaclip = 398746
@@ -1212,9 +1334,11 @@ class Mrl(ReadWriteKaitaiStruct):
         bsblendaddalphargb = 403451
         bsblendrevsubcolorrgb = 403478
         fsssgaussianfilterh = 403948
+        ssmvc3specularmap = 404242
         bssolid = 404269
         variance_filter_output = 404305
         sbfilterdepthnormps = 405128
+        cbcustomworldcoordparam = 405252
         fdissolve = 405307
         tdistortionblend2map = 405470
         ssemissionmap = 405534
@@ -1292,6 +1416,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fdeferredlightinggetlightparam = 430423
         fshadowreceiveattn2 = 430522
         fdynamiceditmapcoordinateenable = 431032
+        vs_materialstgsimple = 431105
         fswingbillboard = 431704
         fspotlightd = 431740
         fdeferredlightingencodelineardepth = 432168
@@ -1303,6 +1428,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_fxaa = 433374
         fsssfillmarginh = 433847
         cbguimatrix = 434428
+        vs_blendingweightcalculation = 435019
         bsrevsub = 435587
         deferred_lighting_light_volume_vs_output = 436246
         vs_fxaa = 436708
@@ -1324,11 +1450,13 @@ class Mrl(ReadWriteKaitaiStruct):
         sbpsskinningps = 441366
         fgrassconstraintbillboard = 441976
         sb_psmrtout2 = 442490
+        ftransparencymapclamp = 442500
         fradialfilteralpha = 442755
         fbdistortionrefract = 443725
         cbcolorcorrectmatrix = 444205
         cbmaterial = 444417
         ps_filterdepth = 444755
+        ftoonlightcalchalf = 445364
         fsamplecount14 = 445696
         bsblendnoblendrgb = 446136
         bsazero = 446145
@@ -1345,8 +1473,11 @@ class Mrl(ReadWriteKaitaiStruct):
         cbgrasschain = 450075
         fdevelopdecode_r = 450201
         fprocedural1d3e2 = 450783
+        dsdeferredlightingstencilwritedepthpass = 450898
+        cbappcubemapfilter = 451227
         flightmaskrtsolid0 = 451738
         iatrianglef32 = 451997
+        ffilterdistortion = 452877
         fsystemconvertreversehightmaptonormalmap = 453035
         cbdevelopflags = 453289
         ia_nonskin_bla = 453364
@@ -1354,6 +1485,7 @@ class Mrl(ReadWriteKaitaiStruct):
         trayleighscattermap = 454073
         fpointlightsr = 454386
         cbcolormask = 454678
+        tmaterialcharalpha = 455619
         tsimwatersimpletex = 455839
         calcpmax = 456218
         ps_normalizedseparation = 456987
@@ -1387,6 +1519,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tprimalphamap = 468888
         fgrassadjustnormaldisable = 469045
         fpervertexlightingtoonvs = 469350
+        rwtilemax = 469947
         ffiltercolorcorrectvolumeblend = 470453
         fprimitivecoltexinfluencedefault = 470548
         ffogdistancetableest = 470577
@@ -1397,9 +1530,12 @@ class Mrl(ReadWriteKaitaiStruct):
         iaswing2 = 471896
         fgrassbillboarduv = 472136
         fprimitivesamplealphamaplin = 472348
+        fshadowfiltermask0 = 472744
         cbsystemmiptarget = 473628
         fprimitivesamplealphamapparallaxlin = 473717
+        ttvnoiseprimitive = 473780
         tshininessblendmap = 474004
+        ia_tvnoiseprimitive_vcolor = 474012
         fdiffuselightmapocclusion = 474383
         fdebugviewpixelocclusion = 474487
         fshadowfilterpcf3x3comp = 474510
@@ -1407,14 +1543,17 @@ class Mrl(ReadWriteKaitaiStruct):
         fsamplecount1 = 474814
         sbinitps = 474856
         fskinning1weight = 475321
+        fcolorcorrect = 475594
         fldtetradeformer = 475851
         tfogtablevtf = 476305
         shadowreceiveparam = 476452
         fprimitivescenesamplerrefractznotex = 476882
         fddmaterialcalcborderblendalphamap = 477117
         ianonskintbna = 477137
+        smaa_output = 477172
         sampleweight = 477211
         colorlerp = 477328
+        ffiltersimplehatching = 477961
         fcollisionsimplevs = 478953
         fdamagespecularmap = 479956
         fvariancemakemiplevel = 480173
@@ -1430,6 +1569,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fprocedural1e = 482770
         ia_nonskin_tbn_4m = 483216
         spotpointlighttexture = 483726
+        ffilteredgeantialiasinggetedgeweightultrafast = 483793
         fsystemconverthightmaptonormalmap = 483945
         cbbilateralfilter = 484038
         fblendalbedomap = 484166
@@ -1445,8 +1585,11 @@ class Mrl(ReadWriteKaitaiStruct):
         cbpicker = 487389
         fmaterialstdfresneldefault = 487488
         fprimitivecalcvolumeblendps = 487518
+        fdeferredlightingshinesslineardecode = 487520
         fdebugviewpixel = 487539
+        ps_bhddepthwritezfull = 488299
         fspeculardisable = 488441
+        cbdistortionfilter = 488591
         fdynamiclight3 = 488609
         fguicalcuvalphamask = 488610
         iagpuparticle = 488802
@@ -1463,6 +1606,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_sky = 492674
         ia_gpu_polyline_particle = 492689
         dsguizteststencilapplyreverse = 493259
+        fcombinefilterimageplaneenable = 493617
         ds_materialph = 493987
         ffilterlightscattering = 494253
         dsambientshadow = 494889
@@ -1505,8 +1649,10 @@ class Mrl(ReadWriteKaitaiStruct):
         fgrasslightmask = 502949
         talbedoburnmap = 503623
         fsamplecount19 = 504253
+        tddmaterialstd = 504352
         globals = 504514
         tsoftbodytexellipsoid = 504580
+        fddcalcalphaborderrate = 504818
         theightmap = 505201
         fog_out = 505303
         tfogfrontdepthsmall = 505671
@@ -1514,6 +1660,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fbokehbleeding = 505838
         focclusion = 506348
         tprocedural2d3 = 506546
+        ssantiedgebrightnessmask = 506553
         fambientshadowcircularspread = 506947
         fprimitivecalcfogblend = 507398
         mirage_heat_ps_input = 507722
@@ -1542,8 +1689,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fbluralphamaskenable = 515216
         fchromaticaberrationfilterhq = 515271
         fintensityweightrgba = 515335
+        cbdynamiclighting0 = 515544
         fchannelr = 515595
         fuvfresnelmap = 515656
+        fddmaterialbumpoptcamo = 516088
+        cbdynamiclightingdl3 = 516458
+        cbdiffusecolorcorect = 516543
         bsshadowrecvtransparentgroup0 = 517392
         fdeferredlightingsamplinglightdiscontinuityfilteringlayer1 = 517552
         fditheringbayer10bit = 518002
@@ -1559,10 +1710,12 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_deferredlighting_bilateralupsampling = 522805
         iasystemclear = 522869
         fgrasschainuv = 523062
+        fuvuniquerotation = 523841
         ia_inf_particle = 523973
         ps_bloomgather = 524408
         ssnormalmapclamp = 524424
         calclightshaftsearchlength = 524909
+        fuvtransformrotation2 = 525200
         bsmrtwrite0011 = 525349
         ssspecularmap = 525374
         bsrevsubblendcolorrgb = 525403
@@ -1593,12 +1746,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fdebugviewvertexprelight = 534546
         fskinning = 534549
         shadowreceivecontext = 536080
+        ps_tvnoiseprimitive = 536644
         cbprojectiontexture = 536799
         bsambientmaskalphagroup2 = 537154
         iagpulineparticle = 537506
         fprimitivesamplebasemapparalaxlin = 537583
         ffilterhazeinverse = 537855
         ffilteroutlinecompositebloomf = 538735
+        tddmaterialnormalmapex = 539407
         fskymapbeginend = 539461
         fsamplecount22 = 539638
         cbhdremphasis = 539921
@@ -1630,6 +1785,7 @@ class Mrl(ReadWriteKaitaiStruct):
         bsasub = 549462
         bsmrtwrite1000 = 549527
         fmaterialstdreflectiontypedefault2 = 550161
+        fimageblendadd = 550469
         foutlinedetector1 = 551217
         fimageblenddarken = 551324
         fuvdistortionmap = 551493
@@ -1653,12 +1809,15 @@ class Mrl(ReadWriteKaitaiStruct):
         vs_miragesect = 555397
         fdynamiclocalwind0 = 555494
         tdeferredlighting = 555594
+        fspecularmapadd = 556281
         bsaddrgb = 556444
+        cbfilteranaglyph = 556465
         cbprimitivemetadatauvclamp = 557139
         tdetailmaskmap = 557413
         fprocedural1d3e0 = 557555
         fskinningpf1weight = 557611
         foutputencodesrgbrrrgbi = 557995
+        fddmaterialcalcborderblendalphamapoil = 558537
         fprimitiveuvoffset = 558980
         fgpuparticlesamplebasemaplin = 559436
         updateclouddepth = 559525
@@ -1668,6 +1827,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fviewproj = 560175
         tsoftbodytexterrain = 560816
         tprimscenemap = 561400
+        fcombinefiltercolorcorrect = 561791
         calcwaveplane = 562941
         ia_skin_tbn_2wt = 563092
         fbokehantibleedingmaskvalue = 563303
@@ -1675,9 +1835,11 @@ class Mrl(ReadWriteKaitaiStruct):
         fcalchemispherelight = 563575
         fmaterialstdalbedoprocalphablend = 563984
         fdistortion = 564642
+        dsdeferredlightingstenciltestg1 = 564709
         fdevelopdecode_a = 565063
         ffilteroutlineblur1h = 565276
         tmaterialdummyedge = 565315
+        ssmvc3transparencymap = 565318
         ttextureblendsourcecube0 = 565764
         finfparticletexturepatternindependent = 565932
         fprimitivecalcfogpsdefault = 565947
@@ -1685,6 +1847,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fbrdf_lite = 566224
         develop_output = 566768
         ianonskinbl_la = 566808
+        fgetmaterialshadowmultirt = 567456
         bsblendcolorex = 567562
         fheightfogvolume = 567582
         fsamplecount16 = 568364
@@ -1695,17 +1858,22 @@ class Mrl(ReadWriteKaitaiStruct):
         rsmeshbias6 = 571304
         sb_output = 571543
         fbokehnearfilter = 571976
+        fmaterialnopv4 = 572017
         fshadowreceivesmoothcascadelsm = 572054
         fswingupdateall = 572690
+        fblurmaskdistancemaskenable = 573168
         fprimitivecalcdiffusenormalmap = 573686
         dsnvstenciltest = 573794
+        ps_ddmaterialwaterdepth = 573957
         dsguizteststencilapply = 574119
         ssdetailnormalmap = 574654
         tcubeblendmap = 574881
         ffresnelschlick = 575195
         calcparticleratio = 575828
         cbshadowreceive1 = 577156
+        cbddmaterialparamoptcamo = 577388
         ia_primitive_nt = 577875
+        fcombinefilterimageplane = 578603
         ia_skin_bridge_1wt = 579791
         fdebugviewpixeltangent = 581483
         ftransparencyalpha = 582986
@@ -1720,33 +1888,42 @@ class Mrl(ReadWriteKaitaiStruct):
         treductionblendmap = 586303
         finfparticlecolorlerp = 586949
         sbnormalunpackf16 = 586993
+        fwaterrefractionsimplescene = 587373
         lattice_deform_input = 587894
         cbprimitivemetadatalvcorrection = 587996
         fprocedural2d3e0 = 588579
         vs_primitive = 588618
         ps_systemclearmrt2 = 588902
         fspecularmapblendtransparencymap = 589121
+        fappcliplocalplane = 589146
         fdevelopdecode_font = 589979
         fwaterrefractionocean = 590045
+        cbtoon = 590440
         sbapplyworldoffsetps_xbox = 590729
         ttattoo = 591327
+        fimageblendmin = 591986
         ftransparencymap = 592138
         sslinearmippoint = 592282
         tindirectmaskmap = 592577
         tmaterialoutline = 592625
         vs_system = 592840
         fswingbillboarddisable = 592962
+        tmaterialstgsimple2 = 593000
         cbimageplane = 593689
         fprimitivesamplenotexture = 593767
+        fburnemissionmap = 594057
         ia_softbody_decouple = 594104
+        fintegratedoutlinefactor = 594273
         fuvprimary = 594546
         hs_materialdm = 594818
         vs_mirage = 594927
         fsssgaussianfilterv = 595087
+        ps_materialstdzprepass = 595169
         fdynamiclight1 = 595341
         tsimwaterforview = 595814
         calcscreenztoviewdepth = 596577
         fmaterialstdspecularcolortypedefault2 = 596627
+        dsdeferredlightingstencilclear = 596637
         fbokehantibleeding = 596979
         finfparticleposspline = 597260
         getopticaldepthmap = 597581
@@ -1760,6 +1937,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ianonskintbnc = 599805
         gpu_particle_ps_input = 600125
         ps_skystar = 600355
+        fuvprimaryrotation = 601925
         ffeedbackblurfilter = 602453
         tfiltertempmap1 = 602551
         getclouddepth2 = 602632
@@ -1770,10 +1948,12 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_ssaomakesinglefaceocclusionmap = 604609
         ssp2o = 605045
         sslinear = 605119
+        tddmaterialalphamapex = 605498
         ia_texture_blend = 606431
         ffiltergodraysscale = 606658
         tvariancefilter = 607109
         cbscreen = 607341
+        tmotionblurfilter = 607525
         bsblendalphargb = 607651
         bsaddinvalpha = 607805
         dsguizwritestencilupdate = 608261
@@ -1784,6 +1964,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_waterripple = 609530
         fmaterialstdreflectiontyperim2mask = 609947
         fgpuparticlefogvscolor = 610244
+        finalcombinerui = 610432
         cbprimitivedebug = 610575
         ftexorennayar = 610650
         fbrdfskin = 610685
@@ -1792,6 +1973,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_shadowcastzoffset = 610896
         fdeferredlightingencodenormal = 611554
         fmaterialstdreflectiontypevertexcolorrim = 611640
+        fshadowfiltermask2 = 612228
         ia_lattice_deform = 612435
         fprimitivescenesamplerdistortionnotex = 612554
         ftexanisotropicphongspecularmodel = 613348
@@ -1802,6 +1984,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffogvtfdistancetable = 614773
         fssaobouncedisable = 614840
         cbguialphamask = 614850
+        tddmaterialinner = 614953
         iatattooblend2d = 615044
         cbwaterbubble = 615160
         fdebugviewpixelbasemap = 615497
@@ -1812,9 +1995,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivecalccolorintdefault = 617841
         ia_bokeh = 618046
         vs_shadowcast = 618095
+        tmaterialfursell = 618807
         ia_grass_spu_input = 618894
         fwaterwindtransform = 618944
         bsminalphargb = 619116
+        ftoonlightcalc = 619137
+        fdamagealbedomapaddburnmap = 619300
         dsguizteststencilupdate = 620037
         frsmgatherindirectlightinglargesize = 620604
         ps_mirror = 620675
@@ -1825,10 +2011,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fsystemcachecopycr = 621819
         cbmaterialsss = 621873
         fbrdfbeckmann = 622099
+        cbdynamiclightingdl1 = 622662
+        ps_materialui = 622908
         iaastralbody = 623131
+        fgetnormalfromgbuffer = 623434
         flocalwindline = 623627
         cbinstancematrix = 623708
         bsblendrevsubalpha = 624154
+        bhd_depth_write_out = 624428
         fgpuparticlelevelcorrectionpos = 625434
         fspotlightdr = 625497
         fprocedural2d4e2 = 625802
@@ -1841,6 +2031,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tguiblendmap = 628478
         tblendmap = 628817
         sbsolveconstps_xbox = 628893
+        tddmaterialenvmapex = 629223
         ffiltermotionblurreductionblend = 629583
         fcalcprimarycolorstdlitealphadefault = 629663
         sswrapanisotoropic = 630367
@@ -1848,7 +2039,10 @@ class Mrl(ReadWriteKaitaiStruct):
         getintensitybothfaces = 630626
         ps_watershadowmap = 630640
         fchannela = 630741
+        fappclipplane = 630951
+        ffiltercopyalpha = 631335
         fsssfillmarginv = 631764
+        fcombinefilterbloomenable = 631836
         fwaterbubbledepth = 632002
         fguicalccolorattribute = 632023
         grass_outsourcing_input = 632194
@@ -1872,6 +2066,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_deferredlighting_gbufferpass = 637545
         foutlinefadedepth = 637686
         ps_systemdownsample4hdr = 638122
+        cbdynamiclighting2 = 638196
         foutlinedetectorid = 638500
         tsssdiffusemap4 = 638589
         ia_tattoo_blend2d = 638935
@@ -1888,16 +2083,19 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_developedgefont = 643077
         fmiragerefractdefault = 643546
         vs_grassshadowreceive = 644291
+        cbbhddepthmap = 644664
         fheightfogmodelsimplevtf = 645015
         fshininess = 645051
         ffiltercomposite = 645622
         fprimitivecalcintensitydefault = 645778
         tprocedural2d1 = 646046
         calczoffset = 646192
+        fspecularmasktoon = 646615
         fmirrorfilter = 647107
         fmorph = 647202
         ia_skin_bridge_8wt = 648000
         fmatrixtoquaternion = 648156
+        cbmaterialstdcldparam = 648541
         fprimitevecolormodifier = 649504
         falbedomapmodulateuv = 649849
         ps_systemocclusionconvertz = 650450
@@ -1907,12 +2105,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fclampsceneuvclip = 651558
         fcolormaskalbedomapmodulate = 651946
         fdistortionrefract = 652114
+        tddmaterialwaterdepth = 652261
         ia_tetra_deform = 652380
         tmaterialstdpn = 652565
         fprocedural1d4e2 = 652890
         tsoftbodytexdepthnorm4 = 653321
         fadhesionalbedo = 654899
         fprimitivetransparencyvolume = 655121
+        combine_filter_out = 655178
         iaskintbc2wt = 655669
         mirage_filter_vs_input = 655805
         creatematerialcontextlite = 656256
@@ -1923,6 +2123,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_deferredlighting_lightvolume = 657784
         foutlinecompositeblend = 658032
         initmaterialcontextlite = 658409
+        fspecularmapalbedomap = 658771
         fprocedural2e = 658961
         fspecularreflectancemodel = 659125
         fspotlightsr = 659407
@@ -1930,21 +2131,26 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_collision_vs_input = 660888
         bsrevsubinvalpha = 661019
         tspotlighttexture5 = 661099
+        cbdynamiclighting4 = 661953
         tsssdiffusemap2 = 662344
         cbshadowcasterrasterizerstate = 662884
         fgpuparticlecalctexcoordnone = 663000
         tmaterialhud = 664095
+        ps_neighborhoodblending = 664103
         tvertexpositionsubmap = 664189
+        cbdynamiclightingdl7 = 664947
         fdeferredlightinglightvolumelightmasktransparent1 = 665089
         tfogbackdepthsmall = 665571
         fprimitivealphatocolordefault = 665735
         fdistancefogtablevtf = 666639
         fdeferredlightingencodeparameterhalflambert = 666773
+        fddmaterialcalcborderblendalphamapsand = 666829
         cbbokehcomposite = 667092
         fuvspecularmap = 667633
         bsrevsubcolor = 668135
         iaskinbridge8wt = 668172
         dsguistencilapplyreverse = 668190
+        cbmaterialstdcld = 668241
         fdiffusevertexcolorsh = 668275
         fdiffusereflectancemodel = 668407
         fskinning4weightbranch = 669038
@@ -1960,6 +2166,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbgpuparticleex = 672658
         tspecularburnmap = 673342
         ffogvtfnone = 673511
+        ffilterantiedgebrightnessdetectionsub = 673899
         tmaterialsss = 673957
         ssao_normal_out = 674795
         material_outline_output = 675227
@@ -1984,6 +2191,7 @@ class Mrl(ReadWriteKaitaiStruct):
         bsmrtwrite0111 = 683538
         fldtestdeformer = 683728
         ftangentmodifier = 683889
+        fspecularmapblend = 683979
         sbcreatedepthnormbackps = 684008
         ps_textureblend = 684474
         cbprimitivemetadatashade = 684674
@@ -1996,6 +2204,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cblightshaft = 686716
         decodesrgb = 686753
         ps_tvnoisefilter = 687031
+        getdivideindex = 687368
         ianonskinb = 687485
         twatersurfacemap2 = 687891
         fgrassshapeinvisible = 688205
@@ -2008,6 +2217,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ssdevelop = 690954
         fcalcprimarycolorconstantliteuber = 691190
         iagrass = 691720
+        fuvextendrotation = 691757
         frimnone = 691937
         iaskintb1wt = 692139
         fanisotropicphongspecularmodel = 692186
@@ -2017,6 +2227,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowreceivefaceattn1 = 692660
         sampledepthcomp = 692785
         fdebugviewvertex = 692878
+        tindirectmapuser = 693041
         fprimitivecalcposvolumeblenddepthvolume = 693149
         fgrassinput = 693511
         tshadowmapcombine2 = 693769
@@ -2031,9 +2242,11 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_systemps3aacopy = 696480
         falphatestalways = 697011
         tlightmap = 698096
+        dsdeferredlightingstencilupdate = 698578
         fkelemenszirmaymodel = 698905
         fprimitivelevelcorrectionneg = 699241
         bsshadowrecvmultitransparentgroup1 = 699301
+        ps_blendingweightcalculation = 699653
         fgrassuvmixerenable = 699693
         ps_primitive2d = 699869
         fdynamiclight7 = 700600
@@ -2045,6 +2258,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffiltergodrays8samplesiterator = 702557
         fheightfogmodelsimple = 702801
         cbskinning = 702818
+        fburncalcblendrate = 703994
         iasimwaterforviewinput = 704150
         iasystemcopy = 704229
         fmiragemodcolor = 704374
@@ -2053,9 +2267,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fdebugviewpixelprelight = 705851
         ps_tattoonormalblend2d = 705916
         fworldcoordinatefromtexturecalctangnet = 706505
+        cbhalflambert = 706819
         ffilteroutlineblur2v = 708284
+        fguicalccolorfinal = 708594
         calccurveposition = 708710
         fvariancefilterv = 709072
+        cbhatchingfilter = 709873
         cbchromaticaberration = 710191
         ftransparencydodgemap = 710329
         falbedomapblendtransparencymap = 711042
@@ -2076,6 +2293,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fswingorigindefault = 714405
         material_hs_output = 714565
         fprocedural1d2e0 = 715716
+        fappoutlinemul = 715974
         ssgrass = 716312
         cbbalphaclip = 716343
         ffiltergodraysbegin = 717139
@@ -2086,9 +2304,12 @@ class Mrl(ReadWriteKaitaiStruct):
         outline_detector = 718706
         fmaterialstdspecularcolortypealbedo = 719064
         fgaussianfilterh = 719218
+        ps_bhdbgwriteblendx3 = 719240
+        ssmvc3occlusionmap = 719427
         ianonskintba = 719459
         fsamplecount5 = 719527
         fspotlight = 719736
+        fdepthcalc = 720199
         ffiltercolorfogblend = 720270
         falphatestnever = 720575
         fuvthinmap = 720576
@@ -2102,6 +2323,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fworldcoordinatelatticedeform = 723282
         iaskinbridge1wt = 723331
         fshadowreceivert0 = 723896
+        ssmvc3lightmap = 724340
         ffinalcombinernofog = 724402
         getshdiffuse = 724587
         fmaterialstdalbedoprocadd = 725365
@@ -2112,6 +2334,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbvertexdisplacementexplosionquant = 727449
         falbedomapblendalpha = 727976
         bsaccumulatecoloralphamrt2 = 728855
+        fmaterialnopv2 = 728900
         fprocedural2d1e1 = 729051
         fdeferredlightingdecodeinputlog = 729252
         fbruteforcelighting = 729489
@@ -2121,6 +2344,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fbumpnormalmapblendtransparencymap = 730642
         fprimitivecalcspeculardefault = 730764
         bsblendblendadddestcolorrgb = 731445
+        fddmaterialfinalcombineroptcamo = 732684
         falbedomapblend = 733370
         fshadowfilterpointmulti = 733853
         vs_proceduraltexture = 734173
@@ -2128,6 +2352,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_grass_point = 734499
         fblendfog = 735149
         dsguizwritestencilapply = 735160
+        tbhddepthmap = 735316
         iaskintbnla2wt = 735521
         fdevelopdecode_g = 735858
         fwaterreflection = 735983
@@ -2147,6 +2372,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ffresnelschlick2 = 741914
         bsblendminalpha = 742041
         vs_radialblurfilter = 742308
+        smaaarea = 742536
         fdebugviewvertexboneweight = 742570
         rsmeshbias10 = 742662
         vs_adhesionpv = 742924
@@ -2158,6 +2384,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tssaoreductionnormalmap = 745555
         cbprimitivemetadatalensflare = 745610
         fprimitivecalcposparticle = 746351
+        femissionblendrate = 746374
         vs_gui_dev = 746711
         fprocedural1d1e1 = 746763
         vs_materialtoonsm = 747052
@@ -2166,6 +2393,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbmiragedepthblend = 747517
         cbtattoo = 747826
         iagrasslowest = 748863
+        fmaterialnopfloat = 749235
         sky_starry_sky_out = 749680
         fhairsh = 751036
         sbidxtoposition = 751576
@@ -2181,17 +2409,22 @@ class Mrl(ReadWriteKaitaiStruct):
         fsamplecount8 = 755226
         ianonskintbl = 755422
         fvertexdisplacementdirexplosion = 755490
+        dsdeferredlightingstenciltestwriteg1 = 756263
+        tvertexprevpositionsubmap = 756516
         fspecular2map = 756743
         twaterbubble = 756884
         cbshadowtype = 756929
         ambient_shadow_out = 757394
         fprimitivecalceye = 757893
         fgrassxzrotate = 758407
+        fdeferredlightingshinesslinearencode = 758484
         cbviewprojection = 758587
         foutputencodesrgbrgbi = 758793
         tenvmap2 = 759782
+        ps_dddeferredlighting_gbufferpassmrt = 759788
         bsaddgwrite = 760343
         fsamplecount24 = 761539
+        ps_bhddepthwritedebug = 761661
         fwaterrefraction = 761706
         flightmaskrttransparent0 = 761826
         vs_tattoonormalblend2d = 761852
@@ -2244,23 +2477,29 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_systemps3zcullreload = 777458
         fradialfiltersamplecolorscalefade = 777516
         fpointlightr = 777780
+        fcalcuvtransformrotation = 777983
         calcpcf2x2 = 778398
         fshadowcastdistance = 778928
+        fcombinefilterbloom = 779527
         bsaddcolorex = 780463
+        fddmaterialalbedofreeze = 780647
         fdeferredlightingencodeparameteroverlap = 781538
         getdeveloptexedgefont = 781878
         ps_shadowcasttransparentzoffset = 782033
         primitive_vs_output = 782508
         tyuvdecoderu = 782567
         ia_nonskin_tbnla = 782634
+        createddmaterialcontext = 782778
         flocalwindloopdirection = 782870
         adhesion_input = 783371
         flocalwindloopslot0 = 783822
         fshadowfiltermulti = 783843
         ia_grass_outsourcing_f32 = 784119
+        fuvintegratedoutlineoutermap = 784822
         fprimitivecalcfog = 784935
         fdeferredlightinglightvolumelightmasksolid01 = 785109
         bsblendmaxalpha = 785784
+        ffilterantiedgebrightness = 786632
         frayleighdepthmap = 786748
         ps_gui_polygon = 786881
         fskinningpf8weightbranch = 787036
@@ -2293,7 +2532,9 @@ class Mrl(ReadWriteKaitaiStruct):
         fmorphposition = 797711
         vs_grasslowest = 797775
         falbedo2mapmodulate = 797954
+        smaasearchxleft = 798487
         fprocedural2d1e0 = 798541
+        fmaterialnopv3 = 798674
         iaskintb2wt = 799218
         vs_waterwposb = 799254
         dsguistencilupdate = 799326
@@ -2301,6 +2542,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sbpsskinningps_xbox = 799886
         cbgrassroot = 800027
         ffogvtflightscattering = 800327
+        fuvtransformrotation = 800654
         ffiltergodrays16samplesiterator = 801016
         fprimitivecalctexcoord = 801157
         fsamplecount11 = 801167
@@ -2310,6 +2552,7 @@ class Mrl(ReadWriteKaitaiStruct):
         bsshadowrecvzpass = 802023
         tdetailnormalblendmap = 802295
         bsrevsubalpha = 802916
+        ftoonshaderuroko = 803036
         iawaterripple = 804412
         fgrassuseposition = 804545
         cbdistortionrefract = 805111
@@ -2326,6 +2569,8 @@ class Mrl(ReadWriteKaitaiStruct):
         ffocclusionfactorfromtexture = 809782
         fprimitivesamplebasemapparalax = 810139
         encoderippleheight = 810406
+        vs_materialui = 810721
+        tappcubemapfilter = 810780
         ftonemap = 811139
         fisoutofrange = 811202
         vs_heatdepth = 811946
@@ -2337,10 +2582,14 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowreceiveattndistance = 814071
         fblendfogdiffuse = 814110
         fddmaterialfinalcombiner = 814579
+        fcombinefiltertvnoise = 814878
         ftrianglevertex1 = 814987
+        fcolorcorrecttable = 815018
         femissionmap = 815520
         fblurmaskfilter = 815787
         ps_deferredlighting_bilateralblurh_size12 = 815876
+        tmaterialstdcld = 815958
+        iabhddepthwrite = 816329
         fdepthboundstestenable = 816489
         inf_particle_ps_input = 817516
         ps_dof_input = 817709
@@ -2353,9 +2602,11 @@ class Mrl(ReadWriteKaitaiStruct):
         iagrassspu = 820997
         fprimitivecalcfogcolor = 821191
         fprimitivecalcntbtessparticle = 821373
+        ftoonlightcalcnone = 821850
         sbtolocalspaceps_xbox = 822143
         calcscreenuvtoviewdepth = 822689
         fshadowfilterpoint3 = 822735
+        flightmaskshadowmultirt = 822768
         fcalcuvsecondarydefault = 824044
         ia_nonskin_bc = 824266
         cbguicolorattribute = 824648
@@ -2387,6 +2638,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fsamplecount9 = 833164
         fdeveloptexcuberefrect = 833221
         ia_swing_high_precision = 833329
+        dsdeferredlightingstenciltestwriteg0 = 834225
         iaskintbnla8wt = 834807
         fwaternormal = 834844
         fintensityweightrgb = 834882
@@ -2395,10 +2647,12 @@ class Mrl(ReadWriteKaitaiStruct):
         creatematerialcontext = 835635
         iasoftbodyquad = 836094
         fguigetvertexcolor = 836107
+        fcalcrimlightdefault = 836463
         fquaternionmultiplay = 836613
         fshadowfilterpointvsm = 836625
         flocalwindloopslot1 = 836952
         convrot = 837001
+        smaasearchyup = 837107
         cbddmaterialparam = 837259
         cbguifontfilter = 837486
         fwatershadowdisable = 837904
@@ -2411,14 +2665,18 @@ class Mrl(ReadWriteKaitaiStruct):
         fuvalbedomap = 839405
         talbedomap = 839791
         fdissolvepatterndither = 839964
+        ps_edgedetection = 840549
         fmiragedepthblend = 840640
         grass_spu_input = 840768
         fdebugviewpixeldefault = 840796
         ia_nonskin_tbca = 841250
         fblendratealbedomap = 841278
         ftattoooutputheight = 841772
+        fddmaterialspecularoil = 842745
+        fddmaterialcalcborderblendalphamapfreeze = 842781
         sbintegrateps = 842940
         fshadowfilter1 = 844267
+        tindirectmapspecularuser = 844421
         vs_develop2d = 844545
         fuvalbedoburnmap = 844807
         fmaterialstdreflectiontypeprocrim = 845003
@@ -2427,6 +2685,7 @@ class Mrl(ReadWriteKaitaiStruct):
         flightmasktransparent1 = 845363
         fmaterialstdalbedodefault = 845393
         iasky = 845471
+        ffilterantiedgebrightnessdetection = 845590
         fgrassxzrotateenable = 845937
         fdeferredlightingcompareequallightgroupdisable = 846243
         cbvertexdisplacementwave = 846607
@@ -2434,12 +2693,17 @@ class Mrl(ReadWriteKaitaiStruct):
         fdynamiclocalwind7 = 846917
         dsdeferredlightingstenciltest = 847306
         fpointlights = 847522
+        fdamagealbedomap = 847673
         vs_avglog16 = 847755
         freconstructviewdepthfromdepth = 847836
         bsblendblendadddestcolor = 847974
+        ftoonlightrevcalc = 848788
         getangularattenuation = 848900
+        ps_materialchar = 848914
         bssubgwrite = 849007
         cbgrasspointshadow = 849167
+        cbshininessblend = 849703
+        freflectwatermap = 850867
         tpointlighttexture5 = 850901
         cbwaternormal = 850923
         ffocclusionfactor = 851012
@@ -2448,6 +2712,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_nvgaussblur = 851735
         diferred_lighting_mrt = 851747
         iasoftbodydecouple = 851783
+        ffiltercopycolornega = 851908
         cbmiragenoise = 851937
         fpositionrotatequaternion = 852081
         fshadowfilterpcf3x3 = 852557
@@ -2464,6 +2729,7 @@ class Mrl(ReadWriteKaitaiStruct):
         cbwaterfog = 856121
         finfparticlepos = 856722
         fprimitivecalcnormalmap = 856802
+        cbdynamiclightingdl6 = 857573
         depthcompare = 857709
         fdeferredlightinglightvolumelightmasktransparent0 = 857751
         fprimitiveuvoffsetdefault = 857798
@@ -2481,6 +2747,7 @@ class Mrl(ReadWriteKaitaiStruct):
         tspotlighttexture4 = 861949
         vs_watershadowmap = 862328
         fdynamiceditmaprejectenable = 862529
+        cbdynamiclighting5 = 862551
         fvariancefiltercubeh = 862859
         initmaterialcontext = 862918
         fdeferredlightinggetlightingparameter = 862973
@@ -2508,6 +2775,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_deferredlighting_bilateralblurv_size12 = 872477
         bsssao = 873152
         fwatervolumeblenddisable = 873350
+        fdeferredlightingshinessencode = 873493
         flowerposydiscardcolormodifier = 873645
         fuvocclusionmap = 873861
         ia_dual_paraboloid = 875197
@@ -2538,6 +2806,7 @@ class Mrl(ReadWriteKaitaiStruct):
         flightmasksolid01 = 883807
         fprimitivedepthcomparison = 884006
         cbappreflectshadowlight = 884046
+        fappoutlineblend = 884338
         sswraponelinear = 884492
         image_plane_filter_out = 884749
         fdynamiclight6 = 884782
@@ -2557,6 +2826,7 @@ class Mrl(ReadWriteKaitaiStruct):
         feditsimplealbedomapalphamap = 888275
         fssaofilterlineardepthdownscale = 888365
         bsgwrite = 888510
+        ps_materialcharalpha = 888533
         fpervertexlightingtoonps = 888544
         encodesrgb = 888642
         frimuber = 889120
@@ -2588,16 +2858,20 @@ class Mrl(ReadWriteKaitaiStruct):
         fwaterripple = 898077
         flocalwindloopline = 898112
         iaskinbridge2wt = 899034
+        vs_edgedetection = 899713
         system_depthout = 899774
         tyuvdecodery = 900300
+        fusersimplefinalcombiner = 900633
         sb_output2 = 901087
         fdevelopdecode = 901777
         fblendfogprimblend = 901853
         ps_materialsss = 901921
         fbuildersamplebasemap = 902127
+        ps_simplewater = 902176
         falbedomapblendmaxalpha = 902319
         fgrassperpixellightmask = 903010
         fsamplecount4 = 903729
+        tsmaa = 905332
         cbskyastralbody = 905546
         fsamplecount28 = 905960
         tmaterialvelocityedge_stretch_vs_materialvelocityedge = 906296
@@ -2612,7 +2886,9 @@ class Mrl(ReadWriteKaitaiStruct):
         fintensityweight = 909081
         fdeferredlightingdecodenormalspheremaplut = 909465
         finfparticlecolorlerpblend = 910336
+        sstransparencymapclamp = 910816
         fskymapoutputselectcloud = 911137
+        vs_materialfursell = 911714
         fcollisionsimpleps = 911727
         ia_softbody_decouple_novtf = 911868
         tprimitive = 911981
@@ -2620,11 +2896,13 @@ class Mrl(ReadWriteKaitaiStruct):
         fprimitivemodelsmoothalphadefault = 912306
         fmarkdisable = 912427
         samplelevelvariance = 912541
+        fdamagecalcblendrate = 913016
         cbwaterripple = 914154
         sbintegrateps_xbox = 914470
         vs_sky = 914500
         fdynamiceditmaplyingenable = 915605
         bsguialphamaskadd = 915996
+        vs_ddmaterialinner = 916092
         fgrassinfo = 916249
         fmiragerefract = 916262
         fprimitivecalcdiffuse = 916339
@@ -2634,8 +2912,10 @@ class Mrl(ReadWriteKaitaiStruct):
         vs_materialvelocityedge = 917513
         foutlinecompositemultimodulate = 918061
         ftransparencyalphaclip = 918494
+        fworldcoordinatesimple = 918858
         fheightfogdistance = 919027
         tmatrixmap = 919274
+        fmaterialstdcldfinalcombiner = 920549
         fintensityweightgrayscale = 921017
         hs_dm_constant = 921370
         cbtessellation = 921521
@@ -2649,6 +2929,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_water = 924872
         fvertexdisplacementwaverandom = 925409
         ps_skymap = 925958
+        ffrontfacereversenormaltwosidedlh = 926003
         fdynamiclight0 = 927003
         cbgrassbillboard = 927557
         fwaterbubblecoordinate = 927740
@@ -2660,10 +2941,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowmultireceivecascadelsmrt = 928880
         fprimitivemodelscenesampler = 928940
         ps_gui_texture = 929185
+        fspecularmapblendalpha = 931149
         femissionconstant = 931339
         fprimitivecloudcolordefault = 931465
         fdepthtestlt = 931874
         fbokehfarfilter = 932218
+        ssmvc3normalmap = 934130
         fshadowcastdepth = 934565
         fprimitivecalcshade = 935073
         finstancingmultiply = 935092
@@ -2682,21 +2965,26 @@ class Mrl(ReadWriteKaitaiStruct):
         ia_filter2 = 940778
         fnvmodelvignetteblend = 941319
         fburnsimplealbedomapburnmap = 941443
+        fburncalceditbasecolor = 941797
         fvertexdisplacementmapdir = 942102
+        fddmaterialcalcborderblendalphamapoptcamo = 942173
         triangle_input = 942643
         fdebugviewpixelmaskmap = 942995
         fgrassinfowithnormal = 943220
         bsblendrevsubblendcolor = 943240
         system_output = 943577
         ia_skin_bridge_2wt = 943766
+        fshadowfiltermask3 = 943890
         fsystemcachecopycb = 945311
         bsminalpha = 945396
         cbddmaterialparaminnercorrect = 945444
         fsamplecount2 = 945924
+        tddmaterialalbedomapex = 946183
         tfogvolumemap = 946436
         fprimitivecalcnormalmapdefault = 946455
         bsguialphamaskwrite = 946805
         tmaterialstddm = 947194
+        tmaterialstgsimple = 947394
         bsblendaddcolor = 947443
         vs_lightshaft = 947725
         fwaterbubblemapmask = 947872
@@ -2715,6 +3003,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ps_adhesionpv = 952785
         fsystemmakemiplevel = 952852
         iagrasshicomp2 = 952966
+        cbdynamiclighting3 = 953442
         calcviewdepth = 953633
         vs_modelfog = 953987
         tsssdiffusemap5 = 954091
@@ -2734,6 +3023,7 @@ class Mrl(ReadWriteKaitaiStruct):
         sampledepth = 958148
         bsmultiplycoloralphamrt2 = 958351
         ia_gui = 958613
+        ia_tvnoiseprimitive = 958728
         flightmask = 958892
         cbdynamiclighting = 960145
         fvertexdisplacementdirexplosionplus = 960904
@@ -2744,6 +3034,7 @@ class Mrl(ReadWriteKaitaiStruct):
         bsinvcomposite = 962574
         cbmiragecommon = 962615
         ttextureblendmap = 962661
+        cbdynamiclightingdl0 = 962768
         getdeveloptexcuberefrect = 962896
         tcolorcorrecttablemap = 962936
         fuvindirect = 963292
@@ -2765,10 +3056,15 @@ class Mrl(ReadWriteKaitaiStruct):
         fgrassmaterialnormal = 968309
         ps_systemdepthdownsample = 968335
         fprocedural1d4e3 = 968396
+        tvertexprevpositionmap = 968779
         tsoftbodytexdepthnorm5 = 968863
+        fddmaterialalbedooil = 968987
         ftonemapreinhard = 969480
+        fdiffusecolorcorectsimple = 969574
+        fddmaterialspecularfreeze = 969759
         tmiragerefractionmap = 969898
         foutlineblend = 970137
+        fuserdiffusestagefloor = 970456
         iaprimitivecloud = 970793
         fshadowreceivesmoothcascadessmlite = 971268
         bsblendblendadddestalphargb = 971348
@@ -2812,12 +3108,16 @@ class Mrl(ReadWriteKaitaiStruct):
         sstransparencymap = 980839
         tgrassoutsourceing = 981396
         fshadowisoutofrange0 = 981503
+        falbedomapmodulatevertexcolor = 981608
         fgpuparticletonemap = 981923
         iaskinvelocytyedge = 982036
         cbdistortion = 982179
+        ssmirrorlinear = 982183
         ps_gpuparticle = 982743
         tdsfbuffer = 983137
         ffoglightscattering = 983201
+        fuserdiffuseconstantmul = 983756
+        fddmaterialcalcborderblendratesphere = 984052
         tcollision = 984072
         fdamagebumpdetailnormalmap = 984287
         fskinning8weight = 984426
@@ -2853,6 +3153,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowfilterpointpcf3x3 = 994993
         getrayleighscatter = 995510
         fburnalbedomapburnmap = 996025
+        fuvtransformrotation3 = 996102
         water_output = 996120
         bsmrtwrite0010 = 996531
         ttvnoisefilter = 996583
@@ -2861,6 +3162,7 @@ class Mrl(ReadWriteKaitaiStruct):
         frsmgatherindirectlightinghighquality = 997258
         ps_bloomextraction = 997676
         fdynamiclightdl0 = 997706
+        ffilterantiedgebrightnessdetectionfastsub = 998218
         fdeferredlightinglightvolumelightmasktransparentfullsize = 998491
         fgpuparticlefogvsalpha = 998983
         fprimitivecalcspecular = 999637
@@ -2876,10 +3178,12 @@ class Mrl(ReadWriteKaitaiStruct):
         fdynamiclocalwind1 = 1001840
         fssaobounce = 1002088
         simwater_for_view_vs_output = 1002204
+        ftoonshader = 1002218
         light_output = 1003412
         dsguizwritestencilapplyreverse = 1003714
         ssshadowvariance1 = 1003803
         bsmrtwrite1001 = 1004033
+        fshininessmapadd = 1004758
         creatematerialcontextex = 1004994
         foutlinecompositemodulate = 1005139
         fwatershadow = 1005525
@@ -2898,6 +3202,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fburnemissionmapblend = 1011401
         fguicalcuvwrap = 1011426
         fskinning4weight = 1011486
+        cbfilterantiedgebrightness = 1011797
         fdistancefogexp = 1012578
         fmaterialstdspecularmaskalbedo = 1012686
         fuvscreen = 1013078
@@ -2905,6 +3210,7 @@ class Mrl(ReadWriteKaitaiStruct):
         ssenvmaplodbias1 = 1013650
         ps_nvdownsample4 = 1013826
         fprimitiveuvclamp = 1014629
+        fintegratedoutlineonecolor = 1015494
         fdissolvetexture = 1015709
         cbprimitiveex = 1015931
         falbedomapadd = 1016134
@@ -2944,7 +3250,9 @@ class Mrl(ReadWriteKaitaiStruct):
         tssaowidemap = 1026094
         bsblendrevsubblendcolorrgb = 1026977
         rsscissorprim = 1027168
+        cbfrozenuser = 1027286
         sblodtransps = 1027391
+        dsdeferredlightingstenciltestg0 = 1027443
         fbrdfdeferredlighting = 1028062
         fprimitivecalcdepthblend = 1028293
         fprocedural1d3e1 = 1028453
@@ -2959,6 +3267,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fshadowreceiveattn1 = 1032192
         fcalcprimarycolorstdlitedefault = 1032204
         fmaterialstdvertexcolorshadowenable = 1032288
+        dohsv2rgb = 1032520
         finfparticlecalctexcoord = 1032808
         sssystemcopy = 1033842
         foutlinedetector = 1033940
@@ -2972,6 +3281,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fpointlightbr = 1035746
         updatedensity = 1035764
         fshininessmap = 1036259
+        ftoonshadernormal = 1036505
         ps_materialtoonsm = 1036580
         fskymapbeginendcloud = 1036600
         ffiltercopycolor = 1037220
@@ -2985,6 +3295,7 @@ class Mrl(ReadWriteKaitaiStruct):
         fdiffuse = 1039215
         fbilateralfilterh = 1039736
         ps_dummypicker1 = 1039777
+        cbfursell = 1040066
         cbdoffilter = 1040353
         fprimitivevsalphaclip = 1040784
         fjointmatrixpffromcbuf = 1041265
@@ -2992,6 +3303,8 @@ class Mrl(ReadWriteKaitaiStruct):
         getdepthcolumn8 = 1041728
         fdiffuseconstant = 1041806
         fprimitiveclip = 1041951
+        fcalcrimlight = 1042315
+        ps_bhdbgwriteblend = 1042334
         fluminanceenable = 1042503
         fgpuparticlecalctexcoorddefault = 1042941
         fprimitivecalcdepthblenddefault = 1043573
@@ -3028,9 +3341,36 @@ class Mrl(ReadWriteKaitaiStruct):
         self.version = self._io.read_u4le()
         self.num_materials = self._io.read_u4le()
         self.num_textures = self._io.read_u4le()
-        self.shader_version = self._io.read_u4le()
-        self.ofs_textures = self._io.read_u4le()
-        self.ofs_materials = self._io.read_u4le()
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self.shader_version = self._io.read_u4le()
+        elif _on == True:
+            pass
+            self.shader_version = self._io.read_u8le()
+        else:
+            pass
+            self.shader_version = self._io.read_u4le()
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self.ofs_textures = self._io.read_u4le()
+        elif _on == True:
+            pass
+            self.ofs_textures = self._io.read_u8le()
+        else:
+            pass
+            self.ofs_textures = self._io.read_u4le()
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self.ofs_materials = self._io.read_u4le()
+        elif _on == True:
+            pass
+            self.ofs_materials = self._io.read_u8le()
+        else:
+            pass
+            self.ofs_materials = self._io.read_u4le()
         self.textures = []
         for i in range(self.num_textures):
             _t_textures = Mrl.TextureSlot(self._io, self, self._root)
@@ -3052,6 +3392,27 @@ class Mrl(ReadWriteKaitaiStruct):
 
     def _fetch_instances(self):
         pass
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
         for i in range(len(self.textures)):
             pass
             self.textures[i]._fetch_instances()
@@ -3068,9 +3429,36 @@ class Mrl(ReadWriteKaitaiStruct):
         self._io.write_u4le(self.version)
         self._io.write_u4le(self.num_materials)
         self._io.write_u4le(self.num_textures)
-        self._io.write_u4le(self.shader_version)
-        self._io.write_u4le(self.ofs_textures)
-        self._io.write_u4le(self.ofs_materials)
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self._io.write_u4le(self.shader_version)
+        elif _on == True:
+            pass
+            self._io.write_u8le(self.shader_version)
+        else:
+            pass
+            self._io.write_u4le(self.shader_version)
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self._io.write_u4le(self.ofs_textures)
+        elif _on == True:
+            pass
+            self._io.write_u8le(self.ofs_textures)
+        else:
+            pass
+            self._io.write_u4le(self.ofs_textures)
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+            self._io.write_u4le(self.ofs_materials)
+        elif _on == True:
+            pass
+            self._io.write_u8le(self.ofs_materials)
+        else:
+            pass
+            self._io.write_u4le(self.ofs_materials)
         for i in range(len(self.textures)):
             pass
             self.textures[i]._write__seq(self._io)
@@ -3086,6 +3474,27 @@ class Mrl(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"id_magic", 4, len(self.id_magic))
         if not self.id_magic == b"\x4D\x52\x4C\x00":
             raise kaitaistruct.ValidationNotEqualError(b"\x4D\x52\x4C\x00", self.id_magic, None, u"/seq/0")
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
+        _on = self._root.use_64bit_ofs
+        if _on == False:
+            pass
+        elif _on == True:
+            pass
+        else:
+            pass
         if len(self.textures) != self.num_textures:
             raise kaitaistruct.ConsistencyError(u"textures", self.num_textures, len(self.textures))
         for i in range(len(self.textures)):
@@ -5062,6 +5471,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 elif _on == u"rev2":
                     pass
                     self._m_app_specific._fetch_instances()
+                elif _on == u"umvc3":
+                    pass
+                    self._m_app_specific._fetch_instances()
                 else:
                     pass
                     self._m_app_specific._fetch_instances()
@@ -5084,6 +5496,12 @@ class Mrl(ReadWriteKaitaiStruct):
                     if self._m_app_specific._parent != self:
                         raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
                 elif _on == u"rev2":
+                    pass
+                    if self._m_app_specific._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
+                    if self._m_app_specific._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
+                elif _on == u"umvc3":
                     pass
                     if self._m_app_specific._root != self._root:
                         raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
@@ -5119,6 +5537,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"umvc3":
+                pass
+                self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
+                self._m_app_specific._read()
             else:
                 pass
                 self._m_app_specific = Mrl.CbColorMask1(self._io, self, self._root)
@@ -5140,6 +5562,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific._write__seq(self._io)
             elif _on == u"rev2":
+                pass
+                self._m_app_specific._write__seq(self._io)
+            elif _on == u"umvc3":
                 pass
                 self._m_app_specific._write__seq(self._io)
             else:
@@ -5785,6 +6210,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 elif _on == u"rev2":
                     pass
                     self._m_app_specific._fetch_instances()
+                elif _on == u"umvc3":
+                    pass
+                    self._m_app_specific._fetch_instances()
                 else:
                     pass
                     self._m_app_specific._fetch_instances()
@@ -5836,6 +6264,12 @@ class Mrl(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
                     if self._m_app_specific._parent != self:
                         raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
+                elif _on == u"umvc3":
+                    pass
+                    if self._m_app_specific._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
+                    if self._m_app_specific._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
                 else:
                     pass
                     if self._m_app_specific._root != self._root:
@@ -5882,6 +6316,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbGlobals2(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"umvc3":
+                pass
+                self._m_app_specific = Mrl.CbGlobals5(self._io, self, self._root)
+                self._m_app_specific._read()
             else:
                 pass
                 self._m_app_specific = Mrl.CbGlobals1(self._io, self, self._root)
@@ -5915,6 +6353,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific._write__seq(self._io)
             elif _on == u"rev2":
+                pass
+                self._m_app_specific._write__seq(self._io)
+            elif _on == u"umvc3":
                 pass
                 self._m_app_specific._write__seq(self._io)
             else:
@@ -7595,6 +8036,388 @@ class Mrl(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    class CbGlobals5(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Mrl.CbGlobals5, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.f_alpha_clip_threshold = self._io.read_f4le()
+            self.f_albedo_color = []
+            for i in range(3):
+                self.f_albedo_color.append(self._io.read_f4le())
+
+            self.f_albedo_blend_color = []
+            for i in range(4):
+                self.f_albedo_blend_color.append(self._io.read_f4le())
+
+            self.f_detail_normal_power = self._io.read_f4le()
+            self.f_detail_normal_uv_scale = self._io.read_f4le()
+            self.f_detail_normal2_power = self._io.read_f4le()
+            self.f_detail_normal2_uv_scale = self._io.read_f4le()
+            self.f_primary_shift = self._io.read_f4le()
+            self.f_secondary_shift = self._io.read_f4le()
+            self.f_parallax_factor = self._io.read_f4le()
+            self.f_parallax_self_occlusion = self._io.read_f4le()
+            self.f_parallax_min_sample = self._io.read_f4le()
+            self.f_parallax_max_sample = self._io.read_f4le()
+            self.padding_1 = []
+            for i in range(2):
+                self.padding_1.append(self._io.read_f4le())
+
+            self.f_light_map_color = []
+            for i in range(3):
+                self.f_light_map_color.append(self._io.read_f4le())
+
+            self.padding_2 = self._io.read_f4le()
+            self.f_thin_map_color = []
+            for i in range(3):
+                self.f_thin_map_color.append(self._io.read_f4le())
+
+            self.f_thin_scattering = self._io.read_f4le()
+            self.f_screen_uv_scale = []
+            for i in range(2):
+                self.f_screen_uv_scale.append(self._io.read_f4le())
+
+            self.f_screen_uv_offset = []
+            for i in range(2):
+                self.f_screen_uv_offset.append(self._io.read_f4le())
+
+            self.f_indirect_offset = []
+            for i in range(2):
+                self.f_indirect_offset.append(self._io.read_f4le())
+
+            self.f_indirect_scale = []
+            for i in range(2):
+                self.f_indirect_scale.append(self._io.read_f4le())
+
+            self.f_fresnel_schlick = self._io.read_f4le()
+            self.f_fresnel_schlick_rgb = []
+            for i in range(3):
+                self.f_fresnel_schlick_rgb.append(self._io.read_f4le())
+
+            self.f_specular_color = []
+            for i in range(3):
+                self.f_specular_color.append(self._io.read_f4le())
+
+            self.f_shininess = self._io.read_f4le()
+            self.f_emission_color = []
+            for i in range(3):
+                self.f_emission_color.append(self._io.read_f4le())
+
+            self.padding_3 = self._io.read_f4le()
+            self.f_constant_color = []
+            for i in range(4):
+                self.f_constant_color.append(self._io.read_f4le())
+
+            self.f_roughness = self._io.read_f4le()
+            self.f_roughness_rgb = []
+            for i in range(3):
+                self.f_roughness_rgb.append(self._io.read_f4le())
+
+            self.f_anisotoropic_direction = []
+            for i in range(3):
+                self.f_anisotoropic_direction.append(self._io.read_f4le())
+
+            self.f_smoothness = self._io.read_f4le()
+            self.f_anistropic_uv = []
+            for i in range(2):
+                self.f_anistropic_uv.append(self._io.read_f4le())
+
+            self.f_primary_expo = self._io.read_f4le()
+            self.f_secondary_expo = self._io.read_f4le()
+            self.f_primary_color = []
+            for i in range(3):
+                self.f_primary_color.append(self._io.read_f4le())
+
+            self.padding_4 = self._io.read_f4le()
+            self.f_secondary_color = []
+            for i in range(3):
+                self.f_secondary_color.append(self._io.read_f4le())
+
+            self.f_fresnel_legacy_factor = self._io.read_f4le()
+            self.f_fresnel_legacy_bias = self._io.read_f4le()
+            self.padding_5 = []
+            for i in range(3):
+                self.padding_5.append(self._io.read_f4le())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            for i in range(len(self.padding_1)):
+                pass
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            for i in range(len(self.padding_5)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Mrl.CbGlobals5, self)._write__seq(io)
+            self._io.write_f4le(self.f_alpha_clip_threshold)
+            for i in range(len(self.f_albedo_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_color[i])
+
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+                self._io.write_f4le(self.f_albedo_blend_color[i])
+
+            self._io.write_f4le(self.f_detail_normal_power)
+            self._io.write_f4le(self.f_detail_normal_uv_scale)
+            self._io.write_f4le(self.f_detail_normal2_power)
+            self._io.write_f4le(self.f_detail_normal2_uv_scale)
+            self._io.write_f4le(self.f_primary_shift)
+            self._io.write_f4le(self.f_secondary_shift)
+            self._io.write_f4le(self.f_parallax_factor)
+            self._io.write_f4le(self.f_parallax_self_occlusion)
+            self._io.write_f4le(self.f_parallax_min_sample)
+            self._io.write_f4le(self.f_parallax_max_sample)
+            for i in range(len(self.padding_1)):
+                pass
+                self._io.write_f4le(self.padding_1[i])
+
+            for i in range(len(self.f_light_map_color)):
+                pass
+                self._io.write_f4le(self.f_light_map_color[i])
+
+            self._io.write_f4le(self.padding_2)
+            for i in range(len(self.f_thin_map_color)):
+                pass
+                self._io.write_f4le(self.f_thin_map_color[i])
+
+            self._io.write_f4le(self.f_thin_scattering)
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_scale[i])
+
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+                self._io.write_f4le(self.f_screen_uv_offset[i])
+
+            for i in range(len(self.f_indirect_offset)):
+                pass
+                self._io.write_f4le(self.f_indirect_offset[i])
+
+            for i in range(len(self.f_indirect_scale)):
+                pass
+                self._io.write_f4le(self.f_indirect_scale[i])
+
+            self._io.write_f4le(self.f_fresnel_schlick)
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+                self._io.write_f4le(self.f_fresnel_schlick_rgb[i])
+
+            for i in range(len(self.f_specular_color)):
+                pass
+                self._io.write_f4le(self.f_specular_color[i])
+
+            self._io.write_f4le(self.f_shininess)
+            for i in range(len(self.f_emission_color)):
+                pass
+                self._io.write_f4le(self.f_emission_color[i])
+
+            self._io.write_f4le(self.padding_3)
+            for i in range(len(self.f_constant_color)):
+                pass
+                self._io.write_f4le(self.f_constant_color[i])
+
+            self._io.write_f4le(self.f_roughness)
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+                self._io.write_f4le(self.f_roughness_rgb[i])
+
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+                self._io.write_f4le(self.f_anisotoropic_direction[i])
+
+            self._io.write_f4le(self.f_smoothness)
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+                self._io.write_f4le(self.f_anistropic_uv[i])
+
+            self._io.write_f4le(self.f_primary_expo)
+            self._io.write_f4le(self.f_secondary_expo)
+            for i in range(len(self.f_primary_color)):
+                pass
+                self._io.write_f4le(self.f_primary_color[i])
+
+            self._io.write_f4le(self.padding_4)
+            for i in range(len(self.f_secondary_color)):
+                pass
+                self._io.write_f4le(self.f_secondary_color[i])
+
+            self._io.write_f4le(self.f_fresnel_legacy_factor)
+            self._io.write_f4le(self.f_fresnel_legacy_bias)
+            for i in range(len(self.padding_5)):
+                pass
+                self._io.write_f4le(self.padding_5[i])
+
+
+
+        def _check(self):
+            if len(self.f_albedo_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_albedo_color", 3, len(self.f_albedo_color))
+            for i in range(len(self.f_albedo_color)):
+                pass
+
+            if len(self.f_albedo_blend_color) != 4:
+                raise kaitaistruct.ConsistencyError(u"f_albedo_blend_color", 4, len(self.f_albedo_blend_color))
+            for i in range(len(self.f_albedo_blend_color)):
+                pass
+
+            if len(self.padding_1) != 2:
+                raise kaitaistruct.ConsistencyError(u"padding_1", 2, len(self.padding_1))
+            for i in range(len(self.padding_1)):
+                pass
+
+            if len(self.f_light_map_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_light_map_color", 3, len(self.f_light_map_color))
+            for i in range(len(self.f_light_map_color)):
+                pass
+
+            if len(self.f_thin_map_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_thin_map_color", 3, len(self.f_thin_map_color))
+            for i in range(len(self.f_thin_map_color)):
+                pass
+
+            if len(self.f_screen_uv_scale) != 2:
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_scale", 2, len(self.f_screen_uv_scale))
+            for i in range(len(self.f_screen_uv_scale)):
+                pass
+
+            if len(self.f_screen_uv_offset) != 2:
+                raise kaitaistruct.ConsistencyError(u"f_screen_uv_offset", 2, len(self.f_screen_uv_offset))
+            for i in range(len(self.f_screen_uv_offset)):
+                pass
+
+            if len(self.f_indirect_offset) != 2:
+                raise kaitaistruct.ConsistencyError(u"f_indirect_offset", 2, len(self.f_indirect_offset))
+            for i in range(len(self.f_indirect_offset)):
+                pass
+
+            if len(self.f_indirect_scale) != 2:
+                raise kaitaistruct.ConsistencyError(u"f_indirect_scale", 2, len(self.f_indirect_scale))
+            for i in range(len(self.f_indirect_scale)):
+                pass
+
+            if len(self.f_fresnel_schlick_rgb) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_fresnel_schlick_rgb", 3, len(self.f_fresnel_schlick_rgb))
+            for i in range(len(self.f_fresnel_schlick_rgb)):
+                pass
+
+            if len(self.f_specular_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_specular_color", 3, len(self.f_specular_color))
+            for i in range(len(self.f_specular_color)):
+                pass
+
+            if len(self.f_emission_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_emission_color", 3, len(self.f_emission_color))
+            for i in range(len(self.f_emission_color)):
+                pass
+
+            if len(self.f_constant_color) != 4:
+                raise kaitaistruct.ConsistencyError(u"f_constant_color", 4, len(self.f_constant_color))
+            for i in range(len(self.f_constant_color)):
+                pass
+
+            if len(self.f_roughness_rgb) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_roughness_rgb", 3, len(self.f_roughness_rgb))
+            for i in range(len(self.f_roughness_rgb)):
+                pass
+
+            if len(self.f_anisotoropic_direction) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_anisotoropic_direction", 3, len(self.f_anisotoropic_direction))
+            for i in range(len(self.f_anisotoropic_direction)):
+                pass
+
+            if len(self.f_anistropic_uv) != 2:
+                raise kaitaistruct.ConsistencyError(u"f_anistropic_uv", 2, len(self.f_anistropic_uv))
+            for i in range(len(self.f_anistropic_uv)):
+                pass
+
+            if len(self.f_primary_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_primary_color", 3, len(self.f_primary_color))
+            for i in range(len(self.f_primary_color)):
+                pass
+
+            if len(self.f_secondary_color) != 3:
+                raise kaitaistruct.ConsistencyError(u"f_secondary_color", 3, len(self.f_secondary_color))
+            for i in range(len(self.f_secondary_color)):
+                pass
+
+            if len(self.padding_5) != 3:
+                raise kaitaistruct.ConsistencyError(u"padding_5", 3, len(self.padding_5))
+            for i in range(len(self.padding_5)):
+                pass
+
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 304
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class CbMaterial(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Mrl.CbMaterial, self).__init__(_io)
@@ -8412,6 +9235,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 elif _on == u"rev2":
                     pass
                     self._m_app_specific._fetch_instances()
+                elif _on == u"umvc3":
+                    pass
+                    self._m_app_specific._fetch_instances()
                 else:
                     pass
                     self._m_app_specific._fetch_instances()
@@ -8463,6 +9289,12 @@ class Mrl(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
                     if self._m_app_specific._parent != self:
                         raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
+                elif _on == u"umvc3":
+                    pass
+                    if self._m_app_specific._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
+                    if self._m_app_specific._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
                 else:
                     pass
                     if self._m_app_specific._root != self._root:
@@ -8509,6 +9341,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"umvc3":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
+                self._m_app_specific._read()
             else:
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement1(self._io, self, self._root)
@@ -8542,6 +9378,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific._write__seq(self._io)
             elif _on == u"rev2":
+                pass
+                self._m_app_specific._write__seq(self._io)
+            elif _on == u"umvc3":
                 pass
                 self._m_app_specific._write__seq(self._io)
             else:
@@ -8585,6 +9424,9 @@ class Mrl(ReadWriteKaitaiStruct):
                     pass
                     self._m_app_specific._fetch_instances()
                 elif _on == u"rev2":
+                    pass
+                    self._m_app_specific._fetch_instances()
+                elif _on == u"umvc3":
                     pass
                     self._m_app_specific._fetch_instances()
                 else:
@@ -8638,6 +9480,12 @@ class Mrl(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
                     if self._m_app_specific._parent != self:
                         raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
+                elif _on == u"umvc3":
+                    pass
+                    if self._m_app_specific._root != self._root:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self._root, self._m_app_specific._root)
+                    if self._m_app_specific._parent != self:
+                        raise kaitaistruct.ConsistencyError(u"app_specific", self, self._m_app_specific._parent)
                 else:
                     pass
                     if self._m_app_specific._root != self._root:
@@ -8684,6 +9532,10 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
                 self._m_app_specific._read()
+            elif _on == u"umvc3":
+                pass
+                self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
+                self._m_app_specific._read()
             else:
                 pass
                 self._m_app_specific = Mrl.CbVertexDisplacement21(self._io, self, self._root)
@@ -8717,6 +9569,9 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self._m_app_specific._write__seq(self._io)
             elif _on == u"rev2":
+                pass
+                self._m_app_specific._write__seq(self._io)
+            elif _on == u"umvc3":
                 pass
                 self._m_app_specific._write__seq(self._io)
             else:
@@ -8832,20 +9687,52 @@ class Mrl(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.ofs_float_buff = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_float_buff = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_float_buff = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_float_buff = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
 
 
         def _write__seq(self, io=None):
             super(Mrl.CmdOfsBuffer, self)._write__seq(io)
-            self._io.write_u4le(self.ofs_float_buff)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_float_buff)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_float_buff)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_float_buff)
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             self._dirty = False
 
 
@@ -8856,20 +9743,52 @@ class Mrl(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.tex_idx = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.tex_idx = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.tex_idx = self._io.read_u8le()
+            else:
+                pass
+                self.tex_idx = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
 
 
         def _write__seq(self, io=None):
             super(Mrl.CmdTexIdx, self)._write__seq(io)
-            self._io.write_u4le(self.tex_idx)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.tex_idx)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.tex_idx)
+            else:
+                pass
+                self._io.write_u4le(self.tex_idx)
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             self._dirty = False
 
 
@@ -8884,7 +9803,16 @@ class Mrl(ReadWriteKaitaiStruct):
             self.resources__enabled = True
 
         def _read(self):
-            self.type_hash = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.type_hash = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.type_hash = self._io.read_u8le()
+            else:
+                pass
+                self.type_hash = self._io.read_u4le()
             self.name_hash_crcjam32 = self._io.read_u4le()
             self.cmd_buffer_size = self._io.read_u4le()
             self.blend_state_hash = self._io.read_u4le()
@@ -8909,16 +9837,55 @@ class Mrl(ReadWriteKaitaiStruct):
                 self.blend_factor.append(self._io.read_f4le())
 
             self.anim_data_size = self._io.read_u4le()
-            self.ofs_cmd = self._io.read_u4le()
-            self.ofs_anim_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_cmd = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_cmd = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_cmd = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.ofs_anim_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.ofs_anim_data = self._io.read_u8le()
+            else:
+                pass
+                self.ofs_anim_data = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             for i in range(len(self.blend_factor)):
                 pass
 
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             _ = self.anims
             if hasattr(self, '_m_anims'):
                 pass
@@ -8938,7 +9905,16 @@ class Mrl(ReadWriteKaitaiStruct):
             super(Mrl.Material, self)._write__seq(io)
             self._should_write_anims = self.anims__enabled
             self._should_write_resources = self.resources__enabled
-            self._io.write_u4le(self.type_hash)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.type_hash)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.type_hash)
+            else:
+                pass
+                self._io.write_u4le(self.type_hash)
             self._io.write_u4le(self.name_hash_crcjam32)
             self._io.write_u4le(self.cmd_buffer_size)
             self._io.write_u4le(self.blend_state_hash)
@@ -8963,16 +9939,55 @@ class Mrl(ReadWriteKaitaiStruct):
                 self._io.write_f4le(self.blend_factor[i])
 
             self._io.write_u4le(self.anim_data_size)
-            self._io.write_u4le(self.ofs_cmd)
-            self._io.write_u4le(self.ofs_anim_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_cmd)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_cmd)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_cmd)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.ofs_anim_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.ofs_anim_data)
+            else:
+                pass
+                self._io.write_u4le(self.ofs_anim_data)
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if len(self.blend_factor) != 4:
                 raise kaitaistruct.ConsistencyError(u"blend_factor", 4, len(self.blend_factor))
             for i in range(len(self.blend_factor)):
                 pass
 
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if self.anims__enabled:
                 pass
                 if self.anim_data_size != 0:
@@ -9075,35 +10090,11 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 60
+            self._m_size_ = (72 if self._root.app_id == u"umvc3" else 60)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
             del self._m_size_
-
-    class OfsBuff(ReadWriteKaitaiStruct):
-        def __init__(self, _io=None, _parent=None, _root=None):
-            super(Mrl.OfsBuff, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-
-        def _read(self):
-            self.ofs_const_buff = self._io.read_u4le()
-            self._dirty = False
-
-
-        def _fetch_instances(self):
-            pass
-
-
-        def _write__seq(self, io=None):
-            super(Mrl.OfsBuff, self)._write__seq(io)
-            self._io.write_u4le(self.ofs_const_buff)
-
-
-        def _check(self):
-            self._dirty = False
-
 
     class ResourceBinding(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
@@ -9117,6 +10108,10 @@ class Mrl(ReadWriteKaitaiStruct):
             self.cmd_type = KaitaiStream.resolve_enum(Mrl.CmdType, self._io.read_bits_int_le(4))
             self.unused = self._io.read_bits_int_le(16)
             self.shader_obj_idx = self._io.read_bits_int_le(12)
+            if self._root.use_64bit_ofs:
+                pass
+                self.filling = self._io.read_u4le()
+
             _on = self.cmd_type
             if _on == Mrl.CmdType.set_constant_buffer:
                 pass
@@ -9138,12 +10133,24 @@ class Mrl(ReadWriteKaitaiStruct):
                 pass
                 self.value_cmd = Mrl.ShaderObject(self._io, self, self._root)
                 self.value_cmd._read()
-            self.shader_object_id = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.shader_object_id = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.shader_object_id = self._io.read_u8le()
+            else:
+                pass
+                self.shader_object_id = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            if self._root.use_64bit_ofs:
+                pass
+
             _on = self.cmd_type
             if _on == Mrl.CmdType.set_constant_buffer:
                 pass
@@ -9160,6 +10167,13 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == Mrl.CmdType.set_unk:
                 pass
                 self.value_cmd._fetch_instances()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             _ = self.float_buffer
             if hasattr(self, '_m_float_buffer'):
                 pass
@@ -9221,6 +10235,10 @@ class Mrl(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(4, int(self.cmd_type))
             self._io.write_bits_int_le(16, self.unused)
             self._io.write_bits_int_le(12, self.shader_obj_idx)
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_u4le(self.filling)
+
             _on = self.cmd_type
             if _on == Mrl.CmdType.set_constant_buffer:
                 pass
@@ -9237,10 +10255,22 @@ class Mrl(ReadWriteKaitaiStruct):
             elif _on == Mrl.CmdType.set_unk:
                 pass
                 self.value_cmd._write__seq(self._io)
-            self._io.write_u4le(self.shader_object_id)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.shader_object_id)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.shader_object_id)
+            else:
+                pass
+                self._io.write_u4le(self.shader_object_id)
 
 
         def _check(self):
+            if self._root.use_64bit_ofs:
+                pass
+
             _on = self.cmd_type
             if _on == Mrl.CmdType.set_constant_buffer:
                 pass
@@ -9272,6 +10302,13 @@ class Mrl(ReadWriteKaitaiStruct):
                     raise kaitaistruct.ConsistencyError(u"value_cmd", self._root, self.value_cmd._root)
                 if self.value_cmd._parent != self:
                     raise kaitaistruct.ConsistencyError(u"value_cmd", self, self.value_cmd._parent)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if self.float_buffer__enabled:
                 pass
                 if self.cmd_type == Mrl.CmdType.set_constant_buffer:
@@ -9538,7 +10575,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 12
+            self._m_size_ = (24 if self._root.use_64bit_ofs else 12)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -9553,20 +10590,34 @@ class Mrl(ReadWriteKaitaiStruct):
         def _read(self):
             self.index = self._io.read_bits_int_le(12)
             self.name_hash = KaitaiStream.resolve_enum(Mrl.ShaderObjectHash, self._io.read_bits_int_le(20))
+            if self._root.use_64bit_ofs:
+                pass
+                self.filling = self._io.read_u4le()
+
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            if self._root.use_64bit_ofs:
+                pass
+
 
 
         def _write__seq(self, io=None):
             super(Mrl.ShaderObject, self)._write__seq(io)
             self._io.write_bits_int_le(12, self.index)
             self._io.write_bits_int_le(20, int(self.name_hash))
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_u4le(self.filling)
+
 
 
         def _check(self):
+            if self._root.use_64bit_ofs:
+                pass
+
             self._dirty = False
 
 
@@ -9625,9 +10676,36 @@ class Mrl(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.type_hash = KaitaiStream.resolve_enum(Mrl.TextureType, self._io.read_u4le())
-            self.unk_02 = self._io.read_u4le()
-            self.unk_03 = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.type_hash = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.type_hash = self._io.read_u8le()
+            else:
+                pass
+                self.type_hash = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.unk_02 = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.unk_02 = self._io.read_u8le()
+            else:
+                pass
+                self.unk_02 = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.unk_03 = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.unk_03 = self._io.read_u8le()
+            else:
+                pass
+                self.unk_03 = self._io.read_u4le()
             self.texture_path = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
             self.filler = []
             for i in range((64 - len(self.texture_path)) - 1):
@@ -9638,6 +10716,27 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             for i in range(len(self.filler)):
                 pass
 
@@ -9645,9 +10744,36 @@ class Mrl(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mrl.TextureSlot, self)._write__seq(io)
-            self._io.write_u4le(int(self.type_hash))
-            self._io.write_u4le(self.unk_02)
-            self._io.write_u4le(self.unk_03)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.type_hash)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.type_hash)
+            else:
+                pass
+                self._io.write_u4le(self.type_hash)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.unk_02)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.unk_02)
+            else:
+                pass
+                self._io.write_u4le(self.unk_02)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.unk_03)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.unk_03)
+            else:
+                pass
+                self._io.write_u4le(self.unk_03)
             self._io.write_bytes((self.texture_path).encode(u"ASCII"))
             self._io.write_u1(0)
             for i in range(len(self.filler)):
@@ -9657,6 +10783,27 @@ class Mrl(ReadWriteKaitaiStruct):
 
 
         def _check(self):
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             if KaitaiStream.byte_array_index_of((self.texture_path).encode(u"ASCII"), 0) != -1:
                 raise kaitaistruct.ConsistencyError(u"texture_path", -1, KaitaiStream.byte_array_index_of((self.texture_path).encode(u"ASCII"), 0))
             if len(self.filler) != (64 - len(self.texture_path)) - 1:
@@ -9671,7 +10818,7 @@ class Mrl(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 76
+            self._m_size_ = (88 if self._root.app_id == u"umvc3" else 76)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -9712,7 +10859,7 @@ class Mrl(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_ofs_textures_calculated'):
             return self._m_ofs_textures_calculated
 
-        self._m_ofs_textures_calculated = 28
+        self._m_ofs_textures_calculated = (40 if self.app_id == u"umvc3" else 28)
         return getattr(self, '_m_ofs_textures_calculated', None)
 
     def _invalidate_ofs_textures_calculated(self):
@@ -9752,9 +10899,19 @@ class Mrl(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = 28
+        self._m_size_top_level_ = (40 if self.app_id == u"umvc3" else 28)
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):
         del self._m_size_top_level_
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
 

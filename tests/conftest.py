@@ -1,9 +1,11 @@
 import os
 
+import bpy
 import pytest
 
 from albam import register, unregister
 from albam.blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR
+from albam.lib import fs_registry
 
 
 # Written by pytest_sessionfinish so CI can recover the real exit status when
@@ -23,8 +25,15 @@ def pytest_sessionstart():
     register()
 
 
-def pytest_sessionfinish(exitstatus):
-    _record_exit_status(exitstatus)
+def pytest_sessionfinish(session, exitstatus):
+    # Under xdist every worker runs this too, with its own exitstatus - 0
+    # whatever the controller concluded. Which of the two writes lands last
+    # is not ours to rely on (workers shut down in parallel with the
+    # controller's own teardown), and a worker's 0 landing last would turn a
+    # failing run into a green build, the exact failure mode this file
+    # exists to prevent. Only the controller writes.
+    if not hasattr(session.config, "workerinput"):
+        _record_exit_status(exitstatus)
     unregister()
 
     # bpy (the pip package, not the full Blender application) segfaults
@@ -116,3 +125,78 @@ def pytest_configure(config):
                     f"must always be explicit: 'r2://<bucket>/<prefix>' (game root, e.g. "
                     f"r2://albam/re5) or 'r2://<key>' (reng's path-list segment)"
                 )
+
+
+def detach_fs_registry():
+    """Take every registered filesystem out of fs_registry *without* closing
+    it, returning {key: fs} for reattach_fs_registry().
+
+    For the tests that call fs_registry.clear() themselves to simulate a
+    fresh Blender process: clear() closes every filesystem in the process,
+    other suites' session-scoped game roots included. Serially those tests
+    happened to run last, so nothing was left to notice; split across xdist
+    workers they share a worker with suites still using theirs, and closing
+    one fails every later test on that worker with FilesystemClosed.
+
+    Reaches into the registry's own dict because popping without closing is
+    exactly what its public API refuses to offer - see unregister().
+    """
+    detached = {key: fs_registry.get(key) for key in fs_registry.keys()}
+    for key in detached:
+        fs_registry._REGISTRY.pop(key)
+    return detached
+
+
+def reattach_fs_registry(detached):
+    """Put back what detach_fs_registry() took out, under the same keys, and
+    only where nothing has since claimed the key (a .blend reload remounts
+    roots through albam's own load_post handler)."""
+    for key, fs_instance in detached.items():
+        if key not in fs_registry.keys():
+            fs_registry.reconnect(key, fs_instance)
+
+
+def close_new_fs_roots(before):
+    """Close the FS roots registered since `before` was taken.
+
+    Not fs_registry.clear(): that closes every filesystem in the process.
+    Session-scoped parametrization interleaves every engine's tests in the
+    same session - cie's with mtfw's and hexn's, whose game_fs_root is one
+    session-scoped FS shared by every test in it - so clearing here closed
+    it mid-run and every later test using it failed with FilesystemClosed.
+    """
+    for key in fs_registry.keys():
+        if key not in before:
+            fs_registry.unregister(key)
+
+
+def vfs_root_names():
+    """Names of every root vfile currently in the main VFS - a snapshot to
+    diff against after a test, so only the roots it added get removed (see
+    remove_new_vfs_roots)."""
+    return {vf.name for vf in bpy.context.scene.albam.vfs.file_list if vf.is_root}
+
+
+def remove_new_vfs_roots(before):
+    """Remove only the VFS roots added since `before` was taken (see
+    vfs_root_names()), each via the real "Remove imported files" operator so
+    a root's whole subtree goes with it - not
+    scene.albam.vfs.file_list.clear().
+
+    vfs.file_list is one collection shared by every engine's tests in the
+    same session, same reasoning as close_new_fs_roots() above: mtfw's and
+    hexn's own game_fs_root fixtures mount their whole-game root once per
+    session and expect it to still be there on every later test. Clearing
+    the whole list here emptied it out from under them - the later test's
+    own session-scoped fixture, having already run once, never re-mounts,
+    so every VFS lookup after that silently found nothing.
+    """
+    vfs = bpy.context.scene.albam.vfs
+    for name in [vf.name for vf in vfs.file_list if vf.is_root]:
+        if name in before:
+            continue
+        index = vfs.file_list.find(name)
+        if index == -1:
+            continue  # already removed as part of an earlier root's own cleanup
+        vfs.file_list_selected_index = index
+        bpy.ops.albam.remove_imported()

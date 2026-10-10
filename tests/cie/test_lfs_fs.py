@@ -1,0 +1,267 @@
+"""
+LfsFS against real .lfs archives: mounting one, listing it, and reading
+every file back out - the same path the VFS takes when "Add Files" mounts an
+archive (see albam/engines/cie/archive.py).
+"""
+import json
+import os
+
+import pytest
+
+from tests.cie.lfs_paths import resolve_archive_hashes
+
+# Committed, fixed dataset - explicit, hash-only, catalog-verified archives
+# (see test_dataset_hashes_are_in_catalog below), same pattern as
+# tests/reng/test_mesh_parsing.py. One small archive per payload layout
+# LfsFS has to handle: a container that names its entries' extensions
+# (.udas, .dat), one that doesn't (.pack, both plain and .pack.yz2), one
+# whose entries carry nested paths (.evd), and single-file archives.
+DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
+LFS_PARSING_DATASET_PATH = os.path.join(DATASETS_DIR, "lfs_parsing_hashes.json")
+with open(LFS_PARSING_DATASET_PATH) as f:
+    LFS_PARSING_DATASET = json.load(f)
+
+# Payload extensions that hold more than one file (see albam.engines.cie.fs).
+CONTAINER_EXTENSIONS = {".udas", ".dat", ".pack", ".evd"}
+
+
+def pytest_generate_tests(metafunc):
+    if ("local_app_id" in metafunc.fixturenames and
+            "local_archive_path_hash" in metafunc.fixturenames):
+        argnames = ("local_app_id", "local_archive_path_hash")
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in LFS_PARSING_DATASET]
+        ids = [f"{d['app_id']}-{d['payload_extension'].lstrip('.')}-{d['archive_path_hash']}"
+               for d in LFS_PARSING_DATASET]
+        metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_hashes_are_in_catalog():
+    """No plaintext game asset path is ever committed - every hash referenced
+    by LFS_PARSING_DATASET must be in that app_id's committed catalog, so this
+    file only ever exercises real, unmodified, hash-verified game files.
+    CI-safe: reads two committed JSON files, no real install needed.
+    """
+    for entry in LFS_PARSING_DATASET:
+        catalog_path = os.path.join(DATASETS_DIR, f"{entry['app_id']}_catalog.json")
+        with open(catalog_path) as f:
+            catalog = {e["path_hash"]: e for e in json.load(f)}
+        catalogued = catalog.get(entry["archive_path_hash"])
+        assert catalogued is not None, (
+            f"{entry['archive_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
+        )
+        assert catalogued["payload_extension"] == entry["payload_extension"], (
+            f"{entry['archive_path_hash']!r} is a {catalogued['payload_extension']!r} archive, "
+            f"not {entry['payload_extension']!r}"
+        )
+
+
+@pytest.fixture(scope="session")
+def local_payload_extension(local_archive_path_hash):
+    """The dataset's own payload extension for this archive - a fixture
+    rather than a third parametrized argument, so tests that don't care about
+    it don't have to take it."""
+    return next(d["payload_extension"] for d in LFS_PARSING_DATASET
+                if d["archive_path_hash"] == local_archive_path_hash)
+
+
+@pytest.fixture(scope="session")
+def lfs_fs(game_root, local_archive_path_hash):
+    from albam.engines.cie.fs import LfsFS
+
+    path = resolve_archive_hashes(game_root, {local_archive_path_hash})[local_archive_path_hash]
+    fs = LfsFS(path)
+    yield fs
+    fs.close()
+
+
+def test_archive_is_readable(lfs_fs):
+    """Every listed file reads back at the size getinfo() reports.
+
+    Not every entry has content: a .dat's file table has fixed-size slots, and
+    an unused one is a real, zero-length entry with no extension (LfsFS names
+    those "<stem>_NNN.null"). They stay listed rather than being dropped, so
+    the numbering keeps matching the container's own.
+    """
+    paths = list(lfs_fs.walk.files())
+    assert paths, "archive should expose at least one file"
+    assert len(set(paths)) == len(paths), "file paths should be unique"
+
+    sizes = []
+    for path in paths:
+        data = lfs_fs.readbytes(path)
+        assert len(data) == lfs_fs.getinfo(path, namespaces=["details"]).size
+        sizes.append(len(data))
+    assert any(sizes), "archive should hold at least one non-empty file"
+
+
+def test_payload_is_read_as_its_extension_says(lfs_fs, local_payload_extension):
+    """The archive holds what its name says it does: a container splits into
+    entries, anything else is one file named after the archive itself."""
+    assert lfs_fs.payload_extension == local_payload_extension
+    assert lfs_fs.container_error is None, (
+        f"{lfs_fs.payload_extension} container failed to parse: {lfs_fs.container_error}"
+    )
+
+    paths = list(lfs_fs.walk.files())
+    if local_payload_extension in CONTAINER_EXTENSIONS:
+        assert len(paths) > 1, "a container archive in this dataset should hold several files"
+    else:
+        assert paths == [f"/{os.path.basename(lfs_fs.lfs_path).split('.')[0]}"
+                         f"{local_payload_extension}"]
+
+
+def test_unnamed_entries_are_numbered_in_container_order(lfs_fs, local_payload_extension):
+    """udas/dat/pack entries have no names of their own, so LfsFS numbers them
+    - and the numbering has to follow the container's own order, since that is
+    the only thing a .tpl's texture index can refer to (see textures.py)."""
+    if local_payload_extension not in CONTAINER_EXTENSIONS - {".evd"}:
+        pytest.skip(f"a {local_payload_extension} archive has nothing to number "
+                    f"(its entries are named, or it holds a single file)")
+
+    stem = os.path.basename(lfs_fs.lfs_path).split(".")[0]
+    indices = []
+    for name in lfs_fs.listdir("/"):
+        assert name.startswith(f"{stem}_"), f"{name} is not numbered after its archive"
+        indices.append(int(name[len(stem) + 1:].split(".")[0]))
+    assert indices == list(range(len(indices)))
+
+
+def test_missing_file_raises(lfs_fs):
+    from fs.errors import ResourceNotFound
+
+    with pytest.raises(ResourceNotFound):
+        lfs_fs.readbytes("/not-a-file-in-here.bin")
+
+
+def test_read_only(lfs_fs):
+    from fs.errors import ResourceReadOnly
+
+    with pytest.raises(ResourceReadOnly):
+        lfs_fs.openbin(next(iter(lfs_fs.walk.files())), mode="w")
+
+
+def test_evd_entries_are_sliced_by_offset_order(lfs_fs, local_payload_extension):
+    """An .evd's file table is not sorted by offset and its entries' `size`
+    field doesn't measure their content, so LfsFS slices each entry from its
+    own offset to the next one in ascending-offset order (see fs._split_evd).
+
+    Getting that wrong is silent rather than loud - a .bin comes back short of
+    its own vertex data, not empty - so this checks the bytes really are a
+    whole file: the magic its extension calls for, and a full parse.
+    """
+    if local_payload_extension != ".evd":
+        pytest.skip("only .evd entries are sliced this way")
+
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+    from albam.engines.cie.structs.tpl import Tpl
+
+    checked = 0
+    for path in lfs_fs.walk.files():
+        blob = lfs_fs.readbytes(path)
+        if path.endswith(".bin"):
+            assert blob[:4] == b"\x60\x00\x00\x00", f"{path} is not a .bin"
+            parsed = Re4UhdBin.from_bytes(blob)
+            parsed._read()
+            # Lazy instances: reading them is what needs the whole slice.
+            for attribute in ("bones", "vertex_positions", "normals", "texcoords", "materials"):
+                getattr(parsed, attribute)
+        elif path.endswith(".tpl"):
+            # Both byte orders of the same magic occur (see structs/tpl.ksy).
+            assert blob[:4] in (b"\x78\x56\x34\x12", b"\x12\x34\x56\x78"), (
+                f"{path} is not a .tpl"
+            )
+            parsed = Tpl.from_bytes(blob)
+            parsed._read()
+            for entry in parsed.tpl_entries:
+                entry.image_data.ids
+        else:
+            continue
+        checked += 1
+    if not checked:
+        pytest.skip("this .evd holds no model files")
+
+
+def test_lfs_round_trips_through_the_writer(lfs_fs):
+    """An archive rebuilt by xcompress_compress_re4hd decompresses back to
+    exactly the payload it was given.
+
+    The rebuilt file is not compared to the original byte for byte: albam
+    writes its own LZX (see tests/cie/test_lfs_compress.py), not a
+    reproduction of whatever produced the shipped archives. What matters here
+    is that the container it writes reads back as the same payload.
+    """
+    from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
+                                                  xcompress_decompress_re4hd)
+    from albam.engines.cie.structs.lfs import Lfs
+
+    original = Lfs.from_file(lfs_fs.lfs_path)
+    original._read()
+    payload = bytes(xcompress_decompress_re4hd(original.chunks))
+
+    rebuilt = xcompress_compress_re4hd(payload)
+    reparsed = Lfs.from_bytes(rebuilt)
+    reparsed._read()
+
+    assert bytes(xcompress_decompress_re4hd(reparsed.chunks)) == payload
+    assert reparsed.header.size_decompressed == len(payload)
+
+
+def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, local_payload_extension,
+                                                              tmp_path):
+    """Rebuilding an archive without changing anything gives back what went in.
+
+    This is the path a mod takes - the archive writer rebuilds the file table
+    around the exported files and recompresses - so an identity run of it is
+    what says the rebuild itself introduces nothing. Entries are matched by
+    the number they were unpacked under rather than by name, since the name
+    carries the archive's own filename.
+    """
+    if local_payload_extension != ".udas":
+        pytest.skip("only .udas containers are rebuilt")
+
+    from albam.engines.cie.archive import _read_payload, _rebuild_udas
+    from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
+                                                  xcompress_decompress_re4hd)
+    from albam.engines.cie.structs.lfs import Lfs
+    from albam.engines.cie.structs.udas import Udas
+
+    before = {_entry_key(path): lfs_fs.readbytes(path) for path in lfs_fs.walk.files()}
+    assert before
+
+    payload, _extension = _read_payload(lfs_fs.lfs_path)
+    # One entry handed back unchanged: the writer needs a replacement to
+    # match, and substituting an entry for itself is the identity case.
+    any_path = next(iter(lfs_fs.walk.files()))
+    rebuilt_payload = _rebuild_udas(payload, {any_path.lstrip("/"): lfs_fs.readbytes(any_path)})
+
+    original = Udas.from_bytes(payload)
+    original._read()
+    rebuilt = Udas.from_bytes(rebuilt_payload)
+    rebuilt._read()
+    assert [(b.block_type, b.size, b.offset) for b in rebuilt.header.blocks] == \
+           [(b.block_type, b.size, b.offset) for b in original.header.blocks]
+
+    archive_bytes = xcompress_compress_re4hd(rebuilt_payload)
+    parsed = Lfs.from_bytes(archive_bytes)
+    parsed._read()
+    assert bytes(xcompress_decompress_re4hd(parsed.chunks)) == rebuilt_payload
+
+    # Mounted from disk rather than compared in memory: this is the archive a
+    # mod would ship, so the check is that mounting it gives the same files.
+    from albam.engines.cie.fs import LfsFS
+    repacked_path = tmp_path / os.path.basename(lfs_fs.lfs_path)
+    repacked_path.write_bytes(archive_bytes)
+    repacked = LfsFS(str(repacked_path))
+    try:
+        after = {_entry_key(path): repacked.readbytes(path) for path in repacked.walk.files()}
+    finally:
+        repacked.close()
+    assert after == before
+
+
+def _entry_key(path):
+    """(entry number, extension) - the identity an entry has independent of
+    which archive filename it was unpacked from."""
+    name = path.rsplit("/", 1)[-1]
+    stem, _, extension = name.rpartition(".")
+    return int(stem.rsplit("_", 1)[1]), extension

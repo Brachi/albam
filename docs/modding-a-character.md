@@ -1,0 +1,227 @@
+# Modding a character (RE4UHD)
+
+A worked example: taking the player character, changing something about him, and
+getting the result back into the game.
+
+The same steps apply to any character or enemy. Everything here has been done end
+to end and confirmed in the running game.
+
+## Before you start
+
+- Blender 5.2 with albam installed.
+- A legitimate installation of the game.
+- **A backup of any archive you replace.** albam never writes into your install;
+  you do, and the game will not put a file back for you.
+
+## 1. Pick the app
+
+In the Albam sidebar, set the app to **RE4UHD**. Everything below
+is keyed off that: which importers run, which formats are offered, how an
+archive is repacked.
+
+## 2. Add the character's archive
+
+Use **Add Files** in the File Explorer panel and choose the archive holding the
+character you want. Characters and enemies each live in their own `.udas.lfs`
+inside the game's character folder, named after the character's own id.
+
+**Add Folder is not useful for this game**, unlike the MT Framework titles. An
+archive here keeps its file table *inside* its compressed stream, so listing one
+means decompressing the whole thing - about 0.38 MB/s, against several GB across
+an install. albam therefore mounts one archive at a time. This is a deliberate
+limitation, not an oversight; see `albam/engines/cie/fs.py`.
+
+A mounted archive expands into numbered entries, because the container stores no
+names - only positions. A `.bin` is a model, a `.tpl` is a texture list, and the
+rest are animation and script data albam does not read yet.
+
+## How the files fit together
+
+Worth five minutes before you change anything: what you edit in Blender is one
+file inside one archive, and its textures are in a different archive entirely.
+
+```
+pl00.udas.lfs                  the archive you add - LZX compressed
+|
++-- pl00.udas                  the container inside it, entries in order,
+    |                          none of them named
+    +-- pl00_000.bin           a model (the body)
+    +-- pl00_001.bin           another part of the same character
+    +-- ...                    25 of them for a main character
+    +-- pl00_015.tpl           a texture list
+             |
+             |  entry 3 says: pack 44000002, texture 7
+             v
+    44000002.pack.lfs          a DIFFERENT archive, in ImagePackHD/
+    +-- 44000002_007.dds       the actual texture bytes
+```
+
+An archive holds no names for its entries, only positions, so albam numbers
+them after the archive's own filename: `pl00.udas.lfs` gives `pl00_000.bin`,
+`pl00_001.bin` and so on. **Rename the archive and every entry inside it is
+renamed too** - which is why step 6 insists you write the repacked file under
+the original name.
+
+| Entry | What it is | What albam does |
+| --- | --- | --- |
+| `.bin` with the mesh flag | a model | imports and exports it |
+| `.bin` without it | camera, lighting, collision | refuses it with an error |
+| `.tpl` | a texture list: slot -> pack id + index | reads it |
+| `.pack` (separate archive) | the texture bytes, DDS or TGA | reads it |
+| everything else | animation, script data | not read yet |
+
+Three things follow, and they are what catches people out:
+
+- **A material names a slot, not a texture.** Its `diffuse_map` is an index
+  into a `.tpl`, and the model never says which `.tpl` - so picking the wrong
+  one textures your character with someone else's textures. Step 3 covers the
+  setting that decides this.
+- **Textures live outside the archive you are modding**, so the archive alone
+  is not enough to import a textured model. Step 3 covers what to do when you
+  are working from a copy.
+- **A pack is shared by many models**, and about a third carry an extra YZ2
+  compression layer albam cannot read. That, plus there being no `.pack` or
+  `.tpl` writer, is why new textures cannot be added - see the end of this
+  guide.
+
+The parts of a character also share one skeleton, which is why the order you
+import them in matters - again, step 3.
+
+## 3. Import the model
+
+Select a `.bin` entry and press **Import**.
+
+Not every `.bin` is a model: cameras, lighting and collision data share the
+extension. albam only offers the ones that really are models.
+
+A character is not one model. The example character is 25 of them - body,
+jacket, head, hands, weapon attachments, level-of-detail copies. Import the ones
+you want to work on; you do not need all of them.
+
+### The two import options
+
+Both default to doing the right thing, and both are worth understanding.
+
+**Textures.** A model does not name its texture list. Its materials hold indices
+into one, and its archive can hold dozens - one enemy archive carries 75 for 120
+models. Left on **Auto**, albam works out which one the model's own materials
+fit, and is right about 99.9% of the time across every character and enemy in the
+game. Override it only if you know better.
+
+The textures themselves live in a *separate* archive named after the pack id the
+texture list refers to. albam finds it next to the model's own archive, so
+importing from the install just works. If you have copied an archive out to a
+working folder, add any archive from the install too and albam will look beside
+that one as well.
+
+**Attach to armature.** Leave it empty. A character archive holds one model
+carrying the whole skeleton and many carrying only the bones they need, so albam
+reuses a rig already imported from the same archive that covers the model's
+bones. Import the body first and the head, jacket and hands attach to the same
+skeleton rather than arriving with part-skeletons of their own. The field is an
+override for when you want a specific one.
+
+## 4. Make your change
+
+Anything you do to the mesh is what gets written:
+
+- **Vertex edits** - move, scale, sculpt, add or remove geometry.
+- **Object transforms** - moving, rotating or scaling the object itself is baked
+  in on export, so you do not need to apply transforms first.
+- **Materials** - swapping the image in a texture node changes which texture the
+  model uses, because the exporter reads the binding back rather than a stored
+  value. Note what this is and is not: it re-points the material at a texture
+  **already in the archive's texture pack**. Bringing a new image into the game
+  is not supported - see below.
+
+Two things to keep in mind:
+
+- **Keep the vertex groups.** They are the skinning, named after bone ids. A
+  vertex in no group gets pinned to the first bone.
+- **There is a size limit.** Both vertex counts in the format are 16-bit, so a
+  model cannot exceed 65535 face corners. Corners are shared along a triangle
+  strip but never across a UV seam or a shading split, so a mesh needs somewhere
+  between one and three per triangle. Exceeding it is reported, not silently
+  truncated. Only one model in the whole game is near it.
+
+## 5. Export the model
+
+Select the imported object in the Exportable list and press **Export**. The
+result appears in the second File Explorer panel, the export side.
+
+Export builds the file from what is in Blender now. The only things carried over
+rather than rebuilt are the handful of header values Blender has nowhere to keep,
+which ride on the mesh's and materials' albam custom properties.
+
+Export each model you changed. Models you did not touch do not need exporting -
+the repack keeps the archive's own copy.
+
+## 6. Repack the archive
+
+With the source archive selected on the import side and your exported files
+selected on the export side, press **Pack item** and choose where to write.
+
+This rebuilds the whole archive: your files substituted for the entries they came
+from, the file table rebuilt around their new sizes, and the result recompressed.
+
+**Name the output exactly as the original.** Entries are numbered after the
+archive's own filename, so an archive under a different name produces differently
+named entries and its replacements will not match.
+
+Archives albam writes come out about 6% larger than the originals. Its LZX
+encoder does not find quite as many matches as the one the game shipped with,
+which costs size and nothing else.
+
+## 7. Install and test
+
+Back up the original, drop yours in its place under the same name, and start the
+game.
+
+If you are iterating, keep the backup outside the install and swap the two files
+with a one-line script rather than by hand - it is easy to lose the original
+otherwise, and the game will not restore it for you.
+
+## 8. Check your work before you ship it
+
+Importing a model and exporting it again proves less than it looks. albam reads
+its own output, so a file it writes wrongly still comes back looking right in
+Blender. Several archives that crashed or visibly broke the game passed exactly
+that check.
+
+What catches those is comparing a **no-edit re-export against the bytes the
+archive shipped with**:
+
+```
+python tests/tools/cie_build_mod.py <archive> <out-dir> [scale]
+```
+
+It re-exports every model with no changes, compares bone tables, texture slots,
+material counts and geometry against the original, and only then writes an edited
+archive - keeping the original bytes for any model that did not reproduce. If
+something is wrong with the exporter, you find out before the game does.
+
+## If the game does not load it
+
+Add one layer of albam at a time, and whichever fails first names the layer:
+
+1. **The container only** - repack with every file inside taken from the original
+   archive. If this fails, nothing about your model is involved.
+2. **Models re-exported, unedited** - adds the mesh exporter.
+3. **Your edit** - adds the change itself.
+
+`cie_build_mod.py` writes the second and third of those for you.
+
+## What does not work yet
+
+- **A model whose bone table names one bone id twice** cannot be exported
+  faithfully; import collapses the two. 69 of 738 models are affected, and the
+  build tool keeps their original bytes rather than shipping them wrong.
+- **Morph targets, bone pairs and adjacency** are not written back. A model with
+  facial morphs loses them on export.
+- **Rooms** import - geometry, props and placement - but there is no exporter for
+  them.
+- **New textures cannot be added.** Nothing writes a `.pack` or a `.tpl`, so a
+  model can only address textures its archive already ships. Retexturing - the
+  usual reason to mod a character - needs that, and it needs a DDS encoder
+  (albam only reads DDS) plus a decoder for the YZ2 layer that about a third of
+  the packs carry.

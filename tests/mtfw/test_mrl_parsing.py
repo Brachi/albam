@@ -114,7 +114,14 @@ KNOWN_CONSTANT_BUFFERS = {
         Mrl.ShaderObjectHash.cbuvrotationoffset,
         Mrl.ShaderObjectHash.globals,
     },
-
+    "umvc3": {
+        Mrl.ShaderObjectHash.cbmaterial,
+        Mrl.ShaderObjectHash.cbdiffusecolorcorect,
+        Mrl.ShaderObjectHash.cbhalflambert,
+        Mrl.ShaderObjectHash.cbindirectuser,
+        Mrl.ShaderObjectHash.cbtoon2,
+        Mrl.ShaderObjectHash.globals,
+    },
 }
 
 

@@ -1,4 +1,4 @@
-from kaitaistruct import ReadWriteKaitaiStruct
+from kaitaistruct import BytesIO, KaitaiStream, ReadWriteKaitaiStruct
 
 # The only attributes that legitimately point at another ReadWriteKaitaiStruct
 # without "belonging" to kaitai_obj - back-references to the enclosing
@@ -35,3 +35,16 @@ def check_recursive(kaitai_obj):
                 if isinstance(item, ReadWriteKaitaiStruct):
                     check_recursive(item)
     kaitai_obj._check()
+
+
+def parse(kaitai_cls, data, *params):
+    """Parses `data` with `kaitai_cls`, passing `params` to its constructor.
+
+    kaitaistruct's own `from_bytes` hardcodes a parameterless constructor,
+    so it can't be used with a struct that declares `params:` in its .ksy
+    (every mtfw model/texture struct takes an `app_id`, since some fields
+    differ per app rather than per format version).
+    """
+    obj = kaitai_cls(*params, KaitaiStream(BytesIO(data)))
+    obj._read()
+    return obj
