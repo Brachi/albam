@@ -31,34 +31,40 @@ TRACK_TYPE = {
 
 RV_TRACK_TYPE = {v: k for k, v in TRACK_TYPE.items()}
 
-SDL_SCALAR_PROPERTY_TYPES = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24, 28, 55, 57}
-SDL_DATA_STRUCT_SIZES = {
-    3: 4,
-    4: 4,
-    5: 4,
-    6: 4,
-    7: 8,
-    8: 4,
-    9: 4,
-    10: 4,
-    11: 8,
-    12: 4,
-    13: 8,
-    14: 4,
-    15: 16,
-    20: 16,
-    21: 16,
-    22: 16,
-    24: 4,
-    28: 4,
-    34: 8,
-    35: 12,
-    36: 16,
-    40: 8,
-    55: 4,
-    57: 4,
-    58: 4,
+SDL_SCALAR_PROPERTY_TYPES = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24, 28, 55, 57}
+SDL_DATA_STRUCT_SIZES = {   # Padding included
+    "TYPE_CLASSREF": 4,
+    "TYPE_BOOL": 4,  # multiple of four but 1 byte in array
+    "TYPE_U8": 4,
+    "TYPE_U16": 4,
+    "TYPE_U32": 4,
+    "TYPE_U64": 8,
+    "TYPE_S8": 4,
+    "TYPE_S16": 4,
+    "TYPE_S32": 4,
+    "TYPE_S64": 8,
+    "TYPE_F32": 4,
+    "TYPE_F64": 8,
+    "TYPE_STRING": 4,
+    "TYPE_COLOR": 16,
+    "TYPE_VECTOR3": 16,
+    "TYPE_VECTOR4": 16,
+    "TYPE_QUATERNION": 16,
+    "TYPE_EVENT": 4,
+    "TYPE_EVENT32": 4,
+    "TYPE_FLOAT2": 16,
+    "TYPE_FLOAT3": 16,
+    "TYPE_FLOAT4": 16,
+    "TYPE_EASECURVE": 16,
+    "TYPE_RANGEF": 16,
+    "TYPE_HERMITECURVE": 64,
+    "TYPE_CUSTOM": 4,
 }
+
+
+def _sdl_data_struct_size(prop_type):
+    prop_type_name = RV_MtPropertyTypeRE5.get(prop_type)
+    return SDL_DATA_STRUCT_SIZES.get(prop_type_name)
 
 
 def _append_sdl_value_xml(parent_xml, value):
@@ -238,8 +244,9 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
             value = float(value)
         else:
             value = _sdl_int_value(value)
-        if prop_type in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+        if prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
             classes = {
+                2: Sdl156.Classref,
                 3: Sdl156.Bool,
                 4: Sdl156.U8,
                 5: Sdl156.U16,
@@ -401,51 +408,61 @@ def _sdl_xml_to_bytes(root_xml):
 
     header_size = 20
     tracks_size = track_count * 24
-    cursor = header_size + tracks_size
+    cur_track_data = header_size + tracks_size
     for track, data_entry in zip(tracks, track_data):
-        track["timing_offset"] = cursor if data_entry else 0
-        cursor += len(data_entry) * 4
+        track["timing_offset"] = cur_track_data if data_entry else 0
+        cur_track_data += len(data_entry) * 4
+        data_struct_size = _sdl_data_struct_size(track["prop_type"])
         has_serialized_data = (
             data_entry
             and track["type"] > TRACK_TYPE["TYPE_OBJECT"]
-            and track["prop_type"] in SDL_DATA_STRUCT_SIZES
+            and data_struct_size is not None
         )
+        # padding for data blocks
         if has_serialized_data:
-            r = cursor % 16
-            cursor += (16 - r) % 16
-        track["data_offset"] = cursor if has_serialized_data else 0
+            r = cur_track_data % 16
+            cur_track_data += (16 - r) % 16
+        track["data_offset"] = cur_track_data if has_serialized_data else 0
         if track["data_offset"]:
-            cursor += len(data_entry) * SDL_DATA_STRUCT_SIZES[track["prop_type"]]
-    while cursor % 4:
-        cursor += 1
+            # special bool list case
+            if track["prop_type"] == 3:
+                r = len(data_entry) % 4
+                if r == 0:
+                    cur_track_data += len(data_entry)
+                else:
+                    cur_track_data += len(data_entry) + (4 - r)
+            else:
+                cur_track_data += len(data_entry) * data_struct_size
+    while cur_track_data % 4:
+        cur_track_data += 1
 
-    metadata_cursor = 4
+    cur_names = 0
     name_offsets = {}
     for track in tracks:
         name = track["name"]
         if "\0" in name:
             raise ValueError("SDL track names cannot contain NUL characters")
         if name not in name_offsets:
-            name_offsets[name] = metadata_cursor
-            metadata_cursor += len(name.encode("utf-8")) + 1
+            name_offsets[name] = cur_names
+            cur_names += len(name.encode("utf-8")) + 1
 
-    custom_data_offset = metadata_cursor
+    custom_data_offset = cur_names
     for track, data_entry in zip(tracks, track_data):
         for item in data_entry:
             if track["prop_type"] == 14:
                 value = item.get("string", "")
                 if "\0" in value:
                     raise ValueError("SDL strings cannot contain NUL characters")
-                metadata_cursor += len(value.encode("utf-8")) + 1
+                cur_names += len(value.encode("utf-8")) + 1
             elif track["prop_type"] == 58 and (
                 item.get("ref_path") is not None or item.get("ref_dti") is not None
             ):
                 path = item.get("ref_path", "")
                 if "\0" in path:
                     raise ValueError("SDL resource paths cannot contain NUL characters")
-                metadata_cursor += 4 + len(path.encode("utf-8")) + 1
+                cur_names += 4 + len(path.encode("utf-8")) + 1
 
-    final_size = cursor + metadata_cursor
+    final_size = cur_track_data + cur_names
     stream = KaitaiStream(io.BytesIO(bytearray(final_size)))
     sdl = Sdl156(stream)
     header = Sdl156.BaseHeader(stream, sdl, sdl)
@@ -456,11 +473,11 @@ def _sdl_xml_to_bytes(root_xml):
     header.floor_frame = bool(floor_frame)
     header.reserved = reserved
     header.ofs_dti_table = 0
-    header.ofs_names = cursor
+    header.ofs_names = cur_track_data
     sdl.header = header
 
     generated_tracks = []
-    metadata_cursor = custom_data_offset
+    cur_names = custom_data_offset
     for track, data_entry in zip(tracks, track_data):
         dst_track = Sdl156.Track(stream, sdl, sdl)
         dst_track.track_type = track["type"]
@@ -484,20 +501,18 @@ def _sdl_xml_to_bytes(root_xml):
             timing.type = frame_type
             timing_frames.append(timing)
 
-            if (
-                track["type"] > TRACK_TYPE["TYPE_OBJECT"]
-                and track["prop_type"] in SDL_DATA_STRUCT_SIZES
-            ):
+            data_struct_size = _sdl_data_struct_size(track["prop_type"])
+            if track["type"] > TRACK_TYPE["TYPE_OBJECT"] and data_struct_size is not None:
                 value_offset = (
                     track["data_offset"]
-                    + item_index * SDL_DATA_STRUCT_SIZES[track["prop_type"]]
+                    + item_index * data_struct_size
                 )
                 if track["prop_type"] == 14:
-                    value_offset = metadata_cursor
+                    value_offset = cur_names
                 elif track["prop_type"] == 58 and (
                     item.get("ref_path") is not None or item.get("ref_dti") is not None
                 ):
-                    value_offset = metadata_cursor
+                    value_offset = cur_names
                 data_values.append(
                     _sdl_data_value(
                         track["prop_type"],
@@ -509,11 +524,11 @@ def _sdl_xml_to_bytes(root_xml):
                     )
                 )
             if track["prop_type"] == 14:
-                metadata_cursor += len(item.get("string", "").encode("utf-8")) + 1
+                cur_names += len(item.get("string", "").encode("utf-8")) + 1
             elif track["prop_type"] == 58 and (
                 item.get("ref_path") is not None or item.get("ref_dti") is not None
             ):
-                metadata_cursor += 4 + len(item.get("ref_path", "").encode("utf-8")) + 1
+                cur_names += 4 + len(item.get("ref_path", "").encode("utf-8")) + 1
 
         dst_track.name = track["name"]
         dst_track.timing_frames = timing_frames

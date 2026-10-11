@@ -11,10 +11,6 @@ seq:
   - {id: header, type: base_header}
   - {id: tracks, type: track, repeat: expr, repeat-expr: header.num_tracks}
 
-#instances:
-#  tracks:
-#    {pos: 0x14, type: track, repeat: expr, repeat-expr: header.num_tracks}
-
 types:
   base_header:
     seq:
@@ -51,6 +47,7 @@ types:
         type:
           switch-on: prop_type
           cases:
+            2: classref
             3: bool # bool
             4: u8 # u8
             5: u16 # u16
@@ -103,11 +100,13 @@ types:
     seq:
       - {id: frame, type: b24}
       - {id: type, type: b8}
-    #instances:
-    #  frame:
-    #    value: val & 0xffffff
-    #  type:
-    #    value: val >> 24
+  
+  classref:
+    seq:
+      - {id: val, type: u4}
+    instances:
+      size_:
+        value: 4  # has padding
         
   bool:
     seq:

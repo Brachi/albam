@@ -140,6 +140,41 @@ class Sdl156(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+
+    class Classref(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sdl156.Classref, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.val = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sdl156.Classref, self)._write__seq(io)
+            self._io.write_u4le(self.val)
+
+
+        def _check(self):
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 4
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class Color(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sdl156.Color, self).__init__(_io)
@@ -1032,6 +1067,9 @@ class Sdl156(ReadWriteKaitaiStruct):
                     elif _on == 15:
                         pass
                         self._m_data[i]._fetch_instances()
+                    elif _on == 2:
+                        pass
+                        self._m_data[i]._fetch_instances()
                     elif _on == 20:
                         pass
                         self._m_data[i]._fetch_instances()
@@ -1155,6 +1193,12 @@ class Sdl156(ReadWriteKaitaiStruct):
                             if self._m_data[i]._parent != self:
                                 raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
                         elif _on == 15:
+                            pass
+                            if self._m_data[i]._root != self._root:
+                                raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
+                            if self._m_data[i]._parent != self:
+                                raise kaitaistruct.ConsistencyError(u"data", self, self._m_data[i]._parent)
+                        elif _on == 2:
                             pass
                             if self._m_data[i]._root != self._root:
                                 raise kaitaistruct.ConsistencyError(u"data", self._root, self._m_data[i]._root)
@@ -1331,6 +1375,13 @@ class Sdl156(ReadWriteKaitaiStruct):
                             _t__m_data._read()
                         finally:
                             self._m_data.append(_t__m_data)
+                    elif _on == 2:
+                        pass
+                        _t__m_data = Sdl156.Classref(self._io, self, self._root)
+                        try:
+                            _t__m_data._read()
+                        finally:
+                            self._m_data.append(_t__m_data)
                     elif _on == 20:
                         pass
                         _t__m_data = Sdl156.Vec3(self._io, self, self._root)
@@ -1475,6 +1526,9 @@ class Sdl156(ReadWriteKaitaiStruct):
                         pass
                         self._m_data[i]._write__seq(self._io)
                     elif _on == 15:
+                        pass
+                        self._m_data[i]._write__seq(self._io)
+                    elif _on == 2:
                         pass
                         self._m_data[i]._write__seq(self._io)
                     elif _on == 20:
@@ -1829,4 +1883,3 @@ class Sdl156(ReadWriteKaitaiStruct):
 
         def _invalidate_size_(self):
             del self._m_size_
-

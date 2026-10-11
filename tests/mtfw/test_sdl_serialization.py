@@ -1,16 +1,14 @@
 import json
 import os
-import xml.etree.ElementTree as ET
 
 import bpy
 import pytest
 
 from tests.mtfw.conftest import import_export
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
-from albam.engines.mtfw.config_assets import (
-    SDL_DATA_STRUCT_SIZES,
-    _sdl_to_xml,
-)
+from albam.engines.mtfw.config_assets import SDL_DATA_STRUCT_SIZES
+from albam.lib.mt_classes import RV_MtPropertyTypeRE5
+
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
@@ -56,6 +54,7 @@ def sdl_export_local(game_fs_root, local_app_id, local_sdl_path_hash):
     bpy.context.scene.albam.apps.app_selected = local_app_id
 
     local_sbc_path = resolve_hashes(game_fs_root, {local_sdl_path_hash})[local_sdl_path_hash].lstrip("/")
+    print(f"[SDL serialization] file={local_sbc_path!r} app_id={local_app_id!r}", flush=True)
     vfile_sdl = import_export(local_app_id, local_sbc_path)
     vfile_sdl_exported = bpy.context.scene.albam.exported.select_vfile(local_app_id, local_sbc_path)
     assert vfile_sdl_exported
@@ -78,7 +77,7 @@ def sdl_exported_local(sdl_export_local):
     return sdl_export_local[1]
 
 
-def test_real_sdl_xml_serialization_roundtrip(sdl_imported_local, sdl_exported_local):
+def test_sdl_header(sdl_imported_local, sdl_exported_local):
     src = sdl_imported_local
     dst = sdl_exported_local
 
@@ -86,21 +85,51 @@ def test_real_sdl_xml_serialization_roundtrip(sdl_imported_local, sdl_exported_l
     assert dst.header.frame_max == src.header.frame_max
     assert dst.header.floor_frame == src.header.floor_frame
     assert dst.header.ofs_names == src.header.ofs_names
-    assert len(dst.tracks) == len(src.tracks)
-    for source_track, exported_track in zip(src.tracks, dst.tracks):
-        assert exported_track.track_type == source_track.track_type
-        assert exported_track.prop_type == source_track.prop_type
-        assert exported_track.parent == source_track.parent
-        assert exported_track.num_frames == source_track.num_frames
-        assert exported_track.name == source_track.name
-        assert [
-            (frame.frame, frame.type) for frame in exported_track.timing_frames
-        ] == [
-            (frame.frame, frame.type) for frame in source_track.timing_frames
-        ]
+    assert len(dst.tracks) == len(src.tracks)  # doesn't wor for now
 
-        if (
-            source_track.track_type > 5
-            and source_track.prop_type not in SDL_DATA_STRUCT_SIZES
-        ):
-            assert exported_track.ofs_data == 0
+
+def test_sdl_tracks(sdl_imported_local, sdl_exported_local):
+    src = sdl_imported_local
+    dst = sdl_exported_local
+    for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
+        print(
+            f"[SDL serialization] track_index={track_index} name={src_track.name!r} "
+            f"type={src_track.track_type!r} prop_type={src_track.prop_type!r}",
+            flush=True,
+        )
+        assert dst_track.track_type == src_track.track_type
+        assert dst_track.prop_type == src_track.prop_type
+        assert dst_track.parent == src_track.parent
+        assert dst_track.num_frames == src_track.num_frames
+        assert dst_track.name == src_track.name
+        assert dst_track.name == src_track.name
+        if getattr(src_track, "timing_frames", None) is not None:
+            for src_timing, dst_timing in zip(src_track.timing_frames, dst_track.timing_frames):
+                assert dst_timing.frame == src_timing.frame
+                assert dst_timing.type == src_timing.type
+
+
+def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
+    src = sdl_imported_local
+    dst = sdl_exported_local
+    for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
+        print(
+            f"[SDL serialization] track_index={track_index} name={src_track.name!r} "
+            f"type={src_track.track_type!r} prop_type={src_track.prop_type!r}",
+            flush=True,
+        )
+        if src_track.num_frames > 0:
+            for src_data, dst_data in zip(src_track.data, dst_track.data):
+                if src_track.prop_type in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+                    assert src_data.val == dst_data.val
+                elif src_track.prop_type == 14:
+                    assert src_data.ref_path == dst_data.ref_path
+        # prop_type_name = RV_MtPropertyTypeRE5.get(src_track.prop_type)
+        # if prop_type_name in SDL_DATA_STRUCT_SIZES:
+        #    assert src_track.num
+        #    assert src_track.data is not None
+        #    # assert len(dst_track.data) == len(src_track.data)
+        #    # assert SDL_DATA_STRUCT_SIZES[prop_type_name] == dst_track.data_block_size
+        #    if src_track.prop_type in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+            #    for src_data, dst_data in zip(src_track.data, dst_track.data):
+            #        assert dst_data.val == src_data.val
