@@ -13,7 +13,9 @@ seam or a shading split, and a strip restart rewrites the two corners it
 begins with, so a re-imported model carries slightly more vertices while
 describing the same surface (see albam/engines/cie/mesh.py).
 """
+import itertools
 import json
+import math
 import os
 
 import bpy
@@ -59,7 +61,15 @@ def _is_mesh_bin(data):
 
 
 def _model_state(bl_object):
-    """What has to survive a round trip."""
+    """What has to survive a round trip.
+
+    Vertex count is deliberately not part of this: it is only ever compared
+    between two re-imports (see the module docstring), where a strip restart
+    legitimately adds corners without changing the surface. Whether the
+    geometry itself - positions, normals, UVs - actually matches the shipped
+    file is test_bin_round_trip_matches_the_original_geometry's job, which
+    compares against the original bytes instead.
+    """
     meshes = [o for o in bl_object.children_recursive if o.type == "MESH"]
     if bl_object.type == "MESH":
         meshes.append(bl_object)
@@ -70,8 +80,182 @@ def _model_state(bl_object):
                          for o in meshes for polygon in o.data.polygons),
         "materials": len(materials),
         "bones": len(armatures[0].data.bones) if armatures else 0,
-        "vertices": sum(len(o.data.vertices) for o in meshes),
     }
+
+
+def _decoded_triangles(bin_bytes):
+    """Every triangle `bin_bytes` describes, as a multiset of
+    ((position, uv), normal) corners - decoded straight off the file's own
+    bytes through the same per-corner arrays and strip-to-triangle logic
+    import uses (see albam.engines.cie.mesh), not through Blender.
+
+    Every value is kept exactly as the file states it; what absorbs the
+    float32 round trip is the tolerance the triangles are matched within
+    (see _match_triangles), not any rounding done here. The normal is kept
+    alongside each corner rather than folded into the surface it belongs to:
+    Blender recomputes a loop's split normal from the surrounding topology on
+    every mesh edit, and reproduces it only to within about a tenth even for
+    a model that came back with the same surface - see
+    test_bin_round_trip_matches_the_original_geometry, which checks normals
+    on their own with a looser, majority-agreement tolerance instead of
+    demanding every one match.
+
+    Corners are kept in the order the file gives them; the comparison itself
+    is order-independent and winding-independent (see _shape) because a
+    no-edit re-export is free to walk materials and strips in a different
+    corner order and still describe the same surface - triangle count is what
+    has to match exactly, not corner order or count (see the module
+    docstring).
+    """
+    from albam.engines.cie.mesh import _build_faces, _decode_normal, _yz_flip
+    from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
+
+    parsed = Re4UhdBin.from_bytes(bin_bytes)
+    parsed._read()
+    faces, _mat_face_ranges = _build_faces(parsed)
+
+    positions = [_yz_flip(v.x, v.y, v.z) for v in parsed.vertex_positions]
+    # A mesh .bin states one normal per face corner. Tolerating a file that
+    # states none would make the normal comparison pass without ever having
+    # compared anything, which is precisely the regression it exists to catch.
+    assert len(parsed.normals or ()) == len(parsed.vertex_positions), (
+        f"this file states {len(parsed.normals or ())} normals against "
+        f"{len(parsed.vertex_positions)} face corners"
+    )
+    normals = [_decode_normal(n) for n in parsed.normals]
+    uvs = [(uv.u, 1.0 - uv.v) for uv in parsed.texcoords] if parsed.texcoords else None
+
+    def corner(i):
+        uv = tuple(uvs[i]) if uvs else ()
+        return (tuple(positions[i]), uv), tuple(normals[i])
+
+    return [tuple(corner(i) for i in triangle) for triangle in faces]
+
+
+# A coordinate makes a float32 -> double -> float32 round trip on the way
+# through Blender and comes back a few ulps off, so nothing here is compared
+# for equality. These are the absolute tolerances a corner is matched
+# within - one raw unit of whatever the file itself stores, which is orders
+# of magnitude tighter than any scale, axis or UV regression and wide enough
+# that no value sits on a boundary where the round trip decides the answer.
+POSITION_TOLERANCE = 0.001
+UV_TOLERANCE = 0.0001
+NORMAL_TOLERANCE = 0.15
+
+
+def _shape(triangle):
+    """A triangle's surface: its corner positions and UVs, sorted.
+
+    Sorted so that which corner the file listed first never decides a match -
+    a re-export is free to state the same triangle from a different corner or
+    in the opposite winding.
+    """
+    return tuple(sorted(position + uv for position, uv in
+                        (corner for corner, _normal in triangle)))
+
+
+def _same_surface(one, other):
+    """Whether two surfaces (see _shape) are the same one within tolerance.
+
+    Corners are paired by tolerance, not by position in the tuple: two corners
+    whose values tie within rounding can sort either way round on each side.
+    """
+    if len(one) != len(other):
+        return False
+    remaining = list(other)
+    for corner in one:
+        for k, other_corner in enumerate(remaining):
+            if _same_corner(corner, other_corner):
+                del remaining[k]
+                break
+        else:
+            return False
+    return True
+
+
+def _same_corner(corner, other_corner):
+    if len(corner) != len(other_corner):
+        return False
+    for i, (value, other_value) in enumerate(zip(corner, other_corner)):
+        tolerance = POSITION_TOLERANCE if i < 3 else UV_TOLERANCE
+        if abs(value - other_value) > tolerance:
+            return False
+    return True
+
+
+# Coarser than POSITION_TOLERANCE, so a matching triangle's centroid is always
+# in the same cell as the original's or a neighbouring one.
+MATCH_CELL_SIZE = POSITION_TOLERANCE * 10
+
+
+def _cell(surface):
+    """The grid cell a surface's (see _shape) centroid falls in."""
+    return tuple(
+        math.floor(sum(corner[axis] for corner in surface) / len(surface) / MATCH_CELL_SIZE)
+        for axis in range(3))
+
+
+def _match_triangles(original_triangles, exported_triangles):
+    """Pair each original triangle with the exported triangle describing the
+    same surface, as (pairs, originals nothing matched).
+
+    Exported triangles are bucketed by the cell their centroid falls in, and
+    an original is compared against its own cell and every neighbouring one,
+    so a pair costs a few comparisons rather than a scan. A centroid that
+    rounding pushes across a cell boundary still lands in a neighbour, which
+    is what an exact key or a sorted walk cannot survive.
+    """
+    buckets = {}
+    for triangle in exported_triangles:
+        surface = _shape(triangle)
+        buckets.setdefault(_cell(surface), []).append((surface, triangle))
+
+    pairs = []
+    unmatched = []
+    for triangle in original_triangles:
+        surface = _shape(triangle)
+        cx, cy, cz = _cell(surface)
+        match = None
+        for neighbour in itertools.product((cx - 1, cx, cx + 1), (cy - 1, cy, cy + 1),
+                                           (cz - 1, cz, cz + 1)):
+            bucket = buckets.get(neighbour, ())
+            for k, (other_surface, other_triangle) in enumerate(bucket):
+                if _same_surface(surface, other_surface):
+                    match = other_triangle
+                    del bucket[k]
+                    break
+            if match is not None:
+                break
+        if match is None:
+            unmatched.append(triangle)
+        else:
+            pairs.append((triangle, match))
+    return pairs, unmatched
+
+
+def _normal_agreement(pairs):
+    """The fraction of matched triangles (see _match_triangles) that also
+    carry the normals they shipped with.
+
+    Every triangle here already describes the surface it shipped with; this
+    measures how many also kept its normals, which - unlike the surface -
+    Blender does not reproduce on every triangle even for a model with no
+    real regression (see _decoded_triangles).
+    """
+    if not pairs:
+        return 0.0
+
+    def normals(triangle):
+        return [normal for _corner, normal in sorted(triangle, key=lambda c: c[0])]
+
+    agreed = 0
+    for original, exported in pairs:
+        if all(abs(a - b) <= NORMAL_TOLERANCE
+               for original_normal, exported_normal in zip(normals(original),
+                                                           normals(exported))
+               for a, b in zip(original_normal, exported_normal)):
+            agreed += 1
+    return agreed / len(pairs)
 
 
 def _texture_slots(bin_bytes):
@@ -140,6 +324,73 @@ def test_bin_round_trips_through_export(game_root, local_app_id,
     assert after["triangles"] == before["triangles"]
     assert after["materials"] == before["materials"]
     assert after["bones"] == before["bones"]
+
+
+def test_bin_round_trip_matches_the_original_geometry(
+        game_root, local_app_id, local_archive_path_hash, _clean_scene):
+    """A no-edit re-export describes the same surface the shipped file did.
+
+    Every other geometry check in this module goes through a second import
+    of albam's own output, which cannot catch a bug that is consistent with
+    itself - a wrong scale, a flipped axis or a broken normal decoding would
+    still come back looking right, since the same (wrong) math reads it back
+    that wrote it. This instead decodes both files' raw per-corner arrays
+    independently (see _decoded_triangles) and compares them directly, which
+    is the only check here that touches the bytes the game actually shipped.
+    """
+    from albam.engines.cie.mesh import AUTO_TPL
+    from albam.registry import blender_registry
+
+    archive_path = resolve_archive_hashes(
+        game_root, {local_archive_path_hash})[local_archive_path_hash]
+
+    vfs = bpy.context.scene.albam.vfs
+    bpy.context.scene.albam.apps.app_selected = local_app_id
+    root = vfs.add_real_file(local_app_id, archive_path)
+
+    models = [vf for vf in vfs.file_list
+              if vf.tree_node.root_id == root.name and not vf.is_root and
+              vf.display_name.lower().endswith(".bin") and _is_mesh_bin(vf.get_bytes())]
+    assert models, "this archive should hold a mesh .bin"
+    vfile = models[0]
+
+    import_function = blender_registry.import_registry[(local_app_id, "bin")]
+    export_function = blender_registry.export_registry[(local_app_id, "bin")]
+
+    vfs.file_list_selected_index = vfs.file_list.find(vfile.name)
+    bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+    original_bytes = vfile.get_bytes()
+    bl_object = import_function(vfile, bpy.context)
+
+    bl_object.albam_asset.app_id = local_app_id
+    bl_object.albam_asset.extension = "bin"
+    bl_object.albam_asset.relative_path = vfile.display_name
+    bl_object.albam_asset.original_bytes = original_bytes
+    exported_bytes = export_function(bl_object)[0].data_bytes
+
+    original_triangles = _decoded_triangles(original_bytes)
+    exported_triangles = _decoded_triangles(exported_bytes)
+    assert original_triangles, "this model should hold at least one triangle"
+
+    # Strict: position and UV, decoded straight off the bytes on both sides.
+    # This is what would catch a scale, axis or UV regression - the surface a
+    # re-exported model describes has to be exactly the one it shipped with.
+    assert len(exported_triangles) == len(original_triangles), (
+        "the re-export does not describe as many triangles as the shipped file"
+    )
+    pairs, unmatched = _match_triangles(original_triangles, exported_triangles)
+    assert not unmatched, (
+        f"{len(unmatched)} of {len(original_triangles)} shipped triangles are not "
+        f"described by the re-export, e.g. {_shape(unmatched[0])}"
+    )
+
+    # Loose: normals agree for the large majority of triangles rather than
+    # all of them - see _decoded_triangles for why an exact-match normal
+    # check would fail even a faithful re-export.
+    agreement = _normal_agreement(pairs)
+    assert agreement > 0.9, (
+        f"only {agreement:.0%} of triangles kept the normals they shipped with"
+    )
 
 
 def test_importing_several_models_from_one_archive(game_root, local_app_id,
