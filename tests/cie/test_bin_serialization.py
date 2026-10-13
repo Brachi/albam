@@ -13,7 +13,9 @@ seam or a shading split, and a strip restart rewrites the two corners it
 begins with, so a re-imported model carries slightly more vertices while
 describing the same surface (see albam/engines/cie/mesh.py).
 """
+import itertools
 import json
+import math
 import os
 
 import bpy
@@ -170,47 +172,81 @@ def _shape(triangle):
 
 
 def _same_surface(one, other):
-    """Whether two surfaces (see _shape) are the same one within tolerance."""
+    """Whether two surfaces (see _shape) are the same one within tolerance.
+
+    Corners are paired by tolerance, not by position in the tuple: two corners
+    whose values tie within rounding can sort either way round on each side.
+    """
     if len(one) != len(other):
         return False
-    for corner, other_corner in zip(one, other):
-        if len(corner) != len(other_corner):
+    remaining = list(other)
+    for corner in one:
+        for k, other_corner in enumerate(remaining):
+            if _same_corner(corner, other_corner):
+                del remaining[k]
+                break
+        else:
             return False
-        for i, (value, other_value) in enumerate(zip(corner, other_corner)):
-            tolerance = POSITION_TOLERANCE if i < 3 else UV_TOLERANCE
-            if abs(value - other_value) > tolerance:
-                return False
     return True
+
+
+def _same_corner(corner, other_corner):
+    if len(corner) != len(other_corner):
+        return False
+    for i, (value, other_value) in enumerate(zip(corner, other_corner)):
+        tolerance = POSITION_TOLERANCE if i < 3 else UV_TOLERANCE
+        if abs(value - other_value) > tolerance:
+            return False
+    return True
+
+
+# Coarser than POSITION_TOLERANCE, so a matching triangle's centroid is always
+# in the same cell as the original's or a neighbouring one.
+MATCH_CELL_SIZE = POSITION_TOLERANCE * 10
+
+
+def _cell(surface):
+    """The grid cell a surface's (see _shape) centroid falls in."""
+    return tuple(
+        math.floor(sum(corner[axis] for corner in surface) / len(surface) / MATCH_CELL_SIZE)
+        for axis in range(3))
 
 
 def _match_triangles(original_triangles, exported_triangles):
     """Pair each original triangle with the exported triangle describing the
     same surface, as (pairs, originals nothing matched).
 
-    Both sides are sorted by surface and walked together, so a pair costs a
-    sort rather than a scan. Nothing is snapped to a grid on the way: a
-    quantized coordinate landing on a cell boundary - an exact half raw unit,
-    which axis-aligned or tool-quantized geometry produces readily - is
-    exactly the value an exact-key comparison cannot survive, since the round
-    trip alone decides which side of the boundary it lands on.
+    Exported triangles are bucketed by the cell their centroid falls in, and
+    an original is compared against its own cell and every neighbouring one,
+    so a pair costs a few comparisons rather than a scan. A centroid that
+    rounding pushes across a cell boundary still lands in a neighbour, which
+    is what an exact key or a sorted walk cannot survive.
     """
-    original = sorted((_shape(t), t) for t in original_triangles)
-    exported = sorted((_shape(t), t) for t in exported_triangles)
+    buckets = {}
+    for triangle in exported_triangles:
+        surface = _shape(triangle)
+        buckets.setdefault(_cell(surface), []).append((surface, triangle))
 
     pairs = []
     unmatched = []
-    i = j = 0
-    while i < len(original) and j < len(exported):
-        if _same_surface(original[i][0], exported[j][0]):
-            pairs.append((original[i][1], exported[j][1]))
-            i += 1
-            j += 1
-        elif original[i][0] < exported[j][0]:
-            unmatched.append(original[i][1])
-            i += 1
+    for triangle in original_triangles:
+        surface = _shape(triangle)
+        cx, cy, cz = _cell(surface)
+        match = None
+        for neighbour in itertools.product((cx - 1, cx, cx + 1), (cy - 1, cy, cy + 1),
+                                           (cz - 1, cz, cz + 1)):
+            bucket = buckets.get(neighbour, ())
+            for k, (other_surface, other_triangle) in enumerate(bucket):
+                if _same_surface(surface, other_surface):
+                    match = other_triangle
+                    del bucket[k]
+                    break
+            if match is not None:
+                break
+        if match is None:
+            unmatched.append(triangle)
         else:
-            j += 1
-    unmatched.extend(triangle for _surface, triangle in original[i:])
+            pairs.append((triangle, match))
     return pairs, unmatched
 
 

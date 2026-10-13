@@ -733,12 +733,17 @@ def _bone_ids_by_name(all_bones):
     and IK bones nothing is weighted to, say. A bone left with no free id is
     simply absent from the mapping; whether that matters is decided where the
     table is written, not here.
+
+    When "5" and a padded "05" both claim id 5, the canonical spelling gets it
+    whatever their order, since that is the name import gives the bone.
     """
     used = {claimed for claimed in (_claimed_id(bone.name) for bone in all_bones)
             if claimed is not None}
     taken = set()
     ids = {}
-    for i, bone in enumerate(all_bones):
+    canonical_first = sorted(enumerate(all_bones),
+                             key=lambda item: item[1].name != str(_claimed_id(item[1].name)))
+    for i, bone in canonical_first:
         bone_id = _claimed_id(bone.name)
         if bone_id is None or bone_id in taken:
             preferred = min(i, 254)

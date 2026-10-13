@@ -53,7 +53,7 @@ def test_a_zero_padded_name_does_not_claim_an_id_a_second_time():
     of the two bones from the exported table while its weights re-mapped
     onto the survivor.
     """
-    bones = [_FakeBone("5"), _FakeBone("05"), _FakeBone("head")]
+    bones = [_FakeBone("05"), _FakeBone("5"), _FakeBone("head")]
     ids = _bone_ids_by_name(bones)
 
     assert len(set(ids.values())) == len(ids), f"id collision in {ids}"
