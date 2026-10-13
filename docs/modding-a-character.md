@@ -220,9 +220,6 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 ## What does not work yet
 
-- **A model whose bone table names one bone id twice** cannot be exported
-  faithfully; import collapses the two. 69 of 738 models are affected, and the
-  build tool keeps their original bytes rather than shipping them wrong.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
 - **New textures cannot be added.** Nothing writes a `.pack` or a `.tpl`, so a
