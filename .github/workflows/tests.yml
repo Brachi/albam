@@ -121,13 +121,41 @@ jobs:
           exitcode="$(cat "$ALBAM_PYTEST_EXIT_STATUS_FILE" 2>/dev/null || echo 139)"
         fi
         exit "$exitcode"
+    - name: "Scrub credentials from test results"
+      # A traceback in the report prints each frame's arguments, and the R2
+      # credentials are passed as arguments (from_s3). GitHub masks secrets in
+      # logs but not inside artifacts, and artifacts of a public repo can be
+      # downloaded by anyone.
+      if: ${{ !cancelled() }}
+      env:
+        R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        JUNIT_XML: junit-${{ matrix.bpy.bpy-version }}.xml
+      run: |
+        python3 - <<'PY'
+        import os
+        path = os.environ["JUNIT_XML"]
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                report = f.read()
+            for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"):
+                value = os.environ.get(name, "").strip()
+                if value:
+                    report = report.replace(value, f"<{name}>")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(report)
+        PY
     - name: "Upload test results"
-      if: always()
-      uses: actions/upload-artifact@v5
+      # Not on a cancelled run, and a run that never reached pytest (lint or
+      # install failed) has no report to upload - that is not a second failure.
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v7
       with:
         name: junit-${{ matrix.bpy.bpy-version }}
         path: junit-${{ matrix.bpy.bpy-version }}.xml
-        if-no-files-found: error
+        if-no-files-found: warn
     - name: "Upload coverage data"
       if: matrix.bpy.coverage
       uses: actions/upload-artifact@v7
