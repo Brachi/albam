@@ -231,6 +231,18 @@ TEX_TYPE_MAPPER = {
 }
 
 NON_SRGB_IMAGE_TYPE = [2, 8]
+# TODO: add dmc4 - "albam_custom_properties.dmc4__mod_153_material.detail_factor[1]",
+# laid out like re5's. Without it DMC4 detail maps get no driver and stay at UV scale 1.
+DETAIL_SCALE_PATH = {
+    "re0": "albam_custom_properties.re0__globals.f_detail_normal_uv_scale",
+    "re1": "albam_custom_properties.re1__globals.f_detail_normal_uv_scale",
+    "re5": "albam_custom_properties.re5__mod_156_material.detail_factor[1]",
+    "re6": "albam_custom_properties.re6__globals.f_detail_normal_uv_scale",
+    "rev1": "albam_custom_properties.rev1__globals.f_detail_normal_uv_scale",
+    "rev2": "albam_custom_properties.rev2__globals.f_detail_normal_uv_scale",
+    "dd": "albam_custom_properties.dd__globals.f_detail_normal_uv_scale",
+    "umvc3": "albam_custom_properties.umvc3__globals.f_detail_normal_uv_scale",
+}
 
 # The FTransparency feature value meaning "this material is opaque". Its
 # albedo map's alpha channel is then not opacity - it carries whatever the
@@ -249,6 +261,11 @@ FTRANSPARENCY_OPAQUE = "FTransparency"
 # test_mod_import_textures_are_resolved) instead of being skipped silently
 # alongside the placeholders.
 DUMMY_TEXTURE_PATH_PREFIX = "system/texture/defaultcube"
+
+# An .mrl texture slot stores its path in a fixed 64-byte field, ASCII and
+# nul-terminated, so 63 characters is all that fits. The path stored there
+# carries no extension.
+MRL_TEXTURE_PATH_MAX_LEN = 63
 
 
 def is_dummy_texture_path(texture_path):
@@ -289,7 +306,7 @@ def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
     return dds
 
 
-def build_blender_textures(app_id, context, parsed_mod, mrl=None):
+def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
     textures = []
 
     src_textures = getattr(parsed_mod.materials_data, "textures", None) or getattr(mrl, "textures", None)
@@ -306,18 +323,35 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
         if RtexCls == Rtex157 and texture_type == 2013850128:
             is_rtex = True
             ext = ".rtex"
-        try:
-            texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ext)
-            tex_bytes = texture_vfile.get_bytes()
-        except KeyError:
-            tex_bytes = None
-        if RtexCls == Rtex112 and not tex_bytes:
-            try:
-                texture_vfile = context.scene.albam.vfs.get_vfile(app_id, texture_path + ".rtex")
-                tex_bytes = texture_vfile.get_bytes()
-                is_rtex = True
-            except KeyError:
-                tex_bytes = None
+        # Candidate extensions for the same logical texture, in preference
+        # order: re5/dmc4 (Rtex112) store it as either ".tex" or ".rtex".
+        candidates = [(ext, is_rtex)]
+        if RtexCls == Rtex112:
+            candidates.append((".rtex", True))
+        # Two passes, strict first, mirroring _infer_mrl: root_id prefers
+        # the model's own mounted root, but a tolerant lookup on the
+        # *first* candidate can fall back cross-root and win before the
+        # second candidate under the model's own root is ever tried (two
+        # same-named archives, one holding "x.tex", the model's own only
+        # "x.rtex") - exactly the failure issue #294 describes. The strict
+        # pass considers every candidate under root_id alone before any
+        # cross-root fallback; the tolerant pass then preserves
+        # get_vfile's fallback for a texture genuinely mounted as its own
+        # root elsewhere.
+        tex_bytes = None
+        for strict in (True, False):
+            for cand_ext, cand_is_rtex in candidates:
+                try:
+                    texture_vfile = context.scene.albam.vfs.get_vfile(
+                        app_id, texture_path + cand_ext, root_id=root_id, strict=strict)
+                    tex_bytes = texture_vfile.get_bytes()
+                except KeyError:
+                    continue
+                if tex_bytes:
+                    is_rtex = cand_is_rtex
+                    break
+            if tex_bytes:
+                break
         if not tex_bytes:
             # Both cases append None - assign_textures() tells them apart by
             # the path, and only the placeholder is skipped there.
@@ -378,17 +412,23 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None):
 
 
 def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
+    detail_scale = DETAIL_SCALE_PATH.get(app_id, None)
     if not mrl:
-        old_assignment(mtfw_material, bl_material, textures)
+        old_assignment(mtfw_material, bl_material, textures, detail_scale=detail_scale)
         return
     features = (bl_material.albam_custom_properties
                 .get_custom_properties_secondary_for_appid(app_id)
                 .get("features"))
     link_albedo_alpha = (
         features is None or features.f_transparency_param != FTRANSPARENCY_OPAQUE)
+    # Export only writes a set_texture command for a slot that has an image
+    # node linked, so an app that exports needs an (empty) node for every
+    # dummy slot too - dropping the command breaks the shader in game.
+    # Import-only apps skip them, so the socket keeps the shader group's
+    # default instead of an empty node driving it with black.
+    keep_dummy_slots = (app_id, "mod") in blender_registry.export_registry
     set_texture_resources = [(r, i) for i, r in enumerate(mtfw_material.resources)
                              if r.cmd_type == Mrl.CmdType.set_texture]
-
     assert len(mrl.textures) == len(textures), f"{len(mrl.textures)} != {len(textures)}"
     for ri, (resource, i) in enumerate(set_texture_resources):
         tex_index = resource.value_cmd.tex_idx
@@ -407,24 +447,22 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
 
             if tex_index == 0:
                 # Index 0 is the engine's dummy texture: the material is
-                # saying this map is deliberately absent. Leave the socket
-                # on the shader group's own default - an empty image node
-                # would drive it with black, which for a normal map is not
-                # the neutral value. old_assignment() skips these too.
-                continue
-            texture_target = textures[real_tex_index]
-            if texture_target is None and is_dummy_texture_path(
-                    getattr(mrl.textures[real_tex_index], "texture_path", None)):
-                # Same case as tex_index == 0 above, just spelled as a path:
-                # leave the socket on the shader group's default rather than
-                # driving it with an empty image node.
-                continue
+                # saying this map is deliberately absent.
+                if not keep_dummy_slots:
+                    continue
+                texture_target = None
+            else:
+                texture_target = textures[real_tex_index]
+                if texture_target is None and not keep_dummy_slots and is_dummy_texture_path(
+                        getattr(mrl.textures[real_tex_index], "texture_path", None)):
+                    # Same case as tex_index == 0 above, just spelled as a path.
+                    continue
 
             texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
             if texture_target is not None:
                 texture_node.image = texture_target
             texture_code_to_blender_texture(tex_type_blender.value, texture_node, bl_material,
-                                            link_albedo_alpha=link_albedo_alpha)
+                                            link_albedo_alpha=link_albedo_alpha, detail_scale=detail_scale)
             if texture_node.image and tex_type_blender.value in NON_SRGB_IMAGE_TYPE:
                 try:
                     texture_node.image.colorspace_settings.name = "Non-Color"
@@ -435,7 +473,7 @@ def assign_textures(app_id, mtfw_material, bl_material, textures, mrl):
             continue
 
 
-def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
+def old_assignment(mtfw_material, bl_material, textures, from_mrl=False, detail_scale=None):
     for texture_type in TextureType:
         if texture_type.value > 8:
             break
@@ -452,7 +490,12 @@ def old_assignment(mtfw_material, bl_material, textures, from_mrl=False):
             continue
         texture_node = bl_material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_node.image = texture_target
-        texture_code_to_blender_texture(texture_type.value, texture_node, bl_material)
+        texture_code_to_blender_texture(
+            texture_type.value,
+            texture_node,
+            bl_material,
+            detail_scale=detail_scale
+        )
         # change color settings for normal and detail maps
         if texture_node.image and texture_type.value in NON_SRGB_IMAGE_TYPE:
             texture_node.image.colorspace_settings.name = "Non-Color"
@@ -469,8 +512,21 @@ def _find_texture_index(mtfw_material, texture_type, from_mrl=False):
     return tex_index
 
 
+def _link_detail_factor_driver(mapping_node, blender_material, data_path):
+    """Set blender driver for detail map UV scale from material props"""
+    for axis in range(3):
+        driver = mapping_node.inputs[3].driver_add("default_value", axis)
+        variable = driver.driver.variables.new()
+        variable.name = "detail_multiplier"
+        target = variable.targets[0]
+        target.id_type = "MATERIAL"
+        target.id = blender_material
+        target.data_path = data_path
+        driver.driver.expression = variable.name
+
+
 def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_material,
-                                    link_albedo_alpha=True):
+                                    link_albedo_alpha=True, detail_scale=None):
     """
     Function for detecting texture type and map it to blender shader sockets
     texture_code : index for detecting type of a texture
@@ -541,16 +597,12 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Alpha"], shader_node_grp.inputs["Alpha DNM"])
 
         shader_node_grp.inputs["Use Detail Map"].default_value = 1
-        # TODO move it to function
-        # Link the material properites value
-        for x in range(3):
-            d = mapping_node.inputs[3].driver_add("default_value", x)
-            var1 = d.driver.variables.new()
-            var1.name = "detail_multiplier"
-            var1.targets[0].id_type = "MATERIAL"
-            var1.targets[0].id = blender_material
-            var1.targets[0].data_path = 'albam_custom_properties.re5__mod_156_material.detail_factor[1]'
-            d.driver.expression = var1.name
+        if detail_scale:
+            _link_detail_factor_driver(
+                mapping_node,
+                blender_material,
+                detail_scale,
+            )
 
     elif texture_code == 9:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Albedo Blend BM"])
@@ -608,12 +660,17 @@ def serialize_textures(app_id, bl_materials):
     bad_appid = []
     texture_paths = []
     duplicated_paths = []
+    too_long = []
     for im_name, data in exported_textures.items():
         if data["image"].albam_asset.app_id != app_id:
             bad_appid.append((im_name, data["image"].albam_asset.app_id))
         if data["image"].albam_asset.relative_path in texture_paths:
             duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
         texture_paths.append(data["image"].albam_asset.relative_path)
+        # the extension doesn't matter here, only what goes in the .mrl slot
+        path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
+        if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
+            too_long.append((im_name, path_no_ext))
     if bad_appid:
         raise AttributeError(
             f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
@@ -624,6 +681,17 @@ def serialize_textures(app_id, bl_materials):
             f"The following images have duplicated relative paths: {duplicated_paths}\n"
             "Go to Image Editor -> Albam and select a unique relative path for each."
         )
+    if too_long:
+        paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]
+        raise AlbamCheckFailure(
+            "Some images have a relative path too long to store in a material file "
+            f"(max {MRL_TEXTURE_PATH_MAX_LEN} characters, without the extension)",
+            details=f"Images: {paths}",
+            solution=("Go to Image Editor -> Albam and shorten the relative path of each image "
+                      "listed above. Images with no relative path set use their image name "
+                      "instead, so renaming the image also works"),
+        )
+
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile

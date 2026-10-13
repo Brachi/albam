@@ -3,9 +3,11 @@ from kaitaistruct import KaitaiStream
 import bpy
 from mathutils import Vector
 import math
+import re
 import struct
 from ...registry import blender_registry
 from ...vfs import VirtualFile, VirtualFileData
+from ...lib.blender import material_uses_nodes
 from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
@@ -18,12 +20,14 @@ GLOBAL_SCALE = 0.001  # same raw unit as vertex positions
 GLOBAL_NORMAL_FIX_EXTENDED = 545460800000
 GLOBAL_NORMAL_FIX_REDUCED = 16384
 
-# Header layout. The format allows 0x40, 0x50 and 0x60 headers - the shorter
-# ones simply stop before the trailing offsets - and offset_bones doubles as
-# the header's own size.
+# Header layout. The format allows 0x40, 0x50 and 0x60 headers - a 0x40 one
+# stops before the four trailing offsets, a 0x50 one is exactly those four
+# present and a 0x60 one adds 16 bytes of padding nothing reads - and
+# offset_bones doubles as the header's own size.
 HEADER_SIZE = 0x60
 BONE_SIZE = 16
 WEIGHT_SIZE = 8
+BONE_PAIR_LINE_SIZE = 8
 VEC3_SIZE = 12
 UV_SIZE = 8
 RGBA_SIZE = 4
@@ -44,12 +48,30 @@ BIN_FLAG_BONEPAIRS = 0x00000100
 # bonepair and adjacency blocks are present, the second where they are not.
 VERSION_FLAGS_WITH_TAGS = 0x20030818
 VERSION_FLAGS_PLAIN = 0x20010801
+# unk_01 goes in step with the build stamp: measured across 184 shipped mesh
+# .bin files in 8 character archives, every tagged file pairs
+# VERSION_FLAGS_WITH_TAGS with 0x50 and every untagged one pairs
+# VERSION_FLAGS_PLAIN with 0, without exception.
+UNK_01_WITH_TAGS = 0x50
+UNK_01_PLAIN = 0
 
 NO_PARENT = 0xFF
 NO_TEXTURE = 0xFF
+# What Blender appends to a name already taken in the same datablock - see
+# _claimed_id.
+BLENDER_NAME_SUFFIX = re.compile(r"\.\d{3}$")
 MAX_BONE_INFLUENCES = 3
 # Both counts are u2, so a model cannot state more corners than this.
 MAX_VERTICES = 0xFFFF
+# A morph delta is an s2, pre-multiplied by 2 ** vertex_scale.
+MORPH_DELTA_MIN = -32768
+MORPH_DELTA_MAX = 32767
+# u4 offset + u4 count, per group.
+MORPH_GROUP_ENTRY_SIZE = 8
+# id (u2) + 3 * s2 delta.
+MORPH_VERTEX_SIZE = 8
+# A bone pairing the symmetry table has nothing to mirror.
+NO_MIRROR_BONE = -1
 # How closely two corners' normals must agree to be the same entry - see
 # _normal_clusters. One degree: measured across a character mesh, loops the
 # importer gave an identical normal come back differing by at most 0.34
@@ -160,11 +182,23 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         archive_id=root_vfile.name if root_vfile else "")
 
     if skeleton:
-        # Which bones the model itself had. An armature it shares with the
-        # rest of its archive is not its skeleton, and bones nothing is
-        # weighted to are in nothing else here - see _bones_to_write.
+        # The model's own bone table, entry for entry. An armature it shares
+        # with the rest of its archive is not its skeleton, bones nothing is
+        # weighted to are in nothing else here (see _bones_to_write), and an
+        # id the table names twice has one bone between the two of them - so
+        # this is the only place the table itself survives.
         bl_mesh_ob[BONE_IDS_PROPERTY] = [bone.bone_id for bone in bin.bones]
         bl_mesh_ob[BONE_PARENTS_PROPERTY] = [bone.parent for bone in bin.bones]
+        if bin.symmetry_table:
+            bl_mesh_ob[BONE_MIRROR_IDS_PROPERTY] = list(bin.symmetry_table.mirror_bone_ids)
+        if bin.bone_pairs:
+            bl_mesh_ob[BONE_PAIRS_PROPERTY] = [
+                value
+                for line in bin.bone_pairs.line
+                for value in (line.helper_bone_id, line.bone_a_id, line.bone_b_id, line.percent)
+            ]
+        bl_mesh_ob[BONE_OFFSETS_PROPERTY] = [
+            coordinate for bone in bin.bones for coordinate in (bone.x, bone.y, bone.z)]
         _apply_weights(bl_mesh_ob, bin)
         arm_mod = bl_mesh_ob.modifiers.new("Armature", 'ARMATURE')
         arm_mod.object = skeleton
@@ -339,14 +373,42 @@ def _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile):
 
 
 ARCHIVE_PROPERTY = "cie.source_archive"
-# The bone ids the model was imported with (see build_blender_model).
+# The bone ids the model was imported with, one per table entry and in the
+# order the table had them (see build_blender_model).
+#
+# A table may name the same id twice, and the armature cannot say so: a bone
+# is addressed by id everywhere it matters - the weights, the vertex groups
+# named after them, animation retargeting - so the scene has exactly one bone
+# per id and a second one would only be a bone named "5.001" that nothing
+# means. The repeats live here instead, and this list is what export writes
+# the table back from. The table is written in bone id order, which puts two
+# entries sharing an id next to each other, so their order here is the order
+# they are written in.
 BONE_IDS_PROPERTY = "cie.bone_ids"
-# The parent each of those bones had in this model's own table. A shared
+# The parent each of those entries had in this model's own table. A shared
 # armature cannot hold them: measured over one character archive, 10 of its
 # 119 bone ids are given different parents by different models, and some
 # models root a bone whose parent is present. Whatever the game reads them
 # for, they are the model's own and are carried rather than recomputed.
 BONE_PARENTS_PROPERTY = "cie.bone_parents"
+# The DBL_JNT ("double joint") table, flattened: four ints per line -
+# (helper bone id, bone a id, bone b id, blend percent) - see the .ksy
+# comment on pair_line. Bone ids rather than a Blender-side structure
+# because the block outlives an edited bone table only by naming ids, the
+# same reasoning BONE_IDS_PROPERTY follows.
+BONE_PAIRS_PROPERTY = "cie.bone_pairs"
+# The pXFlip / symmetry table, aligned with BONE_IDS_PROPERTY: mirror_ids[i]
+# is the bone bin.bones[i] mirrors to, or NO_MIRROR_BONE. See the .ksy
+# comment on the symmetry type.
+BONE_MIRROR_IDS_PROPERTY = "cie.bone_mirror_ids"
+# The parent-relative offset each of those entries had, flattened to x, y, z
+# per entry - the raw values the file stores, not Blender's.
+#
+# Only a repeat reads them back. Every id the armature does have a bone for
+# is written from that bone, so moving it in Blender is an edit the export
+# sees; a repeat has no bone of its own to move, and writing back exactly
+# what it came with is the only answer that does not invent one.
+BONE_OFFSETS_PROPERTY = "cie.bone_offsets"
 
 
 def _find_reusable_armature(bin, context, archive_id):
@@ -388,7 +450,17 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
         print(f"[re4uhd] armature: reusing '{existing.name}' ({len(bin.bones)} bones)")
         return existing, False
 
-    bone_data = {b.bone_id: b for b in bin.bones}
+    # One bone per id, not one per table entry: see BONE_IDS_PROPERTY for
+    # why a repeated id has nowhere in the armature to go. The first entry
+    # is the one the bone stands for, and the repeats are carried on the mesh.
+    own_bones = []
+    seen_ids = set()
+    for bone in bin.bones:
+        if bone.bone_id not in seen_ids:
+            seen_ids.add(bone.bone_id)
+            own_bones.append(bone)
+
+    bone_data = {b.bone_id: b for b in own_bones}
 
     def world_pos(bone_id, visited=None):
         """Recursively accumulate local offsets (same unit as vertices) to world position."""
@@ -404,7 +476,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
             return local
         return world_pos(b.parent, visited) + local
 
-    world_positions = {b.bone_id: world_pos(b.bone_id) for b in bin.bones}
+    world_positions = {b.bone_id: world_pos(b.bone_id) for b in own_bones}
 
     arm_data = bpy.data.armatures.new(f"{bl_object_name}_armature")
     arm_ob = bpy.data.objects.new(f"{bl_object_name}_armature", arm_data)
@@ -419,12 +491,12 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
 
     edit_bone_map = {}
     # Create bones
-    for bone in bin.bones:
+    for bone in own_bones:
         blender_bone = arm_data.edit_bones.new(f"{bone.bone_id}")
         blender_bone['cie.anim_retarget'] = str(bone.bone_id)
         head = world_positions[bone.bone_id]
         blender_bone.head = head
-        children = [c for c in bin.bones
+        children = [c for c in own_bones
                     if c.parent == bone.bone_id and c.bone_id != bone.bone_id]
         if children:
             child_avg = sum((world_positions[c.bone_id] for c in children), Vector((0, 0, 0)))
@@ -436,7 +508,7 @@ def _build_armature(bl_object_name, bin, context, shared_armature=None, archive_
 
         edit_bone_map[bone.bone_id] = blender_bone
 
-    for bone in bin.bones:
+    for bone in own_bones:
         if bone.parent != bone.bone_id and bone.parent in edit_bone_map:
             edit_bone_map[bone.bone_id].parent = edit_bone_map[bone.parent]
             edit_bone_map[bone.bone_id].use_connect = False
@@ -700,18 +772,81 @@ def _classify_mesh_ob(bl_mesh_ob):
         return bin_type, armature
 
 
-def _bone_id(bl_bone, fallback):
-    """The .bin bone id a Blender bone stands for.
+def _claimed_id(bone_name, repeated_ids=()):
+    """The .bin bone id a Blender bone name claims outright, or None.
 
     Import names each bone after its id (see _build_armature), so the name is
-    the id coming back. A bone the user added by hand won't be named that way;
-    it gets its position in the armature instead, which at least stays inside
-    the u1 the format allows.
+    the id coming back. A zero-padded spelling names the same id its
+    canonical form does, so "05" and "5" claim one id between them rather
+    than one each.
+
+    Blender's own ".001" suffix is stripped for an id in `repeated_ids`, the
+    ones the model's own table named more than once. Import used to make a
+    bone per table entry, so a scene saved before repeated ids were carried
+    on the mesh has a second bone named "5.001" for one named "5". Any other
+    suffixed bone is one the user made, duplicating "12" into "12.001" say,
+    and stays a bone of its own.
     """
-    name = bl_bone.name
-    if name.isdigit() and int(name) < 255:
-        return int(name)
-    return min(fallback, 254)
+    stripped = BLENDER_NAME_SUFFIX.sub("", bone_name)
+    if stripped != bone_name and stripped.isdigit() and int(stripped) in repeated_ids:
+        bone_name = stripped
+    if bone_name.isdigit() and int(bone_name) < 255:
+        return int(bone_name)
+    return None
+
+
+def _is_repeat_alias(bone_name, repeated_ids):
+    """Whether `bone_name` is a ".001" copy of a repeated id (see
+    _claimed_id), which shares that id rather than colliding with it."""
+    return (BLENDER_NAME_SUFFIX.search(bone_name) is not None and
+            _claimed_id(bone_name, repeated_ids) is not None)
+
+
+def _bone_ids_by_name(all_bones, repeated_ids=()):
+    """{bone name: id}, with no two bones landing on the same id - bar a
+    ".001" copy of an id in `repeated_ids`, which shares it (see _claimed_id).
+
+    A bone named after an id claims it (see _claimed_id); a bone the user
+    added by hand falls back to its position in the armature, which at least
+    stays inside the u1 the format allows. That position can be the very
+    number an id-named bone elsewhere claims - a hand-added bone at index 5
+    collides with one named "5" wherever it sits. Claimed ids are therefore
+    reserved up front, and anything colliding with one takes the nearest free
+    id the format allows instead of silently doubling up - a model bound to
+    the upper half of a shared rig leaves the ids below it free, so the
+    search wraps rather than stopping at 254.
+
+    An armature can hold more bones than the format can name, since only some
+    of them are ever written (see _bones_to_write) - a rig carrying control
+    and IK bones nothing is weighted to, say. A bone left with no free id is
+    simply absent from the mapping; whether that matters is decided where the
+    table is written, not here.
+
+    When "5" and a padded "05" both claim id 5, the canonical spelling gets it
+    whatever their order, since that is the name import gives the bone.
+    """
+    used = {claimed for claimed in (_claimed_id(bone.name, repeated_ids) for bone in all_bones)
+            if claimed is not None}
+    taken = set()
+    ids = {}
+    canonical_first = sorted(
+        enumerate(all_bones),
+        key=lambda item: item[1].name != str(_claimed_id(item[1].name, repeated_ids)))
+    for i, bone in canonical_first:
+        bone_id = _claimed_id(bone.name, repeated_ids)
+        if bone_id is not None and _is_repeat_alias(bone.name, repeated_ids):
+            ids[bone.name] = bone_id
+            taken.add(bone_id)
+            continue
+        if bone_id is None or bone_id in taken:
+            preferred = min(i, 254)
+            search = list(range(preferred, 255)) + list(range(preferred))
+            bone_id = next((c for c in search if c not in used and c not in taken), None)
+            if bone_id is None:
+                continue
+        taken.add(bone_id)
+        ids[bone.name] = bone_id
+    return ids
 
 
 def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
@@ -743,7 +878,8 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
     all_bones = list(bl_armature.data.bones)
     by_id = {}
     for bone in all_bones:
-        by_id.setdefault(ids[bone.name], bone)
+        if bone.name in ids:
+            by_id.setdefault(ids[bone.name], bone)
 
     kept = set()
     for bone_id in own_ids:
@@ -771,11 +907,20 @@ def _bones_to_write(bl_armature, ids, used_ids, own_ids=()):
             kept.update(bone.name for bone in chain[shared:])
 
     # In the armature's own order, so the table is the same whichever order
-    # the weights happened to name their bones in.
-    return [bone for bone in all_bones if bone.name in kept]
+    # the weights happened to name their bones in. One bone per id: a scene
+    # saved before repeated ids were carried on the mesh has a "5.001"
+    # standing for the same id as its "5", and the repeats are written from
+    # what the model recorded, not from how many bones are named after an id.
+    written = []
+    seen = set()
+    for bone in all_bones:
+        if bone.name in kept and ids[bone.name] not in seen:
+            seen.add(ids[bone.name])
+            written.append(bone)
+    return written
 
 
-def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=None):
+def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_entries=None):
     """The bone table, as local offsets from each bone's parent.
 
     Holds the bones this model itself uses, not every bone of the armature it
@@ -783,8 +928,12 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
 
     Written in non-decreasing bone-id order, which every shipped model is
     laid out in. Blender's own bone order is not id order, and a table in any
-    other order does not read back as the same skeleton. Ids repeat in some
-    shipped tables, so the sort has to be stable rather than a sort of a set.
+    other order does not read back as the same skeleton.
+
+    Ids repeat in some shipped tables, and the armature has one bone per id,
+    so a bone is expanded into one entry per time the model's own table named
+    it - in the order it named them, which is what the sort puts them next to
+    each other for. See _own_bone_table.
 
     The file stores a parent-relative offset per bone, while Blender holds
     absolute rest positions, so each one is differenced against its parent on
@@ -792,40 +941,66 @@ def _serialize_bones(dst_bin, bl_armature, used_ids=(), own_ids=(), own_parents=
     absolute - which is how the bone the table starts at is written when the
     model hangs off part of a larger skeleton.
     """
+    own_entries = own_entries or {}
     all_bones = list(bl_armature.data.bones)
-    ids = {bone.name: _bone_id(bone, i) for i, bone in enumerate(all_bones)}
-    bones = _bones_to_write(bl_armature, ids, used_ids, own_ids)
+    repeated_ids = {bone_id for bone_id, entries in own_entries.items() if len(entries) > 1}
+    ids = _bone_ids_by_name(all_bones, repeated_ids)
+    bones = _bones_to_write(bl_armature, ids, used_ids, own_entries.keys())
     if not bones:
         # Nothing said which bones are used - a model with no weights at all.
         bones = all_bones
+    unnamed = [bone.name for bone in bones if bone.name not in ids]
+    if unnamed:
+        raise AlbamCheckFailure(
+            f"{bl_armature.name} needs to write more bones than the format can name",
+            details=f"A bone is named by a single byte, so an exported table holds at "
+                    f"most 255 of them, and {len(unnamed)} of the bones this model "
+                    f"writes have no id left: {', '.join(unnamed[:5])}",
+            solution="Remove bones the model does not need, or unweight the ones it "
+                     "does not use",
+        )
     kept = {bone.name for bone in bones}
 
-    own_parents = own_parents or {}
-    by_id = {ids[bone.name]: bone for bone in all_bones}
+    by_id = {}
+    for bone in all_bones:
+        if bone.name in ids:
+            by_id.setdefault(ids[bone.name], bone)
 
     dst_bones = []
     for bone in sorted(bones, key=lambda b: ids[b.name]):
-        dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
         bone_id = ids[bone.name]
-        dst_bone.bone_id = bone_id
+        # A bone the model never listed still gets one entry: it is weighted
+        # to now even if it was not before.
+        entries = own_entries.get(bone_id) or [(None, None)]
+        for occurrence, (recorded_parent, recorded_offset) in enumerate(entries):
+            dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
+            dst_bone.bone_id = bone_id
 
-        # The model's own parent for this bone if it recorded one, since the
-        # armature it is bound to may be shared and disagree; otherwise the
-        # armature's own hierarchy, clipped to the bones being written.
-        recorded = own_parents.get(bone_id)
-        if recorded is not None and (recorded == NO_PARENT or recorded in by_id):
-            dst_bone.parent = recorded
-            parent = None if recorded == NO_PARENT else by_id[recorded]
-        else:
-            parent = bone.parent if bone.parent and bone.parent.name in kept else None
-            dst_bone.parent = ids[parent.name] if parent else NO_PARENT
-        head = bone.head_local
-        if parent:
-            head = head - parent.head_local
-        dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
-        dst_bone.filler = 0
-        dst_bone._check()
-        dst_bones.append(dst_bone)
+            # The model's own parent for this entry if it recorded one, since
+            # the armature it is bound to may be shared and disagree;
+            # otherwise the armature's own hierarchy, clipped to the bones
+            # being written.
+            if (recorded_parent is not None and
+                    (recorded_parent == NO_PARENT or recorded_parent in by_id)):
+                dst_bone.parent = recorded_parent
+                parent = None if recorded_parent == NO_PARENT else by_id[recorded_parent]
+            else:
+                parent = bone.parent if bone.parent and bone.parent.name in kept else None
+                dst_bone.parent = ids[parent.name] if parent else NO_PARENT
+
+            if occurrence and recorded_offset is not None:
+                # A repeat has no bone of its own in the scene to read a
+                # position off, so it goes back exactly as it came in - see
+                # BONE_OFFSETS_PROPERTY.
+                dst_bone.x, dst_bone.y, dst_bone.z = recorded_offset
+            else:
+                head = bone.head_local
+                if parent:
+                    head = head - parent.head_local
+                dst_bone.x, dst_bone.y, dst_bone.z = _zy_flip(head.x, head.y, head.z)
+            dst_bone.filler = 0
+            dst_bone._check()
+            dst_bones.append(dst_bone)
     return dst_bones
 
 
@@ -867,8 +1042,13 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
     return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _collect_geometry(bl_mesh_objs):
+def _collect_geometry(bl_mesh_objs, armature):
     """Everything per-corner the format needs, in the order it stores it.
+
+    `armature` is the one the bone table is written from (see export_bin),
+    which is what every mesh is baked relative to and what names its vertex
+    groups' bones - a mesh parented under it without an Armature modifier of
+    its own is part of the same model and has to land in the same space.
 
     The format is non-indexed: positions, normals, UVs and weight indices are
     all one entry per face corner, consumed sequentially by each material's
@@ -876,9 +1056,12 @@ def _collect_geometry(bl_mesh_objs):
     build and no vertex welding to undo - a triangle is simply three more
     entries on the end of every array.
 
-    Returns (groups, positions, normals, uvs, weight_indices, weight_table),
-    where `groups` is one (bl_material, triangle count) per material in the
-    order their corners appear.
+    Returns (groups, positions, normals, uvs, weight_indices, weight_table,
+    source_vertices), where `groups` is one (bl_material, triangle count) per
+    material in the order their corners appear, and `source_vertices` is one
+    (bl_mesh_ob, vertex index) per corner - the Blender vertex a corner was
+    built from, which is what a morph's per-corner deltas are keyed against
+    (see _serialize_morphs).
     """
     groups = []
     positions = []
@@ -887,18 +1070,34 @@ def _collect_geometry(bl_mesh_objs):
     weight_indices = []
     weight_table = []
     weight_lookup = {}
+    source_vertices = []
+
+    all_bones = list(armature.data.bones) if armature else []
+    # The same repeats _serialize_bones reads, so a weight and the bone table
+    # agree on every id.
+    repeated_ids = {bone_id for bone_id, entries in _own_bone_table(bl_mesh_objs).items()
+                    if len(entries) > 1}
+    bone_ids = _bone_ids_by_name(all_bones, repeated_ids)
+    bone_names = {bone.name for bone in all_bones}
 
     for bl_mesh_ob in bl_mesh_objs:
         bl_mesh = bl_mesh_ob.data
-        armature_modifier = bl_mesh_ob.modifiers.get("Armature")
-        armature = armature_modifier.object if armature_modifier else None
         group_ids = {}
         if armature:
-            bone_ids = {bone.name: _bone_id(bone, i)
-                        for i, bone in enumerate(armature.data.bones)}
             for group in bl_mesh_ob.vertex_groups:
                 if group.name in bone_ids:
                     group_ids[group.index] = bone_ids[group.name]
+                elif group.name in bone_names:
+                    raise AlbamCheckFailure(
+                        f"{bl_mesh_ob.name} is weighted to {group.name!r}, a bone the "
+                        f"format cannot name",
+                        details="A bone is named by a single byte, so an armature can "
+                                "only hand out 255 ids, and this one has more bones "
+                                "than that. Weights on a bone left without an id would "
+                                "otherwise fall onto the first bone instead.",
+                        solution="Remove bones the model does not need, so every bone "
+                                 "it is weighted to can be named",
+                    )
                 elif group.name.isdigit():
                     group_ids[group.index] = int(group.name)
 
@@ -906,11 +1105,25 @@ def _collect_geometry(bl_mesh_objs):
         slots = bl_mesh_ob.material_slots
 
         # Object-level transforms are baked in: moving, rotating or scaling
-        # the object itself is an edit like any other, and import leaves
+        # the mesh itself is an edit like any other, and import leaves
         # everything at the origin so this is the identity for an unmodified
         # model. Normals go through the inverse transpose, which is what
         # keeps them perpendicular under a non-uniform scale.
+        #
+        # Relative to the armature, not the mesh's own matrix_world outright:
+        # the file has no field for where the armature sits in the scene -
+        # that is scenario placement, a separate concern from the model
+        # itself (see scenario._place) - so bones are already written in the
+        # armature's own local rest space, unaffected by it. A mesh normally
+        # parented to its armature with an identity local transform inherits
+        # the armature's matrix_world, so baking that in outright moved,
+        # rotated or scaled the exported vertices by whatever the armature
+        # object's own placement in the scene happened to be, while the bones
+        # they are meant to bind to stayed exactly where they started -
+        # skinning a moved mesh to an unmoved skeleton.
         matrix = bl_mesh_ob.matrix_world
+        if armature:
+            matrix = armature.matrix_world.inverted_safe() @ matrix
         normal_matrix = matrix.to_3x3().inverted_safe().transposed()
 
         # Weights depend only on the vertex, while corners are visited once
@@ -968,6 +1181,7 @@ def _collect_geometry(bl_mesh_objs):
                                 tuple((normal_matrix @ loop.normal).normalized()),
                                 uv,
                                 weight_index,
+                                loop.vertex_index,
                             ))
                         triangle.append(corner_id)
                     triangles.append(tuple(triangle))
@@ -978,14 +1192,15 @@ def _collect_geometry(bl_mesh_objs):
             strips = _strips_from_triangles(triangles)
             for strip in strips:
                 for corner_id in strip:
-                    position, normal, uv, weight_index = corner_list[corner_id]
+                    position, normal, uv, weight_index, vertex_index = corner_list[corner_id]
                     positions.append(position)
                     normals.append(normal)
                     uvs.append(uv)
                     weight_indices.append(weight_index)
+                    source_vertices.append((bl_mesh_ob, vertex_index))
             groups.append((bl_material, [len(strip) for strip in strips]))
 
-    return groups, positions, normals, uvs, weight_indices, weight_table
+    return groups, positions, normals, uvs, weight_indices, weight_table, source_vertices
 
 
 def _normal_clusters(bl_mesh):
@@ -1100,7 +1315,7 @@ def _texture_slot(bl_material, input_name, app_id):
 
     No image bound is not the same as no texture - see _serialize_material.
     """
-    if not bl_material.use_nodes:
+    if not material_uses_nodes(bl_material):
         return SLOT_EMPTY
     found = SLOT_EMPTY
     for node in bl_material.node_tree.nodes:
@@ -1182,6 +1397,207 @@ def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
     return dst_material
 
 
+def _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids):
+    """The DBL_JNT block, from BONE_PAIRS_PROPERTY - see its comment.
+
+    A line's three ids are resolved against this file's own bone table, so
+    `written_bone_ids` is the ids that table is about to carry. A line naming
+    anything else is dropped rather than written pointing at nothing.
+
+    The table is character-wide, so every mesh object exported together
+    carries the same lines: they are merged first-seen, the way
+    _serialize_symmetry merges its mirrors, rather than written once per
+    mesh sharing them.
+    """
+    dst_bone_pairs = dst_bin.BonePair(_parent=dst_bin, _root=dst_bin._root)
+    dst_lines = []
+    seen = set()
+    for bl_mesh_ob in bl_mesh_objs:
+        raw = bl_mesh_ob.get(BONE_PAIRS_PROPERTY) or ()
+        for line in chunks(list(raw), 4):
+            helper_id, bone_a_id, bone_b_id, percent = line
+            if tuple(line) in seen:
+                continue
+            seen.add(tuple(line))
+            if (helper_id not in written_bone_ids or
+                    bone_a_id not in written_bone_ids or
+                    bone_b_id not in written_bone_ids):
+                print(f"[re4uhd] WARNING: dropping bone pair "
+                      f"({helper_id}, {bone_a_id}, {bone_b_id}, {percent}) - "
+                      f"a bone it names is not being exported")
+                continue
+            dst_line = dst_bin.PairLine(_parent=dst_bone_pairs, _root=dst_bin._root)
+            dst_line.helper_bone_id = helper_id
+            dst_line.bone_a_id = bone_a_id
+            dst_line.bone_b_id = bone_b_id
+            dst_line.percent = percent
+            dst_line._check()
+            dst_lines.append(dst_line)
+    if not dst_lines:
+        return None
+    dst_bone_pairs.num_pair = len(dst_lines)
+    dst_bone_pairs.line = dst_lines
+    dst_bone_pairs._check()
+    return dst_bone_pairs
+
+
+def _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bones, written_bone_ids):
+    """The pXFlip mirror table, one entry per written bone in table order -
+    see the .ksy comment on `symmetry`. A mirror target is an id in this
+    file's own bone table, so one pointing outside `written_bone_ids` comes
+    back as NO_MIRROR_BONE, the same as a bone the source never paired.
+
+    The table is positional in the file - row i belongs to bin.bones[i] -
+    and a bone id can repeat there (a known RE4UHD quirk, see PR #297), so
+    it is never safe to key a lookup by id alone: two different rows can
+    share one id and disagree. What breaks that tie here is
+    _build_armature's own collapse, `{b.bone_id: b for b in bin.bones}` -
+    only the LAST occurrence of a repeated id becomes that id's Blender
+    bone, carrying that occurrence's rest position and parent. `mirrors`
+    below applies the identical last-occurrence-wins rule, so the mirror
+    written for a bone always comes from the same source row as everything
+    else about that bone. When a source file's own table lists one id
+    twice with different data, only that last row's data survives the
+    round trip at all - a limitation of the bone table itself (the same
+    duplicate-id class as issue #265), not something this function can
+    recover on its own.
+
+    Across mesh objects the rule is the other one: their tables are partial
+    and differ, so a mesh whose own table simply does not pair a bone must
+    not blank out a mirror another mesh does carry. Each object resolves
+    its own table first, then merges in preferring a real value over
+    NO_MIRROR_BONE, the way _own_bone_parents and _serialize_bone_pairs
+    already union partial tables.
+    """
+    mirrors = {}
+    for bl_mesh_ob in bl_mesh_objs:
+        own_ids = bl_mesh_ob.get(BONE_IDS_PROPERTY)
+        own_mirrors = bl_mesh_ob.get(BONE_MIRROR_IDS_PROPERTY)
+        if not own_ids or not own_mirrors:
+            continue
+        own = {}
+        for bone_id, mirror_id in zip(own_ids, own_mirrors):
+            own[bone_id] = mirror_id
+        for bone_id, mirror_id in own.items():
+            if mirrors.get(bone_id, NO_MIRROR_BONE) == NO_MIRROR_BONE:
+                mirrors[bone_id] = mirror_id
+    if not mirrors or not dst_bones:
+        return None
+
+    dst_symmetry = dst_bin.Symmetry(_parent=dst_bin, _root=dst_bin._root)
+    dst_symmetry.num_bones = len(dst_bones)
+    dst_symmetry.mirror_bone_ids = [
+        mirror_id if (mirror_id := mirrors.get(bone.bone_id, NO_MIRROR_BONE)) in written_bone_ids
+        else NO_MIRROR_BONE
+        for bone in dst_bones
+    ]
+    dst_symmetry._check()
+    return dst_symmetry
+
+
+def _serialize_morph_group(dst_bin, dst_morphs, entries):
+    dst_group = dst_bin.MorphGroup(_parent=dst_morphs, _root=dst_bin._root)
+    dst_group.count = len(entries)
+    dst_body = dst_bin.MorphGroupBody(_parent=dst_group, _root=dst_bin._root)
+    dst_vertices = []
+    for corner_index, dx, dy, dz in entries:
+        dst_vertex = dst_bin.MorphVertex(_parent=dst_body, _root=dst_bin._root)
+        dst_position = dst_bin.Vec3s2(_parent=dst_vertex, _root=dst_bin._root)
+        dst_position.x, dst_position.y, dst_position.z = dx, dy, dz
+        dst_position._check()
+        dst_vertex.id = corner_index
+        dst_vertex.position = dst_position
+        dst_vertex._check()
+        dst_vertices.append(dst_vertex)
+    dst_body.vertices = dst_vertices
+    dst_body._check()
+    dst_group.body = dst_body
+    return dst_group
+
+
+def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armature=None):
+    """Shape keys beyond Basis as morph groups - see the .ksy comments on
+    morph_block / morph_group / morph_group_body.
+
+    One group per shape key name. The game addresses a morph by its group
+    index, so a key named the way import names one ("000", "001", ..., see
+    _build_shape_keys) is written at that index, whichever mesh it is found
+    on first and wherever it sits in key_blocks. An index no key claims is
+    an empty group rather than a reason to renumber every key after it; any
+    other name follows the numbered ones, in the order first found. Within a group,
+    one entry per corner whose source vertex moved in that key - `id` is the
+    corner's own index into the model's flat per-corner arrays, exactly what
+    building `positions` already gave it (see _collect_geometry).
+    """
+    numbered = {}
+    others = []
+    for bl_mesh_ob in bl_mesh_objs:
+        keys = bl_mesh_ob.data.shape_keys
+        if not keys:
+            continue
+        for key in keys.key_blocks[1:]:
+            if key.name.isdigit():
+                numbered.setdefault(int(key.name), key.name)
+            elif key.name not in others:
+                others.append(key.name)
+    if not numbered and not others:
+        return None
+    names = [numbered.get(index) for index in range(max(numbered, default=-1) + 1)]
+    names += others
+
+    corners_by_vertex = {}
+    for corner_index, source in enumerate(source_vertices):
+        corners_by_vertex.setdefault(source, []).append(corner_index)
+
+    dst_morphs = dst_bin.MorphBlock(_parent=dst_bin, _root=dst_bin._root)
+    clamped = False
+    dst_groups = []
+    for name in names:
+        entries = []
+        for bl_mesh_ob in bl_mesh_objs:
+            keys = bl_mesh_ob.data.shape_keys
+            if name is None or not keys or name not in keys.key_blocks:
+                continue
+            # A delta is the difference of two positions, so it goes through
+            # the linear part of the same transform _collect_geometry bakes
+            # into those positions - relative to the armature, as there.
+            matrix = bl_mesh_ob.matrix_world
+            if armature:
+                matrix = armature.matrix_world.inverted_safe() @ matrix
+            matrix = matrix.to_3x3()
+            basis = keys.key_blocks[0]
+            shape_key = keys.key_blocks[name]
+            for vertex in bl_mesh_ob.data.vertices:
+                basis_co = basis.data[vertex.index].co
+                shape_co = shape_key.data[vertex.index].co
+                if shape_co == basis_co:
+                    continue
+                delta = matrix @ (shape_co - basis_co)
+                raw = _zy_flip(delta.x, delta.y, delta.z)
+                deltas = [round(v * extra_scale) for v in raw]
+                if any(v < MORPH_DELTA_MIN or v > MORPH_DELTA_MAX for v in deltas):
+                    clamped = True
+                dx, dy, dz = (max(MORPH_DELTA_MIN, min(MORPH_DELTA_MAX, v)) for v in deltas)
+                for corner_index in corners_by_vertex.get((bl_mesh_ob, vertex.index), ()):
+                    entries.append((corner_index, dx, dy, dz))
+        dst_groups.append(_serialize_morph_group(dst_bin, dst_morphs, entries))
+
+    if clamped:
+        print("[re4uhd] WARNING: a morph delta exceeded what vertex_scale allows "
+              "and was clamped")
+
+    dst_morphs.num_morph_groups = len(dst_groups)
+    dst_morphs.morph_groups = dst_groups
+
+    offset = MORPH_GROUP_ENTRY_SIZE * len(dst_groups)
+    for dst_group in dst_groups:
+        dst_group.offset = offset
+        offset += MORPH_VERTEX_SIZE * len(dst_group.body.vertices)
+        dst_group._check()
+    dst_morphs._check()
+    return dst_morphs
+
+
 @blender_registry.register_export_function(app_id="re4uhd", extension="bin")
 def export_bin(bl_obj):
     """Serialize a Blender object back to a mesh .bin.
@@ -1209,8 +1625,8 @@ def export_bin(bl_obj):
     if armature is None and bl_obj.type == "ARMATURE":
         armature = bl_obj
 
-    (groups, positions, normals, uvs,
-     weight_indices, weight_table) = _collect_geometry(bl_mesh_objs)
+    (groups, positions, normals, uvs, weight_indices,
+     weight_table, source_vertices) = _collect_geometry(bl_mesh_objs, armature)
 
     num_vertices = len(positions)
     if num_vertices > MAX_VERTICES:
@@ -1227,7 +1643,7 @@ def export_bin(bl_obj):
     dst_bin.header = _serialize_header(dst_bin, bl_mesh_objs[0])
     dst_bin.bones = (
         _serialize_bones(dst_bin, armature, _weighted_bone_ids(weight_table),
-                         _own_bone_ids(bl_mesh_objs), _own_bone_parents(bl_mesh_objs))
+                         _own_bone_table(bl_mesh_objs))
         if armature else [])
     # No armature means nothing to weight against, and a shipped model
     # without bones carries no weight block at all.
@@ -1241,11 +1657,27 @@ def export_bin(bl_obj):
     dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
     dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
                          for bl_material, strip_lengths in groups]
-    # Morphs, bone pairs and adjacency are left out: their offsets stay 0 and
-    # the header flags announcing them are cleared with them, which is how a
-    # shipped model without them looks. They are not assigned at all rather
-    # than assigned None - these are conditional Kaitai instances, and the
-    # generated writer walks whatever is set.
+
+    # Left unassigned rather than assigned None when there is nothing to
+    # write - these are conditional Kaitai instances, and the generated
+    # writer only walks what is set. A model with none of the three simply
+    # gets 0 offsets and clear flags, the same as a shipped model without
+    # them.
+    extra_scale = 2 ** dst_bin.header.vertex_scale
+    dst_morphs = _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armature)
+    if dst_morphs:
+        dst_bin.morphs = dst_morphs
+    if armature:
+        # The DBL_JNT and symmetry blocks name bones by id, and the game
+        # resolves those against this file's own bone table - so they are
+        # checked against the ids that table actually writes.
+        written_bone_ids = {bone.bone_id for bone in dst_bin.bones}
+        dst_bone_pairs = _serialize_bone_pairs(dst_bin, bl_mesh_objs, written_bone_ids)
+        if dst_bone_pairs:
+            dst_bin.bone_pairs = dst_bone_pairs
+        dst_symmetry = _serialize_symmetry(dst_bin, bl_mesh_objs, dst_bin.bones, written_bone_ids)
+        if dst_symmetry:
+            dst_bin.symmetry_table = dst_symmetry
 
     data_bytes = _layout_and_write(dst_bin, num_vertices)
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)]
@@ -1272,34 +1704,44 @@ def _serialize_header(dst_bin, bl_mesh_ob):
     return header
 
 
-def _own_bone_ids(bl_mesh_objs):
-    """The bone ids the model was imported with, if it still says.
+def _own_bone_table(bl_mesh_objs):
+    """{bone id: [(parent, offset), ...]} as the model's own table had it.
 
-    Recorded on import (see BONE_IDS_PROPERTY) because a bone nothing is
-    weighted to is in nothing else on the Blender side, while the file it
-    came from listed it. Anything since weighted to a bone this does not name
-    is still written - the table is the union of the two.
+    One pair per time the table named that id, in the order it named them,
+    and `offset` is that entry's raw (x, y, z) or None where the model did
+    not record one. Recorded on import (see BONE_IDS_PROPERTY) because a bone
+    nothing is weighted to is in nothing else on the Blender side, while the
+    file it came from listed it, and because two entries can share an id -
+    which the armature, holding one bone per id, cannot express. Anything
+    since weighted to a bone this does not name is still written: the table
+    is the union of the two.
+
+    A scene saved before offsets were recorded has ids and parents but no
+    offsets, and gets None for every one of them. Its repeats are then
+    written from the one bone the scene has for that id - not what each
+    entry came in with, but every entry is at least there, and re-importing
+    the model records them properly.
     """
-    own = set()
+    table = {}
     for bl_mesh_ob in bl_mesh_objs:
-        own.update(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
-    return own
-
-
-def _own_bone_parents(bl_mesh_objs):
-    """{bone id: parent id} as the model's own table had them.
-
-    See BONE_PARENTS_PROPERTY: the same bone is parented differently by
-    different models of one character, so the armature they share cannot
-    answer this and the model has to say.
-    """
-    parents = {}
-    for bl_mesh_ob in bl_mesh_objs:
-        ids = bl_mesh_ob.get(BONE_IDS_PROPERTY) or ()
-        recorded = bl_mesh_ob.get(BONE_PARENTS_PROPERTY) or ()
-        for bone_id, parent in zip(ids, recorded):
-            parents.setdefault(bone_id, parent)
-    return parents
+        ids = list(bl_mesh_ob.get(BONE_IDS_PROPERTY) or ())
+        parents = list(bl_mesh_ob.get(BONE_PARENTS_PROPERTY) or ())
+        offsets = list(bl_mesh_ob.get(BONE_OFFSETS_PROPERTY) or ())
+        counted = {}
+        for index, bone_id in enumerate(ids):
+            occurrence = counted.get(bone_id, 0)
+            counted[bone_id] = occurrence + 1
+            entries = table.setdefault(bone_id, [])
+            # Several meshes exporting as one model are merged the way their
+            # bone ids always were: the first to describe an occurrence is
+            # the one that describes it.
+            if occurrence != len(entries):
+                continue
+            parent = parents[index] if index < len(parents) else None
+            offset = (tuple(offsets[index * 3:index * 3 + 3])
+                      if len(offsets) >= index * 3 + 3 else None)
+            entries.append((parent, offset))
+    return table
 
 
 def _weighted_bone_ids(weight_table):
@@ -1383,8 +1825,9 @@ def _layout_and_write(dst_bin, num_vertices):
     Offsets are all explicit in the header, so the file's layout is ours to
     choose rather than something to reproduce; blocks go in the order shipped
     files use them, each aligned to 16. The header is a fixed 0x60 here - the
-    format allows 0x40 and 0x50 too, which simply stop before the four
-    trailing offsets, and writing the largest means never having to decide.
+    format allows 0x40, which stops before the four trailing offsets, and
+    0x50, which is exactly those four present - and writing the largest means
+    never having to decide.
     """
     header = dst_bin.header
     header.num_bones = len(dst_bin.bones)
@@ -1398,11 +1841,17 @@ def _layout_and_write(dst_bin, num_vertices):
     header.num_weights = weight_count if weight_count <= 255 else weight_count & 0xFF
     header.num_weights2 = weight_count
 
-    # 0x80000000 is what marks the file as a mesh at all; the bone-pair and
-    # adjacency bits stay clear because nothing rebuilds those blocks yet.
-    header.flags = BIN_FLAG_IS_MESH
-    header.version_flags = VERSION_FLAGS_PLAIN
-    header.unk_01 = 0
+    # 0x80000000 is what marks the file as a mesh at all; the other two flag
+    # bits and the build stamp go with whichever of the bone-pair and
+    # symmetry blocks are actually written - see the header's own comments.
+    has_bone_pairs = bool(getattr(dst_bin, "bone_pairs", None))
+    has_symmetry = bool(getattr(dst_bin, "symmetry_table", None))
+    header.flags = (BIN_FLAG_IS_MESH |
+                    (BIN_FLAG_BONEPAIRS if has_bone_pairs else 0) |
+                    (BIN_FLAG_ADJACENCY if has_symmetry else 0))
+    tagged = has_bone_pairs or has_symmetry
+    header.version_flags = VERSION_FLAGS_WITH_TAGS if tagged else VERSION_FLAGS_PLAIN
+    header.unk_01 = UNK_01_WITH_TAGS if tagged else UNK_01_PLAIN
 
     offset = HEADER_SIZE
     header.offset_bones = HEADER_SIZE
@@ -1410,6 +1859,24 @@ def _layout_and_write(dst_bin, num_vertices):
 
     header.offset_weights = offset if dst_bin.weights else 0
     offset = _align(offset + weight_count * WEIGHT_SIZE)
+
+    has_morphs = bool(getattr(dst_bin, "morphs", None))
+    header.offset_morphs = offset if has_morphs else 0
+    if has_morphs:
+        morph_groups = dst_bin.morphs.morph_groups
+        # The leading u4 num_morph_groups, then the group table, then the
+        # bodies the table points at.
+        morph_block_size = (4 + MORPH_GROUP_ENTRY_SIZE * len(morph_groups) +
+                            sum(MORPH_VERTEX_SIZE * len(g.body.vertices) for g in morph_groups))
+        offset = _align(offset + morph_block_size)
+
+    header.offset_bonepairs = offset if has_bone_pairs else 0
+    if has_bone_pairs:
+        offset = _align(offset + 4 + BONE_PAIR_LINE_SIZE * len(dst_bin.bone_pairs.line))
+
+    header.offset_adjacents = offset if has_symmetry else 0
+    if has_symmetry:
+        offset = _align(offset + 4 + 2 * len(dst_bin.symmetry_table.mirror_bone_ids))
 
     header.offset_vertex_position = offset
     offset = _align(offset + num_vertices * VEC3_SIZE)

@@ -2,7 +2,7 @@
  
 
 <p align="left">
-<a href="https://github.com/Brachi/albam/actions"><img alt="Actions Status" src="https://github.com/Brachi/albam/workflows/Test/badge.svg"></a>
+<a href="https://github.com/Brachi/albam/actions"><img alt="Actions Status" src="https://github.com/Brachi/albam/actions/workflows/main.yml/badge.svg"></a>
 <img alt="Code coverage" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Brachi/879e4f106f38b080ff10d3f46e3336e6/raw/covbadge.json">
 </p>
 
@@ -69,6 +69,11 @@ one command rather than a per-file split that nothing in a `.ksy` records. It im
 `--no-auto-read`, which is the one thing callers have to know: constructing a parser (or calling
 `from_bytes()`) no longer parses anything on its own, so every call site follows it with an
 explicit `_read()`.
+
+One generated parser is not purely generated: `albam/engines/cie/structs/re4_uhd_bin.py`
+carries a hand-written short-header branch the compiler does not produce, because a `.ksy`
+cannot say "this field reads as 0 when it is absent". Regenerating that file drops the branch;
+the comment at the edit itself says what to reapply and why.
 
 A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
 a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both
