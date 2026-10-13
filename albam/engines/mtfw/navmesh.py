@@ -172,7 +172,7 @@ def _mat_name_to_flags(face, ob_mesh):
         ix = face.material_index
         slot = ob_mesh.material_slots[ix]
         mat_name = slot.material.name
-        #  extract id from mat name, clamp Type prefix and possible suffix and then converto to int
+        #  extract id from mat name, clamp Nav prefix and possible suffix and then converto to int
         mat_name = mat_name.replace("_", ".").split(".")[0]
         return int(mat_name[len("Nav "):])
     except IndexError:
