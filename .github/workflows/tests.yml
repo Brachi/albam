@@ -122,10 +122,13 @@ jobs:
         fi
         exit "$exitcode"
     - name: "Scrub credentials from test results"
-      # A traceback in the report prints each frame's arguments, and the R2
-      # credentials are passed as arguments (from_s3). GitHub masks secrets in
-      # logs but not inside artifacts, and artifacts of a public repo can be
-      # downloaded by anyone.
+      # A traceback in the report prints frame arguments, and the R2 endpoint
+      # URL, bucket and credentials are passed around as arguments. GitHub
+      # masks secrets in logs but not inside artifacts, and artifacts of a
+      # public repo can be downloaded by anyone. pytest also cuts long
+      # arguments to "head...tail", so any hex run of 8+ characters that is
+      # part of a secret goes too, not only whole values.
+      id: scrub
       if: ${{ !cancelled() }}
       env:
         R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
@@ -136,26 +139,36 @@ jobs:
       run: |
         python3 - <<'PY'
         import os
+        import re
         path = os.environ["JUNIT_XML"]
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 report = f.read()
-            for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"):
-                value = os.environ.get(name, "").strip()
-                if value:
-                    report = report.replace(value, f"<{name}>")
-            with open(path, "w", encoding="utf-8") as f:
+            secrets = [os.environ.get(name, "").strip() for name in
+                       ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME")]
+            secrets = [value for value in secrets if value]
+            for value in sorted(secrets, key=len, reverse=True):
+                report = report.replace(value, "***")
+            report = re.sub(
+                r"[0-9A-Fa-f]{8,}",
+                lambda m: "***" if any(m.group(0).lower() in v.lower() for v in secrets) else m.group(0),
+                report)
+            # Replaced whole, so a failure part way never leaves a half-scrubbed report.
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
                 f.write(report)
+            os.replace(path + ".tmp", path)
         PY
     - name: "Upload test results"
-      # Not on a cancelled run, and a run that never reached pytest (lint or
-      # install failed) has no report to upload - that is not a second failure.
-      if: ${{ !cancelled() }}
+      # Only a report the scrub step finished with; not on a cancelled run;
+      # and a run that never reached pytest (lint or install failed) has no
+      # report to upload, which is not a second failure.
+      if: ${{ !cancelled() && steps.scrub.outcome == 'success' }}
       uses: actions/upload-artifact@v7
       with:
         name: junit-${{ matrix.bpy.bpy-version }}
         path: junit-${{ matrix.bpy.bpy-version }}.xml
         if-no-files-found: warn
+        retention-days: 14
     - name: "Upload coverage data"
       if: matrix.bpy.coverage
       uses: actions/upload-artifact@v7
