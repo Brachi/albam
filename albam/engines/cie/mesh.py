@@ -1422,25 +1422,31 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
     """Shape keys beyond Basis as morph groups - see the .ksy comments on
     morph_block / morph_group / morph_group_body.
 
-    One group per shape key name, in Blender's own key_blocks order - the
-    order import creates them in ("000", "001", ..., see _build_shape_keys)
-    and the one the user sees and can reorder. The game addresses a morph by
-    its group index, so a key that moves nothing is still written, as an
-    empty group, rather than renumbering every key after it. Within a group,
+    One group per shape key name. The game addresses a morph by its group
+    index, so a key named the way import names one ("000", "001", ..., see
+    _build_shape_keys) is written at that index, whichever mesh it is found
+    on first and wherever it sits in key_blocks. An index no key claims is
+    an empty group rather than a reason to renumber every key after it; any
+    other name follows the numbered ones, in the order first found. Within a group,
     one entry per corner whose source vertex moved in that key - `id` is the
     corner's own index into the model's flat per-corner arrays, exactly what
     building `positions` already gave it (see _collect_geometry).
     """
-    names = []
+    numbered = {}
+    others = []
     for bl_mesh_ob in bl_mesh_objs:
         keys = bl_mesh_ob.data.shape_keys
         if not keys:
             continue
         for key in keys.key_blocks[1:]:
-            if key.name not in names:
-                names.append(key.name)
-    if not names:
+            if key.name.isdigit():
+                numbered.setdefault(int(key.name), key.name)
+            elif key.name not in others:
+                others.append(key.name)
+    if not numbered and not others:
         return None
+    names = [numbered.get(index) for index in range(max(numbered, default=-1) + 1)]
+    names += others
 
     corners_by_vertex = {}
     for corner_index, source in enumerate(source_vertices):
@@ -1453,7 +1459,7 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
         entries = []
         for bl_mesh_ob in bl_mesh_objs:
             keys = bl_mesh_ob.data.shape_keys
-            if not keys or name not in keys.key_blocks:
+            if name is None or not keys or name not in keys.key_blocks:
                 continue
             # A delta is the difference of two positions, so it goes through
             # the linear part of the same transform _collect_geometry bakes

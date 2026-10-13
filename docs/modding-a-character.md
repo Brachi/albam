@@ -140,11 +140,11 @@ Three things to keep in mind:
 
 - **Keep the vertex groups.** They are the skinning, named after bone ids. A
   vertex in no group gets pinned to the first bone.
-- **Keep the shape keys in order.** The game asks for a morph by its position
-  in the list, so a key you delete or reorder renames every morph after it -
-  an animation asking for a smile gets whatever now sits at that index. Editing
-  a key in place is fine, and a key that moves nothing is still exported, as an
-  empty morph, rather than shifting the rest up.
+- **Keep the shape key names.** The game asks for a morph by its number, and
+  a key named `007` is written as morph 7 wherever it sits in the list.
+  Renaming one moves it: an animation asking for a smile gets whatever now has
+  that number. A number no key has is exported as an empty morph, and a key
+  with any other name is added after the numbered ones.
 - **There is a size limit.** Both vertex counts in the format are 16-bit, so a
   model cannot exceed 65535 face corners. Corners are shared along a triangle
   strip but never across a UV seam or a shading split, so a mesh needs somewhere
