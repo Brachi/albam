@@ -366,7 +366,7 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             return {"CANCELLED"}
         return {"FINISHED"}
 
-    def _execute(self, context):  # pragma: no cover
+    def _execute(self, context):
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
