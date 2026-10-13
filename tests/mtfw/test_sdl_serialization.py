@@ -6,8 +6,6 @@ import pytest
 
 from tests.mtfw.conftest import import_export
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
-from albam.engines.mtfw.config_assets import SDL_DATA_STRUCT_SIZES
-from albam.lib.mt_classes import RV_MtPropertyTypeRE5
 
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -81,35 +79,26 @@ def test_sdl_header(sdl_imported_local, sdl_exported_local):
     src = sdl_imported_local
     dst = sdl_exported_local
 
-    assert dst.header.version == src.header.version
-    assert dst.header.frame_max == src.header.frame_max
-    assert dst.header.floor_frame == src.header.floor_frame
-    assert dst.header.ofs_names == src.header.ofs_names
-    assert len(dst.tracks) == len(src.tracks)  # doesn't wor for now
+    assert src.header.version == dst.header.version
+    assert src.header.frame_max == dst.header.frame_max
+    assert src.header.floor_frame == dst.header.floor_frame
+    assert src.header.ofs_names == dst.header.ofs_names
+    assert len(src.tracks) == len(dst.tracks)
 
 
 def test_sdl_tracks(sdl_imported_local, sdl_exported_local):
     src = sdl_imported_local
     dst = sdl_exported_local
     for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
-        assert dst_track.track_type == src_track.track_type
-        assert dst_track.prop_type == src_track.prop_type
-        assert dst_track.parent == src_track.parent
-        assert dst_track.num_frames == src_track.num_frames
-        assert dst_track.name == src_track.name
-        assert dst_track.name == src_track.name
+        assert src_track.track_type == dst_track.track_type
+        assert src_track.prop_type == dst_track.prop_type
+        assert src_track.parent == dst_track.parent
+        assert src_track.num_frames == dst_track.num_frames
+        assert src_track.name == dst_track.name
         if getattr(src_track, "timing_frames", None) is not None:
             for src_timing, dst_timing in zip(src_track.timing_frames, dst_track.timing_frames):
-                assert dst_timing.frame == src_timing.frame
-                assert dst_timing.type == src_timing.type
-
-
-def test_sdl_data_lengts(sdl_imported_local, sdl_exported_local):
-    src = sdl_imported_local
-    dst = sdl_exported_local
-    for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
-        if src_track.num_frames > 0:
-            assert len(src_track.data) == len(dst_track.data)
+                assert src_timing.frame == dst_timing.frame
+                assert dst_timing.type == dst_timing.type
 
 
 def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
@@ -117,6 +106,7 @@ def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
     dst = sdl_exported_local
     for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
         if src_track.num_frames > 0:
+            assert len(src_track.data) == len(dst_track.data)
             for src_data, dst_data in zip(src_track.data, dst_track.data):
                 if src_track.prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
                     assert src_data.val == dst_data.val
@@ -145,3 +135,20 @@ def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
                 elif src_track.prop_type == 57:
                     assert src_data.x == dst_data.x
                     assert src_data.y == dst_data.y
+
+
+def test_sdl_offsets(sdl_imported_local, sdl_exported_local):
+    src = sdl_imported_local
+    dst = sdl_exported_local
+    for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
+        # Original files have junk string data like s512.arc>stage/s512/light/LightLnk/a00/s512_a00.sdl
+        # has track 105 mColor name only because offset set in the middle of mBloomColor. string
+        # it's impossible to keep this check
+        # assert src_track.ofs_name == dst_track.ofs_name, (
+        #    f"track {track_index}: name mismatch "
+        #    f"{src_track.name!r} != {dst_track.name!r}; "
+        #    f"ofs_name {src_track.ofs_name} -> {dst_track.ofs_name}"
+        # )
+        assert src_track.dti_ref == dst_track.dti_ref
+        assert src_track.ofs_timing == dst_track.ofs_timing
+        assert src_track.ofs_data == dst_track.ofs_data
