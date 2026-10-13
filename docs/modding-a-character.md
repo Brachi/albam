@@ -127,23 +127,40 @@ override for when you want a specific one.
 Anything you do to the mesh is what gets written:
 
 - **Vertex edits** - move, scale, sculpt, add or remove geometry.
-- **Object transforms** - moving, rotating or scaling the object itself is baked
-  in on export, so you do not need to apply transforms first.
+- **Object transforms** - moving, rotating or scaling the mesh itself is baked
+  in on export, so you do not need to apply transforms first. What is baked is
+  the mesh's placement *relative to its armature*, so moving the armature
+  object carries the whole model with it in Blender and changes nothing in the
+  exported file - where a model sits in the world is the room's data, not the
+  model's.
 - **Materials** - swapping the image in a texture node changes which texture the
   model uses, because the exporter reads the binding back rather than a stored
   value. Note what this is and is not: it re-points the material at a texture
   **already in the archive's texture pack**. Bringing a new image into the game
   is not supported - see below.
+- **Facial morphs** - a model's morph targets arrive as shape keys named `000`,
+  `001`, ... and are written back, edits included.
 
-Two things to keep in mind:
+Three things to keep in mind:
 
 - **Keep the vertex groups.** They are the skinning, named after bone ids. A
   vertex in no group gets pinned to the first bone.
+- **Keep the shape key names.** The game asks for a morph by its number, and
+  a key named `007` is written as morph 7 wherever it sits in the list.
+  Renaming one moves it: an animation asking for a smile gets whatever now has
+  that number. A number no key has is exported as an empty morph, and a key
+  with any other name is added after the numbered ones.
 - **There is a size limit.** Both vertex counts in the format are 16-bit, so a
   model cannot exceed 65535 face corners. Corners are shared along a triangle
   strip but never across a UV seam or a shading split, so a mesh needs somewhere
   between one and three per triangle. Exceeding it is reported, not silently
   truncated. Only one model in the whole game is near it.
+- **There is a bone limit as well.** A bone is named by a single byte, so a
+  model can write at most 255 of them. Only the bones the model actually needs
+  count - the ones it was imported with, plus the ones its weights name - so
+  control and IK bones nothing is weighted to are free, however many of them a
+  rig carries. Going past the limit is reported too, rather than exported with
+  bones silently sharing an id.
 
 ## 5. Export the model
 
@@ -214,11 +231,6 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 ## What does not work yet
 
-- **A model whose bone table names one bone id twice** cannot be exported
-  faithfully; import collapses the two. 69 of 738 models are affected, and the
-  build tool keeps their original bytes rather than shipping them wrong.
-- **Morph targets, bone pairs and adjacency** are not written back. A model with
-  facial morphs loses them on export.
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
 - **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
