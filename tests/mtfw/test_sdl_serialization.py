@@ -92,11 +92,6 @@ def test_sdl_tracks(sdl_imported_local, sdl_exported_local):
     src = sdl_imported_local
     dst = sdl_exported_local
     for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
-        print(
-            f"[SDL serialization] track_index={track_index} name={src_track.name!r} "
-            f"type={src_track.track_type!r} prop_type={src_track.prop_type!r}",
-            flush=True,
-        )
         assert dst_track.track_type == src_track.track_type
         assert dst_track.prop_type == src_track.prop_type
         assert dst_track.parent == src_track.parent
@@ -109,27 +104,44 @@ def test_sdl_tracks(sdl_imported_local, sdl_exported_local):
                 assert dst_timing.type == src_timing.type
 
 
+def test_sdl_data_lengts(sdl_imported_local, sdl_exported_local):
+    src = sdl_imported_local
+    dst = sdl_exported_local
+    for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
+        if src_track.num_frames > 0:
+            assert len(src_track.data) == len(dst_track.data)
+
+
 def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
     src = sdl_imported_local
     dst = sdl_exported_local
     for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
-        print(
-            f"[SDL serialization] track_index={track_index} name={src_track.name!r} "
-            f"type={src_track.track_type!r} prop_type={src_track.prop_type!r}",
-            flush=True,
-        )
         if src_track.num_frames > 0:
             for src_data, dst_data in zip(src_track.data, dst_track.data):
-                if src_track.prop_type in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+                if src_track.prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
                     assert src_data.val == dst_data.val
                 elif src_track.prop_type == 14:
                     assert src_data.ref_path == dst_data.ref_path
-        # prop_type_name = RV_MtPropertyTypeRE5.get(src_track.prop_type)
-        # if prop_type_name in SDL_DATA_STRUCT_SIZES:
-        #    assert src_track.num
-        #    assert src_track.data is not None
-        #    # assert len(dst_track.data) == len(src_track.data)
-        #    # assert SDL_DATA_STRUCT_SIZES[prop_type_name] == dst_track.data_block_size
-        #    if src_track.prop_type in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
-            #    for src_data, dst_data in zip(src_track.data, dst_track.data):
-            #        assert dst_data.val == src_data.val
+                elif src_track.prop_type == 15:
+                    assert src_data.r == dst_data.r
+                    assert src_data.g == dst_data.g
+                    assert src_data.b == dst_data.b
+                    assert src_data.a == dst_data.a
+                elif src_track.prop_type in (20, 36):
+                    assert src_data.x == dst_data.x
+                    assert src_data.y == dst_data.y
+                    assert src_data.z == dst_data.z
+                elif src_track.prop_type in (21, 22, 36):
+                    assert src_data.x == dst_data.x
+                    assert src_data.y == dst_data.y
+                    assert src_data.z == dst_data.z
+                    assert src_data.w == dst_data.w
+                elif src_track.prop_type == 40:
+                    assert src_data.p1 == dst_data.p1
+                    assert src_data.p2 == dst_data.p2
+                elif src_track.prop_type == 55:
+                    assert src_data.s == dst_data.s
+                    assert src_data.r == dst_data.r
+                elif src_track.prop_type == 57:
+                    assert src_data.x == dst_data.x
+                    assert src_data.y == dst_data.y

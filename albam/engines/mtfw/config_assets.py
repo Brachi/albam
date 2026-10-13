@@ -31,7 +31,7 @@ TRACK_TYPE = {
 
 RV_TRACK_TYPE = {v: k for k, v in TRACK_TYPE.items()}
 
-SDL_SCALAR_PROPERTY_TYPES = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24, 28, 55, 57}
+SDL_VAL_TYPES = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24, 28}
 SDL_DATA_STRUCT_SIZES = {   # Padding included
     "TYPE_CLASSREF": 4,
     "TYPE_BOOL": 4,  # multiple of four but 1 byte in array
@@ -146,7 +146,12 @@ def _sdl_to_xml(sdl):
                     continue
 
                 value = data[frame_id]
-                if track.prop_type in SDL_SCALAR_PROPERTY_TYPES:
+                if track.prop_type == 57:
+                    for field_name in ("x", "y"):
+                        field_xml = ET.SubElement(item_xml, field_name)
+                        for field_value in getattr(value, field_name):
+                            ET.SubElement(field_xml, "value").text = str(field_value)
+                elif track.prop_type in SDL_VAL_TYPES:
                     item_xml.set("value", str(getattr(value, "val", value)))
                 elif track.track_type == TRACK_TYPE["TYPE_VECTOR"]:
                     _append_sdl_value_xml(item_xml, value)
@@ -158,6 +163,7 @@ def _sdl_to_xml(sdl):
                     )
                 elif track.prop_type == 14:
                     item_xml.set("string", value.string or "")
+
         elements.append(track_el)
 
     ET.SubElement(header_xml, "reserved").text = str(getattr(sdl.header, "reserved", 0))
@@ -225,6 +231,22 @@ def _xml_value(item, field="val"):
     raise ValueError(f'Missing "{field}" value on <{item.tag}>')
 
 
+def _xml_float_array(item, field, length):
+    field_xml = item.find(field)
+    if field_xml is None:
+        raise ValueError(f'Missing "{field}" values on <{item.tag}>')
+    value_xml = field_xml.findall("value")
+    if len(value_xml) != length:
+        raise ValueError(
+            f'Expected {length} values for "{field}" on <{item.tag}>, '
+            f"got {len(value_xml)}"
+        )
+    try:
+        return [float(value.text) for value in value_xml]
+    except (TypeError, ValueError) as error:
+        raise ValueError(f'Invalid float in "{field}" values on <{item.tag}>') from error
+
+
 def _sdl_int_value(value):
     try:
         return int(value, 0)
@@ -238,13 +260,13 @@ def _sdl_dti_value(value):
 
 
 def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
-    if prop_type in SDL_SCALAR_PROPERTY_TYPES:
+    if prop_type in SDL_VAL_TYPES:
         value = _xml_value(item, "value")
         if prop_type in (12, 13):
             value = float(value)
         else:
             value = _sdl_int_value(value)
-        if prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+        if prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24, 28):
             classes = {
                 2: Sdl156.Classref,
                 3: Sdl156.Bool,
@@ -258,6 +280,8 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
                 11: Sdl156.S64,
                 12: Sdl156.F32,
                 13: Sdl156.F64,
+                24: Sdl156.Event,
+                28: Sdl156.Event32
             }
             data_value = classes[prop_type](stream, track, sdl)
             data_value.val = value
@@ -279,6 +303,7 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
         35: ("x", "y", "z"),
         36: ("x", "y", "z", "w"),
         40: ("p1", "p2"),
+        55: ("s", "r"),
     }
     classes = {
         15: Sdl156.Color,
@@ -289,7 +314,14 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
         35: Sdl156.Float3,
         36: Sdl156.Float4,
         40: Sdl156.MtEasecurve,
+        55: Sdl156.Rangef,
     }
+    if prop_type == 57:
+        data_value = Sdl156.Hermitecurve(stream, track, sdl)
+        data_value.x = _xml_float_array(item, "x", 8)
+        data_value.y = _xml_float_array(item, "y", 8)
+        return data_value
+
     if prop_type in classes:
         data_value = classes[prop_type](stream, track, sdl)
         for field in fields_by_type[prop_type]:

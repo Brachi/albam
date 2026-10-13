@@ -64,14 +64,14 @@ types:
             20: vec3
             21: vec4
             22: quaternion
-            24: u4  # event size 4 probably u2?
-            28: u4  # event32 size 4 probably u4?
+            24: event  # event size 4 probably u2?
+            28: event32 # event32 size 4 probably u4?
             34: float2
             35: float3
             36: float4
             40: mt_easecurve
-            55: u4 # RANGE
-            57: u4 # HERMITECURVE
+            55: rangef # RANGE
+            57: hermitecurve # HERMITECURVE
             58: resource
         repeat: expr
         repeat-expr: num_frames
@@ -101,19 +101,19 @@ types:
       - {id: frame, type: b24}
       - {id: type, type: b8}
   
-  classref:
+  classref: 
     seq:
       - {id: val, type: u4}
     instances:
       size_:
-        value: 4  # has padding
+        value: 4
         
   bool:
     seq:
       - {id: val, type: u1}
     instances:
       size_:
-        value: 4  # has padding
+        value: 4  # one byte but multiple of 4 in array
   u8:
     seq:
       - {id: val, type: u1}
@@ -192,7 +192,21 @@ types:
     instances:
       size_:
         value: 16 # not tested
-  
+
+  event:
+    seq:
+      - {id: val, type: u4}
+    instances:
+      size_:
+        value: 4 
+
+  event32:
+    seq:
+      - {id: val, type: u4}
+    instances:
+      size_:
+        value: 4 
+
   quaternion:
     seq:
       - {id: x, type: f4}
@@ -283,3 +297,22 @@ types:
     seq:
     - {id: p1, type: f4}
     - {id: p2, type: f4}
+    instances:
+      size_:
+        value: 16
+
+  rangef:
+    seq:
+    - {id: s, type: f4}
+    - {id: r, type: f4}
+    instances:
+      size_:
+        value: 16
+
+  hermitecurve:
+    seq:
+     - {id: x, type: f4, repeat: expr, repeat-expr: 8}
+     - {id: y, type: f4, repeat: expr, repeat-expr: 8}
+    instances:
+      size_:
+        value: 64
