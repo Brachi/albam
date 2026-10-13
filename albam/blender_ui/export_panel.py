@@ -481,6 +481,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         # necessary for kaitaistruct unavailable when registering
         # blender types
         from ..engines.mtfw.archive import update_arc
+        from ..engines.mtfw.arc_fs import AmbiguousExtension, UnknownExtension
+        from ..lib.xcompress_encode import FrameTooLarge
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
@@ -494,8 +496,14 @@ class ALBAM_OT_Patch(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(self.filepath, files_e,
-                         remove_unused_textures=context.scene.albam.export_settings.remove_unused_textures)
+        remove_unused_textures = context.scene.albam.export_settings.remove_unused_textures
+        try:
+            arc = update_arc(self.filepath, files_e, remove_unused_textures=remove_unused_textures)
+        except (AmbiguousExtension, UnknownExtension, FrameTooLarge) as err:
+            # Something about the files given, not a bug: say what, rather
+            # than offer a crash report.
+            self.report({'ERROR'}, str(err))
+            return {'CANCELLED'}
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}
@@ -558,11 +566,11 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
         vfs = self.get_vfs(self, context)
         vfile = vfs.selected_vfile
         from ..engines.mtfw.archive import find_and_replace_in_arc
-        from ..engines.mtfw.arc_fs import AmbiguousExtension
+        from ..engines.mtfw.arc_fs import AmbiguousExtension, UnknownExtension
         from ..lib.xcompress_encode import FrameTooLarge
         try:
             arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
-        except (AmbiguousExtension, FrameTooLarge) as err:
+        except (AmbiguousExtension, UnknownExtension, FrameTooLarge) as err:
             self.report({'ERROR'}, str(err))
             return {'CANCELLED'}
         if arc:

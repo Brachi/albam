@@ -81,10 +81,7 @@ def _get_file_entry(vfile, arc_version):
     path = ntpath.normpath(vfile.relative_path)
     chunk = compress_entry(arc_version, vf_data, path)
     file_path = ntpath.splitext(path)[0]
-    try:
-        file_type = new_entry_file_type(arc_version, vfile.extension)
-    except KeyError:
-        file_type = int(vfile.extension)
+    file_type = new_entry_file_type(arc_version, vfile.extension)
     item = Arc.FileEntry(None, _parent=None, _root=None)
     item.file_path = file_path
     item.file_type = file_type
@@ -298,10 +295,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
             item.raw_data = chunk
             imported[path] = item
         else:
-            try:
-                file_type = new_entry_file_type(arc_version, vf.extension)
-            except KeyError:
-                file_type = int(vf.extension)
+            file_type = new_entry_file_type(arc_version, vf.extension)
             item = Arc.FileEntry(None, _parent=None, _root=None)
             item.file_path = file_path
             item.file_type = file_type

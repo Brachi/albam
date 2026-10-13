@@ -49,6 +49,9 @@ from .xcompress import EXTRA_BITS, POSITION_BASE
 # One frame's uncompressed size. The frame header's size fields are 16 bit,
 # so a frame cannot say it holds more than this.
 FRAME_SIZE = 32768
+# The most compressed bytes one frame may take: LZX allows a frame to grow by
+# 6144 bytes over its input, and decoders size their input buffer to that.
+MAX_COMPRESSED_FRAME_SIZE = FRAME_SIZE + 6144
 # Introduces the long frame header; a frame not starting with it carries the
 # short one (see _frame).
 SHORT_FRAME_HEADER_MARKER = 0xFF
@@ -559,10 +562,26 @@ def compress_frames(payload, max_block_size=MAX_BLOCK_SIZE):
 
     `max_block_size` is a parameter so a test can force the multi-block path
     without a 16MB payload.
+
+    One block's trees are built from the whole block, so a frame whose bytes
+    are rare in the rest of it gets long codes and can grow past
+    MAX_COMPRESSED_FRAME_SIZE. When one does, the stream is encoded again
+    with a block per frame, each with trees of its own. No match crosses a
+    frame boundary, so capping blocks at FRAME_SIZE cuts them exactly there.
     """
     operations = _operations(payload, _lz77_tokens(payload))
-    blocks = _split_blocks(operations, max_block_size)
+    frames = _encode_blocks(_split_blocks(operations, max_block_size))
+    if (max_block_size > FRAME_SIZE and
+            any(len(data) > MAX_COMPRESSED_FRAME_SIZE for data, _size in frames)):
+        frames = _encode_blocks(_split_blocks(operations, FRAME_SIZE))
+    if sum(size for _data, size in frames) != len(payload):
+        raise RuntimeError("LZX encoder lost track of a stream's output size")
+    return frames
 
+
+def _encode_blocks(blocks):
+    """`blocks` (see _split_blocks) written out and cut into frames, as
+    compress_frames returns them."""
     writer = _BitWriter()
     # No E8 (x86 call) translation. The decoder reads this bit once per
     # stream, before the first block.
@@ -589,8 +608,6 @@ def compress_frames(payload, max_block_size=MAX_BLOCK_SIZE):
                 writer = _BitWriter()
     if emitted:
         frames.append((writer.finish(), emitted))
-    if sum(size for _data, size in frames) != len(payload):
-        raise RuntimeError("LZX encoder lost track of a stream's output size")
     return frames
 
 

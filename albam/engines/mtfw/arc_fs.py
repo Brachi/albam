@@ -57,13 +57,18 @@ class AmbiguousExtension(Exception):
     so the id a file albam is adding should carry is not knowable."""
 
 
+class UnknownExtension(Exception):
+    """An extension the archive's version has no file type id for, and that
+    is not a literal id either."""
+
+
 def new_entry_file_type(arc_version, extension):
     """The file type id to label a file albam adds to an archive with.
 
     The reverse of file_type_extensions(), for giving a file albam adds to an
-    archive the id that archive's own version knows it by. Raises KeyError if
-    the version's table does not name the extension at all - callers take the
-    extension for a literal id then.
+    archive the id that archive's own version knows it by. An extension the
+    version's table does not name, in any case, is taken for a literal id if
+    it is a number, and refused with UnknownExtension otherwise.
 
     A version 17 extension that names more than one resource class is refused
     rather than guessed at: nothing has been written on that guess yet, and
@@ -74,9 +79,18 @@ def new_entry_file_type(arc_version, extension):
     Existing entries never come through here either way: they keep the file
     type they were parsed with, which is an answer and not a guess.
     """
+    table = EXTENSION_TO_FILE_ID if arc_version != ARC_VERSION_DMC4 else EXTENSION_TO_FILE_IDS_DMC4
+    if extension not in table and extension.lower() in table:
+        extension = extension.lower()
+    if extension not in table:
+        if extension.isdigit():
+            return int(extension)
+        raise UnknownExtension(
+            f'cannot add a ".{extension}" to this archive: its version (v{arc_version}) '
+            "has no file type id for that extension")
     if arc_version != ARC_VERSION_DMC4:
-        return EXTENSION_TO_FILE_ID[extension]
-    file_ids = EXTENSION_TO_FILE_IDS_DMC4[extension]
+        return table[extension]
+    file_ids = table[extension]
     if len(file_ids) > 1:
         candidates = ", ".join(f"0x{h:08X}" for h in file_ids)
         raise AmbiguousExtension(
