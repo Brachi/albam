@@ -77,7 +77,8 @@ explicit `_read()`.
 One generated parser is not purely generated: `albam/engines/cie/structs/re4_uhd_bin.py`
 carries a hand-written short-header branch the compiler does not produce, because a `.ksy`
 cannot say "this field reads as 0 when it is absent". Regenerating that file drops the branch;
-the comment at the edit itself says what to reapply and why.
+the comment at the edit itself says what to reapply and why, and `scripts/ksc.py` warns when a
+run overwrites a parser carrying such an edit.
 
 A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
 a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both
