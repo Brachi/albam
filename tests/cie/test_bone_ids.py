@@ -148,6 +148,9 @@ class _FakeMeshObject:
         self.data = None
         self.vertex_groups = vertex_groups
 
+    def get(self, _key, default=None):
+        return default
+
 
 def test_weighting_a_mesh_to_a_bone_the_format_cannot_name_fails_loudly():
     """A rig larger than the id space is fine as long as the bones past it

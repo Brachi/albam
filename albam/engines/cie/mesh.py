@@ -1515,7 +1515,7 @@ def _serialize_morph_group(dst_bin, dst_morphs, entries):
     return dst_group
 
 
-def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
+def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armature=None):
     """Shape keys beyond Basis as morph groups - see the .ksy comments on
     morph_block / morph_group / morph_group_body.
 
@@ -1560,8 +1560,11 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale):
                 continue
             # A delta is the difference of two positions, so it goes through
             # the linear part of the same transform _collect_geometry bakes
-            # into those positions.
-            matrix = bl_mesh_ob.matrix_world.to_3x3()
+            # into those positions - relative to the armature, as there.
+            matrix = bl_mesh_ob.matrix_world
+            if armature:
+                matrix = armature.matrix_world.inverted_safe() @ matrix
+            matrix = matrix.to_3x3()
             basis = keys.key_blocks[0]
             shape_key = keys.key_blocks[name]
             for vertex in bl_mesh_ob.data.vertices:
@@ -1661,7 +1664,7 @@ def export_bin(bl_obj):
     # gets 0 offsets and clear flags, the same as a shipped model without
     # them.
     extra_scale = 2 ** dst_bin.header.vertex_scale
-    dst_morphs = _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale)
+    dst_morphs = _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armature)
     if dst_morphs:
         dst_bin.morphs = dst_morphs
     if armature:

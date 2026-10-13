@@ -81,7 +81,7 @@ def test_a_short_header_s_trailing_offsets_default_to_absent():
     # re4-uhd-bin.ksy), so asking for one comes back with nothing rather than
     # parsing whatever those bytes happen to be.
     assert parsed.bone_pairs is None
-    assert parsed.adjacent is None
+    assert parsed.symmetry_table is None
     assert parsed.indexes is None
     assert parsed.indexes2 is None
 

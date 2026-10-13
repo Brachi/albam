@@ -1018,7 +1018,7 @@ class Re4UhdBin(ReadWriteKaitaiStruct):
             # would consume the next 16 bytes of whatever actually follows
             # the header - bone data, for such a file - as if they were these
             # fields, and a nonzero misread offset_bonepairs/offset_adjacents
-            # would then send albam.bone_pairs/.adjacent off to parse garbage
+            # would then send bone_pairs/symmetry_table off to parse garbage
             # from a bogus absolute offset. None of a several-hundred-file
             # sample of the shipped game uses a header this short, but a
             # reader has no business assuming that always holds.
