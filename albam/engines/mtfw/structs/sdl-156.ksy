@@ -49,11 +49,11 @@ types:
           cases:
             2: classref
             3: bool # bool
-            4: u8 # u8
+            4: u8_value # TYPE_U8 (one byte, padded to four)
             5: u16 # u16
             6: u32 # u32
             7: u64 # u64
-            8: s8 # s8
+            8: s8_value # s8
             9: s16 # s16
             10: s32 # s32
             11: s64 # s64
@@ -114,7 +114,7 @@ types:
     instances:
       size_:
         value: 4  # one byte but multiple of 4 in array
-  u8:
+  u8_value:
     seq:
       - {id: val, type: u1}
     instances:
@@ -138,7 +138,7 @@ types:
     instances:
       size_:
         value: 8 # not tested
-  s8:
+  s8_value:
     seq:
       - {id: val, type: s1}
     instances:

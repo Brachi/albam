@@ -4,7 +4,7 @@ import os
 import pytest
 from albam.engines.mtfw.structs.sdl_156 import Sdl156
 from albam.engines.mtfw.config_assets import SDL_DATA_STRUCT_SIZES
-from albam.lib.mt_classes import RV_MtPropertyTypeRE5
+from albam.lib.mt_classes import RV_MTPROPERTY_RE5
 
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
@@ -83,7 +83,7 @@ def test_sdl_data_block_boundaries_from_timing_frames(parsed_sdl):
         if track.track_type <= 5 or track.num_frames == 0 or track.ofs_data == 0:
             continue
 
-        prop_type_name = RV_MtPropertyTypeRE5.get(track.prop_type)
+        prop_type_name = RV_MTPROPERTY_RE5.get(track.prop_type)
         expected_size = SDL_DATA_STRUCT_SIZES.get(prop_type_name)
         if expected_size is None:
             continue

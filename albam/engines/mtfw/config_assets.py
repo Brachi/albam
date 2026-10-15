@@ -7,7 +7,7 @@ from ...vfs import VirtualFileData, VirtualFile
 
 from ...lib.xml_parser import from_xfs, to_xfs
 from ...lib.kaitai_utils import check_recursive
-from ...lib.mt_classes import DTI_HASHES, RV_DTI_HASHES, RV_MtPropertyTypeRE5
+from ...lib.mt_classes import DTI_HASHES, RV_DTI_HASHES, RV_MTPROPERTY_RE5
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
 
@@ -63,7 +63,7 @@ SDL_DATA_STRUCT_SIZES = {   # Padding included
 
 
 def _sdl_data_struct_size(prop_type):
-    prop_type_name = RV_MtPropertyTypeRE5.get(prop_type)
+    prop_type_name = RV_MTPROPERTY_RE5.get(prop_type)
     return SDL_DATA_STRUCT_SIZES.get(prop_type_name)
 
 
@@ -82,6 +82,7 @@ def _append_sdl_value_xml(parent_xml, value):
 @blender_registry.register_import_function(app_id="re5", extension="sdl", albam_asset_type="CONFIG")
 def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
+    assert app_id == "re5", "Currently only Resident Evil 5 is supported"
     sdl_bytes = vfile.get_bytes()
     sdl = Sdl156.from_bytes(sdl_bytes)
     sdl._read()
@@ -136,7 +137,7 @@ def _sdl_to_xml(sdl):
                 timing_frame = timing_frames[frame_id]
                 item_xml = ET.SubElement(
                     data_xml,
-                    RV_MtPropertyTypeRE5.get(track.prop_type, "TYPE_UNKNOWN"),
+                    RV_MTPROPERTY_RE5.get(track.prop_type, "TYPE_UNKNOWN"),
                     {
                         "frame": str(timing_frame.frame),
                         "type": str(timing_frame.type),
@@ -200,7 +201,7 @@ def export_sdl(bl_obj):
     if xml_text is None:
         raise ValueError(f'SDL XML text "{xml_name}" is missing')
 
-    sdl_bytes = _sdl_xml_to_bytes(ET.fromstring(xml_text.as_string()))
+    sdl_bytes = _xml_to_sdl_bytes(ET.fromstring(xml_text.as_string()))
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=sdl_bytes)]
 
 
@@ -270,11 +271,11 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
             classes = {
                 2: Sdl156.Classref,
                 3: Sdl156.Bool,
-                4: Sdl156.U8,
+                4: Sdl156.U8Value,
                 5: Sdl156.U16,
                 6: Sdl156.U32,
                 7: Sdl156.U64,
-                8: Sdl156.S8,
+                8: Sdl156.S8Value,
                 9: Sdl156.S16,
                 10: Sdl156.S32,
                 11: Sdl156.S64,
@@ -343,7 +344,7 @@ def _sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
     raise ValueError(f"Unsupported SDL property type {prop_type}")
 
 
-def _sdl_xml_to_bytes(root_xml):
+def _xml_to_sdl_bytes(root_xml):
     if root_xml.tag != "sdl":
         raise ValueError('SDL XML root must be <sdl>')
     header_xml = root_xml.find("header")
@@ -408,13 +409,13 @@ def _sdl_xml_to_bytes(root_xml):
         prop_type_attr = element.get("prop_type")
         if prop_type_attr is None:
             prop_type = next(
-                (value for value, name in RV_MtPropertyTypeRE5.items()
+                (value for value, name in RV_MTPROPERTY_RE5.items()
                  if data_entry and name == data_entry[0].tag),
                 0,
             )
         else:
             prop_type = int(prop_type_attr, 0)
-        if data_entry and any(item.tag != RV_MtPropertyTypeRE5.get(prop_type) for item in data_entry):
+        if data_entry and any(item.tag != RV_MTPROPERTY_RE5.get(prop_type) for item in data_entry):
             raise ValueError(f"Inconsistent property type on SDL track {element.get('name', '')!r}")
 
         if len(data_entry) > 0xFFFF:
@@ -576,6 +577,7 @@ def _sdl_xml_to_bytes(root_xml):
 @blender_registry.register_import_function(app_id="re5", extension="lot", albam_asset_type="CONFIG")
 def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
+    assert app_id == "re5", "Currently only Resident Evil 5 is supported"
     xfs_bytes = vfile.get_bytes()
     xfs = Xfs.from_bytes(xfs_bytes)
     xfs._read()
@@ -592,3 +594,19 @@ def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.type
     text.from_string(xml_string)
 
     return bl_object
+
+
+@blender_registry.register_export_function(app_id="re5", extension="lot")
+def export_lot(bl_obj):
+    asset = bl_obj.albam_asset
+    app_id = asset.app_id
+    xml_name = bl_obj.get("lot", None)
+    if not xml_name:
+        return []
+
+    xml_text = bpy.data.texts.get(xml_name)
+    if xml_text is None:
+        raise ValueError(f'LOT XML text "{xml_name}" is missing')
+
+    xfs_bytes = to_xfs(ET.fromstring(xml_text.as_string()))
+    return [VirtualFileData(app_id, asset.relative_path, data_bytes=xfs_bytes)]

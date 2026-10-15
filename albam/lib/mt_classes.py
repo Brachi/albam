@@ -124,7 +124,7 @@ MtPropertyTypeRE5 = {
 }
 
 RV_MtPropertyType = {v: k for k, v in MtPropertyType.items()}
-RV_MtPropertyTypeRE5 = {v: k for k, v in MtPropertyTypeRE5.items()}
+RV_MTPROPERTY_RE5 = {v: k for k, v in MtPropertyTypeRE5.items()}
 
 DTI_HASHES = {
     "cEvent": 0x204D7C00,
