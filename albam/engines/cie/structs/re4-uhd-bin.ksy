@@ -25,8 +25,8 @@ instances:
     {pos: header.offset_morphs, type: morph_block, if: header.offset_morphs > 0 }
   bone_pairs:
     {pos: header.offset_bonepairs, type: bone_pair, if: header.offset_bonepairs > 0}
-  adjacent:
-    {pos: header.offset_adjacents, type: bone_adj, if: header.offset_adjacents > 0}
+  symmetry_table:
+    {pos: header.offset_adjacents, type: symmetry, if: header.offset_adjacents > 0}
   vertex_positions:
     {pos: header.offset_vertex_position, type: vec3, repeat: expr, repeat-expr: header.num_vertices}
   normals:
@@ -49,8 +49,11 @@ instances:
 types:
   uhd_bin_header:
     seq:
-      # Doubles as the header's own size: 0x40, 0x50 or 0x60. The shorter
-      # ones stop before the four trailing offsets. albam writes 0x60.
+      # Doubles as the header's own size: 0x40, 0x50 or 0x60. The fields
+      # down to version_flags are exactly 0x40 bytes and the four trailing
+      # offsets bring the header to exactly 0x50, so only a 0x40 header stops
+      # before those four; 0x60 is 0x50 plus 16 bytes of padding nothing
+      # reads, which is why size_ below is 96. albam writes 0x60.
       - {id: offset_bones, type: u4} # bone_offset
       - {id: unk_00, type: u4} # unknown_x04 //--zeros
       - {id: unk_01, type: u4} #unknown_x08 adress to blank area
@@ -92,8 +95,20 @@ types:
       - {id: num_vertex_normals, type: u2} # vertex_normal_count
       # A build stamp, shipped as one of exactly two date-shaped values:
       # 0x20030818 where the adjacency and bone-pair blocks are present,
-      # 0x20010801 where they are not, always in step with unk_01.
+      # 0x20010801 where they are not, always in step with unk_01: measured
+      # across 184 mesh .bin files in 8 character archives, the first always
+      # pairs with unk_01 = 0x50 and the second with unk_01 = 0.
       - {id: version_flags, type: u4}
+      # These four do not exist in a 0x40 header at all - offset_bones (see
+      # above) is what says so, and a 0x50 header is exactly these four
+      # present - and every reader downstream of this struct,
+      # here and in fs.py, expects the field to exist and reads a nonzero
+      # value as "this optional block is present". An `if:` here would make
+      # the field absent rather than 0, so those readers would raise instead
+      # of skipping the block; ksy has no way to say "defaults to 0 when
+      # absent". They are therefore declared as the plain unconditional
+      # reads they are, and re4_uhd_bin.py's _read carries the short-header
+      # branch by hand - see the comment there before regenerating.
       - {id: offset_bonepairs, type: u4} # bonepair_offset
       - {id: offset_adjacents, type: u4} # adjacent_offset
       - {id: offset_index_buffer, type: u4} # vertex_weight_index_offset
@@ -102,16 +117,24 @@ types:
       size_:
         value: 96
 
-  bone_adj:
+  # The game's pXFlip / symmetry table: one entry per bone, the bone it
+  # mirrors to or -1. Stored big-endian in an otherwise little-endian file -
+  # a leftover of the format's GameCube origin (unverified against a
+  # GameCube .bin, but the byte order itself is measured across 5,709 RE4
+  # UHD models with no exception). Not adjacency: nothing here describes
+  # triangle or face relationships.
+  symmetry:
+    meta:
+      endian: be
     seq:
-      - {id: count, type: u1, repeat: expr, repeat-expr: 4}
-      - id: adj
-        type: u2
+      - {id: num_bones, type: u4}
+      - id: mirror_bone_ids
+        type: s2
         repeat: expr
-        repeat-expr: count[3] # num bones?
+        repeat-expr: num_bones
     instances:
       size_:
-        value: 4 + count[3] * 2
+        value: 4 + num_bones * 2
 
   morph_block:
     seq:
@@ -120,17 +143,19 @@ types:
 
   morph_group:
     seq:
+      # Relative to the group table's own start (offset_morphs + 4), not to
+      # offset_morphs - see morph_group_body.body below. Measured exact
+      # across 389 morph-carrying models, 9,468 non-final groups.
       - {id: offset, type: u4}
-      - {id: num_vertices, type: u4}
+      - {id: count, type: u4}
     instances:
       body:
-        pos: _root.header.offset_morphs + offset
+        pos: _root.header.offset_morphs + 4 + offset
         type: morph_group_body
 
   morph_group_body:
     seq:
-      - {id: header, type: u4}
-      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.num_vertices}
+      - {id: vertices, type: morph_vertex, repeat: expr, repeat-expr: _parent.count}
 
   morph_vertex:
     seq:
@@ -148,10 +173,18 @@ types:
       size_:
         value: 4 + 8*num_pair
 
-  # Four bone ids; what the fourth is for is unknown.
+  # The game's DBL_JNT ("double joint") table: one line per helper bone that
+  # takes the blend-percent-of-the-way orientation between two other bones -
+  # the textbook "double joint" that keeps a bent elbow or knee from
+  # collapsing. `percent` is in the same 0-100 units the weight block uses;
+  # measured 50 in 7,950 of 7,954 lines across 2,643 models, with the four
+  # exceptions all real per-side variation on the same helper joint.
   pair_line:
     seq:
-      - {id: data, size: 8}
+      - {id: helper_bone_id, type: u2}
+      - {id: bone_a_id, type: u2}
+      - {id: bone_b_id, type: u2}
+      - {id: percent, type: u2}
 
   # Positions are local offsets from the parent, in the same units as
   # vertices. Bone ids are not guaranteed unique across a model.
