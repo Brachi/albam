@@ -14,7 +14,7 @@ from .arc_fs import (
     new_entry_file_type,
 )
 from .structs.arc import Arc
-from ...blender_ui.tools import show_message_box
+from ...blender_ui.tools_panel import show_message_box
 
 
 @blender_registry.register_fs_root_loader(app_id="re0", extension="arc")
