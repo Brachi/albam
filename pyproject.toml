@@ -59,6 +59,10 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
+# Every run publishes its slowest tests, so "is this test worth its minutes"
+# is a question the CI log can answer. --durations-min keeps the fast ones
+# out of it; the per-file totals go to the job summary (tests/conftest.py).
+addopts = ["--durations=25", "--durations-min=1.0"]
 # pytest installs its own warning filters around every test, which discards
 # the one albam sets on import (albam/_pkg_resources_warning.py), so the
 # same two messages have to be named again here. Both come from `fs` 2.4.16
