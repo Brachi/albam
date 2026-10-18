@@ -61,14 +61,24 @@ Binary formats are described by `.ksy` files under each engine's `structs/` dire
 to the `*.py` next to them with [Kaitai Struct](https://kaitai.io/) (currently 0.11):
 
 ```
-kaitai-struct-compiler --target python -w --outdir . <file>.ksy
+python scripts/ksc.py --target python -w --outdir . <file>.ksy
 ```
+
+`scripts/ksc.py` downloads the pinned compiler on first use (checksum-verified, cached per version)
+and passes every argument through, so nothing needs installing beyond Java. The compiler version
+lives there and has to match `pyproject.toml`'s `kaitaistruct` pin.
 
 `-w`/`--read-write` applies to every parser, including formats albam only reads today, so there is
 one command rather than a per-file split that nothing in a `.ksy` records. It implies
 `--no-auto-read`, which is the one thing callers have to know: constructing a parser (or calling
 `from_bytes()`) no longer parses anything on its own, so every call site follows it with an
 explicit `_read()`.
+
+One generated parser is not purely generated: `albam/engines/cie/structs/re4_uhd_bin.py`
+carries a hand-written short-header branch the compiler does not produce, because a `.ksy`
+cannot say "this field reads as 0 when it is absent". Regenerating that file drops the branch;
+the comment at the edit itself says what to reapply and why, and `scripts/ksc.py` warns when a
+run overwrites a parser carrying such an edit.
 
 A `.ksy` that declares `params:` can't use `from_bytes()` at all - Kaitai's own runtime hardcodes
 a parameterless constructor there. `albam.lib.kaitai_utils.parse(cls, data, *params)` covers both

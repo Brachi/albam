@@ -20,13 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autosorter tool to automatically set `alpha priority` values for hair cards
 - Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
-- Reading `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. Models and textures inside them can now be imported. Read-only for now: packing into one is refused rather than writing an archive the game cannot read
+- Reading and packing `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. These archives can now be repacked, and their contents written back. The XMemCompress encoder this needed is verified against real archive entries and against an independent LZX decoder, but has not yet been confirmed by loading an edited archive in the game
 - BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 
 ### Fixed
 
+- Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
@@ -58,6 +59,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Export of a texture whose relative path doesn't fit a material file's
   64-byte path field failing with an unreadable "Check failed: filler" error
   instead of naming the images to shorten
+- A model imported from the second of two same-named archives taking its
+  materials and textures from the first archive's `.mrl` and `.tex` files, so
+  the mesh was right but silently wore the other archive's look
+- Fix hardcoded UV scale factor for detail maps
+- `.lmt` export retargeting bone ids through whichever armature the import
+  panel currently pointed at, instead of the one the animation was imported
+  onto, silently renumbering or dropping tracks when a second character had
+  been imported since. Export now also refuses a block whose action keys only
+  bones the rig has no "Anim Retarget" id for, instead of writing it out with
+  no tracks
+- An animation block created rather than imported exporting as an empty slot,
+  so a new animation could not be added to an `.lmt`. Whether a slot holds a
+  block is now derived from the block having tracks, so the block's "Offset"
+  field is gone: it no longer has to be hand-edited to a non-zero number to
+  add an animation, and setting it to 0 can no longer delete the block from
+  the exported file
 
 ### Changed
 
