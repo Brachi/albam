@@ -846,7 +846,7 @@ class ALBAM_OT_VFGuesser(bpy.types.Operator):
                 if cur_bones > max_bones:
                     max_bones = cur_bones
 
-            if app_id in ("re0", "re1" "re6", "rev1", "rev2", "dd"):
+            if app_id in ("re0", "re1", "re6", "rev1", "rev2", "dd"):
 
                 if max_bones == 1:
                     vf = "0xa8fab018"  # "SkinTB1wt"
