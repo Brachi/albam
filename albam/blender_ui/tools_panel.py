@@ -431,7 +431,7 @@ class ALBAM_OT_BatchMergeVertexGroups(bpy.types.Operator):
     def execute(self, context):
         vg_a = context.scene.albam.tools_settings.vg_a
         selected_vgroups = [item.vertex_group_name for item in self.vertex_groups if item.selected]
-        if len(selected_vgroups) <= 1:
+        if len(selected_vgroups) < 1:
             self.report({'WARNING'}, "Select at least one vertex groups")
             return {'CANCELLED'}
 
