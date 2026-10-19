@@ -96,7 +96,7 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     xml.write(buffer, encoding="unicode", xml_declaration=True)
     xml_string = buffer.getvalue()
     text = bpy.data.texts.new(bl_object_name + ".xml")
-    bl_object["sdl"] = bl_object_name + ".xml"
+    bl_object["sdl"] = text.name
     text.from_string(xml_string)
 
     return bl_object

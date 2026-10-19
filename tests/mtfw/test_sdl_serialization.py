@@ -14,6 +14,8 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 # Every hash here must be a subset of that app_id's committed
 # tests/mtfw/datasets/<app_id>_catalog.json - see test_dataset_hashes_are_in_catalog
 # below, which enforces it.
+# hashes fad4373373f90a8c and 2e975feecbccaa2a removed from dataset because they are flawed
+# the game reads then because of fallback system that ignores incorrect prop_type
 SDL_SERIALIZATION_DATASET_PATH = os.path.join(
     os.path.dirname(__file__), "datasets", "sdl_serialization_hashes.json"
 )
@@ -98,7 +100,7 @@ def test_sdl_tracks(sdl_imported_local, sdl_exported_local):
         if getattr(src_track, "timing_frames", None) is not None:
             for src_timing, dst_timing in zip(src_track.timing_frames, dst_track.timing_frames):
                 assert src_timing.frame == dst_timing.frame
-                assert dst_timing.type == dst_timing.type
+                assert src_timing.type == dst_timing.type
 
 
 def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
@@ -111,7 +113,7 @@ def test_sdl_data_blocks(sdl_imported_local, sdl_exported_local):
                 if src_track.prop_type in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
                     assert src_data.val == dst_data.val
                 elif src_track.prop_type == 14:
-                    assert src_data.ref_path == dst_data.ref_path
+                    assert src_data.string == dst_data.string
                 elif src_track.prop_type == 15:
                     assert src_data.r == dst_data.r
                     assert src_data.g == dst_data.g
@@ -142,7 +144,7 @@ def test_sdl_offsets(sdl_imported_local, sdl_exported_local):
     dst = sdl_exported_local
     for track_index, (src_track, dst_track) in enumerate(zip(src.tracks, dst.tracks)):
         # Original files have junk string data like s512.arc>stage/s512/light/LightLnk/a00/s512_a00.sdl
-        # has track 105 mColor name only because offset set in the middle of mBloomColor. string
+        # has track 105 mColor name only because offset set in the middle of the mBloomColor. string
         # it's impossible to keep this check
         # assert src_track.ofs_name == dst_track.ofs_name, (
         #    f"track {track_index}: name mismatch "
