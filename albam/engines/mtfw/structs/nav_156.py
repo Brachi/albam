@@ -377,7 +377,7 @@ class Nav156(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.type = self._io.read_u4le()
+            self.node_offset = self._io.read_u4le()
             self.lower = Nav156.Vertex(self._io, self, self._root)
             self.lower._read()
             self.padding_00 = self._io.read_bytes(4)
@@ -395,7 +395,7 @@ class Nav156(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Nav156.NodeInfo, self)._write__seq(io)
-            self._io.write_u4le(self.type)
+            self._io.write_u4le(self.node_offset)
             self.lower._write__seq(self._io)
             self._io.write_bytes(self.padding_00)
             self.upper._write__seq(self._io)

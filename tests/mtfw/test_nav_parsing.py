@@ -99,7 +99,7 @@ def test_parsed_nav(parsed_nav):
     assert nav.footer_tag == b'\x07'
     assert nav.num_grid_nodes == 5461
     for i, ninfo in enumerate(nav.node_infos):
-        assert ninfo.type == 0
+        assert ninfo.node_offset == 0
         assert ninfo.padding_00 in UNK_BBOX_PADDING
         assert ninfo.padding_01 in UNK_BBOX_PADDING
     for i, face in enumerate(nav.faces):

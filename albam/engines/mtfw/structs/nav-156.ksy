@@ -57,8 +57,10 @@ types:
     doc: |
       36 bytes on disk; runtime struct is 0x30. The 4-byte pads are
       uninitialized in some builds (0xCDCDCDCD = MSVC debug fill).
+      node_offset is probably an offset to grid data in case of multiple node_info
+      but there is no example in RE5 files
     seq:
-      - {id: type, type: u4}
+      - {id: node_offset, type: u4}
       - {id: lower, type: vertex}
       - {id: padding_00, size: 4}
       - {id: upper, type: vertex}

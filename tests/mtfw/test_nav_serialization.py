@@ -122,7 +122,7 @@ def test_export_grid_header(nav_imported_local, nav_exported_local):
     src_node_infos = src_nav.node_infos
     dst_node_infos = dst_nav.node_infos
     for src_ninfo, dst_ninfo in zip(src_node_infos, dst_node_infos):
-        assert src_ninfo.type == dst_ninfo.type
+        assert src_ninfo.node_offset == dst_ninfo.node_offset
         assert src_ninfo.lower.x == pytest.approx(dst_ninfo.lower.x, rel=0.001)
         assert src_ninfo.lower.y == pytest.approx(dst_ninfo.lower.y, rel=0.001)
         assert src_ninfo.lower.z == pytest.approx(dst_ninfo.lower.z, rel=0.001)

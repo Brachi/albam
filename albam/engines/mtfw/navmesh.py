@@ -111,7 +111,7 @@ def export_nav(bl_obj):
     dst_nav.faces = dst_faces
     lower, upper = bounding_box(vertices)
     dst_node_info = dst_nav.NodeInfo(_parent=dst_nav, _root=dst_nav._root)
-    dst_node_info.type = 0
+    dst_node_info.node_offset = 0
     dst_lower = dst_nav.Vertex(_parent=dst_node_info, _root=dst_nav._root)
     dst_lower.x = lower[0]
     dst_lower.y = lower[1]
