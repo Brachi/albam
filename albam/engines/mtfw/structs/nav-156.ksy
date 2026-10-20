@@ -4,6 +4,13 @@ meta:
   endian: le
   ks-version: '0.11'
   title: Resident Evil 5 navmesh
+doc: |
+    Tail layout: the footer holds a node count (0x1555 = 5461), which is a full
+    quadtree for a 64x64 leaf grid:
+        4096 leaves (64x64) + 1024 + 256 + 64 + 16 + 4 + 1 = 5461 nodes.
+    The first 1365 nodes (32x32 down to 1x1) are all zero in every sample; the
+    last 4096 entries are the leaf cells, stored in Morton (Z-order) order.
+    Leaf cell size = (node_info.upper - node_info.lower) / 64 on X and Z.
 
 seq:
   - {id: indent, contents: [0x4e, 0x41, 0x56, 0x00]}
@@ -11,12 +18,13 @@ seq:
   - {id: reserved, type: u4}
   - {id: num_vertices, type: u4}
   - {id: num_faces, type: u4}
-  - {id: header_padding, type: u4}
+  - {id: num_node_infos, type: u4}
   - {id: vertices, type: vertex, repeat: expr, repeat-expr: num_vertices}
   - {id: faces, type: face, repeat: expr, repeat-expr: num_faces}
-  - {id: bbox, type: bounding_box}
-  - {id: footer_indent, contents: [0x07, 0x55, 0x15, 0x00, 0x00]}
-  - {id: footer_padding, size: 5460}
+  - {id: node_infos, type: node_info, repeat: expr, repeat-expr: num_node_infos}
+  - {id: footer_tag, contents: [0x07]}
+  - {id: num_grid_nodes, type: u4}
+  - {id: internal_nodes, type: grid_cell, repeat: expr, repeat-expr: num_grid_nodes - 4096}
   - {id: lookup_grid, type: grid_cell, repeat: expr, repeat-expr: 4096}
 
 types:
@@ -40,23 +48,26 @@ types:
 
   neighbor:
     seq:
-      - {id: face_index, type: u4}
-      - {id: padding, type: u4}
-      - {id: edge, type: u4, enum: edge}
-      - {id: centroid_distance, type: f4}
+      - {id: face_index, type: u4}  # linkNode
+      - {id: padding, type: u4}     # per-edge attribute; 0 in samples
+      - {id: edge, type: u4, enum: edge} # portal_number, equals edge index 0/1/2
+      - {id: centroid_distance, type: f4} # = centroid distance in metres her
 
-  bounding_box:
+  node_info:
+    doc: |
+      36 bytes on disk; runtime struct is 0x30. The 4-byte pads are
+      uninitialized in some builds (0xCDCDCDCD = MSVC debug fill).
     seq:
-      - {id: padding_00, type: u4}
+      - {id: type, type: u4}
       - {id: lower, type: vertex}
-      - {id: padding_01, size: 4}
+      - {id: padding_00, size: 4}
       - {id: upper, type: vertex}
-      - {id: padding_02, size: 4}
+      - {id: padding_01, size: 4}
 
   grid_cell:
     seq:
-      - {id: face_count, type: u4}
-      - {id: faces, type: grid_face, repeat: expr, repeat-expr: face_count}
+      - {id: num_faces, type: u4}
+      - {id: faces, type: grid_face, repeat: expr, repeat-expr: num_faces}
 
   grid_face:
     seq:
