@@ -85,24 +85,24 @@ KNOWN_FACE_FLAGS = [0, 1, 2, 3, 4, 8, 256, 1024, 1296, 1536, 2048, 2049, 2050, 2
                     25176832, 25239808, 25272576, 25305344, 25320192, 25377536, 25402112, 25444608, 25640192,
                     1073743872, 1073747968]
 
-# Junk?
+# Junk
 UNK_BBOX_PADDING = [b'\x00\x00\x00\x00', b'\xcd\xcd\xcd\xcd', b'1_cl', b'pen\x00',
                     b'own\x00', b'\x8c\x00\x9f\x02', b'se\x00\x00', b'\x01\x00j\x00',
                     b'\xc45@\x01', b'E~\xe3\x00', b'L\x01\x00\x03']
 
-UNK_GRID_PADDING = b"\x00" * 5460
-
 
 def test_parsed_nav(parsed_nav):
     nav = parsed_nav
-    nav.version = 2
-    nav.reserved = 0
-    nav.header_padding = 1
-    assert nav.bbox.padding_00 == 0
-    assert nav.bbox.padding_01 in UNK_BBOX_PADDING
-    assert nav.bbox.padding_02 in UNK_BBOX_PADDING
-    assert nav.footer_padding == UNK_GRID_PADDING
+    assert nav.version == 2
+    assert nav.reserved == 0
+    assert nav.num_node_infos == 1
+    assert nav.footer_tag == b'\x07'
+    assert nav.num_grid_nodes == 5461
+    for i, ninfo in enumerate(nav.node_infos):
+        assert ninfo.type == 0
+        assert ninfo.padding_00 in UNK_BBOX_PADDING
+        assert ninfo.padding_01 in UNK_BBOX_PADDING
     for i, face in enumerate(nav.faces):
         assert face.flags in KNOWN_FACE_FLAGS
     grid_cells = [c for _, c in enumerate(nav.lookup_grid)]
-    assert grid_cells[4095].face_count >= 0
+    assert grid_cells[4095].num_faces >= 0
