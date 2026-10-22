@@ -175,6 +175,8 @@ def load_sbc(file_item, context):
     sbc_objects = []
 
     if sbc_version == 255:
+        div_type = sbc.pace_div_type_triangle
+        assert div_type == 0, f"Division type {div_type} is not supported yet"
         bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
@@ -514,9 +516,9 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, num_objects, num_stages, num_pair
     bbox.max = [v for v in bbox_data["maxPos"].values()]
     dst_sbc_header.__dict__.update(dict(
         indent=b"SBC\xFF",
-        unk_00=src_sbc.header.unk_00,
-        unk_02=0,
-        unk_03=0,
+        version=src_sbc.header.version,
+        space_div_type_part=0,
+        space_div_type_triangle=0,
         num_objects=num_objects,
         num_stages=num_stages,
         num_pairs=num_pairs,

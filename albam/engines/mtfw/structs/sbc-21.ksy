@@ -203,6 +203,6 @@ types:
 
   grco_cell:   # cGridCollision::StaticGridInfo (8 bytes)
     seq:
-      - {id: leaf_num, type: u2}     # mLeafNum   (0 == empty cell)
-      - {id: pad, type: u2}          # padding
+      - {id: leaf_num, type: u2}     # (0 == empty cell)
+      - {id: padding, type: u2}
       - {id: leaf_start, type: u4}   # mLeafStart (index into regist_params)
