@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Reading and packing `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. These archives can now be repacked, and their contents written back. The XMemCompress encoder this needed is verified against real archive entries and against an independent LZX decoder, but has not yet been confirmed by loading an edited archive in the game
 - BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
+- Vertex Groups Merger now has an option for batch merge
 
 ### Fixed
 
