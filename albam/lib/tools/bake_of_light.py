@@ -2,6 +2,7 @@ import bpy
 import os
 import tempfile
 from contextlib import contextmanager
+from pathlib import PureWindowsPath
 
 from bc7enc import pack_dds
 from ..common_op import _get_albam_mat_props
@@ -35,7 +36,7 @@ def _image_to_dds(bl_image):
     return bytes(header) + blocks
 
 
-def _replace_bake_target(baked_image, replaced_image, lightmap_name):
+def _replace_bake_target(baked_image, replaced_image, lightmap_name, app_id, mod_path):
     """Make the baked result a DDS image and remap every reference to it.
 
     ``bake_image`` is deliberately never used as the final texture: a
@@ -45,6 +46,13 @@ def _replace_bake_target(baked_image, replaced_image, lightmap_name):
     newly created lightmap.
     """
     final_image = replaced_image.copy() if replaced_image else baked_image.copy()
+    if not replaced_image:
+        # A copy of the bake target has default Albam properties (app_id re0, no
+        # path), which export rejects. Place the new lightmap next to its .mod.
+        final_image.albam_asset.app_id = app_id
+        lightmap_path = PureWindowsPath(mod_path).with_name(f"{lightmap_name}.tex")
+        final_image.albam_asset.relative_path = str(lightmap_path)
+        final_image.albam_asset.extension = "tex"
     final_image.name = f"__albam_dxt1__{lightmap_name}"
     final_image.scale(*baked_image.size)
     final_image.pixels.foreach_set(baked_image.pixels[:])
@@ -263,7 +271,8 @@ def bake_light(bl_objects, lm_size, lm_mode, app_id):
             )
             with _without_lightmap_inputs(lm_mats):
                 _render_lightmaps()
-            _replace_bake_target(image_for_bake, replaced_image, lmap_name)
+            mod_path = lm_objects[0].parent.albam_asset.relative_path
+            _replace_bake_target(image_for_bake, replaced_image, lmap_name, app_id, mod_path)
         except Exception:
             # Do not leave materials pointing at a temporary generated image
             # when Cycles cancels or the DDS encoder fails.
