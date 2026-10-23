@@ -19,9 +19,9 @@ types:
   sbc_header:
     seq:
      - {id: indent, contents: [0x53, 0x42, 0x43, 0xff]}
-     - {id: unk_00, type: u4}
-     - {id: unk_02, type: u4}
-     - {id: unk_03, type: u4}
+     - {id: version, type: u4}
+     - {id: space_div_type_part, type: u4}
+     - {id: space_div_type_triangle, type: u4}
      - {id: num_objects, type: u2}
      - {id: num_stages, type: u2}
      - {id: num_pairs, type: u4}
@@ -93,7 +93,7 @@ types:
       
   collision_type:
     seq:
-      - {id: unk_01, type: f4}
+      - {id: attribute, type: u4}
       - {id: unk_02, type: u2}
       - {id: unk_03, type: u2}
       - {id: unk_04, type: u4, repeat: expr, repeat-expr: 3}

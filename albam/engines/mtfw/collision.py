@@ -175,6 +175,8 @@ def load_sbc(file_item, context):
     sbc_objects = []
 
     if sbc_version == 255:
+        div_type = sbc.pace_div_type_triangle
+        assert div_type == 0, f"Division type {div_type} is not supported yet"
         bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
@@ -247,7 +249,7 @@ def create_link_ob(link_ob, app_id, link_name):
     sbc_empty = common.create_root_nub(link_name)
     sbc_link_proprs = sbc_empty.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
         "sbc_21_link"]
-    sbc_link_proprs.unk_01 = link_ob.unk_01
+    sbc_link_proprs.attribute = link_ob.attribute
     sbc_link_proprs.unk_02 = link_ob.unk_02
     sbc_link_proprs.unk_03 = link_ob.unk_03
     sbc_link_proprs.unk_04 = link_ob.unk_04
@@ -514,9 +516,9 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, num_objects, num_stages, num_pair
     bbox.max = [v for v in bbox_data["maxPos"].values()]
     dst_sbc_header.__dict__.update(dict(
         indent=b"SBC\xFF",
-        unk_00=src_sbc.header.unk_00,
-        unk_02=0,
-        unk_03=0,
+        version=src_sbc.header.version,
+        space_div_type_part=0,
+        space_div_type_triangle=0,
         num_objects=num_objects,
         num_stages=num_stages,
         num_pairs=num_pairs,
@@ -769,11 +771,11 @@ def _serialize_col_types(dst_sbc, link_ob, app_id):
     sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
         app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = sbc_link_props.unk_01
+    coltype.attribute = sbc_link_props.attribute
     coltype.unk_02 = sbc_link_props.unk_02
     coltype.unk_03 = sbc_link_props.unk_03
     coltype.unk_04 = sbc_link_props.unk_04
-    coltype.jp_path = sbc_link_props.jp_path
+    coltype.jp_path = sbc_link_props.jp_path  # padding
     coltype._check()
     return coltype
 
