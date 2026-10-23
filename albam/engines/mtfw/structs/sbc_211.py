@@ -491,7 +491,7 @@ class Sbc211(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unk_01 = self._io.read_f4le()
+            self.attribute = self._io.read_u4le()
             self.unk_02 = self._io.read_u2le()
             self.unk_03 = self._io.read_u2le()
             self.unk_04 = []
@@ -517,7 +517,7 @@ class Sbc211(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Sbc211.CollisionType, self)._write__seq(io)
-            self._io.write_f4le(self.unk_01)
+            self._io.write_u4le(self.attribute)
             self._io.write_u2le(self.unk_02)
             self._io.write_u2le(self.unk_03)
             for i in range(len(self.unk_04)):

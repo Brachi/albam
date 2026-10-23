@@ -162,3 +162,12 @@ def test_export_vertices(sbc_imported_local, sbc_exported_local):
         assert svert.z == pytest.approx(dvert.z, rel=0.001)
         assert svert.w == pytest.approx(dvert.w, rel=0.001)
         assert svert.w == 0
+
+
+def test_collision_type(sbc_imported_local, sbc_exported_local):
+    sbc_version = 255 if sbc_imported_local.header.indent == b"SBC\xFF" else 49
+    if sbc_version == 255:
+        scoltypes = sbc_imported_local.collision_types
+        dcoltypes = sbc_exported_local.collision_types
+        for stype, dtype in zip(scoltypes, dcoltypes):
+            stype.attribute == stype.attribute

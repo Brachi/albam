@@ -93,7 +93,7 @@ types:
       
   collision_type:
     seq:
-      - {id: unk_01, type: f4}
+      - {id: attribute, type: u4}
       - {id: unk_02, type: u2}
       - {id: unk_03, type: u2}
       - {id: unk_04, type: u4, repeat: expr, repeat-expr: 3}

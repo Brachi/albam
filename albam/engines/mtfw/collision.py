@@ -249,7 +249,7 @@ def create_link_ob(link_ob, app_id, link_name):
     sbc_empty = common.create_root_nub(link_name)
     sbc_link_proprs = sbc_empty.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
         "sbc_21_link"]
-    sbc_link_proprs.unk_01 = link_ob.unk_01
+    sbc_link_proprs.attribute = link_ob.attribute
     sbc_link_proprs.unk_02 = link_ob.unk_02
     sbc_link_proprs.unk_03 = link_ob.unk_03
     sbc_link_proprs.unk_04 = link_ob.unk_04
@@ -771,11 +771,11 @@ def _serialize_col_types(dst_sbc, link_ob, app_id):
     sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
         app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = sbc_link_props.unk_01
+    coltype.attribute = sbc_link_props.attribute
     coltype.unk_02 = sbc_link_props.unk_02
     coltype.unk_03 = sbc_link_props.unk_03
     coltype.unk_04 = sbc_link_props.unk_04
-    coltype.jp_path = sbc_link_props.jp_path
+    coltype.jp_path = sbc_link_props.jp_path  # padding
     coltype._check()
     return coltype
 
