@@ -3,7 +3,7 @@ import json
 import pytest
 
 from albam.engines.mtfw.structs.xfs import Xfs
-from albam.lib.xml_parser import from_xfs
+from albam.engines.mtfw.config_assets import from_xfs
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 
@@ -54,4 +54,15 @@ def test_xfs_lot_imports_real_sample(parsed_lot):
 
     assert root.tag == "root"
     assert root.get("extension") == "lot"
-    assert root.find("./class") is not None
+    root_class = root.find("./class")
+    assert root_class is not None
+    assert root_class.get("class_index") == "0"
+    # XFS stores the root body directly; object indexes belong only to
+    # nested ObjectRef values.
+    assert "object_index" not in root_class.attrib
+
+    class_defs = root.findall("./_xfs_metadata/class_def")
+    assert len(class_defs) == xfs.header.num_class_defs
+    assert [int(class_def.get("index")) for class_def in class_defs] == list(
+        range(xfs.header.num_class_defs)
+    )
