@@ -669,42 +669,58 @@ def _xml_to_sdl_bytes(root_xml):
 
 
 
-@blender_registry.register_import_function(app_id="re5", extension="lot", albam_asset_type="CONFIG")
+XFS_EXTENSIONS = (
+    "lot", "sce", "fsm", "lsp", "rvt", "seg", "smh", "lku",
+    "lnk", "los", "lom", "cmi", "glp", "bmse",
+)
+XFS_EXTENSION_VERSIONS = {"fsm": 1, "lot": 4, "sce": 11, "lnk": 14}
+
+
 def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
     assert app_id == "re5", "Currently only Resident Evil 5 is supported"
+    extension = vfile.extension.lower()
     xfs_bytes = vfile.get_bytes()
     xfs = Xfs.from_bytes(xfs_bytes)
     xfs._read()
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
-    xml = from_xfs(xfs, "lot")
+    xml = from_xfs(xfs, extension)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
     xml_string = buffer.getvalue()
     text = bpy.data.texts.new(bl_object_name + ".xml")
-    bl_object["lot"] = bl_object_name + ".xml"
+    bl_object[extension] = text.name
     text.from_string(xml_string)
 
     return bl_object
 
 
-@blender_registry.register_export_function(app_id="re5", extension="lot")
-def export_lot(bl_obj):
+def export_xfs(bl_obj):
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    xml_name = bl_obj.get("lot", None)
+    extension = asset.extension.lower()
+    xml_name = bl_obj.get(extension)
     if not xml_name:
         return []
 
     xml_text = bpy.data.texts.get(xml_name)
     if xml_text is None:
-        raise ValueError(f'LOT XML text "{xml_name}" is missing')
+        raise ValueError(f'{extension.upper()} XML text "{xml_name}" is missing')
 
     xfs_bytes = to_xfs(ET.fromstring(xml_text.as_string()))
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=xfs_bytes)]
+
+
+for xfs_extension in XFS_EXTENSIONS:
+    blender_registry.register_import_function(
+        app_id="re5", extension=xfs_extension, albam_asset_type="CONFIG"
+    )(build_xfs_object)
+    blender_registry.register_export_function(
+        app_id="re5", extension=xfs_extension
+    )(export_xfs)
 
 
 # XFS XML conversion helpers.
@@ -1275,15 +1291,14 @@ def to_xfs(xml):
             class_defs_data.extend(prop['reserved'])
 
     extension = xml.attrib.get('extension', 'lot').lower().lstrip('.')
-    extension_versions = {'fsm': 1, 'lot': 4, 'sce': 11, 'lnk': 14}
     if 'version_major' in xml.attrib:
         version_major = parse_int(xml.attrib['version_major'])
     else:
         version_major = 6
     if 'version_minor' in xml.attrib:
         version_minor = parse_int(xml.attrib['version_minor'])
-    elif extension in extension_versions:
-        version_minor = extension_versions[extension]
+    elif extension in XFS_EXTENSION_VERSIONS:
+        version_minor = XFS_EXTENSION_VERSIONS[extension]
     else:
         raise ValueError(f'No XFS version is known for extension {extension!r}')
 
