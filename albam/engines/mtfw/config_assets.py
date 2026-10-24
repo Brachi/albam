@@ -1116,8 +1116,7 @@ class XfsXmlSerializer:
                 type_id, self.property_type_info['scalar_sizes'].get(type_id)
             )
             if (
-                size is None
-                and type_id in self.property_type_info['vector_property_types']
+                size is None and type_id in self.property_type_info['vector_property_types']
             ):
                 vectors = prop_xml.findall('vec')
                 size = len(vectors[0].findall('item')) * 4 if vectors else None
