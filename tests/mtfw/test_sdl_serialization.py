@@ -11,6 +11,9 @@ from tests.mtfw.scripts.catalog_paths import resolve_hashes
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
 # of tests/mtfw/*.py. This is the single source of truth for what this file
 # tests locally; extend it directly rather than pointing at some other file.
+# The two entries are the minimum cover of the full RE5 SDL corpus: together
+# they cover every observed track type, property type, and property type with
+# serialized data. Both are needed to cover TYPE_COLOR and TYPE_RANGEF.
 # Every hash here must be a subset of that app_id's committed
 # tests/mtfw/datasets/<app_id>_catalog.json - see test_dataset_hashes_are_in_catalog
 # below, which enforces it.
