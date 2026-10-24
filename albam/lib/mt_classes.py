@@ -1,4 +1,4 @@
-MtPropertyType = {
+MtPropType = {
     "TYPE_UNDEFINED": 0,
     "TYPE_CLASS": 1,
     "TYPE_CLASSREF": 2,
@@ -60,7 +60,7 @@ MtPropertyType = {
     "TYPE_END": 58,
 }
 
-MtPropertyTypeRE5 = {
+MtPropTypeRE5 = {
     "TYPE_UNDEFINED": 0,
     "TYPE_CLASS": 1,
     "TYPE_CLASSREF": 2,
@@ -123,8 +123,8 @@ MtPropertyTypeRE5 = {
     "TYPE_END": 59,
 }
 
-RV_MtPropertyType = {v: k for k, v in MtPropertyType.items()}
-RV_MTPROPERTY_RE5 = {v: k for k, v in MtPropertyTypeRE5.items()}
+RV_MtPropertyType = {v: k for k, v in MtPropType.items()}
+RV_MTPROPERTY_RE5 = {v: k for k, v in MtPropTypeRE5.items()}
 
 DTI_HASHES = {
     "cEvent": 0x204D7C00,

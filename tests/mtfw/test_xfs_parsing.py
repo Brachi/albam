@@ -46,10 +46,10 @@ def parsed_lot(game_fs_root, local_lot_path_hash):
     return parsed
 
 
-def test_xfs_lot_imports_real_sample(parsed_lot):
+def test_xfs_lot_imports_real_sample(parsed_lot, local_app_id):
     xfs = parsed_lot
 
-    xml = from_xfs(xfs, "lot")
+    xml = from_xfs(xfs, "lot", local_app_id)
     root = xml.getroot()
 
     assert root.tag == "root"

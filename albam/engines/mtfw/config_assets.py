@@ -11,13 +11,11 @@ from ...vfs import VirtualFileData, VirtualFile
 from ...lib.kaitai_utils import check_recursive
 from ...lib.mt_classes import (
     DTI_HASHES,
-    MtPropertyType,
-    MtPropertyTypeRE5,
+    MtPropType,
+    MtPropTypeRE5,
     RV_DTI_HASHES,
-    RV_MtPropertyType,
     RV_MTPROPERTY_RE5,
 )
-from ...lib import mt_types as mt
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
 
@@ -310,8 +308,8 @@ def _sdl_prop_type_name(prop_type):
 
 
 def _sdl_prop_type_value(value):
-    if value in MtPropertyTypeRE5:
-        return MtPropertyTypeRE5[value]
+    if value in MtPropTypeRE5:
+        return MtPropTypeRE5[value]
     return _sdl_value_to_int(value)
 
 
@@ -466,9 +464,9 @@ def _sdl_parent_from_xml(
     if not 0 <= parent <= 0xFFFFFFFF:
         raise ValueError(f"SDL parent value is outside its binary range: {parent}")
     if (
-        track_type not in SDL_ROOT_TRACK_TYPES
-        and track_type not in SDL_MOVE_LINE_TRACK_TYPES
-        and (parent >= track_count or parent == track_index)
+        track_type not in SDL_ROOT_TRACK_TYPES and
+        track_type not in SDL_MOVE_LINE_TRACK_TYPES and
+        (parent >= track_count or parent == track_index)
     ):
         raise ValueError(f"SDL parent index {parent} is invalid for track {track_index}")
     return parent
@@ -550,9 +548,9 @@ def _calculate_sdl_layout(tracks, track_data):
         cur_track_data += len(data_entry) * 4
         data_struct_size = _sdl_data_struct_size(track["prop_type"])
         has_serialized_data = (
-            data_entry
-            and track["type"] > TRACK_TYPE["TYPE_OBJECT"]
-            and data_struct_size is not None
+            data_entry and
+            track["type"] > TRACK_TYPE["TYPE_OBJECT"] and
+            data_struct_size is not None
         )
         if has_serialized_data:
             cur_track_data += (-cur_track_data) % 16
@@ -687,6 +685,122 @@ XFS_EXTENSIONS = (
     "lnk", "los", "lom", "cmi", "glp", "bmse",
 )
 XFS_EXTENSION_VERSIONS = {"fsm": 1, "lot": 4, "sce": 11, "lnk": 14}
+XFS_PROPERTY_TYPES_BY_APP_ID = {
+    "dmc4": MtPropType,
+    "re5": MtPropTypeRE5,
+}
+XFS_VECTOR_PROPERTY_TYPE_NAMES = frozenset({
+    "TYPE_COLOR",
+    "TYPE_VECTOR3",
+    "TYPE_VECTOR4",
+    "TYPE_QUATERNION",
+    "TYPE_FLOAT2",
+    "TYPE_FLOAT3",
+    "TYPE_FLOAT4",
+    "TYPE_FLOAT3x3",
+    "TYPE_FLOAT4x3",
+    "TYPE_FLOAT4x4",
+    "TYPE_EASECURVE",
+    "TYPE_LINE",
+    "TYPE_LINESEGMENT",
+    "TYPE_RAY",
+    "TYPE_PLANE",
+    "TYPE_SPHERE",
+    "TYPE_CAPSULE",
+    "TYPE_AABB",
+    "TYPE_OBB",
+    "TYPE_CYLINDER",
+    "TYPE_RANGE",
+    "TYPE_RANGEF",
+})
+XFS_SCALAR_READERS_BY_TYPE_NAME = {
+    "TYPE_BOOL": KaitaiStream.read_u1,
+    "TYPE_U8": KaitaiStream.read_u1,
+    "TYPE_U16": KaitaiStream.read_u2le,
+    "TYPE_U32": KaitaiStream.read_u4le,
+    "TYPE_U64": KaitaiStream.read_u8le,
+    "TYPE_S8": KaitaiStream.read_s1,
+    "TYPE_S16": KaitaiStream.read_s2le,
+    "TYPE_S32": KaitaiStream.read_s4le,
+    "TYPE_S64": KaitaiStream.read_s8le,
+    "TYPE_F32": KaitaiStream.read_f4le,
+    "TYPE_F64": KaitaiStream.read_f8le,
+}
+XFS_SCALAR_SIZES_BY_TYPE_NAME = {
+    "TYPE_BOOL": 1,
+    "TYPE_U8": 1,
+    "TYPE_U16": 2,
+    "TYPE_U32": 4,
+    "TYPE_U64": 8,
+    "TYPE_S8": 1,
+    "TYPE_S16": 2,
+    "TYPE_S32": 4,
+    "TYPE_S64": 8,
+    "TYPE_F32": 4,
+    "TYPE_F64": 8,
+}
+XFS_PROPERTY_SIZES_BY_TYPE_NAME = {
+    "TYPE_CLASS": 4,
+    "TYPE_CLASSREF": 4,
+    "TYPE_STRING": 4,
+    "TYPE_COLOR": 4,
+    "TYPE_POINT": 8,
+    "TYPE_RECT": 16,
+    "TYPE_MATRIX": 64,
+    "TYPE_VECTOR3": 16,
+    "TYPE_VECTOR4": 16,
+    "TYPE_QUATERNION": 16,
+    "TYPE_FLOAT4": 16,
+    "TYPE_AABB": 32,
+    "TYPE_RANGE": 8,
+    "TYPE_RANGEF": 8,
+    "TYPE_CUSTOM": 64,
+    "TYPE_HERMITECURVE": 64,
+}
+XFS_SCALAR_FORMATS_BY_TYPE_NAME = {
+    "TYPE_BOOL": 'B',
+    "TYPE_U8": 'B',
+    "TYPE_U16": 'H',
+    "TYPE_U32": 'I',
+    "TYPE_U64": 'Q',
+    "TYPE_S8": 'b',
+    "TYPE_S16": 'h',
+    "TYPE_S32": 'i',
+    "TYPE_S64": 'q',
+    "TYPE_F32": 'f',
+    "TYPE_F64": 'd',
+}
+
+
+def _get_xfs_property_type_info(app_id):
+    try:
+        property_types = XFS_PROPERTY_TYPES_BY_APP_ID[app_id.lower()]
+    except (AttributeError, KeyError) as error:
+        raise ValueError(f'Unsupported XFS app id {app_id!r}') from error
+
+    def to_ids(type_names):
+        return {
+            property_types[type_name]: value
+            for type_name, value in type_names.items()
+            if type_name in property_types
+        }
+
+    return {
+        'property_types': property_types,
+        'reverse_property_types': {
+            type_id: type_name for type_name, type_id in property_types.items()
+        },
+        'vector_property_types': frozenset(
+            property_types[name] for name in XFS_VECTOR_PROPERTY_TYPE_NAMES
+        ),
+        'scalar_readers': to_ids(XFS_SCALAR_READERS_BY_TYPE_NAME),
+        'scalar_sizes': to_ids(XFS_SCALAR_SIZES_BY_TYPE_NAME),
+        'property_sizes': {
+            **to_ids(XFS_PROPERTY_SIZES_BY_TYPE_NAME),
+            int(Xfs.PropertyType.resource): 4,
+        },
+        'scalar_formats': to_ids(XFS_SCALAR_FORMATS_BY_TYPE_NAME),
+    }
 
 
 def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
@@ -699,7 +813,7 @@ def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.type
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
-    xml = from_xfs(xfs, extension)
+    xml = from_xfs(xfs, extension, app_id)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
@@ -723,7 +837,7 @@ def export_xfs(bl_obj):
     if xml_text is None:
         raise ValueError(f'{extension.upper()} XML text "{xml_name}" is missing')
 
-    xfs_bytes = to_xfs(ET.fromstring(xml_text.as_string()))
+    xfs_bytes = to_xfs(ET.fromstring(xml_text.as_string()), app_id)
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=xfs_bytes)]
 
 
@@ -737,10 +851,14 @@ for xfs_extension in XFS_EXTENSIONS:
 
 
 # XFS XML conversion helpers.
-def from_xfs(xml, extension):
+def from_xfs(xml, extension, app_id):
+    property_type_info = _get_xfs_property_type_info(app_id)
+    property_types = property_type_info['property_types']
+    reverse_property_types = property_type_info['reverse_property_types']
     root = ET.Element(
         'root',
         attrib={
+            'app_id': app_id,
             'extension': extension,
             'version_major': str(xml.header.version_major),
             'version_minor': str(xml.header.version_minor),
@@ -765,14 +883,19 @@ def from_xfs(xml, extension):
             prop = property_values.property
             prop_type = int(prop.type)
             prop_attrib = {
-                'type': RV_MtPropertyType.get(prop_type, f'TYPE_UNKNOWN_{prop_type}'),
+                'type': reverse_property_types.get(
+                    prop_type, f'TYPE_UNKNOWN_{prop_type}'
+                ),
                 'name': prop.name,
                 'size': str(prop.size),
                 'flags': str(prop.flags),
                 'reserved': prop.reserved.hex(),
             }
 
-            if prop_type in (1, 2):
+            if prop_type in (
+                property_types['TYPE_CLASS'],
+                property_types['TYPE_CLASSREF'],
+            ):
                 prop_xml = ET.SubElement(class_xml, 'classref', attrib=prop_attrib)
                 for value in property_values.values:
                     if value.is_null:
@@ -806,7 +929,7 @@ def from_xfs(xml, extension):
                                 'reference_index': str(value.index),
                             },
                         )
-            elif prop_type == int(Xfs.PropertyType.string):
+            elif prop_type == property_types['TYPE_STRING']:
                 prop_xml = ET.SubElement(class_xml, 'string', attrib=prop_attrib)
                 for value in property_values.values:
                     ET.SubElement(prop_xml, 'item', attrib={'val': value.value})
@@ -815,7 +938,7 @@ def from_xfs(xml, extension):
                 for value in property_values.values:
                     ET.SubElement(prop_xml, 'item', attrib={'val': value.class_name})
                     ET.SubElement(prop_xml, 'item', attrib={'val': value.path})
-            elif prop_type in mt.type_to_class:
+            elif prop_type in property_type_info['vector_property_types']:
                 prop_xml = ET.SubElement(class_xml, 'vector', attrib=prop_attrib)
                 for value in property_values.values:
                     vec_xml = ET.SubElement(prop_xml, 'vec')
@@ -829,7 +952,7 @@ def from_xfs(xml, extension):
                         ET.SubElement(vec_xml, 'item', attrib={'val': str(component)})
             else:
                 prop_xml = ET.SubElement(class_xml, 'scalar', attrib=prop_attrib)
-                scalar_reader = mt.scalar_type_map.get(prop_type)
+                scalar_reader = property_type_info['scalar_readers'].get(prop_type)
                 for value in property_values.values:
                     if scalar_reader is None:
                         scalar_value = value.value.hex()
@@ -877,23 +1000,16 @@ def from_xfs(xml, extension):
 class XfsXmlSerializer:
     """Build an XFS binary from its editable XML representation."""
 
-    # XFS property widths not already covered by mt.scalar_bytes_num.
-    # SDL has a separate stride table because its values use different padding.
-    XFS_PROPERTY_SIZES = {
-        1: 4, 2: 4, 14: 4, 15: 4,
-        16: 8, 18: 16, 19: 64, 20: 16, 21: 16, 22: 16,
-        36: 16, 47: 32, 54: 8, 55: 8, 57: 64, 58: 4,
-    }
-    # struct types, because kaitain can't conver the serialization
-    SCALAR_FORMATS = {
-        3: 'B', 4: 'B', 5: 'H', 6: 'I', 7: 'Q',
-        8: 'b', 9: 'h', 10: 'i', 11: 'q', 12: 'f', 13: 'd',
-    }
-
-    def __init__(self, xml):
+    def __init__(self, xml, app_id=None):
         self.xml = xml.getroot() if isinstance(xml, ET.ElementTree) else xml
         if self.xml.tag != 'root':
             raise ValueError('XFS XML root must be <root>')
+        self.app_id = (app_id or self.xml.attrib.get('app_id') or '').lower()
+        if not self.app_id:
+            raise ValueError('XFS app_id is required to select property type IDs')
+        self.xml.set('app_id', self.app_id)
+        self.property_type_info = _get_xfs_property_type_info(self.app_id)
+        self.property_types = self.property_type_info['property_types']
 
         root_classes = [child for child in self.xml if child.tag == 'class']
         if len(root_classes) != 1:
@@ -974,7 +1090,7 @@ class XfsXmlSerializer:
         if type_name is None and old_prop is not None:
             return old_prop['type_id']
         try:
-            return int(MtPropertyType[type_name])
+            return int(self.property_types[type_name])
         except (KeyError, TypeError):
             if type_name:
                 try:
@@ -996,10 +1112,13 @@ class XfsXmlSerializer:
         elif old_prop is not None:
             size = old_prop['size']
         else:
-            size = self.XFS_PROPERTY_SIZES.get(
-                type_id, mt.scalar_bytes_num.get(type_id)
+            size = self.property_type_info['property_sizes'].get(
+                type_id, self.property_type_info['scalar_sizes'].get(type_id)
             )
-            if size is None and type_id in mt.type_to_class:
+            if (
+                size is None
+                and type_id in self.property_type_info['vector_property_types']
+            ):
                 vectors = prop_xml.findall('vec')
                 size = len(vectors[0].findall('item')) * 4 if vectors else None
             if size is None:
@@ -1097,10 +1216,7 @@ class XfsXmlSerializer:
 
         for prop_xml in property_nodes:
             for value_xml in prop_xml.findall('class'):
-                if (
-                    value_xml.attrib.get('name') != 'null'
-                    and 'reference_index' not in value_xml.attrib
-                ):
+                if (value_xml.attrib.get('name') != 'null' and 'reference_index' not in value_xml.attrib):
                     self._collect_inline_classes(value_xml)
 
     def _prepare_class_definitions(self):
@@ -1158,8 +1274,8 @@ class XfsXmlSerializer:
         class_name = class_xml.attrib.get('name', '')
         if class_name == 'null' or class_xml.attrib.get('reference_kind') == 'null':
             return (
-                self._pack_uint(0xFFFE, 16, 'null-reference tag')
-                + self._pack_uint(0, 16, 'null-reference index')
+                self._pack_uint(0xFFFE, 16, 'null-reference tag') +
+                self._pack_uint(0, 16, 'null-reference index')
             )
 
         class_index = self._node_class_index(class_xml)
@@ -1188,10 +1304,9 @@ class XfsXmlSerializer:
         body = self._encode_body(class_xml, class_index)
         size = len(body) + 4
         return (
-            self._pack_uint(class_index * 2 + 1, 16, 'inline-reference tag')
-            + self._pack_uint(object_index, 16, 'inline-reference index')
-            + self._pack_uint(size, 32, 'inline-reference size')
-            + body
+            self._pack_uint(class_index * 2 + 1, 16, 'inline-reference tag') +
+            self._pack_uint(object_index, 16, 'inline-reference index') +
+            self._pack_uint(size, 32, 'inline-reference size') + body
         )
 
     def _encode_reference_values(self, prop_xml):
@@ -1247,7 +1362,7 @@ class XfsXmlSerializer:
         type_id = prop_def['type_id']
         values = prop_xml.findall('item')
         output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
-        value_format = self.SCALAR_FORMATS.get(type_id)
+        value_format = self.property_type_info['scalar_formats'].get(type_id)
         for value_xml in values:
             value_text = value_xml.attrib['val']
             if value_format is None:
@@ -1265,7 +1380,10 @@ class XfsXmlSerializer:
             else:
                 scalar_value = (
                     float(value_text)
-                    if type_id in (12, 13)
+                    if type_id in (
+                        self.property_types["TYPE_F32"],
+                        self.property_types["TYPE_F64"],
+                    )
                     else self._parse_int(value_text)
                 )
                 try:
@@ -1285,13 +1403,16 @@ class XfsXmlSerializer:
 
     def _encode_property_values(self, prop_xml, prop_def):
         type_id = prop_def['type_id']
-        if type_id in (1, 2):
+        if type_id in (
+            self.property_types["TYPE_CLASS"],
+            self.property_types["TYPE_CLASSREF"],
+        ):
             return self._encode_reference_values(prop_xml)
-        if type_id == int(Xfs.PropertyType.string):
+        if type_id == self.property_types["TYPE_STRING"]:
             return self._encode_string_values(prop_xml)
         if type_id == int(Xfs.PropertyType.resource):
             return self._encode_resource_values(prop_xml, prop_def)
-        if type_id in mt.type_to_class:
+        if type_id in self.property_type_info['vector_property_types']:
             return self._encode_vector_values(prop_xml, prop_def)
         return self._encode_scalar_values(prop_xml, prop_def)
 
@@ -1317,9 +1438,8 @@ class XfsXmlSerializer:
 
     def _encode_data_section(self, root_body):
         return (
-            self._pack_uint(1, 32, 'XFS root count')
-            + self._pack_uint(len(root_body) + 4, 32, 'XFS data-section size')
-            + root_body
+            self._pack_uint(1, 32, 'XFS root count') +
+            self._pack_uint(len(root_body) + 4, 32, 'XFS data-section size') + root_body
         )
 
     def _build_class_table(self):
@@ -1380,11 +1500,11 @@ class XfsXmlSerializer:
 
         offset_data = offsets_size + class_defs_size + name_table_size
         return (
-            b'XFS\0'
-            + self._pack_uint(version_major, 16, 'XFS major version')
-            + self._pack_uint(version_minor, 16, 'XFS minor version')
-            + self._pack_uint(self.class_count, 32, 'XFS class count')
-            + self._pack_uint(offset_data, 32, 'XFS data offset')
+            b'XFS\0' +
+            self._pack_uint(version_major, 16, 'XFS major version') +
+            self._pack_uint(version_minor, 16, 'XFS minor version') +
+            self._pack_uint(self.class_count, 32, 'XFS class count') +
+            self._pack_uint(offset_data, 32, 'XFS data offset')
         )
 
     def serialize(self):
@@ -1403,6 +1523,6 @@ class XfsXmlSerializer:
         return header + class_def_offsets + class_defs_data + name_table + data_section
 
 
-def to_xfs(xml):
+def to_xfs(xml, app_id=None):
     """Serialize XFS XML using the class-definition/data-section schema."""
-    return XfsXmlSerializer(xml).serialize()
+    return XfsXmlSerializer(xml, app_id).serialize()

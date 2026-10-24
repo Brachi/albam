@@ -20,8 +20,7 @@ with open(XFS_SERIALIZATION_DATASET_PATH) as f:
 
 def pytest_generate_tests(metafunc):
     if (
-        "local_app_id" in metafunc.fixturenames
-        and "local_xfs_path_hash" in metafunc.fixturenames
+        "local_app_id" in metafunc.fixturenames and "local_xfs_path_hash" in metafunc.fixturenames
     ):
         argnames = ("local_app_id", "local_xfs_path_hash")
         argvalues = [
@@ -54,6 +53,7 @@ def test_dataset_hashes_are_in_catalog():
 @pytest.fixture(scope="session")
 def xfs_xml_roundtrip(
     game_fs_root,
+    local_app_id,
     local_xfs_path_hash,
 ):
     path = resolve_hashes(game_fs_root, {local_xfs_path_hash})[
@@ -63,11 +63,11 @@ def xfs_xml_roundtrip(
     source = Xfs.from_bytes(game_fs_root.readbytes(path))
     source._read()
 
-    source_xml = from_xfs(source, extension)
-    exported_bytes = to_xfs(source_xml)
+    source_xml = from_xfs(source, extension, local_app_id)
+    exported_bytes = to_xfs(source_xml, local_app_id)
     exported = Xfs.from_bytes(exported_bytes)
     exported._read()
-    exported_xml = from_xfs(exported, extension)
+    exported_xml = from_xfs(exported, extension, local_app_id)
     return source_xml, exported_xml, source, exported
 
 
