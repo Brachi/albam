@@ -117,26 +117,27 @@ def test_export_faces(nav_imported_local, nav_exported_local):
 
 
 def test_export_grid_header(nav_imported_local, nav_exported_local):
-    sgridh = nav_imported_local
-    dgridh = nav_exported_local
-    sgridh.bbox.padding_00 == dgridh.bbox.padding_00
-    sgridh.bbox.lower.x == pytest.approx(dgridh.bbox.lower.x, rel=0.001)
-    sgridh.bbox.lower.y == pytest.approx(dgridh.bbox.lower.y, rel=0.001)
-    sgridh.bbox.lower.z == pytest.approx(dgridh.bbox.lower.z, rel=0.001)
-    sgridh.bbox.padding_01 == dgridh.bbox.padding_01
-    sgridh.bbox.upper.x == pytest.approx(dgridh.bbox.upper.x, rel=0.001)
-    sgridh.bbox.upper.y == pytest.approx(dgridh.bbox.upper.y, rel=0.001)
-    sgridh.bbox.upper.z == pytest.approx(dgridh.bbox.upper.z, rel=0.001)
-    sgridh.bbox.padding_02 == dgridh.bbox.padding_02
-    sgridh.footer_indent == dgridh.footer_indent
-    sgridh.footer_padding = dgridh.footer_padding
+    src_nav = nav_imported_local
+    dst_nav = nav_exported_local
+    src_node_infos = src_nav.node_infos
+    dst_node_infos = dst_nav.node_infos
+    for src_ninfo, dst_ninfo in zip(src_node_infos, dst_node_infos):
+        assert src_ninfo.node_offset == dst_ninfo.node_offset
+        assert src_ninfo.lower.x == pytest.approx(dst_ninfo.lower.x, rel=0.001)
+        assert src_ninfo.lower.y == pytest.approx(dst_ninfo.lower.y, rel=0.001)
+        assert src_ninfo.lower.z == pytest.approx(dst_ninfo.lower.z, rel=0.001)
+        assert src_ninfo.upper.x == pytest.approx(dst_ninfo.upper.x, rel=0.001)
+        assert src_ninfo.upper.y == pytest.approx(dst_ninfo.upper.y, rel=0.001)
+        assert src_ninfo.upper.z == pytest.approx(dst_ninfo.upper.z, rel=0.001)
+    assert src_nav.footer_tag == dst_nav.footer_tag
+    assert src_nav.num_grid_nodes == dst_nav.num_grid_nodes
 
 
 def test_export_grid(nav_imported_local, nav_exported_local):
     sgrid = nav_imported_local.lookup_grid
     dgrid = nav_exported_local.lookup_grid
     for scell, dcell in zip(sgrid, dgrid):
-        scell.face_count = dcell.face_count
+        scell.num_faces = dcell.num_faces
         sgfaces = scell.faces
         dgfaces = dcell.faces
         sface_idxs = set()

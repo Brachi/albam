@@ -227,6 +227,7 @@ def _read_plain_pack(pack_path):
     Named the same way its entries are numbered elsewhere (see
     albam/engines/cie/fs.py), so a texture resolves by index either way.
     """
+    from .fs import pack_entry_extension
     from .structs.pack import Pack
 
     with open(pack_path, "rb") as f:
@@ -236,7 +237,7 @@ def _read_plain_pack(pack_path):
     stem = os.path.basename(pack_path).split(".")[0]
     textures = {}
     for index, entry in enumerate(pack.file_entries):
-        extension = "dds" if entry.data.is_dds else "tga"
+        extension = pack_entry_extension(entry)
         textures[index] = (f"{stem}_{index:03d}.{extension}", entry.data.raw_data)
     return textures
 
