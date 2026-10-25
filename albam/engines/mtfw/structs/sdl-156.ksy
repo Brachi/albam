@@ -99,7 +99,7 @@ types:
   timing_frame:
     seq:
       - {id: frame, type: b24}
-      - {id: type, type: b8}
+      - {id: type, type: b8} #0 = CONSTANT, 1 = OFFSET, 2 = TRIGGER, 3 = LINEAR, 4 = OFFSET_F, 5 = HERMITE.
   
   classref: 
     seq:

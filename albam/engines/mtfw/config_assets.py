@@ -11,10 +11,8 @@ from ...vfs import VirtualFileData, VirtualFile
 from ...lib.kaitai_utils import check_recursive
 from ...lib.mt_classes import (
     DTI_HASHES,
-    MtPropType,
-    MtPropTypeRE5,
-    RV_DTI_HASHES,
-    RV_MTPROPERTY_RE5,
+    DTI_REF_HASHES_RE5,
+    MT_PROP_TYPES_RE5,
 )
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
@@ -37,7 +35,22 @@ TRACK_TYPE = {
     "TYPE_MATRIX": 14,
 }
 
+RV_DTI_HASHES = {v: k for k, v in DTI_HASHES.items()}
+RV_DTI_REF_HASHES_RE5 = {v: k for k, v in DTI_REF_HASHES_RE5.items()}
 RV_TRACK_TYPE = {v: k for k, v in TRACK_TYPE.items()}
+RV_MT_PROP_TYPES_RE5 = {v: k for k, v in MT_PROP_TYPES_RE5.items()}
+
+SDL_TIMING_FRAME_TYPE = {
+    "CONSTANT": 0,
+    "OFFSET": 1,
+    "TRIGGER": 2,
+    "LINEAR": 3,
+    "OFFSET_F": 4,
+    "HERMITE": 5,
+}
+RV_SDL_TIMING_FRAME_TYPE = {
+    value: name for name, value in SDL_TIMING_FRAME_TYPE.items()
+}
 SDL_ROOT_TRACK_TYPES = {
     TRACK_TYPE["TYPE_ROOT"],
     TRACK_TYPE["TYPE_UNIT"],
@@ -119,7 +132,7 @@ SDL_DATA_STRIDE = {
 
 
 def _sdl_data_struct_size(prop_type):
-    prop_type_name = RV_MTPROPERTY_RE5.get(prop_type)
+    prop_type_name = RV_MT_PROP_TYPES_RE5.get(prop_type)
     return SDL_DATA_STRIDE.get(prop_type_name)
 
 
@@ -145,7 +158,7 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
-    xml = _sdl_to_xml(sdl)
+    xml = sdl_to_xml(sdl)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
@@ -157,7 +170,14 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     return bl_object
 
 
-def _sdl_to_xml(sdl):
+def _dti_ref_to_value(track):
+    dti_ref = getattr(track, "dti_ref", 0)
+    if track.track_type in (2, 3):
+        dti_ref = DTI_REF_HASHES_RE5.get(dti_ref, dti_ref)
+    return str(dti_ref)
+
+
+def sdl_to_xml(sdl):
     root_xml = ET.Element("sdl")
     header_xml = ET.SubElement(root_xml, "header")
 
@@ -178,7 +198,7 @@ def _sdl_to_xml(sdl):
             "name": track.name,
             "index": str(track_id),
             "prop_type": _sdl_prop_type_name(getattr(track, "prop_type", 0)),
-            "dti_ref": str(getattr(track, "dti_ref", 0)),
+            "dti_ref": _dti_ref_to_value(track),
         }
         if track.track_type in SDL_MOVE_LINE_TRACK_TYPES:
             track_attributes["move_line"] = str(track.parent)
@@ -193,10 +213,12 @@ def _sdl_to_xml(sdl):
                 timing_frame = timing_frames[frame_id]
                 item_xml = ET.SubElement(
                     data_xml,
-                    RV_MTPROPERTY_RE5.get(track.prop_type, "TYPE_UNKNOWN"),
+                    RV_MT_PROP_TYPES_RE5.get(track.prop_type, "TYPE_UNKNOWN"),
                     {
                         "frame": str(timing_frame.frame),
-                        "type": str(timing_frame.type),
+                        "type": RV_SDL_TIMING_FRAME_TYPE.get(
+                            timing_frame.type, str(timing_frame.type)
+                        ),
                     },
                 )
                 if frame_id >= len(data):
@@ -249,7 +271,7 @@ def export_sdl(bl_obj):
     if xml_text is None:
         raise ValueError(f'SDL XML text "{xml_name}" is missing')
 
-    sdl_bytes = _xml_to_sdl_bytes(ET.fromstring(xml_text.as_string()))
+    sdl_bytes = xml_to_sdl_bytes(ET.fromstring(xml_text.as_string()))
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=sdl_bytes)]
 
 
@@ -266,6 +288,28 @@ def _read_xml_int(element, name, default=None):
     if isinstance(value, str) and value.lower() in ("true", "false"):
         return int(value.lower() == "true")
     return int(value, 0)
+
+
+def _read_sdl_timing_frame_type(element):
+    value = element.get("type")
+    if value is None:
+        child = element.find("type")
+        value = child.text if child is not None else None
+    if value is None:
+        return SDL_TIMING_FRAME_TYPE["CONSTANT"]
+
+    value_text = str(value).strip()
+    type_name = value_text.upper()
+    if type_name in SDL_TIMING_FRAME_TYPE:
+        return SDL_TIMING_FRAME_TYPE[type_name]
+    try:
+        return int(value_text, 0)
+    except ValueError as error:
+        valid_names = ", ".join(SDL_TIMING_FRAME_TYPE)
+        raise ValueError(
+            f'Unknown SDL timing frame type {value!r} on <{element.tag}>; '
+            f'expected one of {valid_names} or a numeric value'
+        ) from error
 
 
 def _read_xml_value(item, field="val"):
@@ -304,16 +348,21 @@ def _sdl_value_to_int(value):
 
 
 def _sdl_prop_type_name(prop_type):
-    return RV_MTPROPERTY_RE5.get(prop_type, str(prop_type))
+    return RV_MT_PROP_TYPES_RE5.get(prop_type, str(prop_type))
 
 
 def _sdl_prop_type_value(value):
-    if value in MtPropTypeRE5:
-        return MtPropTypeRE5[value]
+    if value in MT_PROP_TYPES_RE5:
+        return MT_PROP_TYPES_RE5[value]
     return _sdl_value_to_int(value)
 
 
 def _sdl_dti_value(value):
+    # RE5 SDL export writes the readable name from DTI_REF_HASHES_RE5; map it
+    # back to the binary ref before trying the older/general DTI names.
+    dti = RV_DTI_REF_HASHES_RE5.get(value)
+    if dti is not None:
+        return dti
     dti = DTI_HASHES.get(value)
     return dti if dti is not None else _sdl_value_to_int(value)
 
@@ -484,7 +533,7 @@ def _parse_sdl_track_entry(
         prop_type = next(
             (
                 value
-                for value, name in RV_MTPROPERTY_RE5.items()
+                for value, name in RV_MT_PROP_TYPES_RE5.items()
                 if data_entry and name == data_entry[0].tag
             ),
             0,
@@ -492,7 +541,7 @@ def _parse_sdl_track_entry(
     else:
         prop_type = _sdl_prop_type_value(prop_type_attr)
     if data_entry and any(
-        item.tag != RV_MTPROPERTY_RE5.get(prop_type) for item in data_entry
+        item.tag != RV_MT_PROP_TYPES_RE5.get(prop_type) for item in data_entry
     ):
         raise ValueError(
             f"Inconsistent property type on SDL track {element.get('name', '')!r}"
@@ -625,7 +674,7 @@ def _write_sdl_bytes(header_values, tracks, track_data, layout):
         data_values = []
         for item_index, item in enumerate(data_entry):
             frame = _read_xml_int(item, "frame", 0)
-            frame_type = _read_xml_int(item, "type", 0)
+            frame_type = _read_sdl_timing_frame_type(item)
             if not 0 <= frame <= 0xFFFFFF or not 0 <= frame_type <= 0xFF:
                 raise ValueError("SDL timing frame/type is outside its binary range")
             timing = Sdl156.TimingFrame(stream, dst_track, sdl)
@@ -670,7 +719,7 @@ def _write_sdl_bytes(header_values, tracks, track_data, layout):
     return stream.to_byte_array()
 
 
-def _xml_to_sdl_bytes(root_xml):
+def xml_to_sdl_bytes(root_xml):
     header_values, tracks_xml = _parse_sdl_xml_document(root_xml)
     track_elements, track_index_by_element = _collect_sdl_track_elements(tracks_xml)
     tracks, track_data = _parse_sdl_track_entries(
@@ -686,8 +735,8 @@ XFS_EXTENSIONS = (
 )
 XFS_EXTENSION_VERSIONS = {"fsm": 1, "lot": 4, "sce": 11, "lnk": 14}
 XFS_PROPERTY_TYPES_BY_APP_ID = {
-    "dmc4": MtPropType,
-    "re5": MtPropTypeRE5,
+    "dmc4": MT_PROP_TYPES_RE5,
+    "re5": MT_PROP_TYPES_RE5,
 }
 XFS_VECTOR_PROPERTY_TYPE_NAMES = frozenset({
     "TYPE_COLOR",
