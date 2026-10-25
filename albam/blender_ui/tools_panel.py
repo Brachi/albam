@@ -90,6 +90,37 @@ def get_active_face_paint_mode(context):
     return context.scene.albam.tools_settings.face_paint_mode
 
 
+@blender_registry.register_blender_type
+class MergeVGItem(bpy.types.PropertyGroup):
+    vertex_group_index: bpy.props.IntProperty()
+    vertex_group_name: bpy.props.StringProperty()
+    selected: bpy.props.BoolProperty()
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_MergeVertexGroups(bpy.types.UIList):
+    bl_idname = "ALBAM_UL_MergeVertexGroups"
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.prop(item, "selected", text="")
+        row.label(text=item.vertex_group_name)
+
+    def filter_items(self, context, data, propname):
+        items = getattr(data, propname)
+        if self.filter_name:
+            flags = bpy.types.UI_UL_list.filter_items_by_name(
+                self.filter_name,
+                self.bitflag_filter_item,
+                items,
+                "vertex_group_name",
+                reverse=self.use_filter_sort_reverse,
+            )
+        else:
+            flags = []
+        return flags, []
+
+
 @blender_registry.register_blender_prop_albam(name="meshes")
 class AlbamMeshes(bpy.types.PropertyGroup):
     all_meshes: bpy.props.PointerProperty(type=bpy.types.Object, poll=mesh_filter)
@@ -137,7 +168,6 @@ class ToolsSettings(bpy.types.PropertyGroup):
         update=face_preset_update
     )
     face_preset: face_preset_enum
-    overwrite_tex_path: bpy.props.BoolProperty(default=False)
     lm_resolution_enum = bpy.props.EnumProperty(
         name="Lightmap Resolution",
         description="Set the side of the baked lightmap",
@@ -377,6 +407,69 @@ class ALBAM_OT_MergeVertexGroups(bpy.types.Operator):
         albam_settings = bpy.context.scene.albam.tools_settings
         merge_vgroups(albam_settings.vg_a, albam_settings.vg_b)
         albam_settings.vg_b = ""
+        return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_BatchMergeVertexGroups(bpy.types.Operator):
+    bl_idname = "albam.batch_vg_merge"
+    bl_label = "Batch Merge Vertex Groups"
+    bl_options = {'UNDO'}
+    vertex_groups: bpy.props.CollectionProperty(type=MergeVGItem)
+    active_index: bpy.props.IntProperty(default=0)
+
+    @classmethod
+    def poll(cls, context):
+        bl_ob = context.object
+        if bl_ob is None or bl_ob.type != 'MESH':
+            return False
+        albam_settings = bpy.context.scene.albam.tools_settings
+        if albam_settings.vg_a == "":
+            return False
+        return True
+
+    def invoke(self, context, event):
+        bl_ob = context.object
+        albam_settings = bpy.context.scene.albam.tools_settings
+        group_a = albam_settings.vg_a
+        group_b = albam_settings.vg_b
+        self.vertex_groups.clear()
+        for vg in bl_ob.vertex_groups:
+            if vg.name == group_a:
+                continue
+            item = self.vertex_groups.add()
+            item.vertex_group_index = vg.index
+            item.vertex_group_name = vg.name
+            item.selected = False
+            if vg.name == group_b:
+                item.selected = True
+
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def draw(self, context):
+        albam_settings = bpy.context.scene.albam.tools_settings
+        layout = self.layout
+        layout.label(text=f"Merge selected groups to {albam_settings.vg_a}")
+        layout.template_list(
+            "ALBAM_UL_MergeVertexGroups",
+            "",
+            self,
+            "vertex_groups",
+            self,
+            "active_index",
+            rows=8,
+            maxrows=8,
+        )
+
+    def execute(self, context):
+        vg_a = context.scene.albam.tools_settings.vg_a
+        selected_vgroups = [item.vertex_group_name for item in self.vertex_groups if item.selected]
+        if len(selected_vgroups) < 1:
+            self.report({'WARNING'}, "Select at least one vertex groups")
+            return {'CANCELLED'}
+
+        batch_merge_vgroups(vg_a, selected_vgroups)
+        show_message_box(message=f"Merged {len(selected_vgroups)} vertex groups to {vg_a}")
         return {'FINISHED'}
 
 
@@ -795,7 +888,7 @@ class ALBAM_OT_BakeLighting(bpy.types.Operator):
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_face_paint_modal(bpy.types.Operator):
+class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
     """Modal operator for face painter"""
     bl_idname = "albam.material_paint_modal"
     bl_label = "Paint Material ID"
@@ -1208,6 +1301,7 @@ class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
             row = layout.row()
             row.prop_search(scn, "vg_b", context.active_object, "vertex_groups", text="Merge from")
         row.operator("albam.vg_merge")
+        row.operator("albam.batch_vg_merge", text="Batch merge vertex groups")
         if not obj:
             row = layout.row()
             row.label(text="No active object selected")
@@ -1417,6 +1511,16 @@ def merge_vgroups(vg_a, vg_b):
         ob.vertex_groups.remove(ob.vertex_groups[vg_a])
         ob.vertex_groups.remove(ob.vertex_groups[vg_b])
         vg_merged.name = vg_a
+
+
+def batch_merge_vgroups(vg_a, selected_vgs):
+    ob = bpy.context.active_object
+    if vg_a not in ob.vertex_groups:
+        return
+
+    for vg_b in selected_vgs:
+        if vg_b != vg_a and vg_b in ob.vertex_groups:
+            merge_vgroups(vg_a, vg_b)
 
 
 def paste_props(context_item):
