@@ -167,7 +167,7 @@ def AlbamCustomPropertiesFactory(kind: str):
         app_id = albam_asset.app_id
         return self.get_custom_properties_for_appid(app_id)
 
-    def get_custom_properties_for_appid(self, app_id):
+    def get_custom_properties_for_appid(self, app_id, asset_type=None):
         """
         class method to return the custom_properties
         associated with the app_id
@@ -175,14 +175,15 @@ def AlbamCustomPropertiesFactory(kind: str):
         property_dict = self.APPID_MAP[app_id]
         if _is_new_object_format(property_dict):
             # New format: app_id -> {asset_type -> {...}}
-            albam_asset = self.get_parent_albam_asset()
-            if albam_asset:
-                asset_type = albam_asset.asset_type
+            if asset_type is None:
+                albam_asset = self.get_parent_albam_asset()
+                if albam_asset:
+                    asset_type = albam_asset.asset_type
+            if asset_type is not None:
                 property_dict = property_dict.get(asset_type)
             else:
                 # Fallback: if no albam_asset, pick the first available asset_type
-                # This handles cases where custom properties are accessed on objects
-                # that don't have an albam_asset parent (e.g., during animation import)
+                # for legacy callers without an explicit asset type.
                 property_dict = next(iter(property_dict.values())) if property_dict else None
 
             if not property_dict:
@@ -238,7 +239,7 @@ def AlbamCustomPropertiesFactory(kind: str):
                 property_dict = next(iter(property_dict.values())) if property_dict else {}
         return property_dict.get("custom_props_asset_type")
 
-    def get_custom_properties_secondary_for_appid(self, app_id):
+    def get_custom_properties_secondary_for_appid(self, app_id, asset_type=None):
         # TODO: error handling
         try:
             property_names = self.APPID_MAP_SECONDARY[app_id]
@@ -248,14 +249,14 @@ def AlbamCustomPropertiesFactory(kind: str):
         # Check if this is the new object format (nested by asset_type)
         if property_names and isinstance(property_names, dict):
             # New format: app_id -> {asset_type -> [names...]}
-            albam_asset = self.get_parent_albam_asset()
-            if albam_asset:
-                # Use asset_type from albam_asset
-                asset_type = albam_asset.asset_type
+            if asset_type is None:
+                albam_asset = self.get_parent_albam_asset()
+                if albam_asset:
+                    asset_type = albam_asset.asset_type
+            if asset_type is not None:
                 property_names = property_names.get(asset_type, [])
             else:
-                # If no albam_asset, collect names from ALL asset_types
-                # This ensures we get all available secondary properties
+                # Preserve the legacy behavior for callers without an asset type.
                 all_names = []
                 for asset_type_names in property_names.values():
                     all_names.extend(asset_type_names)

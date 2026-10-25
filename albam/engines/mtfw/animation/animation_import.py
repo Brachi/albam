@@ -32,10 +32,17 @@ CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
+LMT_ASSET_TYPE = "ANIMATION"
 
 
 def _block_props(anim_object, app_id):
-    return anim_object.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return anim_object.albam_custom_properties.get_custom_properties_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
+
+
+def _block_secondary_props(anim_object, app_id):
+    return anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
 
 
 def set_block_index(anim_object, app_id, block_index):
@@ -71,15 +78,6 @@ def load_lmt(vfile, context):
     DEBUG_BLOCK = None
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
-    # Child objects resolve their custom properties through this asset root.
-    # Set its identity before creating them: the import operator normally does
-    # this only after load_lmt returns, which leaves the app_id's animation vs
-    # collision properties ambiguous while the LMT blocks are being populated.
-    asset = bl_object.albam_asset
-    asset.app_id = app_id
-    asset.relative_path = vfile.relative_path
-    asset.extension = vfile.extension
-    asset.asset_type = blender_registry.albam_asset_types[(app_id, vfile.extension)]
     # Recorded so export reads the armature this .lmt was actually imported
     # onto, rather than whichever one the import panel happens to point at
     # by the time export runs (#254).
@@ -109,8 +107,7 @@ def load_lmt(vfile, context):
         action.use_fake_user = True
         channels = get_action_channels(action, armature.name)
 
-        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "tracks"]
+        tracks = _block_secondary_props(anim_object, app_id)["tracks"]
         chains = _find_chains(block.block_header.tracks, lmt_ver)
         # Workaround for cases when same bone index has more than 3 anim tracks
         last_usage = {}
@@ -211,28 +208,23 @@ def load_lmt(vfile, context):
         block_chains.append((channels, set(chains)))
 
         # building custom attributes of lmt metadata
-        custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
+        custom_properties = _block_props(anim_object, app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
-        anim_props = anim_object.albam_custom_properties
         if lmt_ver < 67:
-            col_events = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "col_events"]
+            col_events = _block_secondary_props(anim_object, app_id)["col_events"]
             col_events.copy_custom_properties_from(block.block_header.collision_events)
             for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
                 item = col_events.attributes.add()
                 item.copy_custom_properties_from(attribute)
 
-            motion_se = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "motion_se"]
+            motion_se = _block_secondary_props(anim_object, app_id)["motion_se"]
             motion_se.copy_custom_properties_from(block.block_header.motion_sound_effects)
             for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
                 item = motion_se.attributes.add()
                 item.copy_custom_properties_from(attribute)
         else:
-            seq_infos = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "sequence_infos"]
+            seq_infos = _block_secondary_props(anim_object, app_id)["sequence_infos"]
             # seq_info.copy_custom_properties_from(block.block_header.sequence_infos)
             for s_index, s_info in enumerate(block.block_header.sequence_infos):
                 item = seq_infos.sequence_info.add()
@@ -241,8 +233,7 @@ def load_lmt(vfile, context):
                     a_item = item.attributes.add()
                     a_item.copy_custom_properties_from(s_attr)
 
-            keyframe_infos = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "keyframe_infos"]
+            keyframe_infos = _block_secondary_props(anim_object, app_id)["keyframe_infos"]
             if len(block.block_header.key_infos) > 0:
                 for k_index, k_info in enumerate(block.block_header.key_infos):
                     item = keyframe_infos.keyframe_info.add()
