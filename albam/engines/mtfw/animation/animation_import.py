@@ -71,6 +71,15 @@ def load_lmt(vfile, context):
     DEBUG_BLOCK = None
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)
+    # Child objects resolve their custom properties through this asset root.
+    # Set its identity before creating them: the import operator normally does
+    # this only after load_lmt returns, which leaves the app_id's animation vs
+    # collision properties ambiguous while the LMT blocks are being populated.
+    asset = bl_object.albam_asset
+    asset.app_id = app_id
+    asset.relative_path = vfile.relative_path
+    asset.extension = vfile.extension
+    asset.asset_type = blender_registry.albam_asset_types[(app_id, vfile.extension)]
     # Recorded so export reads the armature this .lmt was actually imported
     # onto, rather than whichever one the import panel happens to point at
     # by the time export runs (#254).
