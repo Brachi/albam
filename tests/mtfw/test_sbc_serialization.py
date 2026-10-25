@@ -85,7 +85,7 @@ def test_export_header(sbc_imported_local, sbc_exported_local):
         assert sheader.version == dheader.version
         assert sheader.num_boxes == dheader.num_boxes
     elif sbc_version == 255:
-        assert sheader.unk_00 == dheader.unk_00
+        assert sheader.version == dheader.version
         assert sheader.num_stages == dheader.num_stages
         # assert sheader.num_pairs == dheader.num_pairs
     assert sheader.bounding_box.min[0] == pytest.approx(dheader.bounding_box.min[0], rel=0.001)
