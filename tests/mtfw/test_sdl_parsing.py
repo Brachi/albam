@@ -4,10 +4,13 @@ import os
 import pytest
 from albam.engines.mtfw.structs.sdl_156 import Sdl156
 from albam.engines.mtfw.config_assets import SDL_DATA_STRIDE
-from albam.lib.mt_classes import RV_MT_PROP_TYPES_RE5, DTI_REF_HASHES_RE5
-
+from albam.lib.mt_classes import (
+    MT_PROP_TYPES_RE5,
+    SDL_DTI_HASHES,
+)
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
+RV_MT_PROP_TYPES_RE5 = {v: k for k, v in MT_PROP_TYPES_RE5.items()}
 PROP_TYPES = [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 14, 15, 20, 21, 22, 24, 28, 34, 35, 36, 40, 55, 57, 58]
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
@@ -43,15 +46,13 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def parsed_sdl(game_fs_root, local_sdl_path_hash):
+def parsed_sdl(game_fs_root, local_app_id, local_sdl_path_hash):
     path = resolve_hashes(game_fs_root, {local_sdl_path_hash})[local_sdl_path_hash]
     sdl_bytes = game_fs_root.readbytes(path)
 
     parsed = Sdl156.from_bytes(sdl_bytes)
     parsed._read()
-    return {"parsed": parsed,
-            "path": path
-            }
+    return {"parsed": parsed, "path": path, "app_id": local_app_id}
 
 
 def test_parsed_sdl_version(parsed_sdl):
@@ -65,14 +66,24 @@ def test_parsed_sdl_type(parsed_sdl):
 
 
 def test_data_postion(parsed_sdl):
+    path = parsed_sdl["path"]
+    app_id = parsed_sdl["app_id"]
+    dti_hashes = SDL_DTI_HASHES[app_id]
     for i, track in enumerate(parsed_sdl["parsed"].tracks):
         if track.track_type in (2, 3):
-            assert track.dti_ref in DTI_REF_HASHES_RE5
+            assert track.dti_ref in dti_hashes
         if track.track_type > 5 and track.num_frames > 0 and track.ofs_data:
             assert track.ofs_data % 16 == 0, (
                 f"the data offset is not 16-byte aligned at track {i} "
                 f"in {parsed_sdl['path']}"
             )
+        if track.track_type == 11 and track.prop_type == 58 and track.num_frames > 0:
+            for j, res in enumerate(track.data):
+                if res.ref_ofs != 0:
+                    assert res.ref_dti in dti_hashes, (
+                        f"unknown DTI hash {res.ref_dti:#x} at track {i}, "
+                        f"resource {j}, file {path}, app_id {app_id}"
+                    )
 
 
 def test_sdl_data_block_boundaries_from_timing_frames(parsed_sdl):

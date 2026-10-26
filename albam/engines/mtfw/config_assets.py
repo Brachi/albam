@@ -10,8 +10,7 @@ from ...vfs import VirtualFileData, VirtualFile
 
 from ...lib.kaitai_utils import check_recursive
 from ...lib.mt_classes import (
-    DTI_HASHES,
-    DTI_REF_HASHES_RE5,
+    SDL_DTI_HASHES,
     MT_PROP_TYPES_RE5,
 )
 from .structs.xfs import Xfs
@@ -35,10 +34,30 @@ TRACK_TYPE = {
     "TYPE_MATRIX": 14,
 }
 
-RV_DTI_HASHES = {v: k for k, v in DTI_HASHES.items()}
-RV_DTI_REF_HASHES_RE5 = {v: k for k, v in DTI_REF_HASHES_RE5.items()}
+# SDL_DTI_HASHES stores each app's table as hash -> readable name. The reverse
+# tables are used when writing names from XML back into binary SDL/XFS files.
+RV_SDL_DTI_HASHES = {
+    app_id: {name: dti_hash for dti_hash, name in dti_hashes.items()}
+    for app_id, dti_hashes in SDL_DTI_HASHES.items()
+}
 RV_TRACK_TYPE = {v: k for k, v in TRACK_TYPE.items()}
 RV_MT_PROP_TYPES_RE5 = {v: k for k, v in MT_PROP_TYPES_RE5.items()}
+
+
+def _get_sdl_dti_hashes(app_id):
+    try:
+        return SDL_DTI_HASHES[app_id]
+    except KeyError:
+        supported_app_ids = ", ".join(sorted(SDL_DTI_HASHES))
+        raise ValueError(
+            f"No SDL DTI hash table for app_id {app_id!r}; "
+            f"supported app_ids: {supported_app_ids}"
+        ) from None
+
+
+def _sdl_dti_name(value, app_id):
+    return _get_sdl_dti_hashes(app_id).get(value, str(value))
+
 
 SDL_TIMING_FRAME_TYPE = {
     "CONSTANT": 0,
@@ -158,7 +177,7 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
-    xml = sdl_to_xml(sdl)
+    xml = sdl_to_xml(sdl, app_id)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
@@ -170,14 +189,15 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     return bl_object
 
 
-def _dti_ref_to_value(track):
+def _dti_ref_to_value(track, app_id):
     dti_ref = getattr(track, "dti_ref", 0)
     if track.track_type in (2, 3):
-        dti_ref = DTI_REF_HASHES_RE5.get(dti_ref, dti_ref)
+        dti_ref = _sdl_dti_name(dti_ref, app_id)
     return str(dti_ref)
 
 
-def sdl_to_xml(sdl):
+def sdl_to_xml(sdl, app_id):
+    _get_sdl_dti_hashes(app_id)
     root_xml = ET.Element("sdl")
     header_xml = ET.SubElement(root_xml, "header")
 
@@ -198,7 +218,7 @@ def sdl_to_xml(sdl):
             "name": track.name,
             "index": str(track_id),
             "prop_type": _sdl_prop_type_name(getattr(track, "prop_type", 0)),
-            "dti_ref": _dti_ref_to_value(track),
+            "dti_ref": _dti_ref_to_value(track, app_id),
         }
         if track.track_type in SDL_MOVE_LINE_TRACK_TYPES:
             track_attributes["move_line"] = str(track.parent)
@@ -238,7 +258,7 @@ def sdl_to_xml(sdl):
                     item_xml.set("ref_path", value.ref_path)
                     item_xml.set(
                         "ref_dti",
-                        RV_DTI_HASHES.get(value.ref_dti, str(value.ref_dti)),
+                        _sdl_dti_name(value.ref_dti, app_id),
                     )
                 elif track.prop_type == 14:
                     item_xml.set("string", value.string or "")
@@ -271,7 +291,7 @@ def export_sdl(bl_obj):
     if xml_text is None:
         raise ValueError(f'SDL XML text "{xml_name}" is missing')
 
-    sdl_bytes = xml_to_sdl_bytes(ET.fromstring(xml_text.as_string()))
+    sdl_bytes = xml_to_sdl_bytes(ET.fromstring(xml_text.as_string()), app_id)
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=sdl_bytes)]
 
 
@@ -357,13 +377,8 @@ def _sdl_prop_type_value(value):
     return _sdl_value_to_int(value)
 
 
-def _sdl_dti_value(value):
-    # RE5 SDL export writes the readable name from DTI_REF_HASHES_RE5; map it
-    # back to the binary ref before trying the older/general DTI names.
-    dti = RV_DTI_REF_HASHES_RE5.get(value)
-    if dti is not None:
-        return dti
-    dti = DTI_HASHES.get(value)
+def _sdl_dti_value(value, app_id):
+    dti = RV_SDL_DTI_HASHES[app_id].get(value)
     return dti if dti is not None else _sdl_value_to_int(value)
 
 
@@ -400,7 +415,7 @@ def _sdl_vector_data_value(prop_type, item, stream, sdl, track):
     return data_value
 
 
-def _sdl_resource_data_value(item, stream, sdl, track, value_offset):
+def _sdl_resource_data_value(item, stream, sdl, track, value_offset, app_id):
     data_value = Sdl156.Resource(stream, track, sdl)
     path = item.get("ref_path")
     dti = item.get("ref_dti")
@@ -408,12 +423,14 @@ def _sdl_resource_data_value(item, stream, sdl, track, value_offset):
         data_value.ref_ofs = 0
     else:
         data_value.ref_ofs = value_offset
-        data_value.ref_dti = _sdl_dti_value(dti or "0")
+        data_value.ref_dti = _sdl_dti_value(dti or "0", app_id)
         data_value.ref_path = path or ""
     return data_value
 
 
-def _get_sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
+def _get_sdl_data_value(
+    prop_type, item, stream, sdl, track, value_offset, app_id
+):
     if prop_type in SDL_VAL_TYPES:
         return _sdl_scalar_data_value(prop_type, item, stream, sdl, track)
     if prop_type == 14:
@@ -423,7 +440,9 @@ def _get_sdl_data_value(prop_type, item, stream, sdl, track, value_offset):
     if prop_type in SDL_VECTOR_CLASSES:
         return _sdl_vector_data_value(prop_type, item, stream, sdl, track)
     if prop_type == 58:
-        return _sdl_resource_data_value(item, stream, sdl, track, value_offset)
+        return _sdl_resource_data_value(
+            item, stream, sdl, track, value_offset, app_id
+        )
     raise ValueError(f"Unsupported SDL property type {prop_type}")
 
 
@@ -523,6 +542,7 @@ def _sdl_parent_from_xml(
 
 def _parse_sdl_track_entry(
     element, structural_parent, track_index, track_count, track_index_by_element,
+    app_id,
 ):
     track_type = TRACK_TYPE[element.tag]
     data_xml = element.find("data")
@@ -566,12 +586,12 @@ def _parse_sdl_track_entry(
         "count": len(data_entry),
         "parent": parent,
         "name": name,
-        "dti_ref": _sdl_dti_value(element.get("dti_ref", "0")),
+        "dti_ref": _sdl_dti_value(element.get("dti_ref", "0"), app_id),
     }
     return track, data_entry
 
 
-def _parse_sdl_track_entries(track_elements, track_index_by_element):
+def _parse_sdl_track_entries(track_elements, track_index_by_element, app_id):
     track_count = len(track_elements)
     tracks = []
     track_data = []
@@ -582,6 +602,7 @@ def _parse_sdl_track_entries(track_elements, track_index_by_element):
             track_index,
             track_count,
             track_index_by_element,
+            app_id,
         )
         tracks.append(track)
         track_data.append(data_entry)
@@ -643,7 +664,7 @@ def _calculate_sdl_layout(tracks, track_data):
     }
 
 
-def _write_sdl_bytes(header_values, tracks, track_data, layout):
+def _write_sdl_bytes(header_values, tracks, track_data, layout, app_id):
     stream = KaitaiStream(io.BytesIO(bytearray(layout["final_size"])))
     sdl = Sdl156(stream)
     header = Sdl156.BaseHeader(stream, sdl, sdl)
@@ -699,6 +720,7 @@ def _write_sdl_bytes(header_values, tracks, track_data, layout):
                         sdl,
                         dst_track,
                         value_offset,
+                        app_id,
                     )
                 )
             if track["prop_type"] == 14:
@@ -719,14 +741,15 @@ def _write_sdl_bytes(header_values, tracks, track_data, layout):
     return stream.to_byte_array()
 
 
-def xml_to_sdl_bytes(root_xml):
+def xml_to_sdl_bytes(root_xml, app_id):
+    _get_sdl_dti_hashes(app_id)
     header_values, tracks_xml = _parse_sdl_xml_document(root_xml)
     track_elements, track_index_by_element = _collect_sdl_track_elements(tracks_xml)
     tracks, track_data = _parse_sdl_track_entries(
-        track_elements, track_index_by_element
+        track_elements, track_index_by_element, app_id
     )
     layout = _calculate_sdl_layout(tracks, track_data)
-    return _write_sdl_bytes(header_values, tracks, track_data, layout)
+    return _write_sdl_bytes(header_values, tracks, track_data, layout, app_id)
 
 
 XFS_EXTENSIONS = (
@@ -901,6 +924,7 @@ for xfs_extension in XFS_EXTENSIONS:
 
 # XFS XML conversion helpers.
 def from_xfs(xml, extension, app_id):
+    dti_hashes = _get_sdl_dti_hashes(app_id)
     property_type_info = _get_xfs_property_type_info(app_id)
     property_types = property_type_info['property_types']
     reverse_property_types = property_type_info['reverse_property_types']
@@ -919,7 +943,7 @@ def from_xfs(xml, extension, app_id):
 
     def append_class(body, class_index, parent, object_index=None):
         class_def = xml.class_defs[class_index]
-        class_name = RV_DTI_HASHES.get(class_def.type_hash, str(hex(class_def.type_hash)))
+        class_name = dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
         class_attrib = {
             'name': class_name,
             'class_index': str(class_index),
@@ -965,7 +989,7 @@ def from_xfs(xml, extension, app_id):
                         )
                     else:
                         reference_class = xml.class_defs[value.class_index]
-                        reference_name = RV_DTI_HASHES.get(
+                        reference_name = dti_hashes.get(
                             reference_class.type_hash,
                             str(hex(reference_class.type_hash)),
                         )
@@ -1019,7 +1043,7 @@ def from_xfs(xml, extension, app_id):
     # tree, along with the metadata needed to rebuild the class table exactly.
     metadata_xml = ET.SubElement(root, '_xfs_metadata')
     for class_index, class_def in enumerate(xml.class_defs):
-        class_name = RV_DTI_HASHES.get(class_def.type_hash, str(hex(class_def.type_hash)))
+        class_name = dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
         class_xml = ET.SubElement(
             metadata_xml,
             'class_def',
@@ -1059,6 +1083,8 @@ class XfsXmlSerializer:
         self.xml.set('app_id', self.app_id)
         self.property_type_info = _get_xfs_property_type_info(self.app_id)
         self.property_types = self.property_type_info['property_types']
+        _get_sdl_dti_hashes(self.app_id)
+        self.dti_hashes_by_name = RV_SDL_DTI_HASHES[self.app_id]
 
         root_classes = [child for child in self.xml if child.tag == 'class']
         if len(root_classes) != 1:
@@ -1207,8 +1233,8 @@ class XfsXmlSerializer:
         }
 
     def _hash_for_class(self, class_name):
-        if class_name in DTI_HASHES:
-            return DTI_HASHES[class_name]
+        if class_name in self.dti_hashes_by_name:
+            return self.dti_hashes_by_name[class_name]
         try:
             return self._parse_int(class_name)
         except ValueError:
