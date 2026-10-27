@@ -417,32 +417,27 @@ def export_sbc(bl_obj):
 def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata, app_id):
     def tally(x):
         return sum(map(len, x))
-    # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
-    #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
+
     _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(quads), tally(tris),
                      tally(verts), parent_tree, tally(sbcs + [parent_tree]))
-    # header = buildHeader(headerData)
-    # cBVH = list(map(buildCollision,sbcs))
+    # Kaitai initializes repeated fields while parsing, but dst_sbc is a new
+    # write-only object here. pair_aabbs is checked even when its repeat count
+    # is zero (the exporter currently writes the non-grid layout).
+    if app_id in ("re0", "re1", "rev1", "rev2"):
+        dst_sbc.pair_aabbs = []
+
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
 
-    # cBVHCollision = buildCollision(parentTree)
     dst_sbc.bvh = _serialize_bvhc(dst_sbc, parent_tree)
 
-    # faceCollection = list(map(buildFaces, tris))
     dst_sbc.faces = build_faces(dst_sbc, tris)
 
-    # vertexCollection = list(map(buildVertices, verts))
     dst_sbc.vertices = build_vertices(dst_sbc, verts)
 
-    # collisionTypes = list(map(buildTypes, links))
     dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link, app_id) for link in links]
 
-    # pairCollection = list(map(buildPairs, quads))
     dst_sbc.pairs_collections = build_pairs(dst_sbc, quads)
-    # dst_sbc.pairs_collections = _serialize_pairs(dst_sbc, quads)
 
-    # infoCollection = buildInfo(
-    #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
     dst_sbc.sbc_info = _serialize_infos(dst_sbc, tris, verts, dst_sbc.collision_types,
                                         quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, mesh_metadata)
 
