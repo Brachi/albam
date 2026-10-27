@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
+- Tools: VF Guesser
 
 ### Fixed
 
