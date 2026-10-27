@@ -175,7 +175,7 @@ def load_sbc(file_item, context):
     sbc_objects = []
 
     if sbc_version == 255:
-        div_type = sbc.pace_div_type_triangle
+        div_type = sbc.header.space_div_type_triangle
         assert div_type == 0, f"Division type {div_type} is not supported yet"
         bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
@@ -1024,7 +1024,7 @@ class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     is_secondary=True, display_name="SBC Link", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21LinkCustomProperties(BaseSBCProperties):
-    unk_01: bpy.props.FloatProperty(name="Unknown 01", default=0.0, options=set())  # noqa: F821
+    attribute: bpy.props.IntProperty(name="Attribute", default=0, options=set())  # noqa: F821
     unk_02: bpy.props.IntProperty(name="Unknown 02", default=0, options=set())  # noqa: F821
     unk_03: bpy.props.IntProperty(name="Unknown 03", default=0, options=set())  # noqa: F821
     unk_04: bpy.props.IntVectorProperty(name="Unknown 04", size=3, default=(0, 0, 0),

@@ -170,4 +170,8 @@ def test_collision_type(sbc_imported_local, sbc_exported_local):
         scoltypes = sbc_imported_local.collision_types
         dcoltypes = sbc_exported_local.collision_types
         for stype, dtype in zip(scoltypes, dcoltypes):
-            stype.attribute == stype.attribute
+            stype.attribute == dtype.attribute
+            stype.unk_02 == dtype.unk_02
+            stype.unk_03 == dtype.unk_03
+            stype.unk_04 == dtype.unk_04
+            stype.jp_path == dtype.jp_path
