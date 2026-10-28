@@ -40,8 +40,9 @@ class LMT51AnimationCustomProperties(CustomPropsBase):
     # the block header: the header says nothing about its own position, and
     # position is what identifies a block. -1 means never recorded.
     block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    # num_tracks and num_frames are not stored: the first is len(tracks) and
+    # the second the action's manual frame range, both written at export.
+    # A .blend saved before #273 still holds num_frames - see _block_length.
     loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
@@ -73,8 +74,9 @@ class LMT67AnimationCustomProperties(CustomPropsBase):
     # the block header: the header says nothing about its own position, and
     # position is what identifies a block. -1 means never recorded.
     block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    # num_tracks and num_frames are not stored: the first is len(tracks) and
+    # the second the action's manual frame range, both written at export.
+    # A .blend saved before #273 still holds num_frames - see _block_length.
     loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
