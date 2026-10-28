@@ -4,7 +4,6 @@ Turning actions into tracks, then laying the whole file out - every offset in
 an .lmt header is absolute, so the sizes have to be known before a single byte
 is written, which is what the two _calculate_offsets passes are for.
 """
-import ast
 from io import BytesIO
 
 import bpy
@@ -19,6 +18,7 @@ from .animation_import import (
     ROOT_MOTION_BONE_ID,
     _create_bone_mapping,
     get_block_index,
+    get_track_keys,
 )
 from .keyframes import (
     APPID_VERSION_MAPPER,
@@ -26,7 +26,6 @@ from .keyframes import (
     BONE_TRACK_TYPES,
     BOUNDS_BUFF_TYPES,
     LMTKeyFrames,
-    USAGE,
 )
 
 
@@ -133,24 +132,33 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_stored, app_id):
+def _update_track_data(bl_obj, encoded_tracks, num_frames, app_id):
     custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_props.num_frames = num_frames
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
+    # joint_type and reference_data do not come out of an action, and these
+    # tracks are the only place they live, so they are read before clear()
+    # and carried over to the track that takes each one's place: the one with
+    # the same usage and key. Keys are taken by position on both sides, as
+    # the file itself does, so a chain's control bone ("<id>_1") still finds
+    # the track it came from and a second export agrees with the first.
+    stored = {
+        (item.usage, key): (item.joint_type, tuple(item.reference_data))
+        for item, key in zip(
+            tracks_collection,
+            get_track_keys((item.bone_index, item.usage) for item in tracks_collection))
+    }
+    bone_indices = [int(et.bone_index.split("_")[0]) for et in encoded_tracks]  # workaround for 254_ values
+    keys = get_track_keys((bone_index, et.usage) for bone_index, et in zip(bone_indices, encoded_tracks))
     tracks_collection.clear()
-    for et in encoded_tracks:
+    for et, bone_index, key in zip(encoded_tracks, bone_indices, keys):
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
         item.usage = et.usage
-        item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
-        item.joint_type = joint_types.get((USAGE[item.usage], str(et.bone_index)), 0)
+        item.bone_index = bone_index
+        item.joint_type, item.reference_data = stored.get((et.usage, key), (0, et.reference_data))
         item.weight = 1.0
-        ref_data = et.reference_data
-        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.bone_index)), None)
-        if ref_data_stored:  # and ref_data_stored != "[]":
-            ref_data = ast.literal_eval(ref_data_stored)
-        item.reference_data = ref_data
         item.raw_data = et.data
 
 
@@ -180,8 +188,6 @@ def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = {value: key for key, value in mapping.items()}
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
-        joint_types = {}
-        reference_data = {}
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
@@ -202,22 +208,6 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     num_bone_channels += 1
                     if mapping.get(bone_name, None) is None:
                         continue
-                    joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
-                    joint_types[(track_type, mapping.get(bone_name))] = joint_type
-
-                    # A chain's control bone is retargeted "<id>_1", but its
-                    # reference data was stored under the plain id the track
-                    # came from, so ask for it under that.
-                    rd_bone_id = mapping.get(bone_name)
-                    if get_chain_target(armature.pose.bones[bone_name], app_id):
-                        rd_bone_id = rd_bone_id.split("_")[0]
-                    elif bone_name == "IK_Foot.L":
-                        rd_bone_id = "23"
-                    elif bone_name == "IK_Foot.R":
-                        rd_bone_id = "19"
-                    ref_data = action.get(f"rd_{track_type}_{rd_bone_id}", None)
-                    if ref_data:
-                        reference_data[(track_type, rd_bone_id)] = ref_data
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
@@ -247,7 +237,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     "ofs_frame - check the armature this .lmt was imported onto against the "
                     "bones the action actually keys."
                 )
-            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
+            _update_track_data(bl_obj, track_attrs, num_frames, app_id)
 
 
 def _align(value, alignment):
