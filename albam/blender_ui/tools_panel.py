@@ -25,6 +25,115 @@ BONE_NAMES = {
 
 DEV_MODE = False
 WORKSPACE_TOOLS = []
+FACE_PAINTER_TOOL_ID = "albam.material_painter_tool"
+FACE_PAINTER_TIMER_INTERVAL = 0.1
+_FACE_PAINTER_SHADING_STATES = {}
+_FACE_PAINTER_BVH_CACHE = {}
+
+
+def _restore_face_painter_shading(state):
+    try:
+        state["space"].shading.type = state["shading_type"]
+    except (AttributeError, ReferenceError):
+        pass
+
+
+def _track_face_painter_area(area):
+    area_key = area.as_pointer()
+    state = _FACE_PAINTER_SHADING_STATES.get(area_key)
+    if state:
+        try:
+            if state["area"] == area:
+                return
+        except ReferenceError:
+            pass
+        _restore_face_painter_shading(state)
+
+    space = area.spaces.active
+    _FACE_PAINTER_SHADING_STATES[area_key] = {
+        "area": area,
+        "space": space,
+        "shading_type": space.shading.type,
+    }
+    space.shading.type = 'SOLID'
+
+
+def _get_face_painter_bvh(mesh_data, edit_mesh):
+    """Reuse the BVH while the tool is active and mesh geometry is unchanged."""
+    mesh_key = mesh_data.as_pointer()
+    cached_bvh = _FACE_PAINTER_BVH_CACHE.get(mesh_key)
+    if cached_bvh:
+        try:
+            if cached_bvh["mesh_data"] == mesh_data:
+                return cached_bvh["bvh"]
+        except ReferenceError:
+            pass
+
+    edit_mesh.faces.ensure_lookup_table()
+    bvh = BVHTree.FromBMesh(edit_mesh)
+    _FACE_PAINTER_BVH_CACHE[mesh_key] = {
+        "mesh_data": mesh_data,
+        "bvh": bvh,
+    }
+    return bvh
+
+
+def _face_painter_lifecycle_timer():
+    active_area_keys = set()
+    window_manager = bpy.context.window_manager
+    if window_manager:
+        for window in window_manager.windows:
+            try:
+                active_object = window.view_layer.objects.active
+                if (
+                    not active_object or
+                    active_object.type != 'MESH' or
+                    active_object.mode != 'EDIT'
+                ):
+                    continue
+
+                tool = window.workspace.tools.from_space_view3d_mode(
+                    'EDIT_MESH',
+                    create=False,
+                )
+                if not tool or tool.idname != FACE_PAINTER_TOOL_ID:
+                    continue
+
+                for area in window.screen.areas:
+                    if area.type == 'VIEW_3D':
+                        active_area_keys.add(area.as_pointer())
+                        _track_face_painter_area(area)
+            except (AttributeError, ReferenceError):
+                continue
+
+    for area_key, state in list(_FACE_PAINTER_SHADING_STATES.items()):
+        if area_key not in active_area_keys:
+            _restore_face_painter_shading(state)
+            del _FACE_PAINTER_SHADING_STATES[area_key]
+
+    if not active_area_keys:
+        _FACE_PAINTER_BVH_CACHE.clear()
+
+    return FACE_PAINTER_TIMER_INTERVAL
+
+
+def _ensure_face_painter_lifecycle_timer():
+    if not bpy.app.timers.is_registered(_face_painter_lifecycle_timer):
+        bpy.app.timers.register(
+            _face_painter_lifecycle_timer,
+            first_interval=FACE_PAINTER_TIMER_INTERVAL,
+            persistent=True,
+        )
+
+
+def _stop_face_painter_lifecycle_timer():
+    if bpy.app.timers.is_registered(_face_painter_lifecycle_timer):
+        bpy.app.timers.unregister(_face_painter_lifecycle_timer)
+
+    for state in _FACE_PAINTER_SHADING_STATES.values():
+        _restore_face_painter_shading(state)
+    _FACE_PAINTER_SHADING_STATES.clear()
+    _FACE_PAINTER_BVH_CACHE.clear()
 
 
 def register_workspace_tools():
@@ -34,9 +143,11 @@ def register_workspace_tools():
             after=(tool_cls.after,) if tool_cls.after != "" else None,
             group=(tool_cls.after == ""),
         )
+    _ensure_face_painter_lifecycle_timer()
 
 
 def unregister_workspace_tools():
+    _stop_face_painter_lifecycle_timer()
     for tool_cls in reversed(WORKSPACE_TOOLS):
         bpy.utils.unregister_tool(tool_cls)
 
@@ -88,6 +199,28 @@ def get_active_face_paint_mode(context):
                 return mode_map[asset_type]
 
     return context.scene.albam.tools_settings.face_paint_mode
+
+
+def extract_material_id_from_name(material_name, paint_mode):
+    material_name = material_name.replace("_", ".").split(".", 1)[0]
+    mode_prefix = f"{paint_mode} "
+    if not material_name.startswith(mode_prefix):
+        return None
+
+    material_id_text = material_name[len(mode_prefix):]
+    if not material_id_text.isdecimal():
+        return None
+
+    return int(material_id_text)
+
+
+def get_material_purpose(material_id, paint_mode):
+    purpose_descriptions = (
+        SBC_RUNTIME_ATTR_DESC
+        if paint_mode == "SBC"
+        else NAV_FACE_FLAGS_DESC
+    )
+    return purpose_descriptions.get(material_id, "Unregistered")
 
 
 @blender_registry.register_blender_type
@@ -899,18 +1032,21 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             self.report({'WARNING'}, "The tool works only in Edit Mode!")
             return {'CANCELLED'}
 
-        bpy.ops.mesh.select_all(action='DESELECT')
+        # Keep solid shading for the full time this workspace tool is active.
+        _ensure_face_painter_lifecycle_timer()
+        _track_face_painter_area(context.area)
+
+        context.tool_settings.mesh_select_mode = (False, False, True)
+
+        if context.active_object.data.total_face_sel:
+            bpy.ops.mesh.select_all(action='DESELECT')
 
         mode = get_active_face_paint_mode(context)
         context.scene.albam.tools_settings.face_paint_mode = mode
 
-        # Store the original shading type and color type to restore later
-        self.space = context.space_data
-        self.orig_shading_type = self.space.shading.type
-        self.orig_color_type = self.space.shading.color_type
-
-        # Set shading mode and face selection mode for painting
-        self.space.shading.type = 'SOLID'
+        self.mesh_object = context.active_object
+        self.edit_mesh = bmesh.from_edit_mesh(self.mesh_object.data)
+        self.bvh = _get_face_painter_bvh(self.mesh_object.data, self.edit_mesh)
 
         # paint on LMB press
         self.paint_face(context, event)
@@ -920,7 +1056,7 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
 
     def paint_face(self, context, event):
         """Raycast with BVHTree to BMesh"""
-        bl_ob = context.active_object
+        bl_ob = self.mesh_object
         if not bl_ob or bl_ob.type != 'MESH':
             return
 
@@ -937,12 +1073,7 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
         origin_local = inv_matrix @ ray_origin
         dir_local = inv_matrix.to_3x3() @ ray_dir
 
-        # BMesh + BVHTree
-        bm = bmesh.from_edit_mesh(bl_ob.data)
-        bm.faces.ensure_lookup_table()
-        bvh = BVHTree.FromBMesh(bm)
-
-        location, normal, face_index, distance = bvh.ray_cast(origin_local, dir_local)
+        location, normal, face_index, distance = self.bvh.ray_cast(origin_local, dir_local)
 
         if face_index is not None:
             active_mat_idx = bl_ob.active_material_index
@@ -951,13 +1082,12 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
                 self.report({'WARNING'}, "The object has no materials assigned!")
                 return
 
-            if bm.faces[face_index].material_index != active_mat_idx:
-                bm.faces[face_index].material_index = active_mat_idx
+            if self.edit_mesh.faces[face_index].material_index != active_mat_idx:
+                self.edit_mesh.faces[face_index].material_index = active_mat_idx
                 bmesh.update_edit_mesh(bl_ob.data)
                 context.area.tag_redraw()
 
     def modal(self, context, event):
-        context.tool_settings.mesh_select_mode = (False, False, True)
         if event.type == 'MOUSEMOVE':
             self.paint_face(context, event)
             return {'RUNNING_MODAL'}
@@ -966,18 +1096,10 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             return {'FINISHED'}
 
         elif event.type in {'ESC', 'RIGHTMOUSE'}:
-            self.restore_viewport()
             return {'CANCELLED'}
 
         # Allows to use camera navigation while the tool is active
         return {'PASS_THROUGH'}
-
-    def restore_viewport(self):
-        """Restore Viewport"""
-        if hasattr(self, 'space') and self.space:
-            self.space.shading.type = self.orig_shading_type
-            self.space.shading.color_type = self.orig_color_type
-
 
 HEADER_H = 40
 FOOTER_H = 60
@@ -1034,15 +1156,15 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
     _draw_handler = None
 
     def invoke(self, context, event):
-        self.palette_x = event.mouse_region_x
-        self.palette_y = event.mouse_region_y
-        self.mouse_x = event.mouse_region_x
-        self.mouse_y = event.mouse_region_y
-        self.hover = -1
-        self.object = context.active_object
-        self.paint_mode = get_active_face_paint_mode(context)
-        context.scene.albam.tools_settings.face_paint_mode = self.paint_mode
-        self.palette = self.get_material_ids()
+        self.palette_origin_x = event.mouse_region_x
+        self.palette_origin_y = event.mouse_region_y
+        self.mouse_region_x = event.mouse_region_x
+        self.mouse_region_y = event.mouse_region_y
+        self.hovered_palette_index = -1
+        self.mesh_object = context.active_object
+        self.face_paint_mode = get_active_face_paint_mode(context)
+        context.scene.albam.tools_settings.face_paint_mode = self.face_paint_mode
+        self.palette_material_ids = self.get_palette_material_ids()
 
         self._draw_handler = bpy.types.SpaceView3D.draw_handler_add(
             self.draw_palette,
@@ -1056,41 +1178,44 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
         return {'RUNNING_MODAL'}
 
-    def get_material_ids(self):
-        if not self.object or self.object.type != 'MESH':
+    def extract_mat_id(self, material_name):
+        """Return this paint mode's numeric material ID, or None if it doesn't match."""
+        return extract_material_id_from_name(material_name, self.face_paint_mode)
+
+    def get_palette_material_ids(self):
+        """Get numeric IDs parsed from the object's material names."""
+        if not self.mesh_object or self.mesh_object.type != 'MESH':
             return []
 
-        material_ids = []
-        for material in self.object.data.materials:
+        palette_material_ids = []
+        for material in self.mesh_object.data.materials:
             if not material:
                 continue
 
-            material_name = material.name.replace("_", ".").split(".")[0]
-            try:
-                material_ids.append(int(material_name[4:]))
-            except ValueError:
-                continue
+            material_id = self.extract_mat_id(material.name)
+            if material_id is not None:
+                palette_material_ids.append(material_id)
 
-        return material_ids
+        return palette_material_ids
 
     def modal(self, context, event):
         if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
-            self.palette_x = event.mouse_region_x
-            self.palette_y = event.mouse_region_y
-            self.mouse_x = event.mouse_region_x
-            self.mouse_y = event.mouse_region_y
-            self.hover = -1
+            self.palette_origin_x = event.mouse_region_x
+            self.palette_origin_y = event.mouse_region_y
+            self.mouse_region_x = event.mouse_region_x
+            self.mouse_region_y = event.mouse_region_y
+            self.hovered_palette_index = -1
             context.area.tag_redraw()
 
         elif event.type == 'MOUSEMOVE':
-            self.mouse_x = event.mouse_region_x
-            self.mouse_y = event.mouse_region_y
+            self.mouse_region_x = event.mouse_region_x
+            self.mouse_region_y = event.mouse_region_y
             self.update_hover()
             context.area.tag_redraw()
 
         elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':
-            if self.hover >= 0:
-                self.select_material(self.hover)
+            if self.hovered_palette_index >= 0:
+                self.select_material(self.hovered_palette_index)
 
             self.finish(context)
             return {'FINISHED'}
@@ -1112,44 +1237,49 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
 
         context.area.tag_redraw()
 
-    def cell_position(self, index):
-        column = index % GRID_COLUMNS
-        row = index // GRID_COLUMNS
-        x = self.palette_x + GAP + column * (CELL_SIZE + GAP)
-        panel_top = self.palette_y + HEADER_H + CELL_SIZE
-        y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
-        return x, y
+    def cell_position(self, palette_index):
+        column = palette_index % GRID_COLUMNS
+        row = palette_index // GRID_COLUMNS
+        cell_x = self.palette_origin_x + GAP + column * (CELL_SIZE + GAP)
+        panel_top = self.palette_origin_y + HEADER_H + CELL_SIZE
+        cell_y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
+        return cell_x, cell_y
 
     def update_hover(self):
-        self.hover = -1
-        for index in range(len(self.palette)):
-            x, y = self.cell_position(index)
+        self.hovered_palette_index = -1
+        for palette_index in range(len(self.palette_material_ids)):
+            cell_x, cell_y = self.cell_position(palette_index)
             if (
-                x <= self.mouse_x <= x + CELL_SIZE and
-                y <= self.mouse_y <= y + CELL_SIZE
+                cell_x <= self.mouse_region_x <= cell_x + CELL_SIZE and
+                cell_y <= self.mouse_region_y <= cell_y + CELL_SIZE
             ):
-                self.hover = index
+                self.hovered_palette_index = palette_index
                 break
 
-    def select_material(self, index):
-        material_id = self.palette[index]
-        if not self.object or self.object.type != 'MESH':
+    def select_material(self, palette_index):
+        selected_material_id = self.palette_material_ids[palette_index]
+        if not self.mesh_object or self.mesh_object.type != 'MESH':
             return
 
-        for material_index, material in enumerate(self.object.data.materials):
-            if material and material.name.startswith(f"{self.paint_mode} {material_id}"):
-                self.object.active_material_index = material_index
+        for material_slot_index, material in enumerate(self.mesh_object.data.materials):
+            if not material:
+                continue
+
+            material_id = self.extract_mat_id(material.name)
+            if selected_material_id == material_id:
+                self.mesh_object.active_material_index = material_slot_index
+                break
 
     def panel_geometry(self):
-        row_count = max(1, (len(self.palette) + GRID_COLUMNS - 1) // GRID_COLUMNS)
+        row_count = max(1, (len(self.palette_material_ids) + GRID_COLUMNS - 1) // GRID_COLUMNS)
         grid_height = row_count * CELL_SIZE + (row_count - 1) * GAP
         panel_height = HEADER_H + grid_height + FOOTER_H
-        panel_top = self.palette_y + HEADER_H + CELL_SIZE
+        panel_top = self.palette_origin_y + HEADER_H + CELL_SIZE
         return panel_top, panel_top - panel_height, panel_height
 
     def draw_palette(self):
         panel_top, panel_bottom, panel_height = self.panel_geometry()
-        self.panel_x = self.palette_x
+        self.panel_x = self.palette_origin_x
         self.panel_y = panel_bottom
 
         _gpu_draw_rect(
@@ -1174,32 +1304,29 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         )
 
     def draw_cells(self):
-        if self.hover >= 0:
-            x, y = self.cell_position(self.hover)
+        if self.hovered_palette_index >= 0:
+            cell_x, cell_y = self.cell_position(self.hovered_palette_index)
             _gpu_draw_rect(
-                x - 2,
-                y - 2,
+                cell_x - 2,
+                cell_y - 2,
                 CELL_SIZE + 4,
                 CELL_SIZE + 4,
                 (1.0, 1.0, 1.0, 1.0),
             )
 
-        for index, material_id in enumerate(self.palette):
-            x, y = self.cell_position(index)
-            if self.paint_mode == "SBC":
+        for palette_index, material_id in enumerate(self.palette_material_ids):
+            cell_x, cell_y = self.cell_position(palette_index)
+            if self.face_paint_mode == "SBC":
                 color = SBC_COLOR_PALETTE.get(material_id, number_to_color(material_id))
             else:
                 color = number_to_color(material_id)
-            _gpu_draw_rect(x, y, CELL_SIZE, CELL_SIZE, color)
+            _gpu_draw_rect(cell_x, cell_y, CELL_SIZE, CELL_SIZE, color)
 
     def draw_footer(self):
-        if self.hover >= 0:
-            material_id = self.palette[self.hover]
-            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 36, f"Material ID: {material_id}", 12)
-            if self.paint_mode == "SBC":
-                purpose = SBC_RUNTIME_ATTR_DESC.get(material_id, "Unregistered")
-            else:
-                purpose = NAV_FACE_FLAGS_DESC.get(material_id, "Unregistered")
+        if self.hovered_palette_index >= 0:
+            hovered_material_id = self.palette_material_ids[self.hovered_palette_index]
+            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 36, f"Material ID: {hovered_material_id}", 12)
+            purpose = get_material_purpose(hovered_material_id, self.face_paint_mode)
             _blf_draw_text(0, self.panel_x + 12, self.panel_y + 12, f"Purpose: {purpose}", 12)
 
 
@@ -1275,8 +1402,36 @@ class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
 
     @staticmethod
     def draw_settings(context, layout, tool):
-        row = layout.row()
-        row.label(text=f"Painting mode: {get_active_face_paint_mode(context)}")
+        paint_mode = get_active_face_paint_mode(context)
+        settings_row = layout.row(align=True)
+        settings_row.label(text=f"Painting mode: {paint_mode}")
+
+        active_object = context.active_object
+        active_material = (
+            active_object.active_material
+            if active_object and active_object.type == 'MESH'
+            else None
+        )
+        if active_material:
+            settings_row.label(text=active_material.name, icon='MATERIAL')
+            color_swatch = settings_row.row(align=True)
+            color_swatch.ui_units_x = 3.0
+            color_swatch.enabled = False
+            color_swatch.prop(
+                active_material,
+                "diffuse_color",
+                text="",
+                emboss=True,
+            )
+            material_id = extract_material_id_from_name(
+                active_material.name,
+                paint_mode,
+            )
+            purpose = get_material_purpose(material_id, paint_mode)
+            purpose_row = layout.row(align=True)
+            purpose_row.label(text=f"Purpose: {purpose}")
+        else:
+            settings_row.label(text="No active material", icon='MATERIAL')
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
