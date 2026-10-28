@@ -16,6 +16,7 @@ from ....vfs import VirtualFileData
 from ..bone import get_anim_retarget, get_chain_target
 from ..structs.lmt import Lmt
 from .animation_import import (
+    LMT_ASSET_TYPE,
     ROOT_MOTION_BONE_ID,
     _create_bone_mapping,
     get_block_index,
@@ -59,6 +60,16 @@ _TRACK_TYPE_USAGES = {
     "location": (1, 4),
     "scale": (2, 5),
 }
+
+
+def _block_custom_properties(bl_obj, app_id):
+    return bl_obj.albam_custom_properties.get_custom_properties_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
+
+
+def _block_secondary_properties(bl_obj, app_id):
+    return bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
 
 
 def _select_kf_usage(pose_bone, track_type, app_id):
@@ -134,9 +145,9 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
 
 
 def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_stored, app_id):
-    custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    custom_props = _block_custom_properties(bl_obj, app_id)
     custom_props.num_frames = num_frames
-    second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+    second_props = _block_secondary_properties(bl_obj, app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
     for et in encoded_tracks:
@@ -182,7 +193,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         tracks = {}  # bone_name -> frame -> ActionKey
         joint_types = {}
         reference_data = {}
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = _block_custom_properties(bl_obj, app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
             fcurves = _get_action_fcurves(action, armature)
@@ -270,7 +281,7 @@ def _block_tracks(bl_obj, app_id):
     cleared. One whose action keys no bone at all comes out with no tracks and
     is written as an empty slot - the only thing a block without tracks can be.
     """
-    second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+    second_props = _block_secondary_properties(bl_obj, app_id)
     return getattr(second_props["tracks"], "tracks")
 
 
@@ -307,7 +318,7 @@ def _calculate_offsets_lmt51(bl_objects, app_id):
     for bl_obj in bl_objects:
         tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = _block_secondary_properties(bl_obj, app_id)
             ofc = cur_ofc_bloc_offsets
             block_offsets.append(ofc)
             cur_ofc_bloc_offsets += MOTION_HEADER_SIZE
@@ -412,7 +423,7 @@ def _calculate_offsets_lmt67(bl_objects, app_id):
         bounds_size = 0
         tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = _block_secondary_properties(bl_obj, app_id)
             total_headers_size += MOTION_HEADER_SIZE
 
             t_size = len(tracks) * TRACK_SIZE
@@ -649,10 +660,10 @@ def export_lmt(bl_obj):
         ofc_kf_info_attr = lmt_offsets["key_info_attr_offsets"]
     for i, bl_obj in enumerate(bl_objects):
         block_offset = dst_lmt.BlockOffset(_parent=dst_lmt, _root=dst_lmt)
-        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        custom_props = _block_custom_properties(bl_obj, app_id)
         tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
-            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
+            second_props = _block_secondary_properties(bl_obj, app_id)
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
                 col_events_attr = getattr(col_events, "attributes")
