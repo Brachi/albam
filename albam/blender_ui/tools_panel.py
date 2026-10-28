@@ -113,8 +113,8 @@ class AlbamArmatures(bpy.types.PropertyGroup):
 class ToolsSettings(bpy.types.PropertyGroup):
     asettr_overwrite_tex_path: bpy.props.BoolProperty(default=False)
     asettr_use_custom_path: bpy.props.BoolProperty(default=False)
-    assetr_default_path = "path\\to_textures\\"
-    asettr_relative_path_to_textures: bpy.props.StringProperty(default=assetr_default_path)
+    asettr_default_path = "path\\to_textures\\"
+    asettr_relative_path_to_textures: bpy.props.StringProperty(default=asettr_default_path)
     bone_names_enum = bpy.props.EnumProperty(
         name="",
         description="select surface",
@@ -346,15 +346,26 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         if not bl_objects:
             show_message_box(message="There is no mesh in selection")
             return {'CANCELLED'}
+        processed_objects = 0
         for bl_ob in bl_objects:
             parent = bl_ob.parent
-            if parent is not None and not use_custom_path:
-                local_path = getattr(parent.albam_asset, "relative_path", None)
+            if parent is None:
+                print(f"Warning: {bl_ob.name} has no parent")
+                continue
+            local_path = getattr(parent.albam_asset, "relative_path", None)
+            if local_path is None:
+                print(f"Warning: parent of {bl_ob.name}, {parent.name}")
+                continue
+            if use_custom_path:
                 if local_path:
                     local_path = f"{PureWindowsPath(local_path).parent}\\"
-            mat = bl_ob.data.materials[0]
+            try:
+                mat = bl_ob.data.materials[0]
+            except IndexError:
+                continue
             set_image_albam_attr(mat, app_id, local_path)
-        show_message_box(message=f"Texture params were autoset for {len(bl_objects)} meshes")
+            processed_objects += 1
+        show_message_box(message=f"Texture params were autoset for {processed_objects} meshes")
         return {'FINISHED'}
 
 
@@ -1186,7 +1197,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
                         bool(dds_header.pixelfmt_dwFlags & DDSHeader.DDPF_ALPHAPIXELS)
                     )
                 else:
-                    has_alpha_channel = tn.image.channels > 3
+                    has_alpha_channel = tn.image.depth in (32, 64, 128)
                 tex_props.compression_format = tex_compr_preset[0 if has_alpha_channel else 1]
             if type == 1:
                 tex_props.compression_format = tex_compr_preset[3]
