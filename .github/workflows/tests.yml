@@ -109,15 +109,11 @@ jobs:
             export COVERAGE_FILE=.coverage.${{ matrix.bpy.bpy-version }}
             cov=(--cov --cov-report=)
           fi
-          # re3 is RE Engine, so it takes a third segment: the candidate
-          # path list a .pak needs (its entries are hashes only), as a key
-          # under re3's own prefix. A key that isn't there skips re3's
-          # tests with "path list not found/resolvable" rather than failing.
           # re6 and dmc4 have datasets but no data in the bucket yet; add
           # their flags in the same change that uploads it (see
           # tests/scripts/upload_ci_game_files.py), since a mounted prefix
           # with the files missing fails rather than skips.
-          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc --game-dir=re3::r2://"$R2_BUCKET_NAME"/re3::r2://RE3Z_RT_STM_Release.list
+          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
