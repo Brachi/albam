@@ -1224,7 +1224,7 @@ def _derive_parent_ids(armature_ob, num_bones):
 
 
 def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
-    """Each bone's `length`: how far the furthest vertex it influences sits.
+    """Each bone's `furthest_vertex_distance`: how far the furthest vertex it influences sits.
 
     The field is `furthestVertexDistance` in Capcom's own vocabulary, and it is
     zero for a bone nothing skins to. Computed from the live meshes so that
@@ -1448,8 +1448,9 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_pale
         bone.idx_anim_map = anim_map_ids[i] if export_bones else src_bone.idx_anim_map
         bone.idx_parent = parent_ids[i] if export_bones else src_bone.idx_parent
         bone.idx_mirror = mirror_ids[i] if export_bones else src_bone.idx_mirror
-        bone.idx_mapping = BONE_RECORD_PADDING if export_bones else src_bone.idx_mapping
-        bone.length = furthest_vertex[i] if export_bones else src_bone.length
+        bone.padding = BONE_RECORD_PADDING if export_bones else src_bone.padding
+        bone.furthest_vertex_distance = (
+            furthest_vertex[i] if export_bones else src_bone.furthest_vertex_distance)
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
@@ -2578,13 +2579,13 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     oabb_dimension.z = length_y * 100
     oabb_dimension.w = 0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = 255  # since it's static
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
@@ -2702,13 +2703,13 @@ def _calculate_vertex_group_weight_bound(
     oabb_dimension.z = oabb_dimension_export[2]
     oabb_dimension.w = 0.0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = bone_index
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max

@@ -106,7 +106,7 @@ def test_export_uses_the_stored_armature_not_the_panels(two_armatures):
 
     dst_block = dst_lmt.block_offsets[0]
     assert dst_block.offset != 0
-    exported_ids = {t.bone_index for t in dst_block.block_header.tracks}
+    exported_ids = {t.idx_anim_map for t in dst_block.block_header.tracks}
 
     assert 10 in exported_ids, (
         f"exported track ids {exported_ids} don't include A's id (10) for 'hip' - "
@@ -134,7 +134,7 @@ def test_export_falls_back_to_the_panel_when_the_property_is_unset(two_armatures
 
     vfiles = export_lmt(bl_object)
     dst_lmt = parse(Lmt, vfiles[0].data_bytes, APP_ID)
-    exported_ids = {t.bone_index for t in dst_lmt.block_offsets[0].block_header.tracks}
+    exported_ids = {t.idx_anim_map for t in dst_lmt.block_offsets[0].block_header.tracks}
     assert 10 in exported_ids
 
 

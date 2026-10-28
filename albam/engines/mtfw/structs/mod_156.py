@@ -289,8 +289,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self.idx_anim_map = self._io.read_u1()
             self.idx_parent = self._io.read_u1()
             self.idx_mirror = self._io.read_u1()
-            self.idx_mapping = self._io.read_u1()
-            self.length = self._io.read_f4le()
+            self.padding = self._io.read_u1()
+            self.furthest_vertex_distance = self._io.read_f4le()
             self.parent_distance = self._io.read_f4le()
             self.location = Mod156.Vec3(self._io, self, self._root)
             self.location._read()
@@ -307,8 +307,8 @@ class Mod156(ReadWriteKaitaiStruct):
             self._io.write_u1(self.idx_anim_map)
             self._io.write_u1(self.idx_parent)
             self._io.write_u1(self.idx_mirror)
-            self._io.write_u1(self.idx_mapping)
-            self._io.write_f4le(self.length)
+            self._io.write_u1(self.padding)
+            self._io.write_f4le(self.furthest_vertex_distance)
             self._io.write_f4le(self.parent_distance)
             self.location._write__seq(self._io)
 
@@ -2235,8 +2235,8 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.bone_id = self._io.read_u4le()
-            self.unk_01 = Mod156.Vec3(self._io, self, self._root)
-            self.unk_01._read()
+            self.padding = Mod156.Vec3(self._io, self, self._root)
+            self.padding._read()
             self.bsphere = Mod156.Vec4(self._io, self, self._root)
             self.bsphere._read()
             self.bbox_min = Mod156.Vec4(self._io, self, self._root)
@@ -2252,7 +2252,7 @@ class Mod156(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            self.unk_01._fetch_instances()
+            self.padding._fetch_instances()
             self.bsphere._fetch_instances()
             self.bbox_min._fetch_instances()
             self.bbox_max._fetch_instances()
@@ -2263,7 +2263,7 @@ class Mod156(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mod156.WeightBound, self)._write__seq(io)
             self._io.write_u4le(self.bone_id)
-            self.unk_01._write__seq(self._io)
+            self.padding._write__seq(self._io)
             self.bsphere._write__seq(self._io)
             self.bbox_min._write__seq(self._io)
             self.bbox_max._write__seq(self._io)
@@ -2272,10 +2272,10 @@ class Mod156(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if self.unk_01._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"unk_01", self._root, self.unk_01._root)
-            if self.unk_01._parent != self:
-                raise kaitaistruct.ConsistencyError(u"unk_01", self, self.unk_01._parent)
+            if self.padding._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"padding", self._root, self.padding._root)
+            if self.padding._parent != self:
+                raise kaitaistruct.ConsistencyError(u"padding", self, self.padding._parent)
             if self.bsphere._root != self._root:
                 raise kaitaistruct.ConsistencyError(u"bsphere", self._root, self.bsphere._root)
             if self.bsphere._parent != self:

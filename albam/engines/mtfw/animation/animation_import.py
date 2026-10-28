@@ -107,12 +107,14 @@ def load_lmt(vfile, context):
         last_usage = {}
         duplicated_bids = {}
         for track_index, track in enumerate(block.block_header.tracks):
-            if duplicated_bids.get(track.bone_index, None) is None:
-                duplicated_bids[track.bone_index] = 0
+            if duplicated_bids.get(track.idx_anim_map, None) is None:
+                duplicated_bids[track.idx_anim_map] = 0
 
             # Custom attributes for a track
             item = tracks.tracks.add()
             item.copy_custom_properties_from(track)
+            # The custom property keeps its saved name; the struct field is idx_anim_map
+            item.bone_index = track.idx_anim_map
             item.raw_data = track.data
             bounds = None
             keyframes = LMTKeyFrames()
@@ -125,36 +127,36 @@ def load_lmt(vfile, context):
                     keyframes.bounds = bounds
 
             try:
-                lu = last_usage[track.bone_index][-1]
+                lu = last_usage[track.idx_anim_map][-1]
                 if lu >= track.usage:
-                    duplicated_bids[track.bone_index] += 1
-                last_usage[track.bone_index].append(track.usage)
+                    duplicated_bids[track.idx_anim_map] += 1
+                last_usage[track.idx_anim_map].append(track.usage)
             except KeyError:
-                last_usage[track.bone_index] = [track.usage]
+                last_usage[track.idx_anim_map] = [track.usage]
 
-            if duplicated_bids[track.bone_index] == 0:
-                key = str(track.bone_index)
+            if duplicated_bids[track.idx_anim_map] == 0:
+                key = str(track.idx_anim_map)
             else:
-                key = str(track.bone_index) + "_" + str(duplicated_bids[track.bone_index])
+                key = str(track.idx_anim_map) + "_" + str(duplicated_bids[track.idx_anim_map])
             bone_index = mapping.get(key)
 
             # Set motion root bone
-            if bone_index is None and track.bone_index == ROOT_MOTION_BONE_ID:
+            if bone_index is None and track.idx_anim_map == ROOT_MOTION_BONE_ID:
                 bone_index = _get_or_create_root_motion_bone(armature, mapping, app_id)
 
             # Restore IK. Driven by the chain the block declares, not by a
             # fixed pair of bone ids: an arm, and every limb of a quadruped,
             # needs exactly the same treatment as a biped's feet.
-            is_chain_goal = track.bone_index in chains and bone_index is not None
+            is_chain_goal = track.idx_anim_map in chains and bone_index is not None
             if is_chain_goal:
                 bone_index = _get_or_create_ik_bone(
-                    armature, track.bone_index, bone_index, mapping, chains[track.bone_index],
+                    armature, track.idx_anim_map, bone_index, mapping, chains[track.idx_anim_map],
                     chain_constraints, app_id)
 
             # LMT references service(?) bones absent in the imported armature
             if bone_index is None:
                 bone_index = _create_missing_bones(armature,
-                                                   track.bone_index,
+                                                   track.idx_anim_map,
                                                    key,
                                                    mapping,
                                                    app_id)
@@ -185,7 +187,8 @@ def load_lmt(vfile, context):
                     keyframes.decoded_frames, armature, bone_index)
 
             # temporary hack for the root bone
-            if track.usage == 1 and track.bone_index == 0 and armature.data.bones[bone_index].parent is None:
+            is_root_translation = track.usage == 1 and track.idx_anim_map == 0
+            if is_root_translation and armature.data.bones[bone_index].parent is None:
                 keyframes.decoded_frames = _parent_space_to_local_translation(
                     keyframes.decoded_frames, armature, bone_index)
 
@@ -323,7 +326,7 @@ def _find_chains(tracks, version):
     for track in tracks:
         offset = CHAIN_TARGET_OFFSET.get(track.joint_type)
         if offset is not None:
-            chains[track.bone_index + offset] = offset
+            chains[track.idx_anim_map + offset] = offset
     return chains
 
 
