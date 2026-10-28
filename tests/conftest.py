@@ -174,6 +174,20 @@ def pytest_addoption(parser):
     )
 
 
+def pytest_collection_modifyitems(config, items):
+    """Group tests for `--dist loadgroup`: one group per file, like
+    `--dist loadfile`, except tests/hexn, which share one group.
+
+    Every tests/hexn file mounts the same RE:ORC install and walks it into a
+    hash index (session fixtures in tests/hexn/conftest.py). Spread across
+    workers, each worker paid that again; in one group it is paid once.
+    """
+    for item in items:
+        path = item.nodeid.split("::", 1)[0]
+        group = "hexn" if path.startswith("tests/hexn/") else path
+        item.add_marker(pytest.mark.xdist_group(name=group))
+
+
 def pytest_configure(config):
     # Validate eagerly, once, at startup - not from within a fixture, where a
     # malformed value would otherwise only surface once each parametrized

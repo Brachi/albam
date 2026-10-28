@@ -100,8 +100,10 @@ jobs:
           R2_BUCKET_NAME="${R2_BUCKET_NAME//$'\n'/}"
           export ALBAM_PYTEST_EXIT_STATUS_FILE="$RUNNER_TEMP/pytest-exit-status"
           rm -f "$ALBAM_PYTEST_EXIT_STATUS_FILE"
-          # One worker per runner vCPU. --dist loadfile keeps a file's
-          # tests in one process: the Blender scene and the VFS are
+          # One worker per runner vCPU. --dist loadgroup keeps a file's
+          # tests in one process (tests/conftest.py groups each test by its
+          # file, and all of tests/hexn together so the RE:ORC mount and
+          # walk happen once): the Blender scene and the VFS are
           # process-global. --cov rather than `coverage run`, which would
           # measure the controller process only.
           cov=()
@@ -109,7 +111,7 @@ jobs:
             export COVERAGE_FILE=.coverage.${{ matrix.bpy.bpy-version }}
             cov=(--cov --cov-report=)
           fi
-          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
+          pytest -n 4 --dist loadgroup "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
