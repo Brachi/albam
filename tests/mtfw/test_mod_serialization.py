@@ -303,18 +303,18 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
             assert src_mesh.num_weight_bounds == dst_mesh.num_weight_bounds
             assert src_mesh.connect_id == dst_mesh.connect_id
             assert src_mesh.boundary == dst_mesh.boundary
-            # min_index/max_index are derived, not independent: in every real
-            # file min_index is the mesh's own vertex_position and max_index
+            # first_index/last_index are derived, not independent: in every real
+            # file first_index is the mesh's own vertex_index and last_index
             # is one less than a full vertex run past it. Comparing them
-            # against the source would just restate the vertex_position gap
+            # against the source would just restate the vertex_index gap
             # test_meshes_data_xfail already tracks, so what is checked here
             # is that the exported file keeps the invariant internally - a
             # mesh whose index range disagrees with its vertex range reads
             # garbage geometry however the buffer got laid out.
-            assert dst_mesh.min_index == dst_mesh.vertex_position
-            assert dst_mesh.max_index == dst_mesh.min_index + dst_mesh.num_vertices - 1
-            assert src_mesh.max_index - src_mesh.min_index == (
-                dst_mesh.max_index - dst_mesh.min_index)
+            assert dst_mesh.first_index == dst_mesh.vertex_index
+            assert dst_mesh.last_index == dst_mesh.first_index + dst_mesh.num_vertices - 1
+            assert src_mesh.last_index - src_mesh.first_index == (
+                dst_mesh.last_index - dst_mesh.first_index)
 
     # Version 211 normally carries its weight-bound count inside meshes_data,
     # but umvc3's own 211 keeps it at the top level like 210/212 do - see the
@@ -480,8 +480,8 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
 # five fields have therefore had no coverage at all until now.
 #
 # Measured across the mod_serialization dataset:
-#   num_edges            written as 0 on every model, both versions
-#   num_faces            differs on every model, by between 1 and 1706
+#   num_triangles        written as 0 on every model, both versions
+#   num_indices          differs on every model, by between 1 and 1706
 #   size_file            differs on 211; the field does not exist on 156
 #   offset_index_buffer  matches on umvc3 211, differs on 2 of 3 re5 156
 #   size_vertex_buffer   as offset_index_buffer
@@ -512,7 +512,7 @@ VERSIONS_TRISTRIP = {153, 156, 212}
 
 def _index_count_mismatch_reason(src_mod, dst_mod):
     """Why the exported index count differs from the source, or None if it
-    doesn't. num_faces, num_edges and size_file are all computed from the
+    doesn't. num_indices, num_triangles and size_file are all computed from the
     index buffer, so none of them can match while this does not.
 
     Two unrelated causes, and which one applies depends on the version.
@@ -552,8 +552,8 @@ def test_export_header_face_counts(mod_imported_local, mod_exported_local):
     sheader = mod_imported_local.header
     dheader = mod_exported_local.header
 
-    assert sheader.num_edges == dheader.num_edges
-    assert sheader.num_faces == dheader.num_faces
+    assert sheader.num_triangles == dheader.num_triangles
+    assert sheader.num_indices == dheader.num_indices
 
 
 def test_export_header_size_file(mod_imported_local, mod_exported_local):
@@ -570,19 +570,19 @@ def test_export_header_size_file(mod_imported_local, mod_exported_local):
 
 # The only per-mesh offset that round-trips on every model measured, so it
 # is asserted rather than excused.
-MESH_FIELDS_ROUND_TRIPPED = ("face_offset",)
+MESH_FIELDS_ROUND_TRIPPED = ("vertex_base",)
 
 # Buffer placement and what follows from it. Measured across the three
-# umvc3 models in the dataset: of 51/1/31 meshes, face_position differs on
-# 50/0/0, vertex_position on 4/0/13, num_indices on 18/0/0, and min_index,
-# max_index and vertex_offset differ on exactly the meshes vertex_position
+# umvc3 models in the dataset: of 51/1/31 meshes, index_start differs on
+# 50/0/0, vertex_index on 4/0/13, num_indices on 18/0/0, and first_index,
+# last_index and vertex_byte_offset differ on exactly the meshes vertex_index
 # does - they are derived from it. num_indices is the odd one out: 6918
 # against 6822 on one mesh is a real geometry difference, not a placement
 # one. The middle model round-trips all of them, so none of this is
 # inherent to the format.
 MESH_FIELDS_BUFFER_PLACEMENT = (
-    "vertex_position", "min_index", "max_index", "vertex_offset",
-    "face_position", "num_indices",
+    "vertex_index", "first_index", "last_index", "vertex_byte_offset",
+    "index_start", "num_indices",
 )
 APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3"}
 
@@ -604,7 +604,7 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
     that way.
 
     Version-gated like test_meshes_data_21: these are the 21 layout's field
-    names, and a 156 mesh has no vertex_position at all (it has
+    names, and a 156 mesh has no vertex_index at all (it has
     vertex_position_2). Without the gate every re5 mesh raised
     AttributeError inside a subtest, which pytest-subtests reports as a
     failed subtest while the test itself still passes - so the old blanket
