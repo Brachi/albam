@@ -1101,6 +1101,7 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
         # Allows to use camera navigation while the tool is active
         return {'PASS_THROUGH'}
 
+
 HEADER_H = 40
 FOOTER_H = 60
 GRID_COLUMNS = 8
