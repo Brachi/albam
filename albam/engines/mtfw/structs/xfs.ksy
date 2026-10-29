@@ -72,20 +72,21 @@ enums:
     20: vector3
     21: vector4
     22: quaternion
-    36: unk_36
+    36: float4
     47: aabb
-    54: unk_54
-    55: unk_55
-    57: unk_57
-    58: resource
+    54: range
+    55: rangef
+    57: hermitecurve
+    58: resource # custom
 
 types:
   xfs_header:
     seq:
       - {id: ident, contents: [0x58, 0x46, 0x53, 0x00]}
-      - {id: version_major, type: u2}
-      - {id: version_minor, type: u2}
-      - {id: num_class_defs, type: u4}
+      - {id: version_major, type: u2} # version
+      - {id: version_minor, type: u2} # file_type
+      - {id: num_class_defs, type: u2} # num_classes
+      - {id: reserved, type: u2}
       - {id: offset_data, type: u4}
     doc: |
       version_major is 6 everywhere seen; version_minor identifies the schema

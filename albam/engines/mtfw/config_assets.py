@@ -5,6 +5,7 @@ import zlib
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from kaitaistruct import KaitaiStream
+from mathutils import Vector
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 
@@ -177,6 +178,8 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
+    _build_sdl_infinite_lights(sdl, bl_object, app_id)
+
     xml = sdl_to_xml(sdl, app_id)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
@@ -187,6 +190,76 @@ def build_sheduler_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy
     text.from_string(xml_string)
 
     return bl_object
+
+
+def _sdl_first_track_value(track):
+    data = getattr(track, "data", None)
+    return data[0] if getattr(track, "num_frames", 0) and data else None
+
+
+def _sdl_track_vector(value, fields):
+    if value is None:
+        return None
+    try:
+        return tuple(float(getattr(value, field)) for field in fields)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _sdl_light_properties(property_tracks):
+    properties = {track.name: track for track in property_tracks}
+    direction_track = properties.get("mDir")
+    color_track = properties.get("mColor")
+    diffuse_track = properties.get("mDiffuseFactor")
+    if direction_track is None or color_track is None or diffuse_track is None:
+        return None
+
+    direction = _sdl_track_vector(
+        _sdl_first_track_value(direction_track), ("x", "y", "z")
+    )
+    color_value = _sdl_first_track_value(color_track)
+    color = _sdl_track_vector(color_value, ("r", "g", "b"))
+    if color is None:
+        color = _sdl_track_vector(color_value, ("x", "y", "z"))
+    diffuse_value = _sdl_first_track_value(diffuse_track)
+    diffuse_factor = getattr(diffuse_value, "val", None)
+
+    if direction is None or color is None or diffuse_factor is None:
+        return None
+    try:
+        return direction, color, float(diffuse_factor)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_sdl_infinite_lights(sdl, parent_object, app_id):
+    tracks_by_parent = defaultdict(list)
+    for track in sdl.tracks:
+        tracks_by_parent[track.parent].append(track)
+
+    for track_index, track in enumerate(sdl.tracks):
+        if _sdl_dti_name(getattr(track, "dti_ref", 0), app_id) != "uInfiniteLight":
+            continue
+
+        light_properties = _sdl_light_properties(tracks_by_parent.get(track_index, ()))
+        if light_properties is None:
+            continue
+        direction, color, diffuse_factor = light_properties
+
+        # MTFW uses Y-up coordinates; imported Blender scenes use Z-up.
+        direction = Vector((direction[0], -direction[2], direction[1]))
+        if direction.length_squared == 0:
+            continue
+
+        light_name = track.name or f"InfiniteLight_{track_index}"
+        light_name = f"{parent_object.name}_{light_name}"
+        light_data = bpy.data.lights.new(name=light_name, type="SUN")
+        light_data.color = color
+        light_data.energy = float(diffuse_factor)
+
+        light_object = bpy.data.objects.new(light_name, light_data)
+        light_object.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+        light_object.parent = parent_object
 
 
 def _dti_ref_to_value(track, app_id):
@@ -763,6 +836,9 @@ XFS_PROPERTY_TYPES_BY_APP_ID = {
 }
 XFS_VECTOR_PROPERTY_TYPE_NAMES = frozenset({
     "TYPE_COLOR",
+    "TYPE_POINT",
+    "TYPE_RECT",
+    "TYPE_MATRIX",
     "TYPE_VECTOR3",
     "TYPE_VECTOR4",
     "TYPE_QUATERNION",
@@ -843,6 +919,47 @@ XFS_SCALAR_FORMATS_BY_TYPE_NAME = {
     "TYPE_F64": 'd',
 }
 
+XFS_VECTOR_COMPONENT_NAMES = {
+    "TYPE_COLOR": ("r", "g", "b", "a"),
+    "TYPE_POINT": ("x", "y"),
+    "TYPE_VECTOR3": ("x", "y", "z", "w"),
+    "TYPE_VECTOR4": ("x", "y", "z", "w"),
+    "TYPE_QUATERNION": ("x", "y", "z", "w"),
+    "TYPE_FLOAT2": ("x", "y"),
+    "TYPE_FLOAT3": ("x", "y", "z"),
+    "TYPE_FLOAT4": ("x", "y", "z", "w"),
+    "TYPE_RECT": ("left", "top", "right", "bottom"),
+    "TYPE_MATRIX": tuple(
+        f"m{row}{column}" for row in range(4) for column in range(4)
+    ),
+    "TYPE_FLOAT3x3": tuple(
+        f"m{row}{column}" for row in range(3) for column in range(3)
+    ),
+    "TYPE_FLOAT4x3": tuple(
+        f"m{row}{column}" for row in range(4) for column in range(3)
+    ),
+    "TYPE_FLOAT4x4": tuple(
+        f"m{row}{column}" for row in range(4) for column in range(4)
+    ),
+    "TYPE_RANGE": ("min", "max"),
+    "TYPE_RANGEF": ("min", "max"),
+    "TYPE_AABB": ("min_x", "min_y", "min_z", "max_x", "max_y", "max_z"),
+}
+
+
+def _xfs_xml_type_name(type_id, property_type_info):
+    type_name = property_type_info['reverse_property_types'].get(type_id)
+    if type_name is None:
+        return f"unknown_{type_id}"
+    return type_name.removeprefix("TYPE_").lower()
+
+
+def _xfs_vector_component_names(type_name, count):
+    names = XFS_VECTOR_COMPONENT_NAMES.get(type_name, ())
+    if count <= len(names):
+        return names[:count]
+    return names + tuple(f"v{i}" for i in range(len(names), count))
+
 
 def _get_xfs_property_type_info(app_id):
     try:
@@ -922,134 +1039,158 @@ for xfs_extension in XFS_EXTENSIONS:
     )(export_xfs)
 
 
-# XFS XML conversion helpers.
-def from_xfs(xml, extension, app_id):
+def from_xfs(xfs, extension, app_id):
+    """Convert XFS data to a compact, editable XML tree."""
     dti_hashes = _get_sdl_dti_hashes(app_id)
     property_type_info = _get_xfs_property_type_info(app_id)
-    property_types = property_type_info['property_types']
-    reverse_property_types = property_type_info['reverse_property_types']
     root = ET.Element(
         'root',
         attrib={
             'app_id': app_id,
             'extension': extension,
-            'version_major': str(xml.header.version_major),
-            'version_minor': str(xml.header.version_minor),
+            'version_major': str(xfs.header.version_major),
+            'version_minor': str(xfs.header.version_minor),
         },
     )
 
-    if xml.data.num_roots != 1:
-        raise ValueError(f'Expected one XFS root object, got {xml.data.num_roots}')
+    if xfs.data.num_roots != 1:
+        raise ValueError(f'Expected one XFS root object, got {xfs.data.num_roots}')
 
-    def append_class(body, class_index, parent, object_index=None):
-        class_def = xml.class_defs[class_index]
-        class_name = dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
-        class_attrib = {
-            'name': class_name,
-            'class_index': str(class_index),
-        }
-        if object_index is not None:
-            class_attrib['object_index'] = str(object_index)
-        class_xml = ET.SubElement(parent, 'class', attrib=class_attrib)
+    def class_name_for_index(class_index):
+        class_def = xfs.class_defs[class_index]
+        return dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
 
+    def append_class_body(body, class_xml):
         for property_values in body.properties:
-            prop = property_values.property
-            prop_type = int(prop.type)
-            prop_attrib = {
-                'type': reverse_property_types.get(
-                    prop_type, f'TYPE_UNKNOWN_{prop_type}'
-                ),
-                'name': prop.name,
-                'size': str(prop.size),
-                'flags': str(prop.flags),
-                'reserved': prop.reserved.hex(),
-            }
+            append_property(class_xml, property_values)
 
-            if prop_type in (
-                property_types['TYPE_CLASS'],
-                property_types['TYPE_CLASSREF'],
+    def append_reference_value(parent, value, property_name=None):
+        attrib = {}
+        if property_name is not None:
+            attrib['name'] = property_name
+
+        if value.is_null:
+            attrib['value'] = 'None'
+            ET.SubElement(parent, 'classref', attrib=attrib)
+            return
+
+        class_name = class_name_for_index(value.class_index)
+        attrib.update({
+            'type': class_name,
+            'class_index': str(value.class_index),
+        })
+        if value.is_inline:
+            attrib['id'] = str(value.index)
+            class_xml = ET.SubElement(parent, 'classref', attrib=attrib)
+            append_class_body(value.body, class_xml)
+        else:
+            attrib['ref'] = str(value.index)
+            ET.SubElement(parent, 'classref', attrib=attrib)
+
+    def append_simple_value(
+        parent, tag_name, value, property_type, property_name=None
+    ):
+        attrib = {}
+        if property_name is not None:
+            attrib['name'] = property_name
+
+        if property_type == property_type_info['property_types'].get('TYPE_STRING'):
+            attrib['value'] = value.value
+        elif property_type == int(Xfs.PropertyType.resource):
+            attrib['class'] = value.class_name
+            attrib['path'] = value.path
+        elif property_type in property_type_info['vector_property_types']:
+            if len(value.value) % 4:
+                raise ValueError(
+                    f'XFS vector property has a value size of {len(value.value)} '
+                    'bytes, not divisible by 4'
+                )
+            components = [
+                struct.unpack_from('<f', value.value, offset)[0]
+                for offset in range(0, len(value.value), 4)
+            ]
+            # A vector3 occupies 16 bytes in XFS. The fourth float is normally
+            # zero padding, so keep it out of the editing view unless it matters.
+            type_name = property_type_info['reverse_property_types'].get(
+                property_type
+            )
+            if (
+                type_name == 'TYPE_VECTOR3'
+                and len(components) == 4
+                and components[3] == 0
             ):
-                prop_xml = ET.SubElement(class_xml, 'classref', attrib=prop_attrib)
-                for value in property_values.values:
-                    if value.is_null:
-                        ET.SubElement(
-                            prop_xml,
-                            'class',
-                            attrib={
-                                'name': 'null',
-                                'reference_kind': 'null',
-                            },
-                        )
-                    elif value.is_inline:
-                        append_class(
-                            value.body,
-                            value.class_index,
-                            prop_xml,
-                            object_index=value.index,
-                        )
-                    else:
-                        reference_class = xml.class_defs[value.class_index]
-                        reference_name = dti_hashes.get(
-                            reference_class.type_hash,
-                            str(hex(reference_class.type_hash)),
-                        )
-                        ET.SubElement(
-                            prop_xml,
-                            'class',
-                            attrib={
-                                'name': reference_name,
-                                'class_index': str(value.class_index),
-                                'reference_index': str(value.index),
-                            },
-                        )
-            elif prop_type == property_types['TYPE_STRING']:
-                prop_xml = ET.SubElement(class_xml, 'string', attrib=prop_attrib)
-                for value in property_values.values:
-                    ET.SubElement(prop_xml, 'item', attrib={'val': value.value})
-            elif prop_type == int(Xfs.PropertyType.resource):
-                prop_xml = ET.SubElement(class_xml, 'resource', attrib=prop_attrib)
-                for value in property_values.values:
-                    ET.SubElement(prop_xml, 'item', attrib={'val': value.class_name})
-                    ET.SubElement(prop_xml, 'item', attrib={'val': value.path})
-            elif prop_type in property_type_info['vector_property_types']:
-                prop_xml = ET.SubElement(class_xml, 'vector', attrib=prop_attrib)
-                for value in property_values.values:
-                    vec_xml = ET.SubElement(prop_xml, 'vec')
-                    if len(value.value) % 4:
-                        raise ValueError(
-                            f'XFS vector property {prop.name!r} has a value size '
-                            f'of {len(value.value)} bytes, not divisible by 4'
-                        )
-                    for offset in range(0, len(value.value), 4):
-                        component = struct.unpack_from('<f', value.value, offset)[0]
-                        ET.SubElement(vec_xml, 'item', attrib={'val': str(component)})
+                components.pop()
+            names = _xfs_vector_component_names(type_name, len(components))
+            attrib.update(
+                {name: str(component) for name, component in zip(names, components)}
+            )
+        else:
+            scalar_reader = property_type_info['scalar_readers'].get(property_type)
+            if scalar_reader is None:
+                attrib['value'] = value.value.hex()
+                attrib['size'] = str(len(value.value))
+                attrib['type_id'] = str(property_type)
+                tag_name = 'raw'
             else:
-                prop_xml = ET.SubElement(class_xml, 'scalar', attrib=prop_attrib)
-                scalar_reader = property_type_info['scalar_readers'].get(prop_type)
-                for value in property_values.values:
-                    if scalar_reader is None:
-                        scalar_value = value.value.hex()
-                    else:
-                        scalar_value = str(
-                            scalar_reader(KaitaiStream(io.BytesIO(value.value)))
-                        )
-                    ET.SubElement(prop_xml, 'item', attrib={'val': scalar_value})
+                scalar_value = scalar_reader(KaitaiStream(io.BytesIO(value.value)))
+                if property_type == property_type_info['property_types'].get('TYPE_BOOL'):
+                    scalar_value = 'true' if scalar_value else 'false'
+                else:
+                    scalar_value = str(scalar_value)
+                attrib['value'] = scalar_value
+
+        ET.SubElement(parent, tag_name, attrib=attrib)
+
+    def append_property(parent, property_values):
+        prop = property_values.property
+        property_type = int(prop.type)
+        tag_name = _xfs_xml_type_name(property_type, property_type_info)
+        values = property_values.values
+        is_reference = property_type in (
+            property_type_info['property_types']['TYPE_CLASS'],
+            property_type_info['property_types']['TYPE_CLASSREF'],
+        )
+
+        if len(values) == 1:
+            if is_reference:
+                append_reference_value(parent, values[0], prop.name)
+            else:
+                append_simple_value(
+                    parent, tag_name, values[0], property_type, prop.name
+                )
+            return
+
+        array_xml = ET.SubElement(
+            parent,
+            'array',
+            attrib={'name': prop.name, 'type': tag_name},
+        )
+        if is_reference:
+            for value in values:
+                append_reference_value(array_xml, value)
+        else:
+            for value in values:
+                append_simple_value(array_xml, tag_name, value, property_type)
 
     # The XFS root body is stored directly in the data section, outside the
     # object-reference index sequence.
-    append_class(xml.data.root, 0, root)
+    root_class = ET.SubElement(
+        root,
+        'class',
+        attrib={'name': class_name_for_index(0), 'class_index': '0'},
+    )
+    append_class_body(xfs.data.root, root_class)
 
     # Preserve class definitions that have no instantiated object in the XML
-    # tree, along with the metadata needed to rebuild the class table exactly.
+    # tree, plus binary details that are not part of the editable values.
     metadata_xml = ET.SubElement(root, '_xfs_metadata')
-    for class_index, class_def in enumerate(xml.class_defs):
-        class_name = dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
+    for class_index, class_def in enumerate(xfs.class_defs):
         class_xml = ET.SubElement(
             metadata_xml,
             'class_def',
             attrib={
                 'index': str(class_index),
-                'name': class_name,
+                'name': class_name_for_index(class_index),
                 'type_hash': str(class_def.type_hash),
             },
         )
@@ -1062,7 +1203,6 @@ def from_xfs(xml, extension, app_id):
                     'type_id': str(int(prop.type)),
                     'flags': str(prop.flags),
                     'size': str(prop.size),
-                    'reserved': prop.reserved.hex(),
                 },
             )
 
@@ -1119,6 +1259,8 @@ class XfsXmlSerializer:
             properties = []
             for prop_xml in class_xml.findall('property'):
                 reserved = bytes.fromhex(prop_xml.attrib.get('reserved', ''))
+                if not reserved:
+                    reserved = bytes(16)
                 if len(reserved) != 16:
                     raise ValueError(
                         f'XFS property {prop_xml.attrib.get("name")!r} '
@@ -1138,20 +1280,30 @@ class XfsXmlSerializer:
             }
             self.class_indexes_by_name[class_name].append(class_index)
 
+    @staticmethod
+    def _class_name_for_node(class_xml):
+        if class_xml.tag == 'classref':
+            return class_xml.attrib.get('type', class_xml.attrib.get('name', ''))
+        return class_xml.attrib.get('name', class_xml.attrib.get('type', ''))
+
     def _class_index_for_node(self, class_xml, create=False):
-        if class_xml.attrib.get('name') == 'null':
+        if (
+            class_xml.attrib.get('name') == 'null'
+            or class_xml.attrib.get('value') == 'None'
+            or class_xml.attrib.get('ref') is not None
+        ):
             return None
         class_index_attr = class_xml.attrib.get('class_index')
         if class_index_attr is not None:
             class_index = self._parse_int(class_index_attr)
             if class_index not in self.class_defs and not create:
                 raise ValueError(
-                    f'XFS class {class_xml.attrib.get("name")!r} uses missing '
+                    f'XFS class {self._class_name_for_node(class_xml)!r} uses missing '
                     f'class index {class_index}'
                 )
             return class_index
 
-        class_name = class_xml.attrib['name']
+        class_name = self._class_name_for_node(class_xml)
         if self.class_indexes_by_name[class_name]:
             return self.class_indexes_by_name[class_name][0]
         if not create:
@@ -1161,13 +1313,26 @@ class XfsXmlSerializer:
         return class_index
 
     def _parse_property_type(self, prop_xml, old_prop=None):
-        type_name = prop_xml.attrib.get('type')
-        if type_name is None and old_prop is not None:
+        if old_prop is not None and prop_xml.tag not in (
+            'scalar', 'vector', 'array', 'raw'
+        ):
             return old_prop['type_id']
+
+        type_name = prop_xml.attrib.get('type')
+        if prop_xml.tag not in ('scalar', 'vector', 'array', 'raw'):
+            type_name = prop_xml.tag
+        if prop_xml.tag == 'raw' and prop_xml.attrib.get('type_id') is not None:
+            return self._parse_int(prop_xml.attrib['type_id'])
         try:
             return int(self.property_types[type_name])
         except (KeyError, TypeError):
             if type_name:
+                type_key = type_name.lower()
+                if not type_key.startswith('type_'):
+                    type_key = 'type_' + type_key
+                for known_name, known_id in self.property_types.items():
+                    if known_name.lower() == type_key:
+                        return int(known_id)
                 try:
                     return self._parse_int(type_name)
                 except ValueError:
@@ -1177,6 +1342,8 @@ class XfsXmlSerializer:
                     return self._parse_int(type_name[len('TYPE_UNKNOWN_'):])
                 except ValueError:
                     pass
+        if old_prop is not None:
+            return old_prop['type_id']
         raise ValueError(f'Unknown XFS property type {type_name!r}')
 
     def _parse_property_def(self, prop_xml, old_prop=None):
@@ -1191,15 +1358,17 @@ class XfsXmlSerializer:
                 type_id, self.property_type_info['scalar_sizes'].get(type_id)
             )
             if (
-                size is None and type_id in self.property_type_info['vector_property_types']
+                size is None
+                and type_id in self.property_type_info['vector_property_types']
             ):
-                vectors = prop_xml.findall('vec')
-                size = len(vectors[0].findall('item')) * 4 if vectors else None
+                values = self._simple_value_nodes(prop_xml)
+                if values:
+                    size = len(self._vector_component_values(values[0], type_id)) * 4
             if size is None:
-                values = prop_xml.findall('item')
+                values = self._simple_value_nodes(prop_xml)
                 if values:
                     try:
-                        size = len(bytes.fromhex(values[0].attrib['val']))
+                        size = len(bytes.fromhex(self._scalar_text(values[0])))
                     except (KeyError, ValueError):
                         size = None
         if size is None:
@@ -1246,12 +1415,100 @@ class XfsXmlSerializer:
                 ) from error
             return (~zlib.crc32(encoded)) & 0x7FFFFFFF
 
+    @staticmethod
+    def _scalar_text(value_xml):
+        if 'value' in value_xml.attrib:
+            return value_xml.attrib['value']
+        if 'val' in value_xml.attrib:
+            return value_xml.attrib['val']
+        if value_xml.text is not None:
+            return value_xml.text
+        raise ValueError(f'Missing XFS value on <{value_xml.tag}>')
+
+    @staticmethod
+    def _simple_value_nodes(prop_xml):
+        if prop_xml.tag == 'array':
+            return list(prop_xml)
+        if prop_xml.tag == 'vector':
+            vectors = prop_xml.findall('vec')
+            if vectors:
+                return vectors
+            return [] if prop_xml.attrib.get('type') is not None else [prop_xml]
+        if prop_xml.tag in ('scalar', 'string', 'resource'):
+            items = prop_xml.findall('item')
+            if items:
+                return items
+            return [] if prop_xml.attrib.get('type') is not None else [prop_xml]
+        return [prop_xml]
+
+    def _vector_component_values(self, value_xml, type_id):
+        if value_xml.tag == 'vec':
+            return [self._scalar_text(item) for item in value_xml.findall('item')]
+        if value_xml.tag == 'vector':
+            vectors = value_xml.findall('vec')
+            if vectors:
+                return self._vector_component_values(vectors[0], type_id)
+
+        type_name = self.property_type_info['reverse_property_types'].get(type_id)
+        names = XFS_VECTOR_COMPONENT_NAMES.get(type_name, ())
+        component_names = [
+            name for name in names if name in value_xml.attrib
+        ]
+        if not component_names:
+            component_names = sorted(
+                (
+                    name for name in value_xml.attrib
+                    if name.startswith('v') and name[1:].isdigit()
+                ),
+                key=lambda name: int(name[1:]),
+            )
+        if component_names:
+            values = [value_xml.attrib[name] for name in component_names]
+            generic_names = sorted(
+                (
+                    name for name in value_xml.attrib
+                    if name.startswith('v') and name[1:].isdigit()
+                ),
+                key=lambda name: int(name[1:]),
+            )
+            values.extend(value_xml.attrib[name] for name in generic_names)
+            return values
+        if 'value' in value_xml.attrib:
+            return [value_xml.attrib['value']]
+        return []
+
+    def _reference_value_nodes(self, prop_xml):
+        if prop_xml.tag == 'array':
+            return list(prop_xml)
+        if prop_xml.tag == 'classref':
+            legacy_values = prop_xml.findall('class')
+            if legacy_values:
+                return legacy_values
+            if prop_xml.attrib.get('type') in ('TYPE_CLASS', 'TYPE_CLASSREF'):
+                return []
+            return [prop_xml]
+        return prop_xml.findall('class')
+
+    @staticmethod
+    def _is_inline_reference(value_xml):
+        if value_xml.attrib.get('name') == 'null':
+            return False
+        if value_xml.attrib.get('value') == 'None' or value_xml.attrib.get('ref') is not None:
+            return False
+        if value_xml.attrib.get('reference_index') is not None:
+            return False
+        if value_xml.tag == 'classref':
+            if value_xml.findall('class'):
+                return False
+            return value_xml.attrib.get('type') not in (None, 'TYPE_CLASSREF', 'TYPE_CLASS')
+        return True
+
     def _collect_inline_classes(self, class_xml):
         class_index = self._class_index_for_node(class_xml, create=True)
-        class_name = class_xml.attrib['name']
+        class_name = self._class_name_for_node(class_xml)
         old_def = self.class_defs.get(class_index)
         old_props = old_def['properties'] if old_def is not None else []
-        property_nodes = list(class_xml)
+        property_nodes = [child for child in class_xml if child.tag != '_xfs_metadata']
         properties = [
             self._parse_property_def(
                 prop_xml,
@@ -1289,9 +1546,17 @@ class XfsXmlSerializer:
             self.seen_instance_defs.add(class_index)
 
         for prop_xml in property_nodes:
-            for value_xml in prop_xml.findall('class'):
-                if (value_xml.attrib.get('name') != 'null' and 'reference_index' not in value_xml.attrib):
-                    self._collect_inline_classes(value_xml)
+            prop_def = next(
+                prop for prop in properties
+                if prop['name'] == prop_xml.attrib.get('name', '')
+            )
+            if prop_def['type_id'] in (
+                self.property_types.get('TYPE_CLASS'),
+                self.property_types.get('TYPE_CLASSREF'),
+            ):
+                for value_xml in self._reference_value_nodes(prop_xml):
+                    if self._is_inline_reference(value_xml):
+                        self._collect_inline_classes(value_xml)
 
     def _prepare_class_definitions(self):
         self._collect_inline_classes(self.root_class)
@@ -1331,7 +1596,7 @@ class XfsXmlSerializer:
         if class_index_attr is not None:
             class_index = self._parse_int(class_index_attr)
         else:
-            class_name = class_xml.attrib['name']
+            class_name = self._class_name_for_node(class_xml)
             options = self.class_indexes_by_name[class_name]
             if len(options) != 1:
                 raise ValueError(f'Cannot resolve class index for XFS class {class_name!r}')
@@ -1341,19 +1606,25 @@ class XfsXmlSerializer:
         return class_index
 
     def _get_object_source_id(self, class_xml):
-        value = class_xml.attrib.get('object_index')
+        value = class_xml.attrib.get('id', class_xml.attrib.get('object_index'))
         return self._parse_int(value) if value is not None else None
 
     def _encode_reference(self, class_xml):
         class_name = class_xml.attrib.get('name', '')
-        if class_name == 'null' or class_xml.attrib.get('reference_kind') == 'null':
+        if (
+            class_name == 'null'
+            or class_xml.attrib.get('reference_kind') == 'null'
+            or class_xml.attrib.get('value') == 'None'
+        ):
             return (
                 self._pack_uint(0xFFFE, 16, 'null-reference tag') +
                 self._pack_uint(0, 16, 'null-reference index')
             )
 
         class_index = self._node_class_index(class_xml)
-        reference_source_id = class_xml.attrib.get('reference_index')
+        reference_source_id = class_xml.attrib.get(
+            'ref', class_xml.attrib.get('reference_index')
+        )
         if reference_source_id is not None:
             reference_source_id = self._parse_int(reference_source_id)
             if reference_source_id not in self.output_object_ids:
@@ -1384,46 +1655,97 @@ class XfsXmlSerializer:
         )
 
     def _encode_reference_values(self, prop_xml):
-        values = prop_xml.findall('class')
+        values = self._reference_value_nodes(prop_xml)
         output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
         for value_xml in values:
             output.extend(self._encode_reference(value_xml))
         return bytes(output)
 
     def _encode_string_values(self, prop_xml):
-        values = prop_xml.findall('item')
+        values = self._simple_value_nodes(prop_xml)
         output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
         for value_xml in values:
-            output.extend(self._encode_terminated(value_xml.attrib['val'], 'string value'))
+            output.extend(
+                self._encode_terminated(self._scalar_text(value_xml), 'string value')
+            )
         return bytes(output)
 
     def _encode_resource_values(self, prop_xml, prop_def):
-        values = prop_xml.findall('item')
-        if len(values) % 2:
-            raise ValueError(
-                f'XFS resource property {prop_def["name"]!r} must contain '
-                'class-name/path item pairs'
-            )
-        output = bytearray(
-            self._pack_uint(len(values) // 2, 32, 'property value count')
-        )
-        for i in range(0, len(values), 2):
+        if prop_xml.tag == 'resource' and (
+            'class' in prop_xml.attrib or 'path' in prop_xml.attrib
+        ):
+            values = [prop_xml]
+        elif prop_xml.tag == 'resource' and prop_xml.attrib.get('type') is not None:
+            items = prop_xml.findall('item')
+            if len(items) % 2:
+                raise ValueError(
+                    f'XFS resource property {prop_def["name"]!r} must contain '
+                    'class-name/path item pairs'
+                )
+            values = [
+                {'class': items[i].attrib['val'], 'path': items[i + 1].attrib['val']}
+                for i in range(0, len(items), 2)
+            ]
+        elif prop_xml.tag == 'array':
+            values = list(prop_xml)
+        else:
+            items = prop_xml.findall('item')
+            if len(items) % 2:
+                raise ValueError(
+                    f'XFS resource property {prop_def["name"]!r} must contain '
+                    'class-name/path item pairs'
+                )
+            values = [
+                {'class': items[i].attrib['val'], 'path': items[i + 1].attrib['val']}
+                for i in range(0, len(items), 2)
+            ]
+
+        output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
+        for value_xml in values:
+            if isinstance(value_xml, dict):
+                class_name = value_xml['class']
+                path = value_xml['path']
+            else:
+                class_name = value_xml.attrib.get('class', 'null')
+                path = value_xml.attrib.get('path', '')
             output.extend(b'\x02')
-            output.extend(
-                self._encode_terminated(values[i].attrib['val'], 'resource class name')
-            )
-            output.extend(
-                self._encode_terminated(values[i + 1].attrib['val'], 'resource path')
-            )
+            output.extend(self._encode_terminated(class_name, 'resource class name'))
+            output.extend(self._encode_terminated(path, 'resource path'))
         return bytes(output)
 
     def _encode_vector_values(self, prop_xml, prop_def):
-        values = prop_xml.findall('vec')
+        if prop_xml.tag == 'scalar' and prop_xml.findall('item'):
+            values = prop_xml.findall('item')
+            output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
+            for value_xml in values:
+                try:
+                    vector_data = bytes.fromhex(value_xml.attrib['val'])
+                except (KeyError, ValueError) as error:
+                    raise ValueError(
+                        f'Legacy XFS vector property {prop_def["name"]!r} '
+                        'must contain a hex value'
+                    ) from error
+                if len(vector_data) != prop_def['size']:
+                    raise ValueError(
+                        f'XFS vector property {prop_def["name"]!r} has '
+                        f'{len(vector_data)} bytes per value; expected {prop_def["size"]}'
+                    )
+                output.extend(vector_data)
+            return bytes(output)
+
+        values = self._simple_value_nodes(prop_xml)
         output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
         for vector_xml in values:
             vector_data = bytearray()
-            for component in vector_xml.findall('item'):
-                vector_data.extend(struct.pack('<f', float(component.attrib['val'])))
+            components = self._vector_component_values(
+                vector_xml, prop_def['type_id']
+            )
+            if len(components) * 4 < prop_def['size']:
+                components.extend(
+                    ['0.0'] * ((prop_def['size'] - len(components) * 4) // 4)
+                )
+            for component in components:
+                vector_data.extend(struct.pack('<f', float(component)))
             if len(vector_data) != prop_def['size']:
                 raise ValueError(
                     f'XFS vector property {prop_def["name"]!r} has '
@@ -1434,11 +1756,11 @@ class XfsXmlSerializer:
 
     def _encode_scalar_values(self, prop_xml, prop_def):
         type_id = prop_def['type_id']
-        values = prop_xml.findall('item')
+        values = self._simple_value_nodes(prop_xml)
         output = bytearray(self._pack_uint(len(values), 32, 'property value count'))
         value_format = self.property_type_info['scalar_formats'].get(type_id)
         for value_xml in values:
-            value_text = value_xml.attrib['val']
+            value_text = self._scalar_text(value_xml)
             if value_format is None:
                 try:
                     raw_value = bytes.fromhex(value_text)
@@ -1452,14 +1774,19 @@ class XfsXmlSerializer:
                         f'{len(raw_value)} bytes; expected {prop_def["size"]}'
                     )
             else:
-                scalar_value = (
-                    float(value_text)
-                    if type_id in (
-                        self.property_types["TYPE_F32"],
-                        self.property_types["TYPE_F64"],
+                if type_id in (
+                    self.property_types["TYPE_F32"],
+                    self.property_types["TYPE_F64"],
+                ):
+                    scalar_value = float(value_text)
+                elif type_id == self.property_types["TYPE_BOOL"]:
+                    scalar_value = (
+                        int(value_text.lower() == 'true')
+                        if value_text.lower() in ('true', 'false')
+                        else self._parse_int(value_text)
                     )
-                    else self._parse_int(value_text)
-                )
+                else:
+                    scalar_value = self._parse_int(value_text)
                 try:
                     raw_value = struct.pack('<' + value_format, scalar_value)
                 except (struct.error, OverflowError) as error:
