@@ -151,6 +151,12 @@ SDL_DATA_STRIDE = {
 }
 
 
+XFS_EXTENSIONS = (
+    "lot", "sce", "fsm", "lsp", "rvt", "seg", "smh", "lku",
+    "lnk", "los", "lom", "cmi", "glp", "bmse",
+)
+
+
 def _sdl_data_struct_size(prop_type):
     prop_type_name = RV_MT_PROP_TYPES_RE5.get(prop_type)
     return SDL_DATA_STRIDE.get(prop_type_name)
@@ -825,10 +831,6 @@ def xml_to_sdl_bytes(root_xml, app_id):
     return _write_sdl_bytes(header_values, tracks, track_data, layout, app_id)
 
 
-XFS_EXTENSIONS = (
-    "lot", "sce", "fsm", "lsp", "rvt", "seg", "smh", "lku",
-    "lnk", "los", "lom", "cmi", "glp", "bmse",
-)
 XFS_EXTENSION_VERSIONS = {"fsm": 1, "lot": 4, "sce": 11, "lnk": 14}
 XFS_PROPERTY_TYPES_BY_APP_ID = {
     "dmc4": MT_PROP_TYPES_RE5,
@@ -1002,7 +1004,7 @@ def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.type
     bl_object_name = vfile.display_name
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
-    xml = from_xfs(xfs, extension, app_id)
+    xml = XfsXmlImporter(xfs, extension, app_id).to_xml()
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
@@ -1039,32 +1041,25 @@ for xfs_extension in XFS_EXTENSIONS:
     )(export_xfs)
 
 
-def from_xfs(xfs, extension, app_id):
-    """Convert XFS data to a compact, editable XML tree."""
-    dti_hashes = _get_sdl_dti_hashes(app_id)
-    property_type_info = _get_xfs_property_type_info(app_id)
-    root = ET.Element(
-        'root',
-        attrib={
-            'app_id': app_id,
-            'extension': extension,
-            'version_major': str(xfs.header.version_major),
-            'version_minor': str(xfs.header.version_minor),
-        },
-    )
+class XfsXmlImporter:
+    """Convert parsed XFS data to a compact, editable XML tree."""
 
-    if xfs.data.num_roots != 1:
-        raise ValueError(f'Expected one XFS root object, got {xfs.data.num_roots}')
+    def __init__(self, xfs, extension, app_id):
+        self.xfs = xfs
+        self.extension = extension
+        self.app_id = app_id
+        self.dti_hashes = _get_sdl_dti_hashes(app_id)
+        self.property_type_info = _get_xfs_property_type_info(app_id)
 
-    def class_name_for_index(class_index):
-        class_def = xfs.class_defs[class_index]
-        return dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
+    def class_name_for_index(self, class_index):
+        class_def = self.xfs.class_defs[class_index]
+        return self.dti_hashes.get(class_def.type_hash, str(hex(class_def.type_hash)))
 
-    def append_class_body(body, class_xml):
+    def append_class_body(self, body, class_xml):
         for property_values in body.properties:
-            append_property(class_xml, property_values)
+            self.append_property(class_xml, property_values)
 
-    def append_reference_value(parent, value, property_name=None):
+    def append_reference_value(self, parent, value, property_name=None):
         attrib = {}
         if property_name is not None:
             attrib['name'] = property_name
@@ -1074,7 +1069,7 @@ def from_xfs(xfs, extension, app_id):
             ET.SubElement(parent, 'classref', attrib=attrib)
             return
 
-        class_name = class_name_for_index(value.class_index)
+        class_name = self.class_name_for_index(value.class_index)
         attrib.update({
             'type': class_name,
             'class_index': str(value.class_index),
@@ -1082,14 +1077,15 @@ def from_xfs(xfs, extension, app_id):
         if value.is_inline:
             attrib['id'] = str(value.index)
             class_xml = ET.SubElement(parent, 'classref', attrib=attrib)
-            append_class_body(value.body, class_xml)
+            self.append_class_body(value.body, class_xml)
         else:
             attrib['ref'] = str(value.index)
             ET.SubElement(parent, 'classref', attrib=attrib)
 
     def append_simple_value(
-        parent, tag_name, value, property_type, property_name=None
+        self, parent, tag_name, value, property_type, property_name=None
     ):
+        property_type_info = self.property_type_info
         attrib = {}
         if property_name is not None:
             attrib['name'] = property_name
@@ -1115,9 +1111,9 @@ def from_xfs(xfs, extension, app_id):
                 property_type
             )
             if (
-                type_name == 'TYPE_VECTOR3'
-                and len(components) == 4
-                and components[3] == 0
+                type_name == 'TYPE_VECTOR3' and
+                len(components) == 4 and
+                components[3] == 0
             ):
                 components.pop()
             names = _xfs_vector_component_names(type_name, len(components))
@@ -1141,7 +1137,8 @@ def from_xfs(xfs, extension, app_id):
 
         ET.SubElement(parent, tag_name, attrib=attrib)
 
-    def append_property(parent, property_values):
+    def append_property(self, parent, property_values):
+        property_type_info = self.property_type_info
         prop = property_values.property
         property_type = int(prop.type)
         tag_name = _xfs_xml_type_name(property_type, property_type_info)
@@ -1153,9 +1150,9 @@ def from_xfs(xfs, extension, app_id):
 
         if len(values) == 1:
             if is_reference:
-                append_reference_value(parent, values[0], prop.name)
+                self.append_reference_value(parent, values[0], prop.name)
             else:
-                append_simple_value(
+                self.append_simple_value(
                     parent, tag_name, values[0], property_type, prop.name
                 )
             return
@@ -1167,47 +1164,67 @@ def from_xfs(xfs, extension, app_id):
         )
         if is_reference:
             for value in values:
-                append_reference_value(array_xml, value)
+                self.append_reference_value(array_xml, value)
         else:
             for value in values:
-                append_simple_value(array_xml, tag_name, value, property_type)
+                self.append_simple_value(array_xml, tag_name, value, property_type)
 
-    # The XFS root body is stored directly in the data section, outside the
-    # object-reference index sequence.
-    root_class = ET.SubElement(
-        root,
-        'class',
-        attrib={'name': class_name_for_index(0), 'class_index': '0'},
-    )
-    append_class_body(xfs.data.root, root_class)
-
-    # Preserve class definitions that have no instantiated object in the XML
-    # tree, plus binary details that are not part of the editable values.
-    metadata_xml = ET.SubElement(root, '_xfs_metadata')
-    for class_index, class_def in enumerate(xfs.class_defs):
-        class_xml = ET.SubElement(
-            metadata_xml,
-            'class_def',
+    def to_xml(self):
+        """Return an XML tree representing the XFS root and class metadata."""
+        xfs = self.xfs
+        root = ET.Element(
+            'root',
             attrib={
-                'index': str(class_index),
-                'name': class_name_for_index(class_index),
-                'type_hash': str(class_def.type_hash),
+                'app_id': self.app_id,
+                'extension': self.extension,
+                'version_major': str(xfs.header.version_major),
+                'version_minor': str(xfs.header.version_minor),
             },
         )
-        for prop in class_def.properties:
-            ET.SubElement(
-                class_xml,
-                'property',
+
+        if xfs.data.num_roots != 1:
+            raise ValueError(f'Expected one XFS root object, got {xfs.data.num_roots}')
+
+        # The XFS root body is stored directly in the data section, outside the
+        # object-reference index sequence.
+        root_class = ET.SubElement(
+            root,
+            'class',
+            attrib={'name': self.class_name_for_index(0), 'class_index': '0'},
+        )
+        self.append_class_body(xfs.data.root, root_class)
+
+        # Preserve class definitions that have no instantiated object in the XML
+        # tree, plus binary details that are not part of the editable values.
+        metadata_xml = ET.SubElement(root, '_xfs_metadata')
+        for class_index, class_def in enumerate(xfs.class_defs):
+            class_xml = ET.SubElement(
+                metadata_xml,
+                'class_def',
                 attrib={
-                    'name': prop.name,
-                    'type_id': str(int(prop.type)),
-                    'flags': str(prop.flags),
-                    'size': str(prop.size),
+                    'index': str(class_index),
+                    'name': self.class_name_for_index(class_index),
+                    'type_hash': str(class_def.type_hash),
                 },
             )
+            for prop in class_def.properties:
+                ET.SubElement(
+                    class_xml,
+                    'property',
+                    attrib={
+                        'name': prop.name,
+                        'type_id': str(int(prop.type)),
+                        'flags': str(prop.flags),
+                        'size': str(prop.size),
+                    },
+                )
 
-    tree = ET.ElementTree(root)
-    return tree
+        return ET.ElementTree(root)
+
+
+def from_xfs(xfs, extension, app_id):
+    """Convert XFS data to a compact, editable XML tree."""
+    return XfsXmlImporter(xfs, extension, app_id).to_xml()
 
 
 class XfsXmlSerializer:
