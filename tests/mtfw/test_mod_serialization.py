@@ -22,6 +22,16 @@ MOD_SERIALIZATION_DATASET_PATH = os.path.join(
 with open(MOD_SERIALIZATION_DATASET_PATH) as f:
     MOD_SERIALIZATION_DATASET = json.load(f)
 
+# The mod-21 layout (versions 210/211/212); the per-mesh tests below are
+# written against its field names and skip other versions (re5's 156).
+VERSIONS_MOD_21 = (210, 211, 212)
+
+
+def skip_unless_mod_21(mod):
+    version = mod.header.version
+    if version not in VERSIONS_MOD_21:
+        pytest.skip(f"checks mod-21 mesh fields (versions {VERSIONS_MOD_21}); this mod is version {version}")
+
 
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
@@ -277,8 +287,7 @@ def test_materials_data(mod_imported_local, mod_exported_local, local_app_id):
 
 
 def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, subtests):
-    if mod_imported_local.header.version not in (210, 211, 212):
-        pytest.skip()
+    skip_unless_mod_21(mod_imported_local)
 
     for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
@@ -327,8 +336,7 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
 
 
 def test_vertices(mod_imported_local, mod_exported_local, subtests):
-    if mod_imported_local.header.version not in (210, 211, 212):  # RE5 has some mess with in hands files
-        pytest.skip()
+    skip_unless_mod_21(mod_imported_local)  # RE5 has some mess with in hands files
     assert len(mod_imported_local.meshes_data.meshes) == len(mod_exported_local.meshes_data.meshes)
     for mi, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
@@ -616,8 +624,7 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
     AttributeError on umvc3 - under an xfail marker, so every assertion in
     this test silently never ran for that app at all.
     """
-    if mod_imported_local.header.version not in (210, 211, 212):
-        pytest.skip()
+    skip_unless_mod_21(mod_imported_local)
     for i, src_mesh in enumerate(mod_imported_local.meshes_data.meshes):
         dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(i=i):
@@ -634,8 +641,7 @@ def test_meshes_data_buffer_placement(
     here asking to be removed from the set - the signal a plain
     xfail(reason="WIP") throws away.
     """
-    if mod_imported_local.header.version not in (210, 211, 212):
-        pytest.skip()
+    skip_unless_mod_21(mod_imported_local)
     mismatches = _mesh_field_mismatches(
         mod_imported_local.meshes_data.meshes,
         mod_exported_local.meshes_data.meshes,
