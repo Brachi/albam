@@ -76,6 +76,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
+- Autosetter compression format value for Diffuse maps with alpha transparency
 
 ### Changed
 
@@ -84,6 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
   property are migrated the first time they are used
 - Contex-related tools such as Handshaker, Face Attribute Editor. VertexGroupsMerger moved to Blender tools tab
+- Custom texture path field in now hidden, Autosetter uses .mod file directory
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically
