@@ -156,7 +156,7 @@ def _update_track_data(bl_obj, encoded_tracks, app_id):
             tracks_collection,
             get_track_keys((item.bone_index, item.usage) for item in tracks_collection))
     }
-    bone_indices = [int(et.bone_index.split("_")[0]) for et in encoded_tracks]  # workaround for 254_ values
+    bone_indices = [int(et.idx_anim_map.split("_")[0]) for et in encoded_tracks]  # workaround for 254_ values
     keys = get_track_keys((bone_index, et.usage) for bone_index, et in zip(bone_indices, encoded_tracks))
     tracks_collection.clear()
     for et, bone_index, key in zip(encoded_tracks, bone_indices, keys):
@@ -711,6 +711,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     dst_track.len_data = len(track.raw_data)
                     dst_track.ofs_data = track_ofc[j]
                     dst_track.data = track.raw_data
@@ -773,6 +774,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track67(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     track.bounds = None
                     if dst_track.buffer_type in BOUNDS_BUFF_TYPES:
                         # TODO move into calc offsets

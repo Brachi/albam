@@ -307,7 +307,7 @@ VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
 VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 # The versions mod-21.ksy covers, which size their index buffer as
-# num_faces * 2 rather than (num_faces * 2) - 2.
+# num_indices * 2 rather than (num_indices * 2) - 2.
 VERSIONS_MOD_21 = {210, 211, 212}
 
 MAIN_LODS = {
@@ -435,9 +435,9 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
 
-    if min(indices) >= mesh.min_index:  # backwards compability workaround
+    if min(indices) >= mesh.first_index:  # backwards compability workaround
         # convert indices for this mesh only, so they start at zero
-        indices = [tri_idx - mesh.min_index for tri_idx in indices]
+        indices = [tri_idx - mesh.first_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -1015,39 +1015,40 @@ def export_mod(bl_obj):
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
-    # num_faces is the index count, not a face count (see num_edges below,
-    # which is the actual triangle count on a triangle-list version).
+    # num_indices (named num_faces until #252) is the index count, not a face
+    # count (see num_triangles below, which is the actual triangle count on a
+    # triangle-list version).
     #
-    # The 21 formats size their index buffer as num_faces * 2, so num_faces
+    # The 21 formats size their index buffer as num_indices * 2, so num_indices
     # is exactly the number of indices. mod-153 and mod-156 size theirs as
-    # (num_faces * 2) - 2, so there it is the index count plus one, and the
+    # (num_indices * 2) - 2, so there it is the index count plus one, and the
     # trailing entry the +1 accounts for is the padding appended below.
     # Applying the +1 everywhere wrote one index too many on 21: measured
-    # against real umvc3 files, num_faces equals the summed mesh index count
+    # against real umvc3 files, num_indices equals the summed mesh index count
     # exactly, and export was producing 205 against 204, 42847 against 42846.
     if dst_mod.header.version in VERSIONS_MOD_21:
-        dst_mod.header.num_faces = len(index_buffer) // 2
+        dst_mod.header.num_indices = len(index_buffer) // 2
     else:
-        dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+        dst_mod.header.num_indices = (len(index_buffer) // 2) + 1
     if dst_mod.header.version not in VERSIONS_USE_TRISTRIPS:
-        # num_edges was initialised to 0 and never assigned, so every export
-        # wrote 0 for it. On a version that indexes triangles as a plain
+        # num_triangles (named num_edges until #252) was initialised to 0 and
+        # never assigned, so every export wrote 0 for it. On a version that indexes triangles as a plain
         # list, the two fields are one relation apart - measured across
-        # every model in the serialization dataset, num_faces equals the
-        # summed mesh index count and num_edges is exactly a third of it,
+        # every model in the serialization dataset, num_indices equals the
+        # summed mesh index count and num_triangles is exactly a third of it,
         # which is what the TODO above is pointing at: these are the index
         # count and the triangle count. Deriving it keeps the header
-        # self-consistent whatever num_faces ends up being.
+        # self-consistent whatever num_indices ends up being.
         #
         # Left alone on the tristrip versions: there the index count is not
-        # three per triangle, num_edges has no such relation to num_faces in
+        # three per triangle, num_triangles has no such relation to num_indices in
         # a real file, and recovering the triangle count needs the strip
         # decomposition rather than arithmetic.
-        dst_mod.header.num_edges = dst_mod.header.num_faces // 3
+        dst_mod.header.num_triangles = dst_mod.header.num_indices // 3
     if app_id not in ["re5"] and dst_mod.header.version not in VERSIONS_MOD_21:
-        # The trailing index the (num_faces * 2) - 2 sizing leaves room for.
+        # The trailing index the (num_indices * 2) - 2 sizing leaves room for.
         # A 21 file has no such entry: its meshes tile the index buffer
-        # exactly, the last one ending on num_faces.
+        # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
 
     final_size = sum((
@@ -1093,8 +1094,8 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
         num_meshes=0,
         num_materials=0,
         num_vertices=0,
-        num_faces=0,
-        num_edges=0,
+        num_indices=0,
+        num_triangles=0,
         size_vertex_buffer=0,
         num_groups=src_mod.header.num_groups,
         offset_bones_data=0,
@@ -1224,7 +1225,7 @@ def _derive_parent_ids(armature_ob, num_bones):
 
 
 def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
-    """Each bone's `length`: how far the furthest vertex it influences sits.
+    """Each bone's `furthest_vertex_distance`: how far the furthest vertex it influences sits.
 
     The field is `furthestVertexDistance` in Capcom's own vocabulary, and it is
     zero for a bone nothing skins to. Computed from the live meshes so that
@@ -1448,8 +1449,9 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_pale
         bone.idx_anim_map = anim_map_ids[i] if export_bones else src_bone.idx_anim_map
         bone.idx_parent = parent_ids[i] if export_bones else src_bone.idx_parent
         bone.idx_mirror = mirror_ids[i] if export_bones else src_bone.idx_mirror
-        bone.idx_mapping = BONE_RECORD_PADDING if export_bones else src_bone.idx_mapping
-        bone.length = furthest_vertex[i] if export_bones else src_bone.length
+        bone.padding = BONE_RECORD_PADDING if export_bones else src_bone.padding
+        bone.furthest_vertex_distance = (
+            furthest_vertex[i] if export_bones else src_bone.furthest_vertex_distance)
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
@@ -1768,8 +1770,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     current_vertex_format = None
     total_num_vertices = 0
 
-    face_position = 0
-    face_offset = 0  # unused for now
+    index_start = 0
+    vertex_base = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
@@ -1846,13 +1848,13 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # assert num_vertices == len(vertices_array) // 32
         mesh.num_vertices = num_vertices
         mesh.vertex_position_2 = current_vertex_position
-        mesh.vertex_offset = current_vertex_offset
-        mesh.face_position = face_position
+        mesh.vertex_byte_offset = current_vertex_offset
+        mesh.index_start = index_start
         mesh.num_indices = num_indices
-        mesh.face_offset = face_offset
-        mesh.vertex_position = current_vertex_position
-        mesh.min_index = current_vertex_position
-        mesh.max_index = current_vertex_position + \
+        mesh.vertex_base = vertex_base
+        mesh.vertex_index = current_vertex_position
+        mesh.first_index = current_vertex_position
+        mesh.last_index = current_vertex_position + \
             mesh.num_vertices - 1  # XXX only a short!
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
@@ -1886,7 +1888,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
         vertex_offset_2_accumulated += (num_vertices * vertex_stride_2)
-        face_position += (num_indices + face_padding)
+        index_start += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
     if dst_mod.header.version in (153, 156, 211) and app_id != "umvc3":
@@ -2578,13 +2580,13 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     oabb_dimension.z = length_y * 100
     oabb_dimension.w = 0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = 255  # since it's static
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
@@ -2702,13 +2704,13 @@ def _calculate_vertex_group_weight_bound(
     oabb_dimension.z = oabb_dimension_export[2]
     oabb_dimension.w = 0.0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = bone_index
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
