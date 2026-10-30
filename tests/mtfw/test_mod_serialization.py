@@ -184,12 +184,12 @@ def test_export_bones_data(mod_imported_local, mod_exported_local, local_app_id,
             assert src_bone.idx_anim_map == dst_bone.idx_anim_map
             assert src_bone.idx_parent == dst_bone.idx_parent
             assert src_bone.idx_mirror == dst_bone.idx_mirror
-            # idx_mapping is the bone record's alignment padding rather than a
+            # padding is the bone record's alignment padding rather than a
             # field, and the source's copy of it is uninitialised heap (its most
             # common value across a large sample is 0xCD). Export writes a
             # defined value, so there is nothing to compare.
-            assert dst_bone.idx_mapping == 0
-            # `length` is Capcom's furthestVertexDistance, and export derives it
+            assert dst_bone.padding == 0
+            # `furthest_vertex_distance` is Capcom's furthestVertexDistance, and export derives it
             # from the live meshes rather than carrying the source's value. The
             # game's own number is a maximum over some subset of the vertices a
             # bone influences that has not been identified, so deriving over the
@@ -198,7 +198,7 @@ def test_export_bones_data(mod_imported_local, mod_exported_local, local_app_id,
             # a wider margin than floating rounding - it was observed that
             # this field is most likely unused by the game itself, so a
             # generous tolerance is used here rather than an exact match.
-            assert dst_bone.length >= src_bone.length * 0.8 - 9e-03
+            assert dst_bone.furthest_vertex_distance >= src_bone.furthest_vertex_distance * 0.8 - 9e-03
             assert src_bone.parent_distance == pytest.approx(dst_bone.parent_distance, abs=9e-05)
             assert src_bone.location.x == pytest.approx(dst_bone.location.x, abs=9e-05)
             assert src_bone.location.y == pytest.approx(dst_bone.location.y, abs=9e-05)

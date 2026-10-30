@@ -150,11 +150,11 @@ def _update_track_data(bl_obj, encoded_tracks, joint_types, rd_stored, app_id):
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
         item.usage = et.usage
-        item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
-        item.joint_type = joint_types.get((USAGE[item.usage], str(et.bone_index)), 0)
+        item.bone_index = int(et.idx_anim_map.split("_")[0])  # workaround for 254_ values
+        item.joint_type = joint_types.get((USAGE[item.usage], str(et.idx_anim_map)), 0)
         item.weight = 1.0
         ref_data = et.reference_data
-        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.bone_index)), None)
+        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.idx_anim_map)), None)
         if ref_data_stored:  # and ref_data_stored != "[]":
             ref_data = ast.literal_eval(ref_data_stored)
         item.reference_data = ref_data
@@ -721,6 +721,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     dst_track.len_data = len(track.raw_data)
                     dst_track.ofs_data = track_ofc[j]
                     dst_track.data = track.raw_data
@@ -783,6 +784,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track67(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     track.bounds = None
                     if dst_track.buffer_type in BOUNDS_BUFF_TYPES:
                         # TODO move into calc offsets

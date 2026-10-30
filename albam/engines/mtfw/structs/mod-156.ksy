@@ -149,8 +149,8 @@ types:
       - {id: idx_anim_map, type: u1}
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
-      - {id: idx_mapping, type: u1}
-      - {id: length, type: f4}
+      - {id: padding, type: u1}
+      - {id: furthest_vertex_distance, type: f4}
       - {id: parent_distance, type: f4}
       - {id: location, type: vec3}
     instances:
@@ -327,7 +327,7 @@ types:
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
-      - {id: unk_01, type: vec3}
+      - {id: padding, type: vec3}
       - {id: bsphere, type: vec4}
       - {id: bbox_min, type: vec4}
       - {id: bbox_max, type: vec4}
