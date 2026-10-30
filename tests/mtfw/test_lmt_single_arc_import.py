@@ -158,7 +158,7 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
     """fig01.lmt is a static, single-frame pose, not a motion clip: exactly
     one of its animation blocks should actually carry data (the rest are
     placeholder empties - see load_lmt()'s `if block.offset == 0: continue`),
-    and that one block's num_frames should be 1, with every one of its
+    and that one block's frame range should be 1 to 1, with every one of its
     fcurves holding exactly one keyframe at frame 1 (_create_blender_action
     keys at frame_index + 1).
 
@@ -185,9 +185,9 @@ def test_single_frame_pose_action_applied(single_arc_import_local, local_app_id)
         f"animation block out of {len(anim_blocks)}, got {len(populated)}"
     )
     _block, custom_props = populated[0]
-    assert custom_props.num_frames == 1
-
     action = custom_props.action
+    assert action.use_frame_range
+    assert tuple(action.frame_range) == (1.0, 1.0)
     fcurves = action_fcurves(action)
     assert fcurves
     for fcurve in fcurves:

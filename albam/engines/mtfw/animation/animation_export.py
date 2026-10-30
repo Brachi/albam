@@ -73,20 +73,29 @@ def _select_kf_usage(pose_bone, track_type, app_id):
 def _block_length(action, fcurves, custom_props):
     """How many frames the block runs for.
 
-    An action whose tracks never change carries a single keyframe, because one
-    keyframe is all a constant needs - so its frame range reads 1 no matter how
-    long the block actually runs. Blocks like that are ordinary: a static idle
-    the engine holds for a couple of seconds. Taking the range there would
-    write a 60 frame hold out as a single frame, leaving the pose right and the
-    timing destroyed, so the length the block already declares is kept instead.
+    Import sets the action's manual frame range to the block's length, and
+    that range is what decides it - it is the control a user retimes a clip
+    with, and it is right where keyframes alone are not: a track that never
+    changes carries a single keyframe however long the block runs, a static
+    idle the engine holds for a couple of seconds.
 
-    An action with real keyframes is the authority on its own length, including
-    when the intent is to shorten the block.
+    A .blend saved before #273 has no manual range and keeps the length in a
+    `num_frames` property that is no longer registered but still stored, so
+    that is read the way it always was: an action with real keyframes decides
+    its own length, one without falls back to the stored value.
     """
+    if action is not None and action.use_frame_range:
+        return int(action.frame_range[1])
+    stored = int(custom_props.get("num_frames", 0))
+    if action is None:
+        return stored
+    if fcurves is None:
+        # stored raw_data is written back as is, under the length it had
+        return stored or int(action.frame_range[1])
     frames = {keyframe.co[0] for fcurve in fcurves for keyframe in fcurve.keyframe_points}
     if len(frames) > 1:
         return int(action.frame_range[1])
-    return int(custom_props.num_frames) or int(action.frame_range[1])
+    return stored or int(action.frame_range[1])
 
 
 def _serialize_lmt_track(armature, tracks, mapping, app_id):
@@ -133,9 +142,7 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_stored, app_id):
-    custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
-    custom_props.num_frames = num_frames
+def _update_track_data(bl_obj, encoded_tracks, joint_types, rd_stored, app_id):
     second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
@@ -178,6 +185,7 @@ def _get_action_fcurves(action, armature):
 def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = _create_bone_mapping(armature, app_id)
     mapping = {value: key for key, value in mapping.items()}
+    lengths = {}  # bl_obj name -> num_frames, for the blocks regenerated here
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
         joint_types = {}
@@ -186,7 +194,11 @@ def _generate_track_from_action(armature, bl_objects, app_id):
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
             fcurves = _get_action_fcurves(action, armature)
-            num_frames = _block_length(action, fcurves, custom_props)
+            lengths[bl_obj.name] = _block_length(action, fcurves, custom_props)
+            if "num_frames" in custom_props:
+                # a pre-#273 .blend: keep its stored length matching the
+                # tracks regenerated here, for a later export of the raw data
+                custom_props["num_frames"] = lengths[bl_obj.name]
             num_bone_channels = 0
             for fcurve in fcurves:
                 path = fcurve.data_path
@@ -247,7 +259,8 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     "ofs_frame - check the armature this .lmt was imported onto against the "
                     "bones the action actually keys."
                 )
-            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
+            _update_track_data(bl_obj, track_attrs, joint_types, reference_data, app_id)
+    return lengths
 
 
 def _align(value, alignment):
@@ -630,7 +643,7 @@ def export_lmt(bl_obj):
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)
     block_offsets = []
-    _generate_track_from_action(armature, bl_objects, app_id)
+    lengths = _generate_track_from_action(armature, bl_objects, app_id)
     lmt_offsets = _calculate_offsets(bl_objects, app_id)
     ofc_block = lmt_offsets["block_offsets"]
     final_size = lmt_offsets["final_size"]
@@ -652,6 +665,9 @@ def export_lmt(bl_obj):
         custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
+            num_frames = lengths.get(bl_obj.name)
+            if num_frames is None:
+                num_frames = _block_length(custom_props.action, None, custom_props)
             second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
@@ -668,6 +684,7 @@ def export_lmt(bl_obj):
                 custom_props.copy_custom_properties_to(anim_header)
                 anim_header.ofs_frame = ofc_frames[i]
                 anim_header.num_tracks = len(tracks)
+                anim_header.num_frames = num_frames
                 anim_header.filler = 0
 
                 dst_col_event_attr = []
@@ -720,6 +737,7 @@ def export_lmt(bl_obj):
                 anim_header.ofs_keyframe_infos = ofc_kf_info[i]
                 anim_header.ofs_frame = ofc_track_headers[i]
                 anim_header.num_tracks = len(tracks)
+                anim_header.num_frames = num_frames
                 anim_header.filler = 0
                 # Sequence Info
                 dst_seq_infos = []
