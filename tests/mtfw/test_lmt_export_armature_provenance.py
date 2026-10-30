@@ -162,9 +162,9 @@ def test_export_accepts_a_block_whose_action_has_no_channels_at_all(two_armature
     empty_action = bpy.data.actions.new("SyntheticActionEmpty")
     empty_action.use_fake_user = True
     bl_object = _make_lmt_block(armature_a, empty_action)
-    anim_object = bl_object.children[0]
-    custom_props = anim_object.albam_custom_properties.get_custom_properties_for_appid(APP_ID)
-    custom_props.num_frames = 10
+    empty_action.use_frame_range = True
+    empty_action.frame_start = 1
+    empty_action.frame_end = 10
 
     vfiles = export_lmt(bl_object)
     dst_lmt = parse(Lmt, vfiles[0].data_bytes, APP_ID)

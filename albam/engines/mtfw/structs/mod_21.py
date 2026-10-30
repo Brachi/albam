@@ -155,8 +155,8 @@ class Mod21(ReadWriteKaitaiStruct):
 
         if self.index_buffer__enabled:
             pass
-            if len(self._m_index_buffer) != self.header.num_faces * 2:
-                raise kaitaistruct.ConsistencyError(u"index_buffer", self.header.num_faces * 2, len(self._m_index_buffer))
+            if len(self._m_index_buffer) != self.header.num_indices * 2:
+                raise kaitaistruct.ConsistencyError(u"index_buffer", self.header.num_indices * 2, len(self._m_index_buffer))
 
         if self.materials_data__enabled:
             pass
@@ -633,17 +633,17 @@ class Mod21(ReadWriteKaitaiStruct):
             self.topology = self._io.read_bits_int_le(6)
             self.binormal_flip = self._io.read_bits_int_le(1) != 0
             self.bridge = self._io.read_bits_int_le(1) != 0
-            self.vertex_position = self._io.read_u4le()
-            self.vertex_offset = self._io.read_u4le()
+            self.vertex_index = self._io.read_u4le()
+            self.vertex_byte_offset = self._io.read_u4le()
             self.vertex_format = self._io.read_u4le()
-            self.face_position = self._io.read_u4le()
+            self.index_start = self._io.read_u4le()
             self.num_indices = self._io.read_u4le()
-            self.face_offset = self._io.read_u4le()
+            self.vertex_base = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
             self.num_weight_bounds = self._io.read_u1()
             self.connect_id = self._io.read_u2le()
-            self.min_index = self._io.read_u2le()
-            self.max_index = self._io.read_u2le()
+            self.first_index = self._io.read_u2le()
+            self.last_index = self._io.read_u2le()
             self.boundary = self._io.read_u4le()
             if self._root.use_64bit_ofs:
                 pass
@@ -812,17 +812,17 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(6, self.topology)
             self._io.write_bits_int_le(1, int(self.binormal_flip))
             self._io.write_bits_int_le(1, int(self.bridge))
-            self._io.write_u4le(self.vertex_position)
-            self._io.write_u4le(self.vertex_offset)
+            self._io.write_u4le(self.vertex_index)
+            self._io.write_u4le(self.vertex_byte_offset)
             self._io.write_u4le(self.vertex_format)
-            self._io.write_u4le(self.face_position)
+            self._io.write_u4le(self.index_start)
             self._io.write_u4le(self.num_indices)
-            self._io.write_u4le(self.face_offset)
+            self._io.write_u4le(self.vertex_base)
             self._io.write_u1(self.bone_id_start)
             self._io.write_u1(self.num_weight_bounds)
             self._io.write_u2le(self.connect_id)
-            self._io.write_u2le(self.min_index)
-            self._io.write_u2le(self.max_index)
+            self._io.write_u2le(self.first_index)
+            self._io.write_u2le(self.last_index)
             self._io.write_u4le(self.boundary)
             if self._root.use_64bit_ofs:
                 pass
@@ -1104,7 +1104,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek(self._root.header.offset_index_buffer + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.index_start * 2)
             self._m_indices = []
             for i in range(self.num_indices):
                 self._m_indices.append(self._io.read_u2le())
@@ -1120,7 +1120,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write_indices(self):
             self._should_write_indices = False
             _pos = self._io.pos()
-            self._io.seek(self._root.header.offset_index_buffer + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.index_start * 2)
             for i in range(len(self._m_indices)):
                 pass
                 self._io.write_u2le(self._m_indices[i])
@@ -1148,7 +1148,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + (self.face_offset + self.vertex_position) * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_byte_offset) + (self.vertex_base + self.vertex_index) * self.vertex_stride)
             self._m_vertices = []
             for i in range(self.num_vertices):
                 _on = self.vertex_format
@@ -1444,7 +1444,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write_vertices(self):
             self._should_write_vertices = False
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + (self.face_offset + self.vertex_position) * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_byte_offset) + (self.vertex_base + self.vertex_index) * self.vertex_stride)
             for i in range(len(self._m_vertices)):
                 pass
                 _on = self.vertex_format
@@ -1684,8 +1684,8 @@ class Mod21(ReadWriteKaitaiStruct):
             self.num_meshes = self._io.read_u2le()
             self.num_materials = self._io.read_u2le()
             self.num_vertices = self._io.read_u4le()
-            self.num_faces = self._io.read_u4le()
-            self.num_edges = self._io.read_u4le()
+            self.num_indices = self._io.read_u4le()
+            self.num_triangles = self._io.read_u4le()
             self.size_vertex_buffer = self._io.read_u4le()
             self.reserved_01 = self._io.read_u4le()
             _on = self._root.use_64bit_ofs
@@ -1840,8 +1840,8 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.num_meshes)
             self._io.write_u2le(self.num_materials)
             self._io.write_u4le(self.num_vertices)
-            self._io.write_u4le(self.num_faces)
-            self._io.write_u4le(self.num_edges)
+            self._io.write_u4le(self.num_indices)
+            self._io.write_u4le(self.num_triangles)
             self._io.write_u4le(self.size_vertex_buffer)
             self._io.write_u4le(self.reserved_01)
             _on = self._root.use_64bit_ofs
@@ -6053,7 +6053,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         _pos = self._io.pos()
         self._io.seek(self.header.offset_index_buffer)
-        self._m_index_buffer = self._io.read_bytes(self.header.num_faces * 2)
+        self._m_index_buffer = self._io.read_bytes(self.header.num_indices * 2)
         self._io.seek(_pos)
         return getattr(self, '_m_index_buffer', None)
 

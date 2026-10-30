@@ -209,6 +209,12 @@ def load_lmt(vfile, context):
             app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
+        # Keyframes start at 1 and a constant track holds a single one, so the
+        # keyed range alone would read 1 however long the block runs. The
+        # manual range keeps the block's length where Blender shows it.
+        action.use_frame_range = True
+        action.frame_start = 1
+        action.frame_end = max(1, block.block_header.num_frames)
         anim_props = anim_object.albam_custom_properties
         if lmt_ver < 67:
             col_events = anim_props.get_custom_properties_secondary_for_appid(app_id)[
@@ -454,7 +460,7 @@ def _get_or_create_ik_bone(armature, track_bone_index, bone_index, mapping, chai
     # chain_target marks the bone as carrying a goal rather than a joint's own
     # transform, so export leaves its position channel alone exactly as import did
     set_anim_retarget(armature.pose.bones[bone_name], app_id, str(track_bone_index) + "_1")
-    set_chain_target(armature.pose.bones[bone_name], app_id, chain_count)
+    set_chain_target(armature.pose.bones[bone_name], app_id)
 
     # constrain the chain to the goal
     constraint = pose_bone.constraints.new('IK')
