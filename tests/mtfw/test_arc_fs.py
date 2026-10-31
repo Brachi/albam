@@ -12,9 +12,9 @@ R2_PROTOCOL_PREFIX = "r2://"
 
 # Sourced from --game-dir=re5::<value> like the rest of tests/mtfw (see
 # tests/mtfw/conftest.py's game_fs_root), so CI's r2:// curated subset runs
-# this too. Its own MTFW_FS rather than the session-scoped game_fs_root:
-# several tests here assert the lazy index has *not* been built yet, which a
-# shared instance other test files may already have walked can't promise.
+# this too. A fresh MTFW_FS per test rather than the session-scoped
+# game_fs_root: several tests here assert the lazy index has *not* been built
+# yet, which an instance another test already walked can't promise.
 # Every test holds for any re5 source, a local install or the R2 subset.
 
 # Present in every re5 source: the R2 subset carries its archive too (see
@@ -22,9 +22,6 @@ R2_PROTOCOL_PREFIX = "r2://"
 PACKED_PATH = "pawn/pl/pl00/model/pl0000.mod"
 PACKED_DIR = "/pawn/pl/pl00/model"
 LOOSE_PATH = "re5dx9.exe"  # a real file sitting directly under a full install's root
-
-# origin_of() answers before the index exists, kept for the same question after.
-_ORIGINS_BEFORE_INDEX = {}
 
 
 def _re5_game_dir(pytestconfig):
@@ -36,7 +33,7 @@ def _re5_game_dir(pytestconfig):
     return None
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def game_fs(pytestconfig):
     from tests.mtfw.r2_config import resolve_r2_source
 
@@ -73,7 +70,6 @@ def test_origin_of_before_index_built(game_fs):
     assert game_fs._owner is None
 
     origin = game_fs.origin_of(PACKED_PATH)
-    _ORIGINS_BEFORE_INDEX[PACKED_PATH] = origin
     assert origin is not None and origin.endswith(".arc")
     assert not os.path.isabs(origin), "origin_of() should return a game-root-relative path"
     assert game_fs._owner is None, "origin_of() should not trigger the lazy index"
@@ -118,7 +114,9 @@ def test_missing_path_raises(game_fs):
 
 
 def test_origin_of_after_index_built_matches_pre_index_result(game_fs):
-    assert game_fs._owner is not None  # built by earlier tests in this module
-    assert game_fs.origin_of(PACKED_PATH) == _ORIGINS_BEFORE_INDEX[PACKED_PATH]
+    origin_before_index = game_fs.origin_of(PACKED_PATH)
+    game_fs.listdir(PACKED_DIR)
+    assert game_fs._owner is not None
+    assert game_fs.origin_of(PACKED_PATH) == origin_before_index
     assert game_fs.origin_of(LOOSE_PATH) is None
     assert game_fs.origin_of("nope/does/not/exist.foo") is None
