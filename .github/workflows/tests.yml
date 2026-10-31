@@ -113,7 +113,7 @@ jobs:
           # their flags in the same change that uploads it (see
           # tests/scripts/upload_ci_game_files.py), since a mounted prefix
           # with the files missing fails rather than skips.
-          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc
+          pytest -n 4 --dist loadfile "${cov[@]}" --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5 --game-dir=re1::r2://"$R2_BUCKET_NAME"/re1 --game-dir=umvc3::r2://"$R2_BUCKET_NAME"/umvc3 --game-dir=re4uhd::r2://"$R2_BUCKET_NAME"/re4uhd --game-dir=reorc::r2://"$R2_BUCKET_NAME"/reorc --game-dir=dmc4::r2://"$R2_BUCKET_NAME"/dmc4
         exitcode="$?"
         # bpy segfaults during interpreter finalization, so a 139 here says
         # nothing about whether the run passed - it is what this job sees on
