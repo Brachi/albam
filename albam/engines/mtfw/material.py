@@ -1076,20 +1076,22 @@ def _create_mtfw_shader():
     detail_combine.label = "Combine Detail"
     detail_combine.location = (-1500, -1050)
 
-    separate_rgb_n = shader_group.nodes.new("ShaderNodeSeparateColor")
-    separate_rgb_n.name = "separate_rgb_n"
-    separate_rgb_n.label = "Separate RGB N"
-    separate_rgb_n.location = (-1250, -1050)
+    # Add only the detail map's X/Y offset from neutral to the base normal, so
+    # the default (0.5, 0.5) detail leaves the base untouched. The Normal Map
+    # node normalizes the result.
+    detail_offset = shader_group.nodes.new("ShaderNodeVectorMath")
+    detail_offset.operation = "MULTIPLY_ADD"
+    detail_offset.name = "detail_offset"
+    detail_offset.label = "Detail Offset"
+    detail_offset.inputs[1].default_value = (1, 1, 0)
+    detail_offset.inputs[2].default_value = (-0.5, -0.5, 0)
+    detail_offset.location = (-1000, -1100)
 
-    separate_rgb_d = shader_group.nodes.new("ShaderNodeSeparateColor")
-    separate_rgb_d.name = "separate_rgb_d"
-    separate_rgb_d.label = "Separate RGB D"
-    separate_rgb_d.location = (-1250, -1250)
-
-    combine_all_normals = shader_group.nodes.new("ShaderNodeCombineColor")
-    combine_all_normals.name = "combine_all_normals"
-    combine_all_normals.label = "Combine All Normals"
-    combine_all_normals.location = (-750, -1150)
+    add_detail = shader_group.nodes.new("ShaderNodeVectorMath")
+    add_detail.operation = "ADD"
+    add_detail.name = "add_detail"
+    add_detail.label = "Add Detail"
+    add_detail.location = (-750, -1050)
 
     # Curve RGB for correct normal map display in blender
     invert_green = shader_group.nodes.new("ShaderNodeRGBCurve")
@@ -1098,32 +1100,6 @@ def _create_mtfw_shader():
     curve_g.points[0].location = (1, 0)
     curve_g.points[1].location = (0, 1)
     invert_green.mapping.update()
-
-    # Normalize normals nodes
-    normalize_normals = shader_group.nodes.new("ShaderNodeVectorMath")
-    normalize_normals.operation = "NORMALIZE"
-    normalize_normals.name = "normalize_normals"
-    normalize_normals.label = "Normalize Normals"
-    normalize_normals.location = (-590, -1050)
-
-    # Add nodes
-    add_normals_red = shader_group.nodes.new("ShaderNodeMixRGB")
-    add_normals_red.blend_type = "ADD"
-    add_normals_red.name = "add_normals_red"
-    add_normals_red.label = "Add Normals Red"
-    add_normals_red.location = (-1000, -980)
-
-    add_normals_green = shader_group.nodes.new("ShaderNodeMixRGB")
-    add_normals_green.blend_type = "ADD"
-    add_normals_green.name = "add_normals_green"
-    add_normals_green.label = "Add Normals Green"
-    add_normals_green.location = (-1000, -1200)
-
-    add_normals_blue = shader_group.nodes.new("ShaderNodeMixRGB")
-    add_normals_blue.blend_type = "ADD"
-    add_normals_blue.name = "add_normals_blue"
-    add_normals_blue.label = "Add Normals Blue"
-    add_normals_blue.location = (-1000, -1420)
 
     # Invert node
     invert_spec = shader_group.nodes.new("ShaderNodeInvert")
@@ -1165,7 +1141,7 @@ def _create_mtfw_shader():
     link(normal_separate.outputs[2], normal_combine.inputs[2])
     link(group_inputs.outputs["Alpha NM"], normal_combine.inputs[0])
     link(normal_combine.outputs[0], use_detail_map.inputs[1])
-    link(normal_combine.outputs[0], separate_rgb_n.inputs[0])
+    link(normal_combine.outputs[0], add_detail.inputs[0])
 
     link(group_inputs.outputs["Specular MM"], invert_spec.inputs[1])
     link(invert_spec.outputs[0], bsdf_shader.inputs["Roughness"])
@@ -1178,20 +1154,9 @@ def _create_mtfw_shader():
     link(group_inputs.outputs["Alpha DNM"], detail_combine.inputs[0])
     link(detail_separate.outputs[1], detail_combine.inputs[1])
     link(detail_separate.outputs[2], detail_combine.inputs[2])
-    link(detail_combine.outputs[0], separate_rgb_d.inputs[0])
-
-    link(separate_rgb_n.outputs[0], add_normals_red.inputs[1])
-    link(separate_rgb_d.outputs[0], add_normals_red.inputs[2])
-    link(separate_rgb_n.outputs[1], add_normals_green.inputs[1])
-    link(separate_rgb_d.outputs[1], add_normals_green.inputs[2])
-    link(separate_rgb_n.outputs[2], add_normals_blue.inputs[1])
-    link(separate_rgb_d.outputs[2], add_normals_blue.inputs[2])
-    link(add_normals_red.outputs[0], combine_all_normals.inputs[0])
-    link(add_normals_green.outputs[0], combine_all_normals.inputs[1])
-    link(add_normals_blue.outputs[0], combine_all_normals.inputs[2])
-
-    link(combine_all_normals.outputs[0], normalize_normals.inputs[0])
-    link(normalize_normals.outputs[0], use_detail_map.inputs[2])
+    link(detail_combine.outputs[0], detail_offset.inputs[0])
+    link(detail_offset.outputs[0], add_detail.inputs[1])
+    link(add_detail.outputs[0], use_detail_map.inputs[2])
     link(use_detail_map.outputs[0], invert_green.inputs[1])
     link(invert_green.outputs[0], normal_map.inputs[1])
     link(normal_map.outputs[0], bsdf_shader.inputs["Normal"])
