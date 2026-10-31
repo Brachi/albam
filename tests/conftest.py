@@ -17,6 +17,9 @@ EXIT_STATUS_FILE_ENV_VAR = "ALBAM_PYTEST_EXIT_STATUS_FILE"
 # nodeid -> the (major, minor) its @requires_blender asks for, recorded at
 # collection before deselection, for test_skip_policy.py.
 BLENDER_GATES = pytest.StashKey[dict]()
+# Under xdist, nodeids the workers deselected by Blender version, already
+# added to the controller's summary.
+WORKER_DESELECTED = pytest.StashKey[set]()
 
 
 def pytest_sessionstart():
@@ -307,6 +310,24 @@ def pytest_collection_modifyitems(config, items):
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = kept
+    # Under xdist only the workers collect, so the controller's summary never
+    # hears of these; pytest_testnodedown passes them on.
+    if hasattr(config, "workeroutput"):
+        config.workeroutput["blender_deselected"] = [item.nodeid for item in deselected]
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error):
+    """Count the tests an xdist worker deselected by Blender version in the
+    controller's summary, once each: every worker collects, and deselects,
+    the whole suite."""
+    nodeids = getattr(node, "workeroutput", {}).get("blender_deselected", [])
+    counted = node.config.stash.setdefault(WORKER_DESELECTED, set())
+    new = [nodeid for nodeid in nodeids if nodeid not in counted]
+    counted.update(new)
+    reporter = node.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None and new:
+        reporter.stats.setdefault("deselected", []).extend(new)
 
 
 @pytest.hookimpl(hookwrapper=True)
