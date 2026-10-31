@@ -63,6 +63,13 @@ jobs:
         cache-dependency-glob: |
           pyproject.toml
           pylock.toml
+    - name: Set up Java for the Kaitai Struct compiler
+      # tests/test_generated_structs.py compiles every .ksy through
+      # scripts/ksc.py, which runs the pinned compiler release on Java.
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "21"
     - name: Install dependencies
       # uv rather than pip for the install: it keeps its cache unpacked and
       # hardlinks into the environment instead of extracting, which matters
