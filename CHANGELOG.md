@@ -7,16 +7,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Added
 
+- Support for Resident Evil 4 UHD: import and export of characters and enemies, room
+  import, and repacking edited files back into the game's archives. See
+  `docs/modding-a-character.md` for the full edit-and-repack workflow.
+- Import of Resident Evil: Operation Raccoon City characters, skeletons and
+  animations. No export yet for this game.
 - Autofixer for export: automatic mesh tweaks such as mesh triangulation and set object transformations. This is more beginner friendly.
 - Import option to batch import all `.mod` files from a selected folder at once
 - Export option to remove orphaned textures from `.arc` files when using custom texture paths
 - Error message for the case when there is no mesh to export
 - Support for navigation mesh import-export (Resident Evil 5)
-- Autosorter tool to automatically set `alpha priority` values ​​for hair cards
+- Autosorter tool to automatically set `alpha priority` values for hair cards
+- Experimental support for LMT export (Resident Evil 5)
 - App Settings button next to App selection. Allows to set the root folder of an app. Its content is stored in apps-userdata.ini, in Albam's extension directory.
+- Reading and packing `.arc` archives from Devil May Cry 4, whose entries are XMemCompress (LZX) streams rather than zlib, and which number their file types differently. These archives can now be repacked, and their contents written back. The XMemCompress encoder this needed is verified against real archive entries and against an independent LZX decoder, but has not yet been confirmed by loading an edited archive in the game
+- BakeOfLight tool that simplifies baking lightmaps and vertex colors for Resident Evil 5
+- Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
+- Vertex Groups Merger now has an option for batch merge
+- Tools: VF Guesser
 
 ### Fixed
 
+- Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
+- Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
 - Missed value in .tex `value` enumerator for RE6 render targets
@@ -26,10 +39,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Typo that set wrong name ("name") for the color attribute layer
 - Typo that brightened vertex colors on every import-export round trip
 - Vertex colors losing precision on every import-export round trip
+- Vertices export with multiple attributes, causing artifacts around UV seams
+- Crash when disabling and re-enabling the addon within the same Blender session
+- Duplicate file-load handlers left behind after disabling and re-enabling the addon
+- Animation blocks that never move losing their length on export, so a static
+  hold played back as a single frame
+- Exported animation tracks that could not be read back, when a rotation's
+  quantized components summed past unit norm
+- Animation tracks landing on an unrelated bone when the skeleton has no bone
+  for that animation id, dropping the id from an exported `.lmt`
+- A second animation file imported onto the same skeleton leaving its limb
+  chains solving towards goals none of its blocks move
+- Spurious "Array iterator out of range" messages printed on every export of a mesh with fewer UV layers than the vertex format allows
+- Autorename Bones applying one game's name corrections to every rig renamed
+  afterwards in the same Blender session, silently giving them plausible but
+  wrong bone names
+- Two archives added under the same name sharing one file-tree state, so
+  expanding either one listed both archives' contents
+- "Batch import folder" importing a second, same-named archive's identically
+  placed files along with the selected folder's own
+- Export of a texture whose relative path doesn't fit a material file's
+  64-byte path field failing with an unreadable "Check failed: filler" error
+  instead of naming the images to shorten
+- A model imported from the second of two same-named archives taking its
+  materials and textures from the first archive's `.mrl` and `.tex` files, so
+  the mesh was right but silently wore the other archive's look
+- Fix hardcoded UV scale factor for detail maps
+- `.lmt` export retargeting bone ids through whichever armature the import
+  panel currently pointed at, instead of the one the animation was imported
+  onto, silently renumbering or dropping tracks when a second character had
+  been imported since. Export now also refuses a block whose action keys only
+  bones the rig has no "Anim Retarget" id for, instead of writing it out with
+  no tracks
+- An animation block created rather than imported exporting as an empty slot,
+  so a new animation could not be added to an `.lmt`. Whether a slot holds a
+  block is now derived from the block having tracks, so the block's "Offset"
+  field is gone: it no longer has to be hand-edited to a non-zero number to
+  add an animation, and setting it to 0 can no longer delete the block from
+  the exported file
 
 ### Changed
 
+- A bone's animation re-targeting id is now an Albam custom property on the pose
+  bone, shown as "Anim Retarget" in the Bone tab, instead of the raw
+  `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
+  property are migrated the first time they are used
+- Contex-related tools such as Handshaker, Face Attribute Editor. VertexGroupsMerger moved to Blender tools tab
+- "Export edited bones" is now on by default, so the skeleton (bone positions, parents,
+  animation ids and mirrors) is written from the armature and rig edits reach the game.
+  Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
+  saved with 0.5.0 keep the source file's mirror bones
 ### Removed
+
+- Split UV Seams tool, no longer needed now that export splits vertices automatically
 
 ## [0.5.0] - 2026-04-03
 

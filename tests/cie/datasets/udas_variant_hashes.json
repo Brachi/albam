@@ -1,0 +1,26 @@
+[
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "16751b2ceafb2bb9",
+    "payload_extension": ".udas",
+    "variant": "big_endian_yz2"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "76e7d1b4720d91d4",
+    "payload_extension": ".udas",
+    "variant": "big_endian_yz2"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "9e82657662aa3ff0",
+    "payload_extension": ".udas",
+    "variant": "no_block_table"
+  },
+  {
+    "app_id": "re4uhd",
+    "archive_path_hash": "b1038f780053dc89",
+    "payload_extension": ".udas",
+    "variant": "little_endian"
+  }
+]

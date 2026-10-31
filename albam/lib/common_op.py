@@ -163,44 +163,6 @@ def copy_faces(sourceMesh, targetMesh, numVertices, materialsMap):
             targetFace.material_index = materialsMap[sourceFace.material_index]
 
 
-def triangulate_meshes(bl_objects):
-    for ob in bl_objects:
-        mesh = ob.data
-
-        # bmesh ignores custom normals, so we need to manually transfer them
-        original_corner_normals = [n.vector[:] for n in mesh.corner_normals]
-
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        # In theory it should save time if we skip already triangulated meshes
-        # the check adds overhead  ~0.0002 seconds for the test mesh
-        if not any(len(f.verts) >= 4 for f in bm.faces):
-            bm.free()
-            continue
-        # Create a custom BMesh float vector layer for loops to hold the original normals
-        # BMesh automatically ensures this data persists across structural splits
-        normal_layer = bm.loops.layers.float_vector.new("original_custom_normals")
-
-        loop_index = 0
-        for face in bm.faces:
-            for loop in face.loops:
-                loop[normal_layer] = original_corner_normals[loop_index]
-                loop_index += 1
-
-        bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
-        bm.to_mesh(mesh)
-
-        new_custom_normals = []
-        for face in bm.faces:
-            for loop in face.loops:
-                new_custom_normals.append(loop[normal_layer])
-
-        bm.free()
-
-        mesh.normals_split_custom_set(new_custom_normals)
-        mesh.update()
-
-
 # Works but slower ~+ 0.015 seconds for the test mesh
 def triangulate_meshes_modifier(bl_objects):
     unselect()
@@ -228,3 +190,25 @@ def move_to_collection(bl_objects, col_name):
         for col in ob.users_collection:
             col.objects.unlink(ob)
         collection.objects.link(ob)
+
+
+def _get_mesh_albam_props(bl_ob):
+    albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
+    if not albam_asset:
+        return None
+    app_id = albam_asset.app_id
+    custom_props = bl_ob.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return custom_props
+
+
+def _get_albam_mat_props(bl_ob, app_id):
+    custom_props = None
+    try:
+        bl_mat = bl_ob.data.materials[0]
+    except IndexError:
+        raise IndexError(f"Material not found for object: {bl_ob.name}")
+    try:
+        custom_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    except AttributeError:
+        raise AttributeError(f"Material {bl_mat.name} does not have albam_custom_properties attribute.")
+    return custom_props

@@ -9,10 +9,11 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mod21(ReadWriteKaitaiStruct):
-    def __init__(self, _io=None, _parent=None, _root=None):
+    def __init__(self, app_id, _io=None, _parent=None, _root=None):
         super(Mod21, self).__init__(_io)
         self._parent = _parent
         self._root = _root or self
+        self.app_id = app_id
         self._should_write_bones_data = False
         self.bones_data__enabled = True
         self._should_write_groups = False
@@ -37,7 +38,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_max._read()
         self.model_info = Mod21.ModelInfo(self._io, self, self._root)
         self.model_info._read()
-        if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+        if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3")) :
             pass
             self.num_weight_bounds = self._io.read_u4le()
 
@@ -51,7 +52,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_min._fetch_instances()
         self.bbox_max._fetch_instances()
         self.model_info._fetch_instances()
-        if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+        if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3")) :
             pass
 
         _ = self.bones_data
@@ -100,7 +101,7 @@ class Mod21(ReadWriteKaitaiStruct):
         self.bbox_min._write__seq(self._io)
         self.bbox_max._write__seq(self._io)
         self.model_info._write__seq(self._io)
-        if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+        if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3")) :
             pass
             self._io.write_u4le(self.num_weight_bounds)
 
@@ -127,7 +128,7 @@ class Mod21(ReadWriteKaitaiStruct):
             raise kaitaistruct.ConsistencyError(u"model_info", self._root, self.model_info._root)
         if self.model_info._parent != self:
             raise kaitaistruct.ConsistencyError(u"model_info", self, self.model_info._parent)
-        if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+        if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3")) :
             pass
 
         if self.bones_data__enabled:
@@ -154,8 +155,8 @@ class Mod21(ReadWriteKaitaiStruct):
 
         if self.index_buffer__enabled:
             pass
-            if len(self._m_index_buffer) != self.header.num_faces * 2:
-                raise kaitaistruct.ConsistencyError(u"index_buffer", self.header.num_faces * 2, len(self._m_index_buffer))
+            if len(self._m_index_buffer) != self.header.num_indices * 2:
+                raise kaitaistruct.ConsistencyError(u"index_buffer", self.header.num_indices * 2, len(self._m_index_buffer))
 
         if self.materials_data__enabled:
             pass
@@ -194,8 +195,8 @@ class Mod21(ReadWriteKaitaiStruct):
             self.idx_anim_map = self._io.read_u1()
             self.idx_parent = self._io.read_u1()
             self.idx_mirror = self._io.read_u1()
-            self.idx_mapping = self._io.read_u1()
-            self.length = self._io.read_f4le()
+            self.padding = self._io.read_u1()
+            self.furthest_vertex_distance = self._io.read_f4le()
             self.parent_distance = self._io.read_f4le()
             self.location = Mod21.Vec3(self._io, self, self._root)
             self.location._read()
@@ -212,8 +213,8 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u1(self.idx_anim_map)
             self._io.write_u1(self.idx_parent)
             self._io.write_u1(self.idx_mirror)
-            self._io.write_u1(self.idx_mapping)
-            self._io.write_f4le(self.length)
+            self._io.write_u1(self.padding)
+            self._io.write_f4le(self.furthest_vertex_distance)
             self._io.write_f4le(self.parent_distance)
             self.location._write__seq(self._io)
 
@@ -468,14 +469,14 @@ class Mod21(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+            if  ((self._root.header.version == 210) or (self._root.header.version == 212) or ( ((self._root.header.version == 211) and (self._root.app_id == u"umvc3")) )) :
                 pass
                 self.material_names = []
                 for i in range(self._root.header.num_materials):
                     self.material_names.append((KaitaiStream.bytes_terminate(self._io.read_bytes(128), 0, False)).decode(u"ASCII"))
 
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 self.material_hashes = []
                 for i in range(self._root.header.num_materials):
@@ -487,13 +488,13 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+            if  ((self._root.header.version == 210) or (self._root.header.version == 212) or ( ((self._root.header.version == 211) and (self._root.app_id == u"umvc3")) )) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
 
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 for i in range(len(self.material_hashes)):
                     pass
@@ -503,14 +504,14 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Mod21.MaterialsData, self)._write__seq(io)
-            if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+            if  ((self._root.header.version == 210) or (self._root.header.version == 212) or ( ((self._root.header.version == 211) and (self._root.app_id == u"umvc3")) )) :
                 pass
                 for i in range(len(self.material_names)):
                     pass
                     self._io.write_bytes_limit((self.material_names[i]).encode(u"ASCII"), 128, 0, 0)
 
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 for i in range(len(self.material_hashes)):
                     pass
@@ -520,7 +521,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if  ((self._root.header.version == 210) or (self._root.header.version == 212)) :
+            if  ((self._root.header.version == 210) or (self._root.header.version == 212) or ( ((self._root.header.version == 211) and (self._root.app_id == u"umvc3")) )) :
                 pass
                 if len(self.material_names) != self._root.header.num_materials:
                     raise kaitaistruct.ConsistencyError(u"material_names", self._root.header.num_materials, len(self.material_names))
@@ -532,7 +533,7 @@ class Mod21(ReadWriteKaitaiStruct):
                         raise kaitaistruct.ConsistencyError(u"material_names", -1, KaitaiStream.byte_array_index_of((self.material_names[i]).encode(u"ASCII"), 0))
 
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 if len(self.material_hashes) != self._root.header.num_materials:
                     raise kaitaistruct.ConsistencyError(u"material_hashes", self._root.header.num_materials, len(self.material_hashes))
@@ -547,7 +548,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (128 * self._root.header.num_materials if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else 4 * self._root.header.num_materials)
+            self._m_size_ = (128 * self._root.header.num_materials if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else 4 * self._root.header.num_materials)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -632,23 +633,30 @@ class Mod21(ReadWriteKaitaiStruct):
             self.topology = self._io.read_bits_int_le(6)
             self.binormal_flip = self._io.read_bits_int_le(1) != 0
             self.bridge = self._io.read_bits_int_le(1) != 0
-            self.vertex_position = self._io.read_u4le()
-            self.vertex_offset = self._io.read_u4le()
+            self.vertex_index = self._io.read_u4le()
+            self.vertex_byte_offset = self._io.read_u4le()
             self.vertex_format = self._io.read_u4le()
-            self.face_position = self._io.read_u4le()
+            self.index_start = self._io.read_u4le()
             self.num_indices = self._io.read_u4le()
-            self.face_offset = self._io.read_u4le()
+            self.vertex_base = self._io.read_u4le()
             self.bone_id_start = self._io.read_u1()
             self.num_weight_bounds = self._io.read_u1()
             self.connect_id = self._io.read_u2le()
-            self.min_index = self._io.read_u2le()
-            self.max_index = self._io.read_u2le()
+            self.first_index = self._io.read_u2le()
+            self.last_index = self._io.read_u2le()
             self.boundary = self._io.read_u4le()
+            if self._root.use_64bit_ofs:
+                pass
+                self.padding = self._io.read_u8le()
+
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            if self._root.use_64bit_ofs:
+                pass
+
             _ = self.indices
             if hasattr(self, '_m_indices'):
                 pass
@@ -804,21 +812,28 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_bits_int_le(6, self.topology)
             self._io.write_bits_int_le(1, int(self.binormal_flip))
             self._io.write_bits_int_le(1, int(self.bridge))
-            self._io.write_u4le(self.vertex_position)
-            self._io.write_u4le(self.vertex_offset)
+            self._io.write_u4le(self.vertex_index)
+            self._io.write_u4le(self.vertex_byte_offset)
             self._io.write_u4le(self.vertex_format)
-            self._io.write_u4le(self.face_position)
+            self._io.write_u4le(self.index_start)
             self._io.write_u4le(self.num_indices)
-            self._io.write_u4le(self.face_offset)
+            self._io.write_u4le(self.vertex_base)
             self._io.write_u1(self.bone_id_start)
             self._io.write_u1(self.num_weight_bounds)
             self._io.write_u2le(self.connect_id)
-            self._io.write_u2le(self.min_index)
-            self._io.write_u2le(self.max_index)
+            self._io.write_u2le(self.first_index)
+            self._io.write_u2le(self.last_index)
             self._io.write_u4le(self.boundary)
+            if self._root.use_64bit_ofs:
+                pass
+                self._io.write_u8le(self.padding)
+
 
 
         def _check(self):
+            if self._root.use_64bit_ofs:
+                pass
+
             if self.indices__enabled:
                 pass
                 if len(self._m_indices) != self.num_indices:
@@ -1089,7 +1104,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_index_buffer + self.face_offset * 2) + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.index_start * 2)
             self._m_indices = []
             for i in range(self.num_indices):
                 self._m_indices.append(self._io.read_u2le())
@@ -1105,7 +1120,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write_indices(self):
             self._should_write_indices = False
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_index_buffer + self.face_offset * 2) + self.face_position * 2)
+            self._io.seek(self._root.header.offset_index_buffer + self.index_start * 2)
             for i in range(len(self._m_indices)):
                 pass
                 self._io.write_u2le(self._m_indices[i])
@@ -1117,7 +1132,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 48
+            self._m_size_ = (56 if self._root.app_id == u"umvc3" else 48)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -1133,7 +1148,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 return None
 
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + self.vertex_position * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_byte_offset) + (self.vertex_base + self.vertex_index) * self.vertex_stride)
             self._m_vertices = []
             for i in range(self.num_vertices):
                 _on = self.vertex_format
@@ -1429,7 +1444,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write_vertices(self):
             self._should_write_vertices = False
             _pos = self._io.pos()
-            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_offset) + self.vertex_position * self.vertex_stride)
+            self._io.seek((self._root.header.offset_vertex_buffer + self.vertex_byte_offset) + (self.vertex_base + self.vertex_index) * self.vertex_stride)
             for i in range(len(self._m_vertices)):
                 pass
                 _on = self.vertex_format
@@ -1572,12 +1587,12 @@ class Mod21(ReadWriteKaitaiStruct):
                 finally:
                     self.meshes.append(_t_meshes)
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 self.num_weight_bounds = self._io.read_u4le()
 
             self.weight_bounds = []
-            for i in range((self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else self.num_weight_bounds)):
+            for i in range((self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else self.num_weight_bounds)):
                 _t_weight_bounds = Mod21.WeightBound(self._io, self, self._root)
                 try:
                     _t_weight_bounds._read()
@@ -1593,7 +1608,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 pass
                 self.meshes[i]._fetch_instances()
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
 
             for i in range(len(self.weight_bounds)):
@@ -1608,7 +1623,7 @@ class Mod21(ReadWriteKaitaiStruct):
                 pass
                 self.meshes[i]._write__seq(self._io)
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
                 self._io.write_u4le(self.num_weight_bounds)
 
@@ -1628,11 +1643,11 @@ class Mod21(ReadWriteKaitaiStruct):
                 if self.meshes[i]._parent != self:
                     raise kaitaistruct.ConsistencyError(u"meshes", self, self.meshes[i]._parent)
 
-            if self._root.header.version == 211:
+            if  ((self._root.header.version == 211) and (self._root.app_id != u"umvc3")) :
                 pass
 
-            if len(self.weight_bounds) != (self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else self.num_weight_bounds):
-                raise kaitaistruct.ConsistencyError(u"weight_bounds", (self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else self.num_weight_bounds), len(self.weight_bounds))
+            if len(self.weight_bounds) != (self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else self.num_weight_bounds):
+                raise kaitaistruct.ConsistencyError(u"weight_bounds", (self._root.num_weight_bounds if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else self.num_weight_bounds), len(self.weight_bounds))
             for i in range(len(self.weight_bounds)):
                 pass
                 if self.weight_bounds[i]._root != self._root:
@@ -1647,7 +1662,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = (self._root.header.num_meshes * self.meshes[0].size_ + self._root.num_weight_bounds * self.weight_bounds[0].size_ if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else (self._root.header.num_meshes * self.meshes[0].size_ + self.num_weight_bounds * self.weight_bounds[0].size_) + 4)
+            self._m_size_ = (self._root.header.num_meshes * self.meshes[0].size_ + self._root.num_weight_bounds * self.weight_bounds[0].size_ if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else (self._root.header.num_meshes * self.meshes[0].size_ + self.num_weight_bounds * self.weight_bounds[0].size_) + 4)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -1669,23 +1684,151 @@ class Mod21(ReadWriteKaitaiStruct):
             self.num_meshes = self._io.read_u2le()
             self.num_materials = self._io.read_u2le()
             self.num_vertices = self._io.read_u4le()
-            self.num_faces = self._io.read_u4le()
-            self.num_edges = self._io.read_u4le()
+            self.num_indices = self._io.read_u4le()
+            self.num_triangles = self._io.read_u4le()
             self.size_vertex_buffer = self._io.read_u4le()
             self.reserved_01 = self._io.read_u4le()
-            self.num_groups = self._io.read_u4le()
-            self.offset_bones_data = self._io.read_u4le()
-            self.offset_groups = self._io.read_u4le()
-            self.offset_materials_data = self._io.read_u4le()
-            self.offset_meshes_data = self._io.read_u4le()
-            self.offset_vertex_buffer = self._io.read_u4le()
-            self.offset_index_buffer = self._io.read_u4le()
-            self.size_file = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.num_groups = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.num_groups = self._io.read_u8le()
+            else:
+                pass
+                self.num_groups = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_bones_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_bones_data = self._io.read_u8le()
+            else:
+                pass
+                self.offset_bones_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_groups = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_groups = self._io.read_u8le()
+            else:
+                pass
+                self.offset_groups = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_materials_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_materials_data = self._io.read_u8le()
+            else:
+                pass
+                self.offset_materials_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_meshes_data = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_meshes_data = self._io.read_u8le()
+            else:
+                pass
+                self.offset_meshes_data = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_vertex_buffer = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_vertex_buffer = self._io.read_u8le()
+            else:
+                pass
+                self.offset_vertex_buffer = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.offset_index_buffer = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.offset_index_buffer = self._io.read_u8le()
+            else:
+                pass
+                self.offset_index_buffer = self._io.read_u4le()
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self.size_file = self._io.read_u4le()
+            elif _on == True:
+                pass
+                self.size_file = self._io.read_u8le()
+            else:
+                pass
+                self.size_file = self._io.read_u4le()
             self._dirty = False
 
 
         def _fetch_instances(self):
             pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
 
 
         def _write__seq(self, io=None):
@@ -1697,18 +1840,90 @@ class Mod21(ReadWriteKaitaiStruct):
             self._io.write_u2le(self.num_meshes)
             self._io.write_u2le(self.num_materials)
             self._io.write_u4le(self.num_vertices)
-            self._io.write_u4le(self.num_faces)
-            self._io.write_u4le(self.num_edges)
+            self._io.write_u4le(self.num_indices)
+            self._io.write_u4le(self.num_triangles)
             self._io.write_u4le(self.size_vertex_buffer)
             self._io.write_u4le(self.reserved_01)
-            self._io.write_u4le(self.num_groups)
-            self._io.write_u4le(self.offset_bones_data)
-            self._io.write_u4le(self.offset_groups)
-            self._io.write_u4le(self.offset_materials_data)
-            self._io.write_u4le(self.offset_meshes_data)
-            self._io.write_u4le(self.offset_vertex_buffer)
-            self._io.write_u4le(self.offset_index_buffer)
-            self._io.write_u4le(self.size_file)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.num_groups)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.num_groups)
+            else:
+                pass
+                self._io.write_u4le(self.num_groups)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_bones_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_bones_data)
+            else:
+                pass
+                self._io.write_u4le(self.offset_bones_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_groups)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_groups)
+            else:
+                pass
+                self._io.write_u4le(self.offset_groups)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_materials_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_materials_data)
+            else:
+                pass
+                self._io.write_u4le(self.offset_materials_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_meshes_data)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_meshes_data)
+            else:
+                pass
+                self._io.write_u4le(self.offset_meshes_data)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_vertex_buffer)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_vertex_buffer)
+            else:
+                pass
+                self._io.write_u4le(self.offset_vertex_buffer)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.offset_index_buffer)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.offset_index_buffer)
+            else:
+                pass
+                self._io.write_u4le(self.offset_index_buffer)
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+                self._io.write_u4le(self.size_file)
+            elif _on == True:
+                pass
+                self._io.write_u8le(self.size_file)
+            else:
+                pass
+                self._io.write_u4le(self.size_file)
 
 
         def _check(self):
@@ -1716,6 +1931,62 @@ class Mod21(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"ident", 4, len(self.ident))
             if not self.ident == b"\x4D\x4F\x44\x00":
                 raise kaitaistruct.ValidationNotEqualError(b"\x4D\x4F\x44\x00", self.ident, None, u"/types/mod_header/seq/0")
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
+            _on = self._root.use_64bit_ofs
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            else:
+                pass
             self._dirty = False
 
         @property
@@ -1723,7 +1994,7 @@ class Mod21(ReadWriteKaitaiStruct):
             if hasattr(self, '_m_size_'):
                 return self._m_size_
 
-            self._m_size_ = 64
+            self._m_size_ = (96 if self._root.use_64bit_ofs else 64)
             return getattr(self, '_m_size_', None)
 
         def _invalidate_size_(self):
@@ -5603,8 +5874,8 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _read(self):
             self.bone_id = self._io.read_u4le()
-            self.unk_01 = Mod21.Vec3(self._io, self, self._root)
-            self.unk_01._read()
+            self.padding = Mod21.Vec3(self._io, self, self._root)
+            self.padding._read()
             self.bsphere = Mod21.Vec4(self._io, self, self._root)
             self.bsphere._read()
             self.bbox_min = Mod21.Vec4(self._io, self, self._root)
@@ -5620,7 +5891,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         def _fetch_instances(self):
             pass
-            self.unk_01._fetch_instances()
+            self.padding._fetch_instances()
             self.bsphere._fetch_instances()
             self.bbox_min._fetch_instances()
             self.bbox_max._fetch_instances()
@@ -5631,7 +5902,7 @@ class Mod21(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Mod21.WeightBound, self)._write__seq(io)
             self._io.write_u4le(self.bone_id)
-            self.unk_01._write__seq(self._io)
+            self.padding._write__seq(self._io)
             self.bsphere._write__seq(self._io)
             self.bbox_min._write__seq(self._io)
             self.bbox_max._write__seq(self._io)
@@ -5640,10 +5911,10 @@ class Mod21(ReadWriteKaitaiStruct):
 
 
         def _check(self):
-            if self.unk_01._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"unk_01", self._root, self.unk_01._root)
-            if self.unk_01._parent != self:
-                raise kaitaistruct.ConsistencyError(u"unk_01", self, self.unk_01._parent)
+            if self.padding._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"padding", self._root, self.padding._root)
+            if self.padding._parent != self:
+                raise kaitaistruct.ConsistencyError(u"padding", self, self.padding._parent)
             if self.bsphere._root != self._root:
                 raise kaitaistruct.ConsistencyError(u"bsphere", self._root, self.bsphere._root)
             if self.bsphere._parent != self:
@@ -5782,7 +6053,7 @@ class Mod21(ReadWriteKaitaiStruct):
 
         _pos = self._io.pos()
         self._io.seek(self.header.offset_index_buffer)
-        self._m_index_buffer = self._io.read_bytes(self.header.num_faces * 2)
+        self._m_index_buffer = self._io.read_bytes(self.header.num_indices * 2)
         self._io.seek(_pos)
         return getattr(self, '_m_index_buffer', None)
 
@@ -5873,11 +6144,21 @@ class Mod21(ReadWriteKaitaiStruct):
         if hasattr(self, '_m_size_top_level_'):
             return self._m_size_top_level_
 
-        self._m_size_top_level_ = (self._root.header.size_ + 68 if  ((self._root.header.version == 210) or (self._root.header.version == 212))  else self._root.header.size_ + 64)
+        self._m_size_top_level_ = (self._root.header.size_ + 68 if  ((self._root.header.version == 210) or (self._root.header.version == 212) or (self._root.app_id == u"umvc3"))  else self._root.header.size_ + 64)
         return getattr(self, '_m_size_top_level_', None)
 
     def _invalidate_size_top_level_(self):
         del self._m_size_top_level_
+    @property
+    def use_64bit_ofs(self):
+        if hasattr(self, '_m_use_64bit_ofs'):
+            return self._m_use_64bit_ofs
+
+        self._m_use_64bit_ofs = self._root.app_id == u"umvc3"
+        return getattr(self, '_m_use_64bit_ofs', None)
+
+    def _invalidate_use_64bit_ofs(self):
+        del self._m_use_64bit_ofs
     @property
     def vertex_buffer(self):
         if self._should_write_vertex_buffer:

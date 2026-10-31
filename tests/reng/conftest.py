@@ -4,6 +4,8 @@ import tempfile
 import bpy
 import pytest
 
+from tests.skip_policy import skip_missing
+
 R2_PROTOCOL_PREFIX = "r2://"
 
 # app_id -> the ReenFS instance already mounted this session.
@@ -102,11 +104,11 @@ def pak_fs_root(pytestconfig, local_app_id):
     if local_app_id not in _REEN_FS_INSTANCES:
         game_dirs = _reen_game_dirs(pytestconfig)
         if local_app_id not in game_dirs:
-            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
+            skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
 
         game_root, path_list_source = game_dirs[local_app_id]
         if path_list_source is None:
-            pytest.skip(
+            skip_missing(
                 f"--game-dir={local_app_id}::{game_root} has no third (path-list) "
                 f"segment - reng needs --game-dir={local_app_id}::{game_root}::<path-list>"
             )
@@ -115,7 +117,7 @@ def pak_fs_root(pytestconfig, local_app_id):
         if game_root.startswith(R2_PROTOCOL_PREFIX):
             game_r2_kwargs = resolve_r2_source(game_root)
             if game_r2_kwargs is None:
-                pytest.skip(
+                skip_missing(
                     f"--game-dir={local_app_id}::{game_root}::... requested but R2 isn't "
                     f"configured (empty bucket, missing s3 extras, or missing credentials - "
                     f"see .env.example)"
@@ -123,7 +125,7 @@ def pak_fs_root(pytestconfig, local_app_id):
 
         path_list_path = _resolve_path_list(path_list_source, game_r2_kwargs)
         if path_list_path is None:
-            pytest.skip(
+            skip_missing(
                 f"--game-dir={local_app_id}::...::{path_list_source} - path list "
                 f"not found/resolvable"
             )
@@ -131,7 +133,7 @@ def pak_fs_root(pytestconfig, local_app_id):
         if game_r2_kwargs is not None:
             reen_fs = ReenFS.from_s3(path_list_path=path_list_path, **game_r2_kwargs)
         elif not os.path.isdir(game_root):
-            pytest.skip(f"--game-dir={local_app_id}::{game_root}::... does not exist")
+            skip_missing(f"--game-dir={local_app_id}::{game_root}::... does not exist")
         else:
             reen_fs = ReenFS(game_root, path_list_path)
 

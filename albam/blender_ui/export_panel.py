@@ -2,7 +2,6 @@ import time
 import os
 import bpy
 
-from ..lib import fs_registry
 from .error_handling import handle_operator_exception
 from ..registry import blender_registry
 from ..vfs import (
@@ -10,6 +9,8 @@ from ..vfs import (
     ALBAM_OT_VirtualFileSystemCollapseToggleBase,
     ALBAM_OT_VirtualFileSystemRemoveRootVFileBase,
     VirtualFileSystemBase,
+    _extension_from_name,
+    root_fs,
 )
 from .import_panel import ALBAM_UL_VirtualFileSystemUIBase
 
@@ -24,7 +25,14 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     remove_duplicate_materials_suffix: bpy.props.BoolProperty(default=True)
     export_visible: bpy.props.BoolProperty(default=False)
     force_lod255: bpy.props.BoolProperty(default=False)
-    export_bones: bpy.props.BoolProperty(default=False)
+    # On by default (#281): copying the source skeleton under edited meshes
+    # writes a file that only breaks once the game animates it.
+    export_bones: bpy.props.BoolProperty(
+        default=True,
+        description="Write the skeleton from the armature: bone positions, parents, "  # noqa: F722
+                    "animation ids and mirrors. Off copies the source file's skeleton "
+                    "and ignores any rig edits",
+    )
     no_vf_grouping: bpy.props.BoolProperty(
         default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
@@ -346,11 +354,13 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         vfs = context.scene.albam.vfs
         index = vfs.file_list_selected_index
         item = vfs.file_list[index]
-        parent_node = ""
-        if item .is_archive:
+        if item.is_archive:
             parent_node = item.display_name
         else:
-            parent_node = (item.tree_node_ancestors[0].node_id).split("::")[1]
+            # Ancestor 0 is the root node; its display_name is the archive's
+            # own file name - the root's `name` isn't (it's app-id-prefixed,
+            # and suffixed when two roots share a display name).
+            parent_node = vfs.file_list[item.tree_node_ancestors[0].node_id].display_name
         self.filepath = parent_node
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -363,11 +373,10 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             return {"CANCELLED"}
         return {"FINISHED"}
 
-    def _execute(self, context):  # pragma: no cover
+    def _execute(self, context):
         # FIXME don't import function here, use method in archive type
         # necessary for kaitaistruct unavailable when registering
         # blender types
-        from ..engines.mtfw.archive import update_arc
         from ..engines.mtfw.arc_fs import origin_arc_path
         vfs_i = context.scene.albam.vfs
         index_i = vfs_i.file_list_selected_index
@@ -378,17 +387,19 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 # ArcFS-wrapped .arc (always returns that arc's own path) or
                 # a whole MTFW_FS game-folder root (resolves the specific
                 # .arc this path actually came from) - see origin_arc_path.
-                path_i = origin_arc_path(fs_registry.get(item_i.fs_key), item_i.fs_path)
-                if path_i is None:
-                    self.report({'ERROR'}, "Selected archive isn't backed by a packed .arc file")
+                # origin_arc_path answers only for ArcFS/MTFW_FS, so anything
+                # else (LfsFS) falls back to the root's own path.
+                path_i = origin_arc_path(root_fs(item_i), item_i.fs_path) or item_i.absolute_path
+                if not path_i:
+                    self.report({'ERROR'}, "Selected archive isn't backed by a packed file")
                     return
             else:
                 path_i = item_i.absolute_path
         else:
-            arc_name = (item_i.tree_node_ancestors[0].node_id).split("::")[1]
-            arc_node = [item for item in vfs_i.file_list
-                        if item.is_archive is True and item.display_name == arc_name]
-            path_i = arc_node[0].absolute_path
+            # The root node this item came from, looked up directly rather
+            # than by matching display names - two roots can share one (see
+            # VirtualFileSystemBase._unique_root_name).
+            path_i = vfs_i.file_list[item_i.tree_node_ancestors[0].node_id].absolute_path
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
@@ -402,10 +413,26 @@ class ALBAM_OT_Pack(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        remove_unused = context.scene.albam.export_settings.remove_unused_textures
-        arc = update_arc(path_i, files_e, remove_unused_textures=remove_unused)
+
+        # Rebuilding a container is the engine's own business - the formats
+        # have nothing in common beyond both being archives - so it is looked
+        # up rather than hardcoded here.
+        extension = _extension_from_name(os.path.basename(path_i))
+        writer = blender_registry.archive_writer_registry.get((item_i.app_id, extension))
+        if writer is None:
+            self.report({'ERROR'},
+                        f"No way to repack a {extension!r} archive for {item_i.app_id}")
+            return
+        # Every export setting the panel offers is passed to whichever writer
+        # was looked up; a writer takes the ones it understands and ignores
+        # the rest, which is what the **options in its contract is for. An
+        # app_id branch here would put one engine's option back in the UI.
+        options = {
+            "remove_unused_textures": context.scene.albam.export_settings.remove_unused_textures,
+        }
+        archive = writer(path_i, files_e, **options)
         with open(self.filepath, "wb") as f:
-            f.write(arc)
+            f.write(archive)
 
     @classmethod
     def poll(cls, context):
@@ -461,6 +488,8 @@ class ALBAM_OT_Patch(bpy.types.Operator):
         # necessary for kaitaistruct unavailable when registering
         # blender types
         from ..engines.mtfw.archive import update_arc
+        from ..engines.mtfw.arc_fs import AmbiguousExtension, UnknownExtension
+        from ..lib.xcompress_encode import FrameTooLarge
         files_e = []
         vfs_e = context.scene.albam.exported
         index_e = vfs_e.file_list_selected_index
@@ -474,8 +503,14 @@ class ALBAM_OT_Patch(bpy.types.Operator):
                 continue
             if parent == item_e.name:
                 files_e.append(e)
-        arc = update_arc(self.filepath, files_e,
-                         remove_unused_textures=context.scene.albam.export_settings.remove_unused_textures)
+        remove_unused_textures = context.scene.albam.export_settings.remove_unused_textures
+        try:
+            arc = update_arc(self.filepath, files_e, remove_unused_textures=remove_unused_textures)
+        except (AmbiguousExtension, UnknownExtension, FrameTooLarge) as err:
+            # Something about the files given, not a bug: say what, rather
+            # than offer a crash report.
+            self.report({'ERROR'}, str(err))
+            return {'CANCELLED'}
         with open(self.filepath, "wb") as f:
             f.write(arc)
         return {'FINISHED'}
@@ -538,7 +573,13 @@ class ALBAM_OT_FindReplaceFileSel(ALBAM_OT_VirtualFileSystemSaveFileBase, bpy.ty
         vfs = self.get_vfs(self, context)
         vfile = vfs.selected_vfile
         from ..engines.mtfw.archive import find_and_replace_in_arc
-        arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
+        from ..engines.mtfw.arc_fs import AmbiguousExtension, UnknownExtension
+        from ..lib.xcompress_encode import FrameTooLarge
+        try:
+            arc = find_and_replace_in_arc(self.filepath, vfile, file_name, add_new)
+        except (AmbiguousExtension, UnknownExtension, FrameTooLarge) as err:
+            self.report({'ERROR'}, str(err))
+            return {'CANCELLED'}
         if arc:
             with open(self.filepath, "wb") as f:
                 f.write(arc)

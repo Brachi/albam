@@ -12,6 +12,24 @@ BoundingBox = namedtuple('bounding_box', (
 ))
 
 
+def get_action_channels(action, slot_name):
+    """The container a freshly-created action keeps its fcurves and groups
+    in, across every Blender version this addon supports.
+
+    Blender 4.4 moved both behind an action's layers and slots, and 5.0
+    removed the flat Action.fcurves/Action.groups shortcuts altogether - the
+    container returned here (the action itself, or a channelbag) exposes the
+    same .fcurves.new()/.groups API either way, so a caller doesn't need its
+    own version check. `slot_name` only matters on 4.4+, where a slot names
+    the datablock (e.g. an armature) the channels animate.
+    """
+    if hasattr(action, "fcurves"):
+        return action
+    slot = action.slots.new(id_type='OBJECT', name=slot_name)
+    strip = action.layers.new("Layer").strips.new(type='KEYFRAME')
+    return strip.channelbag(slot, ensure=True)
+
+
 def strip_triangles_to_triangles_list(strip_indices_array):
     indices = []
 
@@ -29,30 +47,42 @@ def strip_triangles_to_triangles_list(strip_indices_array):
     return indices
 
 
-def triangles_list_to_triangles_strip(blender_mesh):
+def _triangle_edge_keys(triangle):
+    a, b, c = triangle
+    return (
+        tuple(sorted((a, b))),
+        tuple(sorted((b, c))),
+        tuple(sorted((c, a))),
+    )
+
+
+def triangles_list_to_triangles_strip(triangles):
     """
-    Export triangle strips from a blender mesh.
-    It assumes the mesh is all triangulated.
+    Convert a flat list of triangles (3-tuples of vertex indices, already
+    triangulated) into one or more triangle strips, joined by degenerate
+    triangles into a single index list.
+    Takes plain vertex-index triangles rather than a blender mesh object, so
+    the caller controls what a "vertex index" means (e.g. a post-split index
+    that is no longer 1:1 with `mesh.vertices`).
     Based on a paper by Pierre Terdiman: http://www.codercorner.com/Strips.htm
     """
     # TODO: Fix changing of face orientation in some cases (see tests)
-    blender_mesh = blender_mesh.data
+    triangles = [tuple(t) for t in triangles]
     edges_faces = {}
     current_strip = []
     strips = []
     joined_strips = []
-    faces_indices = deque(p.index for p in blender_mesh.polygons)
+    faces_indices = deque(range(len(triangles)))
     done_faces_indices = set()
     current_face_index = faces_indices.popleft()
     process_faces = True
 
-    for polygon in blender_mesh.polygons:
-        for edge in polygon.edge_keys:
-            edges_faces.setdefault(edge, set()).add(polygon.index)
+    for face_index, triangle in enumerate(triangles):
+        for edge in _triangle_edge_keys(triangle):
+            edges_faces.setdefault(edge, set()).add(face_index)
 
     while process_faces:
-        current_face = blender_mesh.polygons[current_face_index]
-        current_face_verts = current_face.vertices[:]
+        current_face_verts = triangles[current_face_index]
         strip_indices = [v for v in current_face_verts if v not in current_strip[-2:]]
         if current_strip:
             face_to_add = tuple(current_strip[-2:]) + tuple(strip_indices)
@@ -66,7 +96,7 @@ def triangles_list_to_triangles_strip(blender_mesh):
 
         next_face_index = None
         possible_face_indices = {}
-        for edge in current_face.edge_keys:
+        for edge in _triangle_edge_keys(current_face_verts):
             if edge not in edges_faces:
                 continue
             checked_edge = {face_index: edge for face_index in edges_faces[edge]
@@ -161,23 +191,31 @@ def get_model_bounding_sphere(blender_objects):
     return center + [radius]
 
 
-def get_uvs_per_vertex(blender_mesh_object, layer_index):
-    vertices = {}  # vertex_index: (uv_x, uv_y)
-    try:
-        uv_layer = blender_mesh_object.data.uv_layers[layer_index]
-    except IndexError:
-        return vertices
+def get_uvs_per_loop(blender_mesh_object, layer_index):
+    """
+    Return {loop_index: (uv_x, uv_y)}, one entry per mesh corner (as opposed
+    to per vertex): a shared vertex can be part of more than one UV island,
+    so its corners can legitimately have different UVs.
+
+    Callers ask for a fixed number of layers because that is what the vertex
+    formats allow, so a mesh with fewer is the normal case, not an error.
+    Asking how many there are rather than indexing and catching the failure
+    keeps Blender from printing "Array iterator out of range" to stdout: it
+    writes that before raising, so catching the exception does not suppress
+    it, and once per missing layer per mesh it reads like a real error in
+    the middle of an export log.
+    """
+    loops = {}
+    uv_layers = blender_mesh_object.data.uv_layers
+    if layer_index >= len(uv_layers):
+        return loops
+    uv_layer = uv_layers[layer_index]
     uvs_per_loop = uv_layer.data
     if not uvs_per_loop:
-        return vertices
-    for i, loop in enumerate(blender_mesh_object.data.loops):
-        vertex_index = loop.vertex_index
-        if vertex_index in vertices:
-            continue
-        else:
-            uvs = uvs_per_loop[i].uv
-            vertices[vertex_index] = (uvs[0], uvs[1])
-    return vertices
+        return loops
+    for i, data in enumerate(uvs_per_loop):
+        loops[i] = (data.uv[0], data.uv[1])
+    return loops
 
 
 def get_mesh_vertex_groups(bl_mesh):
@@ -231,7 +269,8 @@ def get_bone_indices_and_weights_per_vertex(blender_object):
     return weights_per_vertex
 
 
-def get_normals_per_vertex(blender_mesh):
+def get_normals_per_loop(blender_mesh):
+    """Return {loop_index: normal}, one (split) normal per mesh corner."""
     normals = {}
 
     if blender_mesh.has_custom_normals:
@@ -240,15 +279,16 @@ def get_normals_per_vertex(blender_mesh):
         except AttributeError:
             # blender 4.1+
             pass
-        for loop in blender_mesh.loops:
-            normals.setdefault(loop.vertex_index, loop.normal)
+        for i, loop in enumerate(blender_mesh.loops):
+            normals[i] = loop.normal
     else:
-        for vertex in blender_mesh.vertices:
-            normals[vertex.index] = vertex.normal
+        for i, loop in enumerate(blender_mesh.loops):
+            normals[i] = blender_mesh.vertices[loop.vertex_index].normal
     return normals
 
 
-def get_tangents_per_vertex(blender_mesh):
+def get_tangents_per_loop(blender_mesh):
+    """Return {loop_index: tangent}, one tangent per mesh corner."""
     tangents = {}
     try:
         uv_name = blender_mesh.uv_layers[0].name
@@ -259,9 +299,59 @@ def get_tangents_per_vertex(blender_mesh):
     except RuntimeError:
         print("Mesh {} has no UV".format(blender_mesh.name))
         return tangents
-    for loop in blender_mesh.loops:
-        tangents.setdefault(loop.vertex_index, loop.tangent)
+    for i, loop in enumerate(blender_mesh.loops):
+        tangents[i] = loop.tangent
     return tangents
+
+
+def get_colors_per_loop(blender_mesh):
+    """
+    Return {loop_index: (r, g, b, a)} for the first color attribute, if any,
+    one entry per mesh corner regardless of the attribute's storage domain.
+    """
+    colors = {}
+    try:
+        color_layer = blender_mesh.color_attributes[0]
+    except IndexError:
+        return colors
+    if color_layer.domain == 'CORNER':
+        for i, item in enumerate(color_layer.data):
+            colors[i] = tuple(item.color)
+    else:  # 'POINT'
+        for i, loop in enumerate(blender_mesh.loops):
+            colors[i] = tuple(color_layer.data[loop.vertex_index].color)
+    return colors
+
+
+def ensure_material_nodes(bl_material):
+    """Give `bl_material` a node tree, on every Blender version albam supports.
+
+    Up to 4.5, `bpy.data.materials.new()` returns a material with `use_nodes`
+    off and no `node_tree` at all, so the assignment here is what builds the
+    tree the callers immediately start adding nodes to. From 5.0 on materials
+    are node-based unconditionally: the tree is already there, and `use_nodes`
+    only survives as a deprecated no-op that warns on both read and write
+    ("'Material.use_nodes' is expected to be removed in Blender 6.0"). Testing
+    `node_tree` rather than `use_nodes` is what keeps 4.2/4.5 working without
+    touching the deprecated property on 5.x.
+    """
+    if bl_material.node_tree is None:
+        bl_material.use_nodes = True
+
+
+def material_uses_nodes(bl_material):
+    """Whether `bl_material` renders from its node tree.
+
+    The counterpart to `ensure_material_nodes` for reads. Before 5.0 this is
+    exactly `use_nodes`, and it has to stay that way: unticking "Use Nodes" in
+    the UI leaves `node_tree` populated, so a material with nodes disabled but
+    a tree still hanging off it must read as not node-based. From 5.0 on the
+    toggle is gone in all but name - it reads True always and warns - so the
+    tree itself is the only thing left to ask about.
+    """
+    if bpy.app.version >= (5, 0, 0):
+        return bl_material.node_tree is not None
+    return bl_material.use_nodes
 
 
 def get_bl_teximage_nodes(bl_materials):
@@ -333,6 +423,40 @@ def get_dist(point_a, point_b):
     return magnitude
 
 
+def layout_node_chains(sink, chains, x_gap=300.0, y_gap=350.0):
+    """
+    Place upstream node chains left-to-right into an already-positioned `sink`
+    node (e.g. a Principled BSDF), each chain stacked into its own row so
+    parallel inputs (e.g. Base Color, Normal, Specular) don't collide.
+
+    New nodes have no `.location` set by Blender until something positions
+    them, so a loop that does `nodes.new(...)` per texture/input without ever
+    touching `.location` leaves every node stacked at the same default spot.
+    This is a small hand-rolled layered layout rather than a call into some
+    node-arrange operator: stock Blender has no core `bpy.ops.node.*` for it,
+    and the one third-party add-on commonly cited for this (Node Wrangler)
+    isn't enabled by default even though it ships bundled, and its operators
+    require a live NODE_EDITOR context (area/space/pinned node tree) that
+    doesn't exist in the headless `bpy`-as-pip-package environment this
+    importer also has to run under (see CLAUDE.md). For graphs this shallow
+    (a texture, optionally through one converter node, into a fixed sink) a
+    few lines of arithmetic are simpler and more predictable than depending
+    on either.
+
+    `sink`'s own location is the anchor and is left untouched.
+    `chains` is an iterable of node lists ordered from the most upstream node
+    to the one feeding directly into `sink` (e.g. [texture_node,
+    normal_map_node]); a chain with no intermediate nodes is just
+    [texture_node].
+    """
+    for row, chain in enumerate(chains):
+        y = sink.location.y - row * y_gap
+        depth = len(chain)
+        for index, node in enumerate(chain):
+            distance_to_sink = depth - index
+            node.location = (sink.location.x - distance_to_sink * x_gap, y)
+
+
 class ShaderGroupCompat:
 
     def __init__(self, shader_group, compat="NEW"):
@@ -354,3 +478,28 @@ class ShaderGroupCompat:
             return self.shader_group.inputs
         return {item.name: item for item in self.shader_group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"}
+
+
+class BaseMaterialCustomProperties(bpy.types.PropertyGroup):
+    """Copies a property group's own annotated fields to and from a parsed
+    struct, with the hex-string fields a Blender UI needs converted back to
+    the integers the struct holds.
+
+    Here rather than in an engine: nothing about it is specific to a format,
+    and an engine importing it from another engine would tie the two
+    together for no reason.
+    """
+
+    def copy_custom_properties_to(self, dst_obj):
+        for attr_name in self.__annotations__:
+            if type(getattr(self, attr_name)) is str:
+                setattr(dst_obj, attr_name, int(getattr(self, attr_name), 16))
+            else:
+                setattr(dst_obj, attr_name, getattr(self, attr_name))
+
+    def copy_custom_properties_from(self, src_obj):
+        for attr_name in self.__annotations__:
+            try:
+                setattr(self, attr_name, getattr(src_obj, attr_name))
+            except TypeError:
+                setattr(self, attr_name, hex(getattr(src_obj, attr_name)))

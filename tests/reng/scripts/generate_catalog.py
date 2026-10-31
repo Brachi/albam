@@ -24,13 +24,8 @@ import time
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "..", "..", ".."))
-_VENDOR_DIR = os.path.join(_REPO_ROOT, "albam", "albam_vendor")
 DATASETS_DIR = os.path.join(_REPO_ROOT, "tests", "reng", "datasets")
 
-# pymmh3 (needed transitively by albam.engines.reng.pak_fs) only lives in
-# albam's vendored copy, same as everywhere else in the codebase that
-# imports engine modules outside of register()'s own sys.path setup.
-sys.path.insert(0, _VENDOR_DIR)
 sys.path.insert(0, _REPO_ROOT)
 
 from albam.engines.reng.pak_fs import PakFS  # noqa: E402

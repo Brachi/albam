@@ -12,6 +12,13 @@ from fs.memoryfs import MemoryFS
 
 from albam.lib import fs_registry
 from albam.vfs import VirtualFileData
+from tests.conftest import (
+    close_new_fs_roots,
+    detach_fs_registry,
+    reattach_fs_registry,
+    remove_new_vfs_roots,
+    vfs_root_names,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -20,10 +27,26 @@ def _clean_vfs_state():
     # per pytest session), so without this, roots added by one test would
     # collide by name with roots added by another - node ids are keyed by
     # app_id::relative_path only, not by which root added them.
+    #
+    # vfs.file_list and fs_registry are shared with every other engine's
+    # tests in the same session (mtfw's and hexn's own game_fs_root
+    # fixtures mount their whole-game root once per session and expect it
+    # to still be there on every later test) - see remove_new_vfs_roots's
+    # and close_new_fs_roots's own docstrings for what a wholesale
+    # .clear() there broke.
+    before_roots = vfs_root_names()
+    # Several tests below call fs_registry.clear() to simulate a fresh
+    # Blender process. That closes every filesystem in this one, so anything
+    # another suite sharing the process (or, under xdist, the worker) still
+    # holds is taken out of the registry first and put back afterwards,
+    # unclosed - see detach_fs_registry().
+    detached = detach_fs_registry()
+    before_fs = fs_registry.keys()
     yield
-    bpy.context.scene.albam.vfs.file_list.clear()
+    remove_new_vfs_roots(before_roots)
     bpy.context.scene.albam.exported.file_list.clear()
-    fs_registry.clear()
+    close_new_fs_roots(before_fs)
+    reattach_fs_registry(detached)
 
 
 def _sample_fs():
@@ -105,6 +128,34 @@ def test_add_export_root_writes_and_reads_bytes():
     assert vfile_mrl.get_bytes() == b"exported-mrl"
 
 
+def test_add_export_root_second_export_replaces_stale_entry():
+    """
+    A child file's node id is app_id::relative_path, not scoped by which
+    root added it. Exporting the same identity twice in one session used to
+    leave both the old and new file_list entries around with an identical
+    id - Blender's CollectionProperty name lookup (file_list[id]/.find(id))
+    returns the *first* match, so select_vfile()/get_vfile() kept silently
+    returning the first export's bytes forever after, no matter how many
+    times the same asset was re-exported (#239).
+    """
+    exported = bpy.context.scene.albam.exported
+    path = "model/pl/pl00/pl00.mod"
+
+    exported.add_export_root("re5", "export-root-first", [
+        VirtualFileData("re5", path, data_bytes=b"first-export"),
+    ])
+    exported.add_export_root("re5", "export-root-second", [
+        VirtualFileData("re5", path, data_bytes=b"second-export"),
+    ])
+
+    assert exported.select_vfile("re5", path).get_bytes() == b"second-export"
+    assert exported.get_vfile("re5", path).get_bytes() == b"second-export"
+
+    file_id = "re5::model::pl::pl00::pl00.mod"
+    matches = [vf for vf in exported.file_list if vf.name == file_id]
+    assert len(matches) == 1
+
+
 def test_add_export_root_defaults_missing_bytes_to_empty():
     exported = bpy.context.scene.albam.exported
     exported.add_export_root(
@@ -115,19 +166,164 @@ def test_add_export_root_defaults_missing_bytes_to_empty():
     assert vfile.get_bytes() == b""
 
 
+def test_reload_blend_file_reconnects_fs_roots(tmp_path):
+    """
+    add_fs_root() stashes the live FS instance in fs_registry - a plain
+    in-process dict (see its module docstring) - and only a string key on
+    the persisted VirtualFile.fs_key. That dict isn't part of the .blend
+    file and doesn't survive a real restart: a fresh Blender process starts
+    with fs_registry empty again, while VirtualFile.fs_key (restored from
+    the file) still points at an entry that no longer exists. Reproduces
+    the KeyError a user hits importing after reopening a saved .blend that
+    had a folder/archive added to the VFS.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model" / "pl" / "pl00").mkdir(parents=True)
+    (game_root / "model" / "pl" / "pl00" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    vfs.add_real_file("re5", str(game_root))
+    vfile = vfs.select_vfile("re5", "model/pl/pl00/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    blend_path = str(tmp_path / "save.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+
+    # Simulate closing and reopening Blender: fs_registry is plain-Python,
+    # in-process state that a fresh process starts up without, unlike
+    # bpy.data (including VirtualFile.fs_key), which is restored from disk.
+    fs_registry.clear()
+    bpy.ops.wm.open_mainfile(filepath=blend_path)
+
+    vfs = bpy.context.scene.albam.vfs
+    vfile = vfs.select_vfile("re5", "model/pl/pl00/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+
+def test_get_bytes_remounts_a_root_the_registry_lost(tmp_path):
+    """
+    fs_registry is also emptied *without* a file load: unregister() clears
+    it, so Reload Scripts, an extension update or a disable/enable cycle
+    leaves every already-added root pointing at a key that's gone, with no
+    load_post to rebuild it. Reading bytes must mount the root again on
+    demand instead of raising a bare KeyError on a uuid.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model").mkdir(parents=True)
+    (game_root / "model" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    vfs.add_real_file("re5", str(game_root))
+    vfile = vfs.select_vfile("re5", "model/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    fs_registry.clear()
+
+    assert vfile.get_bytes() == b"mod-bytes"
+    # Mounted again under the key the root already carried, not a new one.
+    assert fs_registry.get(vfile.root_vfile.fs_key) is not None
+
+
+def test_get_bytes_on_an_unmountable_root_says_why():
+    """An export root's MemoryFS only ever existed in this process - there's
+    no path to mount it again from, so the error naming it must say that
+    rather than surfacing the internal registry key.
+    """
+    exported = bpy.context.scene.albam.exported
+    exported.add_export_root(
+        "re5", "export-root", [VirtualFileData("re5", "a.mod", data_bytes=b"bytes")]
+    )
+    vfile = exported.select_vfile("re5", "a.mod")
+
+    fs_registry.clear()
+
+    with pytest.raises(RuntimeError, match="export-root"):
+        vfile.get_bytes()
+
+
+def test_reload_blend_file_reconnects_roots_in_every_scene(tmp_path):
+    """The load_post handler used to walk bpy.context.scene only, leaving a
+    root added in any other scene of the same file unmounted.
+    """
+    game_root = tmp_path / "game_root"
+    (game_root / "model").mkdir(parents=True)
+    (game_root / "model" / "pl00.mod").write_bytes(b"mod-bytes")
+
+    extra_scene = bpy.data.scenes.new("extra")
+    extra_scene.albam.vfs.add_real_file("re5", str(game_root))
+
+    blend_path = str(tmp_path / "save.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+    fs_registry.clear()
+    bpy.ops.wm.open_mainfile(filepath=blend_path)
+
+    extra_scene = bpy.data.scenes["extra"]
+    vfile = extra_scene.albam.vfs.select_vfile("re5", "model/pl00.mod")
+    assert vfile.get_bytes() == b"mod-bytes"
+
+    extra_scene.albam.vfs.file_list.clear()
+    bpy.data.scenes.remove(extra_scene)
+
+
 def test_remove_root_unregisters_fs():
     from albam.vfs import ALBAM_OT_VirtualFileSystemRemoveRootVFile
 
     vfs = bpy.context.scene.albam.vfs
+    # Not "len(vfs.file_list) == 0" afterward: vfs.file_list is one
+    # collection shared by every engine's tests in the same session (see
+    # tests/conftest.py's remove_new_vfs_roots), so another suite's own
+    # session-scoped root can legitimately already be sitting in it -
+    # what this test actually promises is that removal takes back exactly
+    # what this root added, not that the whole VFS was empty to begin with.
+    before_size = len(vfs.file_list)
     root = vfs.add_fs_root("re5", _sample_fs(), display_name="removable-root")
     key = root.fs_key
+    # Copied out now: removing the item invalidates every reference into
+    # file_list, so reading root.name afterward reads freed memory.
+    root_name = root.name
     assert fs_registry.get(key) is not None
 
-    vfs.file_list_selected_index = vfs.file_list.find(root.name)
+    vfs.file_list_selected_index = vfs.file_list.find(root_name)
     ALBAM_OT_VirtualFileSystemRemoveRootVFile.execute(
         ALBAM_OT_VirtualFileSystemRemoveRootVFile, bpy.context
     )
 
-    assert len(vfs.file_list) == 0
+    assert len(vfs.file_list) == before_size
+    assert vfs.file_list.find(root_name) == -1
     with pytest.raises(KeyError):
         fs_registry.get(key)
+
+
+def test_two_roots_sharing_a_display_name_each_read_their_own_fs():
+    """Adding two same-named archives from different directories (e.g.
+    "Add Files" on both Characters/<name>.ssg and Characters/skel/<name>.ssg)
+    used to give both roots the identical file_list name, so every child of
+    the second one resolved its root - and therefore its FS - back to the
+    first, reading bytes from the wrong archive.
+    """
+    fs_a = MemoryFS()
+    fs_a.makedirs("/only_in_a")
+    fs_a.writebytes("/only_in_a/thing.mod", b"a-bytes")
+    fs_b = MemoryFS()
+    fs_b.makedirs("/only_in_b")
+    fs_b.writebytes("/only_in_b/thing.mod", b"b-bytes")
+
+    vfs = bpy.context.scene.albam.vfs
+    root_a = vfs.add_fs_root("re5", fs_a, display_name="same.arc", is_archive=True)
+    root_b = vfs.add_fs_root("re5", fs_b, display_name="same.arc", is_archive=True)
+
+    # Re-fetched by name: file_list.add() calls during the second
+    # add_fs_root can invalidate a reference taken before them (see the
+    # comment in add_fs_root), and a stale one would pass these vacuously.
+    name_a, name_b = root_a.name, root_b.name
+    assert name_a != name_b
+    root_a, root_b = vfs.file_list[name_a], vfs.file_list[name_b]
+
+    # Distinct keys in file_list, but the same UI label - the disambiguation
+    # is internal, the user still sees what they added.
+    assert root_a.name == name_a and root_b.name == name_b
+    assert root_a.display_name == root_b.display_name == "same.arc"
+    assert root_a.fs_key != root_b.fs_key
+
+    assert vfs.get_vfile("re5", "only_in_a/thing.mod").get_bytes() == b"a-bytes"
+    assert vfs.get_vfile("re5", "only_in_b/thing.mod").get_bytes() == b"b-bytes"

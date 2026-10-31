@@ -9,6 +9,7 @@ from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from .collision import mesh_rescale
 from ...lib import common_op as common
+from ...lib.kaitai_utils import check_recursive
 from ...lib.misc import number_to_color
 
 
@@ -72,7 +73,7 @@ def export_nav(bl_obj):
     dst_nav.reserved = 0
     dst_nav.num_vertices = len(vertices)
     dst_nav.num_faces = len(faces)
-    dst_nav.header_padding = 1
+    dst_nav.num_node_infos = 1
     dst_vertices = []
     dst_faces = []
     size_vertices = 0
@@ -109,29 +110,33 @@ def export_nav(bl_obj):
         dst_faces.append(dst_face)
     dst_nav.faces = dst_faces
     lower, upper = bounding_box(vertices)
-    dst_bbox = dst_nav.BoundingBox(_parent=dst_nav, _root=dst_nav._root)
-    dst_bbox.padding_00 = 0
-    dst_lower = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
+    dst_node_info = dst_nav.NodeInfo(_parent=dst_nav, _root=dst_nav._root)
+    dst_node_info.node_offset = 0
+    dst_lower = dst_nav.Vertex(_parent=dst_node_info, _root=dst_nav._root)
     dst_lower.x = lower[0]
     dst_lower.y = lower[1]
     dst_lower.z = lower[2]
-    dst_bbox.lower = dst_lower
-    dst_bbox.padding_01 = b"\xCD\xCD\xCD\xCD"
-    dst_upper = dst_nav.Vertex(_parent=dst_bbox, _root=dst_nav._root)
+    dst_node_info.lower = dst_lower
+    dst_node_info.padding_00 = b"\xCD\xCD\xCD\xCD"
+    dst_upper = dst_nav.Vertex(_parent=dst_node_info, _root=dst_nav._root)
     dst_upper.x = upper[0]
     dst_upper.y = upper[1]
     dst_upper.z = upper[2]
-    dst_bbox.upper = dst_upper
-    dst_bbox.padding_02 = b"\xCD\xCD\xCD\xCD"
-    dst_bbox._check()
-    dst_nav.bbox = dst_bbox
-    dst_nav.footer_indent = b"\x07\x55\x15\x00\x00"
-    dst_nav.footer_padding = b"\x00" * 5460
+    dst_node_info.upper = dst_upper
+    dst_node_info.padding_01 = b"\xCD\xCD\xCD\xCD"
+    dst_node_info._check()
+    dst_node_infos = [dst_node_info]
+    dst_nav.node_infos = dst_node_infos
+    dst_nav.footer_tag = b"\x07"
+    # quadtree for a 64x64 leaf grid
+    # 4096 leaves (64x64) + 1024 + 256 + 64 + 16 + 4 + 1 = 5461 nodes.
+    dst_nav.num_grid_nodes = 5461
+    dst_nav.internal_nodes = _build_emtpy_cells(dst_nav, 5461 - 4096)
     dst_grid, size_grid = write_lookup_grid(dst_nav, vertices, faces, lower, upper)
     dst_nav.lookup_grid = dst_grid
     final_size = sum((24, size_vertices, size_faces, 36, 5, 5460, size_grid))
     stream = KaitaiStream(BytesIO(bytearray(final_size)))
-    dst_nav._check()
+    check_recursive(dst_nav)
     dst_nav._write(stream)
     nav_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
     vfiles.append(nav_vf)
@@ -244,6 +249,16 @@ def build_neighbors(vertices, faces):
     return neighbors
 
 
+def _build_emtpy_cells(dst_nav, num_nodes):
+    internat_nodes = []
+    for i in range(num_nodes):
+        dst_cell = dst_nav.GridCell(_parent=dst_nav, _root=dst_nav._root)
+        dst_cell.num_faces = 0
+        dst_cell.faces = []
+        internat_nodes.append(dst_cell)
+    return internat_nodes
+
+
 def part1by1(n):
     n &= 0xFFFF
     n = (n | (n << 8)) & 0x00FF00FF
@@ -317,7 +332,7 @@ def write_lookup_grid(dst_nav, vertices, faces, lower, upper):
         dst_cell = dst_nav.GridCell(_parent=dst_nav, _root=dst_nav._root)
         dst_grid_size += 4
         dst_faces = []
-        dst_cell.face_count = len(faces_in_cell)
+        dst_cell.num_faces = len(faces_in_cell)
         for face_index in faces_in_cell:
             dst_face = dst_nav.GridFace(_parent=dst_cell, _root=dst_nav._root)
             dst_face.face_index = face_index

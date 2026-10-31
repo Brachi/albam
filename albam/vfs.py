@@ -3,6 +3,7 @@ import os
 from pathlib import PureWindowsPath, Path
 
 import bpy
+from bpy.app.handlers import persistent
 from fs.memoryfs import MemoryFS
 from fs.path import dirname
 
@@ -95,7 +96,7 @@ class VirtualFile(bpy.types.PropertyGroup):
     def get_bytes(self):
         root = self.root_vfile
         if root and root.fs_key:
-            return fs_registry.get(root.fs_key).readbytes(self.fs_path)
+            return root_fs(root).readbytes(self.fs_path)
         accessor = self.get_accessor()
         return accessor(self, bpy.context)
 
@@ -104,7 +105,7 @@ class VirtualFile(bpy.types.PropertyGroup):
             return self.real_file_accessor
         if self.data_bytes:
             return lambda vfile, context: self.data_bytes
-        vfs = getattr(bpy.context.scene.albam, self.vfs_id)
+        vfs = self.get_vfs()
         root = vfs.file_list[self.tree_node.root_id]
         accessor_func = blender_registry.archive_accessor_registry.get(
             (self.app_id, root.extension)
@@ -120,7 +121,14 @@ class VirtualFile(bpy.types.PropertyGroup):
             return f.read()
 
     def get_vfs(self):
-        return getattr(bpy.context.scene.albam, self.vfs_id)
+        """The vfs collection this file actually belongs to - resolved
+        through the scene owning it (`id_data`), not through
+        bpy.context.scene: a file lives in one specific scene's albam data,
+        and looking it up in whichever scene happens to be active resolves
+        roots (and therefore bytes) from the wrong file list entirely.
+        """
+        scene = self.id_data
+        return getattr(scene.albam, self.vfs_id)
 
     def _get_relative_path_windows(self, include_extension=True):
         p = PureWindowsPath(self.relative_path)
@@ -136,16 +144,77 @@ class VirtualFileSystemBase:
     SEPARATOR = "::"
     VFS_ID = "vfs"
 
-    def get_vfile(self, app_id, relative_path):
+    def get_vfile(self, app_id, relative_path, root_id=None, strict=False):
+        """The vfile at `relative_path`, preferring the one that also
+        belongs to root `root_id` when given.
+
+        A plain lookup resolves to whichever root's entry was added first
+        when two mounted roots happen to share this same relative path
+        (see _unique_root_name's own docstring) - fine for a caller that
+        only ever has one root of this app_id mounted, wrong for one that
+        needs a path resolved against a *specific* root (e.g. a shared
+        material path that two different packs each happen to also use for
+        an unrelated file of their own). root_id is a preference, not a
+        restriction: a path genuinely only reachable through a different
+        root - e.g. a shared texture mounted as its own archive alongside
+        the model that references it - still resolves via the same
+        first-match fallback a plain lookup uses.
+
+        strict (opt-in, default False) turns that fallback off: only an
+        entry actually belonging to root_id resolves, raising KeyError
+        otherwise - every existing caller (root_id alone, or neither
+        argument) keeps the tolerant fallback above, byte-for-byte
+        unchanged. Meant for a caller trying several candidate paths for
+        the same logical file (e.g. mtfw's _infer_mrl trying multiple
+        suffixes): without it, a plain root_id lookup on the *first*
+        candidate can fall back cross-root and return before a *later*
+        candidate under the caller's own root is ever tried.
+        """
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
-        return self.file_list[file_id]
+        first = self.file_list.get(file_id)
+        if first is None:
+            raise KeyError(file_id)
+        if root_id is None or first.tree_node.root_id == root_id:
+            return first
+        for vfile in self.file_list:
+            if vfile.name == file_id and vfile.tree_node.root_id == root_id:
+                return vfile
+        if strict:
+            raise KeyError(file_id)
+        return first
 
     def select_vfile(self, app_id, relative_path):
         path = PureWindowsPath(relative_path)
         file_id = self.SEPARATOR.join((app_id,) + path.parts)
         self.file_list_selected_index = self.file_list.find(file_id)
         return self.file_list[file_id]
+
+    def _unique_root_name(self, app_id, display_name):
+        """Root nodes are keyed by name in `file_list`, and two roots can
+        easily share a display name - e.g. "Add Files" on both
+        Characters/<name>.ssg and Characters/skel/<name>.ssg, two different
+        archives with the same basename. A CollectionProperty happily holds
+        duplicate names but resolves a lookup to the first match only, so
+        without disambiguating here every child of the second root would
+        resolve its `tree_node.root_id` back to the *first* root - reading
+        its bytes from the wrong FS (ResourceNotFound) and listing its
+        children under the wrong node in the tree UI.
+
+        Node ids themselves are still `app_id::<path parts>` with no root
+        in them (see Tree), so two roots holding the *same* internal path
+        still give a plain get_vfile()/select_vfile() only the first
+        root's copy - reading either one's bytes works, but addressing the
+        second by path alone does not. get_vfile()'s own root_id parameter
+        is the way out for a caller that needs the second root's copy.
+        """
+        root_name = f"{app_id}{self.SEPARATOR}{display_name}"
+        if root_name not in self.file_list:
+            return root_name
+        suffix = 1
+        while f"{root_name}#{suffix}" in self.file_list:
+            suffix += 1
+        return f"{root_name}#{suffix}"
 
     def add_real_file(self, app_id, absolute_path):
         path = PureWindowsPath(absolute_path)
@@ -157,15 +226,14 @@ class VirtualFileSystemBase:
         fs_loader = (blender_registry.fs_root_loader_registry.get((app_id, extension)) or
                      blender_registry.fs_root_loader_registry.get((app_id, None)))
         if fs_loader:
-            self.add_fs_root(
+            return self.add_fs_root(
                 app_id, fs_loader(absolute_path), display_name=path.name,
                 is_archive=bool(extension), absolute_path=absolute_path,
             )
-            return
 
         vf = self.file_list.add()
         vf.is_root = True
-        vf.name = f"{app_id}::{path.name}"
+        vf.name = self._unique_root_name(app_id, path.name)
         vf.vfs_id = self.VFS_ID
         vf.app_id = app_id
         vf.display_name = path.name
@@ -193,7 +261,7 @@ class VirtualFileSystemBase:
         """
         fs_key = fs_registry.register(fs_instance)
 
-        root_id = f"{app_id}::{display_name}"
+        root_id = self._unique_root_name(app_id, display_name)
         vf = self.file_list.add()
         vf.is_root = True
         vf.name = root_id
@@ -225,12 +293,34 @@ class VirtualFileSystemBase:
         read-only archive/game-folder roots, sharing the same tree-building
         and get_bytes() machinery instead of duplicating bytes into
         data_bytes.
+
+        A child file's node id is `app_id::<relative path parts>` (see
+        select_vfile()/get_vfile()) and isn't scoped by which root added it -
+        each root here gets its own unique display_name (see
+        ALBAM_OT_Export._execute()), but re-exporting the same
+        (app_id, relative_path) still produces a second file_list entry with
+        an identical id. Blender's CollectionProperty name lookup
+        (file_list[id]/file_list.find(id)) returns the *first* match, so
+        without this, select_vfile() on that identity would keep returning
+        the previous export's bytes forever after, silently - purge every
+        earlier entry for each identity this export is about to add, so the
+        new one (added below via add_fs_root()) is the one found. Scoped to
+        the export root only - add_fs_root()'s read-only archive/game-folder
+        mount path has its own separate "mounting the same folder twice"
+        sharp edge (see game_fs_root()'s docstring), left alone here.
         """
         mem_fs = MemoryFS()
         for vfile_data in vfiles_data:
             path = "/" + str(vfile_data.relative_path).replace("\\", "/")
             mem_fs.makedirs(dirname(path), recreate=True)
             mem_fs.writebytes(path, vfile_data.data_bytes or b"")
+
+            file_id = self.SEPARATOR.join(
+                (app_id,) + PureWindowsPath(vfile_data.relative_path).parts)
+            stale_index = self.file_list.find(file_id)
+            while stale_index != -1:
+                self.file_list.remove(stale_index)
+                stale_index = self.file_list.find(file_id)
 
         return self.add_fs_root(app_id, mem_fs, display_name=display_name)
 
@@ -300,6 +390,93 @@ class VirtualFileSystemBase:
         return vfile
 
 
+def _fs_root_loader(vf):
+    """The registered fs_root_loader able to rebuild root `vf`'s FS: keyed by
+    the root's own extension for an archive root ("Add Files"), falling back
+    to the whole-folder loader ("Add Folder"), same as add_real_file().
+    """
+    return (blender_registry.fs_root_loader_registry.get((vf.app_id, vf.extension)) or
+            blender_registry.fs_root_loader_registry.get((vf.app_id, None)))
+
+
+def reconnect_fs_root(vf):
+    """
+    Rebuild the fs_registry entry backing root `vf` - under the `fs_key` it
+    already carries, not a fresh one - and return the live FS instance.
+
+    fs_registry is plain in-process state (see its module docstring): it
+    isn't part of the .blend file, and it's also dropped mid-session
+    whenever the add-on is re-registered (Reload Scripts, an extension
+    update, a disable/enable cycle - unregister() calls fs_registry.clear()).
+    A root's `fs_key`/`absolute_path` are real bpy.props that outlive both,
+    so the entry can be recreated the same way add_real_file() created it
+    the first time.
+    """
+    if not vf.absolute_path:
+        raise RuntimeError(
+            f"VFS root {vf.display_name!r} has no path on disk to mount again - it only "
+            f"ever existed in memory (e.g. an export root), so it's gone for this session"
+        )
+    fs_loader = _fs_root_loader(vf)
+    if not fs_loader:
+        raise RuntimeError(
+            f"VFS root {vf.display_name!r} has no fs_root_loader registered for "
+            f"app_id={vf.app_id!r} to mount it again with"
+        )
+    fs_instance = fs_loader(vf.absolute_path)
+    fs_registry.reconnect(vf.fs_key, fs_instance)
+    return fs_instance
+
+
+def root_fs(root_vf):
+    """
+    The live FS instance backing root `root_vf`, mounting it again on demand
+    if this process's fs_registry doesn't have it (any more) - see
+    reconnect_fs_root(). Going through here instead of straight to
+    fs_registry.get() keeps a root readable in every case the load_post
+    handler below can't cover: the add-on being re-registered mid-session,
+    roots living in a scene that wasn't the active one when the file loaded,
+    or a file loaded before the add-on was enabled at all. Otherwise the
+    first read of such a root raises a bare KeyError on a uuid, from
+    wherever an importer happened to ask for bytes.
+    """
+    try:
+        return fs_registry.get(root_vf.fs_key)
+    except KeyError:
+        print(f"albam: mounting VFS root {root_vf.display_name!r} again "
+              f"from {root_vf.absolute_path!r}")
+        return reconnect_fs_root(root_vf)
+
+
+@persistent
+def reconnect_fs_roots(dummy):
+    """
+    Mount every FS-backed root in the freshly-loaded file again, so the
+    `fs_key` values restored from it keep pointing at something live (see
+    reconnect_fs_root() for what drops them). Doing it up front here keeps
+    the first read of a root predictable - a whole game folder can take a
+    while to mount - while get_bytes() still falls back to mounting lazily
+    for any root this misses. Roots with no `absolute_path`
+    (add_export_root()'s in-memory FS) can't be recreated this way and are
+    left as-is - they're transient, run-only state to begin with.
+    """
+    for scene in bpy.data.scenes:
+        albam_data = getattr(scene, "albam", None)
+        if albam_data is None:
+            continue
+        for vfs_id in ("vfs", "exported"):
+            vfs = getattr(albam_data, vfs_id, None)
+            if vfs is None:
+                continue
+            for vf in vfs.file_list:
+                if not (vf.is_root and vf.fs_key and vf.absolute_path):
+                    continue
+                try:
+                    reconnect_fs_root(vf)
+                except Exception as err:
+                    print(f"albam: could not reconnect VFS root {vf.display_name!r}: {err}")
+
+
 @blender_registry.register_blender_prop_albam(name="vfs")
 class VirtualFileSystem(VirtualFileSystemBase, bpy.types.PropertyGroup):
     pass
@@ -313,7 +490,7 @@ class ALBAM_OT_VirtualFileSystemAddFiles(bpy.types.Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")  # NOQA
     files: bpy.props.CollectionProperty(name="added_files", type=bpy.types.OperatorFileListElement)  # NOQA
     # FIXME: use registry, un-hardcode
-    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak", options={"HIDDEN"})  # NOQA
+    filter_glob: bpy.props.StringProperty(default="*.arc;*.pak;*.ssg;*.lfs", options={"HIDDEN"})  # NOQA
 
     def invoke(self, context, event):  # pragma: no cover
         wm = context.window_manager

@@ -1,6 +1,8 @@
 from binascii import crc32
 from collections import namedtuple, OrderedDict
+from contextlib import contextmanager
 import ctypes
+from functools import reduce
 from itertools import chain
 from io import BytesIO
 from struct import pack, unpack
@@ -12,32 +14,34 @@ except ImportError:
 
 import bpy
 from kaitaistruct import KaitaiStream
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 import numpy as np
 
 from ...apps import get_app_description
 from ...lib.blender import (
     get_bone_indices_and_weights_per_vertex,
+    get_colors_per_loop,
     get_mesh_vertex_groups,
     get_model_bounding_box,
     get_model_bounding_sphere,
-    get_normals_per_vertex,
-    get_tangents_per_vertex,
-    get_uvs_per_vertex,
+    get_normals_per_loop,
+    get_tangents_per_loop,
+    get_uvs_per_loop,
     strip_triangles_to_triangles_list,
     triangles_list_to_triangles_strip,
 )
 from ...lib.misc import chunks
 from ...lib.common_op import (
     apply_transform,
-    triangulate_meshes,
     delete_ob,
     move_to_collection
 )
 from ...lib.export_checks import check_all_objects_have_materials
+from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
 from ...exceptions import AlbamCheckFailure
+from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
 from .material import (
     build_blender_materials,
     serialize_materials_data,
@@ -65,13 +69,14 @@ APPID_CLASS_MAPPER = {
     "rev2": Mod21,
     "dd": Mod21,
     "dmc4": Mod153,
+    "umvc3": Mod21,
 }
 
 MOD_VERSION_APPID_MAPPER = {
     153: {"dmc4"},
     156: {"re5"},
     210: {"re0", "re1", "rev1", "rev2"},
-    211: {"re6"},
+    211: {"re6", "umvc3"},
     212: {"dd"},
 }
 
@@ -301,6 +306,10 @@ BBOX_AFFECTED = [
 VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
 VERSIONS_USE_TRISTRIPS = {153, 156, 212}
+# The versions mod-21.ksy covers, which size their index buffer as
+# num_indices * 2 rather than (num_indices * 2) - 2.
+VERSIONS_MOD_21 = {210, 211, 212}
+
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -310,6 +319,7 @@ MAIN_LODS = {
     "rev2": [1, 255],
     "dd": [1, 255],
     "dmc4": [1, 255],
+    "umvc3": [255],  # its models ship a single LOD, always 255
 }
 
 
@@ -351,6 +361,7 @@ def _validate_app_id_for_mod(app_id, mod_bytes):
 @blender_registry.register_import_function(app_id="rev2", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="dd", extension="mod", albam_asset_type="MODEL")
 @blender_registry.register_import_function(app_id="dmc4", extension="mod", albam_asset_type="MODEL")
+@blender_registry.register_import_function(app_id="umvc3", extension="mod", albam_asset_type="MODEL")
 def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
     mod_bytes = vfile.get_bytes()
@@ -359,15 +370,14 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
-    mod = ModCls.from_bytes(mod_bytes)
-    mod._read()
+    mod = parse(ModCls, mod_bytes, app_id)
 
     import_settings = context.scene.albam.import_settings
 
     bl_object_name = vfile.display_name
     bbox_data = _create_bbox_data(mod)
     skeleton = None if mod.header.num_bones == 0 else build_blender_armature(
-        mod, bl_object_name, bbox_data)
+        app_id, mod, bl_object_name, bbox_data)
     bl_object = skeleton or bpy.data.objects.new(bl_object_name, None)
     materials = build_blender_materials(
         vfile, context, mod, bl_object_name)
@@ -378,7 +388,7 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             continue
         try:
             name = f"{bl_object_name}_{str(i).zfill(4)}"
-            material_hash = _get_material_hash(mod, mesh)
+            material_hash = _get_material_hash(mod, mesh, app_id)
 
             bl_mesh_ob = build_blender_mesh(
                 app_id, mod, mesh, name, bbox_data, mod_version in VERSIONS_USE_TRISTRIPS
@@ -425,9 +435,9 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
 
-    if min(indices) >= mesh.min_index:  # backwards compability workaround
+    if min(indices) >= mesh.first_index:  # backwards compability workaround
         # convert indices for this mesh only, so they start at zero
-        indices = [tri_idx - mesh.min_index for tri_idx in indices]
+        indices = [tri_idx - mesh.first_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -705,7 +715,7 @@ def _build_weights(bl_obj, weights_per_bone):
             vg.add((vertex_index,), weight_value, "ADD")
 
 
-def build_blender_armature(mod, armature_name, bbox_data):
+def build_blender_armature(app_id, mod, armature_name, bbox_data):
     armature = bpy.data.armatures.new(armature_name)
     armature_ob = bpy.data.objects.new(armature_name, armature)
     armature_ob.show_in_front = True
@@ -728,15 +738,74 @@ def build_blender_armature(mod, armature_name, bbox_data):
         valid_parent = bone.idx_parent < 255
         blender_bone.parent = blender_bones[bone.idx_parent] if valid_parent else None
         # blender_bone.use_deform = False if i in non_deform_bone_indices else True
-        m = mod.bones_data.inverse_bind_matrices[i]
-        head = _transform_inverse_bind_matrix(mod, m, bbox_data)
+
+        if app_id == "umvc3":
+            # umvc3's inverse bind matrices don't survive the bbox transform
+            # every other version-21x app needs: past the first two bones the
+            # positions they produce drift off the skeleton entirely, while
+            # walking the parent-space matrices down the hierarchy lands every
+            # bone where the mesh expects it.
+            head = _transform_parent_matrix(mod, i)
+        else:
+            inverse_bind_matrix = mod.bones_data.inverse_bind_matrices[i]
+            head = _transform_inverse_bind_matrix(mod, inverse_bind_matrix, bbox_data)
+
         blender_bone.head = [head[0] * scale, -head[2] * scale, head[1] * scale]
         blender_bone.tail = [head[0] * scale, -head[2] * scale, (head[1] * scale) + 0.01]
-        blender_bone['mtfw.anim_retarget'] = str(bone.idx_anim_map)
         blender_bones.append(blender_bone)
 
+    # Values after leaving edit mode: a pose bone exists only once the edit
+    # bone it mirrors has been committed.
+    bone_names = [b.name for b in blender_bones]
     bpy.ops.object.mode_set(mode="OBJECT")
+
+    for i, bone in enumerate(mod.bones_data.bones_hierarchy):
+        pose_bone = armature_ob.pose.bones[bone_names[i]]
+        set_anim_retarget(pose_bone, app_id, str(bone.idx_anim_map))
+        # The format spells this three ways and all three have to survive: 255
+        # for a bone with no mirror at all, the bone's own index for one that
+        # mirrors itself, and another index for a real pair. Empty carries the
+        # first; the other two are just the name of the bone pointed at.
+        if bone.idx_mirror >= len(bone_names):
+            set_mirror(pose_bone, app_id, "")
+        else:
+            set_mirror(pose_bone, app_id, bone_names[bone.idx_mirror])
+
     return armature_ob
+
+
+def _to_bl_matrix(m):
+    bl_matrix = Matrix((
+        (m.row_1.x, m.row_1.y, m.row_1.z, m.row_1.w),
+        (m.row_2.x, m.row_2.y, m.row_2.z, m.row_2.w),
+        (m.row_3.x, m.row_3.y, m.row_3.z, m.row_3.w),
+        (m.row_4.x, m.row_4.y, m.row_4.z, m.row_4.w),
+    )).transposed()  # directx to opengl style
+
+    return bl_matrix
+
+
+def _transform_parent_matrix(mod, bone_index):
+    bone = mod.bones_data.bones_hierarchy[bone_index]
+    parents = _get_parents(mod, bone)
+    local_matrices = [mod.bones_data.parent_space_matrices[pi] for pi in parents]
+    local_matrices.append(mod.bones_data.parent_space_matrices[bone_index])
+    local_matrices = [_to_bl_matrix(m) for m in local_matrices]
+
+    world_matrix = reduce(lambda m1, m2: m1 @ m2, local_matrices)
+    return world_matrix.to_translation()
+
+
+def _get_parents(mod, bone):
+    parents = []
+    current_parent_id = bone.idx_parent
+
+    while current_parent_id != 255:
+        parent = mod.bones_data.bones_hierarchy[current_parent_id]
+        parents.append(current_parent_id)
+        current_parent_id = parent.idx_parent
+    parents.reverse()
+    return parents
 
 
 def _transform_inverse_bind_matrix(mod, matrix, bbox_data):
@@ -804,16 +873,63 @@ def _create_bbox_data(mod):
     return bbox_data
 
 
-def _get_material_hash(mod, mesh):
+def _get_material_hash(mod, mesh, app_id):
     material_hash = None
     if mod.header.version in (153, 156):
         material_hash = mesh.idx_material
-    elif mod.header.version == 210 or mod.header.version == 212:
+    elif mod.header.version == 210 or mod.header.version == 212 or app_id == "umvc3":
         material_name = mod.materials_data.material_names[mesh.idx_material]
         material_hash = crc32(material_name.encode()) ^ 0xFFFFFFFF
     elif mod.header.version == 211:
         material_hash = mod.materials_data.material_hashes[mesh.idx_material]
     return material_hash
+
+
+def _purge_autofix_leftovers():
+    """
+    Remove an AlbamTemp left behind by an export that died before cleaning
+    up (e.g. a .blend saved after a failure on 0.5.0). Its copies keep their
+    original's parent, so they would otherwise be picked up as meshes to
+    export; and the collection itself may be excluded from the view layer or
+    linked to another scene, which makes apply_transform fail. Dropping the
+    whole collection lets move_to_collection create a fresh one.
+    """
+    temp_collection = bpy.data.collections.get("AlbamTemp")
+    if not temp_collection:
+        return
+    for ob in list(temp_collection.objects):
+        delete_ob(ob)
+    bpy.data.collections.remove(temp_collection)
+
+
+@contextmanager
+def _autofix_meshes(bl_meshes, enabled):
+    # Vertex splitting (one exported vertex per unique attribute
+    # combination, see _build_export_vertex_table) and triangulation
+    # (see mesh.calc_loop_triangles() in that same function) happen
+    # unconditionally at buffer-build time without touching the
+    # Blender mesh, so the only "mistake" left to autofix here is an
+    # un-applied object transform - which does need a throwaway copy,
+    # since applying it is a real mutation.
+    if not enabled:
+        yield bl_meshes
+        return
+
+    duplicates = []
+    try:
+        for mesh in bl_meshes:
+            duplicates.append(_duplicate_mesh_object(mesh))
+        move_to_collection(duplicates, "AlbamTemp")
+        apply_transform(duplicates)
+        yield duplicates
+    finally:
+        try:
+            for ob in duplicates:
+                delete_ob(ob)
+        finally:
+            temp_collection = bpy.data.collections.get("AlbamTemp")
+            if temp_collection:
+                bpy.data.collections.remove(temp_collection)
 
 
 @blender_registry.register_export_function(app_id="re0", extension="mod")
@@ -824,6 +940,20 @@ def _get_material_hash(mod, mesh):
 @blender_registry.register_export_function(app_id="rev2", extension="mod")
 @blender_registry.register_export_function(app_id="dd", extension="mod")
 @blender_registry.register_export_function(app_id="dmc4", extension="mod")
+# umvc3 is deliberately absent: .mod geometry round-trips, but the .mrl
+# written alongside it does not describe a material this game ships. Every
+# one of the 16963 materials in umvc3's own files matches one of 296 distinct
+# resource signatures; of the 37 materials exported from the two non-trivial
+# models in the serialization dataset, zero do. Export drops the toon
+# pipeline the game's look is built on - ttoonmap, ftoonlightcalc,
+# cbhalflambert, cbdiffusecolorcorect - and invents fambient/focclusion/
+# femission in its place, so the engine would be handed shader permutations
+# no shipped content uses. Import is unaffected and stays registered.
+#
+# Re-register together with the .mrl work, gated on that measurement rather
+# than on resource counts: exported signatures should be found in the
+# shipped set. See docs on albam-wip's mrl-export-overhaul branch, whose
+# bugs 3, 4, 7 and 9 are the same code.
 @check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
@@ -831,48 +961,41 @@ def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset
     app_id = asset.app_id
-    Mod = APPID_CLASS_MAPPER[app_id]
     vfiles = []
 
-    src_mod = Mod.from_bytes(asset.original_bytes)
-    src_mod._read()
-    dst_mod = Mod()
+    ModCls = APPID_CLASS_MAPPER[app_id]
+    src_mod = parse(ModCls, asset.original_bytes, app_id)
+    dst_mod = ModCls(app_id)
+    # Before collecting meshes, so stale copies are not among them.
+    _purge_autofix_leftovers()
     # TODO: export options like visibility
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
+    _check_armature_modifiers_target(bl_obj, bl_meshes)
 
-    if export_settings.export_autofix:
-        if bpy.data.collections.get("AlbamTemp"):
-            for ob in bpy.data.collections["AlbamTemp"].objects:
-                delete_ob(ob)
-        bl_meshes = [_duplicate_vtx_by_attr(mesh) for mesh in bl_meshes]
-        move_to_collection(bl_meshes, "AlbamTemp")
-        apply_transform(bl_meshes)
-        triangulate_meshes(bl_meshes)
+    with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
+        _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
+        _init_mod_header(bl_obj, src_mod, dst_mod)
 
-    _serialize_top_level_mod(bl_meshes, src_mod, dst_mod)
-    _init_mod_header(bl_obj, src_mod, dst_mod)
+        bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
+        bones_data = _serialize_bones_data(
+            bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes)
+        if bones_data is not None:
+            # Only assign when there is one. Assigning None still *creates* the
+            # attribute, and the generated _fetch_instances() guards optional
+            # instances with hasattr(), which is true for an attribute holding
+            # None - so a model with no armature would crash on write instead of
+            # skipping the section it doesn't have.
+            dst_mod.bones_data = bones_data
+        dst_mod.groups = _serialize_groups(src_mod, dst_mod)
+        materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
 
-    bone_palettes = _create_bone_palettes(src_mod, bl_obj, bl_meshes)
-    bones_data = _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes)
-    if bones_data is not None:
-        # Only assign when there is one. Assigning None still *creates* the
-        # attribute, and the generated _fetch_instances() guards optional
-        # instances with hasattr(), which is true for an attribute holding
-        # None - so a model with no armature would crash on write instead of
-        # skipping the section it doesn't have.
-        dst_mod.bones_data = bones_data
-    dst_mod.groups = _serialize_groups(src_mod, dst_mod)
-    materials_map, mrl, vtextures = serialize_materials_data(asset, bl_meshes, src_mod, dst_mod)
+        meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
+            _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
 
-    meshes_data, vertex_buffer, vertex_buffer_2, index_buffer = (
-        _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes))
-    if export_settings.export_autofix:
-        for ob in bl_meshes:
-            delete_ob(ob)
     dst_mod.header.num_vertices = sum(m.num_vertices for m in meshes_data.meshes)
     dst_mod.meshes_data = meshes_data
     dst_mod.vertex_buffer = vertex_buffer
@@ -893,9 +1016,40 @@ def export_mod(bl_obj):
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
-    # TODO: revise, name accordingly
-    dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
-    if app_id not in ["re5", "dd"]:
+    # num_indices (named num_faces until #252) is the index count, not a face
+    # count (see num_triangles below, which is the actual triangle count on a
+    # triangle-list version).
+    #
+    # The 21 formats size their index buffer as num_indices * 2, so num_indices
+    # is exactly the number of indices. mod-153 and mod-156 size theirs as
+    # (num_indices * 2) - 2, so there it is the index count plus one, and the
+    # trailing entry the +1 accounts for is the padding appended below.
+    # Applying the +1 everywhere wrote one index too many on 21: measured
+    # against real umvc3 files, num_indices equals the summed mesh index count
+    # exactly, and export was producing 205 against 204, 42847 against 42846.
+    if dst_mod.header.version in VERSIONS_MOD_21:
+        dst_mod.header.num_indices = len(index_buffer) // 2
+    else:
+        dst_mod.header.num_indices = (len(index_buffer) // 2) + 1
+    if dst_mod.header.version not in VERSIONS_USE_TRISTRIPS:
+        # num_triangles (named num_edges until #252) was initialised to 0 and
+        # never assigned, so every export wrote 0 for it. On a version that indexes triangles as a plain
+        # list, the two fields are one relation apart - measured across
+        # every model in the serialization dataset, num_indices equals the
+        # summed mesh index count and num_triangles is exactly a third of it,
+        # which is what the TODO above is pointing at: these are the index
+        # count and the triangle count. Deriving it keeps the header
+        # self-consistent whatever num_indices ends up being.
+        #
+        # Left alone on the tristrip versions: there the index count is not
+        # three per triangle, num_triangles has no such relation to num_indices in
+        # a real file, and recovering the triangle count needs the strip
+        # decomposition rather than arithmetic.
+        dst_mod.header.num_triangles = dst_mod.header.num_indices // 3
+    if app_id not in ["re5"] and dst_mod.header.version not in VERSIONS_MOD_21:
+        # The trailing index the (num_indices * 2) - 2 sizing leaves room for.
+        # A 21 file has no such entry: its meshes tile the index buffer
+        # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
 
     final_size = sum((
@@ -906,12 +1060,21 @@ def export_mod(bl_obj):
         dst_mod.meshes_data.size_,
         dst_mod.header.size_vertex_buffer,
         dst_mod.header.size_vertex_buffer_2,
-        len(index_buffer) + 4,
+        # No + 4: a real file's size_file stops at the end of the index
+        # buffer and does not count the four trailing bytes after it.
+        # Measured on umvc3 - a 2056 byte file carries size_file 2052, and a
+        # 542808 byte one carries 542804 - while export was writing the full
+        # length. size_file only exists on the 21 formats.
+        len(index_buffer),
     ))
 
     dst_mod.header.size_file = final_size
-    stream = KaitaiStream(BytesIO(bytearray(final_size)))
-    dst_mod._check()
+    # The file itself is four bytes longer than size_file: real ones carry a
+    # zero trailer past it (2056/2052, 542808/542804, 1027148/1027144 on the
+    # umvc3 models in the dataset). The + 4 used to live inside final_size,
+    # which made the length right and the header wrong.
+    stream = KaitaiStream(BytesIO(bytearray(final_size + 4)))
+    check_recursive(dst_mod)
     dst_mod._write(stream)
 
     mod_vf = VirtualFileData(app_id, asset.relative_path, data_bytes=stream.to_byte_array())
@@ -932,8 +1095,8 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
         num_meshes=0,
         num_materials=0,
         num_vertices=0,
-        num_faces=0,
-        num_edges=0,
+        num_indices=0,
+        num_triangles=0,
         size_vertex_buffer=0,
         num_groups=src_mod.header.num_groups,
         offset_bones_data=0,
@@ -958,7 +1121,7 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
     return dst_mod_header
 
 
-def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
+def _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod):
     SCALE = 100
 
     bl_bbox = get_model_bounding_box(bl_meshes)
@@ -1008,20 +1171,269 @@ def _serialize_top_level_mod(bl_meshes, src_mod, dst_mod):
         dst_mod.rcn_vertices = []
         dst_mod.rcn_trianlges = []
 
-    if src_mod.header.version in (210, 212):
+    if src_mod.header.version in (210, 212) or app_id == "umvc3":
         dst_mod.num_weight_bounds = 0
 
 
-def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=None):
+# What bone_map holds for an animation id no bone answers to. A model can
+# never have a bone at index 255 - idx_parent is a u1 and 255 is its "no
+# parent" - so the index space has a spare value to say "unmapped".
+UNMAPPED_ANIM_ID = 255
+
+
+# What idx_parent holds for a bone with no parent, and idx_mirror for a bone
+# with no mirror. A bone that mirrors *itself* is spelled differently, with its
+# own index, and the two are not interchangeable.
+NO_PARENT = 255
+NO_MIRROR = 255
+
+# Blender works in metres and the format in centimetres, the same factor
+# _get_bone_transforms applies to every translation it writes.
+BONE_SCALE = 100
+
+# The fourth byte of the bone record is alignment padding, not a field: the
+# struct is three u1 then a f4, so the compiler leaves a byte spare. Capcom's
+# exporter wrote uninitialised heap into it - its most common value across a
+# large sample is 0xCD, which is MSVC's fill for exactly that - so there is
+# nothing to carry across and a defined value is written instead.
+BONE_RECORD_PADDING = 0
+
+
+def _derive_parent_ids(armature_ob, num_bones):
+    """Each bone's idx_parent, read off the armature's own hierarchy.
+
+    Bones serialize in `armature.data.bones` order, which is the order the rest
+    of the export already assumes, so a parent's index is just its position in
+    that list.
+    """
+    bl_bones = armature_ob.data.bones[:num_bones]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    ids = []
+    for bl_bone in bl_bones:
+        parent = bl_bone.parent
+        if parent is None:
+            ids.append(NO_PARENT)
+            continue
+        if parent.name not in index_of:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} is parented outside the exported skeleton",
+                details=(f"its parent {parent.name!r} is not among the first {num_bones} bones, "
+                         f"so there is no index to write for it"),
+                solution="Re-parent the bone within the model's own skeleton before exporting",
+            )
+        ids.append(index_of[parent.name])
+    return ids
+
+
+def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
+    """Each bone's `furthest_vertex_distance`: how far the furthest vertex it influences sits.
+
+    The field is `furthestVertexDistance` in Capcom's own vocabulary, and it is
+    zero for a bone nothing skins to. Computed from the live meshes so that
+    reshaping geometry or repainting weights moves it, which copying it could
+    never do.
+
+    Measured against real shipped files this is exact on most bones, but on a
+    real skeleton a meaningful minority land on either side of the shipped
+    value by up to about 20% - the game's own value is a maximum over some
+    subset of the influenced vertices that has not been identified, so the
+    whole set is the closest honest answer. It was observed that this field
+    is most likely unused by the game itself, which is why a generous,
+    two-sided tolerance is preferable to chasing an exact match.
+    """
+    bl_bones = armature_ob.data.bones[:num_bones]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    # Bone rest positions and vertices have to be compared in one space, and the
+    # file's is the armature's, scaled the way _get_bone_transforms scales it.
+    heads = [Vector(bl_bone.head_local) * BONE_SCALE for bl_bone in bl_bones]
+    furthest = [0.0] * len(bl_bones)
+    to_armature = armature_ob.matrix_world.inverted()
+    for bl_mesh in bl_meshes:
+        groups = {g.index: index_of.get(g.name) for g in bl_mesh.vertex_groups}
+        if not any(idx is not None for idx in groups.values()):
+            continue
+        to_bone_space = to_armature @ bl_mesh.matrix_world
+        for vertex in bl_mesh.data.vertices:
+            position = (to_bone_space @ vertex.co) * BONE_SCALE
+            for element in vertex.groups:
+                if not element.weight:
+                    continue
+                bone_index = groups.get(element.group)
+                if bone_index is None:
+                    continue
+                distance = (position - heads[bone_index]).length
+                if distance > furthest[bone_index]:
+                    furthest[bone_index] = distance
+    return furthest
+
+
+def _derive_mirror_ids(armature_ob, app_id, num_bones, src_mod):
+    """Each bone's idx_mirror, resolved from the name the rig carries.
+
+    A rig imported before Mirror Bone existed (0.5.0 and earlier) carries no
+    mirror on any bone, which would write every bone as unmirrored. Such a rig
+    keeps the source file's mirrors instead; a source with no mirrors at all
+    comes out the same either way.
+    """
+    bl_bones = armature_ob.data.bones[:num_bones]
+    if not any(get_mirror(armature_ob.pose.bones[b.name], app_id) for b in bl_bones):
+        src_bones = src_mod.bones_data.bones_hierarchy if src_mod.bones_data else []
+        return [src_bones[i].idx_mirror if i < len(src_bones) else NO_MIRROR
+                for i in range(len(bl_bones))]
+    index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
+    ids = []
+    for bl_bone in bl_bones:
+        name = get_mirror(armature_ob.pose.bones[bl_bone.name], app_id)
+        if not name:
+            ids.append(NO_MIRROR)
+            continue
+        if name not in index_of:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} names a mirror that is not in the skeleton",
+                details=f"its Mirror Bone is {name!r}, which is not one of the exported bones",
+                solution="Point Mirror Bone at a bone of this skeleton, or clear it if the "
+                         "bone sits on the midline",
+            )
+        ids.append(index_of[name])
+    return ids
+
+
+def _count_exportable_bones(armature_ob, app_id):
+    """How many of the rig's bones belong in the model.
+
+    Animation import gives a bone of its own to the second track in a block that
+    keys an id already taken, and names its id "<id>_<n>". Those exist to carry
+    animation and are not part of the skeleton the model describes, so they are
+    left out. Import appends them, so they sit at the end; if one does not, the
+    rest of the export would silently shift every bone index after it, and that
+    is an error rather than something to work around.
+    """
+    kept = 0
+    for i, bl_bone in enumerate(armature_ob.data.bones):
+        raw = get_anim_retarget(armature_ob.pose.bones[bl_bone.name], app_id)
+        if "_" not in raw:
+            if kept != i:
+                raise AlbamCheckFailure(
+                    message=f"Bone {bl_bone.name!r} sits after a bone that only carries animation",
+                    details=("bones added by animation import are skipped on export, and they are "
+                             "expected at the end of the armature; one earlier in the order would "
+                             "shift the index of every bone after it"),
+                    solution="Move the bone before any animation-only bone, or delete those bones",
+                )
+            kept += 1
+    return kept
+
+
+def _derive_anim_map_ids(armature_ob, app_id, num_bones):
+    """Each bone's idx_anim_map, read off the rig instead of the source file.
+
+    The id rides on the pose bone (see engines/mtfw/bone.py), put there by
+    whichever import built the armature, so a rig carries its own re-targeting
+    without the .mod it came from.
+    """
+    bl_bones = armature_ob.data.bones
+    if len(bl_bones) < num_bones:
+        raise AlbamCheckFailure(
+            message=f"Armature {armature_ob.name!r} has fewer bones than the model expects",
+            details=f"the model declares {num_bones} bones, the armature has {len(bl_bones)}",
+            solution="Export the armature the model was imported with, without deleting bones",
+        )
+    ids = []
+    for bl_bone in bl_bones[:num_bones]:
+        pose_bone = armature_ob.pose.bones[bl_bone.name]
+        # Animation import gives a bone of its own to the second track in a
+        # block that keys an id already taken, naming it "<id>_<n>"; the id is
+        # the part before the "_".
+        value = get_anim_retarget(pose_bone, app_id).split("_")[0]
+        if not value.isdigit() or int(value) > 255:
+            raise AlbamCheckFailure(
+                message=f"Bone {bl_bone.name!r} has no usable animation id",
+                details=(f"its Anim Retarget is {value!r}, which is not a number in 0-255. "
+                         f"Animations address bones by this id, so a bone without one would "
+                         f"be invisible to every animation"),
+                solution=("Set Anim Retarget on the bone in the Bone tab, or re-import the "
+                          "model to have it filled in"),
+            )
+        ids.append(int(value))
+    return ids
+
+
+# The most bones a model can hold. idx_parent and idx_mirror are each a u1 and
+# spend 255 on "none", so 255 is the first index neither can name. num_bones is
+# a u2 and is not the limit.
+MAX_ADDRESSABLE_BONES = 255
+
+
+def _check_bone_budget(num_bones):
+    if num_bones > MAX_ADDRESSABLE_BONES:
+        raise AlbamCheckFailure(
+            message=f"The armature has {num_bones} bones, more than the format can address",
+            details=(f"a bone refers to its parent and its mirror with one byte each, and "
+                     f"255 of the 256 values means \"none\", so no bone past index "
+                     f"{MAX_ADDRESSABLE_BONES - 1} can be named by another"),
+            solution="Remove bones until the skeleton is within the limit",
+        )
+
+
+def _check_bone_map(bone_map, anim_ids):
+    """Every id a bone claims has to lead back to a bone.
+
+    Two bones sharing an id is normal and the map keeps the last of them, so the
+    check is that each id resolves at all, not that it resolves to a particular
+    bone. What it catches is an id whose slot was never written, which would
+    leave an animation targeting that id driving nothing.
+    """
+    for bone_index, anim_id in enumerate(anim_ids):
+        if bone_map[anim_id] == UNMAPPED_ANIM_ID:
+            raise AlbamCheckFailure(
+                message=f"Bone {bone_index} claims animation id {anim_id}, which maps to nothing",
+                details="the table that resolves an animation id to a bone has no entry for it, "
+                        "so every animation addressing that id would drive no bone at all",
+                solution="Report this: the exported skeleton is inconsistent with itself",
+            )
+
+
+def _build_bone_map(anim_ids):
+    """The 256-byte reverse table an .lmt is resolved through: id -> bone index.
+
+    Rebuilt from the ids rather than copied, which is exact: assigning in bone
+    order reproduces all 404 re5 models byte for byte. Two bones sharing an id
+    is normal rather than a mistake - 280 of those models give a second bone
+    the id 0 - and the shipped tables always resolve such an id to the *last*
+    bone holding it, which is what overwriting in bone order does.
+    """
+    bone_map = bytearray([UNMAPPED_ANIM_ID] * 256)
+    for bone_index, anim_id in enumerate(anim_ids):
+        bone_map[anim_id] = bone_index
+    return bytes(bone_map)
+
+
+def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_palettes=None):
     if bl_obj.type != "ARMATURE":
         return
     export_settings = bpy.context.scene.albam.export_settings
     export_bones = export_settings.export_bones
     bone_magnitudes, bone_transfroms, parent_space_matrix, invert_bind_matix = _get_bone_transforms(
         bl_obj, dst_mod)
-    dst_mod.header.num_bones = src_mod.header.num_bones
+    if export_bones:
+        # The rig decides how many bones there are, which is what lets one gain
+        # bones the file it came from never had.
+        dst_mod.header.num_bones = _count_exportable_bones(bl_obj, app_id)
+    else:
+        dst_mod.header.num_bones = src_mod.header.num_bones
     bones_data = dst_mod.BonesData(_parent=dst_mod, _root=dst_mod._root)
-    bones_data.bone_map = src_mod.bones_data.bone_map
+    if export_bones:
+        _check_bone_budget(dst_mod.header.num_bones)
+        anim_map_ids = _derive_anim_map_ids(bl_obj, app_id, dst_mod.header.num_bones)
+        parent_ids = _derive_parent_ids(bl_obj, dst_mod.header.num_bones)
+        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones, src_mod)
+        furthest_vertex = _derive_furthest_vertex_distances(
+            bl_obj, bl_meshes, dst_mod.header.num_bones)
+        bones_data.bone_map = _build_bone_map(anim_map_ids)
+        _check_bone_map(bones_data.bone_map, anim_map_ids)
+    else:
+        anim_map_ids = parent_ids = mirror_ids = furthest_vertex = None
+        bones_data.bone_map = src_mod.bones_data.bone_map
     bones_data.bones_hierarchy = []
     bones_data.parent_space_matrices = []
     bones_data.inverse_bind_matrices = []
@@ -1041,13 +1453,16 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, bone_palettes=Non
             bone_palette._check()
 
     for i in range(dst_mod.header.num_bones):
-        src_bone = src_mod.bones_data.bones_hierarchy[i]
+        # Only the branch that copies needs the original, and it is not there to
+        # read once the rig has more bones than the file did.
+        src_bone = None if export_bones else src_mod.bones_data.bones_hierarchy[i]
         bone = dst_mod.Bone(_parent=bones_data, _root=bones_data._root)
-        bone.idx_anim_map = src_bone.idx_anim_map
-        bone.idx_parent = src_bone.idx_parent
-        bone.idx_mirror = src_bone.idx_mirror
-        bone.idx_mapping = src_bone.idx_mapping
-        bone.length = src_bone.length
+        bone.idx_anim_map = anim_map_ids[i] if export_bones else src_bone.idx_anim_map
+        bone.idx_parent = parent_ids[i] if export_bones else src_bone.idx_parent
+        bone.idx_mirror = mirror_ids[i] if export_bones else src_bone.idx_mirror
+        bone.padding = BONE_RECORD_PADDING if export_bones else src_bone.padding
+        bone.furthest_vertex_distance = (
+            furthest_vertex[i] if export_bones else src_bone.furthest_vertex_distance)
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
@@ -1261,25 +1676,6 @@ def _normalize_uv(uv_x, uv_y):
     return uv_x, uv_y
 
 
-def _get_vertex_colors(blender_mesh):
-    mesh = blender_mesh.data
-    colors = {}
-    try:
-        color_layer = mesh.color_attributes[0]
-    except IndexError:
-        return colors
-    mesh_loops = {li: loop.vertex_index for li, loop in enumerate(mesh.loops)}
-    vtx_colors = {mesh_loops[li]: data.color for li,
-                  data in color_layer.data.items()}
-    for idx, color in vtx_colors.items():
-        b = round(color[0] * 255)
-        g = round(color[1] * 255)
-        r = round(color[2] * 255)
-        a = round(color[3] * 255)
-        colors[idx] = (r, g, b, a)
-    return colors
-
-
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
     if src_mod.header.version not in (153, 156):
         return {}
@@ -1363,6 +1759,29 @@ def _check_armature(bl_mesh):
     return False
 
 
+def _check_armature_modifiers_target(bl_obj, bl_meshes):
+    """Every Armature modifier has to deform with the rig being exported.
+
+    Bone palettes are built from the exported armature's bone order, while
+    vertex weights are read through the mesh's Armature modifier. If the
+    modifier points at another armature, the two orders disagree and export
+    fails much later with a bare "ValueError: 29 is not in list" (#335).
+    """
+    if bl_obj.type != 'ARMATURE':
+        return
+    for bl_mesh in bl_meshes:
+        for modifier in bl_mesh.modifiers:
+            if modifier.type != 'ARMATURE' or modifier.object is None:
+                continue
+            if modifier.object != bl_obj:
+                raise AlbamCheckFailure(
+                    "A mesh is deformed by a different armature than the one being exported",
+                    details=f"Object: {bl_mesh.name}, Armature modifier '{modifier.name}' "
+                    f"points to '{modifier.object.name}', exported armature: '{bl_obj.name}'",
+                    solution=f"Set the Armature modifier's Object to '{bl_obj.name}'"
+                )
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1385,8 +1804,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     current_vertex_format = None
     total_num_vertices = 0
 
-    face_position = 0
-    face_offset = 0  # unused for now
+    index_start = 0
+    vertex_base = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
@@ -1407,9 +1826,10 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
                 raise ValueError(
                     f"Mesh {mesh_index} doesn't have a bone_palette")
 
+        vertex_table = _build_export_vertex_table(bl_mesh)
         vertices, vertices2, vertex_format, vertex_stride, vertex_stride_2, max_bones_per_vertex = (
             _export_vertices(app_id, bl_mesh, mesh,
-                             mesh_bone_palette, dst_mod, bbox_data)
+                             mesh_bone_palette, dst_mod, bbox_data, vertex_table)
         )
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
@@ -1421,10 +1841,9 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
             current_vertex_format = vertex_format
 
         if use_strips:
-            triangles = triangles_list_to_triangles_strip(bl_mesh)
+            triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
         else:
-            triangles = list(chain.from_iterable(
-                p.vertices for p in bl_mesh.data.polygons))
+            triangles = list(chain.from_iterable(vertex_table.triangles))
 
         triangles = [e + current_vertex_position for e in triangles]
         num_indices = len(triangles)
@@ -1438,7 +1857,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
-        num_vertices = len(bl_mesh.data.vertices)
+        num_vertices = vertex_table.count
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1446,6 +1865,14 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         if export_settings.force_lod255:
             custom_properties.level_of_detail = 255
         custom_properties.copy_custom_properties_to(mesh)
+        if not hasattr(custom_properties, "disp"):
+            # Checked against every mesh (132161) in every .mod-156 in the local re5 install:
+            # disp is always True, no shipped file ever disables it, so it's no longer a
+            # stored/editable custom property there (or on mod-153/dmc4, which shares this
+            # property group). Mod21MeshCustomProperties (re0/re1/re6/rev1/rev2/dd/umvc3)
+            # still has a real, user-editable disp - copy_custom_properties_to() above already
+            # set it, so it must not be clobbered here too.
+            mesh.disp = 1
 
         # TODO: pre-check for no materials
         mesh.idx_material = materials_map[bl_mesh.data.materials[0].name]
@@ -1455,17 +1882,20 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # assert num_vertices == len(vertices_array) // 32
         mesh.num_vertices = num_vertices
         mesh.vertex_position_2 = current_vertex_position
-        mesh.vertex_offset = current_vertex_offset
-        mesh.face_position = face_position
+        mesh.vertex_byte_offset = current_vertex_offset
+        mesh.index_start = index_start
         mesh.num_indices = num_indices
-        mesh.face_offset = face_offset
-        mesh.vertex_position = current_vertex_position
-        mesh.min_index = current_vertex_position
-        mesh.max_index = current_vertex_position + \
+        mesh.vertex_base = vertex_base
+        mesh.vertex_index = current_vertex_position
+        mesh.first_index = current_vertex_position
+        mesh.last_index = current_vertex_position + \
             mesh.num_vertices - 1  # XXX only a short!
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
+        if app_id == "umvc3":
+            mesh.padding = 0
+
         # DD original hack, weapon meshes invisible without it
         if export_settings.force_max_num_weights:
             bone_limit = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format)
@@ -1481,18 +1911,21 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         mesh._check()
         meshes_data.meshes.append(mesh)
+        # The same bone limit and weight encoding `_export_vertices` used, so
+        # the weight bound filter agrees with what actually got exported.
+        wb_max_bones, wb_half_float = _weight_export_params(dst_mod, vertex_format)
         mesh_weight_bounds = _calculate_weight_bounds(
-            bl_obj, bl_mesh, dst_mod, meshes_data)
+            bl_obj, bl_mesh, dst_mod, meshes_data, wb_max_bones, wb_half_float)
         meshes_data.weight_bounds.extend(mesh_weight_bounds)
         mesh.num_weight_bounds = len(mesh_weight_bounds)
 
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
         vertex_offset_2_accumulated += (num_vertices * vertex_stride_2)
-        face_position += (num_indices + face_padding)
+        index_start += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
-    if dst_mod.header.version in (153, 156, 211):
+    if dst_mod.header.version in (153, 156, 211) and app_id != "umvc3":
         meshes_data.num_weight_bounds = len(meshes_data.weight_bounds)
     else:
         dst_mod.num_weight_bounds = len(meshes_data.weight_bounds)
@@ -1501,17 +1934,150 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     return meshes_data, vertex_buffer, vertex_buffer_2, index_buffer
 
 
-def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data):
+ExportVertexTable = namedtuple(
+    "ExportVertexTable",
+    ("count", "source_vertex", "normal", "tangent", "uv", "color", "triangles"),
+)
+
+
+def _build_export_vertex_table(bl_mesh, uv_layer_count=4):
+    """
+    Build a deduplicated, per-corner ("loop") vertex table for exporting
+    `bl_mesh`, without creating or mutating any Blender mesh/object.
+
+    The vertex/index buffer formats used by MOD files need one physical
+    vertex per unique combination of attributes, same as glTF: GPUs (and
+    these formats) require normals/UVs/vertex colors to be constant across a
+    vertex, so a Blender vertex shared by two UV islands or a hard edge has
+    to become two (or more) exported vertices - otherwise all but one of its
+    loops silently lose their attribute values, which is what causes visual
+    artifacts around UV seams.
+
+    This mirrors the approach the official glTF exporter uses
+    (`primitive_extract.py`): collect one "dot" per mesh loop (its source
+    vertex index plus its per-corner attributes), deduplicate identical
+    dots, and use the deduplicated dot index as the exported vertex index
+    everywhere; only position/weights get looked back up through the dot's
+    source vertex index, since those are per-vertex, not per-corner.
+
+    The key deliberately excludes the loop normal: Blender recomputes
+    per-loop normals on every `calc_normals_split()`, and even on a
+    perfectly smooth surface adjacent loops can come back ~1e-4 apart -
+    noise, not an authored discontinuity, but with a normal in the key it's
+    enough to force a split on nearly every loop (verified against real game
+    data: including normal roughly tripled the vertex count; dropping it
+    exactly reproduced the original file's vertex count). That
+    noise floor is also well under the 1-byte-per-axis precision the MOD
+    normal format itself stores, so it wouldn't be visually meaningful
+    even if it were real. UV/vertex-color discontinuities - the actual
+    seams this table exists to preserve - don't have this problem.
+
+    `mesh.calc_loop_triangles()` is a read-only, cached triangulation - it
+    doesn't touch `mesh.polygons`, so n-gons/quads don't need pre-
+    triangulating, and the source mesh is never modified.
+
+    Normals and tangents are taken from the loop that first creates a dot,
+    except that a zero-area triangle never gets the last word: Blender has
+    no valid normal space for one, so `loop.normal` there is a non-unit
+    vector like (0, 0, -0.0039). Source files are full of them - strips are
+    stitched with degenerate triangles built from distinct but coincident
+    vertices, which survive `strip_triangles_to_triangles_list`'s
+    `a != b != c` guard - and a dot shared with a real triangle would
+    otherwise inherit whichever garbage came first in loop_triangles order.
+    They still count as dots and stay in `triangles`, since dropping them
+    changes the vertex count the file expects.
+    """
+    mesh = bl_mesh.data
+    mesh.calc_loop_triangles()
+
+    normals_per_loop = get_normals_per_loop(mesh)
+    tangents_per_loop = get_tangents_per_loop(mesh)
+    uvs_per_loop = [get_uvs_per_loop(bl_mesh, i) for i in range(uv_layer_count)]
+    colors_per_loop = get_colors_per_loop(mesh)
+
+    def dot_key(loop_index):
+        vertex_index = mesh.loops[loop_index].vertex_index
+        uv_key = tuple(
+            tuple(round(x, 6) for x in _fix_nan_uv(*uvs.get(loop_index, (0.0, 0.0))))
+            for uvs in uvs_per_loop
+        )
+        color = tuple(round(x, 6) for x in colors_per_loop.get(loop_index, (0.0, 0.0, 0.0, 0.0)))
+        return (vertex_index, uv_key, color)
+
+    dot_index_by_key = {}
+    source_vertex = []
+    normal = {}
+    tangent = {}
+    uv = [{} for _ in range(uv_layer_count)]
+    color = {}
+    triangles = []
+
+    # Dots whose normal/tangent came from a zero-area triangle, and can be
+    # replaced by a real one if some other triangle turns out to share them.
+    from_degenerate = set()
+
+    for tri in mesh.loop_triangles:
+        degenerate = tri.area == 0.0
+        tri_dots = []
+        for loop_index in tri.loops:
+            key = dot_key(loop_index)
+            dot_index = dot_index_by_key.get(key)
+            if dot_index is None:
+                dot_index = len(source_vertex)
+                dot_index_by_key[key] = dot_index
+                source_vertex.append(key[0])
+                normal[dot_index] = normals_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                tangent[dot_index] = tangents_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                if degenerate:
+                    from_degenerate.add(dot_index)
+                for i, uvs in enumerate(uvs_per_loop):
+                    if loop_index in uvs:
+                        uv[i][dot_index] = _fix_nan_uv(*uvs[loop_index])
+                if loop_index in colors_per_loop:
+                    color[dot_index] = colors_per_loop[loop_index]
+            elif not degenerate and dot_index in from_degenerate:
+                normal[dot_index] = normals_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                tangent[dot_index] = tangents_per_loop.get(loop_index, (0.0, 0.0, 0.0))
+                from_degenerate.discard(dot_index)
+            tri_dots.append(dot_index)
+        triangles.append(tuple(tri_dots))
+
+    # A vertex no triangle references has no loops, so the pass above never
+    # sees it. Real files contain them - one mesh of a real model has 344
+    # vertices of which 342 are referenced - and dropping them would quietly
+    # change the vertex count the file declares. Nothing indexes these, so
+    # their attributes don't matter, only that they exist.
+    referenced = set(source_vertex)
+    for vertex in mesh.vertices:
+        if vertex.index in referenced:
+            continue
+        dot_index = len(source_vertex)
+        source_vertex.append(vertex.index)
+        normal[dot_index] = tuple(vertex.normal)
+        tangent[dot_index] = (0.0, 0.0, 0.0)
+
+    return ExportVertexTable(
+        count=len(source_vertex),
+        source_vertex=source_vertex,
+        normal=normal,
+        tangent=tangent,
+        uv=uv,
+        color=color,
+        triangles=triangles,
+    )
+
+
+def _color_to_rgba_bytes(color):
+    # source is (unusually) stored/expected as b, g, r, a - preserved from
+    # the pre-existing behavior of the function this replaced
+    b, g, r, a = color
+    return (round(r * 255), round(g * 255), round(b * 255), round(a * 255))
+
+
+def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_data, vertex_table):
     SCALE = 100
-    uvs_per_vertex = get_uvs_per_vertex(bl_mesh, 0)
-    uvs_per_vertex_2 = get_uvs_per_vertex(bl_mesh, 1)
-    uvs_per_vertex_3 = get_uvs_per_vertex(bl_mesh, 2)
-    uvs_per_vertex_4 = get_uvs_per_vertex(bl_mesh, 3)
-    color_per_vertex = _get_vertex_colors(bl_mesh)
     weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
     max_bones_per_vertex = max({len(data) for data in weights_per_vertex.values()}, default=0)
-    normals = get_normals_per_vertex(bl_mesh.data)
-    tangents = get_tangents_per_vertex(bl_mesh.data)
     vtx_stream_2 = None
     vtx_stride_2 = 0
     has_vertex_buffer_2 = False
@@ -1520,7 +2086,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
     albam_custom_props = bl_mesh.material_slots[0].material.albam_custom_properties
     mod_156_material_props = albam_custom_props.get_custom_properties_for_appid(app_id)
 
-    vertex_count = len(bl_mesh.data.vertices)
+    vertex_count = vertex_table.count
     if dst_mod.header.version in (153, 156):
         vertex_format = int(mod_156_material_props.vtype, 16)
         skin_function = int(mod_156_material_props.func_skin, 16)
@@ -1545,12 +2111,10 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         VertexCls = VERTEX_FORMATS_MAPPER.get(vertex_format)
         vtx_stride = VertexCls().size_
 
-    MAX_BONES = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)
+    MAX_BONES, weight_half_float = _weight_export_params(dst_mod, vertex_format)
     # It breaks index serealization without clamping
     if max_bones_per_vertex > MAX_BONES:
         max_bones_per_vertex = MAX_BONES
-    weight_half_float = (dst_mod.header.version in (210, 211, 212) and
-                         vertex_format not in VERTEX_FORMATS_BRIDGE)
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
     vtx_stream = KaitaiStream(
@@ -1559,7 +2123,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vtx_stream_2 = KaitaiStream(
             BytesIO(bytearray(8 * vertex_count)))
     bytes_empty = b'\x00\x00'
-    for vertex_index, vertex in enumerate(bl_mesh.data.vertices):
+    for dot_index in range(vertex_table.count):
+        vertex = bl_mesh.data.vertices[vertex_table.source_vertex[dot_index]]
         vertex_struct = VertexCls(_parent=mesh, _root=mesh._root)
         if has_vertex_buffer_2:
             vertex_struct_2 = VertexBuff2Cls(_parent=mesh, _root=mesh._root)
@@ -1573,7 +2138,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct_2.occlusion.w = 255
 
             # Tangents
-            t = tangents.get(vertex_index, (0, 0, 0))
+            t = vertex_table.tangent.get(dot_index, (0, 0, 0))
             try:
                 vertex_struct_2.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
                 vertex_struct_2.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
@@ -1608,7 +2173,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
             vertex_struct.tangent = dst_mod.Vec4U1(
                 _parent=vertex_struct, _root=vertex_struct._root)
             # Tangents
-            t = tangents.get(vertex_index, (0, 0, 0))
+            t = vertex_table.tangent.get(dot_index, (0, 0, 0))
             try:
                 vertex_struct.tangent.x = round(((t[0] * 0.5) + 0.5) * 255)
                 vertex_struct.tangent.y = round(((t[2] * 0.5) + 0.5) * 255)
@@ -1623,7 +2188,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format not in VERTEX_FORMATS_BRIDGE:
             vertex_struct.uv = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            uv_x, uv_y = uvs_per_vertex.get(vertex_index, (0, 0))
+            uv_x, uv_y = vertex_table.uv[0].get(dot_index, (0, 0))
             uv_x, uv_y = _normalize_uv(uv_x, uv_y)
             vertex_struct.uv.u = pack('e', uv_x)
             vertex_struct.uv.v = pack('e', uv_y)
@@ -1631,8 +2196,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV2:
             vertex_struct.uv2 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_2:
-                uv_x, uv_y = uvs_per_vertex_2.get(vertex_index, (0, 0))
+            if vertex_table.uv[1]:
+                uv_x, uv_y = vertex_table.uv[1].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv2.u = pack('e', uv_x)
                 vertex_struct.uv2.v = pack('e', uv_y)
@@ -1643,8 +2208,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV3:
             vertex_struct.uv3 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_3:
-                uv_x, uv_y = uvs_per_vertex_3.get(vertex_index, (0, 0))
+            if vertex_table.uv[2]:
+                uv_x, uv_y = vertex_table.uv[2].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv3.u = pack('e', uv_x)
                 vertex_struct.uv3.v = pack('e', uv_y)
@@ -1655,8 +2220,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         if vertex_format in VERTEX_FORMATS_UV4:
             vertex_struct.uv4 = dst_mod.Vec2HalfFloat(
                 _parent=vertex_struct, _root=vertex_struct._root)
-            if uvs_per_vertex_4:
-                uv_x, uv_y = uvs_per_vertex_4.get(vertex_index, (0, 0))
+            if vertex_table.uv[3]:
+                uv_x, uv_y = vertex_table.uv[3].get(dot_index, (0, 0))
                 uv_x, uv_y = _normalize_uv(uv_x, uv_y)
                 vertex_struct.uv4.u = pack('e', uv_x)
                 vertex_struct.uv4.v = pack('e', uv_y)
@@ -1666,7 +2231,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         # Vertex colors
         if vertex_format in VERTEX_FORMATS_RGBA:
             vertex_struct.rgba = dst_mod.Vec4U1(_parent=vertex_struct, _root=vertex_struct._root)
-            c = color_per_vertex.get(vertex_index, (0, 0, 0, 0))
+            c = _color_to_rgba_bytes(vertex_table.color.get(dot_index, (0, 0, 0, 0)))
             vertex_struct.rgba.x = c[0]
             vertex_struct.rgba.y = c[1]
             vertex_struct.rgba.z = c[2]
@@ -1684,7 +2249,7 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         vertex_struct.position.z = xyz[2]
         vertex_struct.position.w = 32767  # might be changed later
         # Set Normals
-        norms = normals.get(vertex_index, (0, 0, 0))
+        norms = vertex_table.normal.get(dot_index, (0, 0, 0))
         try:
             # from [-1, 1] to [0, 255], and clipping bad blender normals
             vertex_struct.normal.x = max(
@@ -1711,7 +2276,8 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                     solution="Please add Armature modifier and set imported skeleton as Object"
                 )
             # applying bounding box constraints
-            weights_data = weights_per_vertex.get(vertex_index, [])  # bone index , weight value hfloat
+            source_vertex_index = vertex_table.source_vertex[dot_index]
+            weights_data = weights_per_vertex.get(source_vertex_index, [])  # bone index, weight value hfloat
             weight_values = [w for _, w in weights_data]
             if not weight_values:
                 raise AlbamCheckFailure(
@@ -1736,32 +2302,23 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
                 bone_indices.insert(3, 128)
             vertex_struct.bone_indices = bone_indices
             if dst_mod.header.version not in (153, 156) and vertex_format not in VERTEX_FORMATS_BRIDGE:
-                match MAX_BONES:
-                    case 2:
-                        vertex_struct.bone_indices = [
-                            pack('e', bone_indices[0]), pack('e', bone_indices[1])]
-                        vertex_struct.position.w = round(weight_values[0] * 32767)
-                    case 4:
-                        vertex_struct.position.w = round(weight_values[0] * 32767)
-                        vertex_struct.weight_values = [0, 0]
-                        vertex_struct.weight_values[0] = pack("e", weight_values[1])
-                        vertex_struct.weight_values[1] = pack("e", weight_values[2])
-                    case 8:
-                        vertex_struct.position.w = round(weight_values[0] * 32767)
-                        vertex_struct.weight_values = [0, 0, 0, 0]
-                        vertex_struct.weight_values[0] = round(weight_values[1] * 255)
-                        vertex_struct.weight_values[1] = round(weight_values[2] * 255)
-                        vertex_struct.weight_values[2] = round(weight_values[3] * 255)
-                        vertex_struct.weight_values[3] = round(weight_values[4] * 255)
-                        vertex_struct.weight_values2 = [0, 0]
-                        vertex_struct.weight_values2[0] = pack("e", weight_values[5])
-                        vertex_struct.weight_values2[1] = pack("e", weight_values[6])
+                if MAX_BONES == 2:
+                    vertex_struct.bone_indices = [
+                        pack('e', bone_indices[0]), pack('e', bone_indices[1])]
+                position_w, packed_weights, packed_weights_2 = _encode_half_float_weight_slots(
+                    weight_values, MAX_BONES)
+                if position_w is not None:
+                    vertex_struct.position.w = position_w
+                if packed_weights is not None:
+                    vertex_struct.weight_values = packed_weights
+                if packed_weights_2 is not None:
+                    vertex_struct.weight_values2 = packed_weights_2
             else:
                 vertex_struct.weight_values = weight_values
         if has_vertex_buffer_2:
-            vertex_struct_2._check()
+            check_recursive(vertex_struct_2)
             vertex_struct_2._write(vtx_stream_2)
-        vertex_struct._check()
+        check_recursive(vertex_struct)
         vertex_struct._write(vtx_stream)
 
     return vtx_stream, vtx_stream_2, vertex_format, vtx_stride, vtx_stride_2, max_bones_per_vertex
@@ -1800,6 +2357,141 @@ def _apply_bbox_transforms(xyz_tuple, dst_mod, bbox_data):
     return (round(x), round(y), round(z))
 
 
+def _weight_export_params(dst_mod, vertex_format):
+    """
+    The per-vertex bone limit and weight encoding `_export_vertices` uses
+    for `vertex_format`. Shared with the weight bound filter so it mirrors
+    whichever branch the exporter actually takes (see issue #253).
+    """
+    max_bones_per_vertex = VERTEX_FORMATS_BONE_LIMIT.get(vertex_format, 4)
+    half_float = (dst_mod.header.version in VERSIONS_MOD_21 and
+                  vertex_format not in VERTEX_FORMATS_BRIDGE)
+    return max_bones_per_vertex, half_float
+
+
+def _truncate_and_normalize_weights(influence_list, max_bones_per_vertex):
+    """
+    Keep a vertex's `max_bones_per_vertex` strongest influences and
+    normalize them to sum to 1. Returns (bone_indices, weights), both
+    ordered by descending weight.
+    """
+    # limit max bones
+    if len(influence_list) > max_bones_per_vertex:
+        influence_list = sorted(
+            influence_list, key=lambda t: t[1])[-max_bones_per_vertex:]
+
+    weight_data = {t[0]: t[1] for t in influence_list}
+    wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
+    bone_indices = [bi for bi in wd_sorted.keys()]
+    weights = [w for w in wd_sorted.values()]
+    # normalize
+    total_weight = sum(weights)
+    if total_weight:
+        weights = [round((w / total_weight), 4) for w in weights]
+    return bone_indices, weights
+
+
+def _process_vertex_weights(influence_list, max_bones_per_vertex, half_float):
+    """
+    The (bone_index, weight) pairs `_export_vertices` serializes for a
+    single vertex, or None when the byte path is left with nothing to write.
+    """
+    bone_indices, weights = _truncate_and_normalize_weights(
+        influence_list, max_bones_per_vertex)
+    if half_float:
+        weights = _check_weights(weights, max_bones_per_vertex)
+    else:
+        # can't have zero values
+        weights = [round(w * 255) or 1 for w in weights]
+        if not weights:
+            # XXX vertex_position_2 research, beware
+            return None
+        # correct precision
+        excess = sum(weights) - 255
+        if excess:
+            max_index, _ = max(enumerate(weights), key=lambda p: p[1])
+            weights[max_index] -= excess
+
+    return list(zip(bone_indices, weights))
+
+
+def _encode_half_float_weight_slots(weight_values, max_bones_per_vertex):
+    """
+    Encode a vertex's weights into the fields the mod-21 non-bridge vertex
+    formats serialize: (position.w, weight_values, weight_values2), each
+    None for a slot group the format doesn't carry. The last slot is never
+    written: the game reconstructs it as one minus the rest, the way
+    `_get_weights` does on import.
+    """
+    match max_bones_per_vertex:
+        case 2:
+            return round(weight_values[0] * 32767), None, None
+        case 4:
+            return (round(weight_values[0] * 32767),
+                    [pack("e", weight_values[1]), pack("e", weight_values[2])],
+                    None)
+        case 8:
+            return (round(weight_values[0] * 32767),
+                    [round(weight_values[i] * 255) for i in range(1, 5)],
+                    [pack("e", weight_values[5]), pack("e", weight_values[6])])
+    return None, None, None
+
+
+def _reconstruct_half_float_weights(weight_values, max_bones_per_vertex):
+    """
+    The weight each slot ends up with once a vertex encoded by
+    `_encode_half_float_weight_slots` is read back, per format, exactly the
+    way `_get_weights` reconstructs it. Every one of these formats derives
+    its last slot from the remainder rather than a written field, and a
+    1-weight format has no weight field at all, so its single slot is a
+    full weight.
+    """
+    if max_bones_per_vertex == 1:
+        return [1.0]
+    position_w, packed_weights, packed_weights_2 = _encode_half_float_weight_slots(
+        weight_values, max_bones_per_vertex)
+    weights = [position_w / 32767]
+    if max_bones_per_vertex == 8:
+        weights.extend(w / 255 for w in packed_weights)
+        weights.extend(unpack("e", w)[0] for w in packed_weights_2)
+        weights.append(1.0 - sum(weights))
+    elif max_bones_per_vertex == 4:
+        weights.extend(unpack("e", w)[0] for w in packed_weights)
+        weights.append(round(1.0 - sum(weights), 3))
+    else:
+        weights.append(1.0 - weights[0])
+    return weights
+
+
+def _bones_with_exported_weight(influence_list, max_bones_per_vertex, half_float):
+    """
+    The bone indices the exported vertex data really skins a vertex to.
+
+    A vertex counts towards a bone's weight bound exactly when the game
+    ends up with a non-zero weight for that bone, so this runs the
+    exporter's own truncate/normalize/quantize and then reads the result
+    back the way `_get_weights` does, instead of testing the raw
+    vertex-group weight: normalizing can lift a weight far below one
+    quantization step into a substantial exported one, and quantizing can
+    drop a small one to nothing (see issue #253).
+    """
+    weights_data = _process_vertex_weights(
+        influence_list, max_bones_per_vertex, half_float)
+    if not weights_data:
+        return set()
+    if not half_float:
+        return {bone_index for bone_index, weight in weights_data if weight > 0}
+
+    weight_values = [w for _, w in weights_data]
+    weight_values.extend([0] * (max_bones_per_vertex - len(weight_values)))
+    reconstructed = _reconstruct_half_float_weights(weight_values, max_bones_per_vertex)
+    return {
+        bone_index
+        for (bone_index, _), weight in zip(weights_data, reconstructed)
+        if weight > 0
+    }
+
+
 def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half_float=False):
     """
     Given a dict `weights_per_vertex` with vertex_indices as keys and
@@ -1813,41 +2505,17 @@ def _process_weights_for_export(weights_per_vertex, max_bones_per_vertex=4, half
     """
     # TODO: move to mtframework.utils
     new_weights_per_vertex = {}
-    limit = max_bones_per_vertex
     for vertex_index, influence_list in weights_per_vertex.items():
-        # limit max bones
-        if len(influence_list) > limit:
-            influence_list = sorted(
-                influence_list, key=lambda t: t[1])[-limit:]
-
-        weight_data = {t[0]: t[1] for t in influence_list}
-        wd_sorted = {k: v for k, v in sorted(weight_data.items(), key=lambda item: item[1], reverse=True)}
-        bone_indices = [bi for bi in wd_sorted.keys()]
-        weights = [w for w in wd_sorted.values()]
-        # normalize
-        total_weight = sum(weights)
-        if total_weight:
-            weights = [round((w / total_weight), 4) for w in weights]
-        if half_float:
-            weights = _check_weights(weights, limit)
-        else:
-            # can't have zero values
-            weights = [round(w * 255) or 1 for w in weights]
-            # correct precision
-            if not weights:
-                # XXX vertex_position_2 research, beware
-                continue
-            excess = sum(weights) - 255
-            if excess:
-                max_index, _ = max(enumerate(weights), key=lambda p: p[1])
-                weights[max_index] -= excess
-
-        new_weights_per_vertex[vertex_index] = list(zip(bone_indices, weights))
+        weights_data = _process_vertex_weights(
+            influence_list, max_bones_per_vertex, half_float)
+        if weights_data is None:
+            continue
+        new_weights_per_vertex[vertex_index] = weights_data
 
     return new_weights_per_vertex
 
 
-def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
+def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data, max_bones_per_vertex, half_float):
     unsorted_weight_bounds = []
     if bl_obj.type != "ARMATURE":
         weight_bound = _set_static_mesh_weight_bounds(
@@ -1855,9 +2523,15 @@ def _calculate_weight_bounds(bl_obj, bl_mesh, dst_mod, meshes_data):
         unsorted_weight_bounds.append(weight_bound)
     else:
         mesh_vertex_groups = get_mesh_vertex_groups(bl_mesh)
+        weights_per_vertex = get_bone_indices_and_weights_per_vertex(bl_mesh)
+        vertices_per_bone = {}
+        for vertex_index, influence_list in weights_per_vertex.items():
+            for bone_index in _bones_with_exported_weight(
+                    influence_list, max_bones_per_vertex, half_float):
+                vertices_per_bone.setdefault(bone_index, set()).add(vertex_index)
         for vg in bl_mesh.vertex_groups:
             weight_bound = _calculate_vertex_group_weight_bound(
-                mesh_vertex_groups, bl_obj, vg, dst_mod, meshes_data
+                mesh_vertex_groups, bl_obj, vg, dst_mod, meshes_data, vertices_per_bone,
             )
             if weight_bound:
                 unsorted_weight_bounds.append(weight_bound)
@@ -1940,13 +2614,13 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     oabb_dimension.z = length_y * 100
     oabb_dimension.w = 0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = 255  # since it's static
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
@@ -1957,12 +2631,20 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     return wb
 
 
-def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data):
-    vertices_in_group = mesh_vertex_groups.get(vertex_group.index)
+def _calculate_vertex_group_weight_bound(
+    mesh_vertex_groups, armature, vertex_group, dst_mod, meshes_data, vertices_per_bone,
+):
+    bone_index = armature.pose.bones.find(vertex_group.name)
+    exported_vertices = vertices_per_bone.get(bone_index, ())
+
+    vertices_in_group = [
+        v for v in mesh_vertex_groups.get(vertex_group.index, ())
+        if v.index in exported_vertices
+    ]
+
     if not vertices_in_group:
         return
 
-    bone_index = armature.pose.bones.find(vertex_group.name)
     pose_bone = armature.pose.bones[bone_index]
     pose_bone_matrix = Matrix.Translation(pose_bone.head).inverted()
 
@@ -2056,13 +2738,13 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     oabb_dimension.z = oabb_dimension_export[2]
     oabb_dimension.w = 0.0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = bone_index
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
@@ -2073,147 +2755,15 @@ def _calculate_vertex_group_weight_bound(mesh_vertex_groups, armature, vertex_gr
     return wb
 
 
-def _convert_vtx_col_layer(mesh, src_layer):
+def _duplicate_mesh_object(src_obj):
     """
-    Blender changed the way vertex colors work, now there are per vertex and per loop layers
-    This funciton convert vertex colors into loop colors with float values as exporter expects
+    A plain, independent copy of `src_obj` (own object + own mesh
+    datablock), so autofix's apply_transform can mutate it without touching
+    the user's original object.
     """
-    if src_layer.domain == 'CORNER':
-        return src_layer
-    else:
-        scr_col_layer_name = src_layer.name
-        # FLOAT_COLOR to match _build_vertex_colors: routing colors through a
-        # byte layer here would re-introduce the precision loss it avoids
-        dst_col_layer = mesh.color_attributes.new(name="_temp", domain='CORNER', type='FLOAT_COLOR')
-
-        src_data = src_layer.data
-        dst_data = dst_col_layer.data
-        # Transfer from vertices to loops
-        if src_layer.domain == 'POINT':
-            for i, loop in enumerate(mesh.loops):
-                dst_data[i].color = src_data[loop.vertex_index].color
-
-        mesh.color_attributes.remove(src_layer)
-        dst_col_layer.name = scr_col_layer_name
-        return dst_col_layer
-
-
-def _duplicate_vtx_by_attr(src_obj):
-    mesh = src_obj.data
-    uv_layers = mesh.uv_layers
-    color_layers = mesh.color_attributes
-    groups = src_obj.vertex_groups
-
-    new_vertices = []
-    new_normals = []
-    new_uvs_layers = [[] for _ in uv_layers]
-    new_col_layers = [[] for _ in color_layers]
-    new_groups = []
-    new_faces = []
-    comparison_vtx_map = {}
-
-    for poly in mesh.polygons:
-        new_face = []
-        for loop_idx in poly.loop_indices:
-            loop = mesh.loops[loop_idx]
-            v = mesh.vertices[loop.vertex_index]
-            n = loop.normal
-
-            # UVs
-            uv_tuple = []
-            for uv_layer in uv_layers:
-                uv = uv_layer.data[loop_idx].uv
-                # NaN in UV data affected later comparison
-                if not (uv.x != uv.x or uv.y != uv.y):
-                    uv_tuple.append(tuple(round(x, 6) for x in uv))
-                else:
-                    uv_tuple.append(tuple((0.0, 0.0)))
-
-            # Colors
-            col_tuple = []
-            for col_layer in color_layers:
-                col_layer = _convert_vtx_col_layer(mesh, col_layer)
-                col = col_layer.data[loop_idx].color
-                col_tuple.append(tuple(round(x, 6) for x in col))
-
-            # Vertex group weights
-            group_tuple = []
-            for g in v.groups:
-                group_tuple.append((groups[g.group].name, round(g.weight, 6)))
-
-            # Split normal attribute, duplicate in case of Blender's hard edges
-            normal_tuple = tuple(round(x, 6) for x in n)
-
-            # compare by vtx index, uv[(u1,v1),(u2,v2),...] + split normals
-            comparison_key = (loop.vertex_index, *uv_tuple, normal_tuple)
-
-            if comparison_key not in comparison_vtx_map:
-                idx = len(new_vertices)
-                comparison_vtx_map[comparison_key] = idx
-                new_vertices.append(v.co.copy())
-                new_normals.append(n.copy())
-                for i, uv_layer in enumerate(uv_layers):
-                    new_uvs_layers[i].append(uv_layer.data[loop_idx].uv.copy())
-                for i, col_layer in enumerate(color_layers):
-                    new_col_layers[i].append(col_layer.data[loop_idx].color)
-                new_groups.append(group_tuple)
-
-            # new_face.append(vertex_map[key])
-            new_face.append(comparison_vtx_map[comparison_key])
-        new_faces.append(new_face)
-
-    # Set new mesh with duplicated vertices
-    dst_mesh = bpy.data.meshes.new("temp_" + src_obj.name)
-    dst_mesh.from_pydata(new_vertices, [], new_faces)
-    dst_mesh.update()
-
-    # Set UV-layers
-    for i, uv_layer in enumerate(uv_layers):
-        uv_layer_new = dst_mesh.uv_layers.new(name=uv_layer.name)
-        for poly in dst_mesh.polygons:
-            for loop_idx in poly.loop_indices:
-                uv_layer_new.data[loop_idx].uv = new_uvs_layers[i][dst_mesh.loops[loop_idx].vertex_index]
-
-    # Set vertex colors
-    for i, col_layer in enumerate(color_layers):
-        col_layer_new = dst_mesh.color_attributes.new(
-            name=col_layer.name, domain='CORNER', type='FLOAT_COLOR')
-        for poly in dst_mesh.polygons:
-            for loop_idx in poly.loop_indices:
-                col_layer_new.data[loop_idx].color = new_col_layers[i][dst_mesh.loops[loop_idx].vertex_index]
-
-    # Set Normals
-    dst_mesh.normals_split_custom_set_from_vertices(new_normals)
-
-    # Create new obj for exporting
-    dst_obj = bpy.data.objects.new("temp_" + src_obj.name, dst_mesh)
+    dst_obj = src_obj.copy()
+    dst_obj.data = src_obj.data.copy()
     bpy.context.collection.objects.link(dst_obj)
-
-    # Set Vertex groups
-    for g in groups:
-        vg = dst_obj.vertex_groups.new(name=g.name)
-    for i, group_tuple in enumerate(new_groups):
-        for gname, weight in group_tuple:
-            vg = dst_obj.vertex_groups[gname]
-            vg.add([i], weight, 'REPLACE')
-
-    for modifier in src_obj.modifiers:
-        if modifier.type == 'ARMATURE' and modifier.object:
-            new_arm_modifier = dst_obj.modifiers.new(name="Armature", type='ARMATURE')
-            new_arm_modifier.object = modifier.object
-            break
-
-    # TODO replace this ducktaped solution
-    for app_id in APPID_CLASS_MAPPER.keys():
-        src_albam_props = src_obj.data.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
-        dst_albam_props = dst_obj.data.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
-
-        dst_albam_props.copy_custom_properties_from(src_albam_props)
-
-    dst_obj.data.materials.append(src_obj.data.materials[0])
-
     return dst_obj
 
 
@@ -2249,7 +2799,6 @@ class Mod156MeshCustomProperties(bpy.types.PropertyGroup):
     idx_group: bpy.props.IntProperty(name="Group ID", default=0, options=set())  # noqa: F821
     alpha_priority: bpy.props.IntProperty(name="Alpha Transparency Priority",
                                           default=0, options=set())  # noqa: F821
-    disp: bpy.props.BoolProperty(name="Display Mesh in Game", default=1, options=set())  # noqa: F821
     shape: bpy.props.BoolProperty(name="Shape", default=0, options=set())   # noqa: F821
     reserved2_flag_1: bpy.props.BoolProperty(name="Reserved 1", default=0, options=set())  # noqa: F821
     reserved2_flag_2: bpy.props.BoolProperty(name="Reserved 2", default=0, options=set())  # noqa: F821
@@ -2334,7 +2883,8 @@ vertex_format_enum_items = [
 ]
 
 
-@blender_registry.register_custom_properties_mesh("mod_21_mesh", ("re0", "re1", "re6", "rev1", "rev2", "dd",))
+@blender_registry.register_custom_properties_mesh("mod_21_mesh",
+                                                  ("re0", "re1", "re6", "rev1", "rev2", "dd", "umvc3"))
 @blender_registry.register_blender_prop
 class Mod21MeshCustomProperties(bpy.types.PropertyGroup):
     level_of_detail: bpy.props.IntProperty(name="Level of Detail", default=255, options=set())  # noqa: F821

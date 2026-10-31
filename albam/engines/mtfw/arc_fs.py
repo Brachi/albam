@@ -3,7 +3,7 @@ PyFilesystem2 adapter for MTFramework .arc archives.
 
 An .arc is a flat, zip-like container (see structs/arc.ksy): a header
 followed by fixed-size file entries (path, type-hash, sizes, offset), each
-pointing to a zlib-compressed blob later in the file. `ArcFS` exposes a
+pointing to a compressed blob later in the file. `ArcFS` exposes a
 single .arc as a read-only PyFilesystem2 filesystem; `MTFW_FS` overlays every
 .arc under a game root - plus its loose files - into one `MultiFS`, so
 callers can ask for a relative path without knowing which archive (or loose
@@ -14,23 +14,129 @@ import zlib
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
+from fs.errors import CreateFailed, IllegalBackReference, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import dirname, join
+from fs.path import dirname, join, normpath
 from kaitaistruct import KaitaiStream
 
-from . import FILE_ID_TO_EXTENSION
+from . import (
+    EXTENSION_TO_FILE_ID,
+    EXTENSION_TO_FILE_IDS_DMC4,
+    FILE_ID_TO_EXTENSION,
+    FILE_ID_TO_EXTENSION_DMC4,
+)
 from .structs.arc import Arc
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
+from ...lib.xcompress import xmem_decompress
+from ...lib.xcompress_encode import FrameTooLarge, xmem_compress
 
 
-def _entry_path(file_entry):
-    ext = FILE_ID_TO_EXTENSION.get(file_entry.file_type, str(file_entry.file_type))
+# The archive version this app writes. Every other app albam reads writes
+# version 7, so this is what tells the two apart - and they differ in both of
+# the things an entry needs to be read: version 7 entries are zlib, these are
+# XMemCompress (LZX) streams, and the two number their file types from
+# different hashes of the same resource class names.
+#
+# Sniffing the payload would not do for the codec: 41 of 60366 LZX streams in
+# the verified dataset open with bytes that pass zlib's own header check.
+ARC_VERSION_DMC4 = 17
+
+
+def file_type_extensions(arc_version):
+    """The file-type-id -> extension table an archive of this version uses."""
+    if arc_version == ARC_VERSION_DMC4:
+        return FILE_ID_TO_EXTENSION_DMC4
+    return FILE_ID_TO_EXTENSION
+
+
+class AmbiguousExtension(Exception):
+    """An extension that names more than one of version 17's resource classes,
+    so the id a file albam is adding should carry is not knowable."""
+
+
+class UnknownExtension(Exception):
+    """An extension the archive's version has no file type id for, and that
+    is not a literal id either."""
+
+
+def new_entry_file_type(arc_version, extension):
+    """The file type id to label a file albam adds to an archive with.
+
+    The reverse of file_type_extensions(), for giving a file albam adds to an
+    archive the id that archive's own version knows it by. An extension the
+    version's table does not name, in any case, is taken for a literal id if
+    it is a number, and refused with UnknownExtension otherwise.
+
+    A version 17 extension that names more than one resource class is refused
+    rather than guessed at: nothing has been written on that guess yet, and
+    an extension is all a user's file tells albam. The shared table resolves
+    the one extension it doubles up on the way it always has, because version
+    7 archives have been written that way for as long as albam has existed.
+
+    Existing entries never come through here either way: they keep the file
+    type they were parsed with, which is an answer and not a guess.
+    """
+    table = EXTENSION_TO_FILE_ID if arc_version != ARC_VERSION_DMC4 else EXTENSION_TO_FILE_IDS_DMC4
+    if extension not in table and extension.lower() in table:
+        extension = extension.lower()
+    if extension not in table:
+        if extension.isdigit():
+            return int(extension)
+        raise UnknownExtension(
+            f'cannot add a ".{extension}" to this archive: its version (v{arc_version}) '
+            "has no file type id for that extension")
+    if arc_version != ARC_VERSION_DMC4:
+        return table[extension]
+    file_ids = table[extension]
+    if len(file_ids) > 1:
+        candidates = ", ".join(f"0x{h:08X}" for h in file_ids)
+        raise AmbiguousExtension(
+            f'cannot add a ".{extension}" to this archive: version 17 numbers '
+            f"it {candidates}, and which of those this file is cannot be told "
+            "from its name")
+    return file_ids[0]
+
+
+def decompress_entry(arc_version, raw, size):
+    """One .arc file entry's payload, decoded with the codec its archive uses."""
+    if arc_version == ARC_VERSION_DMC4:
+        return xmem_decompress(raw, size)
+    return zlib.decompress(raw)
+
+
+def compress_entry(arc_version, data, entry_path):
+    """One .arc file entry's payload, encoded with the codec its archive uses.
+
+    The counterpart of decompress_entry, and the reason a version 17 archive
+    can be written at all: its entries are XMemCompress streams, and zlib
+    chunks written into one would leave an archive that parses fine and that
+    the game cannot read.
+
+    An entry the LZX encoder cannot encode correctly is refused rather than
+    written, and `entry_path` is what says which file that was.
+    """
+    if arc_version == ARC_VERSION_DMC4:
+        try:
+            return xmem_compress(data)
+        except FrameTooLarge as err:
+            raise FrameTooLarge(f'cannot pack "{entry_path}": {err}') from err
+    return zlib.compress(data)
+
+
+def _entry_path(file_entry, extensions=FILE_ID_TO_EXTENSION):
+    """The path an .arc entry is exposed at, from its raw internal one.
+
+    Normalized, because an entry's internal path is game data and can carry
+    "." / ".." components (e.g. "chr\\x\\weapon\\1p\\..\\y"). PyFilesystem
+    resolves those away in every incoming path (fs.base.FS.validatepath), so
+    an unnormalized key would list fine but never match a read.
+    """
+    ext = extensions.get(file_entry.file_type, str(file_entry.file_type))
     posix_path = file_entry.file_path.replace("\\", "/").lstrip("/")
-    return f"/{posix_path}.{ext}"
+    return normpath(f"/{posix_path}.{ext}")
 
 
 def _local_opener(path):
@@ -70,10 +176,20 @@ class ArcFS(FS):
         try:
             arc = Arc(KaitaiStream(f))
             arc._read()
+            self.version = arc.header.version
+            extensions = file_type_extensions(self.version)
             self._entries = {}
             self._directory = MemoryFS()
             for file_entry in arc.file_entries:
-                path = _entry_path(file_entry)
+                try:
+                    path = _entry_path(file_entry, extensions)
+                except IllegalBackReference:
+                    # ".." climbing above the .arc's own root: unreachable
+                    # through any FS API anyway, so skip it rather than
+                    # failing the whole archive.
+                    print(f"{self.arc_path}: skipping entry {file_entry.file_path!r} "
+                          f"(path escapes the archive root)")
+                    continue
                 self._entries[path] = file_entry
                 self._directory.makedirs(dirname(path), recreate=True)
                 self._directory.create(path)
@@ -119,7 +235,7 @@ class ArcFS(FS):
             raw = f.read(file_entry.zsize)
         finally:
             f.close()
-        data = zlib.decompress(raw)
+        data = decompress_entry(self.version, raw, file_entry.size)
         return _BytesFile(data)
 
     def makedir(self, path, permissions=None, recreate=False):
@@ -301,8 +417,8 @@ class MTFW_FS(MultiFS):
         layered filesystem per directory visited - O(directories x
         filesystems), ~9.5M calls / ~70s for a full RE5 walk over ~1200
         archives. Replaced with one upfront O(total entries) pass and O(1)
-        lookups after, for listdir/scandir/walk only - point lookups already
-        go through MultiFS's own _delegate and stay fast without this.
+        lookups after, for listdir/scandir/walk and, once built, the point
+        lookups _delegate() resolves.
         """
         if self._owner is not None:
             return
@@ -340,6 +456,24 @@ class MTFW_FS(MultiFS):
             # info (size, etc.) from whichever filesystem actually owns it.
             child_path = join(_path, info.name)
             yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
+
+    def _delegate(self, path):
+        """Whichever layered filesystem owns `path`, from the index when one
+        has been built.
+
+        MultiFS asks every layer exists() in priority order. The loose layer
+        has the highest priority, so over S3 every read of a packed file
+        first costs a head_object plus a list_objects_v2 against the loose
+        layer - ~190ms of round trips per read, measured against R2, for a
+        file that was never loose. The index resolves the same precedence
+        (built in the same priority order, first owner wins) without asking
+        anything.
+        """
+        if self._owner is not None:
+            owner_fs = self._owner.get(self.validatepath(path))
+            if owner_fs is not None:
+                return owner_fs
+        return super()._delegate(path)
 
     def _owning_arc_fs(self, path):
         """The ArcFS `path` resolves to, or None if it's a loose/real file.
