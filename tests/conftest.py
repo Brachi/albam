@@ -175,6 +175,10 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "applies_to(**facts): run only on dataset entries with these facts "
+        "(see tests/dataset_cases.py)")
+
     # Validate eagerly, once, at startup - not from within a fixture, where a
     # malformed value would otherwise only surface once each parametrized
     # test actually runs it, as one raw traceback per test instead of a
