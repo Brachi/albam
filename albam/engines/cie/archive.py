@@ -15,6 +15,7 @@ chunks are LZX compressed, bar any that would grow, which the container can
 flag as stored instead.
 """
 import os
+import re
 import struct
 
 from .fs import LfsFS, pack_entry_extension, split_archive_name, udas_byte_order
@@ -47,6 +48,9 @@ PACK_ENTRY_HEADER_SIZE = 16
 # So this is both what a shipped layout looks like and what a rebuilt entry is
 # laid out by.
 PACK_DATA_ALIGNMENT = 128
+# The name a pack entry is exposed under: the pack id as 8 hex digits, then
+# the entry's number (see fs.pack_entry_extension).
+PACK_ENTRY_NAME = re.compile(r"^[0-9a-f]{8}_\d{3,}\.(dds|tga)$", re.IGNORECASE)
 
 
 @blender_registry.register_fs_root_loader(app_id="re4uhd", extension="lfs")
@@ -305,6 +309,8 @@ def _rebuild_pack(payload, replacements):
 
     bodies = []
     replaced = 0
+    count = len(pack.file_entries)
+    appended = _appended_pack_entries(replacements, count)
     for index, entry in enumerate(pack.file_entries):
         original = payload[offsets[index]:ends[index]]
         suffix = f"_{index:03d}.{pack_entry_extension(entry)}"
@@ -325,15 +331,50 @@ def _rebuild_pack(payload, replacements):
             # moves - except when it is the last entry, where nothing follows
             # it to hold in place and padding would be bytes after the final
             # file that no shipped pack has.
-            padding = 0 if index == last else len(original) - len(rebuilt)
+            padding = 0 if index == last and not appended else len(original) - len(rebuilt)
             bodies.append((rebuilt + b"\x00" * padding, False))
 
-    if not replaced:
+    for data, is_dds in appended:
+        bodies.append((_new_pack_entry(pack.pack_name, data, is_dds), True))
+
+    if not replaced and not appended:
         raise ValueError(
             f"none of {sorted(replacements)} matched an entry in this pack - a "
             f"replacement is matched by the numbered name it was imported under"
         )
     return _assemble_pack(pack.pack_name, bodies)
+
+
+def _appended_pack_entries(replacements, count):
+    """[(bytes, is_dds)] for the replacements numbered past the pack's last
+    entry, in order - textures added in Blender (see textures.TextureExport),
+    which number theirs from the pack's entry count up.
+
+    A gap in the numbering is refused: the .tpl exported beside them names
+    each by the index it was given, and a pack has no way to leave one out.
+    """
+    found = {}
+    for name, data in replacements.items():
+        stem, _, extension = name.rpartition(".")
+        _, _, digits = stem.rpartition("_")
+        if digits.isdigit() and int(digits) >= count:
+            found[int(digits)] = (data, extension.lower() == "dds")
+    expected = list(range(count, count + len(found)))
+    if sorted(found) != expected:
+        raise ValueError(
+            f"this pack has {count} entries, so textures added to it are numbered "
+            f"from {count} up without gaps, and these are numbered {sorted(found)} - "
+            f"was the pack changed since the model was exported?"
+        )
+    return [found[index] for index in expected]
+
+
+def _new_pack_entry(pack_id, data, is_dds):
+    """A pack entry for a texture the pack did not have, with the header
+    words every shipped entry carries: 0xFFFFFFFF, then the pack's own id
+    split low half first (see _build_pack_entry)."""
+    return struct.pack("<IIHHI", len(data), 0xFFFFFFFF, pack_id & 0xFFFF, pack_id >> 16,
+                       int(is_dds)) + bytes(data)
 
 
 @blender_registry.register_archive_writer(app_id="re4uhd", extension="lfs")
@@ -346,7 +387,14 @@ def update_lfs(archive_path, exported_vfiles, **options):
     fs.py) rather than by anything stored in the archive.
     """
     payload, extension = _read_payload(archive_path)
-    replacements = {vfile.display_name: vfile.get_bytes() for vfile in exported_vfiles}
+    stem, _ = split_archive_name(os.path.basename(archive_path))
+    replacements = {vfile.display_name: vfile.get_bytes() for vfile in exported_vfiles
+                    if _belongs_to(vfile.display_name, stem)}
+    if not replacements:
+        raise ValueError(
+            f"none of the exported files belong to {os.path.basename(archive_path)} - "
+            f"an archive's entries are named after it, \"{stem}_NNN.ext\""
+        )
 
     if extension == ".udas":
         payload = _rebuild_udas(payload, replacements)
@@ -362,3 +410,57 @@ def update_lfs(archive_path, exported_vfiles, **options):
         )
 
     return xcompress_compress_re4hd(payload)
+
+
+def _belongs_to(file_name, archive_stem):
+    """Whether an exported file is an entry of the archive named
+    `archive_stem`: a container's entries are exposed as "<stem>_NNN.<ext>"
+    and a single-file archive's one file as "<stem>.<ext>" (see fs.py).
+
+    A model's export carries the textures it changed alongside it, and those
+    belong to a texture pack instead (see texture_pack_companions). Matching
+    by the number alone would put them into the model's archive.
+    """
+    stem = file_name.rsplit(".", 1)[0].lower()
+    owner, _, digits = stem.rpartition("_")
+    return stem == archive_stem.lower() or (digits.isdigit() and owner == archive_stem.lower())
+
+
+@blender_registry.register_companion_archive_writer(app_id="re4uhd", extension="lfs")
+def texture_pack_companions(archive_path, exported_vfiles, **options):
+    """{relative path: bytes} for every texture pack an export changed - the
+    exported files that are not entries of the archive at `archive_path`.
+
+    A model's textures live in packs of their own, one copy per pack folder
+    (see textures.texture_pack_archives), and each copy is rebuilt: which one
+    the game loads is a setting. A copy is returned under its folder and its
+    own file name, so the result drops into the content directory as is.
+    """
+    from .textures import texture_pack_archives
+
+    stem, _ = split_archive_name(os.path.basename(archive_path))
+    by_pack = {}
+    for vfile in exported_vfiles:
+        name = vfile.display_name
+        if _belongs_to(name, stem) or not PACK_ENTRY_NAME.match(name):
+            continue
+        owner = name.rsplit(".", 1)[0].rpartition("_")[0]
+        by_pack.setdefault(owner, {})[name] = vfile.get_bytes()
+
+    out = {}
+    for pack_name, replacements in by_pack.items():
+        copies = texture_pack_archives(pack_name, archive_path)
+        if not copies:
+            raise FileNotFoundError(
+                f"texture pack {pack_name} wasn't found beside {archive_path} or any "
+                f"archive in the VFS, so the textures exported for it can't be written"
+            )
+        for folder, path in copies:
+            if path.lower().endswith(".lfs"):
+                payload, _ = _read_payload(path)
+                data = xcompress_compress_re4hd(_rebuild_pack(payload, replacements))
+            else:
+                with open(path, "rb") as f:
+                    data = _rebuild_pack(f.read(), replacements)
+            out[os.path.join(folder, os.path.basename(path))] = data
+    return out

@@ -1,7 +1,13 @@
+from collections import Counter, namedtuple
 import os
+import struct
+import zlib
 
 import bpy
+from ...exceptions import AlbamCheckFailure
+from ...lib.blender import image_to_dds, image_to_tga
 from ...registry import blender_registry
+from ...vfs import VirtualFileData
 from .structs.tpl import Tpl
 
 # The content sub-folders holding texture packs, best first: this release
@@ -35,10 +41,37 @@ def _texture_pack_archive(pack_name, model_root):
     content directory, so that directory is two levels up from the model's
     own path and a pack is named after its id.
     """
-    candidates = []
     absolute_path = model_root.absolute_path if model_root else ""
-    if absolute_path:
-        candidates.append(os.path.dirname(os.path.dirname(absolute_path)))
+    content_dir = _pack_content_dir(pack_name, absolute_path)
+    return _find_pack_in(content_dir, pack_name) if content_dir else None
+
+
+def texture_pack_archives(pack_name, model_archive_path):
+    """Every copy of texture pack `pack_name` - one per TEXTURE_PACK_FOLDERS
+    entry - found the way _texture_pack_archive finds one, as
+    [(folder, path)].
+
+    Import reads the best copy only, but writing has to reach all of them:
+    which one the game loads is its own setting, and a slot the .tpl gains
+    has to exist in whichever pack it loads.
+    """
+    content_dir = _pack_content_dir(pack_name, model_archive_path)
+    if not content_dir:
+        return []
+    found = []
+    for folder in TEXTURE_PACK_FOLDERS:
+        path = _find_pack_in(content_dir, pack_name, folders=(folder,))
+        if path:
+            found.append((folder, path))
+    return found
+
+
+def _pack_content_dir(pack_name, model_archive_path):
+    """The content directory holding pack `pack_name`, looked for beside the
+    model's archive first (see _texture_pack_archive), or None."""
+    candidates = []
+    if model_archive_path:
+        candidates.append(os.path.dirname(os.path.dirname(model_archive_path)))
     candidates.extend(_PACK_DIRECTORIES)
     candidates.extend(_content_directories_in_vfs())
 
@@ -47,12 +80,11 @@ def _texture_pack_archive(pack_name, model_root):
         if not content_dir or content_dir in seen:
             continue
         seen.add(content_dir)
-        found = _find_pack_in(content_dir, pack_name)
-        if found:
+        if _find_pack_in(content_dir, pack_name):
             if content_dir in _PACK_DIRECTORIES:
                 _PACK_DIRECTORIES.remove(content_dir)
             _PACK_DIRECTORIES.insert(0, content_dir)
-            return found
+            return content_dir
     return None
 
 
@@ -66,13 +98,13 @@ def _content_directories_in_vfs():
     return directories
 
 
-def _find_pack_in(content_dir, pack_name):
+def _find_pack_in(content_dir, pack_name, folders=TEXTURE_PACK_FOLDERS):
     try:
         siblings = {name.lower(): name for name in os.listdir(content_dir)}
     except OSError:
         return None
 
-    for folder in TEXTURE_PACK_FOLDERS:
+    for folder in folders:
         real_folder = siblings.get(folder.lower())
         if real_folder is None:
             continue
@@ -303,6 +335,8 @@ def _create_blender_image_from_tex(tpl):
     custom_properties.tpl_id = tpl["tpl_name"]
     custom_properties.pack_id = tpl["pack_name"]
     custom_properties.tpl_index = tpl["tpl_index"]
+    custom_properties.pack_entry = texture_name
+    custom_properties.source_crc = _crc(data)
     return bl_image
 
 
@@ -314,6 +348,12 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
     # Which slot of that .tpl this image came from; -1 for an image albam
     # didn't import (one the user brought in themselves).
     tpl_index: bpy.props.IntProperty(default=-1)
+    # The pack entry the image's bytes came from ("44000002_007.dds"), and a
+    # CRC-32 of those bytes - what tells an image edited since import from
+    # one left alone (see TextureExport). 0 for a scene saved before either
+    # was recorded, whose images are then never written back.
+    pack_entry: bpy.props.StringProperty(default="")
+    source_crc: bpy.props.IntProperty(default=0)
     pixel_format_type: bpy.props.IntProperty(default=0)
     id_offset: bpy.props.IntProperty(default=0)
     wrap_s: bpy.props.IntProperty(default=0)
@@ -328,7 +368,7 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
 
     # XXX copy paste in mesh, material
     # Set by the importer from the .tpl entry, not present on it.
-    _NOT_ON_SOURCE = ("tpl_id", "pack_id", "tpl_index")
+    _NOT_ON_SOURCE = ("tpl_id", "pack_id", "tpl_index", "pack_entry", "source_crc")
 
     def set_from_source(self, mesh):
         # XXX assume only properties are part of annotations
@@ -356,3 +396,308 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
         #     setattr(dst, name, src_value)
         # except TypeError:
         #     setattr(dst, name, hex(src_value))
+
+
+def _crc(data):
+    """A CRC-32 of `data` that fits a Blender IntProperty (signed 32-bit) and
+    is never 0, which TexCIECustomProperties.source_crc keeps for unknown."""
+    return (zlib.crc32(data) & 0x7FFFFFFF) or 1
+
+
+# A .tpl, as every character, enemy and room one in the game lays it out: a
+# 12-byte header (magic, slot count, offset of the slot table), an 8-byte
+# table entry per slot (offset of its info, offset of its palette - always 0
+# here), a 36-byte info per slot, the 8-byte (pack id, texture index) each
+# info points at, and zero padding to TPL_ALIGNMENT. The handful of system
+# .tpl files that carry palettes are not written.
+TPL_HEADER_SIZE = 12
+TPL_TABLE_ENTRY_SIZE = 8
+TPL_INFO_SIZE = 36
+TPL_IDS_SIZE = 8
+TPL_ALIGNMENT = 32
+# Where a tpl_info keeps the offset of its ids (see structs/tpl.ksy).
+TPL_INFO_ID_OFFSET = 8
+# A material names a slot in one byte, and 0xFF is "no texture".
+TPL_MAX_SLOTS = 0xFF
+
+TplSlot = namedtuple("TplSlot", ("info", "pack_id", "texture_id"))
+
+
+def read_tpl(data):
+    """(magic, [TplSlot]) for a .tpl laid out as build_tpl writes one.
+
+    `info` is the slot's 36-byte tpl_info as stored, id offset included;
+    build_tpl rewrites that word.
+    """
+    magic, count, table_offset = struct.unpack_from("<3I", data)
+    slots = []
+    for i in range(count):
+        info_offset, palette_offset = struct.unpack_from(
+            "<2I", data, table_offset + i * TPL_TABLE_ENTRY_SIZE)
+        if palette_offset:
+            raise NotImplementedError(
+                "this .tpl carries palettes, which only a few system files do; "
+                "albam does not write those")
+        info = bytes(data[info_offset:info_offset + TPL_INFO_SIZE])
+        ids_offset = struct.unpack_from("<I", info, TPL_INFO_ID_OFFSET)[0]
+        pack_id, texture_id = struct.unpack_from("<2I", data, ids_offset)
+        slots.append(TplSlot(info, pack_id, texture_id))
+    return magic, slots
+
+
+def build_tpl(magic, slots):
+    """A whole .tpl holding `slots`, laid out the way the game's are."""
+    count = len(slots)
+    infos_start = TPL_HEADER_SIZE + count * TPL_TABLE_ENTRY_SIZE
+    ids_start = infos_start + count * TPL_INFO_SIZE
+
+    out = bytearray(struct.pack("<3I", magic, count, TPL_HEADER_SIZE))
+    for i in range(count):
+        out += struct.pack("<2I", infos_start + i * TPL_INFO_SIZE, 0)
+    for i, slot in enumerate(slots):
+        info = bytearray(slot.info)
+        struct.pack_into("<I", info, TPL_INFO_ID_OFFSET, ids_start + i * TPL_IDS_SIZE)
+        out += info
+    for slot in slots:
+        out += struct.pack("<2I", slot.pack_id, slot.texture_id)
+    out += b"\x00" * (-len(out) % TPL_ALIGNMENT)
+    return bytes(out)
+
+
+def _with_size(info, width, height):
+    """A tpl_info with its dimensions replaced - stored height first."""
+    return struct.pack("<2H", height, width) + info[4:]
+
+
+def pack_entry_name(pack_id, texture_id, extension):
+    """The name a pack entry is exposed under (see fs.pack_entry_extension)."""
+    return f"{pack_id:08x}_{texture_id:03d}.{extension}"
+
+
+def _dds_size(data):
+    height, width = struct.unpack_from("<2I", data, 12)
+    return width, height
+
+
+def _tga_size(data):
+    return struct.unpack_from("<2H", data, 12)
+
+
+def _image_current_bytes(bl_image):
+    """The bytes the image holds now, or None when only its pixels say -
+    painted in Blender, or generated there."""
+    if bl_image.is_dirty:
+        return None
+    if bl_image.packed_file:
+        return bytes(bl_image.packed_file.data)
+    path = bpy.path.abspath(bl_image.filepath) if bl_image.filepath else ""
+    if path and os.path.isfile(path):
+        with open(path, "rb") as f:
+            return f.read()
+    return None
+
+
+def _image_was_edited(bl_image, custom_properties):
+    """Whether an imported image no longer holds the bytes it came with.
+
+    Blender keeps a packed image's bytes when its file path changes, so this
+    is what an edit looks like: pixels painted over, or the image unpacked
+    and its file replaced. A scene saved before the CRC was recorded never
+    reads as edited.
+    """
+    if not custom_properties.source_crc:
+        return False
+    current = _image_current_bytes(bl_image)
+    return current is None or _crc(current) != custom_properties.source_crc
+
+
+def _encode_like(bl_image, original):
+    """(bytes, extension) for `bl_image`, in the format of `original` - the
+    texture it stands in for - unless it already is a DDS.
+
+    A DDS the user supplies goes in as it is: it was made for the game on
+    purpose. Anything else is encoded from its pixels the way the texture it
+    replaces was: DXT1 stays DXT1, any other DDS becomes DXT5 (alpha kept),
+    mip chain only if the original had one; a pack entry that is not a DDS
+    at all is a TGA, and gets one.
+    """
+    current = _image_current_bytes(bl_image)
+    if current and current[:4] == b"DDS ":
+        return current, "dds"
+    if original[:4] != b"DDS ":
+        return image_to_tga(bl_image), "tga"
+    fourcc = "DXT1" if original[84:88] == b"DXT1" else "DXT5"
+    has_mipmaps = struct.unpack_from("<I", original, 28)[0] > 1
+    return image_to_dds(bl_image, fourcc, mipmaps=has_mipmaps), "dds"
+
+
+def _find_vfile(display_name):
+    for vfile in bpy.context.scene.albam.vfs.file_list:
+        if vfile.display_name == display_name and not vfile.is_root:
+            return vfile
+    return None
+
+
+class TextureExport:
+    """What a model's textures add to its export.
+
+    Three kinds of image can be bound to a material:
+
+    - one imported from this model's own .tpl: written as the slot it came
+      from. If it was edited since (see _image_was_edited), its pack entry is
+      rewritten too - which every model sharing that pack sees, but the edit
+      was to that very texture.
+    - one imported from somewhere else: its pack entry stays as it is, and
+      the .tpl gains a slot pointing at it.
+    - one albam did not import: it is appended to the pack this .tpl draws
+      from, and the .tpl gains a slot for it. Nothing that already exists
+      changes, so no other model sharing the pack or the .tpl is affected.
+
+    `bindings` is [(bl_material, field, bl_image)], `field` being the
+    material's slot field the image is bound to; `carried` is
+    {(bl_material name, field): slot} as the material held it on import.
+
+    After construction, `slots` maps an image name to the slot to write,
+    `vfiles` holds the .tpl and pack entries to export beside the model, and
+    `num_slots` is the .tpl's new slot count, or None if it did not grow.
+    """
+
+    def __init__(self, app_id, model_name, tpl_id, bindings, carried):
+        self.app_id = app_id
+        self.model_name = model_name
+        self.slots = {}
+        self.vfiles = []
+        self.num_slots = None
+
+        self._tpl_id = tpl_id or self._tpl_id_from_images(bindings)
+        # Found up front when it can be: its archive is where packs are
+        # looked for, which an edited texture needs whether or not the .tpl
+        # itself changes.
+        self._tpl_vfile = _find_vfile(self._tpl_id) if self._tpl_id else None
+        self._packs = {}
+        # Pack entry name -> the bytes it is being rewritten with.
+        self._replaced = {}
+
+        pending = []
+        seen = set()
+        for bl_material, field, bl_image in bindings:
+            if bl_image.name in seen:
+                continue
+            seen.add(bl_image.name)
+            custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(
+                app_id)
+            imported = custom_properties.tpl_index >= 0 and custom_properties.pack_entry
+            if imported and _image_was_edited(bl_image, custom_properties):
+                self._replace_pack_entry(bl_image, custom_properties)
+            # A slot with no .tpl recorded beside it is taken to be one of
+            # this model's: nothing says otherwise.
+            own = custom_properties.tpl_id in ("", self._tpl_id)
+            if custom_properties.tpl_index >= 0 and own:
+                self.slots[bl_image.name] = custom_properties.tpl_index
+            else:
+                pending.append((bl_material, field, bl_image, custom_properties))
+
+        if pending:
+            self._add_slots(pending, carried)
+
+    def _tpl_id_from_images(self, bindings):
+        """The .tpl most of the model's imported images came from - for a
+        model imported before the mesh recorded its own."""
+        counts = Counter()
+        for _, _, bl_image in bindings:
+            custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(
+                self.app_id)
+            if custom_properties.tpl_index >= 0 and custom_properties.tpl_id:
+                counts[custom_properties.tpl_id] += 1
+        return counts.most_common(1)[0][0] if counts else ""
+
+    def _pack(self, pack_id):
+        """{texture index: (name, bytes)} of one pack."""
+        if pack_id not in self._packs:
+            root = self._tpl_vfile.root_vfile if self._tpl_vfile else None
+            self._packs[pack_id] = _load_pack(f"{pack_id:08x}", root)
+        textures = self._packs[pack_id]
+        if not textures:
+            raise AlbamCheckFailure(
+                f"Texture pack {pack_id:08x} of {self.model_name} wasn't found",
+                details="Exporting a changed or added texture means reading the pack "
+                        "it goes into, and albam looks for it beside the model's "
+                        "archive and beside every archive added to the VFS",
+                solution="Add the model's archive from the game folder to the VFS, "
+                         "or any archive that sits beside the ImagePack folders",
+            )
+        return textures
+
+    def _replace_pack_entry(self, bl_image, custom_properties):
+        name = custom_properties.pack_entry
+        pack_id = int(custom_properties.pack_id, 16)
+        texture_id = _texture_index(name)
+        _, original = self._pack(pack_id)[texture_id]
+        data, _ = _encode_like(bl_image, original)
+        self._replaced[name] = data
+        self.vfiles.append(VirtualFileData(self.app_id, name, data_bytes=data))
+
+    def _load_tpl(self):
+        if self._tpl_vfile is None:
+            raise AlbamCheckFailure(
+                f"{self.model_name} has a texture its .tpl doesn't, and the .tpl "
+                f"isn't in the VFS to add it to",
+                details=f"A new texture is added as a slot of the model's .tpl "
+                        f"({self._tpl_id or 'unknown'}), which is read from the "
+                        f"archive the model came from",
+                solution="Add the model's archive back to the VFS and export again",
+            )
+        return read_tpl(self._tpl_vfile.get_bytes())
+
+    def _add_slots(self, pending, carried):
+        magic, slots = self._load_tpl()
+        original_count = len(slots)
+        if not slots:
+            raise AlbamCheckFailure(
+                f"{self._tpl_id} has no slots, so there is no pack to add a texture to",
+                solution="Re-point the material at a texture the model already has",
+            )
+        # A .tpl draws from one pack in practice; a new texture goes into the
+        # one it draws from most.
+        target_pack = Counter(slot.pack_id for slot in slots).most_common(1)[0][0]
+        next_texture_id = max(self._pack(target_pack)) + 1
+
+        for bl_material, field, bl_image, custom_properties in pending:
+            template = slots[0]
+            carried_slot = carried.get((bl_material.name, field))
+            if carried_slot is not None and carried_slot < original_count:
+                # The texture this image took the place of, which says what
+                # kind of texture the slot holds (format, filtering, wrap).
+                template = slots[carried_slot]
+            _, template_bytes = self._pack(template.pack_id)[template.texture_id]
+
+            if custom_properties.pack_entry:
+                # Imported from another .tpl: the texture is already in a
+                # pack - rewritten there above if it was edited - and only
+                # needs a slot here.
+                name = custom_properties.pack_entry
+                pack_id = int(custom_properties.pack_id, 16)
+                texture_id = _texture_index(name)
+                data = self._replaced.get(name) or self._pack(pack_id)[texture_id][1]
+            else:
+                data, extension = _encode_like(bl_image, template_bytes)
+                pack_id, texture_id = target_pack, next_texture_id
+                next_texture_id += 1
+                self.vfiles.append(VirtualFileData(
+                    self.app_id, pack_entry_name(pack_id, texture_id, extension),
+                    data_bytes=data))
+
+            width, height = _dds_size(data) if data[:4] == b"DDS " else _tga_size(data)
+            slots.append(TplSlot(_with_size(template.info, width, height), pack_id, texture_id))
+            self.slots[bl_image.name] = len(slots) - 1
+
+        if len(slots) > TPL_MAX_SLOTS:
+            raise AlbamCheckFailure(
+                f"{self._tpl_id} would need {len(slots)} texture slots",
+                details=f"A material names its texture by a one-byte slot, and "
+                        f"0xFF means none, so a .tpl holds at most {TPL_MAX_SLOTS}",
+                solution="Use fewer distinct new images",
+            )
+        self.num_slots = len(slots)
+        self.vfiles.append(VirtualFileData(
+            self.app_id, self._tpl_id, data_bytes=build_tpl(magic, slots)))

@@ -12,6 +12,7 @@ from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .material import build_blender_materials
+from .textures import TextureExport
 
 
 # Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
@@ -165,9 +166,11 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             loop_normals.append(_decode_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
 
-    bl_mesh.albam_custom_properties.get_custom_properties_for_appid(
-        "re4uhd").set_from_source(bin.header)
-    _apply_materials(bl_mesh, bin, mat_face_ranges, _resolve_tpl(vfile, bin, context))
+    mesh_properties = bl_mesh.albam_custom_properties.get_custom_properties_for_appid("re4uhd")
+    mesh_properties.set_from_source(bin.header)
+    tpl_vfile = _resolve_tpl(vfile, bin, context)
+    mesh_properties.tpl_id = tpl_vfile.display_name if tpl_vfile else ""
+    _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile)
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
     _build_shape_keys(bl_mesh_ob, bin)
 
@@ -240,6 +243,9 @@ class BinCIEMeshCustomProperties(bpy.types.PropertyGroup):
     # How many TPL slots the materials address. The count is what pairs a
     # model with the right .tpl in its archive.
     num_tpl: bpy.props.IntProperty(name="TPL Slots", default=0, options=set())  # noqa: F821
+    # The .tpl import resolved for the model (see choose_tpl) - the one a
+    # texture added in Blender becomes a new slot of. Not in the header.
+    tpl_id: bpy.props.StringProperty(name="TPL", default="", options=set())  # noqa: F821
 
     def set_from_source(self, bin_header):
         self.vertex_scale = bin_header.vertex_scale
@@ -1296,22 +1302,18 @@ def _third_corner(triangle, first, second):
     return triangle[0]
 
 
-# What _texture_slot found at a material input, when it found no image there.
+# What _bound_image found at a material input, when it found no image there.
 SLOT_EMPTY = "empty"  # nothing is wired into the input
 SLOT_UNRESOLVED = "unresolved"  # a texture node is, but it holds no image
 
 
-def _texture_slot(bl_material, input_name, app_id):
-    """The .tpl slot the image wired into `input_name` came from, or
-    SLOT_EMPTY / SLOT_UNRESOLVED when there is no image to read it off.
+def _bound_image(bl_material, input_name):
+    """The image wired into `input_name` of the material's shader group, or
+    SLOT_EMPTY / SLOT_UNRESOLVED when there is none.
 
     A material's texture references are bindings, not values, so a bound one
     lives in the node tree rather than in the material's custom properties -
     which is what makes swapping a texture in Blender an edit export can see.
-    Import records which .tpl slot each image came from on the image itself;
-    this reads it back. An image that did not come from the model's .tpl has
-    no slot to name it by, so it reads as 0xFF: still a binding, just one the
-    format cannot express.
 
     No image bound is not the same as no texture - see _serialize_material.
     """
@@ -1330,14 +1332,49 @@ def _texture_slot(bl_material, input_name, app_id):
                 # find. It stands for the slot without saying which one.
                 found = SLOT_UNRESOLVED
                 continue
-            custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(
-                app_id)
-            index = custom_properties.tpl_index
-            return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
+            return image
     return found
 
 
-def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
+def _texture_slot(bl_material, input_name, app_id, slots=None):
+    """The .tpl slot to write for the image wired into `input_name`, or
+    SLOT_EMPTY / SLOT_UNRESOLVED when there is no image to read it off.
+
+    `slots` ({image name: slot}) is what textures.TextureExport worked out,
+    new slots included. Without it, the slot import recorded on the image is
+    the answer, and an image albam did not import reads as 0xFF: still a
+    binding, just one the format cannot express.
+    """
+    image = _bound_image(bl_material, input_name)
+    if image in (SLOT_EMPTY, SLOT_UNRESOLVED):
+        return image
+    if slots and image.name in slots:
+        return slots[image.name]
+    custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    index = custom_properties.tpl_index
+    return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
+
+
+def _texture_export(bl_obj, bl_mesh_objs, bl_materials, app_id):
+    """The textures.TextureExport for a model's materials."""
+    bindings = []
+    carried = {}
+    for bl_material in bl_materials:
+        if bl_material is None:
+            continue
+        custom_properties = bl_material.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        for field, input_name in _TEXTURE_SLOT_INPUTS:
+            carried[(bl_material.name, field)] = getattr(custom_properties, field)
+            image = _bound_image(bl_material, input_name)
+            if image not in (SLOT_EMPTY, SLOT_UNRESOLVED):
+                bindings.append((bl_material, field, image))
+    mesh_properties = bl_mesh_objs[0].data.albam_custom_properties.get_custom_properties_for_appid(
+        app_id)
+    return TextureExport(app_id, bl_obj.name, mesh_properties.tpl_id, bindings, carried)
+
+
+def _serialize_material(dst_bin, bl_material, strip_lengths, app_id, slots=None):
     """One material plus the face-index block that follows it inline.
 
     Each strip becomes one entry of type 6, whose fcount is how many corners
@@ -1357,7 +1394,7 @@ def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
         # then overrides them wherever an image is actually bound.
         custom_properties.copy_custom_properties_to(dst_material)
         for field, input_name in _TEXTURE_SLOT_INPUTS:
-            index = _texture_slot(bl_material, input_name, app_id)
+            index = _texture_slot(bl_material, input_name, app_id, slots)
             if index == SLOT_UNRESOLVED:
                 # The texture behind this slot could not be found on import,
                 # so there is no image to read an index off and the carried
@@ -1655,8 +1692,12 @@ def export_bin(bl_obj):
         dst_bin.indexes = list(weight_indices)
         dst_bin.indexes2 = list(weight_indices)
     dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
-    dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
-                         for bl_material, strip_lengths in groups]
+    textures = _texture_export(bl_obj, bl_mesh_objs, [m for m, _ in groups], app_id)
+    if textures.num_slots is not None:
+        dst_bin.header.num_tpl = max(dst_bin.header.num_tpl, textures.num_slots)
+    dst_bin.materials = [
+        _serialize_material(dst_bin, bl_material, strip_lengths, app_id, textures.slots)
+        for bl_material, strip_lengths in groups]
 
     # Left unassigned rather than assigned None when there is nothing to
     # write - these are conditional Kaitai instances, and the generated
@@ -1680,7 +1721,7 @@ def export_bin(bl_obj):
             dst_bin.symmetry_table = dst_symmetry
 
     data_bytes = _layout_and_write(dst_bin, num_vertices)
-    return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)]
+    return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)] + textures.vfiles
 
 
 def _serialize_header(dst_bin, bl_mesh_ob):

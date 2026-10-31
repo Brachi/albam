@@ -425,6 +425,62 @@ def is_blimage_dds(bl_im):
     return is_dds
 
 
+def image_rgba_top_down(bl_image):
+    """The image's pixels as 8-bit RGBA bytes, top row first.
+
+    Blender stores rows bottom-up as floats; DDS and the block encoders want
+    them top-down and 8-bit.
+    """
+    width, height = bl_image.size
+    return _image_rgba(bl_image).reshape(height, width * 4)[::-1].tobytes()
+
+
+def _image_rgba(bl_image):
+    import numpy as np
+
+    width, height = bl_image.size
+    pixels = np.empty(width * height * 4, dtype=np.float32)
+    bl_image.pixels.foreach_get(pixels)
+    return (np.clip(pixels, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
+def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
+    """The image encoded as a block-compressed DDS - DXT1, DXT5, BC5 or BC7 -
+    with a full mip chain unless `mipmaps` is False."""
+    from bc7enc import pack_dds
+    from .dds import DDSHeader
+
+    width, height = bl_image.size
+    if not width or not height:
+        raise AlbamCheckFailure(
+            f"Image {bl_image.name} has no pixels to encode",
+            details="Blender could not load it, so there is nothing to export",
+            solution="Check the image's file path, or reload it",
+        )
+    blocks = pack_dds(image_rgba_top_down(bl_image), width, height, fourcc, mipmaps=mipmaps)
+    header = DDSHeader(
+        dwHeight=height,
+        dwWidth=width,
+        dwMipMapCount=max(width, height).bit_length() if mipmaps else 0,
+        pixelfmt_dwFourCC=fourcc.encode(),
+    )
+    header.set_constants()
+    header.set_variables()
+    return bytes(header) + blocks
+
+
+def image_to_tga(bl_image):
+    """The image as an uncompressed 32-bit TGA. TGA rows run bottom-up by
+    default, which is how Blender already keeps them."""
+    import struct
+
+    width, height = bl_image.size
+    bgra = _image_rgba(bl_image).reshape(-1, 4)[:, [2, 1, 0, 3]]
+    # Image type 2 (uncompressed true colour), 32 bits, 8 of them alpha.
+    header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 8)
+    return header + bgra.tobytes()
+
+
 def get_dist(point_a, point_b):
     x1, y1, z1 = point_a
     x2, y2, z2 = point_b

@@ -82,8 +82,8 @@ Three things follow, and they are what catches people out:
 - **A pack is shared by many models**, so anything done to a texture is done to
   every model using it. About a third of the packs are named `*.pack.yz2.lfs`;
   that extra segment is bookkeeping, and the payload is a plain pack like any
-  other - true of every one in an install. Textures still cannot be changed from
-  the panels, though; see the end of this guide.
+  other - true of every one in an install. Step 4 covers how a new texture is
+  added without touching the ones other models share.
 
 The parts of a character also share one skeleton, which is why the order you
 import them in matters - again, step 3.
@@ -133,11 +133,28 @@ Anything you do to the mesh is what gets written:
   object carries the whole model with it in Blender and changes nothing in the
   exported file - where a model sits in the world is the room's data, not the
   model's.
-- **Materials** - swapping the image in a texture node changes which texture the
-  model uses, because the exporter reads the binding back rather than a stored
-  value. Note what this is and is not: it re-points the material at a texture
-  **already in the archive's texture pack**. Bringing a new image into the game
-  is not supported - see below.
+- **Materials and textures** - the exporter reads back which image each
+  texture node holds, so what you wire up is what the model uses:
+  - **Another image from the same texture list** re-points the material at
+    that slot. Nothing else changes.
+  - **A new image** - one you open or create in Blender - is added as a new
+    texture: appended to the texture pack the model draws from, given a new
+    slot in its `.tpl`, and the material points at that slot. Nothing that
+    already exists changes, so other models sharing the pack are unaffected.
+    The image is encoded the way the texture it took the place of was (DXT1
+    stays DXT1, other DDS formats become DXT5, a TGA stays a TGA); a `.dds`
+    you open goes in exactly as it is.
+  - **A texture imported for another model** gets a slot in this model's
+    `.tpl` pointing at it where it already is.
+  - **Editing an imported image itself** - painting on it, or unpacking it and
+    changing its file - rewrites that texture in its pack, which **every model
+    using it** then shows. Note that *Image > Replace* does nothing to an
+    imported image: albam packs them into the .blend, and Blender keeps a
+    packed image's bytes when its path changes. Open the new file as its own
+    image and wire that in instead.
+
+  A new or edited texture needs the model's archive and its texture pack
+  reachable at export, the same way import found them.
 - **Facial morphs** - a model's morph targets arrive as shape keys named `000`,
   `001`, ... and are written back, edits included.
 
@@ -174,6 +191,12 @@ which ride on the mesh's and materials' albam custom properties.
 Export each model you changed. Models you did not touch do not need exporting -
 the repack keeps the archive's own copy.
 
+A model whose textures changed exports more than its `.bin`: its `.tpl`, if it
+gained a slot, and every texture that is new or was edited, named after the pack
+entry it becomes (`00000010_212.dds`). Export the models sharing a `.tpl` or a
+pack in one go only if you add textures to one of them at a time - each export
+numbers its new textures from the pack as it is on disk.
+
 ## 6. Repack the archive
 
 With the source archive selected on the import side and your exported files
@@ -186,6 +209,13 @@ from, the file table rebuilt around their new sizes, and the result recompressed
 archive's own filename, so an archive under a different name produces differently
 named entries and its replacements will not match.
 
+If the export carries textures, **Pack item** also rebuilds the texture packs
+they belong to and writes them beside your archive, under `ImagePack/` and
+`ImagePackHD/` and their original names. Both copies are written because which
+one the game loads is its texture quality setting, and a slot the `.tpl` names
+has to exist in whichever it picks. A pack's HD copy can be tens of megabytes,
+so recompressing it takes a few minutes.
+
 Archives albam writes come out about 6% larger than the originals. Its LZX
 encoder does not find quite as many matches as the one the game shipped with,
 which costs size and nothing else.
@@ -193,7 +223,8 @@ which costs size and nothing else.
 ## 7. Install and test
 
 Back up the original, drop yours in its place under the same name, and start the
-game.
+game. Texture packs go the same way, into the `ImagePack` and `ImagePackHD`
+folders beside the archive's own folder.
 
 If you are iterating, keep the backup outside the install and swap the two files
 with a one-line script rather than by hand - it is easy to lose the original
@@ -233,17 +264,11 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
-- **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
-  address the slots its texture list already has, and a mod that adds one would
-  also have to renumber the material indices addressing it.
-- **Replacing a texture has no route through the panels yet.** The pack writer
-  itself is done: given a pack archive and a replacement DDS it produces a pack
-  laid out the way the shipped ones are, leaving every other texture in it byte
-  for byte. Unlike the rest of this guide, that last step has not yet been
-  confirmed in the running game. What is missing in front of it is the step that
-  would make it usable: a pack is a different archive from the model, and nothing
-  yet puts a replacement DDS into the export list for **Pack item** to
-  substitute, so the writer is reachable from
-  `albam.engines.cie.archive.update_lfs` and not from the UI. Encoding an
-  arbitrary Blender image as a DDS is a separate gap again: albam only reads DDS
-  today, so the replacement has to be a DDS you supply.
+- **Textures have not been confirmed in the running game.** Adding and
+  replacing them writes packs and `.tpl` files laid out the way the shipped
+  ones are - rebuilding any shipped `.tpl` reproduces it byte for byte, and a
+  rebuilt pack keeps every texture it did not change byte for byte - but
+  whether the game has a limit on how many textures a pack or a `.tpl` can
+  hold is not known yet.
+- **A `.tpl` holds at most 255 slots**, since a material names one in a single
+  byte; adding past that is reported.

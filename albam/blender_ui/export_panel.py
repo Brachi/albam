@@ -434,6 +434,21 @@ class ALBAM_OT_Pack(bpy.types.Operator):
         with open(self.filepath, "wb") as f:
             f.write(archive)
 
+        companion_writer = blender_registry.companion_archive_writer_registry.get(
+            (item_i.app_id, extension))
+        if companion_writer is None:
+            return
+        out_dir = os.path.dirname(self.filepath)
+        written = []
+        for relative_path, data in companion_writer(path_i, files_e, **options).items():
+            companion_path = os.path.join(out_dir, relative_path)
+            os.makedirs(os.path.dirname(companion_path), exist_ok=True)
+            with open(companion_path, "wb") as f:
+                f.write(data)
+            written.append(relative_path)
+        if written:
+            self.report({'INFO'}, f"Also wrote {', '.join(sorted(written))} beside it")
+
     @classmethod
     def poll(cls, context):
         vfs_e = context.scene.albam.exported
