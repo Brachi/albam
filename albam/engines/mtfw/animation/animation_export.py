@@ -5,12 +5,14 @@ an .lmt header is absolute, so the sizes have to be known before a single byte
 is written, which is what the two _calculate_offsets passes are for.
 """
 import ast
+from collections import Counter
 from io import BytesIO
 
 import bpy
 from kaitaistruct import KaitaiStream
 from mathutils import Quaternion, Vector
 
+from ....exceptions import AlbamCheckFailure
 from ....registry import blender_registry
 from ....vfs import VirtualFileData
 from ..bone import get_anim_retarget, get_chain_target
@@ -18,6 +20,7 @@ from ..structs.lmt import Lmt
 from .animation_import import (
     LMT_ASSET_TYPE,
     ROOT_MOTION_BONE_ID,
+    _block_props,
     _create_bone_mapping,
     get_block_index,
 )
@@ -615,8 +618,43 @@ def _lmt_blocks(bl_obj, app_id):
     `.1000`, which sorts before the `.771` of the import before it - and a user
     is free to rename a block outright. Sorting on the index recorded at import
     is what survives both.
+
+    Being parented under bl_obj is not the same claim as belonging to it
+    (#295) - an empty from a different import, or a plain unrelated one,
+    can end up here through ordinary Outliner tidying. Two checks instead
+    of one:
+
+    - block_index < 0 means load_lmt never stamped this empty at all, so
+      it isn't one of this .lmt's blocks - any other object a user parented
+      here, indexed or not.
+    - albam_lmt_block_owner names the .lmt root this block was actually
+      created under; a block whose owner is a *different* root is excluded
+      even though it is indexed and even though it sits directly under
+      bl_obj. A block imported before this property existed has no owner
+      (None) and is kept, same as before - a .blend saved before the fix
+      must keep exporting exactly as it did.
     """
-    blocks = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    candidates = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    blocks = []
+    for block in candidates:
+        if _block_props(block, app_id).block_index < 0:
+            continue
+        owner = block.albam_lmt_block_owner
+        if owner is not None and owner != bl_obj:
+            continue
+        blocks.append(block)
+
+    counts = Counter(get_block_index(block, app_id) for block in blocks)
+    duplicate_indexes = sorted(index for index, count in counts.items() if count > 1)
+    if duplicate_indexes:
+        raise AlbamCheckFailure(
+            "Two blocks claim the same slot",
+            f"{bl_obj.name!r} has more than one block recorded at index(es) "
+            f"{duplicate_indexes}.",
+            "Only one empty per recorded block index is supported - remove or "
+            "re-import whichever one is the duplicate.",
+        )
+
     return sorted(blocks, key=lambda block: get_block_index(block, app_id))
 
 

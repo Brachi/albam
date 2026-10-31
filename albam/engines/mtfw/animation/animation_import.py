@@ -93,6 +93,9 @@ def load_lmt(vfile, context):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
+        # Which .lmt this block actually belongs to (#295) - independent of
+        # where the Outliner lets it end up parented. See _lmt_blocks.
+        anim_object.albam_lmt_block_owner = bl_object
         # Which slot of the file this block is, which is what identifies it.
         # The tree order it would otherwise be read back in is name order, and
         # names stop agreeing with block order - see _lmt_blocks.
