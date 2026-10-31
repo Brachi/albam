@@ -23,7 +23,8 @@ def test_ci_app_ids_matches_the_workflow():
     after a workflow edit, the upload gate is about to allow (or refuse) a
     different set of app_ids - which is the point, but worth noticing.
     """
-    assert uploader.ci_app_ids(WORKFLOW) == {"re5", "re1", "umvc3", "re4uhd", "reorc", "dmc4", "re6"}
+    assert uploader.ci_app_ids(WORKFLOW) == {
+        "re5", "re1", "umvc3", "re4uhd", "reorc", "dmc4", "re6", "re3"}
 
 
 def test_ci_app_ids_ignores_the_shell_expression_in_the_value():
@@ -117,6 +118,10 @@ def test_every_dataset_hash_is_in_the_catalog():
     """
     for app_id in uploader.ci_app_ids(WORKFLOW):
         source = uploader.upload_source_for(app_id)
+        if source is None:
+            # re3 is mounted in CI but uploaded by its own throwaway script,
+            # not this tool - see tests/reng/scripts (reen branch).
+            continue
         catalog_path = os.path.join(source.DATASETS_DIR, f"{app_id}_catalog.json")
         if not os.path.isfile(catalog_path):
             continue

@@ -563,6 +563,13 @@ def export_reengine_mesh(bl_obj):
         _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id)
     buffers.vertex_buffer = bytes(vertex_buffer)
     buffers.index_buffer = bytes(index_buffer)
+    # buffers is its own Kaitai instance (BuffersHeader) - setting its
+    # vertex_buffer/index_buffer above marks only that object dirty.
+    # src_mesh._check() below only validates _m_buffers_data's root/parent
+    # links, not its dirty flag, so buffers._check() has to run separately
+    # or _write() raises ConsistencyNotCheckedError the first time an
+    # edited mesh (as opposed to a byte-exact round trip) is exported.
+    buffers._check()
 
     out_stream = KaitaiStream(io.BytesIO(bytearray(len(src_bytes))))
     src_mesh._check()
