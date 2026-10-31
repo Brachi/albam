@@ -321,7 +321,7 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
             # file first_index is the mesh's own vertex_index and last_index
             # is one less than a full vertex run past it. Comparing them
             # against the source would just restate the vertex_index gap
-            # test_meshes_data_xfail already tracks, so what is checked here
+            # test_meshes_data_buffer_placement tracks, so what is checked here
             # is that the exported file keeps the invariant internally - a
             # mesh whose index range disagrees with its vertex range reads
             # garbage geometry however the buffer got laid out.
@@ -377,8 +377,8 @@ def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
     test.
 
     A mesh whose vertex count/format doesn't match the original is a
-    separate, already tracked gap (see test_meshes_data_xfail), so it's
-    skipped rather than failed.
+    separate gap (see test_vertex_buffer_bytes), so it's left out here
+    rather than failed.
     """
     def colored(mesh):
         return Counter(
@@ -459,19 +459,24 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
     bone_indices padding follows a "repeat the first bone" convention that
     doesn't always match the source file's own choice.
 
-    A mesh whose vertex count/format doesn't match the original is a
-    separate, already tracked gap (see test_meshes_data_xfail), so it is
-    skipped rather than failed.
+    A mesh whose vertex count/format doesn't match the original fails the
+    test, except a connective one (nonzero `connective`), which exports with
+    half its vertices (#352): those are left out and xfail the model instead.
     """
     src_meshes = mod_imported_local.meshes_data.meshes
     dst_meshes = mod_exported_local.meshes_data.meshes
     assert len(src_meshes) == len(dst_meshes)
 
+    connective_mismatches = []
     for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
+        count_and_format = (src_mesh.num_vertices, src_mesh.vertex_stride)
+        if count_and_format != (dst_mesh.num_vertices, dst_mesh.vertex_stride) and getattr(
+                src_mesh, "connective", 0):
+            connective_mismatches.append(mi)
+            continue
         with subtests.test(mesh_index=mi):
-            if (src_mesh.num_vertices, src_mesh.vertex_stride) != (
-                    dst_mesh.num_vertices, dst_mesh.vertex_stride):
-                pytest.skip("vertex count/format doesn't match the original for this mesh")
+            assert count_and_format == (dst_mesh.num_vertices, dst_mesh.vertex_stride), (
+                "vertex count/format doesn't match the original")
 
             def described(mesh):
                 return sorted(
@@ -485,6 +490,10 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
                 assert src_uv == dst_uv, f"vertex {vi}: uv changed"
                 assert _positions_match(src_pos, dst_pos), (
                     f"vertex {vi}: position {src_pos} became {dst_pos}")
+
+    if connective_mismatches:
+        pytest.xfail(f"connective meshes {connective_mismatches} export with a different "
+                     f"vertex count (#352)")
 
 
 # Header fields test_export_header doesn't touch. They had a test, but it

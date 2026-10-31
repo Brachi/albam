@@ -139,7 +139,7 @@ def test_read_only(lfs_fs):
         lfs_fs.openbin(next(iter(lfs_fs.walk.files())), mode="w")
 
 
-@applies_to(payload_extension=".evd")
+@applies_to(payload_extension=".evd", has_models=True)
 def test_evd_entries_are_sliced_by_offset_order(lfs_fs):
     """An .evd's file table is not sorted by offset and its entries' `size`
     field doesn't measure their content, so LfsFS slices each entry from its
@@ -175,8 +175,7 @@ def test_evd_entries_are_sliced_by_offset_order(lfs_fs):
         else:
             continue
         checked += 1
-    if not checked:
-        pytest.skip("this .evd holds no model files")
+    assert checked, "the dataset says this .evd holds model files"
 
 
 def test_lfs_round_trips_through_the_writer(lfs_fs):

@@ -29,15 +29,23 @@ def entries_for(metafunc, dataset):
 
 
 def _matches(entry, facts):
+    # A fact only has to be recorded on the entries the others already let
+    # through: `has_models` lives on the .evd entries alone, and
+    # @applies_to(payload_extension=".evd", has_models=True) never asks the
+    # rest. An entry that matches everything else and lacks one is an error,
+    # not a silent mismatch.
+    missing = [key for key in facts if key not in entry]
     for key, wanted in facts.items():
-        if key not in entry:
-            raise KeyError(f"dataset entry {entry} records no {key!r}, which @applies_to asks for")
-        if callable(wanted):
-            if not wanted(entry[key]):
-                return False
-        elif isinstance(wanted, (set, frozenset, tuple, list)):
-            if entry[key] not in wanted:
-                return False
-        elif entry[key] != wanted:
+        if key in entry and not _fact_matches(entry[key], wanted):
             return False
+    if missing:
+        raise KeyError(f"dataset entry {entry} records no {missing}, which @applies_to asks for")
     return True
+
+
+def _fact_matches(value, wanted):
+    if callable(wanted):
+        return wanted(value)
+    if isinstance(wanted, (set, frozenset, tuple, list)):
+        return value in wanted
+    return value == wanted

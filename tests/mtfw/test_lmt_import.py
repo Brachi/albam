@@ -25,6 +25,7 @@ import os
 import bpy
 import pytest
 
+from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, _pose_restored, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
@@ -44,11 +45,12 @@ def pytest_generate_tests(metafunc):
             "local_mod_path_hash" in metafunc.fixturenames and
             "local_lmt_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_mod_path_hash", "local_lmt_path_hash")
+        entries = entries_for(metafunc, LMT_IMPORT_DATASET)
         argvalues = [
             (d["app_id"], d["mod_path_hash"], d["lmt_path_hash"])
-            for d in LMT_IMPORT_DATASET
+            for d in entries
         ]
-        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in LMT_IMPORT_DATASET]
+        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -101,14 +103,21 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     resolved = resolve_hashes(local_game_fs, {local_mod_path_hash, local_lmt_path_hash})
     mod_path = resolved[local_mod_path_hash]
     lmt_path = resolved[local_lmt_path_hash]
-    # The ArcFS each file already lives in, rather than building a new one
-    # from a path: MTFW_FS opens its archives with a backend-appropriate
-    # opener, so reusing the instance keeps this working over S3/R2 as well
-    # as local disk - and CI only ever runs with an r2:// game dir.
-    mod_arc = local_game_fs._owning_arc_fs(mod_path)
-    lmt_arc = local_game_fs._owning_arc_fs(lmt_path)
-    assert mod_arc, "expected the .mod to live packed inside an .arc, not loose"
-    assert lmt_arc, "expected the .lmt to live packed inside an .arc, not loose"
+    # A new ArcFS on the archive each file lives in, opened with the opener
+    # MTFW_FS already uses for it, so this works over S3/R2 as well as local
+    # disk - and CI only ever runs with an r2:// game dir. Not the owning
+    # instance itself: the teardown's remove_imported() closes what it
+    # unmounts, and closing local_game_fs's own archive would break the next
+    # setup of this fixture, which runs whenever a test with a narrower
+    # @applies_to splits a param group.
+    from albam.engines.mtfw.arc_fs import ArcFS
+
+    mod_owner = local_game_fs._owning_arc_fs(mod_path)
+    lmt_owner = local_game_fs._owning_arc_fs(lmt_path)
+    assert mod_owner, "expected the .mod to live packed inside an .arc, not loose"
+    assert lmt_owner, "expected the .lmt to live packed inside an .arc, not loose"
+    mod_arc = ArcFS(mod_owner.arc_path, opener=mod_owner._opener)
+    lmt_arc = ArcFS(lmt_owner.arc_path, opener=lmt_owner._opener)
 
     # Two separate single-.arc roots under the same app_id, which is safe
     # only because these two files' internal paths don't collide.
@@ -142,12 +151,10 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     yield result, armature, actions, lmt_bl_object
 
     # Unmount both roots again. The VFS lives in Blender's scene data, which
-    # is process-global and outlives this fixture, while local_game_fs (and
-    # with it the ArcFS instances mounted above) is dropped when this param
-    # group tears down - leaving roots behind whose filesystem is closed.
-    # Node ids are app_id::relative_path only, so any later test selecting
-    # these same paths would resolve to one of those dead roots and fail with
-    # fs.errors.FilesystemClosed.
+    # is process-global and outlives this fixture, and node ids are
+    # app_id::relative_path only, so roots left behind would answer for these
+    # same paths in any later test - including the next setup of this
+    # fixture, which mounts the same two archives again.
     #
     # The real root names captured above, not f"{local_app_id}::{display_name}":
     # _unique_root_name() suffixes that same key with "#1", "#2", ... when a
@@ -263,6 +270,7 @@ def _skeleton_root_bone(armature):
     raise AssertionError("the armature carries no bone mapped to anim id 0")
 
 
+@applies_to(turns_root_motion=True)
 def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
     """Root motion is a whole-character transform, rotation included.
 
@@ -297,8 +305,7 @@ def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
         if angle is not None and angle > 5:
             # the engine's axes into Blender's, the same mapping a position takes
             turning.append((action, angle, Vector((axis.x, -axis.z, axis.y)), frames))
-    if not turning:
-        pytest.skip("no block of this .lmt turns the root motion bone")
+    assert turning, "the dataset says a block of this .lmt turns the root motion bone"
 
     with _pose_restored(armature):
         for action, expected, expected_axis, (first, last) in turning:
