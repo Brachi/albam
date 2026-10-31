@@ -1,26 +1,50 @@
 [
     {
         "app_id": "re5",
-        "mod_path_hash": "5d45d4682b062d49"
+        "mod_path_hash": "5d45d4682b062d49",
+        "mod_version": 156,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "re5",
-        "mod_path_hash": "2dc02b22175deb2f"
+        "mod_path_hash": "2dc02b22175deb2f",
+        "mod_version": 156,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "re5",
-        "mod_path_hash": "dd278c4da3cc1635"
+        "mod_path_hash": "dd278c4da3cc1635",
+        "mod_version": 156,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "re6",
-        "mod_path_hash": "6cf30bd3cd1bd1e3"
+        "mod_path_hash": "6cf30bd3cd1bd1e3",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "re6",
-        "mod_path_hash": "0ab2427a58472755"
+        "mod_path_hash": "0ab2427a58472755",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "re6",
-        "mod_path_hash": "1052249071ffa828"
+        "mod_path_hash": "1052249071ffa828",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     }
 ]

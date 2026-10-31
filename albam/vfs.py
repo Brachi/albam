@@ -67,6 +67,10 @@ class VirtualFile(bpy.types.PropertyGroup):
     # can't hold that object directly). Empty for roots/nodes still going
     # through the legacy archive_loader/archive_accessor registries.
     fs_key: bpy.props.StringProperty()
+    # Set on an export root whose files keep their bytes on data_bytes (#308).
+    # Off for exports saved by an older Albam, whose empty data_bytes would
+    # otherwise read back as empty files.
+    bytes_saved: bpy.props.BoolProperty(default=False)
 
     @property
     def relative_path_windows(self):
@@ -257,7 +261,8 @@ class VirtualFileSystemBase:
         whole file tree via one fs_instance.walk() pass instead of an
         engine-specific archive_loader/archive_accessor. Bytes for every node
         under this root are read on demand straight from `fs_instance`
-        (see VirtualFile.get_bytes()), never duplicated into a bpy property.
+        (see VirtualFile.get_bytes()). Only add_export_root() also copies them
+        into a bpy property, so they survive saving the .blend.
         """
         fs_key = fs_registry.register(fs_instance)
 
@@ -291,8 +296,8 @@ class VirtualFileSystemBase:
         engine's export function) in a writable in-memory FS and register it
         as a new root via add_fs_root() - the export-side counterpart of its
         read-only archive/game-folder roots, sharing the same tree-building
-        and get_bytes() machinery instead of duplicating bytes into
-        data_bytes.
+        and get_bytes() machinery. Each file's bytes are also copied to its
+        data_bytes, the only part that survives saving the .blend.
 
         A child file's node id is `app_id::<relative path parts>` (see
         select_vfile()/get_vfile()) and isn't scoped by which root added it -
@@ -310,6 +315,7 @@ class VirtualFileSystemBase:
         sharp edge (see game_fs_root()'s docstring), left alone here.
         """
         mem_fs = MemoryFS()
+        superseded_roots = set()
         for vfile_data in vfiles_data:
             path = "/" + str(vfile_data.relative_path).replace("\\", "/")
             mem_fs.makedirs(dirname(path), recreate=True)
@@ -319,10 +325,46 @@ class VirtualFileSystemBase:
                 (app_id,) + PureWindowsPath(vfile_data.relative_path).parts)
             stale_index = self.file_list.find(file_id)
             while stale_index != -1:
+                superseded_roots.add(self.file_list[stale_index].tree_node.root_id)
                 self.file_list.remove(stale_index)
                 stale_index = self.file_list.find(file_id)
 
-        return self.add_fs_root(app_id, mem_fs, display_name=display_name)
+        # An earlier export whose every file was just replaced is only empty
+        # folders now, and its MemoryFS would otherwise stay registered with
+        # all the old bytes until Blender closes.
+        for old_root_id in superseded_roots:
+            if not self._root_files(old_root_id):
+                self._remove_root(old_root_id)
+
+        root_id = self.add_fs_root(app_id, mem_fs, display_name=display_name).name
+        # The MemoryFS lives only in this process, so the bytes are also kept
+        # on each file's data_bytes, which is saved with the .blend. That is
+        # what reconnect_fs_root() rebuilds the root from after reopening the
+        # file (#308). Read back by the path the tree was built from, which
+        # MemoryFS has normalized, rather than by the export's own spelling.
+        for vf in self._root_files(root_id):
+            vf.data_bytes = mem_fs.readbytes(vf.fs_path)
+        root = self.file_list[root_id]
+        root.bytes_saved = True
+        return root
+
+    def _root_files(self, root_id):
+        """The file (not folder) entries under root `root_id`."""
+        return [vf for vf in self.file_list
+                if not vf.is_root and not vf.is_expandable and vf.tree_node.root_id == root_id]
+
+    def _remove_root(self, root_id):
+        """Remove root `root_id`, everything under it, and its FS instance."""
+        root_index = self.file_list.find(root_id)
+        if root_index == -1:
+            return
+        fs_key = self.file_list[root_index].fs_key
+        for i in reversed(range(len(self.file_list))):
+            vf = self.file_list[i]
+            if vf.name == root_id or vf.tree_node.root_id == root_id:
+                self.file_list.remove(i)
+        if fs_key:
+            fs_registry.unregister(fs_key)
 
     def _expand_archive(self, archive_loader_func, vf, app_id):
         # Beware of chaning this, it was observed the reference
@@ -413,9 +455,13 @@ def reconnect_fs_root(vf):
     the first time.
     """
     if not vf.absolute_path:
+        fs_instance = _export_root_from_saved_bytes(vf)
+        if fs_instance is not None:
+            fs_registry.reconnect(vf.fs_key, fs_instance)
+            return fs_instance
         raise RuntimeError(
-            f"VFS root {vf.display_name!r} has no path on disk to mount again - it only "
-            f"ever existed in memory (e.g. an export root), so it's gone for this session"
+            f"VFS root {vf.display_name!r} has no path on disk to mount again and no saved "
+            f"files to rebuild it from. If it is an export saved by an older Albam, export it again"
         )
     fs_loader = _fs_root_loader(vf)
     if not fs_loader:
@@ -426,6 +472,22 @@ def reconnect_fs_root(vf):
     fs_instance = fs_loader(vf.absolute_path)
     fs_registry.reconnect(vf.fs_key, fs_instance)
     return fs_instance
+
+
+def _export_root_from_saved_bytes(root_vf):
+    """Rebuild an export root's MemoryFS from the data_bytes add_export_root()
+    saved on its files, or None for a root that never saved them (an export
+    by an older Albam, or not an export at all).
+    """
+    if not root_vf.bytes_saved:
+        return None
+    files = root_vf.get_vfs()._root_files(root_vf.name)
+    mem_fs = MemoryFS()
+    for vf in files:
+        path = vf.fs_path
+        mem_fs.makedirs(dirname(path), recreate=True)
+        mem_fs.writebytes(path, vf.data_bytes)
+    return mem_fs
 
 
 def root_fs(root_vf):
@@ -443,8 +505,8 @@ def root_fs(root_vf):
     try:
         return fs_registry.get(root_vf.fs_key)
     except KeyError:
-        print(f"albam: mounting VFS root {root_vf.display_name!r} again "
-              f"from {root_vf.absolute_path!r}")
+        source = root_vf.absolute_path or "its saved files"
+        print(f"albam: mounting VFS root {root_vf.display_name!r} again from {source!r}")
         return reconnect_fs_root(root_vf)
 
 
@@ -456,9 +518,8 @@ def reconnect_fs_roots(dummy):
     reconnect_fs_root() for what drops them). Doing it up front here keeps
     the first read of a root predictable - a whole game folder can take a
     while to mount - while get_bytes() still falls back to mounting lazily
-    for any root this misses. Roots with no `absolute_path`
-    (add_export_root()'s in-memory FS) can't be recreated this way and are
-    left as-is - they're transient, run-only state to begin with.
+    for any root this misses. Export roots have no `absolute_path` and are
+    rebuilt from the bytes add_export_root() saved on their files instead.
     """
     for scene in bpy.data.scenes:
         albam_data = getattr(scene, "albam", None)
@@ -469,7 +530,9 @@ def reconnect_fs_roots(dummy):
             if vfs is None:
                 continue
             for vf in vfs.file_list:
-                if not (vf.is_root and vf.fs_key and vf.absolute_path):
+                # A root with neither can't be rebuilt, e.g. an export saved
+                # by an older Albam; it raises on first read instead.
+                if not (vf.is_root and vf.fs_key and (vf.absolute_path or vf.bytes_saved)):
                     continue
                 try:
                     reconnect_fs_root(vf)

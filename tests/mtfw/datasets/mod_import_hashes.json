@@ -1,106 +1,210 @@
 [
     {
         "app_id": "re5",
-        "mod_path_hash": "5d45d4682b062d49"
+        "mod_path_hash": "5d45d4682b062d49",
+        "mod_version": 156,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "re5",
-        "mod_path_hash": "2dc02b22175deb2f"
+        "mod_path_hash": "2dc02b22175deb2f",
+        "mod_version": 156,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "173cb08098423222"
+        "mod_path_hash": "173cb08098423222",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "3390a5d63b9f317f"
+        "mod_path_hash": "3390a5d63b9f317f",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "916926839ab8e987"
+        "mod_path_hash": "916926839ab8e987",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "dd25423b03eb919c"
+        "mod_path_hash": "dd25423b03eb919c",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "f8df67c155a5fa44"
+        "mod_path_hash": "f8df67c155a5fa44",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "039e168b8f266c28"
+        "mod_path_hash": "039e168b8f266c28",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "12481a468cce1f7e"
+        "mod_path_hash": "12481a468cce1f7e",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "194b895d441e1e50"
+        "mod_path_hash": "194b895d441e1e50",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "2d55a341db788f4f"
+        "mod_path_hash": "2d55a341db788f4f",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "4c304d8a87f1280e"
+        "mod_path_hash": "4c304d8a87f1280e",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "53eab2447441001e"
+        "mod_path_hash": "53eab2447441001e",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "6389ed27a4e0f0f2"
+        "mod_path_hash": "6389ed27a4e0f0f2",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "7f5f443f15af5ab4"
+        "mod_path_hash": "7f5f443f15af5ab4",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "b689bee503d1a573"
+        "mod_path_hash": "b689bee503d1a573",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "c5bb3219ed95b613"
+        "mod_path_hash": "c5bb3219ed95b613",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "f6f38dc353335258"
+        "mod_path_hash": "f6f38dc353335258",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "fcf931248e9cae88"
+        "mod_path_hash": "fcf931248e9cae88",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "205c53e65df292ee"
+        "mod_path_hash": "205c53e65df292ee",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "a084fde974de11cc"
+        "mod_path_hash": "a084fde974de11cc",
+        "mod_version": 211,
+        "has_armature": true,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "umvc3",
-        "mod_path_hash": "0e606e2025f2ba36"
+        "mod_path_hash": "0e606e2025f2ba36",
+        "mod_version": 211,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     },
     {
         "app_id": "dmc4",
-        "mod_path_hash": "13f03dbdf233833f"
+        "mod_path_hash": "13f03dbdf233833f",
+        "mod_version": 153,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": true
     },
     {
         "app_id": "dmc4",
-        "mod_path_hash": "88c385e51e659e3a"
+        "mod_path_hash": "88c385e51e659e3a",
+        "mod_version": 153,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "dmc4",
-        "mod_path_hash": "940d6a6b53e8c80e"
+        "mod_path_hash": "940d6a6b53e8c80e",
+        "mod_version": 153,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     },
     {
         "app_id": "dmc4",
-        "mod_path_hash": "5c65c23bfd23a636"
+        "mod_path_hash": "5c65c23bfd23a636",
+        "mod_version": 153,
+        "has_armature": false,
+        "has_vertex_colors": true,
+        "has_mirrors": false
     }
 ]

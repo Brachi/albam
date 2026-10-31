@@ -14,6 +14,7 @@ import os
 import pytest
 
 from tests.cie.lfs_paths import resolve_archive_hashes
+from tests.dataset_cases import applies_to, entries_for
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 DATASET_PATH = os.path.join(DATASETS_DIR, "archive_update_hashes.json")
@@ -21,6 +22,8 @@ with open(DATASET_PATH) as f:
     ARCHIVE_UPDATE_DATASET = json.load(f)
 
 BLOCK_TYPE_DAT = 0
+# Payloads with entries of their own; anything else is a single file.
+CONTAINER_EXTENSIONS = {".udas", ".dat", ".pack", ".evd"}
 
 
 class _FakeExportedFile:
@@ -44,9 +47,10 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in ARCHIVE_UPDATE_DATASET]
+        entries = entries_for(metafunc, ARCHIVE_UPDATE_DATASET)
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
         ids = [f"{d['app_id']}-{d['payload_extension'].lstrip('.')}-{d['archive_path_hash']}"
-               for d in ARCHIVE_UPDATE_DATASET]
+               for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -63,18 +67,12 @@ def test_dataset_hashes_are_in_catalog():
 
 
 @pytest.fixture(scope="session")
-def local_payload_extension(local_archive_path_hash):
-    return next(d["payload_extension"] for d in ARCHIVE_UPDATE_DATASET
-                if d["archive_path_hash"] == local_archive_path_hash)
-
-
-@pytest.fixture(scope="session")
 def archive_path(game_root, local_archive_path_hash):
     return resolve_archive_hashes(game_root, {local_archive_path_hash})[local_archive_path_hash]
 
 
-def test_rebuild_udas_shifts_blocks_after_a_resized_entry(
-        archive_path, local_payload_extension, tmp_path):
+@applies_to(payload_extension=".udas")
+def test_rebuild_udas_shifts_blocks_after_a_resized_entry(archive_path, tmp_path):
     """The path test_repacking_an_archive_unchanged_preserves_every_entry
     cannot reach: substituting an entry for itself never changes the DAT
     block's size, so shift is always 0 there and comparing every block
@@ -82,9 +80,6 @@ def test_rebuild_udas_shifts_blocks_after_a_resized_entry(
     meaningful check in that one case. Resizing an entry here forces shift
     != 0, so a descriptor after the DAT block actually has to move.
     """
-    if local_payload_extension != ".udas":
-        pytest.skip("only .udas archives are rebuilt by _rebuild_udas")
-
     from albam.engines.cie.archive import _read_payload, _rebuild_udas
     from albam.engines.cie.fs import LfsFS, read_udas_block_table
 
@@ -147,14 +142,12 @@ def test_rebuild_udas_shifts_blocks_after_a_resized_entry(
     assert {k: after[k] for k in unchanged} == unchanged
 
 
-def test_update_lfs_rebuilds_a_udas_archive(archive_path, local_payload_extension, tmp_path):
+@applies_to(payload_extension=".udas")
+def test_update_lfs_rebuilds_a_udas_archive(archive_path, tmp_path):
     """update_lfs's own extension dispatch, on the branch that matters most:
     a .udas archive with one entry replaced comes back as a whole .lfs the
     game can load, with the replacement in place and everything else intact.
     """
-    if local_payload_extension != ".udas":
-        pytest.skip("only .udas archives take this branch of update_lfs")
-
     from albam.engines.cie.archive import update_lfs
     from albam.engines.cie.fs import LfsFS
 
@@ -184,15 +177,12 @@ def test_update_lfs_rebuilds_a_udas_archive(archive_path, local_payload_extensio
     assert {k: after[k] for k in unchanged} == unchanged
 
 
-def test_update_lfs_replaces_a_single_file_archive_wholesale(
-        archive_path, local_payload_extension, tmp_path):
+@applies_to(payload_extension=lambda ext: ext not in CONTAINER_EXTENSIONS)
+def test_update_lfs_replaces_a_single_file_archive_wholesale(archive_path, tmp_path):
     """A single-file .lfs (no container inside it) is replaced outright: the
     whole payload becomes the one exported file, not something rebuilt
     around a file table it never had.
     """
-    if local_payload_extension in (".udas", ".dat", ".pack", ".evd"):
-        pytest.skip("only a single-file archive takes this branch of update_lfs")
-
     from albam.engines.cie.archive import update_lfs
     from albam.engines.cie.fs import LfsFS
 
@@ -220,15 +210,12 @@ def test_update_lfs_replaces_a_single_file_archive_wholesale(
         rebuilt_fs.close()
 
 
-def test_update_lfs_refuses_a_container_it_cannot_rebuild(
-        archive_path, local_payload_extension):
+@applies_to(payload_extension=".dat")
+def test_update_lfs_refuses_a_container_it_cannot_rebuild(archive_path):
     """.dat/.pack/.evd containers have no rebuild support (only .udas does),
     so update_lfs says so plainly rather than silently doing nothing or
     corrupting the archive.
     """
-    if local_payload_extension != ".dat":
-        pytest.skip("only the .dat entry in this dataset exercises this branch")
-
     from albam.engines.cie.archive import update_lfs
     from albam.engines.cie.fs import LfsFS
 

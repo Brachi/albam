@@ -974,6 +974,7 @@ def export_mod(bl_obj):
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
+    _check_armature_modifiers_target(bl_obj, bl_meshes)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
         _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
@@ -1266,9 +1267,19 @@ def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
     return furthest
 
 
-def _derive_mirror_ids(armature_ob, app_id, num_bones):
-    """Each bone's idx_mirror, resolved from the name the rig carries."""
+def _derive_mirror_ids(armature_ob, app_id, num_bones, src_mod):
+    """Each bone's idx_mirror, resolved from the name the rig carries.
+
+    A rig imported before Mirror Bone existed (0.5.0 and earlier) carries no
+    mirror on any bone, which would write every bone as unmirrored. Such a rig
+    keeps the source file's mirrors instead; a source with no mirrors at all
+    comes out the same either way.
+    """
     bl_bones = armature_ob.data.bones[:num_bones]
+    if not any(get_mirror(armature_ob.pose.bones[b.name], app_id) for b in bl_bones):
+        src_bones = src_mod.bones_data.bones_hierarchy if src_mod.bones_data else []
+        return [src_bones[i].idx_mirror if i < len(src_bones) else NO_MIRROR
+                for i in range(len(bl_bones))]
     index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
     ids = []
     for bl_bone in bl_bones:
@@ -1415,7 +1426,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_pale
         _check_bone_budget(dst_mod.header.num_bones)
         anim_map_ids = _derive_anim_map_ids(bl_obj, app_id, dst_mod.header.num_bones)
         parent_ids = _derive_parent_ids(bl_obj, dst_mod.header.num_bones)
-        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones)
+        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones, src_mod)
         furthest_vertex = _derive_furthest_vertex_distances(
             bl_obj, bl_meshes, dst_mod.header.num_bones)
         bones_data.bone_map = _build_bone_map(anim_map_ids)
@@ -1746,6 +1757,29 @@ def _check_armature(bl_mesh):
         if modifier.type == 'ARMATURE' and modifier.object:
             return True
     return False
+
+
+def _check_armature_modifiers_target(bl_obj, bl_meshes):
+    """Every Armature modifier has to deform with the rig being exported.
+
+    Bone palettes are built from the exported armature's bone order, while
+    vertex weights are read through the mesh's Armature modifier. If the
+    modifier points at another armature, the two orders disagree and export
+    fails much later with a bare "ValueError: 29 is not in list" (#335).
+    """
+    if bl_obj.type != 'ARMATURE':
+        return
+    for bl_mesh in bl_meshes:
+        for modifier in bl_mesh.modifiers:
+            if modifier.type != 'ARMATURE' or modifier.object is None:
+                continue
+            if modifier.object != bl_obj:
+                raise AlbamCheckFailure(
+                    "A mesh is deformed by a different armature than the one being exported",
+                    details=f"Object: {bl_mesh.name}, Armature modifier '{modifier.name}' "
+                    f"points to '{modifier.object.name}', exported armature: '{bl_obj.name}'",
+                    solution=f"Set the Armature modifier's Object to '{bl_obj.name}'"
+                )
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):

@@ -7,7 +7,9 @@ import bpy
 import pytest
 from mathutils import Matrix
 
+from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.conftest import import_export
+from tests.mtfw.mod_facts import mod_facts
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - not selectable via --mtfw-dataset like the rest
@@ -23,22 +25,17 @@ with open(MOD_SERIALIZATION_DATASET_PATH) as f:
     MOD_SERIALIZATION_DATASET = json.load(f)
 
 # The mod-21 layout (versions 210/211/212); the per-mesh tests below are
-# written against its field names and skip other versions (re5's 156).
+# written against its field names, so they run on those versions only.
 VERSIONS_MOD_21 = (210, 211, 212)
-
-
-def skip_unless_mod_21(mod):
-    version = mod.header.version
-    if version not in VERSIONS_MOD_21:
-        pytest.skip(f"checks mod-21 mesh fields (versions {VERSIONS_MOD_21}); this mod is version {version}")
 
 
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_mod_path_hash" in metafunc.fixturenames):
+        entries = entries_for(metafunc, MOD_SERIALIZATION_DATASET)
         argnames = ("local_app_id", "local_mod_path_hash")
-        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_SERIALIZATION_DATASET]
-        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_SERIALIZATION_DATASET]
+        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -57,6 +54,15 @@ def test_dataset_hashes_are_in_catalog():
         assert entry["mod_path_hash"] in catalog_hashes, (
             f"{entry['mod_path_hash']!r} ({entry['app_id']}) is not in {catalog_path!r}"
         )
+
+
+def test_dataset_facts_match_the_file(mod_imported_local, local_mod_path_hash):
+    """The facts @applies_to selects on are true of the model, so a test
+    can't lose its cases, or run on one it doesn't apply to, because an
+    entry says something its file doesn't."""
+    entry = next(e for e in MOD_SERIALIZATION_DATASET if e["mod_path_hash"] == local_mod_path_hash)
+    facts = mod_facts(mod_imported_local)
+    assert {k: entry[k] for k in facts} == facts
 
 
 def _model_space_head(mod, bone_index):
@@ -173,10 +179,9 @@ def test_export_top_level(mod_imported_local, mod_exported_local):
 APPS_BONE_REST_ROTATION_NOT_EXPORTED = {"umvc3"}
 
 
+@applies_to(has_armature=True)
 def test_export_bones_data(mod_imported_local, mod_exported_local, local_app_id, subtests):
     # TODO: matrices
-    if mod_imported_local.bones_data is None:
-        pytest.skip("model has no armature")
     if local_app_id in APPS_BONE_REST_ROTATION_NOT_EXPORTED:
         pytest.xfail("bone rest rotation is dropped on export")
     sbd = mod_imported_local.bones_data
@@ -286,8 +291,8 @@ def test_materials_data(mod_imported_local, mod_exported_local, local_app_id):
         assert src.material_hashes == dst.material_hashes
 
 
+@applies_to(mod_version=VERSIONS_MOD_21)
 def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, subtests):
-    skip_unless_mod_21(mod_imported_local)
 
     for i, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
@@ -316,7 +321,7 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
             # file first_index is the mesh's own vertex_index and last_index
             # is one less than a full vertex run past it. Comparing them
             # against the source would just restate the vertex_index gap
-            # test_meshes_data_xfail already tracks, so what is checked here
+            # test_meshes_data_buffer_placement tracks, so what is checked here
             # is that the exported file keeps the invariant internally - a
             # mesh whose index range disagrees with its vertex range reads
             # garbage geometry however the buffer got laid out.
@@ -335,8 +340,8 @@ def test_meshes_data_21(mod_imported_local, mod_exported_local, local_app_id, su
                 mod_exported_local.meshes_data.num_weight_bounds)
 
 
+@applies_to(mod_version=VERSIONS_MOD_21)
 def test_vertices(mod_imported_local, mod_exported_local, subtests):
-    skip_unless_mod_21(mod_imported_local)  # RE5 has some mess with in hands files
     assert len(mod_imported_local.meshes_data.meshes) == len(mod_exported_local.meshes_data.meshes)
     for mi, mesh in enumerate(mod_imported_local.meshes_data.meshes):
         src_mesh = mesh
@@ -354,6 +359,7 @@ def test_vertices(mod_imported_local, mod_exported_local, subtests):
                         src_vertex.normal.x == dst_vertex.normal.x'''
 
 
+@applies_to(has_vertex_colors=True)
 def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
     """
     Vertex colors must survive a round trip byte for byte, compared as a
@@ -371,8 +377,8 @@ def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
     test.
 
     A mesh whose vertex count/format doesn't match the original is a
-    separate, already tracked gap (see test_meshes_data_xfail), so it's
-    skipped rather than failed.
+    separate gap (see test_vertex_buffer_bytes), so it's left out here
+    rather than failed.
     """
     def colored(mesh):
         return Counter(
@@ -395,7 +401,9 @@ def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
         with subtests.test(mesh_index=mi):
             assert src_colors == colored(dst_mesh)
     if not checked:
-        pytest.skip("no mesh in this model carries vertex colors")
+        # has_vertex_colors put this model here, so every colored mesh changed
+        # its vertex count/format, the gap test_vertex_buffer_bytes tracks.
+        pytest.xfail("no colored mesh kept its vertex count/format on export")
 
 
 def _position(vertex):
@@ -453,19 +461,24 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
     bone_indices padding follows a "repeat the first bone" convention that
     doesn't always match the source file's own choice.
 
-    A mesh whose vertex count/format doesn't match the original is a
-    separate, already tracked gap (see test_meshes_data_xfail), so it is
-    skipped rather than failed.
+    A mesh whose vertex count/format doesn't match the original fails the
+    test, except a connective one (nonzero `connective`), which exports with
+    half its vertices (#352): those are left out and xfail the model instead.
     """
     src_meshes = mod_imported_local.meshes_data.meshes
     dst_meshes = mod_exported_local.meshes_data.meshes
     assert len(src_meshes) == len(dst_meshes)
 
+    connective_mismatches = []
     for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
+        count_and_format = (src_mesh.num_vertices, src_mesh.vertex_stride)
+        if count_and_format != (dst_mesh.num_vertices, dst_mesh.vertex_stride) and getattr(
+                src_mesh, "connective", 0):
+            connective_mismatches.append(mi)
+            continue
         with subtests.test(mesh_index=mi):
-            if (src_mesh.num_vertices, src_mesh.vertex_stride) != (
-                    dst_mesh.num_vertices, dst_mesh.vertex_stride):
-                pytest.skip("vertex count/format doesn't match the original for this mesh")
+            assert count_and_format == (dst_mesh.num_vertices, dst_mesh.vertex_stride), (
+                "vertex count/format doesn't match the original")
 
             def described(mesh):
                 return sorted(
@@ -479,6 +492,10 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
                 assert src_uv == dst_uv, f"vertex {vi}: uv changed"
                 assert _positions_match(src_pos, dst_pos), (
                     f"vertex {vi}: position {src_pos} became {dst_pos}")
+
+    if connective_mismatches:
+        pytest.xfail(f"connective meshes {connective_mismatches} export with a different "
+                     f"vertex count (#352)")
 
 
 # Header fields test_export_header doesn't touch. They had a test, but it
@@ -564,16 +581,26 @@ def test_export_header_face_counts(mod_imported_local, mod_exported_local):
     assert sheader.num_indices == dheader.num_indices
 
 
-def test_export_header_size_file(mod_imported_local, mod_exported_local):
-    # Version-gated before anything else: only 21x has a size_file field,
-    # and letting an AttributeError land under a marker is how the test this
+# re6: one model's exported file is 2 bytes longer (16692 vs 16690) with the
+# same index count, so padding or alignment rather than lost faces. Listed
+# apps xfail only on a model that differs, as with the buffer placement below
+# (#349).
+APPS_SIZE_FILE_NOT_ROUND_TRIPPED = {"re6"}
+
+
+@applies_to(mod_version=VERSIONS_MOD_21)
+def test_export_header_size_file(mod_imported_local, mod_exported_local, local_app_id):
+    # Version-gated (see the marker): only 21x has a size_file field, and
+    # letting an AttributeError land under a marker is how the test this
     # replaced went unnoticed for its whole life.
-    if mod_imported_local.header.version not in (210, 211, 212):
-        pytest.skip("no size_file on this version")
     reason = _index_count_mismatch_reason(mod_imported_local, mod_exported_local)
     if reason:
         pytest.xfail(reason)
-    assert mod_imported_local.header.size_file == mod_exported_local.header.size_file
+    src_size = mod_imported_local.header.size_file
+    dst_size = mod_exported_local.header.size_file
+    if local_app_id in APPS_SIZE_FILE_NOT_ROUND_TRIPPED and src_size != dst_size:
+        pytest.xfail(f"size_file not round-tripped ({src_size} -> {dst_size})")
+    assert src_size == dst_size
 
 
 # The only per-mesh offset that round-trips on every model measured, so it
@@ -592,7 +619,9 @@ MESH_FIELDS_BUFFER_PLACEMENT = (
     "vertex_index", "first_index", "last_index", "vertex_byte_offset",
     "index_start", "num_indices",
 )
-APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3"}
+# re6: one model shifts every buffer from mesh 6 on (vertex_index 231 vs 0,
+# num_indices 54 vs 48), so the exporter groups that mesh differently (#349).
+APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3", "re6"}
 
 
 def _mesh_field_mismatches(src_meshes, dst_meshes, fields):
@@ -607,6 +636,7 @@ def _mesh_field_mismatches(src_meshes, dst_meshes, fields):
     return mismatches
 
 
+@applies_to(mod_version=VERSIONS_MOD_21)
 def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
     """The per-mesh fields that already round-trip, asserted so they stay
     that way.
@@ -624,7 +654,6 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
     AttributeError on umvc3 - under an xfail marker, so every assertion in
     this test silently never ran for that app at all.
     """
-    skip_unless_mod_21(mod_imported_local)
     for i, src_mesh in enumerate(mod_imported_local.meshes_data.meshes):
         dst_mesh = mod_exported_local.meshes_data.meshes[i]
         with subtests.test(i=i):
@@ -632,6 +661,7 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
                 assert getattr(src_mesh, field) == getattr(dst_mesh, field), field
 
 
+@applies_to(mod_version=VERSIONS_MOD_21)
 def test_meshes_data_buffer_placement(
         mod_imported_local, mod_exported_local, local_app_id):
     """Buffer placement and index count - see MESH_FIELDS_BUFFER_PLACEMENT.
@@ -641,7 +671,6 @@ def test_meshes_data_buffer_placement(
     here asking to be removed from the set - the signal a plain
     xfail(reason="WIP") throws away.
     """
-    skip_unless_mod_21(mod_imported_local)
     mismatches = _mesh_field_mismatches(
         mod_imported_local.meshes_data.meshes,
         mod_exported_local.meshes_data.meshes,
@@ -652,7 +681,8 @@ def test_meshes_data_buffer_placement(
             pytest.xfail(
                 f"{len(mismatches)} mesh field(s) not round-tripped: {mismatches[0]}")
         # A model in a listed app that round-trips cleanly is not a
-        # contradiction - one of the three umvc3 models does - so this
+        # contradiction - one of the three umvc3 models does, and two of
+        # the three re6 ones - so this
         # passes rather than demanding the app be removed from the set.
         # Whether the app as a whole is fixed can only be judged across
         # every model at once, which a per-model test cannot see.
@@ -660,7 +690,13 @@ def test_meshes_data_buffer_placement(
     assert not mismatches, "\n".join(mismatches)
 
 
-def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, subtests):
+# re6: the guess gets 27 bones of one rig wrong (#349). Listed apps xfail only
+# on a model the guess misses, as with the buffer placement above.
+APPS_MIRRORS_NOT_GUESSED = {"re6"}
+
+
+@applies_to(has_armature=True, has_mirrors=True)
+def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, local_app_id, subtests):
     """The mirror guess is exact on the models this dataset covers.
 
     Export reads a bone's mirror off the rig rather than guessing, so this does
@@ -668,7 +704,7 @@ def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, su
     bones the rig has none for: it works by reflecting each joint across x, and
     a rig where joints stack several deep on one point can defeat it. The
     character models here do not, and a future addition that does should relax
-    this deliberately rather than silently.
+    this deliberately rather than silently (see APPS_MIRRORS_NOT_GUESSED).
 
     The armature is built from the file's own rest positions, in the same
     orientation and scale the importer uses, so this measures the algorithm
@@ -676,14 +712,7 @@ def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, su
     """
     from albam.engines.mtfw.bone import guess_mirrors
 
-    if mod_imported_local.bones_data is None:
-        pytest.skip("model has no armature")
     bones = mod_imported_local.bones_data.bones_hierarchy
-    uses_mirroring = any(
-        b.idx_mirror < len(bones) and b.idx_mirror != i for i, b in enumerate(bones)
-    )
-    if not uses_mirroring:
-        pytest.skip("model never had mirrors authored, so there is nothing to reproduce")
 
     scale = 0.01
     armature_data = bpy.data.armatures.new("mirror_check")
@@ -706,11 +735,17 @@ def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, su
         bpy.ops.object.mode_set(mode="OBJECT")
 
         guessed = guess_mirrors(armature)
-        for i, bone in enumerate(bones):
+        # A bone the file gives no mirror is expected to be absent.
+        expected = {str(i): None if bone.idx_mirror >= len(bones) else str(bone.idx_mirror)
+                    for i, bone in enumerate(bones)}
+        if local_app_id in APPS_MIRRORS_NOT_GUESSED:
+            wrong = [name for name, mirror in expected.items() if guessed.get(name) != mirror]
+            if wrong:
+                pytest.xfail(f"mirror guessed wrong on {len(wrong)} of {len(bones)} bones")
+            return
+        for i in range(len(bones)):
             with subtests.test(bone_index=i):
-                # A bone the file gives no mirror is expected to be absent.
-                expected = None if bone.idx_mirror >= len(bones) else str(bone.idx_mirror)
-                assert guessed.get(str(i)) == expected
+                assert guessed.get(str(i)) == expected[str(i)]
     finally:
         bpy.context.view_layer.objects.active = previous
         bpy.data.objects.remove(armature, do_unlink=True)
