@@ -401,7 +401,9 @@ def test_vertex_colors(mod_imported_local, mod_exported_local, subtests):
         with subtests.test(mesh_index=mi):
             assert src_colors == colored(dst_mesh)
     if not checked:
-        pytest.skip("no colored mesh kept its vertex count/format on export")
+        # has_vertex_colors put this model here, so every colored mesh changed
+        # its vertex count/format, the gap test_vertex_buffer_bytes tracks.
+        pytest.xfail("no colored mesh kept its vertex count/format on export")
 
 
 def _position(vertex):

@@ -60,6 +60,7 @@ from albam.lib.xcompress_encode import (
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from tests.xcompress_cab import independent_decompress, sevenzip
 from tests.xcompress_frames import frames_of
+from tests.skip_policy import skip_missing
 
 ARC_VERSION_ZLIB = 7
 
@@ -582,7 +583,7 @@ def shipped_stream(game_fs_root, local_entry_path_hash, tmp_path_factory):
     if arc_path is None:
         # A loose file on disk shadows the archived one of the same path, so
         # there is no shipped stream behind it in this install.
-        pytest.skip(f"{local_entry_path_hash} resolves to a loose file here")
+        skip_missing(f"{local_entry_path_hash} resolves to a loose file here")
     arc = ArcFS(arc_path)
     extensions = file_type_extensions(arc.version)
     parsed = Arc.from_file(arc_path)
@@ -679,7 +680,7 @@ def test_packing_a_real_archive_rewrites_one_entry_and_nothing_else(
     path = resolve_hashes(game_fs_root, {REPACK_ENTRY_HASH})[REPACK_ENTRY_HASH]
     arc_path = local_arc_path(game_fs_root, path, tmp_path)
     if arc_path is None:
-        pytest.skip(f"{REPACK_ENTRY_HASH} resolves to a loose file here")
+        skip_missing(f"{REPACK_ENTRY_HASH} resolves to a loose file here")
 
     original = Arc.from_file(arc_path)
     original._read()
