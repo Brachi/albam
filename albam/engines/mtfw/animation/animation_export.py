@@ -4,7 +4,6 @@ Turning actions into tracks, then laying the whole file out - every offset in
 an .lmt header is absolute, so the sizes have to be known before a single byte
 is written, which is what the two _calculate_offsets passes are for.
 """
-import ast
 from io import BytesIO
 
 import bpy
@@ -20,6 +19,7 @@ from .animation_import import (
     ROOT_MOTION_BONE_ID,
     _create_bone_mapping,
     get_block_index,
+    get_track_keys,
 )
 from .keyframes import (
     APPID_VERSION_MAPPER,
@@ -27,7 +27,6 @@ from .keyframes import (
     BONE_TRACK_TYPES,
     BOUNDS_BUFF_TYPES,
     LMTKeyFrames,
-    USAGE,
 )
 
 
@@ -153,23 +152,82 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
     return keyframes.encoded_frames
 
 
-def _update_track_data(bl_obj, encoded_tracks, joint_types, rd_stored, app_id):
-    second_props = _block_secondary_properties(bl_obj, app_id)
-    tracks_collection = getattr(second_props["tracks"], "tracks")
+def _tracks_source_action(bl_obj, app_id):
+    """The action a block's tracks were built from, or None if it has none.
+
+    A .blend saved before source_action existed has none recorded, and there
+    the block's own action stands in: import set both together, so it holds
+    until the block is pointed at another action."""
+    tracks_props = _block_secondary_properties(bl_obj, app_id)["tracks"]
+    if not tracks_props.tracks:
+        return None
+    source = getattr(tracks_props, "source_action", None)
+    return source if source is not None else _block_custom_properties(bl_obj, app_id).action
+
+
+def _stored_track_data(tracks_collection):
+    """(usage, key) -> (joint_type, reference_data) for a block's tracks.
+
+    Keys are taken by position, as the file itself does, so a chain's control
+    bone ("<id>_1") still finds the track it came from and a second export
+    agrees with the first.
+    """
+    return {
+        (item.usage, key): (item.joint_type, tuple(item.reference_data))
+        for item, key in zip(
+            tracks_collection,
+            get_track_keys((item.bone_index, item.usage) for item in tracks_collection))
+    }
+
+
+def _stored_track_data_by_action(app_id):
+    """Every block's stored track data, keyed by the action it was built from.
+
+    Taken once, before any block is rebuilt, and across every .lmt in the
+    scene: an action imported with one file can be given to a block of
+    another. Where several blocks were built from the same action, the first
+    by name wins, so the choice doesn't depend on export order.
+    """
+    by_action = {}
+    for bl_obj in sorted(bpy.data.objects, key=lambda o: o.name):
+        if bl_obj.type != "EMPTY":
+            continue
+        tracks_collection = _block_tracks(bl_obj, app_id)
+        if not tracks_collection:
+            continue
+        source = _tracks_source_action(bl_obj, app_id)
+        if source is not None:
+            by_action.setdefault(source.as_pointer(), _stored_track_data(tracks_collection))
+    return by_action
+
+
+def _update_track_data(bl_obj, encoded_tracks, action, app_id, stored_by_action):
+    tracks_props = _block_secondary_properties(bl_obj, app_id)["tracks"]
+    tracks_collection = getattr(tracks_props, "tracks")
+    # joint_type and reference_data do not come out of an action, and tracks
+    # are the only place they live, so each rebuilt track takes them from the
+    # stored track it replaces: the one with the same usage and key, among
+    # tracks built from this same action. The block's own, if they were;
+    # otherwise another block's, which is how a block given an imported
+    # action - a new one, or one that held another animation - keeps that
+    # animation's chain markers instead of losing them or inheriting the
+    # previous animation's.
+    if _tracks_source_action(bl_obj, app_id) == action:
+        stored = _stored_track_data(tracks_collection)
+    else:
+        stored = stored_by_action.get(action.as_pointer(), {})
+    bone_indices = [int(et.idx_anim_map.split("_")[0]) for et in encoded_tracks]  # workaround for 254_ values
+    keys = get_track_keys((bone_index, et.usage) for bone_index, et in zip(bone_indices, encoded_tracks))
     tracks_collection.clear()
-    for et in encoded_tracks:
+    for et, bone_index, key in zip(encoded_tracks, bone_indices, keys):
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
         item.usage = et.usage
-        item.bone_index = int(et.idx_anim_map.split("_")[0])  # workaround for 254_ values
-        item.joint_type = joint_types.get((USAGE[item.usage], str(et.idx_anim_map)), 0)
+        item.bone_index = bone_index
+        item.joint_type, item.reference_data = stored.get((et.usage, key), (0, et.reference_data))
         item.weight = 1.0
-        ref_data = et.reference_data
-        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.idx_anim_map)), None)
-        if ref_data_stored:  # and ref_data_stored != "[]":
-            ref_data = ast.literal_eval(ref_data_stored)
-        item.reference_data = ref_data
         item.raw_data = et.data
+    tracks_props.source_action = action
 
 
 def _get_action_fcurves(action, armature):
@@ -197,10 +255,9 @@ def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = _create_bone_mapping(armature, app_id)
     mapping = {value: key for key, value in mapping.items()}
     lengths = {}  # bl_obj name -> num_frames, for the blocks regenerated here
+    stored_by_action = _stored_track_data_by_action(app_id)
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
-        joint_types = {}
-        reference_data = {}
         custom_props = _block_custom_properties(bl_obj, app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
@@ -225,22 +282,6 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     num_bone_channels += 1
                     if mapping.get(bone_name, None) is None:
                         continue
-                    joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
-                    joint_types[(track_type, mapping.get(bone_name))] = joint_type
-
-                    # A chain's control bone is retargeted "<id>_1", but its
-                    # reference data was stored under the plain id the track
-                    # came from, so ask for it under that.
-                    rd_bone_id = mapping.get(bone_name)
-                    if get_chain_target(armature.pose.bones[bone_name], app_id):
-                        rd_bone_id = rd_bone_id.split("_")[0]
-                    elif bone_name == "IK_Foot.L":
-                        rd_bone_id = "23"
-                    elif bone_name == "IK_Foot.R":
-                        rd_bone_id = "19"
-                    ref_data = action.get(f"rd_{track_type}_{rd_bone_id}", None)
-                    if ref_data:
-                        reference_data[(track_type, rd_bone_id)] = ref_data
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
@@ -270,7 +311,7 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     "ofs_frame - check the armature this .lmt was imported onto against the "
                     "bones the action actually keys."
                 )
-            _update_track_data(bl_obj, track_attrs, joint_types, reference_data, app_id)
+            _update_track_data(bl_obj, track_attrs, action, app_id, stored_by_action)
     return lengths
 
 
