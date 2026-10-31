@@ -26,6 +26,7 @@ import os
 import bpy
 import pytest
 
+from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
@@ -45,11 +46,12 @@ def pytest_generate_tests(metafunc):
             "local_mod_path_hash" in metafunc.fixturenames and
             "local_lmt_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_mod_path_hash", "local_lmt_path_hash")
+        entries = entries_for(metafunc, LMT_IMPORT_DATASET)
         argvalues = [
             (d["app_id"], d["mod_path_hash"], d["lmt_path_hash"])
-            for d in LMT_IMPORT_DATASET
+            for d in entries
         ]
-        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in LMT_IMPORT_DATASET]
+        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -290,6 +292,7 @@ def _skeleton_root_bone(armature):
     raise AssertionError("the armature carries no bone mapped to anim id 0")
 
 
+@applies_to(turns_root_motion=True)
 def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
     """Root motion is a whole-character transform, rotation included.
 
@@ -324,8 +327,7 @@ def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
         if angle is not None and angle > 5:
             # the engine's axes into Blender's, the same mapping a position takes
             turning.append((action, angle, Vector((axis.x, -axis.z, axis.y)), frames))
-    if not turning:
-        pytest.skip("no block of this .lmt turns the root motion bone")
+    assert turning, "the dataset says a block of this .lmt turns the root motion bone"
 
     with _pose_restored(armature):
         for action, expected, expected_axis, (first, last) in turning:

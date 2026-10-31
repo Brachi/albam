@@ -19,6 +19,7 @@ import bpy
 import pytest
 
 from tests.cie.lfs_paths import resolve_archive_hashes
+from tests.dataset_cases import applies_to, entries_for
 from tests.cie.test_bin_serialization import _is_mesh_bin, _texture_slots
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
@@ -34,8 +35,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in EXPORT_FIDELITY_DATASET]
-        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in EXPORT_FIDELITY_DATASET]
+        entries = entries_for(metafunc, EXPORT_FIDELITY_DATASET)
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -225,6 +227,7 @@ def _bone_table(bin_bytes):
     return ids, weighted
 
 
+@applies_to(has_shared_armature=True)
 def test_model_sharing_an_armature_exports_its_own_bones(
         game_root, local_app_id, local_archive_path_hash, _clean_scene):
     """A model bound to a shared armature writes its own bone table.
@@ -260,8 +263,7 @@ def test_model_sharing_an_armature_exports_its_own_bones(
         if armature and original_ids and len(original_ids) < len(armature.data.bones):
             shared = (vfile, original_bytes, bl_object, armature, original_ids, weighted)
             break
-    if shared is None:
-        pytest.skip("no model in this archive reuses another's armature")
+    assert shared is not None, "the dataset says a model in this archive reuses another's armature"
 
     vfile, original_bytes, bl_object, armature, original_ids, weighted = shared
     exported_bytes = _export(bl_object, vfile, original_bytes, local_app_id)
