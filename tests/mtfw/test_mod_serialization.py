@@ -621,28 +621,29 @@ def test_export_header_size_file(mod_imported_local, mod_exported_local):
 # is asserted rather than excused.
 MESH_FIELDS_ROUND_TRIPPED = ("vertex_base",)
 
-# Where each mesh's vertices and indices sit in the shared buffers. Vertices
-# are grouped into blocks the way the game does it (see
-# _serialize_meshes_data), so their fields match outright. The index fields
-# only match while every face made it through import: a dropped invisible one
-# (see test_export_header_face_counts) shortens its mesh and moves every later
-# index_start.
-MESH_FIELDS_VERTEX_PLACEMENT = (
-    "vertex_index", "first_index", "last_index", "vertex_byte_offset",
-)
-MESH_FIELDS_INDEX_PLACEMENT = ("index_start", "num_indices")
 
+def _mesh_placement(mesh, with_indices):
+    """Where a mesh's vertices and indices sit in the shared buffers.
 
-def _mesh_field_mismatches(src_meshes, dst_meshes, fields):
-    mismatches = []
-    for i, src_mesh in enumerate(src_meshes):
-        dst_mesh = dst_meshes[i]
-        for field in fields:
-            src_value = getattr(src_mesh, field)
-            dst_value = getattr(dst_mesh, field)
-            if src_value != dst_value:
-                mismatches.append(f"mesh {i}: {field} {src_value} != {dst_value}")
-    return mismatches
+    Vertices are described by where they start rather than by the raw
+    fields, since the game and the exporter group meshes into blocks
+    differently: re6 6cf30bd3cd1bd1e3 puts mesh 6 in mesh 5's block (two
+    20 byte formats) at vertex_index 231, while export starts a new block per
+    format at vertex_index 0. Both point at the same bytes.
+
+    The index fields only match while every face made it through import: a
+    dropped invisible one (see test_export_header_face_counts) shortens its
+    mesh and moves every later index_start.
+    """
+    placement = {
+        "vertex start": mesh.vertex_byte_offset + mesh.vertex_index * mesh.vertex_stride,
+        "first_index from vertex_index": mesh.first_index - mesh.vertex_index,
+        "last_index from vertex_index": mesh.last_index - mesh.vertex_index,
+    }
+    if with_indices:
+        placement["index_start"] = mesh.index_start
+        placement["num_indices"] = mesh.num_indices
+    return placement
 
 
 @applies_to(mod_version=VERSIONS_MOD_21)
@@ -672,15 +673,14 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
 
 @applies_to(mod_version=VERSIONS_MOD_21)
 def test_meshes_data_buffer_placement(mod_imported_local, mod_exported_local):
-    """Buffer placement - see MESH_FIELDS_VERTEX_PLACEMENT."""
-    fields = MESH_FIELDS_VERTEX_PLACEMENT
-    if _index_counts_match(mod_imported_local, mod_exported_local):
-        fields += MESH_FIELDS_INDEX_PLACEMENT
-    mismatches = _mesh_field_mismatches(
-        mod_imported_local.meshes_data.meshes,
-        mod_exported_local.meshes_data.meshes,
-        fields,
-    )
+    """Buffer placement - see _mesh_placement."""
+    with_indices = _index_counts_match(mod_imported_local, mod_exported_local)
+    mismatches = []
+    for i, (src_mesh, dst_mesh) in enumerate(zip(
+            mod_imported_local.meshes_data.meshes, mod_exported_local.meshes_data.meshes)):
+        src = _mesh_placement(src_mesh, with_indices)
+        dst = _mesh_placement(dst_mesh, with_indices)
+        mismatches.extend(f"mesh {i}: {k} {src[k]} != {dst[k]}" for k in src if src[k] != dst[k])
     assert not mismatches, "\n".join(mismatches)
 
 

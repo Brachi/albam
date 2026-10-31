@@ -1808,7 +1808,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     vertex_offset_accumulated = 0
     current_vertex_offset_2 = 0
     vertex_offset_2_accumulated = 0
-    current_vertex_strides = None
+    current_vertex_format = None
     total_num_vertices = 0
 
     index_start = 0
@@ -1841,17 +1841,11 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
             vertex_buffer_2.extend(vertices2.to_byte_array())
-        # Consecutive meshes share a vertex block while their stride stays the
-        # same, whatever their format: a block is addressed as byte offset +
-        # index * stride, so only the stride has to agree. Grouping by format
-        # instead split re6 6cf30bd3cd1bd1e3's mesh 6 off mesh 5 (two 20 byte
-        # formats), same vertices at a different offset/index pair.
-        vertex_strides = (vertex_stride, vertex_stride_2)
-        if vertex_strides != current_vertex_strides or export_settings.no_vf_grouping:
+        if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_offset_2 = vertex_offset_2_accumulated
             current_vertex_position = 0
-            current_vertex_strides = vertex_strides
+            current_vertex_format = vertex_format
 
         if use_strips:
             triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
