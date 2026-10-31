@@ -566,7 +566,8 @@ def test_export_header_face_counts(mod_imported_local, mod_exported_local):
 
 # re6: one model's exported file is 2 bytes longer (16692 vs 16690) with the
 # same index count, so padding or alignment rather than lost faces. Listed
-# apps xfail only on a model that differs, as with the buffer placement below.
+# apps xfail only on a model that differs, as with the buffer placement below
+# (#349).
 APPS_SIZE_FILE_NOT_ROUND_TRIPPED = {"re6"}
 
 
@@ -603,7 +604,7 @@ MESH_FIELDS_BUFFER_PLACEMENT = (
     "index_start", "num_indices",
 )
 # re6: one model shifts every buffer from mesh 6 on (vertex_index 231 vs 0,
-# num_indices 54 vs 48), so the exporter groups that mesh differently.
+# num_indices 54 vs 48), so the exporter groups that mesh differently (#349).
 APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3", "re6"}
 
 
@@ -673,8 +674,8 @@ def test_meshes_data_buffer_placement(
     assert not mismatches, "\n".join(mismatches)
 
 
-# re6: the guess gets 27 bones of one rig wrong. Listed apps xfail only on a
-# model the guess misses, as with the buffer placement above.
+# re6: the guess gets 27 bones of one rig wrong (#349). Listed apps xfail only
+# on a model the guess misses, as with the buffer placement above.
 APPS_MIRRORS_NOT_GUESSED = {"re6"}
 
 
