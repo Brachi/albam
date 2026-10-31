@@ -328,6 +328,7 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("fdiffuse", "f_diffuse_param")
     copy_feature("fambient", "f_ambient_param")
     copy_feature("fuvspecularmap", "f_uv_specular_map_param")
+    copy_feature("fuvshininessmap", "f_uv_shininess_map_param")
     copy_feature("femission", "f_emission_param")
     copy_feature("focclusion", "f_occlusion_param")
     copy_feature("fdistortion", "f_distortion_param")
@@ -614,6 +615,7 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
+    USES_SHININESS_MAP = features.f_shininess_param == "FShininessMap"
     MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
@@ -683,6 +685,11 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),  # no params found
 
         set_flag("FShininess", features.f_shininess_param),
+        # FShininessMap is always followed by its texture (often the dummy one),
+        # its UV source and its channel, or the shader reads the wrong resources
+        set_texture("tShininessMap", onlyif=USES_SHININESS_MAP),
+        set_flag("FUVShininessMap", features.f_uv_shininess_map_param, onlyif=USES_SHININESS_MAP),
+        set_flag("FChannelShininessMap", onlyif=USES_SHININESS_MAP),
         set_flag("FLighting"),  # no params found
         set_flag("FBRDF", features.f_brdf_param),
         set_flag("FDiffuse", features.f_diffuse_param),
@@ -779,7 +786,9 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=T
         return None
     resource_name_friendly = resource_name.lower()
     target_tex_type = TEX_TYPE_MAP_2[resource_name_friendly]
-    texture_index = tex_types[target_tex_type]
+    # -1 becomes the dummy texture: a resource the shader requires even when
+    # no image is linked to its socket
+    texture_index = tex_types.get(target_tex_type, -1)
 
     shader_objects = get_shader_objects()
     shader_obj_data = shader_objects[resource_name]
@@ -1037,6 +1046,7 @@ def _create_mtfw_shader():
     sg.new_socket("Toon Ramp", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Toon Ramp Reverse", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Indirect User", in_out="INPUT", socket_type="NodeSocketColor")
+    sg.new_socket("Shininess Map", in_out="INPUT", socket_type="NodeSocketColor")
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -2049,6 +2059,15 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
             ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
+        ],
+        options=set()
+    )
+    f_uv_shininess_map_param : bpy.props.EnumProperty(  # noqa: F821
+        name="FUVShininessMap",  # noqa: F821
+        items=[
+            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
+            ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
+            ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
         ],
         options=set()
     )
