@@ -561,14 +561,19 @@ def export_reengine_mesh(bl_obj):
     for bl_mesh_ob, sub_mesh in zip(bl_meshes, sub_meshes):
         _export_submesh(vertex_buffer, index_buffer, buffers, sub_mesh, bl_mesh_ob, bone_name_to_slot)
         _export_submesh_fields(sub_mesh, bl_mesh_ob, material_name_to_index, app_id)
+        # ReadWriteKaitaiStruct.__setattr__ marks an object dirty on *any*
+        # attribute set, not just the ones with their own property/setter -
+        # _export_submesh_fields assigns straight onto sub_mesh's seq
+        # fields (material_index etc.). None of its ancestors' _check()
+        # recurses into it (they only check structural things like
+        # root/parent links and list lengths), so _write() would otherwise
+        # raise ConsistencyNotCheckedError on sub_mesh specifically.
+        sub_mesh._check()
     buffers.vertex_buffer = bytes(vertex_buffer)
     buffers.index_buffer = bytes(index_buffer)
-    # buffers is its own Kaitai instance (BuffersHeader) - setting its
-    # vertex_buffer/index_buffer above marks only that object dirty.
-    # src_mesh._check() below only validates _m_buffers_data's root/parent
-    # links, not its dirty flag, so buffers._check() has to run separately
-    # or _write() raises ConsistencyNotCheckedError the first time an
-    # edited mesh (as opposed to a byte-exact round trip) is exported.
+    # Same reasoning as sub_mesh above: buffers (the BuffersHeader instance)
+    # is marked dirty by the two assignments just above, and no ancestor's
+    # _check() clears it.
     buffers._check()
 
     out_stream = KaitaiStream(io.BytesIO(bytearray(len(src_bytes))))
