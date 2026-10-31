@@ -46,6 +46,17 @@ url = "https://files.pythonhosted.org/packages/4a/4a/cf14bf3b1f5ffb13c69cf5f0ea7
 sha256 = "5c6ce79177b4e193a577ecd359e26516d1d6d000a0bffd6e1010f2a46a62a561"
 
 [[packages]]
+name = "pymmh3"
+version = "0.0.5"
+
+[[packages.wheels]]
+name = "pymmh3-0.0.5-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/65/b0/738cb3e6237aa224f3bf48cd1d24f5ddf42ef7d03e6226012f9bdf7f665d/pymmh3-0.0.5-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "c47e9e735518501a3c9b719dbd795aa5d5a1dba48d9c85bae1777ab9ae6c7c45"
+
+[[packages]]
 name = "pymorton"
 version = "1.0.5"
 
@@ -77,3 +88,14 @@ url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496a
 
 [packages.wheels.hashes]
 sha256 = "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+
+[[packages]]
+name = "zstd"
+version = "1.5.7.2"
+
+[[packages.wheels]]
+name = "zstd-1.5.7.2-cp313-cp313-manylinux_2_14_x86_64.whl"
+url = "https://files.pythonhosted.org/packages/31/4e/547949993ea347ac44f5908262ebe6e85edfa7b11a5df136319789be731d/zstd-1.5.7.2-cp313-cp313-manylinux_2_14_x86_64.whl"
+
+[packages.wheels.hashes]
+sha256 = "53948be45f286a1b25c07a6aa2aca5c902208eb3df9fe36cf891efa0394c8b71"

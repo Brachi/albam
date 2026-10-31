@@ -72,6 +72,7 @@ LOCK_PATH = REPO_ROOT / "pylock.toml"
 PLATFORM_TAGS = {
     "linux-x64": (
         "manylinux2014_x86_64",
+        "manylinux_2_14_x86_64",
         "manylinux_2_17_x86_64",
         "manylinux_2_28_x86_64",
         "linux_x86_64",

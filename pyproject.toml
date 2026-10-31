@@ -19,6 +19,14 @@ dependencies = [
   # albam.engines.hexn.texture: unpack_dds(..., unswizzle="agnm") to decode
   # RE:ORC's DXT5nm-swizzled normal maps.
   "bc7enc-py==0.1.0a1",
+  # albam.engines.reng (RE Engine), registered unconditionally like every
+  # other engine (bc000aa removed the old ALBAM_ENABLE_REEN gate): zstd for
+  # PakFS.openbin()'s zstd-compressed .pak entries, pymmh3 for PakFS/
+  # ReenFS's virtual-path hashing. Both have to be base dependencies, not
+  # an extra, or the extension zip's default build (no --extra) ships an
+  # addon that fails to even register - same reasoning as bc7enc-py above.
+  "zstd==1.5.7.2",
+  "pymmh3==0.0.5",
 ]
 
 [project.optional-dependencies]
@@ -42,16 +50,6 @@ tests = [
 s3 = [
   "boto3==1.43.72",
   "smart-open[s3]==8.0.1",
-]
-
-# albam.engines.reng (RE Engine, gated behind ALBAM_ENABLE_REEN - not part
-# of a default install): zstd for PakFS.openbin()'s zstd-compressed .pak
-# entries, pymmh3 for PakFS/ReenFS's virtual-path hashing. bc7enc-py is also
-# used here (BC7 DDS texture decode, .tex import) but lives in the base
-# dependencies now - albam.engines.hexn needs it unconditionally too.
-reen = [
-  "zstd==1.5.7.2",
-  "pymmh3==0.0.5",
 ]
 
 [build-system]
