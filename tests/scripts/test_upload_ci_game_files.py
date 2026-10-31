@@ -71,14 +71,25 @@ def test_dataset_hashes_are_collected_for_every_engine():
             f"no committed dataset references any app_id of {source.__name__}")
 
 
+@pytest.fixture
+def workflow_without_re6(tmp_path):
+    """A workflow mounting only re5. Every app_id with datasets is mounted by
+    the real one, so the refusal tests below need their own to have an
+    app_id CI doesn't run."""
+    path = tmp_path / "tests.yml"
+    path.write_text('pytest --game-dir=re5::r2://"$R2_BUCKET_NAME"/re5\n')
+    return str(path)
+
+
 @pytest.mark.parametrize("app_id", ["re6"])
-def test_app_id_not_in_ci_uploads_nothing(app_id, capsys):
+def test_app_id_not_in_ci_uploads_nothing(app_id, workflow_without_re6, capsys):
     """The behaviour this tool exists to enforce: an app_id CI never mounts
     is refused before any credential, install or network access, and the
     message names the flag that would make it uploadable.
     """
     exit_code = uploader.main([
         "--app-id", app_id, "--game-root", os.path.dirname(__file__),
+        "--workflow", workflow_without_re6,
     ])
     assert exit_code == 2
     err = capsys.readouterr().err
@@ -115,7 +126,7 @@ def test_every_dataset_hash_is_in_the_catalog():
             assert path_hash in catalog, f"{path_hash} ({sources}) missing from {app_id} catalog"
 
 
-def test_refusal_still_reports_the_upload_size(tmp_path, monkeypatch, capsys):
+def test_refusal_still_reports_the_upload_size(tmp_path, monkeypatch, capsys, workflow_without_re6):
     """An app_id CI doesn't run still gets sized: the number is the point of
     the report - it says what enabling that app_id in CI would cost - so it
     has to survive the refusal rather than being skipped along with it.
@@ -133,7 +144,7 @@ def test_refusal_still_reports_the_upload_size(tmp_path, monkeypatch, capsys):
     )
 
     exit_code = uploader.main([
-        "--app-id", "re6", "--game-root", str(tmp_path),
+        "--app-id", "re6", "--game-root", str(tmp_path), "--workflow", workflow_without_re6,
     ])
     assert exit_code == 2
 
@@ -144,13 +155,14 @@ def test_refusal_still_reports_the_upload_size(tmp_path, monkeypatch, capsys):
     assert "NOTHING UPLOADED" in captured.err
 
 
-def test_unresolvable_game_root_downgrades_to_an_unsized_refusal(capsys):
+def test_unresolvable_game_root_downgrades_to_an_unsized_refusal(capsys, workflow_without_re6):
     """Sizing failures are only fatal when an upload could have followed.
     For an app_id CI doesn't run there was never going to be one, so a game
     root that can't be resolved against still produces the refusal.
     """
     exit_code = uploader.main([
         "--app-id", "re6", "--game-root", "/definitely/not/here",
+        "--workflow", workflow_without_re6,
     ])
     assert exit_code == 2
     captured = capsys.readouterr()
