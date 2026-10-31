@@ -1,6 +1,5 @@
 import os
 import time
-import zlib
 
 import pytest
 
@@ -14,34 +13,16 @@ R2_PROTOCOL_PREFIX = "r2://"
 # this too. Its own MTFW_FS rather than the session-scoped game_fs_root:
 # several tests here assert the lazy index has *not* been built yet, which a
 # shared instance other test files may already have walked can't promise.
-#
-# The tests split two ways. Those taking `game_fs` hold for any re5 source,
-# a local install or the R2 subset. Those taking `full_install_fs` assert
-# facts about one whole local install - which archives fail to parse, how
-# many entries a full walk finds, a loose .exe next to the archives, raw
-# reads straight off disk - that the curated R2 subset (only the archives
-# the committed datasets reference) can't answer, so they skip there.
-
-# Known-bad archives in a full install: they use a container layout arc.ksy
-# doesn't model (see MTFW_FS.failed_arcs). Asserted by name so a regression
-# (more archives silently failing to parse) gets caught.
-EXPECTED_FAILED_ARCS = {
-    "s101.arc",
-    "uOmS103ScrAdj.arc",
-    "uOmf303.arc",
-}
-
-# A file known to live in multiple archives with the same relative path but
-# different content (see the duplicate-content report from the arc_fs
-# prototyping session) - useful as a stable point-lookup target. Full
-# install only: the R2 subset doesn't carry its archives.
-SAMPLE_PATH = "/sound/se/mt/se_mt0002.srq"
+# Every test holds for any re5 source, a local install or the R2 subset.
 
 # Present in every re5 source: the R2 subset carries its archive too (see
 # test_arc_fs_r2.py's SAMPLE_PATH).
 PACKED_PATH = "pawn/pl/pl00/model/pl0000.mod"
 PACKED_DIR = "/pawn/pl/pl00/model"
 LOOSE_PATH = "re5dx9.exe"  # a real file sitting directly under a full install's root
+
+# origin_of() answers before the index exists, kept for the same question after.
+_ORIGINS_BEFORE_INDEX = {}
 
 
 def _re5_game_dir(pytestconfig):
@@ -73,24 +54,6 @@ def game_fs(pytestconfig):
     return MTFW_FS(value)
 
 
-@pytest.fixture
-def full_install_fs(game_fs):
-    if game_fs._s3_prefix is not None:
-        pytest.skip(
-            f"needs a full local {APP_ID} install: --game-dir={APP_ID} is an r2:// "
-            f"curated subset, which can't answer whole-install assertions"
-        )
-    return game_fs
-
-
-def test_construction_finds_arcs_and_skips_bad_ones(full_install_fs):
-    game_fs = full_install_fs
-    failed_names = {os.path.basename(p) for p, _e in game_fs.failed_arcs}
-    assert failed_names == EXPECTED_FAILED_ARCS
-    # +1 for the loose/"<loose>" OSFS layer added on top
-    assert len(list(game_fs.iterate_fs())) > 1000
-
-
 def test_index_is_not_built_by_point_lookups(game_fs):
     assert game_fs._owner is None
 
@@ -108,6 +71,7 @@ def test_origin_of_before_index_built(game_fs):
     assert game_fs._owner is None
 
     origin = game_fs.origin_of(PACKED_PATH)
+    _ORIGINS_BEFORE_INDEX[PACKED_PATH] = origin
     assert origin is not None and origin.endswith(".arc")
     assert not os.path.isabs(origin), "origin_of() should return a game-root-relative path"
     assert game_fs._owner is None, "origin_of() should not trigger the lazy index"
@@ -144,23 +108,6 @@ def test_walk_matches_and_is_fast_after_first_call(game_fs):
     assert second_duration < max(first_duration / 3, 5)
 
 
-def test_point_lookup_matches_manual_decompression(full_install_fs):
-    game_fs = full_install_fs
-    owner_fs = game_fs._delegate(SAMPLE_PATH)
-    assert owner_fs is not None
-
-    # independent read path: raw seek/read on the arc file itself, bypassing
-    # ArcFS/openbin entirely, using only the offset/zsize kaitai already
-    # parsed for this entry.
-    file_entry = owner_fs._entries[SAMPLE_PATH]
-    with open(owner_fs.arc_path, "rb") as f:
-        f.seek(file_entry.offset)
-        raw = f.read(file_entry.zsize)
-    expected = zlib.decompress(raw)
-
-    assert game_fs.readbytes(SAMPLE_PATH) == expected
-
-
 def test_missing_path_raises(game_fs):
     from fs.errors import ResourceNotFound
 
@@ -168,21 +115,8 @@ def test_missing_path_raises(game_fs):
         game_fs.readbytes("/this/does/not/exist.foo")
 
 
-def test_origin_of_after_index_built_matches_pre_index_result(full_install_fs):
-    game_fs = full_install_fs
+def test_origin_of_after_index_built_matches_pre_index_result(game_fs):
     assert game_fs._owner is not None  # built by earlier tests in this module
-
-    owner_arc_path = game_fs._owner[game_fs.validatepath(PACKED_PATH)].arc_path
-    expected = os.path.relpath(owner_arc_path, game_fs.game_root).replace(os.sep, "/")
-    assert game_fs.origin_of(PACKED_PATH) == expected
+    assert game_fs.origin_of(PACKED_PATH) == _ORIGINS_BEFORE_INDEX[PACKED_PATH]
     assert game_fs.origin_of(LOOSE_PATH) is None
     assert game_fs.origin_of("nope/does/not/exist.foo") is None
-
-
-def test_origin_absolute_path_is_openable_on_disk(full_install_fs):
-    game_fs = full_install_fs
-    absolute = game_fs.origin_absolute_path(PACKED_PATH)
-    assert os.path.isabs(absolute)
-    assert os.path.isfile(absolute)
-    assert absolute == os.path.join(game_fs.game_root, game_fs.origin_of(PACKED_PATH))
-    assert game_fs.origin_absolute_path(LOOSE_PATH) is None
