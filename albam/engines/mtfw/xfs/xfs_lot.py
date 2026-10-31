@@ -6,12 +6,79 @@ import math
 import bpy
 from mathutils import Euler, Matrix, Quaternion
 
+from ....lib.stage_placer.re5_item_ids import enum_items, item_class, item_name
+from ....registry import blender_registry
+
 
 _MARKER_TAG = "_albam_xfs_lot_marker"
 _MARKER_PATH = "_albam_xfs_path"
 _MARKER_PARENT_PATH = "_albam_xfs_parent_path"
+_MARKER_UNIT_CLASS_PATH = "_albam_xfs_unit_class_path"
+_MARKER_UNIT_CLASS = "_albam_xfs_unit_class"
+_MARKER_ITEM_ID_PATH = "_albam_xfs_item_id_path"
+_MARKER_ITEM_ID = "_albam_xfs_item_id"
 _MARKER_BASELINE = "_albam_xfs_baseline_transform"
 _MARKER_MESH_TAG = "_albam_xfs_lot_marker_mesh"
+_ITEM_ID_ENUM_ITEMS = tuple(enum_items())
+_UNKNOWN_ITEM_ENUM_ITEMS = {}
+
+
+def _item_id_enum_items(properties, _context):
+    bl_object = properties.id_data
+    items = list(_ITEM_ID_ENUM_ITEMS)
+    current_id = str(bl_object.get(_MARKER_ITEM_ID, ""))
+    try:
+        numeric_id = int(current_id)
+        is_known_id = item_class(numeric_id) is not None
+    except (TypeError, ValueError):
+        numeric_id = None
+        is_known_id = False
+    if current_id and not is_known_id:
+        # Keep dynamically-created strings alive for Blender's EnumProperty.
+        item = _UNKNOWN_ITEM_ENUM_ITEMS.get(current_id)
+        if item is None:
+            readable_name = item_name(numeric_id) if numeric_id is not None else ""
+            label = (
+                f"{current_id} — {readable_name} (no class mapping)"
+                if readable_name else f"{current_id} — unknown (preserve)"
+            )
+            item = (
+                current_id,
+                label,
+                "No class mapping is known; the original ID is preserved on export",
+            )
+            _UNKNOWN_ITEM_ENUM_ITEMS[current_id] = item
+        items.append(item)
+    return items
+
+
+def _item_id_updated(properties, context):
+    bl_object = properties.id_data
+    item_id_text = properties.item_id
+    bl_object[_MARKER_ITEM_ID] = item_id_text
+    try:
+        unit_class = item_class(int(item_id_text))
+    except (TypeError, ValueError):
+        unit_class = None
+    if unit_class is None:
+        return
+
+    bl_object[_MARKER_UNIT_CLASS] = unit_class
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _marker_mesh(unit_class, context)
+
+
+@blender_registry.register_custom_properties_object(
+    "lot_placement", ("re5",), asset_type="CONFIG"
+)
+@blender_registry.register_blender_prop
+class XFSLotPlacementProperties(bpy.types.PropertyGroup):
+    item_id: bpy.props.EnumProperty(
+        name="Item ID",
+        description="RE5 item spawned by this LOT placement",
+        items=_item_id_enum_items,
+        update=_item_id_updated,
+    )
 
 
 def _iter_xml_elements_with_paths(element, path=()):
@@ -119,6 +186,9 @@ def _lot_records(root):
             unit_class_xml.attrib.get("value", unit_class_xml.text or "")
             if unit_class_xml is not None else ""
         )
+        unit_class_path = (
+            paths_by_element[id(unit_class_xml)] if unit_class_xml is not None else None
+        )
         info = _named_property(element, "mpInfo")
         if info is None or info.tag != "classref":
             return
@@ -131,7 +201,18 @@ def _lot_records(root):
             return
         item_set_path = paths_by_element[id(item_set)]
         for item_path, item_record in item_entries(item_set, item_set_path):
-            records[item_path] = (item_record, unit_class, info, info_path)
+            item_id_xml = _named_property(item_record, "ItemId")
+            try:
+                item_id = int(item_id_xml.attrib.get("value"))
+            except (AttributeError, TypeError, ValueError):
+                item_id = None
+            item_id_path = (
+                paths_by_element[id(item_id_xml)] if item_id_xml is not None else None
+            )
+            records[item_path] = (
+                item_record, unit_class, info, info_path, unit_class_path,
+                item_id, item_id_path,
+            )
 
     for element, path in elements:
         is_mset_infos = (
@@ -363,9 +444,12 @@ def build_xfs_lot_markers(bl_object, xml, context):
     records = _lot_records(xml.getroot())
     if not records:
         return
-    for marker_index, (path, (record, unit_class, info, info_path)) in enumerate(
-        records.items()
-    ):
+    for marker_index, (
+        path,
+        (record, xml_unit_class, info, info_path, unit_class_path,
+         item_id, item_id_path),
+    ) in enumerate(records.items()):
+        unit_class = item_class(item_id, default=xml_unit_class)
         position = _xml_vector(_named_property(record, "Pos"))
         angles = _xml_vector(_named_property(record, "Ang"))
         parent_scale = _xml_vector(_named_property(info, "mScale")) or (1, 1, 1)
@@ -390,7 +474,14 @@ def build_xfs_lot_markers(bl_object, xml, context):
         marker[_MARKER_TAG] = True
         marker[_MARKER_PATH] = json.dumps(path)
         marker[_MARKER_PARENT_PATH] = json.dumps(info_path)
-        marker["_albam_xfs_unit_class"] = unit_class
+        if unit_class_path is not None:
+            marker[_MARKER_UNIT_CLASS_PATH] = json.dumps(unit_class_path)
+        marker[_MARKER_UNIT_CLASS] = unit_class
+        if item_id_path is not None:
+            marker[_MARKER_ITEM_ID_PATH] = json.dumps(item_id_path)
+        if item_id is not None:
+            marker[_MARKER_ITEM_ID] = str(item_id)
+            marker.albam_custom_properties.re5__lot_placement.item_id = str(item_id)
         _store_baseline(marker)
 
 
@@ -408,6 +499,46 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
         parent_path = tuple(json.loads(marker.get(_MARKER_PARENT_PATH, "[]")))
         parent = _xml_node_at_path(xml_root, parent_path)
         changes = _transform_changes(marker)
+
+        item_id_path_json = marker.get(_MARKER_ITEM_ID_PATH)
+        item_id_text = str(marker.get(_MARKER_ITEM_ID, ""))
+        if item_id_path_json and item_id_text:
+            item_id_node = _xml_node_at_path(
+                xml_root, tuple(json.loads(item_id_path_json))
+            )
+            try:
+                item_id = int(item_id_text)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid ItemId {item_id_text!r} on XFS lot marker {marker.name!r}"
+                ) from None
+            if "value" in item_id_node.attrib:
+                item_id_node.set("value", str(item_id))
+            else:
+                item_id_node.text = str(item_id)
+
+            mapped_unit_class = item_class(item_id)
+            if mapped_unit_class is not None:
+                unit_class_path_json = marker.get(_MARKER_UNIT_CLASS_PATH)
+                if unit_class_path_json:
+                    unit_class_node = _xml_node_at_path(
+                        xml_root, tuple(json.loads(unit_class_path_json))
+                    )
+                    if "value" in unit_class_node.attrib:
+                        unit_class_node.set("value", mapped_unit_class)
+                    else:
+                        unit_class_node.text = mapped_unit_class
+
+        unit_class_path_json = marker.get(_MARKER_UNIT_CLASS_PATH)
+        if unit_class_path_json and "mUnitClass" in marker and not item_id_path_json:
+            unit_class_node = _xml_node_at_path(
+                xml_root, tuple(json.loads(unit_class_path_json))
+            )
+            unit_class = str(marker["mUnitClass"])
+            if "value" in unit_class_node.attrib:
+                unit_class_node.set("value", unit_class)
+            else:
+                unit_class_node.text = unit_class
 
         # cSetInfoItem repeats its child cItemSetInfo transform.
         if "location" in changes:
