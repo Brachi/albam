@@ -141,9 +141,9 @@ Anything you do to the mesh is what gets written:
     texture: appended to the texture pack the model draws from, given a new
     slot in its `.tpl`, and the material points at that slot. Nothing that
     already exists changes, so other models sharing the pack are unaffected.
-    The image is encoded the way the texture it took the place of was (DXT1
-    stays DXT1, other DDS formats become DXT5, a TGA stays a TGA); a `.dds`
-    you open goes in exactly as it is.
+    The image is encoded the way the texture it took the place of was (DXT1,
+    DXT5, uncompressed DDS and TGA stay what they were, DXT3 becomes DXT5); a
+    `.dds` you open goes in exactly as it is.
   - **A texture imported for another model** gets a slot in this model's
     `.tpl` pointing at it where it already is.
   - **Editing an imported image itself** - painting on it, or unpacking it and

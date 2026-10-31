@@ -445,8 +445,9 @@ def _image_rgba(bl_image):
 
 
 def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
-    """The image encoded as a block-compressed DDS - DXT1, DXT5, BC5 or BC7 -
-    with a full mip chain unless `mipmaps` is False."""
+    """The image encoded as a DDS: block-compressed as DXT1, DXT5, BC5 or
+    BC7, or - with `fourcc` None - uncompressed A8R8G8B8. A full mip chain
+    unless `mipmaps` is False; never one for an uncompressed image."""
     from bc7enc import pack_dds
     from .dds import DDSHeader
 
@@ -457,6 +458,12 @@ def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
             details="Blender could not load it, so there is nothing to export",
             solution="Check the image's file path, or reload it",
         )
+    if fourcc is None:
+        header = DDSHeader(dwHeight=height, dwWidth=width)
+        header.set_constants()
+        header.set_variables(compressed=False)
+        return bytes(header) + _bgra(image_rgba_top_down(bl_image))
+
     blocks = pack_dds(image_rgba_top_down(bl_image), width, height, fourcc, mipmaps=mipmaps)
     header = DDSHeader(
         dwHeight=height,
@@ -470,15 +477,20 @@ def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
 
 
 def image_to_tga(bl_image):
-    """The image as an uncompressed 32-bit TGA. TGA rows run bottom-up by
-    default, which is how Blender already keeps them."""
+    """The image as an uncompressed 32-bit TGA, rows top-down (descriptor
+    0x20) - how every TGA RE4UHD ships is laid out."""
     import struct
 
     width, height = bl_image.size
-    bgra = _image_rgba(bl_image).reshape(-1, 4)[:, [2, 1, 0, 3]]
-    # Image type 2 (uncompressed true colour), 32 bits, 8 of them alpha.
-    header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 8)
-    return header + bgra.tobytes()
+    # Image type 2 (uncompressed true colour), 32 bits per pixel.
+    header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 0x20)
+    return header + _bgra(image_rgba_top_down(bl_image))
+
+
+def _bgra(rgba):
+    import numpy as np
+
+    return np.frombuffer(rgba, dtype=np.uint8).reshape(-1, 4)[:, [2, 1, 0, 3]].tobytes()
 
 
 def get_dist(point_a, point_b):

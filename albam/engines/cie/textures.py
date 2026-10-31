@@ -517,17 +517,22 @@ def _encode_like(bl_image, original):
 
     A DDS the user supplies goes in as it is: it was made for the game on
     purpose. Anything else is encoded from its pixels the way the texture it
-    replaces was: DXT1 stays DXT1, any other DDS becomes DXT5 (alpha kept),
-    mip chain only if the original had one; a pack entry that is not a DDS
-    at all is a TGA, and gets one.
+    replaces was - across the packs of an install that is DXT1, DXT3, DXT5,
+    uncompressed A8R8G8B8, or a TGA, about half of all entries being TGA.
+    DXT1 and DXT5 stay what they were, DXT3 becomes DXT5 (alpha kept, and
+    nothing here encodes DXT3), uncompressed stays uncompressed, and a mip
+    chain is written only if the original had one.
     """
     current = _image_current_bytes(bl_image)
     if current and current[:4] == b"DDS ":
         return current, "dds"
     if original[:4] != b"DDS ":
         return image_to_tga(bl_image), "tga"
-    fourcc = "DXT1" if original[84:88] == b"DXT1" else "DXT5"
+    fourcc = original[84:88]
     has_mipmaps = struct.unpack_from("<I", original, 28)[0] > 1
+    if not fourcc.strip(b"\x00"):
+        return image_to_dds(bl_image, None), "dds"
+    fourcc = "DXT1" if fourcc == b"DXT1" else "DXT5"
     return image_to_dds(bl_image, fourcc, mipmaps=has_mipmaps), "dds"
 
 
