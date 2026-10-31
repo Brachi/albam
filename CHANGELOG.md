@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Fixed
 
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
+- MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
 - Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
 - Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs

@@ -19,6 +19,7 @@ import numpy as np
 
 from ...apps import get_app_description
 from ...lib.blender import (
+    build_uvs,
     get_bone_indices_and_weights_per_vertex,
     get_colors_per_loop,
     get_mesh_vertex_groups,
@@ -446,10 +447,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
     _build_normals(me_ob, normals)
-    _build_uvs(me_ob, uvs_1, "uv1")
-    _build_uvs(me_ob, uvs_2, "uv2")
-    _build_uvs(me_ob, uvs_3, "uv3")
-    _build_uvs(me_ob, uvs_4, "uv4")
+    build_uvs(me_ob, uvs_1, "uv1")
+    build_uvs(me_ob, uvs_2, "uv2")
+    build_uvs(me_ob, uvs_3, "uv3")
+    build_uvs(me_ob, uvs_4, "uv4")
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
@@ -662,17 +663,6 @@ def _build_normals(bl_mesh, normals):
     except AttributeError:
         # blender 4.1+
         pass
-
-
-def _build_uvs(bl_mesh, uvs, name="uv"):
-    if not uvs:
-        return
-    uv_layer = bl_mesh.uv_layers.new(name=name)
-    per_loop_list = []
-    for loop in bl_mesh.loops:
-        offset = loop.vertex_index * 2
-        per_loop_list.extend((uvs[offset], uvs[offset + 1]))
-    uv_layer.data.foreach_set("uv", per_loop_list)
 
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
