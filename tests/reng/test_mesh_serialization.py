@@ -6,6 +6,7 @@ import os
 import pytest
 from kaitaistruct import KaitaiStream
 
+from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from tests.reng.conftest import reng_import_export
 
@@ -26,10 +27,21 @@ with open(MESH_SERIALIZATION_DATASET_PATH) as f:
 def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_mesh_path_hash" in metafunc.fixturenames):
+        entries = entries_for(metafunc, MESH_SERIALIZATION_DATASET)
         argnames = ("local_app_id", "local_mesh_path_hash")
-        argvalues = [(d["app_id"], d["mesh_path_hash"]) for d in MESH_SERIALIZATION_DATASET]
-        ids = [f"{d['app_id']}-{d['mesh_path_hash']}" for d in MESH_SERIALIZATION_DATASET]
+        argvalues = [(d["app_id"], d["mesh_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['mesh_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
+
+
+def test_dataset_facts_match_the_file(mesh_export_local, local_mesh_path_hash):
+    """The fact @applies_to selects test_export_weights_semantically_equal's
+    cases on is true of the model, so a file can't lose its case, or gain
+    one it doesn't support, because the dataset entry says the wrong thing.
+    """
+    entry = next(e for e in MESH_SERIALIZATION_DATASET if e["mesh_path_hash"] == local_mesh_path_hash)
+    src_mesh, _, _, _ = mesh_export_local
+    assert entry["has_bones"] == bool(src_mesh.header.offset_bones)
 
 
 def test_dataset_hashes_are_in_catalog():
@@ -343,6 +355,7 @@ def test_export_normal_edit_reaches_exported_file(reng_vfs_root):
     )
 
 
+@applies_to(has_bones=True)
 def test_export_weights_semantically_equal(mesh_export_local, subtests):
     """
     Which of the 8 joint/weight byte-slots a bone lands in isn't
@@ -350,11 +363,12 @@ def test_export_weights_semantically_equal(mesh_export_local, subtests):
     mesh.py) - so this is deliberately a semantic check (same set of
     (bone name, quantized weight) pairs per vertex), not a byte-exact one
     like test_export_geometry_byte_exact above.
+
+    Only the files mesh_serialization_hashes.json records has_bones=true
+    for have skin weights to check at all - see
+    test_dataset_facts_match_the_file.
     """
     src_mesh, dst_mesh, _, _ = mesh_export_local
-    if not src_mesh.header.offset_bones:
-        pytest.skip("this file has no bones/skin weights")
-
     buffers = src_mesh.buffers_data
     weight_acc = next(a for a in buffers.primitive_accessors if a.primitive_type == 4)
     name_offset = src_mesh.model_info.num_materials

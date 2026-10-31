@@ -1,22 +1,27 @@
 [
     {
         "app_id": "re3",
-        "mesh_path_hash": "094caac02ef9c93b"
+        "mesh_path_hash": "094caac02ef9c93b",
+        "has_bones": true
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "9e28dab100234404"
+        "mesh_path_hash": "9e28dab100234404",
+        "has_bones": true
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "755b8857f0bbc46c"
+        "mesh_path_hash": "755b8857f0bbc46c",
+        "has_bones": true
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "7e9f6f7126f42ebb"
+        "mesh_path_hash": "7e9f6f7126f42ebb",
+        "has_bones": false
     },
     {
         "app_id": "re3",
-        "mesh_path_hash": "232a628a72324dee"
+        "mesh_path_hash": "232a628a72324dee",
+        "has_bones": false
     }
 ]
