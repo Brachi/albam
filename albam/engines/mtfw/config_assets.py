@@ -16,6 +16,7 @@ from ...lib.mt_classes import (
 )
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
+from .xfs_lot import build_xfs_lot_markers, write_xfs_lot_marker_changes
 
 TRACK_TYPE = {
     "TYPE_UNKNOWN": 0,
@@ -1005,6 +1006,8 @@ def build_xfs_object(vfile: VirtualFile, context: bpy.types.Context) -> bpy.type
     bl_object = bpy.data.objects.new(name=bl_object_name, object_data=None)
 
     xml = XfsXmlImporter(xfs, extension, app_id).to_xml()
+    if extension == "lot":
+        build_xfs_lot_markers(bl_object, xml, context)
     ET.indent(xml, space="\t", level=0)
     buffer = io.StringIO()
     xml.write(buffer, encoding="unicode", xml_declaration=True)
@@ -1028,7 +1031,10 @@ def export_xfs(bl_obj):
     if xml_text is None:
         raise ValueError(f'{extension.upper()} XML text "{xml_name}" is missing')
 
-    xfs_bytes = to_xfs(ET.fromstring(xml_text.as_string()), app_id)
+    xml = ET.fromstring(xml_text.as_string())
+    if extension == "lot":
+        write_xfs_lot_marker_changes(xml, bl_obj)
+    xfs_bytes = to_xfs(xml, app_id)
     return [VirtualFileData(app_id, asset.relative_path, data_bytes=xfs_bytes)]
 
 

@@ -12632,6 +12632,20 @@ DTI_RE5 = {
     0x7FFE87E2: "PCIE_P_PAD_MISC_CNTL",
     0x430B4FF4: "rPathList",  # used
     0x60DD1B16: "rLayoutSpr",  # used
+    0x16C2D639: "cSetInfoItem",
+    0x58F29ED8: "cItemSetInfo",
+    0x04EE4467: "cSetInfoEm10",
+    0x0C9ED9BC: "cSetInfoEnemy",
+    0x155F7352: "cSetInfoOmLadderV",
+    0x221E64CE: "rSoundSeGenerator::LayoutInfo",
+    0x25A1B38C: "cSetInfoEm62",
+    0x2DAE9CFF: "sLightLinker::LightLink",
+    0x2ECAC50E: "cSetInfoInsModel",
+    0x38F66FC3: "rSoundSeGenerator",
+    0x446ECFAD: "AHShapeBoxRotate",
+    0x5898749C: "rBioBgmMap",
+    0x5BBE5DF2: "cSprite",
+    0x66B45610: "rAIFSM",
     0xFF000000: "Junk???",
 }
 
