@@ -5,7 +5,6 @@ import os
 
 import bpy
 import pytest
-from mathutils import Matrix
 
 from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.conftest import import_export
@@ -66,10 +65,18 @@ def test_dataset_facts_match_the_file(mod_imported_local, local_mod_path_hash):
 
 
 def _model_space_head(mod, bone_index):
-    """A bone's rest position in model space, from its inverse bind matrix."""
+    """A bone's rest position in model space, the way build_blender_armature
+    works it out before its axis swap and scale. On the 21 versions that
+    means taking the inverse bind matrix out of bbox space first: skipping
+    it put re6 6cf30bd3cd1bd1e3's midline at x = 0.28 instead of 0, and
+    every bone of that rig then looked unmirrorable."""
+    from albam.engines.mtfw.mesh import (
+        _create_bbox_data, _transform_inverse_bind_matrix, _transform_parent_matrix)
+
+    if getattr(mod, "app_id", None) == "umvc3":
+        return _transform_parent_matrix(mod, bone_index)
     matrix = mod.bones_data.inverse_bind_matrices[bone_index]
-    rows = [(m.x, m.y, m.z, m.w) for m in (matrix.row_1, matrix.row_2, matrix.row_3, matrix.row_4)]
-    return Matrix(rows).transposed().inverted().to_translation()
+    return _transform_inverse_bind_matrix(mod, matrix, _create_bbox_data(mod))
 
 
 def _bones_data_error(src_mod, dst_mod):
@@ -461,21 +468,21 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
     bone_indices padding follows a "repeat the first bone" convention that
     doesn't always match the source file's own choice.
 
-    A mesh whose vertex count/format doesn't match the original fails the
-    test, except a connective one (nonzero `connective`), which exports with
-    half its vertices (#352): those are left out and xfail the model instead.
+    The vertex count compared is the drawn one. A few re5 meshes (#352) start
+    their range early, at vertex_position_2 below first_index, and fill the
+    gap with copies of one placeholder vertex no index reaches: 610 identical
+    32 byte vertices on 2dc02b22175deb2f's mesh 49. Export writes only what is
+    drawn, which the GPU can't tell apart.
     """
     src_meshes = mod_imported_local.meshes_data.meshes
     dst_meshes = mod_exported_local.meshes_data.meshes
     assert len(src_meshes) == len(dst_meshes)
 
-    connective_mismatches = []
     for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
-        count_and_format = (src_mesh.num_vertices, src_mesh.vertex_stride)
-        if count_and_format != (dst_mesh.num_vertices, dst_mesh.vertex_stride) and getattr(
-                src_mesh, "connective", 0):
-            connective_mismatches.append(mi)
-            continue
+        num_vertices = src_mesh.num_vertices
+        if src_mesh.first_index > getattr(src_mesh, "vertex_position_2", src_mesh.first_index):
+            num_vertices = src_mesh.last_index - src_mesh.first_index + 1
+        count_and_format = (num_vertices, src_mesh.vertex_stride)
         with subtests.test(mesh_index=mi):
             assert count_and_format == (dst_mesh.num_vertices, dst_mesh.vertex_stride), (
                 "vertex count/format doesn't match the original")
@@ -492,10 +499,6 @@ def test_vertex_buffer_bytes(mod_imported_local, mod_exported_local, subtests):
                 assert src_uv == dst_uv, f"vertex {vi}: uv changed"
                 assert _positions_match(src_pos, dst_pos), (
                     f"vertex {vi}: position {src_pos} became {dst_pos}")
-
-    if connective_mismatches:
-        pytest.xfail(f"connective meshes {connective_mismatches} export with a different "
-                     f"vertex count (#352)")
 
 
 # Header fields test_export_header doesn't touch. They had a test, but it
@@ -535,105 +538,114 @@ def test_export_header_sizes(mod_imported_local, mod_exported_local, local_app_i
 VERSIONS_TRISTRIP = {153, 156, 212}
 
 
-def _index_count_mismatch_reason(src_mod, dst_mod):
-    """Why the exported index count differs from the source, or None if it
-    doesn't. num_indices, num_triangles and size_file are all computed from the
-    index buffer, so none of them can match while this does not.
+def _visible_triangles(mod, mesh):
+    """A mesh's triangles as the GPU draws them: decoded from strips where the
+    version uses them, each corner named by its vertex's UV and position
+    rather than its buffer slot (see test_vertex_buffer_bytes for why slots
+    can't be compared), rotated to a canonical first corner so winding is
+    kept, and without the zero-area ones, which draw nothing."""
+    from albam.lib.blender import strip_triangles_to_triangles_list
 
-    Two unrelated causes, and which one applies depends on the version.
+    indices = list(mesh.indices)
+    if mod.header.version in VERSIONS_TRISTRIP:
+        indices = strip_triangles_to_triangles_list(indices)
+    # Same rebasing the importer does, see albam/engines/mtfw/mesh.py
+    first_index = getattr(mesh, "first_index", 0)
+    if indices and min(indices) >= first_index:
+        indices = [i - first_index for i in indices]
 
-    On a triangle-list version the count is 3 per face, so it only moves when
-    faces go missing - and they do, to a Blender data model limit rather than
-    an export bug: a mesh there cannot hold two faces over the same set of
-    vertices, nor a face that repeats one. That accounts for the loss exactly
-    on the one umvc3 model in this dataset that shows it, 117729 source
-    indices against 116022 exported, being 530 faces sharing a vertex set
-    (1590 indices) plus 39 degenerate ones (117).
+    def corner(i):
+        vertex = mesh.vertices[i]
+        return _uv_bytes(vertex), tuple(round(c, 1) for c in _position(vertex))
 
-    On a tristrip version the count is a strip length, so it moves whenever
-    the strips are cut differently - and albam's own striper
-    (lib/blender.py's triangles_list_to_triangles_strip) does not reproduce
-    the game's. The count as often grows as shrinks: re5's three models here
-    come out +771, -132 and +68. Face dedup contributes as well, but is the
-    smaller term, and source restart degenerates never reach Blender at all
-    since strip_triangles_to_triangles_list drops them at decode. The
-    invariant that actually holds on these versions is the decoded triangle
-    set, not the index count - so this is a statement about what the header
-    tests can assert, not a fidelity check.
-    """
+    triangles = set()
+    for start in range(0, len(indices) - 2, 3):
+        triangle = tuple(corner(i) for i in indices[start:start + 3])
+        if len(set(triangle)) < 3:
+            continue
+        first = triangle.index(min(triangle))
+        triangles.add(triangle[first:] + triangle[:first])
+    return triangles
+
+
+def _index_counts_match(src_mod, dst_mod):
     src = sum(m.num_indices for m in src_mod.meshes_data.meshes)
     dst = sum(m.num_indices for m in dst_mod.meshes_data.meshes)
-    if src == dst:
-        return None
-    if src_mod.header.version in VERSIONS_TRISTRIP:
-        return f"strips re-cut on export, so the index count differs ({src} -> {dst})"
-    return f"duplicate/degenerate faces dropped on import ({src} -> {dst})"
+    return src == dst
 
 
-def test_export_header_face_counts(mod_imported_local, mod_exported_local):
-    reason = _index_count_mismatch_reason(mod_imported_local, mod_exported_local)
-    if reason:
-        pytest.xfail(reason)
-    sheader = mod_imported_local.header
-    dheader = mod_exported_local.header
+def test_export_header_face_counts(mod_imported_local, mod_exported_local, subtests):
+    """The header's index and triangle counts, or what they stand for where
+    they can't match.
 
-    assert sheader.num_triangles == dheader.num_triangles
-    assert sheader.num_indices == dheader.num_indices
+    Two things move the exported index count without losing anything that
+    draws. A Blender mesh can't hold a zero-area face or two faces over the
+    same vertices, so import drops those: on re6 6cf30bd3cd1bd1e3 that is
+    exactly the 36 missing indices, 4 degenerate and 8 same-winding duplicate
+    triangles. And on a tristrip version the count is a strip length, which
+    albam's striper (lib/blender.py) doesn't cut the way the game's did: re5's
+    three models come out -2, +68 and -99 or -132, the last varying by run.
 
-
-# re6: one model's exported file is 2 bytes longer (16692 vs 16690) with the
-# same index count, so padding or alignment rather than lost faces. Listed
-# apps xfail only on a model that differs, as with the buffer placement below
-# (#349).
-APPS_SIZE_FILE_NOT_ROUND_TRIPPED = {"re6"}
+    Neither changes the visible triangles, so when the count moves that is
+    what gets compared, per mesh and winding included.
+    """
+    if _index_counts_match(mod_imported_local, mod_exported_local):
+        assert mod_imported_local.header.num_triangles == mod_exported_local.header.num_triangles
+        assert mod_imported_local.header.num_indices == mod_exported_local.header.num_indices
+        return
+    src_meshes = mod_imported_local.meshes_data.meshes
+    dst_meshes = mod_exported_local.meshes_data.meshes
+    for mi, (src_mesh, dst_mesh) in enumerate(zip(src_meshes, dst_meshes)):
+        with subtests.test(mesh_index=mi):
+            assert (_visible_triangles(mod_imported_local, src_mesh) ==
+                    _visible_triangles(mod_exported_local, dst_mesh))
 
 
 @applies_to(mod_version=VERSIONS_MOD_21)
-def test_export_header_size_file(mod_imported_local, mod_exported_local, local_app_id):
+def test_export_header_size_file(mod_imported_local, mod_exported_local):
     # Version-gated (see the marker): only 21x has a size_file field, and
     # letting an AttributeError land under a marker is how the test this
     # replaced went unnoticed for its whole life.
-    reason = _index_count_mismatch_reason(mod_imported_local, mod_exported_local)
-    if reason:
-        pytest.xfail(reason)
-    src_size = mod_imported_local.header.size_file
-    dst_size = mod_exported_local.header.size_file
-    if local_app_id in APPS_SIZE_FILE_NOT_ROUND_TRIPPED and src_size != dst_size:
-        pytest.xfail(f"size_file not round-tripped ({src_size} -> {dst_size})")
-    assert src_size == dst_size
+    #
+    # size_file ends at the index buffer, padded to 4 bytes. Where import
+    # dropped invisible faces (see test_export_header_face_counts) the buffer
+    # is legitimately shorter, so the exported file is held to the same rule
+    # rather than to the source's number.
+    dheader = mod_exported_local.header
+    if _index_counts_match(mod_imported_local, mod_exported_local):
+        assert mod_imported_local.header.size_file == dheader.size_file
+    else:
+        index_buffer_end = dheader.offset_index_buffer + dheader.num_indices * 2
+        assert dheader.size_file == index_buffer_end + (-index_buffer_end % 4)
 
 
 # The only per-mesh offset that round-trips on every model measured, so it
 # is asserted rather than excused.
 MESH_FIELDS_ROUND_TRIPPED = ("vertex_base",)
 
-# Buffer placement and what follows from it. Measured across the three
-# umvc3 models in the dataset: of 51/1/31 meshes, index_start differs on
-# 50/0/0, vertex_index on 4/0/13, num_indices on 18/0/0, and first_index,
-# last_index and vertex_byte_offset differ on exactly the meshes vertex_index
-# does - they are derived from it. num_indices is the odd one out: 6918
-# against 6822 on one mesh is a real geometry difference, not a placement
-# one. The middle model round-trips all of them, so none of this is
-# inherent to the format.
-MESH_FIELDS_BUFFER_PLACEMENT = (
-    "vertex_index", "first_index", "last_index", "vertex_byte_offset",
-    "index_start", "num_indices",
-)
-# re6: one model shifts every buffer from mesh 6 on (vertex_index 231 vs 0,
-# num_indices 54 vs 48), so the exporter groups that mesh differently (#349).
-APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED = {"umvc3", "re6"}
 
+def _mesh_placement(mesh, with_indices):
+    """Where a mesh's vertices and indices sit in the shared buffers.
 
-def _mesh_field_mismatches(src_meshes, dst_meshes, fields):
-    mismatches = []
-    for i, src_mesh in enumerate(src_meshes):
-        dst_mesh = dst_meshes[i]
-        for field in fields:
-            src_value = getattr(src_mesh, field)
-            dst_value = getattr(dst_mesh, field)
-            if src_value != dst_value:
-                mismatches.append(f"mesh {i}: {field} {src_value} != {dst_value}")
-    return mismatches
+    Vertices are described by where they start rather than by the raw
+    fields, since the game and the exporter group meshes into blocks
+    differently: re6 6cf30bd3cd1bd1e3 puts mesh 6 in mesh 5's block (two
+    20 byte formats) at vertex_index 231, while export starts a new block per
+    format at vertex_index 0. Both point at the same bytes.
+
+    The index fields only match while every face made it through import: a
+    dropped invisible one (see test_export_header_face_counts) shortens its
+    mesh and moves every later index_start.
+    """
+    placement = {
+        "vertex start": mesh.vertex_byte_offset + mesh.vertex_index * mesh.vertex_stride,
+        "first_index from vertex_index": mesh.first_index - mesh.vertex_index,
+        "last_index from vertex_index": mesh.last_index - mesh.vertex_index,
+    }
+    if with_indices:
+        placement["index_start"] = mesh.index_start
+        placement["num_indices"] = mesh.num_indices
+    return placement
 
 
 @applies_to(mod_version=VERSIONS_MOD_21)
@@ -662,41 +674,20 @@ def test_meshes_data_offsets(mod_imported_local, mod_exported_local, subtests):
 
 
 @applies_to(mod_version=VERSIONS_MOD_21)
-def test_meshes_data_buffer_placement(
-        mod_imported_local, mod_exported_local, local_app_id):
-    """Buffer placement and index count - see MESH_FIELDS_BUFFER_PLACEMENT.
-
-    xfail is applied per app rather than to the whole test, and only after
-    running the checks, so an app listed as broken that starts passing fails
-    here asking to be removed from the set - the signal a plain
-    xfail(reason="WIP") throws away.
-    """
-    mismatches = _mesh_field_mismatches(
-        mod_imported_local.meshes_data.meshes,
-        mod_exported_local.meshes_data.meshes,
-        MESH_FIELDS_BUFFER_PLACEMENT,
-    )
-    if local_app_id in APPS_BUFFER_PLACEMENT_NOT_ROUND_TRIPPED:
-        if mismatches:
-            pytest.xfail(
-                f"{len(mismatches)} mesh field(s) not round-tripped: {mismatches[0]}")
-        # A model in a listed app that round-trips cleanly is not a
-        # contradiction - one of the three umvc3 models does, and two of
-        # the three re6 ones - so this
-        # passes rather than demanding the app be removed from the set.
-        # Whether the app as a whole is fixed can only be judged across
-        # every model at once, which a per-model test cannot see.
-        return
+def test_meshes_data_buffer_placement(mod_imported_local, mod_exported_local):
+    """Buffer placement - see _mesh_placement."""
+    with_indices = _index_counts_match(mod_imported_local, mod_exported_local)
+    mismatches = []
+    for i, (src_mesh, dst_mesh) in enumerate(zip(
+            mod_imported_local.meshes_data.meshes, mod_exported_local.meshes_data.meshes)):
+        src = _mesh_placement(src_mesh, with_indices)
+        dst = _mesh_placement(dst_mesh, with_indices)
+        mismatches.extend(f"mesh {i}: {k} {src[k]} != {dst[k]}" for k in src if src[k] != dst[k])
     assert not mismatches, "\n".join(mismatches)
 
 
-# re6: the guess gets 27 bones of one rig wrong (#349). Listed apps xfail only
-# on a model the guess misses, as with the buffer placement above.
-APPS_MIRRORS_NOT_GUESSED = {"re6"}
-
-
 @applies_to(has_armature=True, has_mirrors=True)
-def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, local_app_id, subtests):
+def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, subtests):
     """The mirror guess is exact on the models this dataset covers.
 
     Export reads a bone's mirror off the rig rather than guessing, so this does
@@ -704,7 +695,7 @@ def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, lo
     bones the rig has none for: it works by reflecting each joint across x, and
     a rig where joints stack several deep on one point can defeat it. The
     character models here do not, and a future addition that does should relax
-    this deliberately rather than silently (see APPS_MIRRORS_NOT_GUESSED).
+    this deliberately rather than silently.
 
     The armature is built from the file's own rest positions, in the same
     orientation and scale the importer uses, so this measures the algorithm
@@ -738,11 +729,6 @@ def test_guessing_mirrors_reproduces_the_files_own_values(mod_imported_local, lo
         # A bone the file gives no mirror is expected to be absent.
         expected = {str(i): None if bone.idx_mirror >= len(bones) else str(bone.idx_mirror)
                     for i, bone in enumerate(bones)}
-        if local_app_id in APPS_MIRRORS_NOT_GUESSED:
-            wrong = [name for name, mirror in expected.items() if guessed.get(name) != mirror]
-            if wrong:
-                pytest.xfail(f"mirror guessed wrong on {len(wrong)} of {len(bones)} bones")
-            return
         for i in range(len(bones)):
             with subtests.test(bone_index=i):
                 assert guessed.get(str(i)) == expected[str(i)]

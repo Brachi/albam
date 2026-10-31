@@ -381,6 +381,15 @@ class AnimTrackCustomProperties(CustomPropsBase):
         name="Tracks",  # noqa: F821
         description="Animation tracks for the LMT file"
     )
+    # The action these tracks were built from, set at import and at every
+    # export that rebuilds them. joint_type and reference_data don't come out
+    # of an action, so this is what tells export whose they are once the
+    # block is pointed at another action (see _stored_track_data). None on a
+    # .blend saved before it existed, where the block's own action stands in.
+    source_action: bpy.props.PointerProperty(
+        name="Tracks Built From",  # noqa: F821
+        type=bpy.types.Action,
+    )
     item_index: bpy.props.IntProperty(
         name="Item Index",  # noqa: F821
         description="Allows to select an item from the collection",

@@ -19,6 +19,7 @@ import numpy as np
 
 from ...apps import get_app_description
 from ...lib.blender import (
+    build_uvs,
     get_bone_indices_and_weights_per_vertex,
     get_colors_per_loop,
     get_mesh_vertex_groups,
@@ -446,10 +447,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
     _build_normals(me_ob, normals)
-    _build_uvs(me_ob, uvs_1, "uv1")
-    _build_uvs(me_ob, uvs_2, "uv2")
-    _build_uvs(me_ob, uvs_3, "uv3")
-    _build_uvs(me_ob, uvs_4, "uv4")
+    build_uvs(me_ob, uvs_1, "uv1")
+    build_uvs(me_ob, uvs_2, "uv2")
+    build_uvs(me_ob, uvs_3, "uv3")
+    build_uvs(me_ob, uvs_4, "uv4")
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
@@ -662,17 +663,6 @@ def _build_normals(bl_mesh, normals):
     except AttributeError:
         # blender 4.1+
         pass
-
-
-def _build_uvs(bl_mesh, uvs, name="uv"):
-    if not uvs:
-        return
-    uv_layer = bl_mesh.uv_layers.new(name=name)
-    per_loop_list = []
-    for loop in bl_mesh.loops:
-        offset = loop.vertex_index * 2
-        per_loop_list.extend((uvs[offset], uvs[offset + 1]))
-    uv_layer.data.foreach_set("uv", per_loop_list)
 
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
@@ -1051,6 +1041,12 @@ def export_mod(bl_obj):
         # A 21 file has no such entry: its meshes tile the index buffer
         # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
+    # Real 21 files pad the index buffer with zeros to a 4 byte boundary, and
+    # size_file counts that padding: an odd index count on re6 ends the
+    # buffer at 16690 and the file carries size_file 16692. Only the size
+    # needs it, the stream below starts zeroed.
+    index_buffer_padding = (
+        -len(index_buffer) % 4 if dst_mod.header.version in VERSIONS_MOD_21 else 0)
 
     final_size = sum((
         offset,
@@ -1066,6 +1062,7 @@ def export_mod(bl_obj):
         # 542808 byte one carries 542804 - while export was writing the full
         # length. size_file only exists on the 21 formats.
         len(index_buffer),
+        index_buffer_padding,
     ))
 
     dst_mod.header.size_file = final_size
