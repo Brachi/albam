@@ -192,6 +192,7 @@ def load_lmt(vfile, context):
         custom_properties = _block_props(anim_object, app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
+        tracks.source_action = action
         # Keyframes start at 1 and a constant track holds a single one, so the
         # keyed range alone would read 1 however long the block runs. The
         # manual range keeps the block's length where Blender shows it.
