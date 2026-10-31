@@ -19,14 +19,13 @@ mounted under would create ambiguous duplicate entries for the very same
 paths. local_game_fs below builds its own private MTFW_FS purely to
 resolve hashes to real paths - it is never itself added to the VFS.
 """
-import contextlib
 import json
 import os
 
 import bpy
 import pytest
 
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, _pose_restored, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
@@ -217,32 +216,6 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
     finally:
         for block, name in zip(blocks, original_names):
             block.name = name
-
-
-@contextlib.contextmanager
-def _pose_restored(armature):
-    """Put the armature's pose back exactly as it was found.
-
-    Assigning an action makes Blender write the evaluated values into the pose
-    bones themselves, and taking the action away again does not undo that - the
-    armature keeps the last frame it was on. Root motion moves a character
-    metres from the origin, so a test that animates one and walks away leaves
-    every later test measuring that pose instead of the rest one.
-    """
-    from mathutils import Matrix
-
-    animation_data = armature.animation_data
-    previous_action = animation_data and animation_data.action
-    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
-    previous_frame = bpy.context.scene.frame_current
-    try:
-        yield
-    finally:
-        if armature.animation_data is not None:
-            armature.animation_data.action = previous_action
-        for pose_bone in armature.pose.bones:
-            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
-        bpy.context.scene.frame_set(previous_frame)
 
 
 def _root_motion_track_angle(action, armature):
