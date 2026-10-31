@@ -1051,6 +1051,12 @@ def export_mod(bl_obj):
         # A 21 file has no such entry: its meshes tile the index buffer
         # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
+    # Real 21 files pad the index buffer with zeros to a 4 byte boundary, and
+    # size_file counts that padding: an odd index count on re6 ends the
+    # buffer at 16690 and the file carries size_file 16692. Only the size
+    # needs it, the stream below starts zeroed.
+    index_buffer_padding = (
+        -len(index_buffer) % 4 if dst_mod.header.version in VERSIONS_MOD_21 else 0)
 
     final_size = sum((
         offset,
@@ -1066,6 +1072,7 @@ def export_mod(bl_obj):
         # 542808 byte one carries 542804 - while export was writing the full
         # length. size_file only exists on the 21 formats.
         len(index_buffer),
+        index_buffer_padding,
     ))
 
     dst_mod.header.size_file = final_size
