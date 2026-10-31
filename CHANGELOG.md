@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
 - Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)

@@ -974,6 +974,7 @@ def export_mod(bl_obj):
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
+    _check_armature_modifiers_target(bl_obj, bl_meshes)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
         _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
@@ -1746,6 +1747,29 @@ def _check_armature(bl_mesh):
         if modifier.type == 'ARMATURE' and modifier.object:
             return True
     return False
+
+
+def _check_armature_modifiers_target(bl_obj, bl_meshes):
+    """Every Armature modifier has to deform with the rig being exported.
+
+    Bone palettes are built from the exported armature's bone order, while
+    vertex weights are read through the mesh's Armature modifier. If the
+    modifier points at another armature, the two orders disagree and export
+    fails much later with a bare "ValueError: 29 is not in list" (#335).
+    """
+    if bl_obj.type != 'ARMATURE':
+        return
+    for bl_mesh in bl_meshes:
+        for modifier in bl_mesh.modifiers:
+            if modifier.type != 'ARMATURE' or modifier.object is None:
+                continue
+            if modifier.object != bl_obj:
+                raise AlbamCheckFailure(
+                    "A mesh is deformed by a different armature than the one being exported",
+                    details=f"Object: {bl_mesh.name}, Armature modifier '{modifier.name}' "
+                    f"points to '{modifier.object.name}', exported armature: '{bl_obj.name}'",
+                    solution=f"Set the Armature modifier's Object to '{bl_obj.name}'"
+                )
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
