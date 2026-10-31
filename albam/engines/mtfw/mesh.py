@@ -1051,6 +1051,12 @@ def export_mod(bl_obj):
         # A 21 file has no such entry: its meshes tile the index buffer
         # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
+    # Real 21 files pad the index buffer with zeros to a 4 byte boundary, and
+    # size_file counts that padding: an odd index count on re6 ends the
+    # buffer at 16690 and the file carries size_file 16692. Only the size
+    # needs it, the stream below starts zeroed.
+    index_buffer_padding = (
+        -len(index_buffer) % 4 if dst_mod.header.version in VERSIONS_MOD_21 else 0)
 
     final_size = sum((
         offset,
@@ -1066,6 +1072,7 @@ def export_mod(bl_obj):
         # 542808 byte one carries 542804 - while export was writing the full
         # length. size_file only exists on the 21 formats.
         len(index_buffer),
+        index_buffer_padding,
     ))
 
     dst_mod.header.size_file = final_size
@@ -1801,7 +1808,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     vertex_offset_accumulated = 0
     current_vertex_offset_2 = 0
     vertex_offset_2_accumulated = 0
-    current_vertex_format = None
+    current_vertex_strides = None
     total_num_vertices = 0
 
     index_start = 0
@@ -1834,11 +1841,17 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
             vertex_buffer_2.extend(vertices2.to_byte_array())
-        if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
+        # Consecutive meshes share a vertex block while their stride stays the
+        # same, whatever their format: a block is addressed as byte offset +
+        # index * stride, so only the stride has to agree. Grouping by format
+        # instead split re6 6cf30bd3cd1bd1e3's mesh 6 off mesh 5 (two 20 byte
+        # formats), same vertices at a different offset/index pair.
+        vertex_strides = (vertex_stride, vertex_stride_2)
+        if vertex_strides != current_vertex_strides or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_offset_2 = vertex_offset_2_accumulated
             current_vertex_position = 0
-            current_vertex_format = vertex_format
+            current_vertex_strides = vertex_strides
 
         if use_strips:
             triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
