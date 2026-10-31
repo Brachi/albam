@@ -1,10 +1,10 @@
 name: Test
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "reen" ]
     tags: [ "v*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "reen" ]
 
 jobs:
   tests:
