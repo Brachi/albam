@@ -7,7 +7,14 @@ tagline = "Import/export game engine formats"
 maintainer = "Sebastian Aguirre Brachi;HenryOfCarim"
 type = "add-on"
 website = "https://github.com/Brachi/albam"
-blender_version_min = "4.2.0"
+# reen-only: 5.2+ only (Python 3.13), not main's 4.2+. zstd and pymmh3
+# (albam.engines.reng) ship separate per-Python-version binary wheels, and
+# Blender's extension installer has no way to pick the right one when a
+# single zip bundles wheels for two Python versions - it just keeps
+# whichever one a platform-only filter processes last, regardless of which
+# interpreter is actually running. One Python version per zip is the only
+# way around that, so 4.2/Python 3.11 support is dropped on this branch.
+blender_version_min = "5.2.0"
 license = ["MIT"]
 platforms = ["windows-x64", "linux-x64"]
 

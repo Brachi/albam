@@ -81,10 +81,11 @@ PLATFORM_TAGS = {
     "macos-x64": ("macosx_10_9_x86_64", "macosx_11_0_x86_64"),
     "macos-arm64": ("macosx_11_0_arm64",),
 }
-# The Python versions Blender bundles across the releases this addon supports
-# (4.2 ships 3.11, 5.2 ships 3.13), mirroring pyproject.toml's bpy pins. A
-# dependency with cp-tagged wheels resolves to a different file for each.
-TARGET_PYTHON_VERSIONS = ("3.11", "3.13")
+# The Python version Blender bundles across the releases this addon
+# supports, mirroring pyproject.toml's bpy pin. reen-only: just 5.2's 3.13,
+# not main's 4.2/3.11 too - see blender_manifest.toml's blender_version_min
+# comment for why a single zip can't cover both.
+TARGET_PYTHON_VERSIONS = ("3.13",)
 
 
 def _load_pyproject():

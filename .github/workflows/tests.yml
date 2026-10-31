@@ -35,11 +35,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Only the 3.13 leg measures coverage: the 4.2 leg contributed 2
-        # covered lines in albam/, and the sys.monitoring core that makes it
-        # cheap (pyproject.toml) needs Python 3.12+.
-        bpy: [{"bpy-version": "4.2.0", "python-version": "3.11", "coverage": false},
-              {"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
+        # reen-only: just the 5.2/3.13 leg, not main's 4.2/3.11 one too -
+        # see blender_manifest.toml's blender_version_min comment for why a
+        # single zip (and so a single Python version) is all this branch
+        # supports now.
+        bpy: [{"bpy-version": "5.2.0", "python-version": "3.13", "coverage": true}
              ]
     steps:
     - uses: actions/checkout@v5

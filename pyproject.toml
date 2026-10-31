@@ -4,13 +4,14 @@ version = "0.5.0"
 description = "Import and Export game engine formats in Blender"
 readme = "README.md"
 authors = [ {name = "Sebastian Aguirre Brachi"}, {name = "Henry of Carim"} ]
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.13, <3.14"
 license = {file = "LICENSE"}
 keywords = ["modding", "game-modding", "blender-addon", "import", "export"]
 
 dependencies = [
-  'bpy == 4.2.0; python_version == "3.11.*"',
-  'bpy == 5.2.0; python_version == "3.13.*"',
+  # reen-only: Blender 5.2+ (Python 3.13) only, not main's 4.2+/3.11 too -
+  # see blender_manifest.toml's blender_version_min comment.
+  "bpy==5.2.0",
   "fs==2.4.16",
   # `fs` breaks under setuptools 81+ (drops pkg_resources).
   "setuptools==80.10.2",
