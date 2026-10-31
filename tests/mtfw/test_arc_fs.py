@@ -5,6 +5,8 @@ import pytest
 
 from albam.engines.mtfw.arc_fs import MTFW_FS
 
+from tests.skip_policy import skip_missing
+
 APP_ID = "re5"
 R2_PROTOCOL_PREFIX = "r2://"
 
@@ -40,17 +42,17 @@ def game_fs(pytestconfig):
 
     value = _re5_game_dir(pytestconfig)
     if not value:
-        pytest.skip(f"No --game-dir supplied for app_id={APP_ID!r}")
+        skip_missing(f"No --game-dir supplied for app_id={APP_ID!r}")
     if value.startswith(R2_PROTOCOL_PREFIX):
         r2_kwargs = resolve_r2_source(value)
         if r2_kwargs is None:
-            pytest.skip(
+            skip_missing(
                 f"--game-dir={APP_ID}::{value} requested but R2 isn't configured "
                 f"(empty bucket, missing s3 extras, or missing credentials - see .env.example)"
             )
         return MTFW_FS.from_s3(**r2_kwargs)
     if not os.path.isdir(value):
-        pytest.skip(f"--game-dir={APP_ID}::{value} does not exist")
+        skip_missing(f"--game-dir={APP_ID}::{value} does not exist")
     return MTFW_FS(value)
 
 

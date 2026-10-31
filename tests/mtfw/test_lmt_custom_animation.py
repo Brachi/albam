@@ -4,6 +4,7 @@ import bpy
 import pytest
 
 from tests.mtfw.conftest import action_fcurves
+from tests.skip_policy import requires_blender
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 
@@ -245,6 +246,8 @@ def _first_block_with_location_action(bl_objects, app_id):
     return None, None, None
 
 
+# Action slots and layers replace the flat Action.fcurves from Blender 5.0.
+@requires_blender(5, 0)
 def test_export_reads_the_armatures_channelbag_not_the_first(
     imported_lmt_blocks, local_app_id, scratch_action
 ):
@@ -262,10 +265,8 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
 
     armature, lmt_path, bl_objects = imported_lmt_blocks
     target_block, action, fcurve = _first_block_with_location_action(bl_objects, local_app_id)
-    if action is None:
-        pytest.skip("No block with a location fcurve to rebuild")
-    if hasattr(action, "fcurves"):
-        pytest.skip("Blender exposes flat Action.fcurves here - slots don't apply")
+    assert action is not None, "the dataset's .lmt should have a block with a location fcurve"
+    assert not hasattr(action, "fcurves"), "flat Action.fcurves on this Blender: fix @requires_blender"
 
     axis_index = fcurve.array_index
     expected_values = [kp.co[1] for kp in fcurve.keyframe_points]
@@ -319,6 +320,7 @@ def test_export_reads_the_armatures_channelbag_not_the_first(
     )
 
 
+@requires_blender(5, 0)
 def test_export_action_without_layers_does_not_crash(imported_lmt_blocks, local_app_id, scratch_action):
     """A brand-new action has no layers at all, so the fixed
     layers[0].strips[0].channelbags[0] lookup raises IndexError instead of
@@ -326,10 +328,8 @@ def test_export_action_without_layers_does_not_crash(imported_lmt_blocks, local_
     """
     armature, _lmt_path, bl_objects = imported_lmt_blocks
     target_block, action, _fcurve = _first_block_with_location_action(bl_objects, local_app_id)
-    if action is None:
-        pytest.skip("No block with an action to replace")
-    if hasattr(action, "fcurves"):
-        pytest.skip("Blender exposes flat Action.fcurves here - layers don't apply")
+    assert action is not None, "the dataset's .lmt should have a block with an action to replace"
+    assert not hasattr(action, "fcurves"), "flat Action.fcurves on this Blender: fix @requires_blender"
 
     empty_action = scratch_action(f"{action.name}.empty")
     assert len(empty_action.layers) == 0
