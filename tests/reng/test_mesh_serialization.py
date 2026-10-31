@@ -266,7 +266,8 @@ def test_export_normals_tangents_semantically_equal(mesh_export_local):
 
     for sub_mesh in _sub_meshes(src_mesh):
         index_buffer = buffers.index_buffer
-        indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+        indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
+            index_buffer, sub_mesh.pos_index_buffer * 2)
         num_vertices = len(set(indices))
 
         src_n, src_t, src_s = _decode_nor_tan(src_mesh, sub_mesh, num_vertices, nor_tan_acc)
@@ -327,7 +328,8 @@ def test_export_normal_edit_reaches_exported_file(reng_vfs_root):
     _, nor_tan_acc, _ = buffers.primitive_accessors[0:3]
     sub_mesh = _sub_meshes(src_mesh)[0]
     index_buffer = buffers.index_buffer
-    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
+        index_buffer, sub_mesh.pos_index_buffer * 2)
     num_vertices = len(set(indices))
 
     src_n, _, _ = _decode_nor_tan(src_mesh, sub_mesh, num_vertices, nor_tan_acc)
@@ -362,7 +364,8 @@ def test_export_weights_semantically_equal(mesh_export_local, subtests):
 
     for i, (src_sm, dst_sm) in enumerate(zip(src_sub_meshes, dst_sub_meshes)):
         index_buffer = buffers.index_buffer
-        indices = (ctypes.c_ushort * src_sm.num_indices).from_buffer_copy(index_buffer, src_sm.pos_index_buffer * 2)
+        indices = (ctypes.c_ushort * src_sm.num_indices).from_buffer_copy(
+            index_buffer, src_sm.pos_index_buffer * 2)
         num_vertices = len(set(indices))
 
         src_weights = _decode_weight_pairs(src_mesh, src_sm, num_vertices, weight_acc, name_offset)

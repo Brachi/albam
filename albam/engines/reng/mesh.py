@@ -144,7 +144,8 @@ def build_blender_mesh(re_mesh, sub_mesh, app_id):
 @blender_registry.register_blender_prop
 class ReengineSubMeshCustomProperties(bpy.types.PropertyGroup):
     is_quad: bpy.props.BoolProperty(name="Quad Topology", default=False, options=set())  # noqa: F821
-    vertex_buffer_index: bpy.props.IntProperty(name="Vertex Buffer Index", default=0, options=set())  # noqa: F821
+    vertex_buffer_index: bpy.props.IntProperty(  # noqa: F821
+        name="Vertex Buffer Index", default=0, options=set())
 
     def copy_custom_properties_to(self, dst_obj):
         for attr_name in self.__annotations__:
@@ -249,7 +250,8 @@ def _build_weights(re_mesh, sub_mesh, num_vertices, vertex_buffer, bl_mesh_ob):
 
 def _original_submesh_vertex_count(buffers, sub_mesh):
     index_buffer = buffers.index_buffer
-    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(index_buffer, sub_mesh.pos_index_buffer * 2)
+    indices = (ctypes.c_ushort * sub_mesh.num_indices).from_buffer_copy(
+        index_buffer, sub_mesh.pos_index_buffer * 2)
     return len(set(indices))
 
 
