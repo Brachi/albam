@@ -498,8 +498,12 @@ def export_smd(bl_obj):
         changed += 1
 
     models = _write_models(bl_obj, data, smd, list(placements.values()) + added)
+    # Only entries nothing places any more are free: the unused ones the room
+    # shipped with and the ones deleted above - not the ones import could
+    # not build, which are kept as they are.
     free = [index for index, entry in enumerate(smd.entries)
-            if not entry.is_placed or index not in placements]
+            if not entry.is_placed or (index in imported and (
+                index not in placements or not _has_mesh(placements[index])))]
     appended = _place_new_entries(bl_obj, data, bytes(asset.original_bytes), smd, added, free)
     print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten, "
           f"{len(added)} added ({appended} past the end of the table), "
@@ -887,7 +891,7 @@ def _new_entry(bl_placement, original, smd, entry_offsets):
         )
     entry = bytearray(original[entry_offsets[template]:entry_offsets[template] + SMD_ENTRY_SIZE])
     struct.pack_into(ENTRY_TRANSFORM_FORMAT, entry, 0,
-                     *_matrix_to_entry(_placement_matrix(bl_placement)))
+                     *_matrix_to_entry(_placement_matrix(bl_placement), bl_placement.name))
     entry[ENTRY_MODEL_ID_OFFSET] = model_id
     if tpl_id is not None:
         entry[ENTRY_MODEL_ID_OFFSET + 1] = tpl_id
