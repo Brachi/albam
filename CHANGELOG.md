@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Autosetter now names a texture that never had a path set after its in-game slot
+  (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
+  plugged into. A texture already carrying its own suffix (e.g. one re-imported from a
+  real game file) is left alone
 
 ### Fixed
 
