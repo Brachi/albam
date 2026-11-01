@@ -30,9 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
   game file), wired into slots with different suffixes, or whose suffixed name another
   image already uses is left unsuffixed
+- "Copy report to clipboard" button on the import/export error popup, so a #support
+  user can paste the full error and traceback directly, without being asked to find
+  it in the system console
 
 ### Fixed
 
+- Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
 - Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
@@ -48,6 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertex colors losing precision on every import-export round trip
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
+- Installing the addon from GitHub's "Code > Download ZIP" instead of a release zip crashing with a bare `ModuleNotFoundError` and no indication of why
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
 - Animation blocks that never move losing their length on export, so a static
   hold played back as a single frame
