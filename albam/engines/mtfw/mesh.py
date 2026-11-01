@@ -1665,29 +1665,38 @@ def _get_bone_transforms(armature, mod):
 
 
 def _normalize_uv(uv_x, uv_y):
-    """Flip UV for .dds and replace forbidden for half float -0.0 values.
-
-    Every UV slot (uv/uv2/uv3/uv4) packs both coordinates as half floats
-    right after calling this, so it is also the one place to catch a value
-    too large for that format to hold - 65520 is where pack('e', ...) itself
-    starts raising OverflowError (measured: 65519 packs fine, 65520 doesn't),
-    not a number worth hand-maintaining here.
-    """
+    """Flip UV for .dds and replace forbidden for half float -0.0 values"""
     uv_y *= -1
     uv_y += 1
     uv_y = 0.0 if uv_y == -0.0 else uv_y
     uv_x = 0.0 if uv_x == -0.0 else uv_x
-    for value in (uv_x, uv_y):
-        try:
-            pack('e', value)
-        except OverflowError:
-            raise AlbamCheckFailure(
-                message="A UV coordinate is too large to export",
-                details=(f"{value} doesn't fit in the half-float range this format stores "
-                         "UVs in (roughly -65504 to 65504)"),
-                solution="Scale the mesh's UVs back into a normal range (close to 0-1) before exporting",
-            )
     return uv_x, uv_y
+
+
+def _check_uv_range(bl_mesh, vertex_table, layer_index):
+    """Refuse a UV layer with a coordinate too large to pack as a half float.
+
+    Every UV slot stores u and the flipped v (1 - v, see _normalize_uv) with
+    pack('e', ...), which raises OverflowError from a magnitude of 65520
+    (the largest finite half float is 65504; values in between round down
+    to it). Packing the layer's most extreme coordinate once tells whether
+    any of them overflows, with pack itself as the authority on the limit.
+    """
+    uvs = vertex_table.uv[layer_index]
+    if not uvs:
+        return
+    u, v = max(uvs.values(), key=lambda uv: max(abs(uv[0]), abs(1 - uv[1])))
+    try:
+        pack('ee', u, 1 - v)
+    except OverflowError:
+        layer_name = bl_mesh.data.uv_layers[layer_index].name
+        raise AlbamCheckFailure(
+            message=f"Mesh {bl_mesh.name!r} has a UV coordinate too large to export",
+            details=(f"UV map {layer_name!r} (UV slot {layer_index + 1}) has a vertex at "
+                     f"({u}, {v}), the half-float format UVs are stored in only holds "
+                     "values up to about 65504"),
+            solution="Scale that UV map back into a normal range (close to 0-1) before exporting",
+        )
 
 
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
@@ -1802,13 +1811,32 @@ def _check_armature_modifiers_target(bl_obj, bl_meshes):
 
 
 # num_vertices and last_index are each a u2 on every mod version (mod_21,
-# mod_153, mod_156) - last_index is current_vertex_position (the running
+# mod_153, mod_156). last_index is current_vertex_position (the running
 # total across every mesh sharing one vertex block, see no_vf_grouping
-# below) plus this mesh's own count, so it is the one that actually
-# overflows first. Measured error when it does: struct.error: ushort
-# format requires 0 <= number <= 65535, raised deep inside Kaitai's
-# write_u2le with no indication of which mesh or why.
-MAX_MESH_LAST_INDEX = 0xFFFF
+# below) plus this mesh's own count minus one, so it overflows when meshes
+# add up; num_vertices overflows on its own for a single mesh of exactly
+# 65536 vertices, where last_index still fits. Either way Kaitai's
+# write_u2le would raise a bare struct.error naming neither the mesh nor
+# the field.
+MAX_MESH_U2 = 0xFFFF
+
+
+def _raise_vertex_count_failure(mesh_name, num_vertices, vertex_position):
+    if vertex_position:
+        details = (f"it starts at vertex index {vertex_position} of a block it shares with "
+                   f"the meshes before it of the same vertex format, and its {num_vertices} "
+                   f"vertices would take that block past index {MAX_MESH_U2}")
+        solution = ("Enable \"Don't group meshes by vertex format\" in the export settings so "
+                    "each mesh gets its own vertex block, or split the meshes into smaller pieces")
+    else:
+        details = (f"it has {num_vertices} vertices after splitting at UV seams and hard "
+                   f"edges, the format allows at most {MAX_MESH_U2} per mesh")
+        solution = "Split the mesh into smaller pieces"
+    raise AlbamCheckFailure(
+        message=f"Mesh {mesh_name!r} has too many vertices for the format",
+        details=details,
+        solution=solution,
+    )
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
@@ -1863,21 +1891,16 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
             vertex_buffer_2.extend(vertices2.to_byte_array())
-        if current_vertex_position + vertex_table.count - 1 > MAX_MESH_LAST_INDEX:
-            raise AlbamCheckFailure(
-                message=f"Mesh {bl_mesh.name!r} has too many vertices for the format",
-                details=(f"it would end at vertex index "
-                         f"{current_vertex_position + vertex_table.count - 1}, "
-                         f"the format only addresses up to {MAX_MESH_LAST_INDEX}"),
-                solution=("Split the mesh into smaller pieces. If several meshes sharing the "
-                          "same vertex format are what pushed it over the limit, enabling "
-                          "\"Don't group meshes by vertex format\" may also help"),
-            )
         if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_offset_2 = vertex_offset_2_accumulated
             current_vertex_position = 0
             current_vertex_format = vertex_format
+
+        num_vertices = vertex_table.count
+        last_index = current_vertex_position + num_vertices - 1
+        if num_vertices > MAX_MESH_U2 or last_index > MAX_MESH_U2:
+            _raise_vertex_count_failure(bl_mesh.name, num_vertices, current_vertex_position)
 
         if use_strips:
             triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
@@ -1896,7 +1919,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
-        num_vertices = vertex_table.count
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1927,8 +1949,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         mesh.vertex_base = vertex_base
         mesh.vertex_index = current_vertex_position
         mesh.first_index = current_vertex_position
-        mesh.last_index = current_vertex_position + \
-            mesh.num_vertices - 1  # XXX only a short!
+        mesh.last_index = last_index
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
@@ -2156,6 +2177,15 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         max_bones_per_vertex = MAX_BONES
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
+    uv_slots_used = (
+        vertex_format not in VERTEX_FORMATS_BRIDGE,
+        vertex_format in VERTEX_FORMATS_UV2,
+        vertex_format in VERTEX_FORMATS_UV3,
+        vertex_format in VERTEX_FORMATS_UV4,
+    )
+    for layer_index, used in enumerate(uv_slots_used):
+        if used:
+            _check_uv_range(bl_mesh, vertex_table, layer_index)
     vtx_stream = KaitaiStream(
         BytesIO(bytearray(vtx_stride * vertex_count)))
     if has_vertex_buffer_2:
