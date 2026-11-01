@@ -273,7 +273,7 @@ def _warn_about_unreachable_textures(app_id, referenced_texture_paths, exported,
         _normalize_texture_key(vf.relative_path.rpartition(".")[0])
         for vf in vfs.file_list
         if (not vf.is_root and not vf.is_expandable and
-            vf.app_id == app_id and vf.extension in TEXTURE_EXTENSIONS)
+            vf.app_id == app_id and vf.extension.lower() in TEXTURE_EXTENSIONS)
     }
     missing -= mounted_texture_paths
     if not missing:
@@ -318,6 +318,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     app_id = vf_sorted[0].app_id if vf_sorted else None
     old_texture_paths = set()
     new_texture_paths = set()
+    unparsed_texture_sources = []
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -342,6 +343,12 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
                 new_paths = _texture_paths_from_mrl(vf_data, app_id)
             if new_paths is not None:
                 new_texture_paths |= new_paths
+            else:
+                # Can't tell what this one references, so a dangling
+                # texture reference inside it would go unseen below rather
+                # than un-warned-about - say so instead of claiming a clean
+                # bill of health this file never earned.
+                unparsed_texture_sources.append(vf.relative_path)
 
             # Collect old texture refs before overwriting - only needed for
             # the orphan-removal feature itself.
@@ -384,6 +391,15 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
                 preview += ", ..."
             show_message_box(
                 f"Removed {len(removed)} orphaned texture(s): {preview}")
+
+    if unparsed_texture_sources:
+        names = ", ".join(ntpath.basename(p) for p in unparsed_texture_sources)
+        show_message_box(
+            f"Couldn't check whether every texture {names} references is reachable "
+            "(failed to parse); export continued anyway",
+            title="Warning",
+            icon='ERROR',
+        )
 
     _warn_about_unreachable_textures(app_id, new_texture_paths, exported, arc_version)
 

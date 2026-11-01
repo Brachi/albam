@@ -145,6 +145,25 @@ def test_still_warns_when_the_mounted_texture_belongs_to_a_different_app(
     assert len(recorded_warnings) == 1
 
 
+def test_quiet_when_a_mounted_texture_s_extension_is_upper_case(recorded_warnings):
+    """A real game folder (MTFW_FS, not an .arc) mounts whatever case its
+    files are actually named with on disk - vf.extension is read straight
+    off that name, so a `.TEX` file must still satisfy the check rather
+    than being silently filtered out by a case-sensitive comparison."""
+    mem_fs = MemoryFS()
+    mem_fs.makedirs("/chr/pl/pl00", recreate=True)
+    mem_fs.writebytes("/chr/pl/pl00/pl_vtf5.TEX", b"fake dds bytes")
+    vfs = bpy.context.scene.albam.vfs
+    root = vfs.add_fs_root("re1", mem_fs, display_name="test-372-upper-case-extension")
+    try:
+        _warn_about_unreachable_textures(
+            "re1", {"chr\\pl\\pl00\\pl_vtf5"}, exported={}, arc_version=ARC_VERSION_ZLIB)
+    finally:
+        vfs._remove_root(root.name)
+
+    assert recorded_warnings == []
+
+
 def test_warning_lists_and_pluralizes_several_missing_paths(recorded_warnings):
     missing = {f"chr\\pl\\pl{i:02d}\\pl_vtf{i}" for i in range(10)}
 
@@ -200,3 +219,23 @@ def test_update_arc_stays_quiet_when_the_renamed_texture_is_part_of_the_same_exp
     ], remove_unused_textures=False)
 
     assert recorded_warnings == []
+
+
+def test_update_arc_says_so_when_an_mrl_cannot_be_checked_at_all(
+        recorded_warnings, monkeypatch, tmp_path):
+    """_texture_paths_from_mrl returning None (unparseable) must not be read
+    as "this file references nothing" - that would silently wave through
+    exactly the dangling reference this feature exists to catch. It gets
+    its own, differently-worded notice instead of a plain "reachable" check
+    it was never actually able to run."""
+    monkeypatch.setattr(archive_mod, "_texture_paths_from_mrl", lambda data, app_id: None)
+
+    arc_path = tmp_path / "test.arc"
+    _arc_with_one_dummy_entry(arc_path)
+
+    update_arc(str(arc_path), [FakeVFile("chr\\pl\\pl00\\pl00.mrl", app_id="re1")],
+               remove_unused_textures=False)
+
+    assert len(recorded_warnings) == 1
+    assert "pl00.mrl" in recorded_warnings[0]
+    assert "failed to parse" in recorded_warnings[0]
