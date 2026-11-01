@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Export now encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
 
 ### Fixed
 

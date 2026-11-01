@@ -13,7 +13,7 @@ from ...lib.blender import (
     get_bl_materials,
     is_blimage_dds,
 )
-from ...lib.dds import DDSHeader
+from ...lib.dds import DDSHeader, encode_bl_image_to_dds
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
@@ -1060,12 +1060,140 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             setattr(dst, name, hex(src_value))
 
 
+# Per-app_id, per-slot compression_format codes: (BM alpha, BM no alpha,
+# MM/Specular, NM/Normal). This is also the table the Autosetter
+# (set_image_albam_attr, blender_ui/tools_panel.py) assigns from, moved
+# here so the two can share one copy instead of risking two tables that
+# quietly disagree - e.g. re1 alone uses 19 for Specular, where every
+# other game here uses 25.
+TEX_COMPRESSION = {
+    "re0": (24, 20, 25, 31),
+    "re1": (24, 20, 19, 31),
+    "rev1": (23, 19, 25, 31),
+    "rev2": (24, 20, 25, 31),
+    "re6": (24, 20, 25, 31),
+    "dd": (24, 20, 25, 31),
+}
+
+# TEX_COMPRESSION has no entry for every Tex157 app_id - umvc3 is Tex157
+# (APPID_TEXCLS_MAP) but isn't covered by TEX_COMPRESSION or the
+# Autosetter's own else-branch (which assumes Tex112's encoded_type
+# instead) either, a pre-existing gap. These are the values most of
+# TEX_COMPRESSION's own entries already use, so they are a reasonable
+# default rather than a new guess.
+DEFAULT_TEX_COMPRESSION = (24, 20, 25, 31)
+
+
+def _texture_slot_for_image(bl_im_dict):
+    """
+    The texture slot (TextureType) a non-DDS image is wired into, read from
+    the shader socket its TEX_IMAGE node feeds - the same socket-name
+    mapping _gather_tex_types (material.py) uses to serialize set_texture
+    commands. get_bl_teximage_nodes() only ever records a node that has at
+    least one outgoing link, so there is always one to read here.
+
+    An image can be wired into more than one material; the first one
+    get_bl_teximage_nodes recorded is as good a guess as any, since there is
+    no per-material override for how a given image gets exported.
+    """
+    _bl_mat, node = next(iter(bl_im_dict["materials"].values()))
+    socket_name = node.outputs["Color"].links[0].to_socket.name
+    return NODE_NAMES_TO_TYPES.get(socket_name)
+
+
+def _choose_export_dds_fourcc(texture_slot, has_alpha):
+    """
+    Pick the DDS block format (for bc7enc's pack_dds) for a non-DDS image
+    being encoded on export, from its texture slot and alpha channel - not
+    a single guess for every texture. Unlike the engine's own
+    compression_format code (_choose_export_compression_format), the fourCC
+    itself is not app_id-specific: every TEX_COMPRESSION entry maps Normal
+    to DXT5 and Specular to DXT1 regardless of game.
+
+    BC5/BC7 are deliberately never picked: no code in TEX_FORMAT_MAPPER maps
+    to either, and DDSHeader.get_block_size() (lib/dds.py) does not
+    recognize them, so a DDS written with them would not be a format this
+    addon's own importer - or any supported MT Framework game - can read
+    back. Those are RE Engine (reng/hexn) formats.
+    """
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL):
+        return b"DXT5"
+    if texture_slot == TextureType.SPECULAR:
+        return b"DXT1"
+    return b"DXT5" if has_alpha else b"DXT1"
+
+
+def _choose_export_compression_format(app_id, texture_slot, has_alpha):
+    """
+    The Tex157 compression_format code matching the fourCC
+    _choose_export_dds_fourcc would pick for the same slot/alpha, read from
+    TEX_COMPRESSION - the same per-app_id table the Autosetter uses, so the
+    two never disagree about a given game's Specular or Diffuse code.
+    """
+    bm_alpha, bm_no_alpha, mm, nm = TEX_COMPRESSION.get(app_id, DEFAULT_TEX_COMPRESSION)
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL):
+        return nm
+    if texture_slot == TextureType.SPECULAR:
+        return mm
+    return bm_alpha if has_alpha else bm_no_alpha
+
+
+def _plan_non_dds_image_encode(bl_im_dict):
+    """
+    Compute the DDS bytes and compression_format for a non-DDS image
+    (PNG, TGA, ...), without mutating the image yet - see check_dds_textures,
+    which only applies every image's plan once every one of them has
+    encoded successfully, so one image's encode failure can't leave an
+    earlier image in the same export half-converted.
+    """
+    bl_im = bl_im_dict["image"]
+    app_id = bl_im.albam_asset.app_id
+    texture_slot = _texture_slot_for_image(bl_im_dict)
+    has_alpha = bl_im.depth in (32, 64, 128)
+    dds_fourcc = _choose_export_dds_fourcc(texture_slot, has_alpha)
+    dds_bytes = encode_bl_image_to_dds(bl_im, dds_fourcc)
+    compression_format = _choose_export_compression_format(app_id, texture_slot, has_alpha)
+    return dds_bytes, compression_format
+
+
+def _apply_non_dds_image_encode(bl_im, app_id, dds_bytes, compression_format):
+    """
+    Replace a non-DDS image's packed data with dds_bytes, and set its
+    compression_format to match, instead of export refusing the whole model
+    and sending the user off to pick a DDS format externally by hand - a
+    mismatch between that hand-picked format and the compression setting is
+    one of the most common reported texture problems (black screen,
+    glowing texture, ERR09 crashes).
+
+    The image keeps its name, path and material links - only its packed
+    data and (for Tex157 games) compression_format change - so every later
+    export step sees an ordinary DDS image, same as one the user built
+    externally with the right format.
+    """
+    bl_im.source = "FILE"
+    bl_im.pack(data=dds_bytes, data_len=len(dds_bytes))
+
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    if hasattr(custom_properties, "compression_format"):
+        # Tex112 (re5/dmc4) has no such field - its compression_format is
+        # read straight from the DDS fourCC at serialize time instead (see
+        # _serialize_texture_156), so there is nothing to set for it here.
+        custom_properties.compression_format = compression_format
+
+
 def check_dds_textures(func):
     """
-    Function decorator that checks if all the meshes of a bl_object
-    have materials that use dds textures only
-    Raises AlbamCheckFailure with the list of
-    non-dds textures and materials where they are used
+    Function decorator that encodes any non-DDS image used by a bl_object's
+    materials as DDS before exporting, instead of refusing the whole export
+    and telling the user to convert it externally by hand. A render target
+    has no pixel data to encode and is skipped, same as before; an image
+    that is already DDS is left exactly as it is.
+
+    Every non-DDS image is encoded (_plan_non_dds_image_encode) before any
+    of them is actually applied to an image (_apply_non_dds_image_encode):
+    one image's encode failure - raised as an AlbamCheckFailure rather than
+    a raw exception - then aborts the export without leaving some other
+    image in the same model half-converted.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -1076,24 +1204,30 @@ def check_dds_textures(func):
         meshes = [c for c in bl_objects[0].children_recursive if c.type == "MESH"]
         materials = get_bl_materials(meshes)
         images = get_bl_teximage_nodes(materials)
-        non_dds = []
+        to_apply = []
         for bl_im_name, bl_im_dict in images.items():
-            app_id = bl_im_dict["image"].albam_asset.app_id
             image = bl_im_dict["image"]
-            custom_propertins = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
-            if custom_propertins.render_target is True:
+            app_id = image.albam_asset.app_id
+            custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            if custom_properties.render_target is True:
                 continue
-            if not is_blimage_dds(bl_im_dict["image"]):
-                non_dds.append((bl_im_name, bl_im_dict))
-        if any(non_dds):
-            data = [
-                f"Texture: {bl_im_name} -> materials: {list(bl_im_dict['materials'].keys())}"
-                for bl_im_name, bl_im_dict in non_dds
-            ]
-            raise AlbamCheckFailure(
-                "The materials to export contain some images that are not DDS",
-                details=" ".join(data),
-                solution="Edit the images externally (e.g. in GIMP) and reassign in the materials listed")
+            if is_blimage_dds(image):
+                continue
+            try:
+                dds_bytes, compression_format = _plan_non_dds_image_encode(bl_im_dict)
+            except Exception as err:
+                raise AlbamCheckFailure(
+                    f"Could not convert image '{bl_im_name}' to DDS for export",
+                    details=f"materials: {list(bl_im_dict['materials'].keys())} - {err}",
+                    solution=(
+                        "Convert the image to DDS externally (e.g. in GIMP or the NVIDIA "
+                        "Photoshop plugin), matching its texture slot's compression "
+                        "(diffuse/normal/specular), and reassign it in the material"
+                    ),
+                ) from err
+            to_apply.append((image, app_id, dds_bytes, compression_format))
+        for image, app_id, dds_bytes, compression_format in to_apply:
+            _apply_non_dds_image_encode(image, app_id, dds_bytes, compression_format)
         result = func(*args, **kwargs)
 
         return result

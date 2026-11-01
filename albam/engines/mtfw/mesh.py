@@ -944,9 +944,14 @@ def _autofix_meshes(bl_meshes, enabled):
 # than on resource counts: exported signatures should be found in the
 # shipped set. See docs on albam-wip's mrl-export-overhaul branch, whose
 # bugs 3, 4, 7 and 9 are the same code.
-@check_dds_textures
 @check_mtfw_shader_group
 @check_all_objects_have_materials
+# Innermost: check_dds_textures now encodes a non-DDS texture in place
+# instead of just reporting it, so the purely structural checks above (a
+# mesh has a material, the material uses the MT Framework shader group)
+# run first - no point permanently re-encoding a texture as DDS only to
+# then fail the export over something unrelated to it.
+@check_dds_textures
 def export_mod(bl_obj):
     export_settings = bpy.context.scene.albam.export_settings
     asset = bl_obj.albam_asset

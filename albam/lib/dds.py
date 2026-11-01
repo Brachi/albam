@@ -2,6 +2,9 @@ from ctypes import Structure, c_int, c_char, sizeof
 import io
 import math
 
+import numpy as np
+from bc7enc import pack_dds
+
 
 class DDSHeader(Structure):
     # https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
@@ -215,3 +218,38 @@ class DDSHeader(Structure):
         header_data.readinto(dds_header)
         dds_header._dds_data = data[header_size:]
         return dds_header
+
+
+def encode_bl_image_to_dds(bl_im, dds_format):
+    """
+    Encode a Blender image's current pixels as a DDS with a full mipmap
+    chain, in the given block format (bc7enc's pack_dds).
+
+    Shared by lib.tools.bake_of_light (always "DXT1", for a baked lightmap)
+    and engines.mtfw.texture (the format chosen per texture slot, for a
+    non-DDS texture being converted on export) - keeping one implementation
+    means a fix to the row order or mip count only has to happen once.
+
+    Vectorized with numpy (already a dependency - see e.g.
+    engines/mtfw/mesh.py) rather than iterating bl_im.pixels in pure
+    Python: the latter is fine for a small baked lightmap, but export can
+    hit this for a full-size diffuse/normal map too.
+    """
+    width, height = bl_im.size
+    pixels = np.empty(width * height * 4, dtype=np.float32)
+    bl_im.pixels.foreach_get(pixels)
+    rgba = np.clip(np.round(pixels * 255), 0, 255).astype(np.uint8).reshape(height, width, 4)
+    # Blender stores rows bottom-to-top; DDS (like most image formats) wants
+    # top-to-bottom.
+    rgba = np.flipud(rgba).tobytes()
+
+    blocks = pack_dds(rgba, width, height, dds_format.decode("ascii"), mipmaps=True)
+    header = DDSHeader(
+        dwHeight=height,
+        dwWidth=width,
+        dwMipMapCount=max(width, height).bit_length(),
+        pixelfmt_dwFourCC=dds_format,
+    )
+    header.set_constants()
+    header.set_variables()
+    return bytes(header) + blocks
