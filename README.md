@@ -8,6 +8,8 @@
 
 This is the source of _Albam_, a [Blender](https://blender.org) [addon](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html) for importing and exporting 3d models and other game engine formats.   
 
+**Just want to use Albam in Blender?** Download the zip from the [Releases page](https://github.com/Brachi/albam/releases) and install that in Blender - do not use GitHub's "Code" > "Download ZIP" button above. That button downloads this source repository, which has none of Albam's bundled dependencies and will fail to load.
+
 For user documentation and modding tutorials, refer to the [Wiki](https://github.com/HenryOfCarim/albam_redux/wiki)
 If you are willing to help in development or get quick help you can visit our discord server
 
