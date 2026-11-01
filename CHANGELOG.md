@@ -89,6 +89,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
+- A wrong app_id or a duplicated relative path on an exported image, and
+  importing a `.sbc` file with the wrong App selected or a truncated `.sbc`
+  file, now show a clear error instead of an `AttributeError` or a raw Kaitai
+  parsing error. Images with no relative path set are no longer reported as
+  duplicates of each other
 
 ### Changed
 
