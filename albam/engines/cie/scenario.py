@@ -628,10 +628,13 @@ def _game_matrix(translation, angles, scale):
 
 def _mesh_fingerprint(bl_mesh):
     """A digest of everything a room model is written from: positions,
-    faces, UVs, normals, vertex colours, which material each face uses and
-    which image each material binds. Recorded at import and compared at
-    export - a model is only written again if this changed, since a model
-    written from Blender is not byte for byte what shipped even unedited."""
+    faces, UVs, normals, vertex colours, which material each face uses,
+    which image each material binds and the .tpl slot that image carries,
+    and the albam properties of the mesh and its materials (material flags,
+    specular values, the header words the mesh carries). Recorded at import
+    and compared at export - a model is only written again if this changed,
+    since a model written from Blender is not byte for byte what shipped
+    even unedited."""
     import numpy as np
 
     digest = hashlib.sha1()
@@ -652,9 +655,13 @@ def _mesh_fingerprint(bl_mesh):
     colors = bl_mesh.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
     if colors is not None:
         add(colors.data, "color_srgb", len(colors.data) * 4, np.float32)
+    digest.update(_properties_digest(bl_mesh))
     for bl_material in bl_mesh.materials:
         digest.update(b"\0" + (bl_material.name.encode() if bl_material else b""))
-        if bl_material is None or not bl_material.node_tree:
+        if bl_material is None:
+            continue
+        digest.update(_properties_digest(bl_material))
+        if not bl_material.node_tree:
             continue
         # Which image feeds which shader input is what a material's texture
         # slots are written from (see mesh._texture_slot).
@@ -662,7 +669,20 @@ def _mesh_fingerprint(bl_mesh):
             image = getattr(link.from_node, "image", None)
             if image is not None:
                 digest.update(f"\1{image.name}\2{link.to_socket.name}".encode())
+                digest.update(_properties_digest(image))
     return digest.hexdigest()
+
+
+def _properties_digest(bl_id):
+    """The values of a datablock's re4uhd albam custom properties, as bytes
+    - what export writes from a mesh's header words, a material's fields and
+    an image's .tpl slot besides the geometry itself."""
+    properties = bl_id.albam_custom_properties.get_custom_properties_for_appid("re4uhd")
+    if properties is None:
+        return b""
+    values = [(name, repr(getattr(properties, name)))
+              for name in properties.bl_rna.properties.keys() if name != "rna_type"]
+    return repr(sorted(values)).encode()
 
 
 def _write_models(bl_obj, data, smd, bl_placements):
@@ -702,25 +722,31 @@ def _write_models(bl_obj, data, smd, bl_placements):
         start, end = slot(model_table + smd.offsets_models[model_id])
         rewritten[start] = export_room_model(bl_mesh, bytes(data[start:end]))
 
+    def write_in_place(start, new):
+        end = slot(start)[1]
+        if len(new) > end - start:
+            return False
+        data[start:end] = new + bytes(end - start - len(new))
+        return True
+
     if all(len(new) <= slot(start)[1] - start for start, new in rewritten.items()):
         for start, new in rewritten.items():
-            end = slot(start)[1]
-            data[start:end] = new + bytes(end - start - len(new))
+            write_in_place(start, new)
         return len(meshes)
 
     region_start = starts[0]
     if any(region_start <= table < len(data) for table in (model_table, tpl_table)):
         # A table sits among the models: the region is not models and .tpl
         # files alone, so it is not laid out again.
+        offset_positions = {}
+        for item_start, offset_position, table in items:
+            offset_positions.setdefault(item_start, []).append((offset_position, table))
         for start, new in rewritten.items():
-            end = slot(start)[1]
-            if len(new) <= end - start:
-                data[start:end] = new + bytes(end - start - len(new))
+            if write_in_place(start, new):
                 continue
             data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
-            for item_start, offset_position, table in items:
-                if item_start == start:
-                    struct.pack_into("<I", data, offset_position, len(data) - table)
+            for offset_position, table in offset_positions[start]:
+                struct.pack_into("<I", data, offset_position, len(data) - table)
             data.extend(new)
         return len(meshes)
 

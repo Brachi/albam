@@ -1670,6 +1670,10 @@ VERTEX_COLOR_ATTRIBUTE = "albam_vertex_color"
 def _build_vertex_colors(bl_mesh, colors):
     """One colour per vertex: import builds a Blender vertex per file vertex
     (see build_blender_model), so the file's array maps onto them as is."""
+    if len(colors) < len(bl_mesh.vertices):
+        # Not seen in a shipped file; the colours are left out rather than
+        # half applied.
+        return
     attribute = bl_mesh.color_attributes.new(VERTEX_COLOR_ATTRIBUTE, "BYTE_COLOR", "POINT")
     values = []
     for color in colors[:len(bl_mesh.vertices)]:
