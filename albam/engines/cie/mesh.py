@@ -1261,8 +1261,7 @@ def _strips_from_triangles(triangles):
     start triangle's three rotations, keeping the longest; and it is grown
     from both ends. Measured on the shipped models of four rooms and four
     character and enemy archives, this needs 1.56 and 1.39 corners per
-    triangle where the shipped files use 1.63 and 1.40, and the plain greedy
-    walk this replaced 1.86 and 1.46.
+    triangle where the shipped files use 1.63 and 1.40.
     """
     import heapq
 

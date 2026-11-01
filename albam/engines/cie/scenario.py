@@ -695,8 +695,8 @@ def _write_models(bl_obj, data, smd, bl_placements):
     the order they were, on the alignment they shipped with, unedited ones
     copied as they are, and both offset tables pointed at the new places.
     That only depends on the tables being the only thing pointing into that
-    region, which is what the game showed when every model of a room was
-    moved to the end of its file and it drew the moved copies. Where the
+    region, which the game bears out: with every model of a room moved to the
+    end of its file, it draws the moved copies. Where the
     region is not made of models and .tpl files alone, the model is appended
     at the end instead and the old bytes are left where they were.
     """
