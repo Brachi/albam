@@ -1,9 +1,9 @@
-"""check_dds_textures() used to refuse any non-DDS image outright. It now
-encodes it in place instead, picking the DDS format from the texture slot
-(see _choose_export_dds_fourcc) and the engine compression_format code from
-the texture slot and app_id (see _choose_export_compression_format and
-TEX_COMPRESSION). Needs no game data - a small synthetic image and material
-are enough to exercise the real decorator end to end.
+"""check_dds_textures() encodes a non-DDS image to DDS in place, picking the
+DDS format from the texture slot (see _choose_export_dds_fourcc) and the
+engine compression_format code from the texture slot and app_id (see
+_choose_export_compression_format and TEX_COMPRESSION). Needs no game data -
+a small synthetic image and material are enough to exercise the real
+decorator end to end.
 """
 import bpy
 import pytest

@@ -1207,10 +1207,10 @@ def strict_sanitize(filename):
 
 
 def set_image_albam_attr(blender_material, app_id, local_path):
-    # TEX_COMPRESSION (imported above) lives in engines.mtfw.texture now, so
-    # it's the one shared table for both this Autosetter and export's own
-    # non-DDS-texture encoding (check_dds_textures) - the two can no longer
-    # quietly disagree on a game's Specular/Diffuse compression_format code.
+    # TEX_COMPRESSION (imported above) is the one shared table for both this
+    # Autosetter and export's own non-DDS-texture encoding
+    # (check_dds_textures), so the two can't quietly disagree on a game's
+    # Specular/Diffuse compression_format code.
     VERSION = {
         "re0": "0x9d",
         "re1": "0x9d",
