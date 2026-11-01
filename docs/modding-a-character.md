@@ -68,7 +68,9 @@ the original name.
 | `.bin` without it | camera, lighting, collision | refuses it with an error |
 | `.tpl` | a texture list: slot -> pack id + index | reads it |
 | `.pack` (separate archive) | the texture bytes, DDS or TGA | reads it |
-| everything else | animation, script data | not read yet |
+| `.fcv` | a motion: one clip of skeletal animation | imports it onto an armature |
+| `.seq` | the playback table paired with a motion (sound and effect cues) | not read yet |
+| everything else | effects, paths, script data | not read yet |
 
 Three things follow, and they are what catches people out:
 
@@ -230,6 +232,14 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 `cie_build_mod.py` writes the second and third of those for you.
 
 ## What does not work yet
+
+- **Motions import, but do not export.** Select an `.fcv`, pick the
+  character's armature in the FCV options and press **Import**: the clip is
+  baked into an action, one key per frame, with the limbs posed the way the
+  game's IK solver poses them. That bake is also why it cannot be edited as a
+  rig and written back. A motion keys bones by number, so it only makes sense
+  on the skeleton of the character whose archive it came from (or one sharing
+  its numbering). The game plays motions at 30 frames a second.
 
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.

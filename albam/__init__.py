@@ -48,6 +48,7 @@ def register():
     importlib.import_module(".engines.cie.archive", __package__)
     importlib.import_module(".engines.cie.mesh", __package__)
     importlib.import_module(".engines.cie.scenario", __package__)
+    importlib.import_module(".engines.cie.animation", __package__)
     if os.getenv("ALBAM_ENABLE_REEN"):
         importlib.import_module(".engines.reng.archive", __package__)
         importlib.import_module(".engines.reng.mesh", __package__)
