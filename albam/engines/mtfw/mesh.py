@@ -42,7 +42,7 @@ from ...lib.export_checks import check_all_objects_have_materials
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
-from ...exceptions import AlbamCheckFailure
+from ...exceptions import AlbamCheckFailure, AlbamExportWarning
 from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
 from .material import (
     build_blender_materials,
@@ -1809,7 +1809,9 @@ def _check_group_ids(src_mod, bl_meshes, app_id):
     Only a warning: a mesh with a Group ID outside the table isn't always
     wrong (see #375's discussion), so this never blocks export.
     """
-    available = {group.group_index for group in src_mod.groups[:src_mod.header.num_groups]}
+    # header.num_groups is exactly len(src_mod.groups) - the groups property
+    # itself only ever reads that many entries - so no slicing is needed here.
+    available = {group.group_index for group in src_mod.groups}
     if not available:
         # No groups table at all on this model (e.g. some effect models) -
         # nothing meaningful to compare idx_group against.
@@ -1820,7 +1822,8 @@ def _check_group_ids(src_mod, bl_meshes, app_id):
         if idx_group not in available:
             warnings.warn(
                 f"Mesh {bl_mesh.name!r} has Group ID {idx_group}, which isn't one of this "
-                f"model's groups. Available Group IDs: {sorted(available)}"
+                f"model's groups. Available Group IDs: {sorted(available)}",
+                AlbamExportWarning,
             )
 
 
