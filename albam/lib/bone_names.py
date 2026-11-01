@@ -750,4 +750,15 @@ BONE_COLLECTIONS = {
     "Arms Main": ["clavicle", "upperarm", "elbow", "lowerarm", "hand"],
     "Hands Main": ["palm", "thumb", "index", "middle", "ring", "pinky"],
     "Eyes": ["eye"],
+    "Other": [],
+}
+
+BONE_COLLECTION_COLORS = {
+    "Main Bones": "THEME01",
+    "Legs Main": "THEME02",
+    "Legs Twist": "THEME03",
+    "Arms Main": "THEME04",
+    "Hands Main": "THEME05",
+    "Eyes": "THEME06",
+    "Other": "THEME07",
 }

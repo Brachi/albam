@@ -8,7 +8,13 @@ from mathutils.bvhtree import BVHTree
 
 from ..registry import blender_registry
 from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
-from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+from ..lib.bone_names import (
+    BONE_COLLECTION_COLORS,
+    BONE_COLLECTIONS,
+    BONES_BODY,
+    BONES_HEAD,
+    NAME_FIXES,
+)
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
@@ -1298,6 +1304,45 @@ def rename_bones(armature_ob, app_id, body_type):
         mirror = get_mirror(pose_bone, app_id)
         if mirror in renamed:
             set_mirror(pose_bone, app_id, renamed[mirror])
+
+    _set_bone_layers(armature_ob)
+
+
+def _set_bone_layers(armature_ob):
+    """Assign renamed bones to Albam collections and color them by group."""
+    armature = armature_ob.data
+    collections = {}
+    for collection_name in BONE_COLLECTIONS:
+        collection = armature.collections.get(collection_name)
+        if collection is None:
+            collection = armature.collections.new(collection_name)
+            collection.is_visible = True
+        collections[collection_name] = collection
+
+    for bone in armature.bones:
+        normalized_name = bone.name.casefold()
+        # The most specific token wins (e.g. thigh_twist over thigh).
+        matching_groups = [
+            (fragment.casefold(), collection_name)
+            for collection_name, fragments in BONE_COLLECTIONS.items()
+            for fragment in fragments
+            if fragment.casefold() in normalized_name
+        ]
+        collection_name = (
+            max(matching_groups, key=lambda match: len(match[0]))[1]
+            if matching_groups else "Other"
+        )
+
+        # Remove stale membership so repeated autorename runs keep one Albam
+        # group per bone. Other, differently named collections are untouched.
+        for collection in collections.values():
+            collection.unassign(bone)
+        collections[collection_name].assign(bone)
+        color_palette = BONE_COLLECTION_COLORS[collection_name]
+        bone.color.palette = color_palette
+        armature_ob.pose.bones[bone.name].color.palette = color_palette
+
+    armature.show_bone_colors = True
 
 
 def merge_vgroups(vg_a, vg_b):
