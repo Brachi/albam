@@ -5,10 +5,6 @@ import math
 from ..exceptions import AlbamCheckFailure
 
 
-def _is_power_of_two(n):
-    return n > 0 and (n & (n - 1)) == 0
-
-
 class DDSHeader(Structure):
     # https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
     DDSD_CAPS = 0x1
@@ -227,14 +223,10 @@ class DDSHeader(Structure):
                 "has at least the base level (1)"
             )
         else:
-            if self.dwMipMapCount > 1 and not (
-                _is_power_of_two(self.dwWidth) and _is_power_of_two(self.dwHeight)
-            ):
-                problems.append(
-                    f"the header claims {self.dwMipMapCount} mipmaps for a "
-                    f"{self.dwWidth}x{self.dwHeight} image, but that size isn't a power of two "
-                    "so the mip chain can't be halved cleanly down to 1x1"
-                )
+            # mipmap_sizes already halves non-power-of-two dimensions the same
+            # way calculate_mimpap_offsets does (max(1, dim >> level)), so an
+            # NPOT image with a correctly generated chain adds up fine here -
+            # this only catches sizes that don't match that same math.
             expected_size = sum(self.mipmap_sizes) * self.image_count
             actual_size = len(self.data)
             if expected_size != actual_size:
@@ -250,8 +242,8 @@ class DDSHeader(Structure):
                 details="; ".join(problems),
                 solution=(
                     "Re-save the DDS file with a correct mipmap chain (most image editors "
-                    "have an option to generate or strip mipmaps), making sure its size is a "
-                    "power of two if it is to have more than one level"
+                    "have an option to generate or strip mipmaps), or set its mipmap count "
+                    "to 1 if it should have none"
                 ),
             )
 

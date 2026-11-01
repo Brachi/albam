@@ -59,17 +59,16 @@ def test_mipmap_count_taller_than_the_data_is_rejected():
     assert "8 bytes" in excinfo.value.details
 
 
-def test_non_power_of_two_size_with_mipmaps_is_rejected():
+def test_consistent_non_power_of_two_mip_chain_is_not_rejected():
+    # mipmap_sizes halves non-power-of-two dimensions the same way
+    # calculate_mimpap_offsets does, so a correctly generated NPOT chain is
+    # not itself a problem - only a byte count that doesn't match it is.
     header = _make_header(100, 60, 2)
 
-    with pytest.raises(AlbamCheckFailure) as excinfo:
-        header.check_mipmap_consistency(source_name="npot.dds")
-
-    assert "power of two" in excinfo.value.details
+    header.check_mipmap_consistency(source_name="npot.dds")
 
 
 def test_non_power_of_two_size_without_mipmaps_is_not_rejected():
-    # A single level never needs halving, so there's nothing to check.
     header = _make_header(100, 60, 1)
 
     header.check_mipmap_consistency(source_name="npot_no_mips.dds")
