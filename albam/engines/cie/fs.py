@@ -28,6 +28,8 @@ is a TPL:
   4-character extension, so each is exposed as "<stem>_NNN.<ext>", keeping
   the numbering the container itself uses. Nothing else identifies a texture
   inside a pack: a .tpl refers to one by its index (see textures.py).
+  Two .udas archives of an install are a big-endian variant whose DAT block
+  is YZ2 compressed (see yz2.py); they are listed the same way.
 - evd entries do carry names, nested paths included ("event/r332/s20/cam/
   cam_s20_000.fcv"), and are exposed under them.
 - every other extension (bin, rel, tpl, fix, fnt, esl, fcv, tga, eff, uwf)
@@ -35,7 +37,6 @@ is a TPL:
 """
 import io
 import os
-import re
 import struct
 from collections import defaultdict
 
@@ -45,12 +46,13 @@ from fs.errors import CreateFailed, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
 from kaitaistruct import KaitaiStream
 
-from . import lfs_decompress
+from . import lfs_decompress, yz2
 from .structs.dat import Dat
 from .structs.evd import Evd
 from .structs.lfs import Lfs
 from .structs.pack import Pack
 from .structs.udas import Udas
+from .yz2 import YZ2_HEADER_SIZE
 
 # Container extensions, mapped to the struct parsing that container's own
 # decompressed bytes. Anything not listed here is a single file compressed
@@ -69,11 +71,11 @@ CONTAINER_STRUCTS = {
 UDAS_BLOCK_TABLE_OFFSET = 0x20
 UDAS_BLOCK_DESCRIPTOR_SIZE = 32
 UDAS_BLOCK_TERMINATOR = 0xFFFFFFFF
-# A YZ2 compressed block opens with its own sizes in ASCII: the compressed
-# length, a tab, the decompressed length, a newline, zero padded to 32 bytes,
-# and then range coded data.
-YZ2_HEADER_SIZE = 32
-YZ2_HEADER_PATTERN = re.compile(rb"^[0-9a-f]+\t[0-9a-f]+\n\x00*$")
+# The big-endian variant's DAT block, once out of its YZ2 stream (see
+# _split_big_endian_udas): an entry count, then the offset and extension
+# tables either after three zero words or straight after it.
+BIG_ENDIAN_DAT_TABLE_OFFSET = 0x10
+BIG_ENDIAN_DAT_EARLY_TABLE_OFFSET = 0x04
 
 
 def pack_entry_extension(entry):
@@ -137,7 +139,39 @@ def udas_byte_order(payload):
 def is_yz2_block(payload, offset):
     """Whether the block at `offset` is a YZ2 compressed stream rather than a
     file table, which is what a big-endian UDAS holds its DAT block as."""
-    return bool(YZ2_HEADER_PATTERN.match(payload[offset:offset + YZ2_HEADER_SIZE]))
+    return yz2.parse_header(payload[offset:offset + YZ2_HEADER_SIZE]) is not None
+
+
+def split_big_endian_dat(block):
+    """[(extension, bytes)] for each entry of a big-endian DAT block, the
+    file table the big-endian UDAS variant holds YZ2 compressed.
+
+    Two layouts occur, told apart the way JADERLINK's RE4_DASYZ2_TOOL does:
+    the final game's, where three zero words follow the count before the
+    tables start (as in the little-endian DAT), and an earlier one (the tool
+    calls it the E3 version) where the tables follow the count directly.
+
+    Names and sizes are taken as loosely as that tool takes them, because
+    the archive in the earlier layout is damaged as shipped: three of its
+    extensions carry stray bytes, kept here as the letters around them, and
+    its block ends partway through an entry, so that entry is cut short and
+    the ones placed after the end come out empty. Those stay listed, empty,
+    since the table does name them.
+    """
+    count, *words = struct.unpack_from(">4I", block, 0)
+    table_offset = BIG_ENDIAN_DAT_EARLY_TABLE_OFFSET if any(words) else BIG_ENDIAN_DAT_TABLE_OFFSET
+    if table_offset + count * 8 > len(block):
+        raise ValueError(f"a DAT block of {len(block)} bytes cannot hold {count} entries")
+    offsets = struct.unpack_from(f">{count}I", block, table_offset)
+    names_offset = table_offset + count * 4
+
+    entries = []
+    for i, offset in enumerate(offsets):
+        end = offsets[i + 1] if i + 1 < count else len(block)
+        name = block[names_offset + i * 4:names_offset + i * 4 + 4]
+        extension = "".join(chr(c) for c in name if chr(c).isascii() and chr(c).isalnum())
+        entries.append((extension, block[offset:end]))
+    return entries
 
 
 def _udas_read_error(payload):
@@ -153,13 +187,11 @@ def _udas_read_error(payload):
         return None
     data_offset = read_udas_block_table(payload, byte_order)[0][2]
     if is_yz2_block(payload, data_offset):
-        return NotImplementedError(
-            "this is the big-endian UDAS variant, and its data block is a YZ2 "
-            "compressed stream rather than a file table; albam has no YZ2 decoder, "
-            "so the files inside cannot be listed"
-        )
+        # Only reached when decoding it failed (see LfsFS._split).
+        return None
     return NotImplementedError(
-        "this is the big-endian UDAS variant, whose data block albam does not model"
+        "this is the big-endian UDAS variant, and its data block is not the YZ2 "
+        "stream every one seen holds, so albam does not know how to read it"
     )
 
 
@@ -267,18 +299,41 @@ class LfsFS(FS):
         # same guard because they're lazy: a container whose header parses can
         # still turn out not to be one when an entry's own offset/size is read.
         try:
+            if struct_cls is Udas and udas_byte_order(decompressed) == ">":
+                return self._split_big_endian_udas(decompressed)
             container = struct_cls.from_bytes(decompressed)
             container._read()
             return self._split_container(struct_cls, container, decompressed)
         except Exception as error:
             if struct_cls is Udas:
-                # Two variants read as a UDAS by name only: one whose block
-                # table is big-endian, and one holding no block table at all.
+                # Two variants don't read as the little-endian UDAS: one
+                # whose block table is big-endian (read above, so only here
+                # when that failed), and one holding no block table at all.
                 # Saying which beats handing on the parser's own error, which
                 # only ever reports running off the end of the payload.
                 error = _udas_read_error(decompressed) or error
             self.container_error = error
             return single_file
+
+    def _split_big_endian_udas(self, decompressed):
+        """The entries of the big-endian UDAS variant: its block table read
+        big-endian, and its DAT block decompressed out of YZ2 and read
+        big-endian too (see split_big_endian_dat).
+
+        Only two archives of an install are this variant, and each holds a
+        single block. Entries are named the way the little-endian container's
+        are. Their contents are big-endian as well (an .smd's floats, for
+        one), so listing and reading them is as far as albam goes: the
+        importers expect the little-endian formats the rest of the game uses.
+        """
+        _block_type, size, offset = read_udas_block_table(decompressed, ">")[0]
+        if not is_yz2_block(decompressed, offset):
+            raise _udas_read_error(decompressed)
+        block = yz2.decompress(decompressed[offset:offset + size])
+        return {
+            f"/{self._stem}_{i:03d}.{extension.lower() or 'null'}": data
+            for i, (extension, data) in enumerate(split_big_endian_dat(block))
+        }
 
     def _split_container(self, struct_cls, container, decompressed):
         if struct_cls is Evd:
