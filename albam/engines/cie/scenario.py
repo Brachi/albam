@@ -60,6 +60,14 @@ ENTRY_TRANSFORM_FORMAT = "<9f"
 # Blender's units (metres and radians); anything less is float noise from
 # the round trip through a matrix, and the entry keeps its shipped bytes.
 TRANSFORM_TOLERANCE = 1e-5
+# How far, relative to the placement's own size, the transform an entry can
+# express may land from the one in Blender before export refuses it (see
+# _matrix_to_entry).
+EXPRESSIBLE_TOLERANCE = 1e-4
+# The custom property on a room's object listing the entries import made an
+# object for - the only ones export may treat as deleted when no object
+# claims them (see export_smd).
+IMPORTED_ENTRIES_PROPERTY = "albam_smd_imported_entries"
 
 # The custom properties a room model's mesh carries: which entry of the
 # .smd's model table it was built from, and a fingerprint of what export
@@ -97,6 +105,7 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
     built = {}
     placed = 0
     missing = 0
+    imported = []
     try:
         for index, entry in enumerate(smd.entries):
             if not entry.is_placed:
@@ -125,9 +134,11 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                 built[key] = bl_mesh
             bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
             bl_placement[ENTRY_PROPERTY] = index
+            imported.append(index)
             placed += 1
     finally:
         shared.close()
+    bl_scenario[IMPORTED_ENTRIES_PROPERTY] = imported
     print(f"[re4uhd] scenario {name}: {placed} placed, {len(built)} models, {missing} unresolved")
     return bl_scenario
 
@@ -431,7 +442,12 @@ def export_smd(bl_obj):
 
     A placement moved, rotated or scaled in Blender is written back to its
     entry. One deleted in Blender is zeroed, which is what the unused
-    entries a few rooms ship with look like and is what the game skips.
+    entries a few rooms ship with look like and is what the game skips -
+    but only an entry import made an object for: one whose model could not
+    be built (a split room's shared models when the shared archive is not
+    beside it, a model the .bin importer refused) never had an object to
+    delete, and is kept as it is. A room imported before that was recorded
+    has nothing deleted.
 
     A placement added in Blender - a duplicate of one, or a room model's
     mesh put under the room - becomes a new entry (see _place_new_entries).
@@ -453,9 +469,12 @@ def export_smd(bl_obj):
 
     placements, added = _claimed_placements(bl_obj, smd)
 
+    imported = bl_obj.get(IMPORTED_ENTRIES_PROPERTY)
+    imported = set(imported) if imported is not None else set(placements)
+
     changed = 0
     for index, entry in enumerate(smd.entries):
-        if not entry.is_placed:
+        if not entry.is_placed or index not in imported:
             continue
         offset = SMD_HEADER_SIZE + index * SMD_ENTRY_SIZE
         # The entry is patched where it sits rather than written out from the
@@ -465,14 +484,17 @@ def export_smd(bl_obj):
         if struct.unpack_from("<3f", data, offset) != position:
             raise RuntimeError(f"entry {index} of {bl_obj.name} is not at offset {offset}")
         bl_placement = placements.get(index)
-        if bl_placement is None:
+        if bl_placement is None or not _has_mesh(bl_placement):
+            # Deleting only the mesh under a two-object placement deletes
+            # the placement too: the empty left behind places nothing.
             data[offset:offset + SMD_ENTRY_SIZE] = bytes(SMD_ENTRY_SIZE)
             changed += 1
             continue
         matrix = _placement_matrix(bl_placement)
-        if _same_matrix(matrix, _combined(*_entry_matrices(entry))):
+        if _same_matrix(matrix, _entry_matrix(entry)):
             continue
-        struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset, *_matrix_to_entry(matrix))
+        struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset,
+                         *_matrix_to_entry(matrix, bl_placement.name))
         changed += 1
 
     models = _write_models(bl_obj, data, smd, list(placements.values()) + added)
@@ -485,8 +507,14 @@ def export_smd(bl_obj):
     return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
 
 
-def _combined(placement, rotation):
+def _entry_matrix(entry):
+    """The whole transform an entry places its model at, in Blender's axes."""
+    placement, rotation = _entry_matrices(entry)
     return placement if rotation is None else placement @ rotation
+
+
+def _has_mesh(bl_placement):
+    return bl_placement.type == "MESH" or any(c.type == "MESH" for c in bl_placement.children)
 
 
 def _placement_matrix(bl_placement):
@@ -508,7 +536,7 @@ def _same_matrix(a, b):
                for i in range(4) for j in range(4))
 
 
-def _matrix_to_entry(matrix):
+def _matrix_to_entry(matrix, name="A room placement"):
     """(position, angles, scale) for an entry placing its model at `matrix`,
     nine floats in the order the entry stores them - the inverse of
     _entry_matrices.
@@ -516,35 +544,97 @@ def _matrix_to_entry(matrix):
     Back in the game's axes the linear part is the scale times the rotation,
     each row of the rotation scaled by one axis (see _entry_matrices), so a
     row's length is that axis's scale and dividing it out leaves the
-    rotation. A mirrored placement carries its reflection on X. A shear has
-    no entry that expresses it, and comes out as the nearest rotation.
+    rotation. A mirrored placement carries its reflection on X.
+
+    Done in double precision: mathutils works in single, and taking the
+    angles through it lost up to a centimetre on a large prop turned close
+    to 90 degrees about Y.
+
+    Not every transform is one an entry can hold. An entry scales after it
+    rotates, a Blender object before - so an object turned and then
+    stretched along its own axis is a shear in the game's terms, and the
+    nearest entry puts its model somewhere else. That is refused rather than
+    written: the placement is recomposed from the entry and compared with
+    the one in Blender.
     """
-    to_blender = Matrix.Rotation(math.radians(90), 4, "X")
-    in_game = to_blender.inverted() @ matrix @ to_blender
-    position = in_game.to_translation() / GLOBAL_SCALE
-    linear = in_game.to_3x3()
-    scale = [linear[row].length for row in range(3)]
-    if linear.determinant() < 0:
+    import numpy as np
+
+    to_blender = np.array(Matrix.Rotation(math.radians(90), 4, "X"), dtype=np.float64)
+    blender = np.array(matrix, dtype=np.float64)
+    in_game = np.linalg.inv(to_blender) @ blender @ to_blender
+    position = in_game[:3, 3] / GLOBAL_SCALE
+    linear = in_game[:3, :3]
+    scale = np.linalg.norm(linear, axis=1)
+    if np.linalg.det(linear) < 0:
         scale[0] = -scale[0]
-    if any(abs(value) < 1e-12 for value in scale):
+    if np.any(np.abs(scale) < 1e-12):
         raise AlbamCheckFailure(
-            "A room placement is scaled to nothing on one axis",
+            f"{name} is scaled to nothing on one axis",
             details="An entry with a zero scale is what the game treats as unused",
             solution="Give the object a non-zero scale, or delete it",
         )
-    rotation = Matrix([linear[row] / scale[row] for row in range(3)])
-    angles = rotation.to_quaternion().to_matrix().to_euler("XYZ")
-    return (position.x, position.y, position.z,
-            angles.x, angles.y, angles.z,
-            scale[0], scale[1], scale[2])
+    # The nearest rotation to what is left once the scale is divided out,
+    # which is that rotation itself whenever an entry can express the whole.
+    u, _, vt = np.linalg.svd(linear / scale[:, None])
+    rotation = u @ vt
+    angles = _euler_xyz(rotation)
+
+    recomposed = _game_matrix(position * GLOBAL_SCALE, angles, scale)
+    size = max(1.0, float(np.abs(scale).max()))
+    error = float(np.abs(recomposed - in_game).max())
+    if error > EXPRESSIBLE_TOLERANCE * size:
+        raise AlbamCheckFailure(
+            f"{name} is transformed in a way a room entry can't hold",
+            details="An entry stretches its model after rotating it, along the "
+                    "room's axes, while a Blender object stretches before "
+                    "rotating. A placement both rotated and scaled unevenly along "
+                    f"its own axes would land up to {error:.3g} m off.",
+            solution="Rotate the mesh under an empty and scale the empty instead "
+                     "(the way import builds such placements), or scale evenly",
+        )
+    return (*position, *angles, *scale)
+
+
+def _euler_xyz(rotation):
+    """Angles (x, y, z) such that Euler((x, y, z), "XYZ").to_matrix() is
+    `rotation` - X applied first, so the matrix is Rz @ Ry @ Rx."""
+    sin_y = -rotation[2, 0]
+    cos_y = math.hypot(rotation[2, 1], rotation[2, 2])
+    y = math.atan2(sin_y, cos_y)
+    if cos_y > 1e-9:
+        x = math.atan2(rotation[2, 1], rotation[2, 2])
+        z = math.atan2(rotation[1, 0], rotation[0, 0])
+    else:
+        # Gimbal lock: only x - z (or x + z) is defined; z is taken as 0.
+        z = 0.0
+        x = math.atan2(rotation[0, 1] if sin_y > 0 else -rotation[0, 1], rotation[1, 1])
+    return x, y, z
+
+
+def _game_matrix(translation, angles, scale):
+    """translation @ scale @ rotation in the game's axes, double precision -
+    the transform an entry holds, as _entry_matrices builds it."""
+    import numpy as np
+
+    x, y, z = angles
+    rx = np.array([[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]])
+    ry = np.array([[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]])
+    rz = np.array([[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]])
+    out = np.identity(4)
+    out[:3, :3] = np.diag(scale) @ (rz @ ry @ rx)
+    out[:3, 3] = translation
+    return out
 
 
 def _mesh_fingerprint(bl_mesh):
     """A digest of everything a room model is written from: positions,
-    faces, UVs, normals, vertex colours, which material each face uses and
-    which image each material binds. Recorded at import and compared at
-    export - a model is only written again if this changed, since a model
-    written from Blender is not byte for byte what shipped even unedited."""
+    faces, UVs, normals, vertex colours, which material each face uses,
+    which image each material binds and the .tpl slot that image carries,
+    and the albam properties of the mesh and its materials (material flags,
+    specular values, the header words the mesh carries). Recorded at import
+    and compared at export - a model is only written again if this changed,
+    since a model written from Blender is not byte for byte what shipped
+    even unedited."""
     import numpy as np
 
     digest = hashlib.sha1()
@@ -565,9 +655,13 @@ def _mesh_fingerprint(bl_mesh):
     colors = bl_mesh.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
     if colors is not None:
         add(colors.data, "color_srgb", len(colors.data) * 4, np.float32)
+    digest.update(_properties_digest(bl_mesh))
     for bl_material in bl_mesh.materials:
         digest.update(b"\0" + (bl_material.name.encode() if bl_material else b""))
-        if bl_material is None or not bl_material.node_tree:
+        if bl_material is None:
+            continue
+        digest.update(_properties_digest(bl_material))
+        if not bl_material.node_tree:
             continue
         # Which image feeds which shader input is what a material's texture
         # slots are written from (see mesh._texture_slot).
@@ -575,7 +669,20 @@ def _mesh_fingerprint(bl_mesh):
             image = getattr(link.from_node, "image", None)
             if image is not None:
                 digest.update(f"\1{image.name}\2{link.to_socket.name}".encode())
+                digest.update(_properties_digest(image))
     return digest.hexdigest()
+
+
+def _properties_digest(bl_id):
+    """The values of a datablock's re4uhd albam custom properties, as bytes
+    - what export writes from a mesh's header words, a material's fields and
+    an image's .tpl slot besides the geometry itself."""
+    properties = bl_id.albam_custom_properties.get_custom_properties_for_appid("re4uhd")
+    if properties is None:
+        return b""
+    values = [(name, repr(getattr(properties, name)))
+              for name in properties.bl_rna.properties.keys() if name != "rna_type"]
+    return repr(sorted(values)).encode()
 
 
 def _write_models(bl_obj, data, smd, bl_placements):
@@ -615,25 +722,31 @@ def _write_models(bl_obj, data, smd, bl_placements):
         start, end = slot(model_table + smd.offsets_models[model_id])
         rewritten[start] = export_room_model(bl_mesh, bytes(data[start:end]))
 
+    def write_in_place(start, new):
+        end = slot(start)[1]
+        if len(new) > end - start:
+            return False
+        data[start:end] = new + bytes(end - start - len(new))
+        return True
+
     if all(len(new) <= slot(start)[1] - start for start, new in rewritten.items()):
         for start, new in rewritten.items():
-            end = slot(start)[1]
-            data[start:end] = new + bytes(end - start - len(new))
+            write_in_place(start, new)
         return len(meshes)
 
     region_start = starts[0]
     if any(region_start <= table < len(data) for table in (model_table, tpl_table)):
         # A table sits among the models: the region is not models and .tpl
         # files alone, so it is not laid out again.
+        offset_positions = {}
+        for item_start, offset_position, table in items:
+            offset_positions.setdefault(item_start, []).append((offset_position, table))
         for start, new in rewritten.items():
-            end = slot(start)[1]
-            if len(new) <= end - start:
-                data[start:end] = new + bytes(end - start - len(new))
+            if write_in_place(start, new):
                 continue
             data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
-            for item_start, offset_position, table in items:
-                if item_start == start:
-                    struct.pack_into("<I", data, offset_position, len(data) - table)
+            for offset_position, table in offset_positions[start]:
+                struct.pack_into("<I", data, offset_position, len(data) - table)
             data.extend(new)
         return len(meshes)
 
