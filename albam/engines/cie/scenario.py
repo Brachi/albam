@@ -582,12 +582,81 @@ def _write_models(bl_obj, data, smd, bl_placements):
     """Write every edited room model back into `data`, the .smd being
     exported, and return how many were.
 
-    A model is written where it was if it still fits the space up to the
-    next thing the file is known to hold there, and appended at the end of
-    the file otherwise, with its table entry pointed at the new place. Its
-    old bytes are left where they were in that case: nothing else in the
-    file is known not to point at them.
+    A model that still fits the space it had - up to the next thing the file
+    is known to hold - is written where it was. If one does not, the region
+    the models and .tpl files fill is laid out again: every one of them in
+    the order they were, on the alignment they shipped with, unedited ones
+    copied as they are, and both offset tables pointed at the new places.
+    That only depends on the tables being the only thing pointing into that
+    region, which is what the game showed when every model of a room was
+    moved to the end of its file and it drew the moved copies. Where the
+    region is not made of models and .tpl files alone, the model is appended
+    at the end instead and the old bytes are left where they were.
     """
+    meshes = _edited_models(bl_obj, bl_placements)
+    if not meshes:
+        return 0
+
+    model_table = smd.header.offset_model_table
+    tpl_table = smd.header.offset_tpl_table
+    # (absolute start, table position of its offset, which table it is in).
+    items = [(model_table + o, model_table + 4 * i, model_table)
+             for i, o in enumerate(smd.offsets_models[:-1])]
+    items += [(tpl_table + o, tpl_table + 4 * i, tpl_table)
+              for i, o in enumerate(smd.offsets_tpls[:-1])]
+    starts = sorted({start for start, _, _ in items})
+    known = sorted(set(starts) | {model_table, tpl_table, len(data)})
+
+    def slot(start):
+        return start, min(k for k in known if k > start)
+
+    rewritten = {}
+    for model_id, bl_mesh in sorted(meshes.items()):
+        start, end = slot(model_table + smd.offsets_models[model_id])
+        rewritten[start] = export_room_model(bl_mesh, bytes(data[start:end]))
+
+    if all(len(new) <= slot(start)[1] - start for start, new in rewritten.items()):
+        for start, new in rewritten.items():
+            end = slot(start)[1]
+            data[start:end] = new + bytes(end - start - len(new))
+        return len(meshes)
+
+    region_start = starts[0]
+    if any(region_start <= table < len(data) for table in (model_table, tpl_table)):
+        # A table sits among the models: the region is not models and .tpl
+        # files alone, so it is not laid out again.
+        for start, new in rewritten.items():
+            end = slot(start)[1]
+            if len(new) <= end - start:
+                data[start:end] = new + bytes(end - start - len(new))
+                continue
+            data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
+            for item_start, offset_position, table in items:
+                if item_start == start:
+                    struct.pack_into("<I", data, offset_position, len(data) - table)
+            data.extend(new)
+        return len(meshes)
+
+    region = bytearray()
+    moved = {}
+    for start in starts:
+        region.extend(bytes(-(region_start + len(region)) % SMD_MODEL_ALIGNMENT))
+        moved[start] = region_start + len(region)
+        end = slot(start)[1]
+        region.extend(rewritten.get(start, data[start:end]))
+    del data[region_start:]
+    data.extend(region)
+    for start, offset_position, table in items:
+        struct.pack_into("<I", data, offset_position, moved[start] - table)
+    if smd.header.offset_first_model in moved:
+        # Only a hint (see structs/re4-uhd-smd.ksy), kept consistent anyway.
+        struct.pack_into("<I", data, 12, moved[smd.header.offset_first_model])
+    return len(meshes)
+
+
+def _edited_models(bl_obj, bl_placements):
+    """{model id: mesh} for every room model whose mesh no longer matches
+    the fingerprint import recorded."""
     meshes = {}
     for bl_placement in bl_placements:
         for bl_object in [bl_placement] + list(bl_placement.children):
@@ -607,22 +676,4 @@ def _write_models(bl_obj, data, smd, bl_placements):
                             "model textured through a different .tpl.",
                     solution="Make the edit on one of them only",
                 )
-    if not meshes:
-        return 0
-
-    table = smd.header.offset_model_table
-    known = sorted({table + o for o in smd.offsets_models[:-1]} |
-                   {smd.header.offset_tpl_table + o for o in smd.offsets_tpls[:-1]} |
-                   {table, smd.header.offset_tpl_table, len(data)})
-    for model_id, bl_mesh in sorted(meshes.items()):
-        start = table + smd.offsets_models[model_id]
-        end = min(k for k in known if k > start)
-        model_bytes = export_room_model(bl_mesh, bytes(data[start:end]))
-        if len(model_bytes) <= end - start:
-            data[start:end] = model_bytes + bytes(end - start - len(model_bytes))
-            continue
-        data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
-        new_start = len(data)
-        data.extend(model_bytes)
-        struct.pack_into("<I", data, table + 4 * model_id, new_start - table)
-    return len(meshes)
+    return meshes

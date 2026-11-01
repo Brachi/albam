@@ -234,8 +234,9 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 - **Rooms** export their placements and their models. Moving, rotating, scaling
   or deleting the objects placed in a room's `.smd`, and editing the meshes
   themselves, is written back; a model left alone keeps its shipped bytes, and
-  so does everything else in the file. An edited model that no longer fits
-  where it was is appended to the end of the file, which grows. Adding
+  so does everything else in the file. If an edited model no longer fits where
+  it was, the models are laid out again and the file grows only by what the
+  edit added. Adding
   placements (a duplicate made in Blender is refused), adding models, and the
   one room assembled from several files are not supported yet.
 - **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
