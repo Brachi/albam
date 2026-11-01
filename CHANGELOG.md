@@ -8,8 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Support for Resident Evil 4 UHD: import and export of characters and enemies, room
-  import, adding and replacing textures, and repacking edited files back into the
-  game's archives, texture packs included. See
+  import, and repacking edited files back into the game's archives. See
   `docs/modding-a-character.md` for the full edit-and-repack workflow.
 - Import of Resident Evil: Operation Raccoon City characters, skeletons and
   animations. No export yet for this game.
