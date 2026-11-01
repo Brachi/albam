@@ -22,19 +22,46 @@ file reaches for a sibling archive (see _SharedScenario).
 """
 import math
 import os
+import struct
 
 import bpy
 from mathutils import Euler, Matrix, Vector
 
 from ...exceptions import AlbamCheckFailure
 from ...registry import blender_registry
-from ...vfs import VirtualFile
+from ...vfs import VirtualFile, VirtualFileData
 from .mesh import AUTO_TPL, GLOBAL_SCALE, build_blender_model
 from .structs.re4_uhd_smd import Re4UhdSmd
 
 # The magic values a scenario ships with. Anything else is not one. 0x0000
 # is a stub that places nothing (see structs/re4-uhd-smd.ksy).
 SCENARIO_MAGICS = (0x0000, 0x0010, 0x0020, 0x0031, 0x0040, 0x0140)
+
+# The custom property a placement's top-level object carries: the index of
+# the .smd entry it was imported from, which is what export writes it back
+# into (see export_smd).
+ENTRY_PROPERTY = "albam_smd_entry"
+
+# Where the entry table starts, and how big one entry is - for every magic
+# but 0x140, whose header carries a variable list of counts first (see
+# structs/re4-uhd-smd.ksy). An entry is three vec3f, four u1, seven u4 and
+# a u4 status.
+SMD_HEADER_SIZE = 16
+SMD_ENTRY_SIZE = 72
+# Within an entry: position, angles and scale, three f4 each.
+ENTRY_TRANSFORM_FORMAT = "<9f"
+# A placement is written back only if it moved by more than this, in
+# Blender's units (metres and radians); anything less is float noise from
+# the round trip through a matrix, and the entry keeps its shipped bytes.
+TRANSFORM_TOLERANCE = 1e-5
+# How far, relative to the placement's own size, the transform an entry can
+# express may land from the one in Blender before export refuses it (see
+# _matrix_to_entry).
+EXPRESSIBLE_TOLERANCE = 1e-4
+# The custom property on a room's object listing the entries import made an
+# object for - the only ones export may treat as deleted when no object
+# claims them (see export_smd).
+IMPORTED_ENTRIES_PROPERTY = "albam_smd_imported_entries"
 
 # What the shared file of a split room is called, relative to one of the
 # files sharing it: the extra files are named "<room>_NN" and the shared one
@@ -60,6 +87,7 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
     built = {}
     placed = 0
     missing = 0
+    imported = []
     try:
         for index, entry in enumerate(smd.entries):
             if not entry.is_placed:
@@ -82,10 +110,13 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                     missing += 1
                     continue
                 built[key] = bl_mesh
-            _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement[ENTRY_PROPERTY] = index
+            imported.append(index)
             placed += 1
     finally:
         shared.close()
+    bl_scenario[IMPORTED_ENTRIES_PROPERTY] = imported
     print(f"[re4uhd] scenario {name}: {placed} placed, {len(built)} models, {missing} unresolved")
     return bl_scenario
 
@@ -374,3 +405,204 @@ def _shared_archive_path(archive_path):
         if name.lower() == wanted:
             return os.path.join(directory, name)
     return None
+
+
+@blender_registry.register_export_function(app_id="re4uhd", extension="smd")
+def export_smd(bl_obj):
+    """The .smd a room was imported from, with its placements as they are in
+    Blender.
+
+    Only the entry table is rewritten, and only the entries whose placement
+    changed. A scenario holds far more than this module reads - between the
+    entry table and the models sit megabytes nothing here models - so the
+    shipped file is the starting point and everything else in it is kept
+    byte for byte.
+
+    A placement moved, rotated or scaled in Blender is written back to its
+    entry. One deleted in Blender is zeroed, which is what the unused
+    entries a few rooms ship with look like and is what the game skips -
+    but only an entry import made an object for: one whose model could not
+    be built (a split room's shared models when the shared archive is not
+    beside it, a model the .bin importer refused) never had an object to
+    delete, and is kept as it is. A room whose object has no record of the
+    entries import made objects for has nothing deleted. The models
+    themselves are not written.
+    """
+    asset = bl_obj.albam_asset
+    data = bytearray(asset.original_bytes)
+    smd = Re4UhdSmd.from_bytes(bytes(data))
+    smd._read()
+    if smd.header.magic == 0x140:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} is a room assembled from several files, which albam "
+            f"can't write back yet",
+            details="Its header carries a list of per-file entry counts that "
+                    "export does not maintain. One room of the game is like this.",
+        )
+
+    placements = {}
+    for child in bl_obj.children:
+        index = child.get(ENTRY_PROPERTY)
+        if index is None:
+            continue
+        if index in placements or not 0 <= index < len(smd.entries):
+            raise AlbamCheckFailure(
+                f"{child.name} claims entry {index} of {bl_obj.name}, which "
+                f"{'another object also claims' if index in placements else 'has no such entry'}",
+                details="Each object placed in a room stands for one entry of its "
+                        ".smd, recorded on import. A duplicate made in Blender "
+                        "copies that record but has no entry of its own: adding "
+                        "placements isn't supported yet.",
+                solution="Delete the duplicate, or move the original instead",
+            )
+        placements[index] = child
+
+    imported = bl_obj.get(IMPORTED_ENTRIES_PROPERTY)
+    imported = set(imported) if imported is not None else set(placements)
+
+    changed = 0
+    for index, entry in enumerate(smd.entries):
+        if not entry.is_placed or index not in imported:
+            continue
+        offset = SMD_HEADER_SIZE + index * SMD_ENTRY_SIZE
+        # The entry is patched where it sits rather than written out from the
+        # parsed fields, so the offset is checked against what the parser
+        # read there before anything is written to it.
+        position = (entry.position.x, entry.position.y, entry.position.z)
+        if struct.unpack_from("<3f", data, offset) != position:
+            raise RuntimeError(f"entry {index} of {bl_obj.name} is not at offset {offset}")
+        bl_placement = placements.get(index)
+        if bl_placement is None or not _has_mesh(bl_placement):
+            # Deleting only the mesh under a two-object placement deletes
+            # the placement too: the empty left behind places nothing.
+            data[offset:offset + SMD_ENTRY_SIZE] = bytes(SMD_ENTRY_SIZE)
+            changed += 1
+            continue
+        matrix = _placement_matrix(bl_placement)
+        if _same_matrix(matrix, _entry_matrix(entry)):
+            continue
+        struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset,
+                         *_matrix_to_entry(matrix, bl_placement.name))
+        changed += 1
+
+    print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten")
+    return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
+
+
+def _entry_matrix(entry):
+    """The whole transform an entry places its model at, in Blender's axes."""
+    placement, rotation = _entry_matrices(entry)
+    return placement if rotation is None else placement @ rotation
+
+
+def _has_mesh(bl_placement):
+    return bl_placement.type == "MESH" or any(c.type == "MESH" for c in bl_placement.children)
+
+
+def _placement_matrix(bl_placement):
+    """The transform a placement puts its model at, relative to the room.
+
+    A placement is one object, or an empty with the rotated model under it
+    (see _place); either way it is the product of the matrices from the
+    room's object down to the mesh.
+    """
+    matrix = bl_placement.matrix_basis.copy()
+    meshes = [c for c in bl_placement.children if c.type == "MESH"]
+    if bl_placement.type != "MESH" and meshes:
+        matrix = matrix @ meshes[0].matrix_basis
+    return matrix
+
+
+def _same_matrix(a, b):
+    return all(abs(a[i][j] - b[i][j]) <= TRANSFORM_TOLERANCE
+               for i in range(4) for j in range(4))
+
+
+def _matrix_to_entry(matrix, name="A room placement"):
+    """(position, angles, scale) for an entry placing its model at `matrix`,
+    nine floats in the order the entry stores them - the inverse of
+    _entry_matrices.
+
+    Back in the game's axes the linear part is the scale times the rotation,
+    each row of the rotation scaled by one axis (see _entry_matrices), so a
+    row's length is that axis's scale and dividing it out leaves the
+    rotation. A mirrored placement carries its reflection on X.
+
+    Done in double precision: mathutils works in single, and taking the
+    angles through it loses up to a centimetre on a large prop turned close
+    to 90 degrees about Y.
+
+    Not every transform is one an entry can hold. An entry scales after it
+    rotates, a Blender object before - so an object turned and then
+    stretched along its own axis is a shear in the game's terms, and the
+    nearest entry puts its model somewhere else. That is refused rather than
+    written: the placement is recomposed from the entry and compared with
+    the one in Blender.
+    """
+    import numpy as np
+
+    to_blender = np.array(Matrix.Rotation(math.radians(90), 4, "X"), dtype=np.float64)
+    blender = np.array(matrix, dtype=np.float64)
+    in_game = np.linalg.inv(to_blender) @ blender @ to_blender
+    position = in_game[:3, 3] / GLOBAL_SCALE
+    linear = in_game[:3, :3]
+    scale = np.linalg.norm(linear, axis=1)
+    if np.linalg.det(linear) < 0:
+        scale[0] = -scale[0]
+    if np.any(np.abs(scale) < 1e-12):
+        raise AlbamCheckFailure(
+            f"{name} is scaled to nothing on one axis",
+            details="An entry with a zero scale is what the game treats as unused",
+            solution="Give the object a non-zero scale, or delete it",
+        )
+    # The nearest rotation to what is left once the scale is divided out,
+    # which is that rotation itself whenever an entry can express the whole.
+    u, _, vt = np.linalg.svd(linear / scale[:, None])
+    rotation = u @ vt
+    angles = _euler_xyz(rotation)
+
+    recomposed = _game_matrix(position * GLOBAL_SCALE, angles, scale)
+    size = max(1.0, float(np.abs(scale).max()))
+    error = float(np.abs(recomposed - in_game).max())
+    if error > EXPRESSIBLE_TOLERANCE * size:
+        raise AlbamCheckFailure(
+            f"{name} is transformed in a way a room entry can't hold",
+            details="An entry stretches its model after rotating it, along the "
+                    "room's axes, while a Blender object stretches before "
+                    "rotating. A placement both rotated and scaled unevenly along "
+                    f"its own axes would land up to {error:.3g} m off.",
+            solution="Rotate the mesh under an empty and scale the empty instead "
+                     "(the way import builds such placements), or scale evenly",
+        )
+    return (*position, *angles, *scale)
+
+
+def _euler_xyz(rotation):
+    """Angles (x, y, z) such that Euler((x, y, z), "XYZ").to_matrix() is
+    `rotation` - X applied first, so the matrix is Rz @ Ry @ Rx."""
+    sin_y = -rotation[2, 0]
+    cos_y = math.hypot(rotation[2, 1], rotation[2, 2])
+    y = math.atan2(sin_y, cos_y)
+    if cos_y > 1e-9:
+        x = math.atan2(rotation[2, 1], rotation[2, 2])
+        z = math.atan2(rotation[1, 0], rotation[0, 0])
+    else:
+        # Gimbal lock: only x - z (or x + z) is defined; z is taken as 0.
+        z = 0.0
+        x = math.atan2(rotation[0, 1] if sin_y > 0 else -rotation[0, 1], rotation[1, 1])
+    return x, y, z
+
+
+def _game_matrix(translation, angles, scale):
+    """translation @ scale @ rotation in the game's axes, double precision -
+    the transform an entry holds, as _entry_matrices builds it."""
+    import numpy as np
+
+    x, y, z = angles
+    rx = np.array([[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]])
+    ry = np.array([[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]])
+    rz = np.array([[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]])
+    out = np.identity(4)
+    out[:3, :3] = np.diag(scale) @ (rz @ ry @ rx)
+    out[:3, 3] = translation
+    return out
