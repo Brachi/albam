@@ -304,7 +304,11 @@ def convert_tex_to_dds(tex: [Tex112, Tex157]) -> bytes:
     )
     dds_header.set_constants()
     dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
-    dds = bytes(dds_header) + tex.dds_data
+    dds_header.data = tex.dds_data
+    # Tex112 files (RE5, DMC4) halve each level's block count, which for a
+    # non-power-of-two image leaves fewer blocks than DDS readers expect.
+    # Tex157 files lay their levels out as DDS files do.
+    dds = bytes(dds_header) + dds_header.data_in_dds_spec_layout()
 
     return dds
 
@@ -366,16 +370,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
         tex = parse(TexOrRtexCls, tex_bytes, app_id)
         if not is_rtex:
             try:
-                compression_fmt = TEX_FORMAT_MAPPER[tex.compression_format]
-                dds_header = DDSHeader(
-                    dwHeight=tex.height,
-                    dwWidth=tex.width,
-                    pixelfmt_dwFourCC=compression_fmt,
-                    dwMipMapCount=tex.num_mipmaps_per_image
-                )
-                dds_header.set_constants()
-                dds_header.set_variables(compressed=bool(compression_fmt), cubemap=tex.num_images > 1)
-                dds = bytes(dds_header) + tex.dds_data
+                dds = convert_tex_to_dds(tex)
             except Exception as err:
                 # TODO: log this instead of printing it
                 print(f'Error converting "{texture_path}" to dds: {err}')
@@ -758,8 +753,9 @@ def _serialize_texture_156(app_id, dict_tex):
             fmt = b"\x15\x00\x00\x00".decode("ascii")
         tex.compression_format = fmt
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
-        tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
-        tex.dds_data = dds_header.data
+        # Tex112 files halve each level's block count, see convert_tex_to_dds()
+        tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_, halved_blocks=True)
+        tex.dds_data = dds_header.data_in_halved_blocks_layout()
         dds_data_len = len(tex.dds_data)
     tex.padding = 0
     custom_properties.set_to_dest(tex)
@@ -806,7 +802,7 @@ def _serialize_texture_21(app_id, dict_tex):
     if not is_rtex:
         tex.cube_faces = [] if dds_header.image_count == 1 else _calculate_cube_faces_data(tex)
         tex.mipmap_offsets = dds_header.calculate_mimpap_offsets(tex.size_before_data_)
-        tex.dds_data = dds_header.data
+        tex.dds_data = dds_header.data_in_dds_spec_layout()
         dds_data_size = len(tex.dds_data)
 
     custom_properties.set_to_dest(tex)

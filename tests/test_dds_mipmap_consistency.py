@@ -79,3 +79,20 @@ def test_volume_flag_is_not_a_cubemap():
     header.dwCaps2 = DDSHeader.DDSCAPS2_VOLUME
 
     assert header.image_count == 1
+
+
+def test_non_power_of_two_chain_converts_between_tex_and_dds_layouts():
+    # A 400x400 DXT1 .tex with 9 mipmaps halves the block count per level:
+    # 12x12 blocks at level 3, where DDS readers expect 13x13
+    tex_data = bytes(i * 7 % 251 for i in range(106536))
+    header = DDSHeader.from_dds_bytes(_make_dds(400, 400, 9, data_size=0) + tex_data, "tex.dds")
+
+    dds_data = header.data_in_dds_spec_layout()
+    assert len(dds_data) == 106864
+    level_3, level_3_dds = tex_data[105000:105000 + 12 * 8], dds_data[105000:105000 + 13 * 8]
+    assert level_3_dds == level_3 + level_3[-8:]
+
+    header.data = dds_data
+    assert header.data_in_halved_blocks_layout() == tex_data
+    offsets = header.calculate_mimpap_offsets(0, halved_blocks=True)
+    assert offsets[-1] + header.mipmap_sizes_halved_blocks[-1] == len(tex_data)
