@@ -228,6 +228,8 @@ def load_sbc(file_item, context):
     sbc_objects = []
 
     if sbc_version == 255:
+        div_type = sbc.header.space_div_type_triangle
+        assert div_type == 0, f"Division type {div_type} is not supported yet"
         bvh_collection = [b for i, b in enumerate(sbc.sbc_bvhc)]
         face_collection = [fc for i, fc in enumerate(sbc.faces)]
         vertex_collection = [vc for i, vc in enumerate(sbc.vertices)]
@@ -300,7 +302,7 @@ def create_link_ob(link_ob, app_id, link_name):
     sbc_empty = common.create_root_nub(link_name)
     sbc_link_proprs = sbc_empty.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
         "sbc_21_link"]
-    sbc_link_proprs.unk_01 = link_ob.unk_01
+    sbc_link_proprs.attribute = link_ob.attribute
     sbc_link_proprs.unk_02 = link_ob.unk_02
     sbc_link_proprs.unk_03 = link_ob.unk_03
     sbc_link_proprs.unk_04 = link_ob.unk_04
@@ -468,32 +470,21 @@ def export_sbc(bl_obj):
 def build_sbc(bl_obj, src_sbc, dst_sbc, verts, tris, quads, sbcs, links, parent_tree, mesh_metadata, app_id):
     def tally(x):
         return sum(map(len, x))
-    # headerData = formHeader(len(verts), tally(verts), tally(tris), tally(
-    #    quads), len(links), tally(sbcs+[parentTree]), parentTree)
+
     _init_sbc_header(bl_obj, src_sbc, dst_sbc, len(verts), len(links), tally(quads), tally(tris),
                      tally(verts), parent_tree, tally(sbcs + [parent_tree]))
-    # header = buildHeader(headerData)
-    # cBVH = list(map(buildCollision,sbcs))
+    # Kaitai initializes repeated fields while parsing, but dst_sbc is a new
+    # write-only object here. pair_aabbs is checked even when its repeat count
+    # is zero (the exporter currently writes the non-grid layout).
+    if app_id in ("re0", "re1", "rev1", "rev2", "dd"):
+        dst_sbc.pair_aabbs = []
+
     dst_sbc.sbc_bvhc = [_serialize_bvhc(dst_sbc, sbc) for sbc in sbcs]
-
-    # cBVHCollision = buildCollision(parentTree)
     dst_sbc.bvh = _serialize_bvhc(dst_sbc, parent_tree)
-
-    # faceCollection = list(map(buildFaces, tris))
     dst_sbc.faces = build_faces(dst_sbc, tris)
-
-    # vertexCollection = list(map(buildVertices, verts))
     dst_sbc.vertices = build_vertices(dst_sbc, verts)
-
-    # collisionTypes = list(map(buildTypes, links))
     dst_sbc.collision_types = [_serialize_col_types(dst_sbc, link, app_id) for link in links]
-
-    # pairCollection = list(map(buildPairs, quads))
     dst_sbc.pairs_collections = build_pairs(dst_sbc, quads)
-    # dst_sbc.pairs_collections = _serialize_pairs(dst_sbc, quads)
-
-    # infoCollection = buildInfo(
-    #    header, tris, verts, collisionTypes, quads, cBVH, cBVHCollision, meshmetadata)
     dst_sbc.sbc_info = _serialize_infos(dst_sbc, tris, verts, dst_sbc.collision_types,
                                         quads, dst_sbc.sbc_bvhc, dst_sbc.bvh, mesh_metadata)
 
@@ -567,9 +558,9 @@ def _init_sbc_header(bl_obj, src_sbc, dst_sbc, num_objects, num_stages, num_pair
     bbox.max = [v for v in bbox_data["maxPos"].values()]
     dst_sbc_header.__dict__.update(dict(
         indent=b"SBC\xFF",
-        unk_00=src_sbc.header.unk_00,
-        unk_02=0,
-        unk_03=0,
+        version=src_sbc.header.version,
+        space_div_type_part=0,
+        space_div_type_triangle=0,
         num_objects=num_objects,
         num_stages=num_stages,
         num_pairs=num_pairs,
@@ -822,11 +813,11 @@ def _serialize_col_types(dst_sbc, link_ob, app_id):
     sbc_link_props = link_ob.albam_custom_properties.get_custom_properties_secondary_for_appid(
         app_id)["sbc_21_link"]
     coltype = dst_sbc.CollisionType(_parent=dst_sbc, _root=dst_sbc._root)
-    coltype.unk_01 = sbc_link_props.unk_01
+    coltype.attribute = sbc_link_props.attribute
     coltype.unk_02 = sbc_link_props.unk_02
     coltype.unk_03 = sbc_link_props.unk_03
     coltype.unk_04 = sbc_link_props.unk_04
-    coltype.jp_path = sbc_link_props.jp_path
+    coltype.jp_path = sbc_link_props.jp_path  # padding
     coltype._check()
     return coltype
 
@@ -1075,7 +1066,7 @@ class SBC21CollisionCustomProperties(bpy.types.PropertyGroup):
     is_secondary=True, display_name="SBC Link", asset_type="COLLISION")
 @blender_registry.register_blender_prop
 class SBC21LinkCustomProperties(BaseSBCProperties):
-    unk_01: bpy.props.FloatProperty(name="Unknown 01", default=0.0, options=set())  # noqa: F821
+    attribute: bpy.props.IntProperty(name="Attribute", default=0, options=set())  # noqa: F821
     unk_02: bpy.props.IntProperty(name="Unknown 02", default=0, options=set())  # noqa: F821
     unk_03: bpy.props.IntProperty(name="Unknown 03", default=0, options=set())  # noqa: F821
     unk_04: bpy.props.IntVectorProperty(name="Unknown 04", size=3, default=(0, 0, 0),
