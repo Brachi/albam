@@ -8,8 +8,7 @@ from types import SimpleNamespace
 import bpy
 import pytest
 
-from tests.mtfw.conftest import clear_scene, import_vfile
-from tests.mtfw.scripts.catalog_paths import resolve_hashes
+from tests.mtfw.conftest import clear_scene, import_vfile, resolve_hashes_with_remount
 
 RE5_MODEL_HASH = "5d45d4682b062d49"
 
@@ -63,12 +62,14 @@ def test_export_refuses_a_mesh_influenced_by_more_than_32_bones():
 
 
 @pytest.fixture
-def re5_model(game_fs_root):
+def re5_model(pytestconfig, game_fs_root):
     """A real re5 model, imported fresh and dropped again afterwards, along
     with the export setting the vertex-count tests change."""
     export_settings = bpy.context.scene.albam.export_settings
     no_vf_grouping = export_settings.no_vf_grouping
-    local_path = resolve_hashes(game_fs_root, {RE5_MODEL_HASH})[RE5_MODEL_HASH].lstrip("/")
+    local_path = resolve_hashes_with_remount(
+        pytestconfig, "re5", game_fs_root, {RE5_MODEL_HASH}
+    )[RE5_MODEL_HASH].lstrip("/")
     try:
         import_vfile("re5", local_path)
         yield bpy.context.scene.albam.exportable.file_list[-1].bl_object
