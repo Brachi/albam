@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Warning when writing a `.mod`/`.mrl` into an `.arc` references a texture path
+  that isn't among the arc's own entries or any other arc the VFS has loaded -
+  catches a texture renamed past the duplicate-path check without a `.tex`
+  actually landing at the new name, which the game reads as a crash or an
+  endless load rather than a missing file
 
 ### Fixed
 

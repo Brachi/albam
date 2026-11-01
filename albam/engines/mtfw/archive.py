@@ -1,6 +1,7 @@
 import io
 import ntpath
 
+import bpy
 from kaitaistruct import KaitaiStream
 
 from ...registry import blender_registry
@@ -239,6 +240,60 @@ def _find_orphaned_textures(file_entries, app_id, old_texture_paths, new_texture
     return cleaned, removed
 
 
+def _warn_about_unreachable_textures(app_id, referenced_texture_paths, exported, arc_version):
+    """Warn (#372) about any texture path this export's own model/material
+    references that the game would not actually be able to find: not among
+    this arc's own entries once this write lands, and not in any other root
+    the VFS currently has mounted either.
+
+    A warning, not an AlbamCheckFailure: adding a genuinely new texture is
+    legitimate and looks identical from here. The scenario this exists for
+    is a texture renamed to dodge the duplicate-path check (#368) without a
+    .tex ever actually landing at the new name - in RE6 campaign that is a
+    crash or an endless load, and cost one user about two hours in #support
+    before anyone realized why.
+    """
+    if not referenced_texture_paths:
+        return
+
+    arc_paths = {
+        _normalize_texture_key(fe.file_path)
+        for fe in exported.values()
+        if _file_entry_extension(fe, arc_version) in TEXTURE_EXTENSIONS
+    }
+    missing = referenced_texture_paths - arc_paths
+    if not missing:
+        return
+
+    # Checked against every root currently mounted in the VFS, not just the
+    # arc being written - a texture can legitimately live in a different
+    # .arc than the model that references it.
+    vfs = bpy.context.scene.albam.vfs
+    mounted_texture_paths = {
+        _normalize_texture_key(vf.relative_path.rpartition(".")[0])
+        for vf in vfs.file_list
+        if (not vf.is_root and not vf.is_expandable and
+            vf.app_id == app_id and vf.extension.lower() in TEXTURE_EXTENSIONS)
+    }
+    missing -= mounted_texture_paths
+    if not missing:
+        return
+
+    # The real extension (.tex vs .rtex) isn't known from a bare mod/mrl
+    # reference, and .tex is what the game overwhelmingly uses in practice -
+    # close enough for a warning message, unlike the strict comparisons above.
+    names = sorted(f"{path}.tex" for path in missing)
+    preview = ", ".join(names[:8])
+    if len(names) > 8:
+        preview += ", ..."
+    verb = "isn't" if len(names) == 1 else "aren't"
+    show_message_box(
+        f"{preview} {verb} in any loaded arc; the game may crash or load forever",
+        title="Warning",
+        icon='ERROR',
+    )
+
+
 @blender_registry.register_archive_writer(app_id="re0", extension="arc")
 @blender_registry.register_archive_writer(app_id="re1", extension="arc")
 @blender_registry.register_archive_writer(app_id="re5", extension="arc")
@@ -263,6 +318,7 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
     app_id = vf_sorted[0].app_id if vf_sorted else None
     old_texture_paths = set()
     new_texture_paths = set()
+    unparsed_texture_sources = []
 
     # patch dictionary with imported files
     for vf in vf_sorted:
@@ -274,19 +330,34 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
         if vf.extension in TEXTURE_EXTENSIONS:
             new_texture_paths.add(_normalize_texture_key(file_path))
 
-        # Collect old texture refs before overwriting
-        if remove_unused_textures and vf.extension in ("mod", "mrl"):
-            old_entry = imported.get(path)
-            if old_entry:
-                old_paths = _get_texture_paths_from_arc_entry(old_entry, app_id, arc_version)
-                if old_paths is not None:
-                    old_texture_paths |= old_paths
+        if vf.extension in ("mod", "mrl"):
+            # Unconditional (not just under remove_unused_textures): these are
+            # the paths this export's own model/material actually references,
+            # which _warn_about_unreachable_textures below needs regardless of
+            # that option - a texture whose path got renamed to dodge the
+            # duplicate-path check (#368) shows up here even though no .tex
+            # entry named like it was ever added to new_texture_paths above.
             if vf.extension == "mod":
                 new_paths = _texture_paths_from_mod(vf_data, app_id)
             else:
                 new_paths = _texture_paths_from_mrl(vf_data, app_id)
             if new_paths is not None:
                 new_texture_paths |= new_paths
+            else:
+                # Can't tell what this one references, so a dangling
+                # texture reference inside it would go unseen below rather
+                # than un-warned-about - say so instead of claiming a clean
+                # bill of health this file never earned.
+                unparsed_texture_sources.append(vf.relative_path)
+
+            # Collect old texture refs before overwriting - only needed for
+            # the orphan-removal feature itself.
+            if remove_unused_textures:
+                old_entry = imported.get(path)
+                if old_entry:
+                    old_paths = _get_texture_paths_from_arc_entry(old_entry, app_id, arc_version)
+                    if old_paths is not None:
+                        old_texture_paths |= old_paths
 
         if imported.get(path):
             item = imported.get(path)
@@ -320,6 +391,17 @@ def update_arc(filepath, vfiles, remove_unused_textures=False, **_options):
                 preview += ", ..."
             show_message_box(
                 f"Removed {len(removed)} orphaned texture(s): {preview}")
+
+    if unparsed_texture_sources:
+        names = ", ".join(ntpath.basename(p) for p in unparsed_texture_sources)
+        show_message_box(
+            f"Couldn't check whether every texture {names} references is reachable "
+            "(failed to parse); export continued anyway",
+            title="Warning",
+            icon='ERROR',
+        )
+
+    _warn_about_unreachable_textures(app_id, new_texture_paths, exported, arc_version)
 
     return _serialize_arc(exported, arc_version)
 
