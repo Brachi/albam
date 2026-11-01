@@ -358,8 +358,8 @@ class TexCIECustomProperties(bpy.types.PropertyGroup):
     tpl_index: bpy.props.IntProperty(default=-1)
     # The pack entry the image's bytes came from ("44000002_007.dds"), and a
     # CRC-32 of those bytes - what tells an image edited since import from
-    # one left alone (see TextureExport). 0 for a scene saved before either
-    # was recorded, whose images are then never written back.
+    # one left alone (see TextureExport). 0 when the scene has neither
+    # recorded, and such an image is never written back.
     pack_entry: bpy.props.StringProperty(default="")
     source_crc: bpy.props.IntProperty(default=0)
     pixel_format_type: bpy.props.IntProperty(default=0)
@@ -510,8 +510,8 @@ def _image_was_edited(bl_image, custom_properties):
 
     Blender keeps a packed image's bytes when its file path changes, so this
     is what an edit looks like: pixels painted over, or the image unpacked
-    and its file replaced. A scene saved before the CRC was recorded never
-    reads as edited.
+    and its file replaced. An image with no CRC recorded never reads as
+    edited.
     """
     if not custom_properties.source_crc:
         return False
@@ -625,7 +625,7 @@ class TextureExport:
 
     def _tpl_id_from_images(self, bindings):
         """The .tpl most of the model's imported images came from - for a
-        model imported before the mesh recorded its own."""
+        model whose mesh has no .tpl recorded."""
         counts = Counter()
         for _, _, bl_image in bindings:
             custom_properties = bl_image.albam_custom_properties.get_custom_properties_for_appid(
