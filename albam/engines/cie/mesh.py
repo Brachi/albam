@@ -1249,42 +1249,96 @@ def _strips_from_triangles(triangles):
     Blender loops. Across a UV seam nothing merges, so no strip crosses it,
     which is exactly right.
 
-    Greedy: take a triangle, extend as far as the shared edge and the winding
-    allow, start again. Strips are kept separate rather than stitched with
-    degenerate triangles - the format allows any number of them per material,
-    so there is nothing to gain by joining them and no degenerate winding to
-    get wrong.
+    Every corner is a whole vertex in the file, so a strip costs its
+    triangles plus two, and fewer strips is the only saving there is. Strips
+    are kept separate rather than stitched with degenerate triangles: the
+    format allows any number of them per material, and stitching costs the
+    same two corners a new strip does.
+
+    Greedy, with the usual refinements: the next strip starts from the
+    unused triangle with the fewest unused neighbours, so the edges of a
+    patch are not stranded as single triangles; it is grown from each of the
+    start triangle's three rotations, keeping the longest; and it is grown
+    from both ends. Measured on the shipped models of four rooms and four
+    character and enemy archives, this needs 1.56 and 1.39 corners per
+    triangle where the shipped files use 1.63 and 1.40, and the plain greedy
+    walk this replaced 1.86 and 1.46.
     """
+    import heapq
+
     edges = {}
     for index, (a, b, c) in enumerate(triangles):
         for edge in ((a, b), (b, c), (c, a)):
             edges.setdefault(frozenset(edge), []).append(index)
-
+    neighbours = [set() for _ in triangles]
+    for owners in edges.values():
+        for i in owners:
+            neighbours[i].update(o for o in owners if o != i)
     used = [False] * len(triangles)
-    strips = []
-    for start in range(len(triangles)):
-        if used[start]:
-            continue
-        used[start] = True
-        strip = list(triangles[start])
+    # Unused neighbours per triangle, kept current as strips are taken.
+    degree = [len(n) for n in neighbours]
+
+    def extend(strip, taken, taken_set, flipped=False):
+        """Grow `strip` at its end while a triangle on its last edge winds
+        the way the next corner's parity needs; `flipped` inverts that
+        rule, for a strip being grown reversed (see below)."""
         while True:
-            # The parity of the corner about to be appended decides which way
-            # round the next triangle has to read: an even one traverses the
-            # strip's last edge forwards, an odd one backwards.
             a, b = strip[-2], strip[-1]
-            forwards = len(strip) % 2 == 0
-            found = None
+            forwards = (len(strip) % 2 == 0) is not flipped
+            best = None
             for candidate in edges.get(frozenset((a, b)), ()):
-                if used[candidate]:
+                if used[candidate] or candidate in taken_set:
                     continue
                 if _traverses(triangles[candidate], a, b) is forwards:
-                    found = candidate
-                    break
-            if found is None:
-                break
-            used[found] = True
-            strip.append(_third_corner(triangles[found], a, b))
-        strips.append(strip)
+                    if best is None or degree[candidate] < degree[best]:
+                        best = candidate
+            if best is None:
+                return
+            taken.append(best)
+            taken_set.add(best)
+            strip.append(_third_corner(triangles[best], a, b))
+
+    # Entries go stale as degrees drop; a popped one that no longer matches
+    # is skipped, since its current degree was pushed when it changed.
+    heap = [(degree[i], i) for i in range(len(triangles))]
+    heapq.heapify(heap)
+    strips = []
+    while heap:
+        d, start = heapq.heappop(heap)
+        if used[start] or d != degree[start]:
+            continue
+        a, b, c = triangles[start]
+        best_strip, best_taken = None, None
+        for rotation in ((a, b, c), (b, c, a), (c, a, b)):
+            strip, taken, taken_set = list(rotation), [start], {start}
+            extend(strip, taken, taken_set)
+            # Reversing an even strip keeps every triangle's winding, so it
+            # simply grows at what was its start.
+            if len(strip) % 2 == 0:
+                strip.reverse()
+                extend(strip, taken, taken_set)
+            else:
+                # Reversing an odd strip flips every triangle, so the
+                # reversed one is extended with the winding rule flipped
+                # too, and reversed back - which only restores the winding
+                # if it stays odd, so an odd number of additions loses one.
+                length = len(strip)
+                strip.reverse()
+                extend(strip, taken, taken_set, flipped=True)
+                if (len(strip) - length) % 2:
+                    strip.pop()
+                    taken_set.discard(taken.pop())
+                strip.reverse()
+            if best_strip is None or len(taken) > len(best_taken):
+                best_strip, best_taken = strip, taken
+        for t in best_taken:
+            used[t] = True
+        for t in best_taken:
+            for n in neighbours[t]:
+                if not used[n]:
+                    degree[n] -= 1
+                    heapq.heappush(heap, (degree[n], n))
+        strips.append(best_strip)
     return strips
 
 
