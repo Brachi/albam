@@ -27,25 +27,46 @@ Traceback:
 """
 
 
+HOME_REDACTED = "******"
+
+
+def _redact_home(text):
+    home = Path.home()
+    for home_str in {str(home), home.as_posix()}:
+        text = text.replace(home_str, HOME_REDACTED)
+    return text
+
+
 def format_error_report(type_err, err, tb):
-    """The full report - versions, OS, redacted traceback - as a string.
+    """The full report - versions, OS, error, traceback - as a string, with
+    the user's home directory redacted everywhere in it.
+
+    The redaction covers the whole report, not just the traceback: the error
+    message itself often carries a path (e.g. a FileNotFoundError), and the
+    report is meant to be pasted into public #support and GitHub threads.
+
+    For an AlbamCheckFailure the error line is followed by its details and
+    solution, which name the offending objects or materials.
 
     Module level, and taking the exception explicitly, so callers outside a
     popup can use it: the operator error handlers print it from their own
     `except` blocks, which is the only way it reaches a console when Blender
     runs in background mode (`INVOKE_DEFAULT` falls back to `execute()`
-    there, so the popup's `invoke()` never runs and its print never happens).
+    there, so the popup's `invoke()` never runs).
     """
     stack_summary = traceback.extract_tb(tb)
     traceback_str = "".join(stack_summary.format())
-    traceback_str_home_redacted = traceback_str.replace(str(Path.home()), "******")
-    return ERROR_TEMPLATE.format(
+    error = f"{type_err.__name__}: {str(err)}"
+    if isinstance(err, AlbamCheckFailure):
+        error += f"\nDetails: {err.details}\nSolution: {err.solution}"
+    report = ERROR_TEMPLATE.format(
         blender_version=".".join(map(str, bpy.app.version)),
         albam_version=albam_version,
         operating_system=platform(),
-        error=f"{type_err.__name__}: {str(err)}",
-        traceback_str=traceback_str_home_redacted,
+        error=error,
+        traceback_str=traceback_str,
     )
+    return _redact_home(report)
 
 
 def handle_operator_exception(operator, message):
@@ -53,10 +74,8 @@ def handle_operator_exception(operator, message):
     surface it to the user.
 
     Call from inside the `except`, which is where sys.exc_info() is live.
-    Printing here rather than from the popup means the traceback survives
-    headless Blender and CI, where the popup never opens - the popup itself
-    tells users to "provide the error shown in the console", which until now
-    was empty for exactly those users.
+    This is the only place the report is printed, so the traceback reaches
+    the console in headless Blender and CI too, where the popup never opens.
 
     With ALBAM_RERAISE_ERRORS set the exception is re-raised instead of being
     turned into an operator report. Blender converts an {'ERROR'} report into
@@ -79,8 +98,7 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
     ISSUES_URL = "https://github.com/Brachi/albam/issues"
     DISCORD_INVITE_URL = "https://discord.gg/QC2FhGhxCh"
     ERROR_UNEXPECTED_HEADER = "An unexpected error happened"
-    ERROR_UNEXPECTED_SOLUTION_MSG = "Please provide the error shown in the console for help"
-    ERROR_UNEXPECTED_SOLUTION_MSG_2 = "Go to Window -> Toggle System Console"
+    ERROR_UNEXPECTED_SOLUTION_MSG = "Copy the report below and include it when asking for help"
     ERROR_CHECK_FAILURE_HEADER = "A check failed"
     MIN_POPUP_WIDTH = 300
     PIXELS_PER_CHAR = 7  # should be dynamic based on resolution/dpi
@@ -89,31 +107,31 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
     error_message = bpy.props.StringProperty(default="")
     error_details = bpy.props.StringProperty(default="")
     error_solution = bpy.props.StringProperty(default="")
-    # Unbounded (maxlen=0, the default): a real traceback easily runs past
-    # Blender's StringProperty default cap and would silently truncate.
-    error_report_text = bpy.props.StringProperty(default="")
+    # The plain-assignment properties above are not registered as RNA
+    # properties (Blender only registers annotations); they work as ordinary
+    # Python attributes because invoke() and draw() run on the same instance.
+    # This one is an annotation like ALBAM_OT_CopyErrorReport.report_text,
+    # with StringProperty's default maxlen=0, which means unbounded, so a
+    # long traceback is not truncated.
+    error_report_text: bpy.props.StringProperty(default="")
 
     def invoke(self, context, event):
         type_err, err, tb = sys.exc_info()
         # Computed for every error, not just unexpected ones: this is what
         # the "copy report" button puts on the clipboard, and a check
         # failure's traceback is just as useful to a #support helper as an
-        # unexpected error's.
-        report_text = self._generate_error_report(type_err, err, tb)
-        self.error_report_text = report_text
+        # unexpected error's. Printing is left to handle_operator_exception().
+        self.error_report_text = self._generate_error_report(type_err, err, tb)
         if issubclass(type(err), AlbamCheckFailure):
             self.error_header = self.ERROR_CHECK_FAILURE_HEADER
             self.error_message = err.message
             self.error_details = err.details
             self.error_solution = err.solution
-            self.error_solution_2 = ""
         else:
             self.error_header = self.ERROR_UNEXPECTED_HEADER
             self.error_message = ""
             self.error_details = ""
             self.error_solution = self.ERROR_UNEXPECTED_SOLUTION_MSG
-            self.error_solution_2 = self.ERROR_UNEXPECTED_SOLUTION_MSG_2
-            print(report_text)
         return context.window_manager.invoke_props_dialog(self, width=self._calculate_popup_width())
 
     def execute(self, context):
@@ -126,8 +144,6 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         layout.label(text=self.error_message)
         layout.label(text=self.error_details)
         layout.label(text=self.error_solution)
-        if self.error_solution_2:
-            layout.label(text=self.error_solution_2)
 
         layout.separator()
         layout.separator()
@@ -171,14 +187,14 @@ class ALBAM_OT_CopyErrorReport(bpy.types.Operator):
     bl_label = "Copy report to clipboard"
     bl_idname = "albam.copy_error_report"
     bl_description = "Copy the full error report, including the traceback, to the clipboard"
+    # Only reachable through the popup's button, which sets report_text.
+    # Hidden from F3 search, where running it would copy an empty string.
+    bl_options = {"INTERNAL"}
 
-    # Annotation syntax, unlike ALBAM_OT_ErrorHandler's plain-assignment
-    # properties above: those are only ever set and read on the same
-    # instance (invoke() then draw()), where a plain Python attribute is
-    # enough. This one is set on the *button's* operator instance
-    # (layout.operator() in that draw(), below) and read back on the
-    # instance Blender creates when the button is clicked, so it needs to
-    # be a real registered RNA property to survive the trip.
+    # Annotation syntax, so it is a registered RNA property: it is set on
+    # the button's operator instance (layout.operator() in the popup's
+    # draw()) and read back on the instance Blender creates when the button
+    # is clicked, and only RNA properties survive that trip.
     report_text: bpy.props.StringProperty(default="")
 
     def execute(self, context):
