@@ -1665,11 +1665,28 @@ def _get_bone_transforms(armature, mod):
 
 
 def _normalize_uv(uv_x, uv_y):
-    """Flip UV for .dds and replace forbidden for half float -0.0 values"""
+    """Flip UV for .dds and replace forbidden for half float -0.0 values.
+
+    Every UV slot (uv/uv2/uv3/uv4) packs both coordinates as half floats
+    right after calling this, so it is also the one place to catch a value
+    too large for that format to hold - 65520 is where pack('e', ...) itself
+    starts raising OverflowError (measured: 65519 packs fine, 65520 doesn't),
+    not a number worth hand-maintaining here.
+    """
     uv_y *= -1
     uv_y += 1
     uv_y = 0.0 if uv_y == -0.0 else uv_y
     uv_x = 0.0 if uv_x == -0.0 else uv_x
+    for value in (uv_x, uv_y):
+        try:
+            pack('e', value)
+        except OverflowError:
+            raise AlbamCheckFailure(
+                message="A UV coordinate is too large to export",
+                details=(f"{value} doesn't fit in the half-float range this format stores "
+                         "UVs in (roughly -65504 to 65504)"),
+                solution="Scale the mesh's UVs back into a normal range (close to 0-1) before exporting",
+            )
     return uv_x, uv_y
 
 
@@ -1689,9 +1706,14 @@ def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
         }
         bone_indices = {bi for bi in bone_indices if bi != -1}
 
-        # TODO: check at export time for all meshes
-        msg = f"Mesh {mesh.name} is influenced by more than 32 bones, which is not supported"
-        assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
+        if len(bone_indices) > MAX_BONE_PALETTE_SIZE:
+            raise AlbamCheckFailure(
+                message=f"Mesh {mesh.name!r} is influenced by too many bones",
+                details=(f"its vertex groups reference {len(bone_indices)} distinct bones, "
+                         f"the format allows at most {MAX_BONE_PALETTE_SIZE} per mesh"),
+                solution=(f"Split the mesh so each piece uses at most {MAX_BONE_PALETTE_SIZE} "
+                          "bones, or merge some of its vertex groups"),
+            )
 
         current = bone_palette['bone_indices']
         potential = current.union(bone_indices)
@@ -1779,6 +1801,16 @@ def _check_armature_modifiers_target(bl_obj, bl_meshes):
                 )
 
 
+# num_vertices and last_index are each a u2 on every mod version (mod_21,
+# mod_153, mod_156) - last_index is current_vertex_position (the running
+# total across every mesh sharing one vertex block, see no_vf_grouping
+# below) plus this mesh's own count, so it is the one that actually
+# overflows first. Measured error when it does: struct.error: ushort
+# format requires 0 <= number <= 65535, raised deep inside Kaitai's
+# write_u2le with no indication of which mesh or why.
+MAX_MESH_LAST_INDEX = 0xFFFF
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1831,6 +1863,16 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         vertex_buffer.extend(vertices.to_byte_array())
         if vertices2:
             vertex_buffer_2.extend(vertices2.to_byte_array())
+        if current_vertex_position + vertex_table.count - 1 > MAX_MESH_LAST_INDEX:
+            raise AlbamCheckFailure(
+                message=f"Mesh {bl_mesh.name!r} has too many vertices for the format",
+                details=(f"it would end at vertex index "
+                         f"{current_vertex_position + vertex_table.count - 1}, "
+                         f"the format only addresses up to {MAX_MESH_LAST_INDEX}"),
+                solution=("Split the mesh into smaller pieces. If several meshes sharing the "
+                          "same vertex format are what pushed it over the limit, enabling "
+                          "\"Don't group meshes by vertex format\" may also help"),
+            )
         if vertex_format != current_vertex_format or export_settings.no_vf_grouping:
             current_vertex_offset = vertex_offset_accumulated
             current_vertex_offset_2 = vertex_offset_2_accumulated

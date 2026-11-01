@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Export now checks three preconditions before writing and raises a clear error instead
+  of a raw crash: a mesh influenced by more than 32 bones, a mesh whose vertex index
+  would overflow the format's 16-bit limit, and a UV coordinate too large for the
+  half-float format to store
 
 ### Fixed
 
