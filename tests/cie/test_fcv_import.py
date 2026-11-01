@@ -1,5 +1,5 @@
 """An RE4UHD motion (.fcv) bakes onto an imported armature the way the game
-poses it (issue #268).
+poses it.
 
 The one thing a literal reading of the keys gets wrong is the limbs: the
 translation keyed on a leg chain's end joint is where the toe goes, in model
