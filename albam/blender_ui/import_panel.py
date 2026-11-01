@@ -56,10 +56,9 @@ def set_path_list_file_config(self, context):
 
 def report_missing_textures(operator):
     """Surface textures the importer couldn't find in any loaded arc (see
-    albam/engines/mtfw/texture.py) as a UI warning on `operator`. Before
-    this, a missing texture only ever showed up as a console print - users
-    hit it, didn't see it, and went on to debug the shader or the export
-    instead of just loading the right arc (#374).
+    albam/engines/mtfw/texture.py) as a UI warning on `operator`, instead of
+    only a console print a user is unlikely to see before going on to debug
+    the shader or the export rather than just loading the right arc.
 
     Shared between ALBAM_OT_Import and ALBAM_OT_BatchImportFolder - both
     end up importing .mod files through ALBAM_OT_Import._execute(), so both
