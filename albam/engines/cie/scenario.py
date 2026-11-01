@@ -20,21 +20,66 @@ the models the others share. An entry for a shared model says so and
 indexes that file's table instead of its own, which is why importing one
 file reaches for a sibling archive (see _SharedScenario).
 """
+import hashlib
 import math
 import os
+import struct
 
 import bpy
 from mathutils import Euler, Matrix, Vector
 
 from ...exceptions import AlbamCheckFailure
 from ...registry import blender_registry
-from ...vfs import VirtualFile
-from .mesh import AUTO_TPL, GLOBAL_SCALE, build_blender_model
+from ...vfs import VirtualFile, VirtualFileData
+from .mesh import (AUTO_TPL, GLOBAL_SCALE, VERTEX_COLOR_ATTRIBUTE, build_blender_model,
+                   export_room_model)
 from .structs.re4_uhd_smd import Re4UhdSmd
 
 # The magic values a scenario ships with. Anything else is not one. 0x0000
 # is a stub that places nothing (see structs/re4-uhd-smd.ksy).
 SCENARIO_MAGICS = (0x0000, 0x0010, 0x0020, 0x0031, 0x0040, 0x0140)
+
+# The custom property a placement's top-level object carries: the index of
+# the .smd entry it was imported from, which is what export writes it back
+# into (see export_smd).
+ENTRY_PROPERTY = "albam_smd_entry"
+
+# Where the entry table starts, and how big one entry is - for every magic
+# but 0x140, whose header carries a variable list of counts first (see
+# structs/re4-uhd-smd.ksy). An entry is three vec3f, four u1, seven u4 and
+# a u4 status.
+SMD_HEADER_SIZE = 16
+SMD_ENTRY_SIZE = 72
+# Where an entry's model index sits; its .tpl index is the byte after.
+ENTRY_MODEL_ID_OFFSET = 36
+# num_entries is a u2.
+MAX_ENTRIES = 0xFFFF
+# Within an entry: position, angles and scale, three f4 each.
+ENTRY_TRANSFORM_FORMAT = "<9f"
+# A placement is written back only if it moved by more than this, in
+# Blender's units (metres and radians); anything less is float noise from
+# the round trip through a matrix, and the entry keeps its shipped bytes.
+TRANSFORM_TOLERANCE = 1e-5
+# How far, relative to the placement's own size, the transform an entry can
+# express may land from the one in Blender before export refuses it (see
+# _matrix_to_entry).
+EXPRESSIBLE_TOLERANCE = 1e-4
+# The custom property on a room's object listing the entries import made an
+# object for - the only ones export may treat as deleted when no object
+# claims them (see export_smd).
+IMPORTED_ENTRIES_PROPERTY = "albam_smd_imported_entries"
+
+# The custom properties a room model's mesh carries: which entry of the
+# .smd's model table it was built from, and a fingerprint of what export
+# writes from it as it was imported (see _mesh_fingerprint), which is what
+# tells an edited model from one left alone.
+MODEL_PROPERTY = "albam_smd_model"
+# The .tpl table entry the mesh's textures were imported through - what a
+# placement added in Blender for it addresses (see _new_entry).
+TPL_PROPERTY = "albam_smd_tpl"
+FINGERPRINT_PROPERTY = "albam_smd_fingerprint"
+# Embedded models start on this boundary in shipped files.
+SMD_MODEL_ALIGNMENT = 32
 
 # What the shared file of a split room is called, relative to one of the
 # files sharing it: the extra files are named "<room>_NN" and the shared one
@@ -60,6 +105,7 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
     built = {}
     placed = 0
     missing = 0
+    imported = []
     try:
         for index, entry in enumerate(smd.entries):
             if not entry.is_placed:
@@ -81,11 +127,18 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                 if bl_mesh is None:
                     missing += 1
                     continue
+                if not entry.is_shared:
+                    bl_mesh[MODEL_PROPERTY] = entry.model_id
+                    bl_mesh[TPL_PROPERTY] = entry.tpl_id
+                    bl_mesh[FINGERPRINT_PROPERTY] = _mesh_fingerprint(bl_mesh)
                 built[key] = bl_mesh
-            _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement[ENTRY_PROPERTY] = index
+            imported.append(index)
             placed += 1
     finally:
         shared.close()
+    bl_scenario[IMPORTED_ENTRIES_PROPERTY] = imported
     print(f"[re4uhd] scenario {name}: {placed} placed, {len(built)} models, {missing} unresolved")
     return bl_scenario
 
@@ -374,3 +427,511 @@ def _shared_archive_path(archive_path):
         if name.lower() == wanted:
             return os.path.join(directory, name)
     return None
+
+
+@blender_registry.register_export_function(app_id="re4uhd", extension="smd")
+def export_smd(bl_obj):
+    """The .smd a room was imported from, with its placements as they are in
+    Blender.
+
+    Only the entry table is rewritten, and only the entries whose placement
+    changed. A scenario holds far more than this module reads - between the
+    entry table and the models sit megabytes nothing here models - so the
+    shipped file is the starting point and everything else in it is kept
+    byte for byte.
+
+    A placement moved, rotated or scaled in Blender is written back to its
+    entry. One deleted in Blender is zeroed, which is what the unused
+    entries a few rooms ship with look like and is what the game skips -
+    but only an entry import made an object for: one whose model could not
+    be built (a split room's shared models when the shared archive is not
+    beside it, a model the .bin importer refused) never had an object to
+    delete, and is kept as it is. A room whose object has no record of the
+    entries import made objects for has nothing deleted.
+
+    A placement added in Blender - a duplicate of one, or a room model's
+    mesh put under the room - becomes a new entry (see _place_new_entries).
+
+    A model whose mesh was edited is written again (see _write_models);
+    every other model keeps its shipped bytes.
+    """
+    asset = bl_obj.albam_asset
+    data = bytearray(asset.original_bytes)
+    smd = Re4UhdSmd.from_bytes(bytes(data))
+    smd._read()
+    if smd.header.magic == 0x140:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} is a room assembled from several files, which albam "
+            f"can't write back yet",
+            details="Its header carries a list of per-file entry counts that "
+                    "export does not maintain. One room of the game is like this.",
+        )
+
+    placements, added = _claimed_placements(bl_obj, smd)
+
+    imported = bl_obj.get(IMPORTED_ENTRIES_PROPERTY)
+    imported = set(imported) if imported is not None else set(placements)
+
+    changed = 0
+    for index, entry in enumerate(smd.entries):
+        if not entry.is_placed or index not in imported:
+            continue
+        offset = SMD_HEADER_SIZE + index * SMD_ENTRY_SIZE
+        # The entry is patched where it sits rather than written out from the
+        # parsed fields, so the offset is checked against what the parser
+        # read there before anything is written to it.
+        position = (entry.position.x, entry.position.y, entry.position.z)
+        if struct.unpack_from("<3f", data, offset) != position:
+            raise RuntimeError(f"entry {index} of {bl_obj.name} is not at offset {offset}")
+        bl_placement = placements.get(index)
+        if bl_placement is None or not _has_mesh(bl_placement):
+            # Deleting only the mesh under a two-object placement deletes
+            # the placement too: the empty left behind places nothing.
+            data[offset:offset + SMD_ENTRY_SIZE] = bytes(SMD_ENTRY_SIZE)
+            changed += 1
+            continue
+        matrix = _placement_matrix(bl_placement)
+        if _same_matrix(matrix, _entry_matrix(entry)):
+            continue
+        struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset,
+                         *_matrix_to_entry(matrix, bl_placement.name))
+        changed += 1
+
+    models = _write_models(bl_obj, data, smd, list(placements.values()) + added)
+    # Only entries nothing places any more are free: the unused ones the room
+    # shipped with and the ones deleted above - not the ones import could
+    # not build, which are kept as they are.
+    free = [index for index, entry in enumerate(smd.entries)
+            if not entry.is_placed or (index in imported and (
+                index not in placements or not _has_mesh(placements[index])))]
+    appended = _place_new_entries(bl_obj, data, bytes(asset.original_bytes), smd, added, free)
+    print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten, "
+          f"{len(added)} added ({appended} past the end of the table), "
+          f"{models} models rewritten")
+    return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
+
+
+def _entry_matrix(entry):
+    """The whole transform an entry places its model at, in Blender's axes."""
+    placement, rotation = _entry_matrices(entry)
+    return placement if rotation is None else placement @ rotation
+
+
+def _has_mesh(bl_placement):
+    return bl_placement.type == "MESH" or any(c.type == "MESH" for c in bl_placement.children)
+
+
+def _placement_matrix(bl_placement):
+    """The transform a placement puts its model at, relative to the room.
+
+    A placement is one object, or an empty with the rotated model under it
+    (see _place); either way it is the product of the matrices from the
+    room's object down to the mesh.
+    """
+    matrix = bl_placement.matrix_basis.copy()
+    meshes = [c for c in bl_placement.children if c.type == "MESH"]
+    if bl_placement.type != "MESH" and meshes:
+        matrix = matrix @ meshes[0].matrix_basis
+    return matrix
+
+
+def _same_matrix(a, b):
+    return all(abs(a[i][j] - b[i][j]) <= TRANSFORM_TOLERANCE
+               for i in range(4) for j in range(4))
+
+
+def _matrix_to_entry(matrix, name="A room placement"):
+    """(position, angles, scale) for an entry placing its model at `matrix`,
+    nine floats in the order the entry stores them - the inverse of
+    _entry_matrices.
+
+    Back in the game's axes the linear part is the scale times the rotation,
+    each row of the rotation scaled by one axis (see _entry_matrices), so a
+    row's length is that axis's scale and dividing it out leaves the
+    rotation. A mirrored placement carries its reflection on X.
+
+    Done in double precision: mathutils works in single, and taking the
+    angles through it loses up to a centimetre on a large prop turned close
+    to 90 degrees about Y.
+
+    Not every transform is one an entry can hold. An entry scales after it
+    rotates, a Blender object before - so an object turned and then
+    stretched along its own axis is a shear in the game's terms, and the
+    nearest entry puts its model somewhere else. That is refused rather than
+    written: the placement is recomposed from the entry and compared with
+    the one in Blender.
+    """
+    import numpy as np
+
+    to_blender = np.array(Matrix.Rotation(math.radians(90), 4, "X"), dtype=np.float64)
+    blender = np.array(matrix, dtype=np.float64)
+    in_game = np.linalg.inv(to_blender) @ blender @ to_blender
+    position = in_game[:3, 3] / GLOBAL_SCALE
+    linear = in_game[:3, :3]
+    scale = np.linalg.norm(linear, axis=1)
+    if np.linalg.det(linear) < 0:
+        scale[0] = -scale[0]
+    if np.any(np.abs(scale) < 1e-12):
+        raise AlbamCheckFailure(
+            f"{name} is scaled to nothing on one axis",
+            details="An entry with a zero scale is what the game treats as unused",
+            solution="Give the object a non-zero scale, or delete it",
+        )
+    # The nearest rotation to what is left once the scale is divided out,
+    # which is that rotation itself whenever an entry can express the whole.
+    u, _, vt = np.linalg.svd(linear / scale[:, None])
+    rotation = u @ vt
+    angles = _euler_xyz(rotation)
+
+    recomposed = _game_matrix(position * GLOBAL_SCALE, angles, scale)
+    size = max(1.0, float(np.abs(scale).max()))
+    error = float(np.abs(recomposed - in_game).max())
+    if error > EXPRESSIBLE_TOLERANCE * size:
+        raise AlbamCheckFailure(
+            f"{name} is transformed in a way a room entry can't hold",
+            details="An entry stretches its model after rotating it, along the "
+                    "room's axes, while a Blender object stretches before "
+                    "rotating. A placement both rotated and scaled unevenly along "
+                    f"its own axes would land up to {error:.3g} m off.",
+            solution="Rotate the mesh under an empty and scale the empty instead "
+                     "(the way import builds such placements), or scale evenly",
+        )
+    return (*position, *angles, *scale)
+
+
+def _euler_xyz(rotation):
+    """Angles (x, y, z) such that Euler((x, y, z), "XYZ").to_matrix() is
+    `rotation` - X applied first, so the matrix is Rz @ Ry @ Rx."""
+    sin_y = -rotation[2, 0]
+    cos_y = math.hypot(rotation[2, 1], rotation[2, 2])
+    y = math.atan2(sin_y, cos_y)
+    if cos_y > 1e-9:
+        x = math.atan2(rotation[2, 1], rotation[2, 2])
+        z = math.atan2(rotation[1, 0], rotation[0, 0])
+    else:
+        # Gimbal lock: only x - z (or x + z) is defined; z is taken as 0.
+        z = 0.0
+        x = math.atan2(rotation[0, 1] if sin_y > 0 else -rotation[0, 1], rotation[1, 1])
+    return x, y, z
+
+
+def _game_matrix(translation, angles, scale):
+    """translation @ scale @ rotation in the game's axes, double precision -
+    the transform an entry holds, as _entry_matrices builds it."""
+    import numpy as np
+
+    x, y, z = angles
+    rx = np.array([[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]])
+    ry = np.array([[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]])
+    rz = np.array([[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]])
+    out = np.identity(4)
+    out[:3, :3] = np.diag(scale) @ (rz @ ry @ rx)
+    out[:3, 3] = translation
+    return out
+
+
+def _mesh_fingerprint(bl_mesh):
+    """A digest of everything a room model is written from: positions,
+    faces, UVs, normals, vertex colours, which material each face uses,
+    which image each material binds and the .tpl slot that image carries,
+    and the albam properties of the mesh and its materials (material flags,
+    specular values, the header words the mesh carries). Recorded at import
+    and compared at export - a model is only written again if this changed,
+    since a model written from Blender is not byte for byte what shipped
+    even unedited."""
+    import numpy as np
+
+    digest = hashlib.sha1()
+
+    def add(collection, attribute, count, dtype):
+        values = np.empty(count, dtype=dtype)
+        collection.foreach_get(attribute, values)
+        digest.update(values.tobytes())
+
+    add(bl_mesh.vertices, "co", len(bl_mesh.vertices) * 3, np.float32)
+    add(bl_mesh.loops, "vertex_index", len(bl_mesh.loops), np.int32)
+    add(bl_mesh.polygons, "loop_total", len(bl_mesh.polygons), np.int32)
+    add(bl_mesh.polygons, "material_index", len(bl_mesh.polygons), np.int32)
+    add(bl_mesh.corner_normals, "vector", len(bl_mesh.corner_normals) * 3, np.float32)
+    uv_layer = bl_mesh.uv_layers.active
+    if uv_layer is not None:
+        add(uv_layer.data, "uv", len(uv_layer.data) * 2, np.float32)
+    colors = bl_mesh.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
+    if colors is not None:
+        add(colors.data, "color_srgb", len(colors.data) * 4, np.float32)
+    digest.update(_properties_digest(bl_mesh))
+    for bl_material in bl_mesh.materials:
+        digest.update(b"\0" + (bl_material.name.encode() if bl_material else b""))
+        if bl_material is None:
+            continue
+        digest.update(_properties_digest(bl_material))
+        if not bl_material.node_tree:
+            continue
+        # Which image feeds which shader input is what a material's texture
+        # slots are written from (see mesh._texture_slot).
+        for link in bl_material.node_tree.links:
+            image = getattr(link.from_node, "image", None)
+            if image is not None:
+                digest.update(f"\1{image.name}\2{link.to_socket.name}".encode())
+                digest.update(_properties_digest(image))
+    return digest.hexdigest()
+
+
+def _properties_digest(bl_id):
+    """The values of a datablock's re4uhd albam custom properties, as bytes
+    - what export writes from a mesh's header words, a material's fields and
+    an image's .tpl slot besides the geometry itself."""
+    properties = bl_id.albam_custom_properties.get_custom_properties_for_appid("re4uhd")
+    if properties is None:
+        return b""
+    values = [(name, repr(getattr(properties, name)))
+              for name in properties.bl_rna.properties.keys() if name != "rna_type"]
+    return repr(sorted(values)).encode()
+
+
+def _write_models(bl_obj, data, smd, bl_placements):
+    """Write every edited room model back into `data`, the .smd being
+    exported, and return how many were.
+
+    A model that still fits the space it had - up to the next thing the file
+    is known to hold - is written where it was. If one does not, the region
+    the models and .tpl files fill is laid out again: every one of them in
+    the order they were, on the alignment they shipped with, unedited ones
+    copied as they are, and both offset tables pointed at the new places.
+    That only depends on the tables being the only thing pointing into that
+    region, which the game bears out: with every model of a room moved to the
+    end of its file, it draws the moved copies. Where the
+    region is not made of models and .tpl files alone, the model is appended
+    at the end instead and the old bytes are left where they were.
+    """
+    meshes = _edited_models(bl_obj, bl_placements)
+    if not meshes:
+        return 0
+
+    model_table = smd.header.offset_model_table
+    tpl_table = smd.header.offset_tpl_table
+    # (absolute start, table position of its offset, which table it is in).
+    items = [(model_table + o, model_table + 4 * i, model_table)
+             for i, o in enumerate(smd.offsets_models[:-1])]
+    items += [(tpl_table + o, tpl_table + 4 * i, tpl_table)
+              for i, o in enumerate(smd.offsets_tpls[:-1])]
+    starts = sorted({start for start, _, _ in items})
+    known = sorted(set(starts) | {model_table, tpl_table, len(data)})
+
+    def slot(start):
+        return start, min(k for k in known if k > start)
+
+    rewritten = {}
+    for model_id, bl_mesh in sorted(meshes.items()):
+        start, end = slot(model_table + smd.offsets_models[model_id])
+        rewritten[start] = export_room_model(bl_mesh, bytes(data[start:end]))
+
+    def write_in_place(start, new):
+        end = slot(start)[1]
+        if len(new) > end - start:
+            return False
+        data[start:end] = new + bytes(end - start - len(new))
+        return True
+
+    if all(len(new) <= slot(start)[1] - start for start, new in rewritten.items()):
+        for start, new in rewritten.items():
+            write_in_place(start, new)
+        return len(meshes)
+
+    region_start = starts[0]
+    if any(region_start <= table < len(data) for table in (model_table, tpl_table)):
+        # A table sits among the models: the region is not models and .tpl
+        # files alone, so it is not laid out again.
+        offset_positions = {}
+        for item_start, offset_position, table in items:
+            offset_positions.setdefault(item_start, []).append((offset_position, table))
+        for start, new in rewritten.items():
+            if write_in_place(start, new):
+                continue
+            data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
+            for offset_position, table in offset_positions[start]:
+                struct.pack_into("<I", data, offset_position, len(data) - table)
+            data.extend(new)
+        return len(meshes)
+
+    region = bytearray()
+    moved = {}
+    for start in starts:
+        region.extend(bytes(-(region_start + len(region)) % SMD_MODEL_ALIGNMENT))
+        moved[start] = region_start + len(region)
+        end = slot(start)[1]
+        region.extend(rewritten.get(start, data[start:end]))
+    del data[region_start:]
+    data.extend(region)
+    for start, offset_position, table in items:
+        struct.pack_into("<I", data, offset_position, moved[start] - table)
+    if smd.header.offset_first_model in moved:
+        # Only a hint (see structs/re4-uhd-smd.ksy), kept consistent anyway.
+        struct.pack_into("<I", data, 12, moved[smd.header.offset_first_model])
+    return len(meshes)
+
+
+def _edited_models(bl_obj, bl_placements):
+    """{model id: mesh} for every room model whose mesh no longer matches
+    the fingerprint import recorded."""
+    meshes = {}
+    for bl_placement in bl_placements:
+        for bl_object in [bl_placement] + list(bl_placement.children):
+            if bl_object.type != "MESH" or MODEL_PROPERTY not in bl_object.data:
+                continue
+            bl_mesh = bl_object.data
+            if bl_mesh.get(FINGERPRINT_PROPERTY) == _mesh_fingerprint(bl_mesh):
+                continue
+            model_id = bl_mesh[MODEL_PROPERTY]
+            other = meshes.setdefault(model_id, bl_mesh)
+            if other != bl_mesh:
+                raise AlbamCheckFailure(
+                    f"Model {model_id} of {bl_obj.name} was edited as two different "
+                    f"meshes, {other.name} and {bl_mesh.name}",
+                    details="The room stores the model once, so only one version of "
+                            "it can be written. Import makes a second mesh for a "
+                            "model textured through a different .tpl.",
+                    solution="Make the edit on one of them only",
+                )
+    return meshes
+
+
+def _claimed_placements(bl_obj, smd):
+    """({entry index: object}, [objects to add as new entries]) for the
+    objects placed under a room.
+
+    Import records the entry an object stands for on it, and a duplicate
+    made in Blender copies that record, so two objects can claim one entry:
+    the one still named as import named it keeps the entry, and the others
+    are new placements. Which one keeps it makes no difference to what is
+    drawn - both are written - only to which keeps the entry's position in
+    the table, which other files of the room may refer to.
+
+    An object claiming nothing is a new placement if it carries one of the
+    room's models (a mesh import built from it), and anything else holding
+    a mesh is refused: albam can place the models a room has, not add new
+    ones to it.
+    """
+    stem = _stem(bl_obj.name)
+    claims = {}
+    added = []
+    for child in sorted(bl_obj.children, key=lambda c: c.name):
+        index = child.get(ENTRY_PROPERTY)
+        if index is not None:
+            if not 0 <= index < len(smd.entries) or not smd.entries[index].is_placed:
+                raise AlbamCheckFailure(
+                    f"{child.name} claims entry {index} of {bl_obj.name}, which the "
+                    f"room doesn't place anything with",
+                    details="Each object placed in a room records the .smd entry it "
+                            "stands for on import; this record doesn't match the file.",
+                    solution="Re-import the room, or remove the object's "
+                             f"'{ENTRY_PROPERTY}' custom property to add it as new",
+                )
+            claims.setdefault(index, []).append(child)
+            continue
+        if _placement_mesh(child) is not None:
+            added.append(child)
+        elif child.type == "MESH" or any(c.type == "MESH" for c in child.children):
+            raise AlbamCheckFailure(
+                f"{child.name} isn't one of {bl_obj.name}'s models",
+                details="A room can place the models embedded in its .smd any number "
+                        "of times, but adding a model it doesn't have isn't supported",
+                solution="Duplicate one of the room's placements instead, or move "
+                         "the object out of the room",
+            )
+
+    placements = {}
+    for index, claimants in claims.items():
+        own = f"{stem}_{index:03}"
+        claimants.sort(key=lambda c: c.name != own)
+        placements[index] = claimants[0]
+        added.extend(claimants[1:])
+    return placements, added
+
+
+def _placement_mesh(bl_placement):
+    """The room model mesh a placement object shows, or None."""
+    for bl_object in [bl_placement] + list(bl_placement.children):
+        if bl_object.type == "MESH" and MODEL_PROPERTY in bl_object.data:
+            return bl_object.data
+    return None
+
+
+def _new_entry(bl_placement, original, smd, entry_offsets):
+    """The 72 bytes of an entry placing `bl_placement`.
+
+    Copied from an entry already placing the same model - the one a
+    duplicate was made from, if it was - so every field this module does not
+    understand (status, the .smx index, the unknown words) is one the game
+    already accepts for that model, with the transform and the model and
+    .tpl indices written over it. It is read from the file as shipped
+    (`original`): the entry it is based on may have been deleted in this
+    same export.
+    """
+    bl_mesh = _placement_mesh(bl_placement)
+    if bl_mesh is None:
+        raise AlbamCheckFailure(
+            f"{bl_placement.name} has no room model to place",
+            solution="Duplicate one of the room's placements instead",
+        )
+    model_id = bl_mesh[MODEL_PROPERTY]
+    tpl_id = bl_mesh.get(TPL_PROPERTY)
+    template = bl_placement.get(ENTRY_PROPERTY)
+    if template is None or smd.entries[template].model_id != model_id:
+        candidates = [i for i, entry in enumerate(smd.entries)
+                      if entry.is_placed and not entry.is_shared and entry.model_id == model_id]
+        preferred = [i for i in candidates if smd.entries[i].tpl_id == tpl_id]
+        template = (preferred or candidates or [None])[0]
+    if template is None:
+        raise AlbamCheckFailure(
+            f"No entry of the room places model {model_id}, so there is nothing "
+            f"to base {bl_placement.name}'s entry on",
+            details="A room can hold a model no entry places; the fields of an entry "
+                    "for it would be guesses",
+        )
+    entry = bytearray(original[entry_offsets[template]:entry_offsets[template] + SMD_ENTRY_SIZE])
+    struct.pack_into(ENTRY_TRANSFORM_FORMAT, entry, 0,
+                     *_matrix_to_entry(_placement_matrix(bl_placement), bl_placement.name))
+    entry[ENTRY_MODEL_ID_OFFSET] = model_id
+    if tpl_id is not None:
+        entry[ENTRY_MODEL_ID_OFFSET + 1] = tpl_id
+    return bytes(entry)
+
+
+def _place_new_entries(bl_obj, data, original, smd, added, free):
+    """Write an entry for every placement in `added` into `data`, and return
+    how many had to go past the end of the table.
+
+    Free entries - the zeroed ones some rooms ship with and the ones deleted
+    in this export - are filled first. Past those, the table grows: the
+    entries go in after its last one, everything behind it moves along, and
+    the header's three offsets move with it. The offset tables are relative
+    to their own positions, so nothing they point at needs rewriting. That
+    rests on nothing else in the file pointing past the entry table, which
+    the game bears out: a room given a second copy of every entry this way
+    loads and draws both.
+    """
+    if not added:
+        return 0
+    entry_offsets = [SMD_HEADER_SIZE + i * SMD_ENTRY_SIZE for i in range(len(smd.entries))]
+    entries = [_new_entry(bl_placement, original, smd, entry_offsets) for bl_placement in added]
+    for index, entry in zip(free, entries):
+        data[entry_offsets[index]:entry_offsets[index] + SMD_ENTRY_SIZE] = entry
+    extra = entries[len(free):]
+    if not extra:
+        return 0
+    count = len(smd.entries) + len(extra)
+    if count > MAX_ENTRIES:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} would need {count} entries, and the format counts them "
+            f"in 16 bits",
+            solution="Place fewer objects",
+        )
+    table_end = SMD_HEADER_SIZE + len(smd.entries) * SMD_ENTRY_SIZE
+    shift = len(extra) * SMD_ENTRY_SIZE
+    data[table_end:table_end] = b"".join(extra)
+    struct.pack_into("<H", data, 2, count)
+    for field_offset in (4, 8, 12):
+        offset = struct.unpack_from("<I", data, field_offset)[0]
+        struct.pack_into("<I", data, field_offset, offset + shift)
+    return len(extra)

@@ -431,8 +431,32 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             "remove_unused_textures": context.scene.albam.export_settings.remove_unused_textures,
         }
         archive = writer(path_i, files_e, **options)
+        # Everything is built before anything is written, so a failure in
+        # either step (a pack not found, a numbering check) leaves no
+        # half-written mod on disk.
+        companion_writer = blender_registry.companion_archive_writer_registry.get(
+            (item_i.app_id, extension))
+        companions = companion_writer(path_i, files_e, **options) if companion_writer else {}
+
         with open(self.filepath, "wb") as f:
             f.write(archive)
+
+        # A companion's relative path is laid out from the parent of the
+        # archive's own folder: that is where the game, and the importer,
+        # look for what sits beside an archive's folder (RE4 UHD's texture
+        # packs, BIO4/ImagePackHD/ beside BIO4/Em/). Saving into the install,
+        # or into a mod folder that mirrors its layout, then just works, and
+        # re-importing the saved archive finds what was written with it.
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(self.filepath)))
+        written = []
+        for relative_path, data in companions.items():
+            companion_path = os.path.join(base_dir, relative_path)
+            os.makedirs(os.path.dirname(companion_path), exist_ok=True)
+            with open(companion_path, "wb") as f:
+                f.write(data)
+            written.append(companion_path)
+        if written:
+            self.report({'INFO'}, f"Also wrote {', '.join(sorted(written))}")
 
     @classmethod
     def poll(cls, context):
