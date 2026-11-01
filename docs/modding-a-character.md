@@ -236,9 +236,10 @@ Add one layer of albam at a time, and whichever fails first names the layer:
   themselves, is written back; a model left alone keeps its shipped bytes, and
   so does everything else in the file. If an edited model no longer fits where
   it was, the models are laid out again and the file grows only by what the
-  edit added. Adding
-  placements (a duplicate made in Blender is refused), adding models, and the
-  one room assembled from several files are not supported yet.
+  edit added. Duplicating a placement in Blender, or putting one of the room's
+  meshes under the room as a new object, adds an entry for it. Adding models
+  the room doesn't have, and the one room assembled from several files, are
+  not supported yet.
 - **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
   address the slots its texture list already has, and a mod that adds one would
   also have to renumber the material indices addressing it.

@@ -50,6 +50,10 @@ ENTRY_PROPERTY = "albam_smd_entry"
 # a u4 status.
 SMD_HEADER_SIZE = 16
 SMD_ENTRY_SIZE = 72
+# Where an entry's model index sits; its .tpl index is the byte after.
+ENTRY_MODEL_ID_OFFSET = 36
+# num_entries is a u2.
+MAX_ENTRIES = 0xFFFF
 # Within an entry: position, angles and scale, three f4 each.
 ENTRY_TRANSFORM_FORMAT = "<9f"
 # A placement is written back only if it moved by more than this, in
@@ -62,6 +66,9 @@ TRANSFORM_TOLERANCE = 1e-5
 # writes from it as it was imported (see _mesh_fingerprint), which is what
 # tells an edited model from one left alone.
 MODEL_PROPERTY = "albam_smd_model"
+# The .tpl table entry the mesh's textures were imported through - what a
+# placement added in Blender for it addresses (see _new_entry).
+TPL_PROPERTY = "albam_smd_tpl"
 FINGERPRINT_PROPERTY = "albam_smd_fingerprint"
 # Embedded models start on this boundary in shipped files.
 SMD_MODEL_ALIGNMENT = 32
@@ -113,6 +120,7 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                     continue
                 if not entry.is_shared:
                     bl_mesh[MODEL_PROPERTY] = entry.model_id
+                    bl_mesh[TPL_PROPERTY] = entry.tpl_id
                     bl_mesh[FINGERPRINT_PROPERTY] = _mesh_fingerprint(bl_mesh)
                 built[key] = bl_mesh
             bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
@@ -425,6 +433,9 @@ def export_smd(bl_obj):
     entry. One deleted in Blender is zeroed, which is what the unused
     entries a few rooms ship with look like and is what the game skips.
 
+    A placement added in Blender - a duplicate of one, or a room model's
+    mesh put under the room - becomes a new entry (see _place_new_entries).
+
     A model whose mesh was edited is written again (see _write_models);
     every other model keeps its shipped bytes.
     """
@@ -440,22 +451,7 @@ def export_smd(bl_obj):
                     "export does not maintain. One room of the game is like this.",
         )
 
-    placements = {}
-    for child in bl_obj.children:
-        index = child.get(ENTRY_PROPERTY)
-        if index is None:
-            continue
-        if index in placements or not 0 <= index < len(smd.entries):
-            raise AlbamCheckFailure(
-                f"{child.name} claims entry {index} of {bl_obj.name}, which "
-                f"{'another object also claims' if index in placements else 'has no such entry'}",
-                details="Each object placed in a room stands for one entry of its "
-                        ".smd, recorded on import. A duplicate made in Blender "
-                        "copies that record but has no entry of its own: adding "
-                        "placements isn't supported yet.",
-                solution="Delete the duplicate, or move the original instead",
-            )
-        placements[index] = child
+    placements, added = _claimed_placements(bl_obj, smd)
 
     changed = 0
     for index, entry in enumerate(smd.entries):
@@ -479,8 +475,12 @@ def export_smd(bl_obj):
         struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset, *_matrix_to_entry(matrix))
         changed += 1
 
-    models = _write_models(bl_obj, data, smd, placements.values())
+    models = _write_models(bl_obj, data, smd, list(placements.values()) + added)
+    free = [index for index, entry in enumerate(smd.entries)
+            if not entry.is_placed or index not in placements]
+    appended = _place_new_entries(bl_obj, data, bytes(asset.original_bytes), smd, added, free)
     print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten, "
+          f"{len(added)} added ({appended} past the end of the table), "
           f"{models} models rewritten")
     return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
 
@@ -677,3 +677,144 @@ def _edited_models(bl_obj, bl_placements):
                     solution="Make the edit on one of them only",
                 )
     return meshes
+
+
+def _claimed_placements(bl_obj, smd):
+    """({entry index: object}, [objects to add as new entries]) for the
+    objects placed under a room.
+
+    Import records the entry an object stands for on it, and a duplicate
+    made in Blender copies that record, so two objects can claim one entry:
+    the one still named as import named it keeps the entry, and the others
+    are new placements. Which one keeps it makes no difference to what is
+    drawn - both are written - only to which keeps the entry's position in
+    the table, which other files of the room may refer to.
+
+    An object claiming nothing is a new placement if it carries one of the
+    room's models (a mesh import built from it), and anything else holding
+    a mesh is refused: albam can place the models a room has, not add new
+    ones to it.
+    """
+    stem = _stem(bl_obj.name)
+    claims = {}
+    added = []
+    for child in sorted(bl_obj.children, key=lambda c: c.name):
+        index = child.get(ENTRY_PROPERTY)
+        if index is not None:
+            if not 0 <= index < len(smd.entries) or not smd.entries[index].is_placed:
+                raise AlbamCheckFailure(
+                    f"{child.name} claims entry {index} of {bl_obj.name}, which the "
+                    f"room doesn't place anything with",
+                    details="Each object placed in a room records the .smd entry it "
+                            "stands for on import; this record doesn't match the file.",
+                    solution="Re-import the room, or remove the object's "
+                             f"'{ENTRY_PROPERTY}' custom property to add it as new",
+                )
+            claims.setdefault(index, []).append(child)
+            continue
+        if _placement_mesh(child) is not None:
+            added.append(child)
+        elif child.type == "MESH" or any(c.type == "MESH" for c in child.children):
+            raise AlbamCheckFailure(
+                f"{child.name} isn't one of {bl_obj.name}'s models",
+                details="A room can place the models embedded in its .smd any number "
+                        "of times, but adding a model it doesn't have isn't supported",
+                solution="Duplicate one of the room's placements instead, or move "
+                         "the object out of the room",
+            )
+
+    placements = {}
+    for index, claimants in claims.items():
+        own = f"{stem}_{index:03}"
+        claimants.sort(key=lambda c: c.name != own)
+        placements[index] = claimants[0]
+        added.extend(claimants[1:])
+    return placements, added
+
+
+def _placement_mesh(bl_placement):
+    """The room model mesh a placement object shows, or None."""
+    for bl_object in [bl_placement] + list(bl_placement.children):
+        if bl_object.type == "MESH" and MODEL_PROPERTY in bl_object.data:
+            return bl_object.data
+    return None
+
+
+def _new_entry(bl_placement, original, smd, entry_offsets):
+    """The 72 bytes of an entry placing `bl_placement`.
+
+    Copied from an entry already placing the same model - the one a
+    duplicate was made from, if it was - so every field this module does not
+    understand (status, the .smx index, the unknown words) is one the game
+    already accepts for that model, with the transform and the model and
+    .tpl indices written over it. It is read from the file as shipped
+    (`original`): the entry it is based on may have been deleted in this
+    same export.
+    """
+    bl_mesh = _placement_mesh(bl_placement)
+    if bl_mesh is None:
+        raise AlbamCheckFailure(
+            f"{bl_placement.name} has no room model to place",
+            solution="Duplicate one of the room's placements instead",
+        )
+    model_id = bl_mesh[MODEL_PROPERTY]
+    tpl_id = bl_mesh.get(TPL_PROPERTY)
+    template = bl_placement.get(ENTRY_PROPERTY)
+    if template is None or smd.entries[template].model_id != model_id:
+        candidates = [i for i, entry in enumerate(smd.entries)
+                      if entry.is_placed and not entry.is_shared and entry.model_id == model_id]
+        preferred = [i for i in candidates if smd.entries[i].tpl_id == tpl_id]
+        template = (preferred or candidates or [None])[0]
+    if template is None:
+        raise AlbamCheckFailure(
+            f"No entry of the room places model {model_id}, so there is nothing "
+            f"to base {bl_placement.name}'s entry on",
+            details="A room can hold a model no entry places; the fields of an entry "
+                    "for it would be guesses",
+        )
+    entry = bytearray(original[entry_offsets[template]:entry_offsets[template] + SMD_ENTRY_SIZE])
+    struct.pack_into(ENTRY_TRANSFORM_FORMAT, entry, 0,
+                     *_matrix_to_entry(_placement_matrix(bl_placement)))
+    entry[ENTRY_MODEL_ID_OFFSET] = model_id
+    if tpl_id is not None:
+        entry[ENTRY_MODEL_ID_OFFSET + 1] = tpl_id
+    return bytes(entry)
+
+
+def _place_new_entries(bl_obj, data, original, smd, added, free):
+    """Write an entry for every placement in `added` into `data`, and return
+    how many had to go past the end of the table.
+
+    Free entries - the zeroed ones some rooms ship with and the ones deleted
+    in this export - are filled first. Past those, the table grows: the
+    entries go in after its last one, everything behind it moves along, and
+    the header's three offsets move with it. The offset tables are relative
+    to their own positions, so nothing they point at needs rewriting. That
+    rests on nothing else in the file pointing past the entry table, which
+    the game bore out: a room given a second copy of every entry this way
+    loaded and drew both.
+    """
+    if not added:
+        return 0
+    entry_offsets = [SMD_HEADER_SIZE + i * SMD_ENTRY_SIZE for i in range(len(smd.entries))]
+    entries = [_new_entry(bl_placement, original, smd, entry_offsets) for bl_placement in added]
+    for index, entry in zip(free, entries):
+        data[entry_offsets[index]:entry_offsets[index] + SMD_ENTRY_SIZE] = entry
+    extra = entries[len(free):]
+    if not extra:
+        return 0
+    count = len(smd.entries) + len(extra)
+    if count > MAX_ENTRIES:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} would need {count} entries, and the format counts them "
+            f"in 16 bits",
+            solution="Place fewer objects",
+        )
+    table_end = SMD_HEADER_SIZE + len(smd.entries) * SMD_ENTRY_SIZE
+    shift = len(extra) * SMD_ENTRY_SIZE
+    data[table_end:table_end] = b"".join(extra)
+    struct.pack_into("<H", data, 2, count)
+    for field_offset in (4, 8, 12):
+        offset = struct.unpack_from("<I", data, field_offset)[0]
+        struct.pack_into("<I", data, field_offset, offset + shift)
+    return len(extra)
