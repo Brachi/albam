@@ -1,95 +1,112 @@
 """Tests for albam/_missing_dependency.py (#370).
 
-A user who installs Albam from GitHub's "Code -> Download ZIP" button gets
-none of the bundled wheels (fs, bc7enc, kaitaistruct, pymorton), and used to
-see a bare ModuleNotFoundError with no indication of why. These tests cover
-the helper that turns that into an actionable message, both in isolation
-(no bpy needed - pure logic) and wired into `import albam` itself.
+The helper turns a ModuleNotFoundError for a third-party dependency into an
+ImportError that tells a source-zip install apart from a release build
+whose bundled wheels did not install, based on the manifest's `wheels`.
 """
 import ast
-import subprocess
-import sys
-import textwrap
 
 import pytest
 
-from albam._missing_dependency import BUNDLED_DEPENDENCIES, reraise_as_source_zip_hint
+from albam import _missing_dependency
+from albam._missing_dependency import missing_dependency_hint
+from tests.subprocess_script import run_script
+
+SOURCE_MANIFEST = 'platforms = ["windows-x64", "linux-x64"]\nwheels = [\n]\n'
+RELEASE_MANIFEST = (
+    'platforms = ["windows-x64", "linux-x64"]\n'
+    'wheels = [\n  "./wheels/fs-2.4.16-py2.py3-none-any.whl",\n]\n'
+)
 
 
-@pytest.mark.parametrize("name", sorted(BUNDLED_DEPENDENCIES))
-def test_reraise_as_source_zip_hint_rewrites_known_dependencies(name):
-    original = ModuleNotFoundError(f"No module named {name!r}")
-    original.name = name
+def _missing(name):
+    ex = ModuleNotFoundError(f"No module named {name!r}")
+    ex.name = name
+    return ex
 
-    with pytest.raises(ImportError) as exc_info:
-        reraise_as_source_zip_hint(original)
 
-    message = str(exc_info.value)
-    assert name in message
+@pytest.fixture
+def manifest(tmp_path):
+    def write(text):
+        path = tmp_path / "blender_manifest.toml"
+        path.write_text(text)
+        return path
+    return write
+
+
+def test_source_manifest_gives_the_source_zip_hint(manifest):
+    hint = missing_dependency_hint(_missing("fs"), manifest(SOURCE_MANIFEST))
+
+    message = str(hint)
+    assert isinstance(hint, ImportError)
+    assert "'fs'" in message
     assert "Download ZIP" in message
     assert "releases" in message
-    assert exc_info.value.__cause__ is original
 
 
-def test_reraise_as_source_zip_hint_matches_on_the_top_level_package():
-    # `from fs.path import dirname` reports ex.name as "fs", not "fs.path" -
-    # confirmed separately - but a dotted name should still match if it ever
-    # shows up, since only the top-level package is ever actually bundled.
-    original = ModuleNotFoundError("No module named 'fs.path'")
-    original.name = "fs.path"
+def test_release_manifest_gives_the_wheels_failed_hint(manifest):
+    hint = missing_dependency_hint(_missing("bc7enc"), manifest(RELEASE_MANIFEST))
 
-    with pytest.raises(ImportError):
-        reraise_as_source_zip_hint(original)
-
-
-def test_reraise_as_source_zip_hint_passes_through_unrelated_errors():
-    # A missing module that isn't one of albam's bundled dependencies is a
-    # real bug (e.g. a typo'd internal import), not a packaging problem -
-    # it must come back unchanged, not get relabeled as a source-zip issue.
-    original = ModuleNotFoundError("No module named 'not_a_real_dependency'")
-    original.name = "not_a_real_dependency"
-
-    with pytest.raises(ModuleNotFoundError) as exc_info:
-        reraise_as_source_zip_hint(original)
-
-    assert exc_info.value is original
+    message = str(hint)
+    assert "'bc7enc'" in message
+    assert "did not install" in message
+    assert "windows-x64, linux-x64" in message
+    assert "Download ZIP" not in message
 
 
-def _run(script):
-    # Fresh subprocess, not the live pytest process: this session's `import
-    # albam` already succeeded (tests/conftest.py's pytest_sessionstart
-    # calls register()), and sys.modules poisoning to simulate a missing
-    # dependency would corrupt that shared state for every other test.
-    result = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(script)],
-        capture_output=True,
-        text=True,
-    )
-    return result
+def test_dotted_name_reports_the_top_level_package(manifest):
+    hint = missing_dependency_hint(_missing("fs.path"), manifest(SOURCE_MANIFEST))
+
+    assert "'fs'" in str(hint)
 
 
-def test_import_albam_surfaces_a_clear_message_when_a_bundled_dependency_is_missing():
+@pytest.mark.parametrize("suffix", ["", ".lib.typo"])
+def test_albam_modules_pass_through(manifest, suffix):
+    name = _missing_dependency.__package__ + suffix
+
+    assert missing_dependency_hint(_missing(name), manifest(SOURCE_MANIFEST)) is None
+
+
+def test_unreadable_manifest_passes_through(tmp_path):
+    assert missing_dependency_hint(_missing("fs"), tmp_path / "missing.toml") is None
+
+
+def test_shipped_manifest_is_the_source_one():
+    # build_extension.py fills `wheels` in only in the release zip it builds.
+    hint = missing_dependency_hint(_missing("fs"))
+
+    assert "Download ZIP" in str(hint)
+
+
+def test_import_albam_raises_the_hint_when_a_dependency_is_missing():
     # sys.modules[name] = None makes the import system report that module as
-    # not found without actually uninstalling it - the simplest way to
-    # reproduce a source-zip install's missing `fs` from a normal dev venv
-    # that has it. A marker line separates the result from bpy's own
-    # startup noise on stdout (e.g. a color management config line).
-    script = """
-        import sys
+    # not found, reproducing a source-zip install's missing `fs` from a dev
+    # venv that has it.
+    output = run_script(
+        """
         sys.modules["fs"] = None
         try:
             import albam
         except ImportError as ex:
-            print("RESULT", type(ex).__name__, repr(str(ex)))
+            print((type(ex).__name__, str(ex), type(ex.__cause__).__name__))
         else:
-            print("RESULT", "NO ERROR RAISED")
-    """
-    result = _run(script)
-    assert result.returncode == 0, result.stderr
-    (result_line,) = [line for line in result.stdout.splitlines() if line.startswith("RESULT ")]
-    _, exc_type, message_repr = result_line.split(" ", 2)
+            print("no error raised")
+        """
+    )
+    exc_type, message, cause_type = ast.literal_eval(output)
     assert exc_type == "ImportError"
-    message = ast.literal_eval(message_repr)
     assert "Download ZIP" in message
-    assert "releases" in message
-    assert "ModuleNotFoundError" not in message  # the rewritten message, not the raw one
+    assert cause_type == "ModuleNotFoundError"
+
+
+def test_import_albam_keeps_internal_import_errors():
+    output = run_script(
+        """
+        sys.modules["albam.vfs"] = None
+        try:
+            import albam
+        except ImportError as ex:
+            print((type(ex).__name__, ex.name, ex.__cause__ is None))
+        """
+    )
+    assert ast.literal_eval(output) == ("ModuleNotFoundError", "albam.vfs", True)

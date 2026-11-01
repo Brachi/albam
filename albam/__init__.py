@@ -4,7 +4,7 @@ import os
 import bpy
 
 from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
-from ._missing_dependency import reraise_as_source_zip_hint
+from ._missing_dependency import missing_dependency_hint
 
 try:
     from .lib.tools import face_attr_editor as overlay
@@ -17,7 +17,10 @@ try:
     from .registry import blender_registry
     from .vfs import reconnect_fs_roots
 except ModuleNotFoundError as ex:
-    reraise_as_source_zip_hint(ex)
+    hint = missing_dependency_hint(ex)
+    if hint is None:
+        raise
+    raise hint from ex
 
 from .__version__ import __version__ as version
 
@@ -40,11 +43,10 @@ LOAD_POST_HANDLERS = [populate_albam_data, reconnect_fs_roots]
 
 
 def register():
-    # Load registered functions into the blender_registry. Wrapped because
-    # these are the first imports to reach kaitaistruct/pymorton - a source-
-    # zip install (#370) missing fs/bc7enc fails earlier, at module import
-    # time above, but one missing only these would otherwise surface here
-    # instead, with the same bare, unhelpful ModuleNotFoundError.
+    # Load registered functions into the blender_registry. A source-zip
+    # install fails at module import time above, since `fs` is missing too;
+    # this catches a release build where only some wheels installed (e.g. a
+    # platform-specific one) and the first import of the missing one is here.
     try:
         importlib.import_module(".blender_ui.import_panel", __package__)
         importlib.import_module(".blender_ui.export_panel", __package__)
@@ -64,7 +66,10 @@ def register():
             importlib.import_module(".engines.reng.mesh", __package__)
             importlib.import_module(".engines.reng.texture", __package__)
     except ModuleNotFoundError as ex:
-        reraise_as_source_zip_hint(ex)
+        hint = missing_dependency_hint(ex)
+        if hint is None:
+            raise
+        raise hint from ex
 
     for _, cls in blender_registry.props:
         bpy.utils.register_class(cls)

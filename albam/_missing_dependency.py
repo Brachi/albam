@@ -1,58 +1,66 @@
-"""Turns a missing bundled dependency into an actionable message (#370).
+"""Explains a missing third-party dependency when albam fails to load (#370).
 
 Blender's extension packaging bundles albam's third-party dependencies as
-wheels inside the release zip (see scripts/build_extension.py). A user who
-instead uses GitHub's "Code -> Download ZIP" button gets the source only,
-with none of those wheels, and the first `import fs` or `import bc7enc`
-albam does raises a bare ModuleNotFoundError with no indication of why - at
-least 3 separate #support reports, one costing a user "hours" before they
-worked it out.
+wheels inside the release zip, and scripts/build_extension.py lists them in
+the zip's blender_manifest.toml. The manifest in the source tree has
+`wheels = []`, so an install from GitHub's "Code > Download ZIP" archive
+can be told apart from a release build whose wheels Blender failed to
+install.
 
-Imported first thing in albam/__init__.py, before anything that might
-actually be missing, so this module itself has to stay free of third-party
-imports.
+Imported first thing in albam/__init__.py, before anything that might be
+missing, so this module only uses the standard library.
 """
+from pathlib import Path
+import tomllib
 
-# pyproject.toml's [project.dependencies], minus bpy (Blender provides its
-# own) and setuptools (already present in Blender's bundled Python). Each
-# entry is the name Python imports, not necessarily the PyPI distribution
-# name - bc7enc-py imports as "bc7enc". Deliberately excludes the `reen`/`s3`
-# extras: those aren't bundled in a normal release build either (opt-in,
-# gated behind ALBAM_ENABLE_REEN / the s3 cache), so a user missing one of
-# them hasn't made the source-zip mistake this module is about.
-BUNDLED_DEPENDENCIES = frozenset({"fs", "kaitaistruct", "pymorton", "bc7enc"})
-
+MANIFEST_PATH = Path(__file__).with_name("blender_manifest.toml")
 RELEASES_URL = "https://github.com/Brachi/albam/releases"
 
 
-def reraise_as_source_zip_hint(ex):
-    """Re-raise a ModuleNotFoundError with a clear cause, or pass it through.
+def missing_dependency_hint(ex, manifest_path=MANIFEST_PATH):
+    """Return an ImportError explaining `ex`, or None to keep `ex` as is.
 
-    `ex.name` is the top-level package the failed import was trying to
-    reach - e.g. "fs" even for `from fs.path import dirname` - so comparing
-    just the first dotted component against BUNDLED_DEPENDENCIES still
-    matches. Anything else is a real bug in albam's own code, not a
-    packaging problem, and is re-raised unchanged so it isn't masked.
-
-    Call from inside an `except ModuleNotFoundError:` block.
+    `ex` is a caught ModuleNotFoundError. A module under albam's own package
+    is never a packaging problem (it ships in every zip), so that case and
+    an unreadable manifest return None and the caller re-raises the
+    original error.
     """
-    root_name = (ex.name or "").split(".")[0]
-    if root_name not in BUNDLED_DEPENDENCIES:
-        raise ex
+    if not ex.name or ex.name == __package__ or ex.name.startswith(f"{__package__}."):
+        return None
+    try:
+        with open(manifest_path, "rb") as f:
+            manifest = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
 
-    message = (
-        f"Albam failed to load: the Python package '{root_name}' is missing.\n"
-        "\n"
-        "This happens when Albam is installed from GitHub's 'Code' -> 'Download ZIP' "
-        "button, which only has the source code, not Albam's bundled dependencies.\n"
-        "\n"
-        f"Download the add-on from the Releases page instead:\n{RELEASES_URL}\n"
-        "and install that zip (Preferences > Get Extensions, or Add-ons > install "
-        "from disk) rather than the GitHub source archive."
-    )
-    # Blender's own addon-enable failure handling only guarantees the
-    # traceback reaches the console, not that the exception's message is
-    # shown anywhere else a user might see it - so print it too, loudly.
-    banner = "=" * 70
-    print(f"\n{banner}\n{message}\n{banner}\n")
-    raise ImportError(message) from ex
+    root_name = ex.name.split(".")[0]
+    if manifest.get("wheels"):
+        platforms = ", ".join(manifest.get("platforms", [])) or "unknown"
+        message = (
+            f"Albam failed to load: the Python package '{root_name}' is missing.\n"
+            "\n"
+            "This Albam zip bundles its dependencies as wheels, but Blender did not "
+            "install them. Check that:\n"
+            f"- your platform is supported by this build ({platforms})\n"
+            "- the zip was installed through Blender's extension installer "
+            "(Preferences > Get Extensions > Install from Disk), not extracted or "
+            "copied into the add-ons folder\n"
+            "- your Blender version is supported by this Albam release\n"
+            "\n"
+            f"Releases: {RELEASES_URL}"
+        )
+    else:
+        message = (
+            f"Albam failed to load: the Python package '{root_name}' is missing.\n"
+            "\n"
+            "This copy of Albam is the source code, without the bundled dependencies. "
+            "That happens when it is installed from GitHub's 'Code' > 'Download ZIP' "
+            "button.\n"
+            "\n"
+            f"Download the add-on zip from the Releases page instead:\n{RELEASES_URL}\n"
+            "and install it from Preferences > Get Extensions > Install from Disk.\n"
+            "\n"
+            "Running from a development checkout? See README.md for installing the "
+            "dependencies."
+        )
+    return ImportError(message, name=ex.name)
