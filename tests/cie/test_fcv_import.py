@@ -98,9 +98,19 @@ def test_leg_ik_puts_the_toe_on_the_keyed_target(game_root, local_app_id, local_
     model = next(vf for vf in entries
                  if vf.display_name.lower().endswith(".bin") and _is_mesh_bin(vf.get_bytes()))
     bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
+    # Other test files in the same worker can leave armatures behind (an
+    # MT Framework one shares no bone layout with this one), so take the
+    # armature this import deforms its mesh with, and start it from rest.
+    bpy.context.scene.albam.import_options_bin.shared_armature = None
+    objects_before = set(bpy.data.objects)
     vfs.file_list_selected_index = vfs.file_list.find(model.name)
     blender_registry.import_registry[(local_app_id, "bin")](model, bpy.context)
-    armature = next(ob for ob in bpy.data.objects if ob.type == 'ARMATURE')
+    armatures = {m.object for ob in set(bpy.data.objects) - objects_before if ob.type == 'MESH'
+                 for m in ob.modifiers if m.type == 'ARMATURE' and m.object is not None}
+    assert len(armatures) == 1, [ob.name for ob in armatures]
+    armature = armatures.pop()
+    for pose_bone in armature.pose.bones:
+        pose_bone.matrix_basis = Matrix.Identity(4)
 
     found = _leg_chain_motion([vf for vf in entries if vf.display_name.lower().endswith(".fcv")],
                               _parse_fcv)
