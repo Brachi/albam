@@ -89,9 +89,18 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
     error_message = bpy.props.StringProperty(default="")
     error_details = bpy.props.StringProperty(default="")
     error_solution = bpy.props.StringProperty(default="")
+    # Unbounded (maxlen=0, the default): a real traceback easily runs past
+    # Blender's StringProperty default cap and would silently truncate.
+    error_report_text = bpy.props.StringProperty(default="")
 
     def invoke(self, context, event):
         type_err, err, tb = sys.exc_info()
+        # Computed for every error, not just unexpected ones: this is what
+        # the "copy report" button puts on the clipboard, and a check
+        # failure's traceback is just as useful to a #support helper as an
+        # unexpected error's.
+        report_text = self._generate_error_report(type_err, err, tb)
+        self.error_report_text = report_text
         if issubclass(type(err), AlbamCheckFailure):
             self.error_header = self.ERROR_CHECK_FAILURE_HEADER
             self.error_message = err.message
@@ -104,8 +113,7 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
             self.error_details = ""
             self.error_solution = self.ERROR_UNEXPECTED_SOLUTION_MSG
             self.error_solution_2 = self.ERROR_UNEXPECTED_SOLUTION_MSG_2
-            error = self._generate_error_report(type_err, err, tb)
-            print(error)
+            print(report_text)
         return context.window_manager.invoke_props_dialog(self, width=self._calculate_popup_width())
 
     def execute(self, context):
@@ -124,6 +132,10 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         layout.separator()
         layout.separator()
 
+        copy_op = layout.operator(
+            ALBAM_OT_CopyErrorReport.bl_idname, text="Copy report to clipboard", icon="COPYDOWN"
+        )
+        copy_op.report_text = self.error_report_text
         issues_op = layout.operator("wm.url_open", text="Report an issue on Github", icon="URL")
         issues_op.url = self.ISSUES_URL
         discord_op = layout.operator("wm.url_open", text="Ask on Discord #support", icon="URL")
@@ -145,3 +157,31 @@ class ALBAM_OT_ErrorHandler(bpy.types.Operator):
         needed = max(len(label) for label in using_space)
         width = max(needed * self.PIXELS_PER_CHAR, self.MIN_POPUP_WIDTH)
         return width
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CopyErrorReport(bpy.types.Operator):
+    """Copy the full error report (message and traceback) to the clipboard.
+
+    Exists so a #support user can paste the actual error directly, instead
+    of being asked to open the system console (which most users don't know
+    exists) and copy it from there by hand.
+    """
+
+    bl_label = "Copy report to clipboard"
+    bl_idname = "albam.copy_error_report"
+    bl_description = "Copy the full error report, including the traceback, to the clipboard"
+
+    # Annotation syntax, unlike ALBAM_OT_ErrorHandler's plain-assignment
+    # properties above: those are only ever set and read on the same
+    # instance (invoke() then draw()), where a plain Python attribute is
+    # enough. This one is set on the *button's* operator instance
+    # (layout.operator() in that draw(), below) and read back on the
+    # instance Blender creates when the button is clicked, so it needs to
+    # be a real registered RNA property to survive the trip.
+    report_text: bpy.props.StringProperty(default="")
+
+    def execute(self, context):
+        context.window_manager.clipboard = self.report_text
+        self.report({"INFO"}, "Error report copied to clipboard")
+        return {"FINISHED"}
