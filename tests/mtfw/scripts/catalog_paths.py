@@ -108,7 +108,17 @@ def resolve_hashes(game_fs, target_hashes):
                 break
     missing = target_hashes - found.keys()
     if missing:
-        raise KeyError(f"hash(es) not found in this game install: {sorted(missing)}")
+        # Diagnostic context for a mount that's missing something it
+        # should have: how many archives this FS actually has mounted and
+        # how many failed to load (arc_fs.MTFW_FS specific; absent on any
+        # other FS) tells apart "the archive holding this hash never got
+        # listed/mounted at all" from "it's mounted, but this particular
+        # hash truly isn't inside it".
+        failed_arcs = getattr(game_fs, "failed_arcs", None)
+        iterate_fs = getattr(game_fs, "iterate_fs", None)
+        mounted = sum(1 for _ in iterate_fs()) if iterate_fs else None
+        context = f" (mounted={mounted}, failed_arcs={failed_arcs!r})" if iterate_fs else ""
+        raise KeyError(f"hash(es) not found in this game install: {sorted(missing)}{context}")
     return found
 
 
