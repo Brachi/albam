@@ -4,6 +4,7 @@ import re
 import gpu
 import blf
 from pathlib import Path
+from bpy.app.handlers import persistent
 from bpy_extras import view3d_utils
 from mathutils.bvhtree import BVHTree
 from gpu_extras.batch import batch_for_shader
@@ -29,7 +30,7 @@ WORKSPACE_TOOLS = []
 FACE_PAINTER_TOOL_ID = "albam.material_painter_tool"
 FACE_PAINTER_TIMER_INTERVAL = 0.1
 _FACE_PAINTER_SHADING_STATES = {}
-_FACE_PAINTER_BVH_CACHE = {}
+_FACE_PAINTER_PALETTE_DRAW_HANDLERS = []
 
 
 def _restore_face_painter_shading(state):
@@ -59,24 +60,32 @@ def _track_face_painter_area(area):
     space.shading.type = 'SOLID'
 
 
-def _get_face_painter_bvh(mesh_data, edit_mesh):
-    """Reuse the BVH while the tool is active and mesh geometry is unchanged."""
-    mesh_key = mesh_data.as_pointer()
-    cached_bvh = _FACE_PAINTER_BVH_CACHE.get(mesh_key)
-    if cached_bvh:
-        try:
-            if cached_bvh["mesh_data"] == mesh_data:
-                return cached_bvh["bvh"]
-        except ReferenceError:
-            pass
-
+def _build_face_painter_bvh(edit_mesh):
+    """Build a fresh BVH for the current stroke's edit mesh."""
     edit_mesh.faces.ensure_lookup_table()
-    bvh = BVHTree.FromBMesh(edit_mesh)
-    _FACE_PAINTER_BVH_CACHE[mesh_key] = {
-        "mesh_data": mesh_data,
-        "bvh": bvh,
-    }
-    return bvh
+    return BVHTree.FromBMesh(edit_mesh)
+
+
+def _remove_face_painter_palette_draw_handler(handler):
+    try:
+        _FACE_PAINTER_PALETTE_DRAW_HANDLERS.remove(handler)
+    except ValueError:
+        return
+
+    try:
+        bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+    except (ReferenceError, RuntimeError, ValueError):
+        pass
+
+
+def _cleanup_face_painter_palette_draw_handlers(_filepath=None):
+    for handler in tuple(_FACE_PAINTER_PALETTE_DRAW_HANDLERS):
+        _remove_face_painter_palette_draw_handler(handler)
+
+
+@persistent
+def _face_painter_palette_load_pre(_filepath):
+    _cleanup_face_painter_palette_draw_handlers()
 
 
 def _face_painter_lifecycle_timer():
@@ -112,9 +121,6 @@ def _face_painter_lifecycle_timer():
             _restore_face_painter_shading(state)
             del _FACE_PAINTER_SHADING_STATES[area_key]
 
-    if not active_area_keys:
-        _FACE_PAINTER_BVH_CACHE.clear()
-
     return FACE_PAINTER_TIMER_INTERVAL
 
 
@@ -134,10 +140,12 @@ def _stop_face_painter_lifecycle_timer():
     for state in _FACE_PAINTER_SHADING_STATES.values():
         _restore_face_painter_shading(state)
     _FACE_PAINTER_SHADING_STATES.clear()
-    _FACE_PAINTER_BVH_CACHE.clear()
 
 
 def register_workspace_tools():
+    if _face_painter_palette_load_pre not in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.append(_face_painter_palette_load_pre)
+
     for tool_cls in WORKSPACE_TOOLS:
         bpy.utils.register_tool(
             tool_cls,
@@ -148,6 +156,12 @@ def register_workspace_tools():
 
 
 def unregister_workspace_tools():
+    _cleanup_face_painter_palette_draw_handlers()
+    try:
+        bpy.app.handlers.load_pre.remove(_face_painter_palette_load_pre)
+    except ValueError:
+        pass
+
     _stop_face_painter_lifecycle_timer()
     for tool_cls in reversed(WORKSPACE_TOOLS):
         bpy.utils.unregister_tool(tool_cls)
@@ -1049,7 +1063,7 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
 
         self.mesh_object = context.active_object
         self.edit_mesh = bmesh.from_edit_mesh(self.mesh_object.data)
-        self.bvh = _get_face_painter_bvh(self.mesh_object.data, self.edit_mesh)
+        self.bvh = _build_face_painter_bvh(self.edit_mesh)
 
         # paint on LMB press
         self.paint_face(context, event)
@@ -1176,6 +1190,7 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
             'WINDOW',
             'POST_PIXEL',
         )
+        _FACE_PAINTER_PALETTE_DRAW_HANDLERS.append(self._draw_handler)
 
         context.window_manager.modal_handler_add(self)
         context.area.tag_redraw()
@@ -1231,15 +1246,22 @@ class ALBAM_OT_MaterialPalette(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def finish(self, context):
-        if self._draw_handler:
-            bpy.types.SpaceView3D.draw_handler_remove(
-                self._draw_handler,
-                'WINDOW',
-            )
+        self._cleanup(context)
 
+    def cancel(self, context):
+        self._cleanup(context)
+
+    def _cleanup(self, context=None):
+        if self._draw_handler is not None:
+            _remove_face_painter_palette_draw_handler(self._draw_handler)
             self._draw_handler = None
 
-        context.area.tag_redraw()
+        try:
+            area = context.area if context is not None else None
+            if area is not None:
+                area.tag_redraw()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
 
     def cell_position(self, palette_index):
         column = palette_index % GRID_COLUMNS
