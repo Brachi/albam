@@ -25,7 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
-- Autosetter now names a texture that never had a path set after its in-game slot
+- Export encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
+- Autosetter names a texture that never had a path set after its in-game slot
   (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
   plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
   game file), wired into slots with different suffixes, or whose suffixed name another

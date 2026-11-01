@@ -8,6 +8,7 @@ from mathutils.bvhtree import BVHTree
 
 from ..registry import blender_registry
 from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
+from ..engines.mtfw.texture import TEX_COMPRESSION
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
@@ -1274,15 +1275,10 @@ def _suffixed_texture_name(image, name, slot_suffixes, local_path):
 
 
 def set_image_albam_attr(blender_material, app_id, local_path):
-    TEX_COMPRESSION = {
-        "re0": (24, 20, 25, 31),  # BM alpha, BM no alpha, MM, NM
-        "re1": (24, 20, 19, 31),
-        "rev1": (23, 19, 25, 31),
-        "rev2": (24, 20, 25, 31),
-        "re6": (24, 20, 25, 31),
-        "dd": (24, 20, 25, 31),
-    }
-
+    # TEX_COMPRESSION (imported above) is the one shared table for both this
+    # Autosetter and export's own non-DDS-texture encoding
+    # (check_dds_textures), so the two can't quietly disagree on a game's
+    # Specular/Diffuse compression_format code.
     VERSION = {
         "re0": "0x9d",
         "re1": "0x9d",
