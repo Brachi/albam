@@ -22,7 +22,7 @@ import os
 import bpy
 import pytest
 
-from tests.mtfw.conftest import action_fcurves
+from tests.mtfw.conftest import _pose_restored, action_fcurves
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # pl00action.lmt is the one sampled file that declares three-joint chains - it
@@ -76,7 +76,7 @@ def chain_rig(game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_ha
 
 
 def test_chain_goal_is_the_joints_own_position(chain_rig):
-    from albam.engines.mtfw.bone import get_anim_retarget, get_chain_length, get_chain_target
+    from albam.engines.mtfw.bone import get_anim_retarget, get_chain_target
 
     armature, actions = chain_rig
     app_id = armature.albam_asset.app_id
@@ -88,49 +88,55 @@ def test_chain_goal_is_the_joints_own_position(chain_rig):
 
     exact = []
     for control in armature.pose.bones:
-        if not get_chain_target(control, app_id) or get_chain_length(control, app_id) != 2:
-            continue  # only the exactly determined chains pin the space down
+        if not get_chain_target(control, app_id):
+            continue
         target_id = int(get_anim_retarget(control, app_id).split("_")[0])
         middle, target = by_anim_id.get(str(target_id - 1)), by_anim_id.get(str(target_id))
         if middle is None or target is None:
             continue
+        constraint = armature.pose.bones[target.name].constraints.get(f"chain.{target_id}")
+        if constraint is None or constraint.chain_count != 2:
+            continue  # only the exactly determined chains pin the space down
         exact.append((control.name, middle.name,
                       (target.head_local - middle.head_local).length))
     assert exact, "expected this file to declare a three-joint chain"
 
     checked = 0
-    for action in actions:
-        keyed = {
-            fcurve.data_path.split('"')[1]
-            for fcurve in action_fcurves(action)
-            if 'pose.bones["' in fcurve.data_path
-        }
-        if not any(name in keyed for name, _, _ in exact):
-            continue  # this block declares no such chain
-        armature.animation_data.action = action
-        slots = getattr(action, "slots", None)
-        if slots:
-            armature.animation_data.action_slot = next(
-                (s for s in slots if s.target_id_type == "OBJECT"), slots[0])
-        frames = sorted({
-            int(round(kp.co[0]))
-            for fcurve in action_fcurves(action)
-            for kp in fcurve.keyframe_points
-        })
-        for frame in frames:
-            bpy.context.scene.frame_set(frame)
-            evaluated = armature.evaluated_get(bpy.context.evaluated_depsgraph_get())
-            for control_name, middle_name, segment in exact:
-                if control_name not in keyed:
-                    continue
-                goal = evaluated.pose.bones[control_name].matrix.to_translation()
-                middle = evaluated.pose.bones[middle_name].matrix.to_translation()
-                assert (goal - middle).length == pytest.approx(segment, abs=1e-3), (
-                    f"{action.name} frame {frame}: {control_name} sits "
-                    f"{(goal - middle).length:.4f} from {middle_name}, but the joint "
-                    f"it drives is fixed at {segment:.4f} - the goal is in the wrong space"
-                )
-                checked += 1
+    # frame_set leaves the rig on the last block's last frame, and every later
+    # test in the session would measure that pose instead of the rest one.
+    with _pose_restored(armature):
+        for action in actions:
+            keyed = {
+                fcurve.data_path.split('"')[1]
+                for fcurve in action_fcurves(action)
+                if 'pose.bones["' in fcurve.data_path
+            }
+            if not any(name in keyed for name, _, _ in exact):
+                continue  # this block declares no such chain
+            armature.animation_data.action = action
+            slots = getattr(action, "slots", None)
+            if slots:
+                armature.animation_data.action_slot = next(
+                    (s for s in slots if s.target_id_type == "OBJECT"), slots[0])
+            frames = sorted({
+                int(round(kp.co[0]))
+                for fcurve in action_fcurves(action)
+                for kp in fcurve.keyframe_points
+            })
+            for frame in frames:
+                bpy.context.scene.frame_set(frame)
+                evaluated = armature.evaluated_get(bpy.context.evaluated_depsgraph_get())
+                for control_name, middle_name, segment in exact:
+                    if control_name not in keyed:
+                        continue
+                    goal = evaluated.pose.bones[control_name].matrix.to_translation()
+                    middle = evaluated.pose.bones[middle_name].matrix.to_translation()
+                    assert (goal - middle).length == pytest.approx(segment, abs=1e-3), (
+                        f"{action.name} frame {frame}: {control_name} sits "
+                        f"{(goal - middle).length:.4f} from {middle_name}, but the joint "
+                        f"it drives is fixed at {segment:.4f} - the goal is in the wrong space"
+                    )
+                    checked += 1
     assert checked, "no posed goal was measured"
 
 

@@ -4,13 +4,14 @@ Turning actions into tracks, then laying the whole file out - every offset in
 an .lmt header is absolute, so the sizes have to be known before a single byte
 is written, which is what the two _calculate_offsets passes are for.
 """
-import ast
+from collections import Counter
 from io import BytesIO
 
 import bpy
 from kaitaistruct import KaitaiStream
 from mathutils import Quaternion, Vector
 
+from ....exceptions import AlbamCheckFailure
 from ....registry import blender_registry
 from ....vfs import VirtualFileData
 from ..bone import get_anim_retarget, get_chain_target
@@ -18,8 +19,10 @@ from ..structs.lmt import Lmt
 from .animation_import import (
     LMT_ASSET_TYPE,
     ROOT_MOTION_BONE_ID,
+    _block_props,
     _create_bone_mapping,
     get_block_index,
+    get_track_keys,
 )
 from .keyframes import (
     APPID_VERSION_MAPPER,
@@ -27,7 +30,6 @@ from .keyframes import (
     BONE_TRACK_TYPES,
     BOUNDS_BUFF_TYPES,
     LMTKeyFrames,
-    USAGE,
 )
 
 
@@ -84,20 +86,29 @@ def _select_kf_usage(pose_bone, track_type, app_id):
 def _block_length(action, fcurves, custom_props):
     """How many frames the block runs for.
 
-    An action whose tracks never change carries a single keyframe, because one
-    keyframe is all a constant needs - so its frame range reads 1 no matter how
-    long the block actually runs. Blocks like that are ordinary: a static idle
-    the engine holds for a couple of seconds. Taking the range there would
-    write a 60 frame hold out as a single frame, leaving the pose right and the
-    timing destroyed, so the length the block already declares is kept instead.
+    Import sets the action's manual frame range to the block's length, and
+    that range is what decides it - it is the control a user retimes a clip
+    with, and it is right where keyframes alone are not: a track that never
+    changes carries a single keyframe however long the block runs, a static
+    idle the engine holds for a couple of seconds.
 
-    An action with real keyframes is the authority on its own length, including
-    when the intent is to shorten the block.
+    A .blend saved before #273 has no manual range and keeps the length in a
+    `num_frames` property that is no longer registered but still stored, so
+    that is read the way it always was: an action with real keyframes decides
+    its own length, one without falls back to the stored value.
     """
+    if action is not None and action.use_frame_range:
+        return int(action.frame_range[1])
+    stored = int(custom_props.get("num_frames", 0))
+    if action is None:
+        return stored
+    if fcurves is None:
+        # stored raw_data is written back as is, under the length it had
+        return stored or int(action.frame_range[1])
     frames = {keyframe.co[0] for fcurve in fcurves for keyframe in fcurve.keyframe_points}
     if len(frames) > 1:
         return int(action.frame_range[1])
-    return int(custom_props.num_frames) or int(action.frame_range[1])
+    return stored or int(action.frame_range[1])
 
 
 def _serialize_lmt_track(armature, tracks, mapping, app_id):
@@ -145,24 +156,20 @@ def _serialize_lmt_track(armature, tracks, mapping, app_id):
 
 
 def _update_track_data(bl_obj, encoded_tracks, num_frames, joint_types, rd_stored, app_id):
-    custom_props = _block_custom_properties(bl_obj, app_id)
+    custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
     custom_props.num_frames = num_frames
-    second_props = _block_secondary_properties(bl_obj, app_id)
+    second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
     tracks_collection = getattr(second_props["tracks"], "tracks")
     tracks_collection.clear()
-    for et in encoded_tracks:
+    for et, bone_index, key in zip(encoded_tracks, bone_indices, keys):
         item = tracks_collection.add()
         item.buffer_type = et.buffer_type
         item.usage = et.usage
-        item.bone_index = int(et.bone_index.split("_")[0])  # workaround for 254_ values
-        item.joint_type = joint_types.get((USAGE[item.usage], str(et.bone_index)), 0)
+        item.bone_index = bone_index
+        item.joint_type, item.reference_data = stored.get((et.usage, key), (0, et.reference_data))
         item.weight = 1.0
-        ref_data = et.reference_data
-        ref_data_stored = rd_stored.get((USAGE[item.usage], str(et.bone_index)), None)
-        if ref_data_stored:  # and ref_data_stored != "[]":
-            ref_data = ast.literal_eval(ref_data_stored)
-        item.reference_data = ref_data
         item.raw_data = et.data
+    tracks_props.source_action = action
 
 
 def _get_action_fcurves(action, armature):
@@ -189,15 +196,21 @@ def _get_action_fcurves(action, armature):
 def _generate_track_from_action(armature, bl_objects, app_id):
     mapping = _create_bone_mapping(armature, app_id)
     mapping = {value: key for key, value in mapping.items()}
+    lengths = {}  # bl_obj name -> num_frames, for the blocks regenerated here
+    stored_by_action = _stored_track_data_by_action(app_id)
     for bl_obj in bl_objects:
         tracks = {}  # bone_name -> frame -> ActionKey
         joint_types = {}
         reference_data = {}
-        custom_props = _block_custom_properties(bl_obj, app_id)
+        custom_props = bl_obj.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if custom_props.generate_new and custom_props.action:
             action = custom_props.action
             fcurves = _get_action_fcurves(action, armature)
-            num_frames = _block_length(action, fcurves, custom_props)
+            lengths[bl_obj.name] = _block_length(action, fcurves, custom_props)
+            if "num_frames" in custom_props:
+                # a pre-#273 .blend: keep its stored length matching the
+                # tracks regenerated here, for a later export of the raw data
+                custom_props["num_frames"] = lengths[bl_obj.name]
             num_bone_channels = 0
             for fcurve in fcurves:
                 path = fcurve.data_path
@@ -213,22 +226,6 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     num_bone_channels += 1
                     if mapping.get(bone_name, None) is None:
                         continue
-                    joint_type = action.get(f"{track_type}_{mapping.get(bone_name)}", 0)
-                    joint_types[(track_type, mapping.get(bone_name))] = joint_type
-
-                    # A chain's control bone is retargeted "<id>_1", but its
-                    # reference data was stored under the plain id the track
-                    # came from, so ask for it under that.
-                    rd_bone_id = mapping.get(bone_name)
-                    if get_chain_target(armature.pose.bones[bone_name], app_id):
-                        rd_bone_id = rd_bone_id.split("_")[0]
-                    elif bone_name == "IK_Foot.L":
-                        rd_bone_id = "23"
-                    elif bone_name == "IK_Foot.R":
-                        rd_bone_id = "19"
-                    ref_data = action.get(f"rd_{track_type}_{rd_bone_id}", None)
-                    if ref_data:
-                        reference_data[(track_type, rd_bone_id)] = ref_data
                     if tracks.get(bone_name) is None:
                         tracks[bone_name] = {}
                     for keyframe in fcurve.keyframe_points:
@@ -258,7 +255,8 @@ def _generate_track_from_action(armature, bl_objects, app_id):
                     "ofs_frame - check the armature this .lmt was imported onto against the "
                     "bones the action actually keys."
                 )
-            _update_track_data(bl_obj, track_attrs, num_frames, joint_types, reference_data, app_id)
+            _update_track_data(bl_obj, track_attrs, action, app_id, stored_by_action)
+    return lengths
 
 
 def _align(value, alignment):
@@ -602,8 +600,43 @@ def _lmt_blocks(bl_obj, app_id):
     `.1000`, which sorts before the `.771` of the import before it - and a user
     is free to rename a block outright. Sorting on the index recorded at import
     is what survives both.
+
+    Being parented under bl_obj is not the same claim as belonging to it
+    (#295) - an empty from a different import, or a plain unrelated one,
+    can end up here through ordinary Outliner tidying. Two checks instead
+    of one:
+
+    - block_index < 0 means load_lmt never stamped this empty at all, so
+      it isn't one of this .lmt's blocks - any other object a user parented
+      here, indexed or not.
+    - albam_lmt_block_owner names the .lmt root this block was actually
+      created under; a block whose owner is a *different* root is excluded
+      even though it is indexed and even though it sits directly under
+      bl_obj. A block imported before this property existed has no owner
+      (None) and is kept, same as before - a .blend saved before the fix
+      must keep exporting exactly as it did.
     """
-    blocks = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    candidates = [c for c in bl_obj.children_recursive if c.type == "EMPTY"]
+    blocks = []
+    for block in candidates:
+        if _block_props(block, app_id).block_index < 0:
+            continue
+        owner = block.albam_lmt_block_owner
+        if owner is not None and owner != bl_obj:
+            continue
+        blocks.append(block)
+
+    counts = Counter(get_block_index(block, app_id) for block in blocks)
+    duplicate_indexes = sorted(index for index, count in counts.items() if count > 1)
+    if duplicate_indexes:
+        raise AlbamCheckFailure(
+            "Two blocks claim the same slot",
+            f"{bl_obj.name!r} has more than one block recorded at index(es) "
+            f"{duplicate_indexes}.",
+            "Only one empty per recorded block index is supported - remove or "
+            "re-import whichever one is the duplicate.",
+        )
+
     return sorted(blocks, key=lambda block: get_block_index(block, app_id))
 
 
@@ -641,7 +674,7 @@ def export_lmt(bl_obj):
     dst_lmt.version = APPID_VERSION_MAPPER[app_id]
     dst_lmt.num_block_offsets = len(bl_objects)
     block_offsets = []
-    _generate_track_from_action(armature, bl_objects, app_id)
+    lengths = _generate_track_from_action(armature, bl_objects, app_id)
     lmt_offsets = _calculate_offsets(bl_objects, app_id)
     ofc_block = lmt_offsets["block_offsets"]
     final_size = lmt_offsets["final_size"]
@@ -663,7 +696,7 @@ def export_lmt(bl_obj):
         custom_props = _block_custom_properties(bl_obj, app_id)
         tracks = _block_tracks(bl_obj, app_id)
         if len(tracks) > 0:
-            second_props = _block_secondary_properties(bl_obj, app_id)
+            second_props = bl_obj.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)
             if APPID_VERSION_MAPPER[app_id] == 51:
                 col_events = second_props["col_events"]
                 col_events_attr = getattr(col_events, "attributes")
@@ -679,6 +712,7 @@ def export_lmt(bl_obj):
                 custom_props.copy_custom_properties_to(anim_header)
                 anim_header.ofs_frame = ofc_frames[i]
                 anim_header.num_tracks = len(tracks)
+                anim_header.num_frames = num_frames
                 anim_header.filler = 0
 
                 dst_col_event_attr = []
@@ -715,6 +749,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track51(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     dst_track.len_data = len(track.raw_data)
                     dst_track.ofs_data = track_ofc[j]
                     dst_track.data = track.raw_data
@@ -731,6 +766,7 @@ def export_lmt(bl_obj):
                 anim_header.ofs_keyframe_infos = ofc_kf_info[i]
                 anim_header.ofs_frame = ofc_track_headers[i]
                 anim_header.num_tracks = len(tracks)
+                anim_header.num_frames = num_frames
                 anim_header.filler = 0
                 # Sequence Info
                 dst_seq_infos = []
@@ -776,6 +812,7 @@ def export_lmt(bl_obj):
                 for j, track in enumerate(tracks):
                     dst_track = dst_lmt.Track67(_parent=anim_header, _root=dst_lmt)
                     track.copy_custom_properties_to(dst_track)
+                    dst_track.idx_anim_map = track.bone_index
                     track.bounds = None
                     if dst_track.buffer_type in BOUNDS_BUFF_TYPES:
                         # TODO move into calc offsets

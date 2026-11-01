@@ -88,6 +88,13 @@ def register():
     # The same rig's name. Deleting the rig clears the pointer above, and only
     # this tells that apart from a .blend that never recorded one.
     bpy.types.Object.albam_lmt_armature_name = bpy.props.StringProperty()
+    # Which .lmt root object a block empty was created under at import time -
+    # the real claim of ownership _lmt_blocks needs (#295), since being
+    # parented under a .lmt in the Outliner is not the same claim and the
+    # Outliner lets users reparent freely. Unset (None) on a block imported
+    # before this existed; _lmt_blocks treats that the same as a match, so
+    # those scenes keep exporting exactly as they did.
+    bpy.types.Object.albam_lmt_block_owner = bpy.props.PointerProperty(type=bpy.types.Object)
 
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)

@@ -40,8 +40,9 @@ class LMT51AnimationCustomProperties(CustomPropsBase):
     # the block header: the header says nothing about its own position, and
     # position is what identifies a block. -1 means never recorded.
     block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    # num_tracks and num_frames are not stored: the first is len(tracks) and
+    # the second the action's manual frame range, both written at export.
+    # A .blend saved before #273 still holds num_frames - see _block_length.
     loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
@@ -73,8 +74,9 @@ class LMT67AnimationCustomProperties(CustomPropsBase):
     # the block header: the header says nothing about its own position, and
     # position is what identifies a block. -1 means never recorded.
     block_index: bpy.props.IntProperty(name="Block Index", default=-1, options=set())  # noqa: F821
-    num_tracks: bpy.props.IntProperty(name="Number of Tracks", default=0, options=set())  # noqa: F821
-    num_frames: bpy.props.IntProperty(name="Number of Frames", default=0, options=set())  # noqa: F821
+    # num_tracks and num_frames are not stored: the first is len(tracks) and
+    # the second the action's manual frame range, both written at export.
+    # A .blend saved before #273 still holds num_frames - see _block_length.
     loop_frame: bpy.props.IntProperty(name="Loop Frame", default=0, options=set())  # noqa: F821
     init_position: bpy.props.FloatVectorProperty(
         name="Initial Position", size=3, default=(0.0, 0.0, 0.0), options=set())  # noqa: F821
@@ -378,6 +380,15 @@ class AnimTrackCustomProperties(CustomPropsBase):
         type=LMT51Track,
         name="Tracks",  # noqa: F821
         description="Animation tracks for the LMT file"
+    )
+    # The action these tracks were built from, set at import and at every
+    # export that rebuilds them. joint_type and reference_data don't come out
+    # of an action, so this is what tells export whose they are once the
+    # block is pointed at another action (see _stored_track_data). None on a
+    # .blend saved before it existed, where the block's own action stands in.
+    source_action: bpy.props.PointerProperty(
+        name="Tracks Built From",  # noqa: F821
+        type=bpy.types.Action,
     )
     item_index: bpy.props.IntProperty(
         name="Item Index",  # noqa: F821

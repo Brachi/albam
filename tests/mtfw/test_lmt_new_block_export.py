@@ -26,6 +26,10 @@ def _first_used_block_with_action(bl_objects, app_id):
     return None, None
 
 
+def _track_data(block):
+    return [(t.joint_type, tuple(t.reference_data)) for t in block.block_header.tracks]
+
+
 def test_a_block_created_rather_than_imported_exports(
     game_fs_root, local_app_id, local_mod_path_hash, local_lmt_path_hash
 ):
@@ -36,6 +40,11 @@ def test_a_block_created_rather_than_imported_exports(
     indistinguishable from a slot that really is empty: export wrote the
     block out as an empty slot no matter what action it held, silently, with
     no warning. See issue #272.
+
+    It also checks that a block given an imported action keeps that
+    animation's joint_type and reference_data, which no action carries: a new
+    block has no tracks of its own to take them from, and an existing block
+    switched to another action holds the previous animation's (#342).
     """
     from albam.engines.mtfw.animation.animation_import import get_block_index, set_block_index
     from albam.engines.mtfw.structs.lmt import Lmt
@@ -63,6 +72,12 @@ def test_a_block_created_rather_than_imported_exports(
 
     source_block, source_action = _first_used_block_with_action(bl_objects, local_app_id)
     assert source_action is not None, "No imported block with an action to reuse"
+    switched_block = next(
+        b for b in bl_objects
+        if b is not source_block and
+        b.albam_custom_properties.get_custom_properties_for_appid(local_app_id).action)
+    switched_props = switched_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
+    switched_previous = (switched_props.action, switched_props.generate_new)
 
     # Build a block the way a user does through the UI: a bare empty, given
     # an existing action and told to (re)generate its animation - never
@@ -75,6 +90,8 @@ def test_a_block_created_rather_than_imported_exports(
         custom_props = new_block.albam_custom_properties.get_custom_properties_for_appid(local_app_id)
         custom_props.generate_new = True
         custom_props.action = source_action
+        switched_props.action = source_action
+        switched_props.generate_new = True
 
         assert bpy.ops.albam.export() == {"FINISHED"}
 
@@ -88,5 +105,11 @@ def test_a_block_created_rather_than_imported_exports(
             "as an empty slot"
         )
         assert dst_block.block_header.num_tracks > 0
+
+        expected = _track_data(dst_lmt.block_offsets[get_block_index(source_block, local_app_id)])
+        assert any(joint_type for joint_type, _ in expected), "the source block has no chain markers to carry"
+        assert _track_data(dst_block) == expected
+        assert _track_data(dst_lmt.block_offsets[get_block_index(switched_block, local_app_id)]) == expected
     finally:
         bpy.data.objects.remove(new_block)
+        switched_props.action, switched_props.generate_new = switched_previous
