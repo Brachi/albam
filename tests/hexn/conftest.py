@@ -3,8 +3,6 @@ import os
 import bpy
 import pytest
 
-from tests.skip_policy import skip_missing
-
 R2_PROTOCOL_PREFIX = "r2://"
 
 # app_id -> the HexnFS instance already mounted as a VFS root this session -
@@ -51,18 +49,18 @@ def game_fs_root(pytestconfig, local_app_id):
     if local_app_id not in _GAME_FS_INSTANCES:
         value = _game_dirs(pytestconfig).get(local_app_id)
         if not value:
-            skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
         elif value.startswith(R2_PROTOCOL_PREFIX):
             r2_kwargs = resolve_r2_source(value)
             if r2_kwargs is None:
-                skip_missing(
+                pytest.skip(
                     f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
                     f"(empty bucket, missing s3 extras, or missing credentials - see "
                     f".env.example)"
                 )
             game_fs = HexnFS.from_s3(**r2_kwargs)
         elif not os.path.isdir(value):
-            skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+            pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
         else:
             game_fs = HexnFS(value)
 

@@ -328,7 +328,6 @@ def _copy_resources_to_bl_mat(app_id, material, blender_material):
     copy_feature("fdiffuse", "f_diffuse_param")
     copy_feature("fambient", "f_ambient_param")
     copy_feature("fuvspecularmap", "f_uv_specular_map_param")
-    copy_feature("fuvshininessmap", "f_uv_shininess_map_param")
     copy_feature("femission", "f_emission_param")
     copy_feature("focclusion", "f_occlusion_param")
     copy_feature("fdistortion", "f_distortion_param")
@@ -615,7 +614,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
     tt = tex_types
     HAS_NORMAL_MAPS = TT.NORMAL in tt or TT.HAIR_SHIFT in tt
     USES_PARALLAX = features.f_bump_param == "FBumpParallaxOcclusion"
-    USES_SHININESS_MAP = features.f_shininess_param == "FShininessMap"
     MF = MRL_PER_MATERIAL_FEATURES.get(mrl_mat.type_hash, [])
 
     r = [
@@ -685,11 +683,6 @@ def _create_resources(app_id, tex_types, mrl_mat, custom_props=None, custom_prop
         set_flag("FUVIndirectSource", onlyif=TT.INDIRECT in tt),  # no params found
 
         set_flag("FShininess", features.f_shininess_param),
-        # FShininessMap is always followed by its texture (often the dummy one),
-        # its UV source and its channel, or the shader reads the wrong resources
-        set_texture("tShininessMap", onlyif=USES_SHININESS_MAP),
-        set_flag("FUVShininessMap", features.f_uv_shininess_map_param, onlyif=USES_SHININESS_MAP),
-        set_flag("FChannelShininessMap", onlyif=USES_SHININESS_MAP),
         set_flag("FLighting"),  # no params found
         set_flag("FBRDF", features.f_brdf_param),
         set_flag("FDiffuse", features.f_diffuse_param),
@@ -786,9 +779,7 @@ def _create_set_texture_resource(app_id, mat, tex_types, resource_name, onlyif=T
         return None
     resource_name_friendly = resource_name.lower()
     target_tex_type = TEX_TYPE_MAP_2[resource_name_friendly]
-    # -1 becomes the dummy texture: a resource the shader requires even when
-    # no image is linked to its socket
-    texture_index = tex_types.get(target_tex_type, -1)
+    texture_index = tex_types[target_tex_type]
 
     shader_objects = get_shader_objects()
     shader_obj_data = shader_objects[resource_name]
@@ -1046,7 +1037,6 @@ def _create_mtfw_shader():
     sg.new_socket("Toon Ramp", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Toon Ramp Reverse", in_out="INPUT", socket_type="NodeSocketColor")
     sg.new_socket("Indirect User", in_out="INPUT", socket_type="NodeSocketColor")
-    sg.new_socket("Shininess Map", in_out="INPUT", socket_type="NodeSocketColor")
 
     # Create group outputs
     group_outputs = shader_group.nodes.new("NodeGroupOutput")
@@ -1086,22 +1076,20 @@ def _create_mtfw_shader():
     detail_combine.label = "Combine Detail"
     detail_combine.location = (-1500, -1050)
 
-    # Add only the detail map's X/Y offset from neutral to the base normal, so
-    # the default (0.5, 0.5) detail leaves the base untouched. The Normal Map
-    # node normalizes the result.
-    detail_offset = shader_group.nodes.new("ShaderNodeVectorMath")
-    detail_offset.operation = "MULTIPLY_ADD"
-    detail_offset.name = "detail_offset"
-    detail_offset.label = "Detail Offset"
-    detail_offset.inputs[1].default_value = (1, 1, 0)
-    detail_offset.inputs[2].default_value = (-0.5, -0.5, 0)
-    detail_offset.location = (-1000, -1100)
+    separate_rgb_n = shader_group.nodes.new("ShaderNodeSeparateColor")
+    separate_rgb_n.name = "separate_rgb_n"
+    separate_rgb_n.label = "Separate RGB N"
+    separate_rgb_n.location = (-1250, -1050)
 
-    add_detail = shader_group.nodes.new("ShaderNodeVectorMath")
-    add_detail.operation = "ADD"
-    add_detail.name = "add_detail"
-    add_detail.label = "Add Detail"
-    add_detail.location = (-750, -1050)
+    separate_rgb_d = shader_group.nodes.new("ShaderNodeSeparateColor")
+    separate_rgb_d.name = "separate_rgb_d"
+    separate_rgb_d.label = "Separate RGB D"
+    separate_rgb_d.location = (-1250, -1250)
+
+    combine_all_normals = shader_group.nodes.new("ShaderNodeCombineColor")
+    combine_all_normals.name = "combine_all_normals"
+    combine_all_normals.label = "Combine All Normals"
+    combine_all_normals.location = (-750, -1150)
 
     # Curve RGB for correct normal map display in blender
     invert_green = shader_group.nodes.new("ShaderNodeRGBCurve")
@@ -1110,6 +1098,32 @@ def _create_mtfw_shader():
     curve_g.points[0].location = (1, 0)
     curve_g.points[1].location = (0, 1)
     invert_green.mapping.update()
+
+    # Normalize normals nodes
+    normalize_normals = shader_group.nodes.new("ShaderNodeVectorMath")
+    normalize_normals.operation = "NORMALIZE"
+    normalize_normals.name = "normalize_normals"
+    normalize_normals.label = "Normalize Normals"
+    normalize_normals.location = (-590, -1050)
+
+    # Add nodes
+    add_normals_red = shader_group.nodes.new("ShaderNodeMixRGB")
+    add_normals_red.blend_type = "ADD"
+    add_normals_red.name = "add_normals_red"
+    add_normals_red.label = "Add Normals Red"
+    add_normals_red.location = (-1000, -980)
+
+    add_normals_green = shader_group.nodes.new("ShaderNodeMixRGB")
+    add_normals_green.blend_type = "ADD"
+    add_normals_green.name = "add_normals_green"
+    add_normals_green.label = "Add Normals Green"
+    add_normals_green.location = (-1000, -1200)
+
+    add_normals_blue = shader_group.nodes.new("ShaderNodeMixRGB")
+    add_normals_blue.blend_type = "ADD"
+    add_normals_blue.name = "add_normals_blue"
+    add_normals_blue.label = "Add Normals Blue"
+    add_normals_blue.location = (-1000, -1420)
 
     # Invert node
     invert_spec = shader_group.nodes.new("ShaderNodeInvert")
@@ -1151,7 +1165,7 @@ def _create_mtfw_shader():
     link(normal_separate.outputs[2], normal_combine.inputs[2])
     link(group_inputs.outputs["Alpha NM"], normal_combine.inputs[0])
     link(normal_combine.outputs[0], use_detail_map.inputs[1])
-    link(normal_combine.outputs[0], add_detail.inputs[0])
+    link(normal_combine.outputs[0], separate_rgb_n.inputs[0])
 
     link(group_inputs.outputs["Specular MM"], invert_spec.inputs[1])
     link(invert_spec.outputs[0], bsdf_shader.inputs["Roughness"])
@@ -1164,9 +1178,20 @@ def _create_mtfw_shader():
     link(group_inputs.outputs["Alpha DNM"], detail_combine.inputs[0])
     link(detail_separate.outputs[1], detail_combine.inputs[1])
     link(detail_separate.outputs[2], detail_combine.inputs[2])
-    link(detail_combine.outputs[0], detail_offset.inputs[0])
-    link(detail_offset.outputs[0], add_detail.inputs[1])
-    link(add_detail.outputs[0], use_detail_map.inputs[2])
+    link(detail_combine.outputs[0], separate_rgb_d.inputs[0])
+
+    link(separate_rgb_n.outputs[0], add_normals_red.inputs[1])
+    link(separate_rgb_d.outputs[0], add_normals_red.inputs[2])
+    link(separate_rgb_n.outputs[1], add_normals_green.inputs[1])
+    link(separate_rgb_d.outputs[1], add_normals_green.inputs[2])
+    link(separate_rgb_n.outputs[2], add_normals_blue.inputs[1])
+    link(separate_rgb_d.outputs[2], add_normals_blue.inputs[2])
+    link(add_normals_red.outputs[0], combine_all_normals.inputs[0])
+    link(add_normals_green.outputs[0], combine_all_normals.inputs[1])
+    link(add_normals_blue.outputs[0], combine_all_normals.inputs[2])
+
+    link(combine_all_normals.outputs[0], normalize_normals.inputs[0])
+    link(normalize_normals.outputs[0], use_detail_map.inputs[2])
     link(use_detail_map.outputs[0], invert_green.inputs[1])
     link(invert_green.outputs[0], normal_map.inputs[1])
     link(normal_map.outputs[0], bsdf_shader.inputs["Normal"])
@@ -2024,15 +2049,6 @@ class FeaturesMaterialCustomProperties(bpy.types.PropertyGroup):
             ("FUVSecondary", "FUVSecondary", "", 2),  # noqa: F821
             ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
             ("FUVViewNormal", "FUVViewNormal", "", 4),  # noqa: F821
-        ],
-        options=set()
-    )
-    f_uv_shininess_map_param : bpy.props.EnumProperty(  # noqa: F821
-        name="FUVShininessMap",  # noqa: F821
-        items=[
-            ("FUVSecondary", "FUVSecondary", "", 1),  # noqa: F821
-            ("FUVPrimary", "FUVPrimary", "", 2),  # noqa: F821
-            ("FUVUnique", "FUVUnique", "", 3),  # noqa: F821
         ],
         options=set()
     )

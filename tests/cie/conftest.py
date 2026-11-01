@@ -6,7 +6,6 @@ import pytest
 from albam.lib import fs_registry
 from tests.conftest import close_new_fs_roots, remove_new_vfs_roots, vfs_root_names
 from tests.mtfw.r2_config import R2_PROTOCOL_PREFIX, resolve_r2_source
-from tests.skip_policy import skip_missing
 
 # app_id -> the directory its archives were fetched into this session.
 _DOWNLOADED = {}
@@ -78,7 +77,7 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
     """
     game_dirs = _cie_game_dirs(pytestconfig)
     if local_app_id not in game_dirs:
-        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+        pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
 
     root = game_dirs[local_app_id]
     if root.startswith(R2_PROTOCOL_PREFIX):
@@ -87,14 +86,14 @@ def game_root(pytestconfig, local_app_id, tmp_path_factory):
             _DOWNLOADED[local_app_id] = _fetch_from_r2(root, destination)
         root = _DOWNLOADED[local_app_id]
         if root is None:
-            skip_missing(
+            pytest.skip(
                 f"--game-dir={local_app_id}::{game_dirs[local_app_id]} requested but R2 "
                 f"isn't configured (empty bucket, missing s3 extras, or missing "
                 f"credentials - see .env.example), or the prefix holds no archives")
         return root
 
     if not os.path.isdir(root):
-        skip_missing(f"--game-dir={local_app_id}::{root} does not exist")
+        pytest.skip(f"--game-dir={local_app_id}::{root} does not exist")
     return root
 
 

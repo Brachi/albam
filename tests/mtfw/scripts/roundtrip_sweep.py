@@ -8,7 +8,7 @@ loses or misrepresents something in the file, which is a different failure
 class from what tests/mtfw/test_*_serialization.py tracks, and cheap enough
 to run over a whole game.
 
-What it has found so far, on .mod: face_offset (now vertex_base) being added to a mesh's index
+What it has found so far, on .mod: face_offset being added to a mesh's index
 buffer position, which made 9 umvc3 and 38 re6 models unreadable, and
 confirmed the fix afterwards across all 2702 umvc3 models.
 

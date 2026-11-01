@@ -5,10 +5,13 @@ only in which endpoint_url/credentials get passed to from_s3() (see its
 docstring, and albam.lib.s3 which it shares with MTFW_FS.from_s3/
 ReenFS.from_s3). Mirrors tests/mtfw/test_arc_fs_s3.py.
 
-Like ArcFS/PakFS, construction only reads each .ssg's header and file
-table. Unlike them, the first read of any file decompresses the archive's
-whole body: an .ssg's "solid" compression (see albam/engines/hexn/fs.py's
-module docstring) leaves no way to reach one file on its own.
+Unlike ArcFS/PakFS, SsgFS.__init__ has no lazy header-only read: an .ssg's
+"solid" compression (see albam/engines/hexn/fs.py's module docstring) means
+resolving any single file's bytes requires decompressing the whole archive
+up front, so from_s3() downloads and decompresses each .ssg's *entire*
+compressed body during construction, not just a small header+table like
+MTFW_FS/ReenFS - see test_from_s3_construction_downloads_whole_ssg below,
+which documents this rather than asserting the opposite.
 """
 import os
 
@@ -19,7 +22,6 @@ pytest.importorskip("moto")
 pytest.importorskip("smart_open")
 
 from moto import mock_aws  # noqa: E402
-from albam.lib.s3 import CACHE_DIR_ENV_VAR  # noqa: E402
 
 from albam.engines.hexn.fs import HexnFS  # noqa: E402
 from tests.hexn.test_ssg_fs import _build_ssg_bytes  # noqa: E402
@@ -90,9 +92,6 @@ def get_object_calls(s3_client, monkeypatch):
         return client
 
     monkeypatch.setattr(boto3, "client", spying_client_factory)
-    # The disk cache wraps get_object outside the spy, so a range an earlier
-    # test already fetched would never reach it.
-    monkeypatch.setenv(CACHE_DIR_ENV_VAR, "")
     return calls
 
 
@@ -118,18 +117,19 @@ def test_from_s3_include_loose_false_disables_loose_layer(s3_client):
     assert game_fs.readbytes(SAMPLE_PATH) == SAMPLE_CONTENT
 
 
-def test_from_s3_first_read_fetches_the_archive_and_later_reads_do_not(get_object_calls):
-    """SsgFS decompresses an archive's whole body on its first read and keeps
-    it until close(): solid compression means a single file can't be read
-    on its own. Construction only reads the header and file table.
+def test_from_s3_no_additional_calls_needed_to_read_after_construction(get_object_calls):
+    """Not a virtue - see module docstring: unlike ArcFS/PakFS, SsgFS's solid
+    compression means construction itself has to fetch and decompress an
+    .ssg's entire body, not just a header+table. Proven indirectly rather
+    than by counting fetched bytes directly (unreliable here - smart_open's
+    internal caching for a small enough range means not every read actually
+    reaches the spied client's get_object): once from_s3() returns, every
+    archived path's bytes are already resolved in memory, so reading one
+    triggers zero further S3 calls.
     """
     game_fs = _from_s3()
-    get_object_calls.clear()  # isolate the reads below from construction's calls
+    get_object_calls.clear()  # isolate the read below from construction's calls
 
-    assert game_fs.readbytes(SAMPLE_PATH) == SAMPLE_CONTENT
-    assert get_object_calls, "the first read has to fetch the compressed body"
-
-    get_object_calls.clear()
     assert game_fs.readbytes(SAMPLE_PATH) == SAMPLE_CONTENT
     assert not get_object_calls
 

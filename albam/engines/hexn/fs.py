@@ -19,18 +19,14 @@ import io
 import os
 import threading
 import zlib
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from collections import OrderedDict, defaultdict
 
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import (
-    CreateFailed, DirectoryExpected, FileExpected, ResourceNotFound, ResourceReadOnly)
+from fs.errors import CreateFailed, DirectoryExpected, ResourceNotFound, ResourceReadOnly
 from fs.info import Info
-from fs.memoryfs import MemoryFS
 from fs.multifs import MultiFS
 from fs.osfs import OSFS
-from fs.path import dirname, join
 from kaitaistruct import KaitaiStream
 
 from .structs.hexane_anims import HexaneAnims
@@ -38,8 +34,6 @@ from .structs.hexane_ssg import HexaneSsg
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 ANIM_CLIP_EXTENSION = ".animclip"
-# Archives opened at once by HexnFS.from_s3().
-S3_OPEN_WORKERS = 8
 
 # The content types an id_magic 5 archive may hold to be mounted: .edgemodel,
 # .matb, .hkx and a .dds's TPKH/TPKD pair. An allowlist, so the cutscene/mocap
@@ -330,7 +324,9 @@ class HexnFS(MultiFS):
 
     def __init__(self, game_root, auto_close=True):
         super().__init__(auto_close=auto_close)
-        self._init_common()
+        self.failed_ssgs = []
+        # Set by from_s3(); None for a local instance.
+        self._s3_prefix = None
 
         game_root = str(game_root)
         if not os.path.isdir(game_root):
@@ -375,28 +371,17 @@ class HexnFS(MultiFS):
 
         self = cls.__new__(cls)
         MultiFS.__init__(self, auto_close=auto_close)
-        self._init_common()
+        self.failed_ssgs = []
         self.game_root = f"s3://{bucket}/{prefix}"
         # Keys are rooted under prefix; origin_of() strips it.
         self._s3_prefix = prefix.strip("/")
 
         opener = s3_opener(client, bucket)
-
-        def open_ssg(ssg_key):
+        for ssg_key in sorted(find_ssg_keys_s3(client, bucket, prefix)):
             try:
-                return SsgFS(ssg_key, opener=opener), None
+                ssg_fs = SsgFS(ssg_key, opener=opener)
             except Exception as e:
-                return None, e
-
-        # Each archive's header is a round trip of its own, and none depends
-        # on another, so they're fetched concurrently; they're still added in
-        # sorted key order, as a local install adds them.
-        ssg_keys = sorted(find_ssg_keys_s3(client, bucket, prefix))
-        with ThreadPoolExecutor(max_workers=S3_OPEN_WORKERS) as pool:
-            opened = list(pool.map(open_ssg, ssg_keys))
-        for ssg_key, (ssg_fs, error) in zip(ssg_keys, opened):
-            if error is not None:
-                self.failed_ssgs.append((ssg_key, error))
+                self.failed_ssgs.append((ssg_key, e))
                 continue
             self.add_fs(ssg_key, ssg_fs, priority=_ssg_priority(ssg_key, ssg_fs))
 
@@ -404,85 +389,10 @@ class HexnFS(MultiFS):
             self.add_fs("<loose>", S3LooseFS(client, bucket, prefix))
         return self
 
-    def _init_common(self):
-        self.failed_ssgs = []
-        # Set by from_s3(); None for a local instance.
-        self._s3_prefix = None
-        # lazily built - see _ensure_index()
-        self._owner = None
-        self._topology = None
-
-    def _ensure_index(self):
-        """Build a flat path->owner index plus a directory-topology-only
-        MemoryFS, on first use, the same way MTFW_FS does.
-
-        Asking every layered filesystem per directory visited is
-        O(directories x filesystems): a full RE:ORC walk over ~2100 archives
-        made ~5.4M sub-filesystem scandir calls, 54s on a local install.
-        One upfront pass over every archive's file table replaces it.
-
-        iterate_fs() yields in priority order, highest first, and the first
-        owner of a path wins, as with MultiFS itself. A name that is a file
-        in one layer and a directory in another keeps whichever the higher
-        layer has, which is what the per-directory listing showed first.
-        """
-        if self._owner is not None:
-            return
-
-        owner = {}
-        topology = MemoryFS()
-        for _name, fs_ in self.iterate_fs():
-            for path in fs_.walk.files():
-                if path in owner:
-                    continue
-                try:
-                    topology.makedirs(dirname(path), recreate=True)
-                    topology.create(path)
-                except (DirectoryExpected, FileExpected, ResourceNotFound):
-                    # a higher layer already has this path, or one of its
-                    # parents, as the other kind of entry
-                    continue
-                owner[path] = fs_
-
-        self._owner = owner
-        self._topology = topology
-
-    def listdir(self, path):
-        self.check()
-        self._ensure_index()
-        return self._topology.listdir(path)
-
-    def scandir(self, path, namespaces=None, page=None):
-        self.check()
-        self._ensure_index()
-        _path = self.validatepath(path)
-        namespaces = namespaces or ()
-        for info in self._topology.scandir(_path, namespaces=("basic",), page=page):
-            if info.is_dir or not namespaces:
-                yield info
-                continue
-            # topology only knows the name and is_dir; the real info (size,
-            # type) comes from whichever layer owns the file
-            child_path = join(_path, info.name)
-            yield self._owner[child_path].getinfo(child_path, namespaces=namespaces)
-
-    def _delegate(self, path):
-        """The layer that owns `path`, from the index once it has been built,
-        instead of asking every layer exists() in priority order (the loose
-        layer first, which over S3 is a round trip per packed file)."""
-        if self._owner is not None:
-            owner_fs = self._owner.get(self.validatepath(path))
-            if owner_fs is not None:
-                return owner_fs
-        return super()._delegate(path)
-
     def _owning_ssg_fs(self, path):
         self.check()
         _path = self.validatepath(path)
-        if self._owner is not None:
-            owner_fs = self._owner.get(_path)
-        else:
-            _name, owner_fs = self.which(_path)
+        _name, owner_fs = self.which(_path)
         return owner_fs if isinstance(owner_fs, SsgFS) else None
 
     def origin_of(self, path):
@@ -498,3 +408,38 @@ class HexnFS(MultiFS):
                 return ssg_path[len(self._s3_prefix) + 1:]
             return ssg_path
         return os.path.relpath(ssg_path, self.game_root).replace(os.sep, "/")
+
+    # Unlike MultiFS's versions, skip a sub-fs that has `path` as a file
+    # instead of failing: an archive and the loose files can disagree on
+    # whether a name is a file or a directory.
+    def listdir(self, path):
+        self.check()
+        directory = []
+        exists = False
+        for _name, sub_fs in self.iterate_fs():
+            try:
+                directory.extend(sub_fs.listdir(path))
+            except (ResourceNotFound, DirectoryExpected):
+                pass
+            else:
+                exists = True
+        if not exists:
+            raise ResourceNotFound(path)
+        return list(OrderedDict.fromkeys(directory))
+
+    def scandir(self, path, namespaces=None, page=None):
+        self.check()
+        seen = set()
+        exists = False
+        for _name, sub_fs in self.iterate_fs():
+            try:
+                for info in sub_fs.scandir(path, namespaces=namespaces, page=page):
+                    if info.name not in seen:
+                        yield info
+                        seen.add(info.name)
+            except (ResourceNotFound, DirectoryExpected):
+                pass
+            else:
+                exists = True
+        if not exists:
+            raise ResourceNotFound(path)

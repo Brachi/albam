@@ -25,12 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Color Palette to Face Painter tool
 
 ### Fixed
 
-- Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
-- MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
-- Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
 - Repacking an `.arc` overwriting every entry's flags with a fixed value, instead of carrying over the one the archive already held
 - Import of meshes with Nan UVs
 - Triangulation function(now it keeps custom normals)
@@ -87,10 +85,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   `mtfw.anim_retarget` property. Rigs in `.blend` files saved with the old
   property are migrated the first time they are used
 - Contex-related tools such as Handshaker, Face Attribute Editor. VertexGroupsMerger moved to Blender tools tab
-- "Export edited bones" is now on by default, so the skeleton (bone positions, parents,
-  animation ids and mirrors) is written from the armature and rig edits reach the game.
-  Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
-  saved with 0.5.0 keep the source file's mirror bones
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically

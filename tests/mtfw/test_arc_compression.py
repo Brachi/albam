@@ -60,7 +60,6 @@ from albam.lib.xcompress_encode import (
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 from tests.xcompress_cab import independent_decompress, sevenzip
 from tests.xcompress_frames import frames_of
-from tests.skip_policy import skip_missing
 
 ARC_VERSION_ZLIB = 7
 
@@ -549,23 +548,6 @@ def test_dataset_hashes_are_in_catalog():
         )
 
 
-def local_arc_path(game_fs_root, path, tmp_dir):
-    """A local file holding the archive `path` comes from, or None when a
-    loose file shadows it. On R2 the archive's identifier is a bucket key,
-    and Arc.from_file / update_arc need a file on disk, so it's fetched once
-    into `tmp_dir`."""
-    arc_path = game_fs_root.origin_absolute_path(path)
-    if arc_path is None or os.path.isfile(arc_path):
-        return arc_path
-    owner_fs = game_fs_root._owning_arc_fs(path)
-    with owner_fs._opener(arc_path) as f:
-        data = f.read()
-    local = os.path.join(tmp_dir, os.path.basename(arc_path))
-    with open(local, "wb") as f:
-        f.write(data)
-    return local
-
-
 @pytest.fixture(scope="session")
 def entry_payload(game_fs_root, local_entry_path_hash):
     """One real archived entry, decoded - what the encoder has to write back."""
@@ -574,16 +556,16 @@ def entry_payload(game_fs_root, local_entry_path_hash):
 
 
 @pytest.fixture(scope="session")
-def shipped_stream(game_fs_root, local_entry_path_hash, tmp_path_factory):
+def shipped_stream(game_fs_root, local_entry_path_hash):
     """The same entry as its archive stores it: the stream the game reads."""
     from albam.engines.mtfw.arc_fs import ArcFS, _entry_path
 
     path = resolve_hashes(game_fs_root, {local_entry_path_hash})[local_entry_path_hash]
-    arc_path = local_arc_path(game_fs_root, path, tmp_path_factory.mktemp("arc"))
+    arc_path = game_fs_root.origin_absolute_path(path)
     if arc_path is None:
         # A loose file on disk shadows the archived one of the same path, so
         # there is no shipped stream behind it in this install.
-        skip_missing(f"{local_entry_path_hash} resolves to a loose file here")
+        pytest.skip(f"{local_entry_path_hash} resolves to a loose file here")
     arc = ArcFS(arc_path)
     extensions = file_type_extensions(arc.version)
     parsed = Arc.from_file(arc_path)
@@ -678,9 +660,9 @@ def test_packing_a_real_archive_rewrites_one_entry_and_nothing_else(
     from albam.engines.mtfw.arc_fs import ArcFS, _entry_path
 
     path = resolve_hashes(game_fs_root, {REPACK_ENTRY_HASH})[REPACK_ENTRY_HASH]
-    arc_path = local_arc_path(game_fs_root, path, tmp_path)
+    arc_path = game_fs_root.origin_absolute_path(path)
     if arc_path is None:
-        skip_missing(f"{REPACK_ENTRY_HASH} resolves to a loose file here")
+        pytest.skip(f"{REPACK_ENTRY_HASH} resolves to a loose file here")
 
     original = Arc.from_file(arc_path)
     original._read()

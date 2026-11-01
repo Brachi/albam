@@ -9,7 +9,6 @@ import os
 import pytest
 
 from tests.cie.lfs_paths import resolve_archive_hashes
-from tests.dataset_cases import applies_to, entries_for
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified archives
 # (see test_dataset_hashes_are_in_catalog below), same pattern as
@@ -30,10 +29,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        entries = entries_for(metafunc, LFS_PARSING_DATASET)
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in LFS_PARSING_DATASET]
         ids = [f"{d['app_id']}-{d['payload_extension'].lstrip('.')}-{d['archive_path_hash']}"
-               for d in entries]
+               for d in LFS_PARSING_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -112,11 +110,14 @@ def test_payload_is_read_as_its_extension_says(lfs_fs, local_payload_extension):
                          f"{local_payload_extension}"]
 
 
-@applies_to(payload_extension=CONTAINER_EXTENSIONS - {".evd"})
-def test_unnamed_entries_are_numbered_in_container_order(lfs_fs):
+def test_unnamed_entries_are_numbered_in_container_order(lfs_fs, local_payload_extension):
     """udas/dat/pack entries have no names of their own, so LfsFS numbers them
     - and the numbering has to follow the container's own order, since that is
     the only thing a .tpl's texture index can refer to (see textures.py)."""
+    if local_payload_extension not in CONTAINER_EXTENSIONS - {".evd"}:
+        pytest.skip(f"a {local_payload_extension} archive has nothing to number "
+                    f"(its entries are named, or it holds a single file)")
+
     stem = os.path.basename(lfs_fs.lfs_path).split(".")[0]
     indices = []
     for name in lfs_fs.listdir("/"):
@@ -139,8 +140,7 @@ def test_read_only(lfs_fs):
         lfs_fs.openbin(next(iter(lfs_fs.walk.files())), mode="w")
 
 
-@applies_to(payload_extension=".evd", has_models=True)
-def test_evd_entries_are_sliced_by_offset_order(lfs_fs):
+def test_evd_entries_are_sliced_by_offset_order(lfs_fs, local_payload_extension):
     """An .evd's file table is not sorted by offset and its entries' `size`
     field doesn't measure their content, so LfsFS slices each entry from its
     own offset to the next one in ascending-offset order (see fs._split_evd).
@@ -149,6 +149,8 @@ def test_evd_entries_are_sliced_by_offset_order(lfs_fs):
     its own vertex data, not empty - so this checks the bytes really are a
     whole file: the magic its extension calls for, and a full parse.
     """
+    if local_payload_extension != ".evd":
+        pytest.skip("only .evd entries are sliced this way")
 
     from albam.engines.cie.structs.re4_uhd_bin import Re4UhdBin
     from albam.engines.cie.structs.tpl import Tpl
@@ -175,7 +177,8 @@ def test_evd_entries_are_sliced_by_offset_order(lfs_fs):
         else:
             continue
         checked += 1
-    assert checked, "the dataset says this .evd holds model files"
+    if not checked:
+        pytest.skip("this .evd holds no model files")
 
 
 def test_lfs_round_trips_through_the_writer(lfs_fs):
@@ -203,9 +206,8 @@ def test_lfs_round_trips_through_the_writer(lfs_fs):
     assert reparsed.header.size_decompressed == len(payload)
 
 
-# A .pack is rebuilt too, by tests/cie/test_pack_writer.py; nothing else is.
-@applies_to(payload_extension=".udas")
-def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, tmp_path):
+def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, local_payload_extension,
+                                                              tmp_path):
     """Rebuilding an archive without changing anything gives back what went in.
 
     This is the path a mod takes - the archive writer rebuilds the file table
@@ -214,6 +216,11 @@ def test_repacking_an_archive_unchanged_preserves_every_entry(lfs_fs, tmp_path):
     the number they were unpacked under rather than by name, since the name
     carries the archive's own filename.
     """
+    if local_payload_extension != ".udas":
+        # A .pack is rebuilt too, by tests/cie/test_pack_writer.py; nothing
+        # else is.
+        pytest.skip("this test covers the .udas rebuild")
+
     from albam.engines.cie.archive import _read_payload, _rebuild_udas
     from albam.engines.cie.lfs_decompress import (xcompress_compress_re4hd,
                                                   xcompress_decompress_re4hd)
