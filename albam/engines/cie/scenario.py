@@ -410,7 +410,7 @@ def _shared_archive_path(archive_path):
 @blender_registry.register_export_function(app_id="re4uhd", extension="smd")
 def export_smd(bl_obj):
     """The .smd a room was imported from, with its placements as they are in
-    Blender now.
+    Blender.
 
     Only the entry table is rewritten, and only the entries whose placement
     changed. A scenario holds far more than this module reads - between the
@@ -424,9 +424,9 @@ def export_smd(bl_obj):
     but only an entry import made an object for: one whose model could not
     be built (a split room's shared models when the shared archive is not
     beside it, a model the .bin importer refused) never had an object to
-    delete, and is kept as it is. A room imported before that was recorded
-    has nothing deleted. The
-    models themselves are not written yet.
+    delete, and is kept as it is. A room whose object has no record of the
+    entries import made objects for has nothing deleted. The models
+    themselves are not written.
     """
     asset = bl_obj.albam_asset
     data = bytearray(asset.original_bytes)
@@ -529,7 +529,7 @@ def _matrix_to_entry(matrix, name="A room placement"):
     rotation. A mirrored placement carries its reflection on X.
 
     Done in double precision: mathutils works in single, and taking the
-    angles through it lost up to a centimetre on a large prop turned close
+    angles through it loses up to a centimetre on a large prop turned close
     to 90 degrees about Y.
 
     Not every transform is one an entry can hold. An entry scales after it
