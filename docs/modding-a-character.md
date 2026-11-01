@@ -231,11 +231,13 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 ## What does not work yet
 
-- **Rooms** export their placements only. Moving, rotating, scaling or deleting
-  the objects placed in a room's `.smd` is written back, and every other byte of
-  the file is kept as it shipped. Editing a room's models, adding placements
-  (a duplicate made in Blender is refused), and the one room assembled from
-  several files are not supported yet.
+- **Rooms** export their placements and their models. Moving, rotating, scaling
+  or deleting the objects placed in a room's `.smd`, and editing the meshes
+  themselves, is written back; a model left alone keeps its shipped bytes, and
+  so does everything else in the file. An edited model that no longer fits
+  where it was is appended to the end of the file, which grows. Adding
+  placements (a duplicate made in Blender is refused), adding models, and the
+  one room assembled from several files are not supported yet.
 - **New textures cannot be added.** Nothing writes a `.tpl`, so a model can only
   address the slots its texture list already has, and a mod that adds one would
   also have to renumber the material indices addressing it.

@@ -20,6 +20,7 @@ the models the others share. An entry for a shared model says so and
 indexes that file's table instead of its own, which is why importing one
 file reaches for a sibling archive (see _SharedScenario).
 """
+import hashlib
 import math
 import os
 import struct
@@ -30,7 +31,8 @@ from mathutils import Euler, Matrix, Vector
 from ...exceptions import AlbamCheckFailure
 from ...registry import blender_registry
 from ...vfs import VirtualFile, VirtualFileData
-from .mesh import AUTO_TPL, GLOBAL_SCALE, build_blender_model
+from .mesh import (AUTO_TPL, GLOBAL_SCALE, VERTEX_COLOR_ATTRIBUTE, build_blender_model,
+                   export_room_model)
 from .structs.re4_uhd_smd import Re4UhdSmd
 
 # The magic values a scenario ships with. Anything else is not one. 0x0000
@@ -54,6 +56,15 @@ ENTRY_TRANSFORM_FORMAT = "<9f"
 # Blender's units (metres and radians); anything less is float noise from
 # the round trip through a matrix, and the entry keeps its shipped bytes.
 TRANSFORM_TOLERANCE = 1e-5
+
+# The custom properties a room model's mesh carries: which entry of the
+# .smd's model table it was built from, and a fingerprint of what export
+# writes from it as it was imported (see _mesh_fingerprint), which is what
+# tells an edited model from one left alone.
+MODEL_PROPERTY = "albam_smd_model"
+FINGERPRINT_PROPERTY = "albam_smd_fingerprint"
+# Embedded models start on this boundary in shipped files.
+SMD_MODEL_ALIGNMENT = 32
 
 # What the shared file of a split room is called, relative to one of the
 # files sharing it: the extra files are named "<room>_NN" and the shared one
@@ -100,6 +111,9 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                 if bl_mesh is None:
                     missing += 1
                     continue
+                if not entry.is_shared:
+                    bl_mesh[MODEL_PROPERTY] = entry.model_id
+                    bl_mesh[FINGERPRINT_PROPERTY] = _mesh_fingerprint(bl_mesh)
                 built[key] = bl_mesh
             bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
             bl_placement[ENTRY_PROPERTY] = index
@@ -409,8 +423,10 @@ def export_smd(bl_obj):
 
     A placement moved, rotated or scaled in Blender is written back to its
     entry. One deleted in Blender is zeroed, which is what the unused
-    entries a few rooms ship with look like and is what the game skips. The
-    models themselves are not written yet.
+    entries a few rooms ship with look like and is what the game skips.
+
+    A model whose mesh was edited is written again (see _write_models);
+    every other model keeps its shipped bytes.
     """
     asset = bl_obj.albam_asset
     data = bytearray(asset.original_bytes)
@@ -463,7 +479,9 @@ def export_smd(bl_obj):
         struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset, *_matrix_to_entry(matrix))
         changed += 1
 
-    print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten")
+    models = _write_models(bl_obj, data, smd, placements.values())
+    print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten, "
+          f"{models} models rewritten")
     return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
 
 
@@ -519,3 +537,92 @@ def _matrix_to_entry(matrix):
     return (position.x, position.y, position.z,
             angles.x, angles.y, angles.z,
             scale[0], scale[1], scale[2])
+
+
+def _mesh_fingerprint(bl_mesh):
+    """A digest of everything a room model is written from: positions,
+    faces, UVs, normals, vertex colours, which material each face uses and
+    which image each material binds. Recorded at import and compared at
+    export - a model is only written again if this changed, since a model
+    written from Blender is not byte for byte what shipped even unedited."""
+    import numpy as np
+
+    digest = hashlib.sha1()
+
+    def add(collection, attribute, count, dtype):
+        values = np.empty(count, dtype=dtype)
+        collection.foreach_get(attribute, values)
+        digest.update(values.tobytes())
+
+    add(bl_mesh.vertices, "co", len(bl_mesh.vertices) * 3, np.float32)
+    add(bl_mesh.loops, "vertex_index", len(bl_mesh.loops), np.int32)
+    add(bl_mesh.polygons, "loop_total", len(bl_mesh.polygons), np.int32)
+    add(bl_mesh.polygons, "material_index", len(bl_mesh.polygons), np.int32)
+    add(bl_mesh.corner_normals, "vector", len(bl_mesh.corner_normals) * 3, np.float32)
+    uv_layer = bl_mesh.uv_layers.active
+    if uv_layer is not None:
+        add(uv_layer.data, "uv", len(uv_layer.data) * 2, np.float32)
+    colors = bl_mesh.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
+    if colors is not None:
+        add(colors.data, "color_srgb", len(colors.data) * 4, np.float32)
+    for bl_material in bl_mesh.materials:
+        digest.update(b"\0" + (bl_material.name.encode() if bl_material else b""))
+        if bl_material is None or not bl_material.node_tree:
+            continue
+        # Which image feeds which shader input is what a material's texture
+        # slots are written from (see mesh._texture_slot).
+        for link in bl_material.node_tree.links:
+            image = getattr(link.from_node, "image", None)
+            if image is not None:
+                digest.update(f"\1{image.name}\2{link.to_socket.name}".encode())
+    return digest.hexdigest()
+
+
+def _write_models(bl_obj, data, smd, bl_placements):
+    """Write every edited room model back into `data`, the .smd being
+    exported, and return how many were.
+
+    A model is written where it was if it still fits the space up to the
+    next thing the file is known to hold there, and appended at the end of
+    the file otherwise, with its table entry pointed at the new place. Its
+    old bytes are left where they were in that case: nothing else in the
+    file is known not to point at them.
+    """
+    meshes = {}
+    for bl_placement in bl_placements:
+        for bl_object in [bl_placement] + list(bl_placement.children):
+            if bl_object.type != "MESH" or MODEL_PROPERTY not in bl_object.data:
+                continue
+            bl_mesh = bl_object.data
+            if bl_mesh.get(FINGERPRINT_PROPERTY) == _mesh_fingerprint(bl_mesh):
+                continue
+            model_id = bl_mesh[MODEL_PROPERTY]
+            other = meshes.setdefault(model_id, bl_mesh)
+            if other != bl_mesh:
+                raise AlbamCheckFailure(
+                    f"Model {model_id} of {bl_obj.name} was edited as two different "
+                    f"meshes, {other.name} and {bl_mesh.name}",
+                    details="The room stores the model once, so only one version of "
+                            "it can be written. Import makes a second mesh for a "
+                            "model textured through a different .tpl.",
+                    solution="Make the edit on one of them only",
+                )
+    if not meshes:
+        return 0
+
+    table = smd.header.offset_model_table
+    known = sorted({table + o for o in smd.offsets_models[:-1]} |
+                   {smd.header.offset_tpl_table + o for o in smd.offsets_tpls[:-1]} |
+                   {table, smd.header.offset_tpl_table, len(data)})
+    for model_id, bl_mesh in sorted(meshes.items()):
+        start = table + smd.offsets_models[model_id]
+        end = min(k for k in known if k > start)
+        model_bytes = export_room_model(bl_mesh, bytes(data[start:end]))
+        if len(model_bytes) <= end - start:
+            data[start:end] = model_bytes + bytes(end - start - len(model_bytes))
+            continue
+        data.extend(bytes(-len(data) % SMD_MODEL_ALIGNMENT))
+        new_start = len(data)
+        data.extend(model_bytes)
+        struct.pack_into("<I", data, table + 4 * model_id, new_start - table)
+    return len(meshes)

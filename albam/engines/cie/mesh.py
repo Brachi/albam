@@ -165,6 +165,9 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             loop_normals.append(_decode_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
 
+    if bin.header.flags & BIN_FLAG_VERTEX_COLORS and bin.vertex_colors:
+        _build_vertex_colors(bl_mesh, bin.vertex_colors)
+
     bl_mesh.albam_custom_properties.get_custom_properties_for_appid(
         "re4uhd").set_from_source(bin.header)
     _apply_materials(bl_mesh, bin, mat_face_ranges, _resolve_tpl(vfile, bin, context))
@@ -1042,7 +1045,7 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
     return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _collect_geometry(bl_mesh_objs, armature):
+def _collect_geometry(bl_mesh_objs, armature, matrix=None):
     """Everything per-corner the format needs, in the order it stores it.
 
     `armature` is the one the bone table is written from (see export_bin),
@@ -1062,6 +1065,10 @@ def _collect_geometry(bl_mesh_objs, armature):
     (bl_mesh_ob, vertex index) per corner - the Blender vertex a corner was
     built from, which is what a morph's per-corner deltas are keyed against
     (see _serialize_morphs).
+
+    `matrix`, when given, is what every mesh is baked with instead: a room
+    model is exported in its own space, which is neither where it is placed
+    nor relative to any armature (see scenario.export_smd).
     """
     groups = []
     positions = []
@@ -1071,6 +1078,7 @@ def _collect_geometry(bl_mesh_objs, armature):
     weight_table = []
     weight_lookup = {}
     source_vertices = []
+    explicit_matrix = matrix
 
     all_bones = list(armature.data.bones) if armature else []
     # The same repeats _serialize_bones reads, so a weight and the bone table
@@ -1121,8 +1129,8 @@ def _collect_geometry(bl_mesh_objs, armature):
         # object's own placement in the scene happened to be, while the bones
         # they are meant to bind to stayed exactly where they started -
         # skinning a moved mesh to an unmoved skeleton.
-        matrix = bl_mesh_ob.matrix_world
-        if armature:
+        matrix = explicit_matrix if explicit_matrix is not None else bl_mesh_ob.matrix_world
+        if armature and explicit_matrix is None:
             matrix = armature.matrix_world.inverted_safe() @ matrix
         normal_matrix = matrix.to_3x3().inverted_safe().transposed()
 
@@ -1598,6 +1606,102 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armat
     return dst_morphs
 
 
+# The color attribute a model's vertex colours are imported into and exported
+# from. Only models whose header sets BIN_FLAG_VERTEX_COLORS use them - in
+# shipped files, a few of the models a room is built from, where they appear
+# to carry baked lighting - and every other model stores zeros or white there.
+VERTEX_COLOR_ATTRIBUTE = "albam_vertex_color"
+
+
+def _build_vertex_colors(bl_mesh, colors):
+    """One colour per vertex: import builds a Blender vertex per file vertex
+    (see build_blender_model), so the file's array maps onto them as is."""
+    attribute = bl_mesh.color_attributes.new(VERTEX_COLOR_ATTRIBUTE, "BYTE_COLOR", "POINT")
+    values = []
+    for color in colors[:len(bl_mesh.vertices)]:
+        values.extend((color.r / 255, color.g / 255, color.b / 255, color.a / 255))
+    # color_srgb is the one that round-trips a byte colour's stored values.
+    attribute.data.foreach_set("color_srgb", values)
+
+
+def _vertex_colors(dst_bin, source_vertices, default):
+    """A colour entry per corner, from the colour attribute of the vertex the
+    corner was built from, or `default` (r, g, b, a) where there is none."""
+    dst_colors = []
+    for bl_mesh_ob, vertex_index in source_vertices:
+        attribute = bl_mesh_ob.data.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
+        if attribute is not None and attribute.domain == "POINT":
+            rgba = tuple(round(c * 255) for c in attribute.data[vertex_index].color_srgb)
+        else:
+            rgba = default
+        dst_color = dst_bin.Rgba(_parent=dst_bin, _root=dst_bin._root)
+        dst_color.r, dst_color.g, dst_color.b, dst_color.a = rgba
+        dst_color._check()
+        dst_colors.append(dst_color)
+    return dst_colors
+
+
+def export_room_model(bl_mesh, template_bytes, app_id="re4uhd"):
+    """A model embedded in a room's .smd, written from `bl_mesh` (a mesh
+    datablock), as bytes - see scenario.export_smd.
+
+    Room models are written in their own space, the mesh's coordinates as
+    they are: where the model stands is the entry placing it, not something
+    baked into its vertices. Every one of them carries a single bone at the
+    origin, which import drops along with the armature, and the shipped
+    model being replaced (`template_bytes`) is what says what that bone, the
+    weights, the flags and the weight-index buffers were; they are kept from
+    it as they are. Vertex colours come from VERTEX_COLOR_ATTRIBUTE where the
+    model uses them, and are otherwise zero, as shipped room models store.
+    """
+    from mathutils import Matrix
+
+    template = Re4UhdBin.from_bytes(template_bytes)
+    template._read()
+    if template.header.offset_morphs:
+        raise AlbamCheckFailure(
+            f"{bl_mesh.name} is a room model with morphs, which albam can't write yet",
+        )
+    bl_mesh_ob = bpy.data.objects.new("__albam_room_model__", bl_mesh)
+    try:
+        (groups, positions, normals, uvs, _weight_indices,
+         _weight_table, source_vertices) = _collect_geometry(
+            [bl_mesh_ob], None, matrix=Matrix.Identity(4))
+        num_vertices = len(positions)
+        if num_vertices > MAX_VERTICES:
+            raise AlbamCheckFailure(
+                f"{bl_mesh.name} has too much geometry to export: {num_vertices} face "
+                f"corners, and the format counts them in 16 bits",
+                solution="Reduce the polygon count, or split the model",
+            )
+
+        dst_bin = Re4UhdBin()
+        dst_bin.header = _serialize_header(dst_bin, bl_mesh_ob)
+        dst_bin.bones = []
+        for bone in template.bones:
+            dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
+            for attribute in ("bone_id", "parent", "filler", "x", "y", "z"):
+                setattr(dst_bone, attribute, getattr(bone, attribute))
+            dst_bone._check()
+            dst_bin.bones.append(dst_bone)
+        dst_bin.weights = _serialize_weights(dst_bin, [
+            (tuple(w.bone_ids), tuple(w.weights), w.count) for w in (template.weights or [])])
+        dst_bin.vertex_positions = _serialize_vec3s(dst_bin, positions)
+        dst_bin.normals = _serialize_normals(dst_bin, normals)
+        dst_bin.texcoords = _serialize_uvs(dst_bin, uvs)
+        if template.header.offset_index_buffer:
+            dst_bin.indexes = [0] * num_vertices
+            dst_bin.indexes2 = [0] * num_vertices
+        uses_colors = bool(template.header.flags & BIN_FLAG_VERTEX_COLORS)
+        dst_bin.vertex_colors = _vertex_colors(
+            dst_bin, source_vertices, (255, 255, 255, 255) if uses_colors else (0, 0, 0, 0))
+        dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
+                             for bl_material, strip_lengths in groups]
+        return _layout_and_write(dst_bin, num_vertices, template_header=template.header)
+    finally:
+        bpy.data.objects.remove(bl_mesh_ob)
+
+
 @blender_registry.register_export_function(app_id="re4uhd", extension="bin")
 def export_bin(bl_obj):
     """Serialize a Blender object back to a mesh .bin.
@@ -1819,7 +1923,7 @@ def _serialize_colors(dst_bin, count):
     return dst_colors
 
 
-def _layout_and_write(dst_bin, num_vertices):
+def _layout_and_write(dst_bin, num_vertices, template_header=None):
     """Place every block, fill in the header, and serialize.
 
     Offsets are all explicit in the header, so the file's layout is ours to
@@ -1828,6 +1932,12 @@ def _layout_and_write(dst_bin, num_vertices):
     format allows 0x40, which stops before the four trailing offsets, and
     0x50, which is exactly those four present - and writing the largest means
     never having to decide.
+
+    `template_header`, when given, is the header of the shipped model this
+    one replaces, and its flags, version and weight-index buffers are kept
+    rather than derived: a room model sets flag bits nothing here derives
+    (see BIN_FLAG_VERTEX_COLORS) and carries weight-index buffers without a
+    weight table (see export_room_model).
     """
     header = dst_bin.header
     header.num_bones = len(dst_bin.bones)
@@ -1852,6 +1962,10 @@ def _layout_and_write(dst_bin, num_vertices):
     tagged = has_bone_pairs or has_symmetry
     header.version_flags = VERSION_FLAGS_WITH_TAGS if tagged else VERSION_FLAGS_PLAIN
     header.unk_01 = UNK_01_WITH_TAGS if tagged else UNK_01_PLAIN
+    if template_header is not None:
+        header.flags = template_header.flags
+        header.version_flags = template_header.version_flags
+        header.unk_01 = template_header.unk_01
 
     offset = HEADER_SIZE
     header.offset_bones = HEADER_SIZE
@@ -1885,7 +1999,8 @@ def _layout_and_write(dst_bin, num_vertices):
     # table, and shipped models without one leave their offsets at 0. They
     # hold the same values as each other: no shipped model was found where
     # the second differs from the first.
-    weighted = bool(dst_bin.weights)
+    weighted = bool(dst_bin.weights) or bool(
+        template_header is not None and template_header.offset_index_buffer)
     header.offset_index_buffer = offset if weighted else 0
     if weighted:
         offset = _align(offset + num_vertices * INDEX_SIZE)
