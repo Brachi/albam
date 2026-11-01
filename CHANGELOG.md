@@ -25,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- "Copy report to clipboard" button on the import/export error popup, so a #support
+  user can paste the full error and traceback directly, without being asked to find
+  it in the system console
 
 ### Fixed
 
