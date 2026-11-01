@@ -8,6 +8,7 @@ class BlenderRegistry:
         self.archive_accessor_registry = {}
         self.fs_root_loader_registry = {}
         self.archive_writer_registry = {}
+        self.companion_archive_writer_registry = {}
         self.props = []  # order is meaningful for dependencies
         self.types = []  # order is meaningufl for dependencies
         self.import_options_custom_draw_funcs = {}
@@ -96,6 +97,21 @@ class BlenderRegistry:
         """
         def decorator(f):
             self.archive_writer_registry[(app_id, extension)] = f
+            return f
+        return decorator
+
+    def register_companion_archive_writer(self, app_id, extension):
+        """
+        Decorated function must be
+        `(archive_path, exported_vfiles, **options) -> {relative path: bytes}`:
+        the other archives an export changes besides the one at
+        `archive_path` - say, the texture packs a model draws from, when
+        those live elsewhere. Pack writes each one at its relative path from
+        the parent of the folder it writes the archive into, so a path names
+        a sibling of the archive's own folder.
+        """
+        def decorator(f):
+            self.companion_archive_writer_registry[(app_id, extension)] = f
             return f
         return decorator
 

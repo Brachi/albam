@@ -5,12 +5,12 @@ albam reads.
 Three kinds of payload arrive under that extension. Almost all of them are
 the little-endian container structs/udas.ksy models. A couple write their
 block table big-endian and hold their DAT block as a YZ2 compressed stream
-instead of a file table, which albam has no decoder for. One holds no block
-table at all, so it is not a UDAS whatever its name says.
+(see albam/engines/cie/yz2.py), which albam decodes and lists. One holds no
+block table at all, so it is not a UDAS whatever its name says, and mounts as
+a single file with an error saying why.
 
-None of the last two can be listed, and this file pins down what albam does
-with them instead: mount the payload as a single file, say precisely why,
-and refuse to write the archive back rather than emitting a little-endian
+Only the little-endian variant can be written back: this file also pins down
+that the writer refuses the other two rather than emitting a little-endian
 container over what was never one.
 """
 import json
@@ -33,6 +33,13 @@ VARIANT_BYTE_ORDERS = {
     "little_endian": "<",
     "big_endian_yz2": ">",
     "no_block_table": None,
+}
+# SHA-1 of each big-endian archive's DAT block once out of YZ2: what the
+# original C++ yz2 decoder (as JADERLINK's RE4_DASYZ2_TOOL ships it, built
+# with 32-bit words) produces for the same blocks.
+DECODED_DAT_SHA1 = {
+    "16751b2ceafb2bb9": "46c93da3015665023f81212f4787489cda84e51a",
+    "76e7d1b4720d91d4": "0aaa908fd75d27fbd3e657beb0acc8191adb46bf",
 }
 # Where a block table starts and where every archive seen puts its DAT block.
 BLOCK_TABLE_END = 0x20 + 32
@@ -120,15 +127,21 @@ def test_byte_order_is_read_from_the_block_table(payload, local_variant):
 
 
 @applies_to(variant="big_endian_yz2")
-def test_big_endian_data_block_is_a_yz2_stream(payload):
+def test_big_endian_data_block_is_a_yz2_stream(payload, local_archive_path_hash):
     """The big-endian variant's DAT block is not a file table but a YZ2
-    compressed stream, which is why its entries cannot be listed however the
-    container itself is read: the block opens with its own compressed and
-    decompressed lengths in ASCII hex, and the compressed one accounts for
-    the rest of the block.
+    compressed stream, so its entries can only be listed once it is decoded:
+    the block opens with its own compressed and decompressed lengths in
+    ASCII hex, and the compressed one accounts for the rest of the block.
+
+    What it decodes to is pinned by hash, since a decoder bug can keep the
+    length right and still garble the bytes (yz2's matches are looked up by
+    content, so a wrong byte early on derails later copies, not the coder).
     """
+    import hashlib
+
     from albam.engines.cie.fs import (YZ2_HEADER_SIZE, is_yz2_block, read_udas_block_table,
-                                      udas_byte_order)
+                                      split_big_endian_dat, udas_byte_order)
+    from albam.engines.cie.yz2 import decompress
 
     _block_type, size, offset = read_udas_block_table(payload, udas_byte_order(payload))[0]
     assert is_yz2_block(payload, offset)
@@ -138,11 +151,18 @@ def test_big_endian_data_block_is_a_yz2_stream(payload):
     assert YZ2_HEADER_SIZE + compressed <= size
     assert decompressed > compressed, "a block stored compressed should shrink"
 
+    block = decompress(payload[offset:offset + size])
+    assert len(block) == decompressed
+    assert hashlib.sha1(block).hexdigest() == DECODED_DAT_SHA1[local_archive_path_hash]
+    extensions = [extension for _index, extension, _data in split_big_endian_dat(block)]
+    assert {"LIT", "SMD", "SMX", "SHD", "TEX"} <= set(extensions)
 
-def test_unreadable_variants_mount_as_one_file_and_say_why(archive_path, payload, local_variant):
-    """An archive albam cannot list still mounts, holding its whole payload
-    under the archive's own name - and carries an error naming the variant,
-    rather than the parse failure of reading it as the wrong container.
+
+def test_variants_list_their_entries_or_say_why_not(archive_path, payload, local_variant):
+    """Both UDAS variants list their entries. An archive albam cannot list
+    still mounts, holding its whole payload under the archive's own name -
+    and carries an error saying why, rather than the parse failure of reading
+    it as the wrong container.
     """
     from albam.engines.cie.fs import LfsFS
 
@@ -150,19 +170,17 @@ def test_unreadable_variants_mount_as_one_file_and_say_why(archive_path, payload
     try:
         paths = list(fs.walk.files())
         error = fs.container_error
-        if local_variant == "little_endian":
+        stem = os.path.basename(archive_path).split(".")[0]
+        if local_variant in ("little_endian", "big_endian_yz2"):
             assert error is None
             assert len(paths) > 1
+            assert all(path.startswith(f"/{stem}_") for path in paths)
             return
 
-        stem = os.path.basename(archive_path).split(".")[0]
         assert paths == [f"/{stem}.udas"]
         assert fs.readbytes(paths[0]) == payload
-        assert isinstance(error, (NotImplementedError, ValueError))
-        if local_variant == "big_endian_yz2":
-            assert "big-endian" in str(error) and "YZ2" in str(error)
-        else:
-            assert "block table" in str(error)
+        assert isinstance(error, ValueError)
+        assert "block table" in str(error)
     finally:
         fs.close()
 
