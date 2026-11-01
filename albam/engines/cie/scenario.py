@@ -22,19 +22,38 @@ file reaches for a sibling archive (see _SharedScenario).
 """
 import math
 import os
+import struct
 
 import bpy
 from mathutils import Euler, Matrix, Vector
 
 from ...exceptions import AlbamCheckFailure
 from ...registry import blender_registry
-from ...vfs import VirtualFile
+from ...vfs import VirtualFile, VirtualFileData
 from .mesh import AUTO_TPL, GLOBAL_SCALE, build_blender_model
 from .structs.re4_uhd_smd import Re4UhdSmd
 
 # The magic values a scenario ships with. Anything else is not one. 0x0000
 # is a stub that places nothing (see structs/re4-uhd-smd.ksy).
 SCENARIO_MAGICS = (0x0000, 0x0010, 0x0020, 0x0031, 0x0040, 0x0140)
+
+# The custom property a placement's top-level object carries: the index of
+# the .smd entry it was imported from, which is what export writes it back
+# into (see export_smd).
+ENTRY_PROPERTY = "albam_smd_entry"
+
+# Where the entry table starts, and how big one entry is - for every magic
+# but 0x140, whose header carries a variable list of counts first (see
+# structs/re4-uhd-smd.ksy). An entry is three vec3f, four u1, seven u4 and
+# a u4 status.
+SMD_HEADER_SIZE = 16
+SMD_ENTRY_SIZE = 72
+# Within an entry: position, angles and scale, three f4 each.
+ENTRY_TRANSFORM_FORMAT = "<9f"
+# A placement is written back only if it moved by more than this, in
+# Blender's units (metres and radians); anything less is float noise from
+# the round trip through a matrix, and the entry keeps its shipped bytes.
+TRANSFORM_TOLERANCE = 1e-5
 
 # What the shared file of a split room is called, relative to one of the
 # files sharing it: the extra files are named "<room>_NN" and the shared one
@@ -82,7 +101,8 @@ def build_blender_scenario(vfile: VirtualFile, context: bpy.types.Context) -> bp
                     missing += 1
                     continue
                 built[key] = bl_mesh
-            _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement = _place(f"{_stem(name)}_{index:03}", bl_mesh, entry, bl_scenario, context)
+            bl_placement[ENTRY_PROPERTY] = index
             placed += 1
     finally:
         shared.close()
@@ -374,3 +394,128 @@ def _shared_archive_path(archive_path):
         if name.lower() == wanted:
             return os.path.join(directory, name)
     return None
+
+
+@blender_registry.register_export_function(app_id="re4uhd", extension="smd")
+def export_smd(bl_obj):
+    """The .smd a room was imported from, with its placements as they are in
+    Blender now.
+
+    Only the entry table is rewritten, and only the entries whose placement
+    changed. A scenario holds far more than this module reads - between the
+    entry table and the models sit megabytes nothing here models - so the
+    shipped file is the starting point and everything else in it is kept
+    byte for byte.
+
+    A placement moved, rotated or scaled in Blender is written back to its
+    entry. One deleted in Blender is zeroed, which is what the unused
+    entries a few rooms ship with look like and is what the game skips. The
+    models themselves are not written yet.
+    """
+    asset = bl_obj.albam_asset
+    data = bytearray(asset.original_bytes)
+    smd = Re4UhdSmd.from_bytes(bytes(data))
+    smd._read()
+    if smd.header.magic == 0x140:
+        raise AlbamCheckFailure(
+            f"{bl_obj.name} is a room assembled from several files, which albam "
+            f"can't write back yet",
+            details="Its header carries a list of per-file entry counts that "
+                    "export does not maintain. One room of the game is like this.",
+        )
+
+    placements = {}
+    for child in bl_obj.children:
+        index = child.get(ENTRY_PROPERTY)
+        if index is None:
+            continue
+        if index in placements or not 0 <= index < len(smd.entries):
+            raise AlbamCheckFailure(
+                f"{child.name} claims entry {index} of {bl_obj.name}, which "
+                f"{'another object also claims' if index in placements else 'has no such entry'}",
+                details="Each object placed in a room stands for one entry of its "
+                        ".smd, recorded on import. A duplicate made in Blender "
+                        "copies that record but has no entry of its own: adding "
+                        "placements isn't supported yet.",
+                solution="Delete the duplicate, or move the original instead",
+            )
+        placements[index] = child
+
+    changed = 0
+    for index, entry in enumerate(smd.entries):
+        if not entry.is_placed:
+            continue
+        offset = SMD_HEADER_SIZE + index * SMD_ENTRY_SIZE
+        # The entry is patched where it sits rather than written out from the
+        # parsed fields, so the offset is checked against what the parser
+        # read there before anything is written to it.
+        position = (entry.position.x, entry.position.y, entry.position.z)
+        if struct.unpack_from("<3f", data, offset) != position:
+            raise RuntimeError(f"entry {index} of {bl_obj.name} is not at offset {offset}")
+        bl_placement = placements.get(index)
+        if bl_placement is None:
+            data[offset:offset + SMD_ENTRY_SIZE] = bytes(SMD_ENTRY_SIZE)
+            changed += 1
+            continue
+        matrix = _placement_matrix(bl_placement)
+        if _same_matrix(matrix, _combined(*_entry_matrices(entry))):
+            continue
+        struct.pack_into(ENTRY_TRANSFORM_FORMAT, data, offset, *_matrix_to_entry(matrix))
+        changed += 1
+
+    print(f"[re4uhd] scenario {bl_obj.name}: {changed} entries rewritten")
+    return [VirtualFileData(asset.app_id, asset.relative_path, data_bytes=bytes(data))]
+
+
+def _combined(placement, rotation):
+    return placement if rotation is None else placement @ rotation
+
+
+def _placement_matrix(bl_placement):
+    """The transform a placement puts its model at, relative to the room.
+
+    A placement is one object, or an empty with the rotated model under it
+    (see _place); either way it is the product of the matrices from the
+    room's object down to the mesh.
+    """
+    matrix = bl_placement.matrix_basis.copy()
+    meshes = [c for c in bl_placement.children if c.type == "MESH"]
+    if bl_placement.type != "MESH" and meshes:
+        matrix = matrix @ meshes[0].matrix_basis
+    return matrix
+
+
+def _same_matrix(a, b):
+    return all(abs(a[i][j] - b[i][j]) <= TRANSFORM_TOLERANCE
+               for i in range(4) for j in range(4))
+
+
+def _matrix_to_entry(matrix):
+    """(position, angles, scale) for an entry placing its model at `matrix`,
+    nine floats in the order the entry stores them - the inverse of
+    _entry_matrices.
+
+    Back in the game's axes the linear part is the scale times the rotation,
+    each row of the rotation scaled by one axis (see _entry_matrices), so a
+    row's length is that axis's scale and dividing it out leaves the
+    rotation. A mirrored placement carries its reflection on X. A shear has
+    no entry that expresses it, and comes out as the nearest rotation.
+    """
+    to_blender = Matrix.Rotation(math.radians(90), 4, "X")
+    in_game = to_blender.inverted() @ matrix @ to_blender
+    position = in_game.to_translation() / GLOBAL_SCALE
+    linear = in_game.to_3x3()
+    scale = [linear[row].length for row in range(3)]
+    if linear.determinant() < 0:
+        scale[0] = -scale[0]
+    if any(abs(value) < 1e-12 for value in scale):
+        raise AlbamCheckFailure(
+            "A room placement is scaled to nothing on one axis",
+            details="An entry with a zero scale is what the game treats as unused",
+            solution="Give the object a non-zero scale, or delete it",
+        )
+    rotation = Matrix([linear[row] / scale[row] for row in range(3)])
+    angles = rotation.to_quaternion().to_matrix().to_euler("XYZ")
+    return (position.x, position.y, position.z,
+            angles.x, angles.y, angles.z,
+            scale[0], scale[1], scale[2])
