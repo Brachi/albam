@@ -340,7 +340,7 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
     def execute(self, context):
         app_id = context.scene.albam.apps.app_selected
         tools_settings = context.scene.albam.tools_settings
-        local_path = tools_settings.asettr_relative_path_to_textures
+        custom_path = tools_settings.asettr_relative_path_to_textures
         use_custom_path = tools_settings.asettr_use_custom_path
         bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
         if not bl_objects:
@@ -352,13 +352,14 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
             if parent is None:
                 print(f"Warning: {bl_ob.name} has no parent")
                 continue
-            local_path = getattr(parent.albam_asset, "relative_path", None)
-            if local_path is None:
-                print(f"Warning: parent of {bl_ob.name}, {parent.name}")
-                continue
             if use_custom_path:
-                if local_path:
-                    local_path = f"{PureWindowsPath(local_path).parent}\\"
+                local_path = custom_path
+            else:
+                mod_path = getattr(parent.albam_asset, "relative_path", None)
+                if not mod_path:
+                    print(f"Warning: {parent.name} has no .mod path, skipping {bl_ob.name}")
+                    continue
+                local_path = f"{PureWindowsPath(mod_path).parent}\\"
             try:
                 mat = bl_ob.data.materials[0]
             except IndexError:
