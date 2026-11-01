@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+import kaitaistruct
 from kaitaistruct import KaitaiStream
 import colorsys
 import numpy as np
@@ -10,6 +11,7 @@ import traceback
 
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
+from ...exceptions import AlbamCheckFailure
 from .structs.sbc_156 import Sbc156
 from .structs.sbc_21 import Sbc21
 from .structs.sbc_211 import Sbc211
@@ -165,10 +167,22 @@ def load_sbc(file_item, context):
     app_id = file_item.app_id
     sbc_bytes = file_item.get_bytes()
     sbc_version = sbc_bytes[3]
-    assert sbc_version in SBC_CLASS_MAPPER, f"Unsupported version: {sbc_version}"
+    if sbc_version not in SBC_CLASS_MAPPER:
+        raise AlbamCheckFailure(
+            f"The version of this .sbc file ({sbc_version}) is not supported",
+            details=f"Supported versions: {sorted(SBC_CLASS_MAPPER)}",
+            solution="Double check that this file comes from a supported game/app"
+        )
     SbcCls = APPID_SBC_CLASS_MAPPER[app_id]
-    sbc = SbcCls.from_bytes(sbc_bytes)
-    sbc._read()
+    try:
+        sbc = SbcCls.from_bytes(sbc_bytes)
+        sbc._read()
+    except kaitaistruct.ValidationNotEqualError as ex:
+        raise AlbamCheckFailure(
+            "This .sbc file variant is not supported",
+            details=f"Expected header magic {ex.expected!r}, got {ex.actual!r} for app '{app_id}'",
+            solution="Double check that this file comes from a supported game/app"
+        ) from ex
 
     bl_object_name = file_item.display_name
     bl_object = bpy.data.objects.new(bl_object_name, None)

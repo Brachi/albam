@@ -679,9 +679,10 @@ def serialize_textures(app_id, bl_materials):
         if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
             too_long.append((im_name, path_no_ext))
     if bad_appid:
-        raise AttributeError(
-            f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
-            "Go to Image -> tools -> Albam and select the proper app_id for each."
+        raise AlbamCheckFailure(
+            f"Some images have an app_id that doesn't match the exported app ({app_id})",
+            details=f"Images: {bad_appid}",
+            solution="Go to Image -> tools -> Albam and select the proper app_id for each image listed above"
         )
     if duplicated_paths:
         raise AttributeError(
