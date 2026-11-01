@@ -229,6 +229,36 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 `cie_build_mod.py` writes the second and third of those for you.
 
+## Modding a room
+
+Rooms follow the same steps with a different file. A room's archive is under
+`BIO4/St<n>/`, named after the room (`St1/r102.udas.lfs` is the typewriter
+room of chapter 1-3). The room itself is its `.smd` entry: importing it builds
+one empty named after the file, with an object for every model the room
+places under it.
+
+- **Move, rotate, scale or delete** those objects and the room's entries follow.
+  A placement that was imported as an empty with the model under it (the room
+  stretched and rotated that model) keeps that shape: transform the empty, or
+  scale the room's object evenly. A transform the file can't hold is refused
+  with a message rather than written off target.
+- **Add a placement** by duplicating one (Shift+D or Alt+D), or by putting an
+  object that shows one of the room's meshes under the room.
+- **Edit a model's mesh** and every placement of it changes, since the room
+  stores each model once. Models you don't touch keep their shipped bytes.
+- **Export** the room's object, then **Pack item** with the room's archive
+  selected, as for a character.
+
+Two things the room's `.smd` does not cover:
+
+- **Collision is a separate file.** What the player walks on and bumps into
+  lives in the room's `.sat`/`.eat` entries, which albam does not write.
+  Moving a wall moves what is drawn, not where Leon stops.
+- **Some rooms are split across archives** (`r100_00.dat.lfs`,
+  `r100_01.dat.lfs`, ... sharing models with `r100.udas.lfs`). Import finds the
+  shared archive next to the one you open; if it is not there, the shared
+  models are not built, and export leaves their entries exactly as they were.
+
 ## What does not work yet
 
 - **Rooms** export their placements and their models. Moving, rotating, scaling
