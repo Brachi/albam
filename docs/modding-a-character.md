@@ -193,9 +193,13 @@ the repack keeps the archive's own copy.
 
 A model whose textures changed exports more than its `.bin`: its `.tpl`, if it
 gained a slot, and every texture that is new or was edited, named after the pack
-entry it becomes (`00000010_212.dds`). Export the models sharing a `.tpl` or a
-pack in one go only if you add textures to one of them at a time - each export
-numbers its new textures from the pack as it is on disk.
+entry it becomes (`00000010_212.dds`). New textures are numbered from the pack
+as it is on disk, so add textures to **one model per pack at a time**, and pack
+it before exporting the next. Two exports adding to the same pack or `.tpl`
+give their new textures the same numbers, and the second export overwrites the
+first's new textures in the export list: an export replaces files of the same
+name already there. Once the first model's archive and packs are packed and
+installed, the next export numbers its textures after them.
 
 ## 6. Repack the archive
 
@@ -210,11 +214,17 @@ archive's own filename, so an archive under a different name produces differentl
 named entries and its replacements will not match.
 
 If the export carries textures, **Pack item** also rebuilds the texture packs
-they belong to and writes them beside your archive, under `ImagePack/` and
-`ImagePackHD/` and their original names. Both copies are written because which
-one the game loads is its texture quality setting, and a slot the `.tpl` names
-has to exist in whichever it picks. A pack's HD copy can be tens of megabytes,
-so recompressing it takes a few minutes.
+they belong to, under their original names, in `ImagePack/` and `ImagePackHD/`
+beside the folder you write the archive into - where the game and albam look
+for them. Writing `BIO4/Em/pl08.udas.lfs` puts the packs in
+`BIO4/ImagePack/` and `BIO4/ImagePackHD/`, so writing straight into the
+install, or into a mod folder laid out like `BIO4`, needs nothing more, and
+re-importing the written archive finds its new textures. The report at the
+bottom of the window lists every file written. Both copies are written because
+which one the game loads is its texture quality setting, and a slot the `.tpl`
+names has to exist in whichever it picks. A pack's HD copy can be tens of
+megabytes, so recompressing it takes a few minutes. Nothing is written if
+either step fails.
 
 Archives albam writes come out about 6% larger than the originals. Its LZX
 encoder does not find quite as many matches as the one the game shipped with,
@@ -223,8 +233,10 @@ which costs size and nothing else.
 ## 7. Install and test
 
 Back up the original, drop yours in its place under the same name, and start the
-game. Texture packs go the same way, into the `ImagePack` and `ImagePackHD`
-folders beside the archive's own folder.
+game. Texture packs go the same way: back up the original packs in
+`BIO4/ImagePack` and `BIO4/ImagePackHD` and put the written ones in their
+place. If you wrote into a folder laid out like `BIO4`, that is copying its
+`Em`, `ImagePack` and `ImagePackHD` folders over the install's.
 
 If you are iterating, keep the backup outside the install and swap the two files
 with a one-line script rather than by hand - it is easy to lose the original
@@ -264,11 +276,15 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 - **Rooms** import - geometry, props and placement - but there is no exporter for
   them.
-- **Textures have not been confirmed in the running game.** Adding and
-  replacing them writes packs and `.tpl` files laid out the way the shipped
-  ones are - rebuilding any shipped `.tpl` reproduces it byte for byte, and a
-  rebuilt pack keeps every texture it did not change byte for byte - but
-  whether the game has a limit on how many textures a pack or a `.tpl` can
-  hold is not known yet.
+- **Textures are only partly confirmed in the running game.** Adding a texture
+  works with the HD texture setting: a new image on Leon's `pl08` got its new
+  `.tpl` slot and appended pack entry drawn in game. The SD setting, and editing
+  an imported texture in place, have not been checked in game yet. The files
+  are laid out the way the shipped ones are: rebuilding the shipped `.tpl`
+  files of an install gives back the same bytes for 1907 of 1919, another 10
+  differ only by trailing zero padding, and the 2 system files with palettes
+  are refused; a rebuilt pack keeps every texture it did not change byte for
+  byte. Whether the game limits how many textures a pack or a `.tpl` can hold
+  is not known yet.
 - **A `.tpl` holds at most 255 slots**, since a material names one in a single
   byte; adding past that is reported.

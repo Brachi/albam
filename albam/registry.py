@@ -106,8 +106,9 @@ class BlenderRegistry:
         `(archive_path, exported_vfiles, **options) -> {relative path: bytes}`:
         the other archives an export changes besides the one at
         `archive_path` - say, the texture packs a model draws from, when
-        those live elsewhere. Pack writes each one at its relative path next
-        to the archive it writes.
+        those live elsewhere. Pack writes each one at its relative path from
+        the parent of the folder it writes the archive into, so a path names
+        a sibling of the archive's own folder.
         """
         def decorator(f):
             self.companion_archive_writer_registry[(app_id, extension)] = f

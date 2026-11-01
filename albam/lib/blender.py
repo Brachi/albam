@@ -451,13 +451,7 @@ def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
     from bc7enc import pack_dds
     from .dds import DDSHeader
 
-    width, height = bl_image.size
-    if not width or not height:
-        raise AlbamCheckFailure(
-            f"Image {bl_image.name} has no pixels to encode",
-            details="Blender could not load it, so there is nothing to export",
-            solution="Check the image's file path, or reload it",
-        )
+    width, height = _require_pixels(bl_image)
     if fourcc is None:
         header = DDSHeader(dwHeight=height, dwWidth=width)
         header.set_constants()
@@ -476,12 +470,26 @@ def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
     return bytes(header) + blocks
 
 
+def _require_pixels(bl_image):
+    """The image's (width, height), refusing an image with none: one whose
+    file is missing reads as 0x0 rather than failing, and would otherwise be
+    written as an empty texture."""
+    width, height = bl_image.size
+    if not width or not height:
+        raise AlbamCheckFailure(
+            f"Image {bl_image.name} has no pixels to encode",
+            details="Blender could not load it, so there is nothing to export",
+            solution="Check the image's file path, or reload it",
+        )
+    return width, height
+
+
 def image_to_tga(bl_image):
     """The image as an uncompressed 32-bit TGA, rows top-down (descriptor
     0x20) - how every TGA RE4UHD ships is laid out."""
     import struct
 
-    width, height = bl_image.size
+    width, height = _require_pixels(bl_image)
     # Image type 2 (uncompressed true colour), 32 bits per pixel.
     header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 0x20)
     return header + _bgra(image_rgba_top_down(bl_image))

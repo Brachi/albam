@@ -184,12 +184,20 @@ def _process_tex_indices(tpl_db):
     if not any(packs.values()):
         return None
 
+    reread = set()
     for tp in tpl_db:
         textures = packs.get(tp["pack_name"])
         if not textures:
             continue
         tp["pack_name_vfile"] = tp["pack_name"]
         texture = textures.get(tp["texture_id"])
+        if texture is None and tp["pack_name"] not in reread:
+            # The session's copy of the pack predates one albam rebuilt with
+            # textures added (see _PACK_CACHE) - read it again, once.
+            reread.add(tp["pack_name"])
+            _PACK_CACHE.pop(tp["pack_name"], None)
+            textures = packs[tp["pack_name"]] = _load_pack(tp["pack_name"], tp["model_root"])
+            texture = textures.get(tp["texture_id"])
         if texture is None:
             raise RuntimeError(
                 "Texture {} not found in pack {}".format(tp["texture_id"], tp["pack_name"])
@@ -508,6 +516,16 @@ def _image_was_edited(bl_image, custom_properties):
     if not custom_properties.source_crc:
         return False
     current = _image_current_bytes(bl_image)
+    if not current and not any(bl_image.size):
+        # Neither bytes nor pixels: its file went missing (unpacked, then
+        # moved or deleted). That is not an edit, and treating it as one
+        # would overwrite the shipped texture with an empty one.
+        raise AlbamCheckFailure(
+            f"Image {bl_image.name} has no data",
+            details=f"It was imported from {custom_properties.pack_entry}, but "
+                    f"Blender can't load it any more, so there is nothing to export",
+            solution="Check the image's file path, or pack it back into the .blend",
+        )
     return current is None or _crc(current) != custom_properties.source_crc
 
 
@@ -633,6 +651,53 @@ class TextureExport:
             )
         return textures
 
+    def _entry_count_on_disk(self, pack_id):
+        """How many entries pack `pack_id` holds on disk now, which is what a
+        texture added to it is numbered from.
+
+        Not the session's cached copy (see _PACK_CACHE): once a pack albam
+        rebuilt has been installed, the cache still holds the pack as first
+        read, and numbering from it would give new textures the numbers the
+        installed pack already uses - which Pack item then reads as
+        replacements, silently overwriting the textures added before. The
+        copies counted are the ones Pack item rewrites
+        (archive.texture_pack_companions), so they have to agree: a pack
+        whose SD and HD copies hold different counts has no number a new
+        texture could take in both.
+        """
+        from .archive import pack_entry_count
+
+        pack_name = f"{pack_id:08x}"
+        root = self._tpl_vfile.root_vfile if self._tpl_vfile else None
+        copies = texture_pack_archives(pack_name, root.absolute_path if root else "")
+        if not copies:
+            raise AlbamCheckFailure(
+                f"Texture pack {pack_name} of {self.model_name} wasn't found on disk",
+                details="A new texture is appended to the pack the model draws from, "
+                        "and Pack item rewrites that pack's copies on disk",
+                solution="Add the model's archive from the game folder to the VFS, "
+                         "or any archive that sits beside the ImagePack folders",
+            )
+        counts = {path: pack_entry_count(path) for _, path in copies}
+        if len(set(counts.values())) > 1:
+            listed = ", ".join(f"{path}: {count}" for path, count in counts.items())
+            raise AlbamCheckFailure(
+                f"The copies of texture pack {pack_name} hold different numbers of "
+                f"textures",
+                details=f"{listed}. A texture added to the pack has to get the same "
+                        f"number in every copy, since the game loads whichever its "
+                        f"texture setting picks",
+                solution="Install every copy Pack item wrote for this pack, or restore "
+                         "the originals",
+            )
+        count = next(iter(counts.values()))
+        cached = _PACK_CACHE.get(pack_name)
+        if cached is not None and len(cached) != count:
+            # Read again on next use, so re-importing sees what is installed.
+            _PACK_CACHE.pop(pack_name)
+            self._packs.pop(pack_id, None)
+        return count
+
     def _replace_pack_entry(self, bl_image, custom_properties):
         name = custom_properties.pack_entry
         pack_id = int(custom_properties.pack_id, 16)
@@ -665,7 +730,7 @@ class TextureExport:
         # A .tpl draws from one pack in practice; a new texture goes into the
         # one it draws from most.
         target_pack = Counter(slot.pack_id for slot in slots).most_common(1)[0][0]
-        next_texture_id = max(self._pack(target_pack)) + 1
+        next_texture_id = self._entry_count_on_disk(target_pack)
 
         for bl_material, field, bl_image, custom_properties in pending:
             template = slots[0]

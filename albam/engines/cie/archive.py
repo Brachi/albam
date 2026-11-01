@@ -369,6 +369,22 @@ def _appended_pack_entries(replacements, count):
     return [found[index] for index in expected]
 
 
+def pack_entry_count(path):
+    """How many entries the texture pack at `path` holds, from its header.
+
+    Only an .lfs's first chunk is decoded: the count is the payload's second
+    word, and decoding a whole HD pack takes far longer than that.
+    """
+    if path.lower().endswith(".lfs"):
+        lfs = Lfs.from_file(path)
+        lfs._read()
+        head = bytes(xcompress_decompress_re4hd(lfs.chunks[:1]))
+    else:
+        with open(path, "rb") as f:
+            head = f.read(PACK_HEADER_SIZE)
+    return struct.unpack_from("<II", head)[1]
+
+
 def _new_pack_entry(pack_id, data, is_dds):
     """A pack entry for a texture the pack did not have, with the header
     words every shipped entry carries: 0xFFFFFFFF, then the pack's own id
@@ -434,7 +450,9 @@ def texture_pack_companions(archive_path, exported_vfiles, **options):
     A model's textures live in packs of their own, one copy per pack folder
     (see textures.texture_pack_archives), and each copy is rebuilt: which one
     the game loads is a setting. A copy is returned under its folder and its
-    own file name, so the result drops into the content directory as is.
+    own file name ("ImagePackHD/01000008.pack.yz2.lfs"), relative to the
+    content directory - the parent of the archive's own folder, where the
+    game and the importer look for packs - so the result drops into it as is.
     """
     from .textures import texture_pack_archives
 
