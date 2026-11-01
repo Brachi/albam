@@ -76,7 +76,7 @@ def test_export_refuses_a_mesh_whose_vertex_index_overflows_the_format(game_fs_r
 
     monkeypatch.setattr(mesh_mod, "MAX_MESH_LAST_INDEX", 2)
 
-    local_path = resolve_hashes(game_fs_root, {"2dc02b22175deb2f"})["2dc02b22175deb2f"].lstrip("/")
+    local_path = resolve_hashes(game_fs_root, {"5d45d4682b062d49"})["5d45d4682b062d49"].lstrip("/")
     import_vfile("re5", local_path)
     bl_object = bpy.context.scene.albam.exportable.file_list[-1].bl_object
 
