@@ -432,7 +432,7 @@ def _shared_archive_path(archive_path):
 @blender_registry.register_export_function(app_id="re4uhd", extension="smd")
 def export_smd(bl_obj):
     """The .smd a room was imported from, with its placements as they are in
-    Blender now.
+    Blender.
 
     Only the entry table is rewritten, and only the entries whose placement
     changed. A scenario holds far more than this module reads - between the
@@ -446,8 +446,8 @@ def export_smd(bl_obj):
     but only an entry import made an object for: one whose model could not
     be built (a split room's shared models when the shared archive is not
     beside it, a model the .bin importer refused) never had an object to
-    delete, and is kept as it is. A room imported before that was recorded
-    has nothing deleted.
+    delete, and is kept as it is. A room whose object has no record of the
+    entries import made objects for has nothing deleted.
 
     A placement added in Blender - a duplicate of one, or a room model's
     mesh put under the room - becomes a new entry (see _place_new_entries).
@@ -551,7 +551,7 @@ def _matrix_to_entry(matrix, name="A room placement"):
     rotation. A mirrored placement carries its reflection on X.
 
     Done in double precision: mathutils works in single, and taking the
-    angles through it lost up to a centimetre on a large prop turned close
+    angles through it loses up to a centimetre on a large prop turned close
     to 90 degrees about Y.
 
     Not every transform is one an entry can hold. An entry scales after it
@@ -699,8 +699,8 @@ def _write_models(bl_obj, data, smd, bl_placements):
     the order they were, on the alignment they shipped with, unedited ones
     copied as they are, and both offset tables pointed at the new places.
     That only depends on the tables being the only thing pointing into that
-    region, which is what the game showed when every model of a room was
-    moved to the end of its file and it drew the moved copies. Where the
+    region, which the game bears out: with every model of a room moved to the
+    end of its file, it draws the moved copies. Where the
     region is not made of models and .tpl files alone, the model is appended
     at the end instead and the old bytes are left where they were.
     """
