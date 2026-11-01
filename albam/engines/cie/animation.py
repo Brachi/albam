@@ -5,22 +5,35 @@ structs/re4-uhd-fcv.ksy), which is also what the .bin importer names an
 armature's bones after, so a motion goes onto whichever armature the import
 panel points at, the same way an MT Framework .lmt does.
 
-The keys cannot be copied onto pose bones one for one. A limb is an IK
-chain: the file keys the chain's root rotation and, on its end joint, a
-target position in model space that the game's solver (game/ik.cpp in the
-RE4 decompilation) bends the chain towards every frame. Its elbows and
-knees are not in the file at all, and a target read as a bone translation
-tears the limb off. Neither the bend axis per chain nor the toe and twist
-corrections it applies have a Blender constraint that behaves the same. So
-this evaluates every frame the way the game does - Hermite curves, the
-forward pass, the solver, then the double-joint blends - and bakes the
-result into one key per frame per moved bone. The clip plays as it does in
-the game, at the cost of not being an IK rig that can be re-posed by hand.
+The keys cannot be copied onto pose bones one for one. Arms and legs are IK
+chains: the file keys the chain's upper bone and, on its end bone (ankle or
+wrist), a position in model space that the limb has to reach, plus the end
+bone's orientation relative to the model. Knees and elbows are not keyed at
+all, and a target read as a bone translation tears the limb off. So every
+frame is evaluated here and baked into one key per frame per moved bone:
+
+1. the Hermite curves give each keyed bone its local rotation (Euler XYZ),
+   translation or scale, and the root motion places the model;
+2. each limb is solved as a two-bone IK (`_Limb`): the upper and lower bones
+   keep their rest lengths, the knee or elbow bends in the plane picked by
+   the joint's channel seen from the upper bone's keyed orientation, and the
+   end bone keeps its keyed orientation relative to the model; on arms the
+   wrist's twist about the forearm is spread over the forearm helper bones;
+3. the "double joint" helpers listed in the model's .bin take the slerp of
+   the two bones they sit between.
+
+This evaluator was written from a behavioural description of the format,
+checked against the game's own data (toes landing on their targets, limb
+lengths kept, knees bending forward and elbows backward), not from the
+game's code. The twist falloff in particular is an approximation. The clip
+plays as it does in the game, at the cost of not being an IK rig that can be
+re-posed by hand.
 
 Root motion (the character's own displacement over the clip, which the game
 applies to the model rather than to a part) is applied to the armature's
 root bones, so a walk walks.
 """
+from bisect import bisect_right
 import math
 
 import bpy
@@ -34,16 +47,18 @@ from .structs.re4_uhd_fcv import Re4UhdFcv
 
 # Joint kinds (see joint_info.kind in the .ksy).
 KIND_ROOT_POSITION = 0x01
+KIND_ROOT_ROTATION = 0x40
 KIND_ROTATION = 0x02
 KIND_TRANSLATION = 0x04
 KIND_SCALE = 0x08
 KIND_IK_ROOT = 0x30
 KIND_IK_TOE = 0x20
 KIND_IK_FOUR_JOINTS = 0x80
-KIND_ROOT_ROTATION = 0x40
 
-# A chain root's channel is the axis its chain bends about (IKInit).
-IK_BEND_AXES = {
+# On a chain's upper bone, the channel is the direction the middle joint
+# (knee, elbow) bends towards, in the upper bone's own posed frame. Every
+# leg in the game uses 4 (+z, forward) and every arm 5 (-z, backwards).
+IK_POLE_DIRECTIONS = {
     0: Vector((0.0, 1.0, 0.0)),
     1: Vector((0.0, -1.0, 0.0)),
     2: Vector((1.0, 0.0, 0.0)),
@@ -56,6 +71,8 @@ CAMERA_CHANNELS = (6, 7)
 # A basis this close to identity on every frame is a bone the motion left
 # alone, and gets no keys.
 STATIC_EPSILON = 1e-5
+# Shorter than this (in model units, millimetres) is no bone at all.
+MIN_BONE_LENGTH = 1e-3
 
 # Game space (Y up, model units) to an armature's (Z up, metres), the same
 # swap and scale the .bin importer builds the bones with (mesh._yz_flip).
@@ -68,69 +85,398 @@ GAME_TO_BLENDER = Matrix((
 BLENDER_TO_GAME = GAME_TO_BLENDER.inverted()
 
 
-def hermite_value(frames, keys, frame):
-    """One curve's value at `frame`, as game/motion.cpp HermiteInterpolation
-    computes it: the key's own value on a key, the last key's from there on,
-    and in between the cubic Hermite over the segment's normalised time with
-    the tangents unscaled."""
-    if not frames:
+def _hermite(p0, m0, p1, m1, t):
+    """The cubic Hermite segment from p0 to p1 at t in [0, 1], with m0 and
+    m1 the tangents in units of the whole segment."""
+    t2 = t * t
+    t3 = t2 * t
+    return ((2.0 * t3 - 3.0 * t2 + 1.0) * p0 +
+            (t3 - 2.0 * t2 + t) * m0 +
+            (3.0 * t2 - 2.0 * t3) * p1 +
+            (t3 - t2) * m1)
+
+
+def _curve_value(axis, frame):
+    """One scalar curve at `frame`: held before the first and after the last
+    key, Hermite in between.
+
+    The tangents are not multiplied by the key interval. Measured over every
+    Leon motion they track the value change across the whole segment (a
+    median ratio of 0.87) and not the change per frame (2.9, about the usual
+    three frame interval), so they are already in segment units.
+    """
+    frames = axis.frames
+    keys = axis.keys
+    if not keys:
         return 0.0
+    if frame <= frames[0]:
+        return keys[0].value
     if frame >= frames[-1]:
         return keys[-1].value
-    for i in range(len(frames) - 1):
-        f0, f1 = frames[i], frames[i + 1]
-        if frame == f0:
-            return keys[i].value
-        if f0 < frame < f1:
-            t = (frame - f0) / (f1 - f0)
-            t2 = t * t
-            t3 = t2 * t
-            h01 = -2.0 * t3 + 3.0 * t2
-            h11 = t3 - t2
-            h10 = h11 - t2 + t
-            h00 = 1.0 - h01
-            values = keys[i].value * h00 + keys[i + 1].value * h01
-            return values + keys[i].out_tangent * h10 + keys[i + 1].in_tangent * h11
-    return keys[0].value
+    i = bisect_right(frames, frame) - 1
+    k0, k1 = keys[i], keys[i + 1]
+    span = frames[i + 1] - frames[i]
+    t = (frame - frames[i]) / span if span else 0.0
+    return _hermite(k0.value, k0.out_tangent, k1.value, k1.in_tangent, t)
 
 
 def _axes_value(joint, frame):
-    return Vector([hermite_value(list(axis.frames), axis.keys, frame) for axis in joint.axes])
+    """A joint's three curves at `frame`, as a vector."""
+    return Vector([_curve_value(axis, frame) for axis in joint.axes])
 
 
-def _rotation_matrix(ang):
-    """The game's RotMatrix: Rz * Ry * Rx, which is Blender's XYZ euler."""
-    return Euler(ang, 'XYZ').to_matrix().to_4x4()
+def _euler_quaternion(xyz):
+    """Rotation keys are radians applied x, then y, then z."""
+    return Euler(xyz, 'XYZ').to_quaternion()
 
 
-def _local_matrix(pos, ang, scale):
-    """partsMatCalc: rotation, translation column, then the columns scaled."""
-    m = _rotation_matrix(ang)
-    m.translation = pos
-    return m @ Matrix.Diagonal((scale[0], scale[1], scale[2], 1.0))
+def _rotation_of(matrix):
+    return matrix.to_quaternion().normalized()
 
 
-def _orientation_zx(z, x):
-    """math_sub SetOrientationZX: a rotation whose Z axis is `z` and whose X
-    axis is `x`, orthonormalised."""
-    vz = z.normalized()
-    vy = vz.cross(x.normalized()).normalized()
-    vx = vy.cross(vz).normalized()
-    return Matrix((vx, vy, vz)).transposed().to_4x4()
+def _twist_angle(rotation, axis):
+    """The signed angle of `rotation`'s twist about the unit `axis`
+    (swing-twist decomposition), in [-pi, pi]."""
+    along = rotation.x * axis.x + rotation.y * axis.y + rotation.z * axis.z
+    angle = 2.0 * math.atan2(along, rotation.w)
+    if angle > math.pi:
+        angle -= 2.0 * math.pi
+    elif angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
 
 
-def _orientation_zy(z, y):
-    """math_sub SetOrientationZY: Z axis `z`, Y axis `y`, orthonormalised."""
-    vz = z.normalized()
-    vx = y.normalized().cross(vz).normalized()
-    vy = vz.cross(vx).normalized()
-    return Matrix((vx, vy, vz)).transposed().to_4x4()
+class _Limb:
+    """One IK chain of a motion on one skeleton.
+
+    `upper` is the joint's bone (thigh, upper arm), `lower` the next one
+    (shin, forearm), `helpers` the forearm twist bones between `lower` and
+    `end` (only with KIND_IK_FOUR_JOINTS), `end` the ankle or wrist, and
+    `toe` the end's child whose head the target places, on legs.
+    """
+
+    def __init__(self, joint, skeleton):
+        kind = joint.info.kind
+        self.upper = joint.parts_no
+        self.channel = joint.info.channel
+        four = bool(kind & KIND_IK_FOUR_JOINTS)
+        self.lower = self.upper + 1
+        self.helpers = [self.upper + 2] if four else []
+        self.end = self.upper + (3 if four else 2)
+        self.toe = self.end + 1 if (kind & KIND_IK_TOE and not four) else None
+        self.problem = self._check(skeleton)
+
+    @property
+    def label(self):
+        return f"{self.upper}-{self.end}"
+
+    def bones(self):
+        return [self.upper, self.lower, *self.helpers, self.end]
+
+    def _check(self, skeleton):
+        """Why this chain cannot be solved on `skeleton`, or None."""
+        if self.channel not in IK_POLE_DIRECTIONS:
+            return f"channel {self.channel} is not a bend direction"
+        ids = self.bones() + ([self.toe] if self.toe is not None else [])
+        missing = [i for i in ids if i not in skeleton.names]
+        if missing:
+            return f"no bone {', '.join(map(str, missing))}"
+        for child, parent in zip(ids[1:], ids[:-1]):
+            if skeleton.parent[child] != parent:
+                return f"bone {child} is not a child of {parent}"
+        self.upper_length = skeleton.rest_local[self.lower].length
+        self.lower_offset = sum((skeleton.rest_local[i] for i in self.helpers + [self.end]), Vector())
+        self.lower_length = self.lower_offset.length
+        if self.upper_length < MIN_BONE_LENGTH or self.lower_length < MIN_BONE_LENGTH:
+            return "a bone of it has no length at rest"
+        # How far along the forearm each helper sits, for the twist falloff.
+        self.helper_fractions = []
+        walked = Vector()
+        for helper in self.helpers:
+            walked = walked + skeleton.rest_local[helper]
+            along = walked.dot(self.lower_offset) / (self.lower_length ** 2)
+            self.helper_fractions.append(min(1.0, max(0.0, along)))
+        return None
+
+    def solve(self, pose, target, end_rotation):
+        """Pose this limb so its end (or toe) reaches `target`, the end
+        bone turned to `end_rotation`; both in world space."""
+        skeleton = pose.skeleton
+        upper_world = pose.world[self.upper]
+        root = upper_world.translation
+        upper_rotation = _rotation_of(upper_world)
+
+        reach = target
+        if self.toe is not None:
+            reach = target - end_rotation @ skeleton.rest_local[self.toe]
+
+        a, b = self.upper_length, self.lower_length
+        to_reach = reach - root
+        distance = to_reach.length
+        if distance > 1e-9:
+            direction = to_reach / distance
+        else:
+            direction = (upper_rotation @ skeleton.rest_local[self.lower]).normalized()
+        distance = min(max(distance, abs(a - b)), a + b)
+
+        pole = upper_rotation @ IK_POLE_DIRECTIONS[self.channel]
+        side = pole - direction * pole.dot(direction)
+        if side.length < 1e-9:
+            side = direction.orthogonal()
+        side.normalize()
+
+        # Law of cosines: how far along `direction` the middle joint sits,
+        # and how far out to the side.
+        along = (a * a - b * b + distance * distance) / (2.0 * distance) if distance > 1e-9 else 0.0
+        out = math.sqrt(max(0.0, a * a - along * along))
+        middle = root + direction * along + side * out
+        end = root + direction * distance
+
+        upper_bone = upper_rotation @ skeleton.rest_local[self.lower]
+        new_upper = upper_bone.rotation_difference(middle - root) @ upper_rotation
+        lower_fk = new_upper @ pose.local_rotation[self.lower]
+        lower_bone = lower_fk @ self.lower_offset
+        new_lower = lower_bone.rotation_difference(end - middle) @ lower_fk
+
+        parent_rotation = pose.parent_world_rotation(self.upper)
+        pose.local_rotation[self.upper] = parent_rotation.inverted() @ new_upper
+        pose.local_rotation[self.lower] = new_upper.inverted() @ new_lower
+
+        # Spread the wrist's twist about the forearm over the helpers,
+        # each turned by the fraction of the forearm it sits along. A
+        # linear falloff is an approximation of what the game does.
+        previous = new_lower
+        if self.helpers:
+            axis = self.lower_offset.normalized()
+            twist = _twist_angle(new_lower.inverted() @ end_rotation, axis)
+            for helper, fraction in zip(self.helpers, self.helper_fractions):
+                helper_world = new_lower @ Quaternion(axis, twist * fraction)
+                pose.local_rotation[helper] = previous.inverted() @ helper_world
+                previous = helper_world
+        pose.local_rotation[self.end] = previous.inverted() @ end_rotation
+        pose.local_position[self.end] = skeleton.rest_local[self.end].copy()
+        pose.update(self.upper)
 
 
-def _with_translation(m, t):
-    m = m.copy()
-    m.translation = t
-    return m
+class _Pose:
+    """One frame's local transforms per bone and the world matrices they
+    make. A world matrix maps a bone's own space (rest head at the origin,
+    model axes) to the world, the model's root motion included."""
+
+    def __init__(self, skeleton, children):
+        self.skeleton = skeleton
+        self.children = children
+        self.model = Matrix.Identity(4)
+        self.local_position = {}
+        self.local_rotation = {}
+        self.local_scale = {}
+        self.world = {}
+
+    def reset(self, model):
+        self.model = model
+        for bone_id in self.skeleton.order:
+            self.local_position[bone_id] = self.skeleton.rest_local[bone_id].copy()
+            self.local_rotation[bone_id] = Quaternion()
+            self.local_scale[bone_id] = Vector((1.0, 1.0, 1.0))
+
+    def parent_world(self, bone_id):
+        parent_id = self.skeleton.parent[bone_id]
+        return self.world[parent_id] if parent_id is not None else self.model
+
+    def parent_world_rotation(self, bone_id):
+        return _rotation_of(self.parent_world(bone_id))
+
+    def _local_matrix(self, bone_id):
+        return Matrix.LocRotScale(
+            self.local_position[bone_id], self.local_rotation[bone_id], self.local_scale[bone_id])
+
+    def update(self, bone_id=None):
+        """Recompute the world matrices of `bone_id` and everything under
+        it, or of the whole skeleton."""
+        if bone_id is None:
+            for b in self.skeleton.order:
+                self.world[b] = self.parent_world(b) @ self._local_matrix(b)
+            return
+        stack = [bone_id]
+        while stack:
+            b = stack.pop()
+            self.world[b] = self.parent_world(b) @ self._local_matrix(b)
+            stack.extend(self.children.get(b, ()))
+
+
+def _usable_joints(fcv):
+    """(joints, skipped): the joints whose keys read and that drive a
+    skeleton, and a description of each one left out. A handful of weapon
+    motions carry broken camera joints the game never reads; one of those
+    should not cost the rest of the motion."""
+    joints, skipped = [], []
+    for i, joint in enumerate(fcv.joints):
+        try:
+            channel = joint.info.channel
+            if channel in CAMERA_CHANNELS:
+                skipped.append(f"joint {i} (camera channel {channel})")
+                continue
+            for axis in joint.axes:
+                axis.keys
+        except Exception as error:
+            skipped.append(f"joint {i} ({error})")
+            continue
+        joints.append(joint)
+    return joints, skipped
+
+
+class _Motion:
+    """A motion's joints sorted by what they drive, against one skeleton."""
+
+    def __init__(self, joints, skeleton):
+        self.root_position = None
+        self.root_rotation = None
+        self.rotation = {}
+        self.translation = {}
+        self.scale = {}
+        self.limbs = []
+        self.skipped_limbs = []
+        for joint in joints:
+            kind = joint.info.kind
+            bone_id = joint.parts_no
+            if kind == KIND_ROOT_POSITION:
+                self.root_position = joint
+            elif kind == KIND_ROOT_ROTATION:
+                self.root_rotation = joint
+            elif kind & KIND_ROTATION:
+                self.rotation[bone_id] = joint
+            elif kind & KIND_TRANSLATION:
+                self.translation[bone_id] = joint
+            elif kind & KIND_SCALE:
+                self.scale[bone_id] = joint
+            elif kind & KIND_IK_ROOT:
+                # The chain's own curves are its upper bone's rotation.
+                self.rotation[bone_id] = joint
+                limb = _Limb(joint, skeleton)
+                if limb.problem is None:
+                    self.limbs.append(limb)
+                else:
+                    self.skipped_limbs.append(limb)
+        # The end bone of every chain is keyed in model space, solved or not;
+        # only a solved chain may use its translation keys, as a target.
+        self.model_space_ends = {limb.end for limb in self.limbs + self.skipped_limbs}
+        self.targets = {limb.end for limb in self.limbs}
+
+    def model_matrix(self, frame):
+        model = Matrix.Identity(4)
+        if self.root_position is not None:
+            model = Matrix.Translation(_axes_value(self.root_position, frame))
+        if self.root_rotation is not None:
+            model = model @ _euler_quaternion(_axes_value(self.root_rotation, frame)).to_matrix().to_4x4()
+        return model
+
+
+def evaluate_motion(joints, skeleton, double_joints, num_frames):
+    """{bone id: [world matrix per frame]} for every bone of `skeleton`, and
+    the chains that could not be solved on it (see _Limb.problem).
+
+    `joints` are the motion's usable joints (_usable_joints) and
+    `double_joints` the (helper, bone a, bone b, fraction) lines that apply
+    to the skeleton (_double_joints).
+    """
+    motion = _Motion(joints, skeleton)
+    children = {}
+    for bone_id in skeleton.order:
+        parent_id = skeleton.parent[bone_id]
+        if parent_id is not None:
+            children.setdefault(parent_id, []).append(bone_id)
+    pose = _Pose(skeleton, children)
+    worlds = {bone_id: [] for bone_id in skeleton.order}
+    known = skeleton.names
+
+    for frame in range(num_frames):
+        model = motion.model_matrix(frame)
+        pose.reset(model)
+        model_rotation = _rotation_of(model)
+        end_rotations = {}
+        for bone_id, joint in motion.rotation.items():
+            if bone_id not in known:
+                continue
+            rotation = _euler_quaternion(_axes_value(joint, frame))
+            if bone_id in motion.model_space_ends:
+                end_rotations[bone_id] = model_rotation @ rotation
+            else:
+                pose.local_rotation[bone_id] = rotation
+        for bone_id, joint in motion.translation.items():
+            if bone_id in known and bone_id not in motion.model_space_ends:
+                pose.local_position[bone_id] = _axes_value(joint, frame)
+        for bone_id, joint in motion.scale.items():
+            if bone_id in known:
+                pose.local_scale[bone_id] = _axes_value(joint, frame)
+        pose.update()
+
+        # An unsolved chain's end still turns the way the model says.
+        for limb in motion.skipped_limbs:
+            if limb.end in end_rotations:
+                parent_rotation = pose.parent_world_rotation(limb.end)
+                pose.local_rotation[limb.end] = parent_rotation.inverted() @ end_rotations[limb.end]
+                pose.update(limb.end)
+
+        for limb in motion.limbs:
+            end_rotation = end_rotations.get(limb.end)
+            if end_rotation is None:
+                end_rotation = _rotation_of(pose.world[limb.end])
+            target_joint = motion.translation.get(limb.end)
+            if target_joint is None:
+                # Nothing to reach for: keep the limb where it is.
+                parent_rotation = pose.parent_world_rotation(limb.end)
+                pose.local_rotation[limb.end] = parent_rotation.inverted() @ end_rotation
+                pose.update(limb.end)
+                continue
+            target = model @ _axes_value(target_joint, frame)
+            limb.solve(pose, target, end_rotation)
+
+        for helper, bone_a, bone_b, fraction in double_joints:
+            blended = _rotation_of(pose.world[bone_a]).slerp(_rotation_of(pose.world[bone_b]), fraction)
+            pose.local_rotation[helper] = pose.parent_world_rotation(helper).inverted() @ blended
+            pose.update(helper)
+
+        for bone_id in skeleton.order:
+            worlds[bone_id].append(pose.world[bone_id].copy())
+    return worlds, motion.skipped_limbs
+
+
+def _double_joints(armature, skeleton):
+    """The double joint lines (see mesh.BONE_PAIRS_PROPERTY) of the meshes
+    deformed by `armature`, as (helper, bone a, bone b, fraction), first
+    seen first, keeping only those whose bones the skeleton has. A helper
+    must not be an ancestor of either bone it blends."""
+    lines = []
+    seen = set()
+    for ob in bpy.data.objects:
+        if ob.type != 'MESH':
+            continue
+        deformed = ob.parent == armature or any(
+            m.type == 'ARMATURE' and m.object == armature for m in ob.modifiers)
+        raw = ob.get(BONE_PAIRS_PROPERTY) if deformed else None
+        if not raw:
+            continue
+        raw = list(raw)
+        for i in range(0, len(raw) - 3, 4):
+            line = tuple(int(v) for v in raw[i:i + 4])
+            if line in seen:
+                continue
+            seen.add(line)
+            helper, bone_a, bone_b, percent = line
+            if not all(b in skeleton.names for b in (helper, bone_a, bone_b)):
+                continue
+            if _is_ancestor(skeleton, helper, bone_a) or _is_ancestor(skeleton, helper, bone_b):
+                continue
+            lines.append((helper, bone_a, bone_b, percent / 100.0))
+    return lines
+
+
+def _is_ancestor(skeleton, ancestor, bone_id):
+    while bone_id is not None:
+        if bone_id == ancestor:
+            return True
+        bone_id = skeleton.parent[bone_id]
+    return False
 
 
 class _Skeleton:
@@ -170,261 +516,6 @@ class _Skeleton:
             parent_id = self.parent[bone_id]
             parent_rest = self.rest_world[parent_id] if parent_id is not None else Vector()
             self.rest_local[bone_id] = self.rest_world[bone_id] - parent_rest
-
-
-class _Chain:
-    """One IK chain as IKInit sets it up: which parts, the bone lengths, and
-    the frame the solver bends in, all from the rest pose."""
-
-    def __init__(self, skeleton, root, kind, channel):
-        self.root = root
-        self.joint = root + 1
-        self.has_toe = bool(kind & KIND_IK_TOE)
-        self.four_joints = bool(kind & KIND_IK_FOUR_JOINTS)
-        # The joint whose distance from `joint` is the second bone. For the
-        # four-joint chains (the arms) the solve spans two parts, so it is
-        # the one after the effector.
-        self.end = root + 3 if self.four_joints and self.has_toe else root + 2
-        self.effector = root + 2
-        parts = [root, root + 1, root + 2] + ([root + 3] if self.four_joints or self.has_toe else [])
-        missing = [p for p in parts if p not in skeleton.names]
-        self.valid = not missing and channel in IK_BEND_AXES
-        if not self.valid:
-            return
-        rest = skeleton.rest_world
-        self.root_length = (rest[root] - rest[self.joint]).length
-        self.joint_length = (rest[self.joint] - rest[self.end]).length
-        direction = rest[self.end] - rest[root]
-        axis = IK_BEND_AXES[channel]
-        # IKInit's "IK plane error": a bend axis lying along the rest
-        # direction leaves no plane to bend in, and the game skips the chain.
-        if direction.length == 0 or direction.normalized().cross(axis).length < 1e-6:
-            self.valid = False
-            return
-        mtx = _orientation_zy(direction, axis)
-        self.inv_mat = mtx.transposed()
-        self.up_vector = mtx.to_3x3() @ Vector((1.0, 0.0, 0.0))
-        # Twist history of the four-joint chains (motParts.ikAng): lets the
-        # twist run past half a turn without flipping.
-        self.twist_history = 0.0
-
-
-class _Pose:
-    """One frame of the parts, in game space: local and world matrices per
-    bone id, plus the translation each part is posed with."""
-
-    def __init__(self, skeleton, model_matrix):
-        self.skeleton = skeleton
-        self.model = model_matrix
-        self.pos = {}
-        self.ang = {}
-        self.local = {}
-        self.world = {}
-
-    def parent_world(self, bone_id):
-        parent_id = self.skeleton.parent[bone_id]
-        return self.world[parent_id] if parent_id is not None else self.model
-
-    def world_pass(self):
-        for bone_id in self.skeleton.order:
-            self.world[bone_id] = self.parent_world(bone_id) @ self.local[bone_id]
-
-    def relocalise(self, bone_id):
-        self.local[bone_id] = self.parent_world(bone_id).inverted_safe() @ self.world[bone_id]
-
-
-def _ik_solve(chain, pose, root, joint, end):
-    """ikCalc: bend root and joint so that `end` stays where it is, by the
-    law of cosines in the chain's bend plane."""
-    root_world = pose.world[root].translation
-    end_world = pose.world[end].translation
-    d = (root_world - end_world).length
-    la, lb = chain.root_length, chain.joint_length
-    ang1 = ang2 = 0.0
-    if d < la + lb and d > 0:
-        c1 = (la * la + d * d - lb * lb) / ((la + la) * d)
-        c2 = (d * d + lb * lb - la * la) / ((d + d) * lb)
-        ang1 = math.acos(max(-1.0, min(1.0, c1)))
-        ang2 = math.acos(max(-1.0, min(1.0, c2)))
-    axis = pose.world[root].to_3x3() @ chain.up_vector
-    m = _orientation_zx(end_world - root_world, axis) @ chain.inv_mat
-    pose.world[root] = _with_translation(
-        m @ Matrix.Rotation(-ang1, 4, chain.up_vector), root_world)
-    joint_world = pose.world[root] @ pose.pos[joint]
-    pose.world[joint] = _with_translation(
-        m @ Matrix.Rotation(ang2, 4, chain.up_vector), joint_world)
-
-
-def _twist(chain, pose, part, toe):
-    """IK_TWIST_ANGLE: how far the end part has turned about the forearm,
-    measured against the vertical."""
-    rel = pose.world[part].inverted_safe() @ pose.world[toe]
-    a = rel.col[0].to_3d()
-    b = rel.col[2].to_3d()
-    c = a.cross(Vector((0.0, 1.0, 0.0)))
-    if c.length == 0 or b.length == 0:
-        return 0.0
-    ang = c.angle(b)
-    d = c.cross(b)
-    if d.dot(a) < 0.0:
-        ang = -ang
-        if chain.twist_history > math.pi / 2:
-            ang += math.tau
-        else:
-            chain.twist_history = ang
-    else:
-        if chain.twist_history < -math.pi / 2:
-            ang -= math.tau
-        else:
-            chain.twist_history = ang
-    return ang
-
-
-def _apply_twist(pose, part, ang):
-    """IK_TWIST_APPLY: turn a part about its own X axis in place."""
-    world = pose.world[part]
-    axis = world.col[0].to_3d()
-    if axis.length == 0:
-        return
-    pose.world[part] = _with_translation(
-        Matrix.Rotation(ang, 4, axis.normalized()) @ world, world.translation)
-
-
-def _inverse_kinematics(chains, pose):
-    """InverseKinematics, without the floor probe (there is no floor here,
-    and with none the game leaves the targets as keyed)."""
-    for chain in chains:
-        root, joint, effector = chain.root, chain.joint, chain.effector
-        if not chain.four_joints:
-            target = pose.model @ pose.pos[effector]
-            if chain.has_toe:
-                # heel2toe: the target is where the toe goes; the heel is
-                # placed so that it lands there.
-                toe = effector + 1
-                world = pose.model @ pose.local[effector]
-                heel = target - world.to_3x3() @ pose.pos[toe]
-                pose.world[effector] = _with_translation(world, heel)
-                pose.relocalise(effector)
-                pose.world[toe] = pose.world[effector] @ pose.local[toe]
-            else:
-                pose.world[effector] = _with_translation(pose.model @ pose.local[effector], target)
-                pose.relocalise(effector)
-            _ik_solve(chain, pose, root, joint, effector)
-            pose.relocalise(root)
-            pose.relocalise(joint)
-            if chain.has_toe:
-                rest = pose.skeleton.rest_world
-                attached = pose.world[joint] @ (rest[effector] - rest[joint])
-                pose.world[effector] = _with_translation(pose.world[effector], attached)
-                pose.relocalise(effector)
-                pose.pos[effector] = pose.local[effector].translation
-                toe = effector + 1
-                pose.local[toe] = _local_matrix(pose.pos[toe], pose.ang[toe], (1.0, 1.0, 1.0))
-                pose.world[toe] = pose.world[effector] @ pose.local[toe]
-            else:
-                pose.relocalise(effector)
-        else:
-            # The arms: the hand is keyed in model space outright, and the
-            # upper arm and elbow are solved to reach it.
-            end = chain.end
-            pose.world[end] = pose.model @ pose.local[end]
-            pose.relocalise(end)
-            if not chain.has_toe:
-                continue
-            _ik_solve(chain, pose, root, joint, end)
-            pose.world[effector] = pose.world[joint] @ pose.local[effector]
-            ang = _twist(chain, pose, effector, end)
-            _apply_twist(pose, effector, ang * 0.5)
-            _apply_twist(pose, joint, ang * 0.25)
-            _apply_twist(pose, root, ang * 0.125)
-            for part in (root, joint, effector, end):
-                pose.relocalise(part)
-            pose.pos[end] = pose.local[end].translation
-
-
-def _double_joints(armature, skeleton):
-    """(helper, a, b, percent) per line of the model's double-joint table,
-    from whichever mesh deformed by `armature` carries one (see
-    mesh.BONE_PAIRS_PROPERTY)."""
-    for ob in bpy.data.objects:
-        if ob.type != 'MESH' or BONE_PAIRS_PROPERTY not in ob:
-            continue
-        deformed_by = ob.parent is armature or any(
-            m.type == 'ARMATURE' and m.object is armature for m in ob.modifiers)
-        if not deformed_by:
-            continue
-        flat = list(ob[BONE_PAIRS_PROPERTY])
-        lines = [tuple(flat[i:i + 4]) for i in range(0, len(flat) - 3, 4)]
-        return [line for line in lines if all(b in skeleton.names for b in line[:3])]
-    return []
-
-
-def _apply_double_joints(pose, lines, keyed):
-    """The DblJnt pass at the end of MotionMove: a helper bone takes the
-    rotation `percent` of the way between two others, unless the motion keys
-    it itself."""
-    for helper, bone_a, bone_b, percent in lines:
-        if helper in keyed:
-            continue
-        qa = pose.world[bone_a].to_3x3().normalized().to_quaternion()
-        qb = pose.world[bone_b].to_3x3().normalized().to_quaternion()
-        rotation = qb.slerp(qa, percent / 100.0).to_matrix().to_4x4()
-        pose.world[helper] = _with_translation(rotation, pose.world[helper].translation)
-
-
-def evaluate_motion(fcv, skeleton, double_joints=()):
-    """{bone id: [game world matrix per frame]} for frames 0..max_frame,
-    covering every bone of `skeleton`."""
-    joints = [j for j in fcv.joints if j.info.channel not in CAMERA_CHANNELS]
-    root_position = next((j for j in joints if j.info.kind == KIND_ROOT_POSITION), None)
-    root_rotation = next((j for j in joints if j.info.kind == KIND_ROOT_ROTATION), None)
-    chains = []
-    for j in sorted(joints, key=lambda j: j.parts_no):
-        if j.info.kind not in (KIND_ROOT_POSITION, KIND_ROOT_ROTATION) and j.info.kind & KIND_IK_ROOT:
-            chain = _Chain(skeleton, j.parts_no, j.info.kind, j.info.channel)
-            if chain.valid:
-                chains.append(chain)
-    keyed = {j.parts_no for j in joints}
-    origin_position = _axes_value(root_position, 0) if root_position else Vector()
-    origin_rotation = _axes_value(root_rotation, 0) if root_rotation else Vector()
-
-    result = {bone_id: [] for bone_id in skeleton.order}
-    for frame in range(fcv.max_frame + 1):
-        model = Matrix.Identity(4)
-        if root_position or root_rotation:
-            offset = _axes_value(root_position, frame) - origin_position if root_position else Vector()
-            turn = _axes_value(root_rotation, frame) - origin_rotation if root_rotation else Vector()
-            model = Matrix.Translation(offset) @ _rotation_matrix(turn)
-        pose = _Pose(skeleton, model)
-        scale = {}
-        for bone_id in skeleton.order:
-            pose.pos[bone_id] = skeleton.rest_local[bone_id].copy()
-            pose.ang[bone_id] = Vector()
-            scale[bone_id] = Vector((1.0, 1.0, 1.0))
-        # MotionMoveCore, in its own order of tests.
-        for j in joints:
-            kind = j.info.kind
-            part = j.parts_no
-            if part not in skeleton.names or kind in (KIND_ROOT_POSITION, KIND_ROOT_ROTATION):
-                continue
-            if kind & KIND_ROTATION:
-                pose.ang[part] = _axes_value(j, frame)
-            elif kind & KIND_TRANSLATION:
-                pose.pos[part] = _axes_value(j, frame)
-            elif kind & KIND_SCALE:
-                scale[part] = _axes_value(j, frame)
-            elif kind & KIND_IK_ROOT:
-                pose.ang[part] = _axes_value(j, frame)
-        for bone_id in skeleton.order:
-            pose.local[bone_id] = _local_matrix(pose.pos[bone_id], pose.ang[bone_id], scale[bone_id])
-        pose.world_pass()
-        if chains:
-            _inverse_kinematics(chains, pose)
-            pose.world_pass()
-        _apply_double_joints(pose, double_joints, keyed)
-        for bone_id in skeleton.order:
-            result[bone_id].append(pose.world[bone_id])
-    return result
 
 
 def _pose_bases(skeleton, armature, worlds, num_frames):
@@ -505,14 +596,12 @@ def _key_bases(action, armature, bases):
 
 
 def _parse_fcv(fcv_bytes):
+    """The motion's header and joint table. The joints' keys are read
+    lazily, and one at a time by _usable_joints, so a broken joint costs
+    only itself."""
     fcv = Re4UhdFcv.from_bytes(fcv_bytes)
     fcv._read()
-    # Joints are read lazily (they are instances); reading them all here is
-    # what turns a malformed entry into an error at import, not half-way
-    # through the bake.
-    for joint in fcv.joints:
-        for axis in joint.axes:
-            axis.keys
+    fcv.joints
     return fcv
 
 
@@ -531,27 +620,41 @@ def load_fcv(vfile, context):
         raise AlbamCheckFailure(
             "This .fcv does not read as a motion",
             details=f"{vfile.display_name}: {error}",
-            solution="A few weapon motions ship with broken camera joints the game never reads; "
-                     "those cannot be imported.",
+            solution="Check that the file is a motion from an RE4UHD character archive.",
         ) from error
-    if fcv.num_joints and all(j.info.channel in CAMERA_CHANNELS for j in fcv.joints):
+    joints, skipped_joints = _usable_joints(fcv)
+    if fcv.num_joints and not joints:
+        if all("camera channel" in reason for reason in skipped_joints):
+            raise AlbamCheckFailure(
+                "This .fcv moves a camera, not a skeleton",
+                details=f"{vfile.display_name}: every joint is on a camera channel.",
+                solution="Camera motions are not supported yet.",
+            )
         raise AlbamCheckFailure(
-            "This .fcv moves a camera, not a skeleton",
-            details=f"{vfile.display_name}: every joint is on a camera channel.",
-            solution="Camera motions are not supported yet.",
+            "None of this .fcv's joints read",
+            details=f"{vfile.display_name}: {'; '.join(skipped_joints[:5])}",
+            solution="A few weapon motions ship broken, with keys the game never reads; "
+                     "those cannot be imported.",
         )
     skeleton = _Skeleton(armature)
-    parts = {j.parts_no for j in fcv.joints if j.info.channel not in CAMERA_CHANNELS}
-    if parts and not parts & set(skeleton.names):
+    parts = {j.parts_no for j in joints}
+    if fcv.num_joints and not parts & set(skeleton.names):
         raise AlbamCheckFailure(
             "The motion drives none of this armature's bones",
             details=f"{vfile.display_name} keys bone ids {sorted(parts)}; "
                     f"{armature.name} has none of them.",
             solution="Pick the armature of the character the motion belongs to.",
         )
+    if skipped_joints:
+        print(f"[re4uhd] WARNING: {vfile.display_name}: skipped {len(skipped_joints)} joint(s) "
+              f"that drive no bone: {'; '.join(skipped_joints)}")
 
-    worlds = evaluate_motion(fcv, skeleton, _double_joints(armature, skeleton))
     num_frames = fcv.max_frame + 1
+    worlds, skipped_limbs = evaluate_motion(
+        joints, skeleton, _double_joints(armature, skeleton), num_frames)
+    for limb in skipped_limbs:
+        print(f"[re4uhd] WARNING: {vfile.display_name}: IK chain {limb.label} cannot be solved on "
+              f"{armature.name} ({limb.problem}); its rotations are kept, its target is ignored")
     bases = _pose_bases(skeleton, armature, worlds, num_frames)
 
     action = bpy.data.actions.new(f"{armature.name}.{vfile.display_name}")

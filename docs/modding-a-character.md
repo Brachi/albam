@@ -235,9 +235,11 @@ Add one layer of albam at a time, and whichever fails first names the layer:
 
 - **Motions import, but do not export.** Select an `.fcv`, pick the
   character's armature in the FCV options and press **Import**: the clip is
-  baked into an action, one key per frame, with the limbs posed the way the
-  game's IK solver poses them. That bake is also why it cannot be edited as a
-  rig and written back. A motion keys bones by number, so it only makes sense
+  baked into an action, one key per frame, with arms and legs solved as
+  two-bone IK so that feet and hands land where the motion puts them. That
+  bake is also why it cannot be edited as a rig and written back. Limb
+  chains that do not fit the armature are skipped with a warning in the
+  console, and so are the broken camera joints a few weapon motions carry. A motion keys bones by number, so it only makes sense
   on the skeleton of the character whose archive it came from (or one sharing
   its numbering). The game plays motions at 30 frames a second.
 

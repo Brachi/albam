@@ -5,9 +5,8 @@ meta:
   title: RE4UHD skeletal motion (.fcv)
 
 # One motion clip: per animated joint, three Hermite curves (x, y, z) of
-# rotation, translation or scale. It is the GameCube "MotionData" layout
-# (game/motion.cpp MotionSetCore and HermiteInterpolation in the RE4
-# decompilation at github.com/adonis-singh/re4, tools/motion/fcv.py) written
+# rotation, translation or scale. It is the GameCube motion layout (see
+# tools/motion/fcv.py at github.com/adonis-singh/re4, CC0) written
 # little-endian - except `size`, which stays big-endian.
 #
 # Where they are: character, enemy and weapon archives (BIO4/Em/*.udas.lfs)
@@ -17,8 +16,8 @@ meta:
 # Each archive also carries .seq entries, the playback tables the game pairs
 # with a motion (sound / effect triggers per frame), which this does not read.
 #
-# Units: angles in radians, composed as the game's RotMatrix does,
-# Rz * Ry * Rx (x applied first); translations in model units (the same
+# Units: angles in radians, composed Rz * Ry * Rx (x applied first, Blender's
+# Euler 'XYZ'); translations in model units (the same
 # millimetres as a model's vertices and bone offsets); 30 frames a second.
 # A joint's local matrix is T(pos) * R(ang) * S(scale), and the values are
 # absolute, not offsets from the rest pose - an unkeyed part keeps its rest
@@ -56,8 +55,7 @@ types:
     seq:
       - {id: raw, type: u2}
     instances:
-      # Bits 0-7. What the curves drive, tested in this order by
-      # MotionMoveCore:
+      # Bits 0-7. What the curves drive, tested in this order:
       #   1     root position: the character's displacement over the clip
       #         (root motion), applied to the whole model rather than a part
       #   0x40  root rotation, likewise
@@ -68,8 +66,10 @@ types:
       # 0x80 only ever comes with 0x20 (0xa0, the arms).
       kind:
         value: raw & 0xff
-      # Bits 8-11. On a chain root (is_ik_root), the axis the chain bends
-      # about: 0 +y, 1 -y, 2 +x, 3 -x, 4 +z, 5 -z. 6 and 7 are camera
+      # Bits 8-11. On a chain root (is_ik_root), the direction its middle
+      # joint bends towards, in the chain root's posed frame: 0 +y, 1 -y,
+      # 2 +x, 3 -x, 4 +z, 5 -z. Legs use 4 (knees forward), arms 5 (elbows
+      # back). 6 and 7 are camera
       # channels (position, target, roll, fov...), which only an event
       # camera attached to the motion reads; a handful of weapon motions
       # carry broken channel 6 joints the game never touches, with key
@@ -82,12 +82,13 @@ types:
       # A chain root (kind & 0x30) starts an IK chain of the next parts in
       # bone order: root, joint, effector (and, for 0xa0, one more). The
       # translation keys on the effector - the ankle and wrist joints - are
-      # not its local offset: they are the position the solver
-      # (game/ik.cpp) pulls the chain towards, in model space, and the
-      # effector's rotation keys are model space too. With 0x20 the target
-      # is where the effector's child (the toe) goes, and the effector is
-      # placed so that it does. Applied as plain bone transforms they give
-      # stretched or folded limbs.
+      # not its local offset: they are the position the limb is solved
+      # towards, in model space, and the effector's rotation keys are model
+      # space too. With 0x20 alone (legs) the target is where the effector's
+      # child (the toe) goes, and the effector is placed so that it does;
+      # with 0xa0 (arms) the third part is a forearm twist bone and the
+      # target is where the fourth, the wrist, goes. Applied as plain bone
+      # transforms they give stretched or folded limbs.
       is_ik_root:
         value: (kind & 0x30) != 0
       is_camera:
@@ -119,7 +120,8 @@ types:
   # Between keys k0 and k1 the curve is the cubic Hermite through
   # value[k0] and value[k1] with tangents out_tangent[k0] and in_tangent[k1],
   # over t = (frame - frame[k0]) / (frame[k1] - frame[k0]); the tangents are
-  # not scaled by the span. key_type is two 2-bit fields, value storage
+  # not scaled by the span (they already track the change over the whole
+  # segment, not per frame). key_type is two 2-bit fields, value storage
   # times 4 plus tangent storage: 0 f4, 1 s2, 2 s1, where an s2 or s1 is
   # the value times 10000. 15 is an f4 value without tangents, which only
   # the event cameras use.
