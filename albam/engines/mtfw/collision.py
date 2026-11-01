@@ -9,6 +9,7 @@ from io import BytesIO
 import traceback
 
 
+from ...apps import get_app_description
 from ...registry import blender_registry
 from ...vfs import VirtualFileData
 from ...exceptions import AlbamCheckFailure
@@ -22,9 +23,21 @@ from ...lib import common_op as common
 from ...lib.kaitai_utils import check_recursive
 from ...lib.misc import number_to_color
 
-SBC_CLASS_MAPPER = {
-    49: Sbc156,
-    255: Sbc21,
+SBC_CLASS_MAGIC = {
+    Sbc156: b"SBC1",
+    Sbc21: b"SBC\xff",
+    Sbc211: b"SBC\xff",
+}
+
+# Sbc21 and Sbc211 share their magic; the u4 after it is a per-game constant
+# that tells them apart. Files with a stamp not listed here are parsed with
+# the struct of the selected app.
+SBC_STAMP_CLASS = {
+    0x781ACA20: Sbc21,  # re0
+    0x77DF43D8: Sbc21,  # re1, rev1
+    0x77DF43D9: Sbc21,  # rev2
+    0x77DF2114: Sbc21,  # dd
+    0x77CF8DF8: Sbc211,  # re6
 }
 
 APPID_SBC_CLASS_MAPPER = {
@@ -155,6 +168,34 @@ palette = [colorsys.hsv_to_rgb(c / 55, 1.0, cycle()) for c in range(44)]
 palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 
 
+def _validate_app_id_for_sbc(app_id, sbc_bytes):
+    app_desc = get_app_description(app_id)
+    if len(sbc_bytes) < 8:
+        raise AlbamCheckFailure(
+            "This .sbc file appears to be truncated or corrupted",
+            details=f"The file is only {len(sbc_bytes)} bytes long",
+            solution="Re-extract this file from the game's archive and try importing it again"
+        )
+    id_magic = sbc_bytes[0:4]
+    if id_magic not in SBC_CLASS_MAGIC.values():
+        raise AlbamCheckFailure(
+            "The file to import doesn't seem to be valid for "
+            f"the app '{app_desc}'",
+            details=f"The file has an incorrect ID Magic: {id_magic}",
+            solution=f"Double check that this is a file from {app_desc}"
+        )
+    SbcCls = APPID_SBC_CLASS_MAPPER[app_id]
+    stamp = int.from_bytes(sbc_bytes[4:8], "little")
+    stamp_cls = SBC_STAMP_CLASS.get(stamp, SbcCls) if id_magic == b"SBC\xff" else SbcCls
+    if id_magic != SBC_CLASS_MAGIC[SbcCls] or stamp_cls is not SbcCls:
+        raise AlbamCheckFailure(
+            "The file to import doesn't seem to be valid for "
+            f"the app '{app_desc}'",
+            details=f"The file's header ({sbc_bytes[0:8].hex(' ')}) belongs to a different game",
+            solution="Double check that you selected the correct App and re-import"
+        )
+
+
 @blender_registry.register_import_function(app_id="re0", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re1", extension='sbc', albam_asset_type="COLLISION")
 @blender_registry.register_import_function(app_id="re5", extension='sbc', albam_asset_type="COLLISION")
@@ -166,37 +207,20 @@ palette = [(i[0], i[1], i[2], 1.0) for i in palette]
 def load_sbc(file_item, context):
     app_id = file_item.app_id
     sbc_bytes = file_item.get_bytes()
+    _validate_app_id_for_sbc(app_id, sbc_bytes)
     sbc_version = sbc_bytes[3]
-    if sbc_version not in SBC_CLASS_MAPPER:
-        raise AlbamCheckFailure(
-            f"The version of this .sbc file ({sbc_version}) is not supported",
-            details=f"Supported versions: {sorted(SBC_CLASS_MAPPER)}",
-            solution="Double check that this file comes from a supported game/app"
-        )
     SbcCls = APPID_SBC_CLASS_MAPPER[app_id]
     try:
         sbc = SbcCls.from_bytes(sbc_bytes)
         sbc._read()
-    except kaitaistruct.ValidationNotEqualError as ex:
-        # The version byte above (49/255) only tells apart Sbc156 from
-        # Sbc21/Sbc211; a file whose byte happens to match one of those but
-        # whose actual header magic doesn't is a variant this version of
-        # Albam has no struct for.
-        raise AlbamCheckFailure(
-            "This .sbc file variant is not supported",
-            details=f"Expected header magic {ex.expected!r}, got {ex.actual!r} for app '{app_id}'",
-            solution="Double check that this file comes from a supported game/app"
-        ) from ex
-    except (kaitaistruct.ConsistencyError, kaitaistruct.EndOfStreamError) as ex:
-        # EndOfStreamError is the realistic case here: a truncated file runs
-        # out of bytes mid-read. ConsistencyError is only ever raised from
-        # the generated _check() methods, which this read path doesn't call
-        # - caught anyway in case that changes, since it means the same
-        # thing a truncated/corrupted file would.
+    except kaitaistruct.EndOfStreamError as ex:
+        # a truncated file, or one from a game whose header stamp isn't in
+        # SBC_STAMP_CLASS, runs out of bytes mid-read
         raise AlbamCheckFailure(
             "This .sbc file appears to be truncated or corrupted",
             details=f"{type(ex).__name__}: {ex}",
-            solution="Re-extract this file from the game's archive and try importing it again"
+            solution=f"Double check that this is a file from {get_app_description(app_id)}; "
+            "if it is, re-extract it from the game's archive and try importing it again"
         ) from ex
 
     bl_object_name = file_item.display_name

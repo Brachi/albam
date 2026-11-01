@@ -669,11 +669,16 @@ def serialize_textures(app_id, bl_materials):
     duplicated_paths = []
     too_long = []
     for im_name, data in exported_textures.items():
-        if data["image"].albam_asset.app_id != app_id:
-            bad_appid.append((im_name, data["image"].albam_asset.app_id))
-        if data["image"].albam_asset.relative_path in texture_paths:
-            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
-        texture_paths.append(data["image"].albam_asset.relative_path)
+        bl_im = data["image"]
+        if bl_im.albam_asset.app_id != app_id:
+            bad_appid.append((im_name, bl_im.albam_asset.app_id))
+        # compared as the path the file is exported to, so images with no
+        # relative path set fall back to their (unique) image name
+        render_target = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id).render_target
+        export_path = _handle_relative_path(bl_im, render_target)
+        if export_path in texture_paths:
+            duplicated_paths.append((im_name, export_path))
+        texture_paths.append(export_path)
         # the extension doesn't matter here, only what goes in the .mrl slot
         path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
         if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
@@ -682,7 +687,7 @@ def serialize_textures(app_id, bl_materials):
         raise AlbamCheckFailure(
             f"Some images have an app_id that doesn't match the exported app ({app_id})",
             details=f"Images: {bad_appid}",
-            solution="Go to Image -> tools -> Albam and select the proper app_id for each image listed above"
+            solution="Go to Image Editor -> Albam and select the proper app_id for each image listed above"
         )
     if duplicated_paths:
         raise AlbamCheckFailure(

@@ -325,6 +325,12 @@ MAIN_LODS = {
 
 
 def _validate_app_id_for_mod(app_id, mod_bytes):
+    if len(mod_bytes) < 5:
+        raise AlbamCheckFailure(
+            "This .mod file appears to be truncated or corrupted",
+            details=f"The file is only {len(mod_bytes)} bytes long",
+            solution="Re-extract this file from the game's archive and try importing it again"
+        )
     id_magic = mod_bytes[0:3]
     version = mod_bytes[4]
 
@@ -368,12 +374,6 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     mod_bytes = vfile.get_bytes()
     _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
-    if mod_version not in MOD_CLASS_MAPPER:
-        raise AlbamCheckFailure(
-            f"The version of this .mod file ({mod_version}) is not supported",
-            details=f"Supported versions: {sorted(MOD_CLASS_MAPPER)}",
-            solution="Double check that this file comes from a supported game/app"
-        )
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = parse(ModCls, mod_bytes, app_id)

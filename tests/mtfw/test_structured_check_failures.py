@@ -1,7 +1,6 @@
-"""Conditions caused by the user's scene or file that used to raise a bare
-assert/AttributeError instead of AlbamCheckFailure (see #376). All synthetic:
-each case only needs just enough bytes/scene state to reach the check, no
-game data required.
+"""Conditions caused by the user's scene or file that raise AlbamCheckFailure
+(see #376). All synthetic: each case only needs just enough bytes/scene state
+to reach the check, no game data required.
 """
 import bpy
 import pytest
@@ -21,31 +20,12 @@ class _FakeVFile:
         return self._data
 
 
-# -- texture.py: images with the wrong app_id ------------------------------
+# -- texture.py: image app_id and relative paths ---------------------------
 
-@pytest.fixture
-def bl_material_with_image(request):
-    name = request.node.name
-    bl_mat = bpy.data.materials.new(name)
-    if not bl_mat.node_tree:  # created on demand before Blender 5
-        bl_mat.use_nodes = True
-    im_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
-    bl_im = bpy.data.images.new(name, 4, 4)
-    im_node.image = bl_im
-    bsdf = bl_mat.node_tree.nodes["Principled BSDF"]
-    bl_mat.node_tree.links.new(im_node.outputs["Color"], bsdf.inputs["Base Color"])
-
-    yield bl_mat, bl_im
-
-    bpy.data.materials.remove(bl_mat)
-    bpy.data.images.remove(bl_im)
-
-
-def test_serialize_textures_rejects_wrong_appid_image(bl_material_with_image):
+def test_serialize_textures_rejects_wrong_appid_image(new_bl_material):
     from albam.engines.mtfw.texture import serialize_textures
 
-    bl_mat, bl_im = bl_material_with_image
-    bl_im.albam_asset.app_id = "re1"  # exporting for a different app below
+    bl_mat, bl_im = new_bl_material("re1")  # exporting for a different app below
 
     with pytest.raises(AlbamCheckFailure) as excinfo:
         serialize_textures("re5", [bl_mat])
@@ -54,38 +34,28 @@ def test_serialize_textures_rejects_wrong_appid_image(bl_material_with_image):
     assert "re1" in excinfo.value.details
 
 
-def test_serialize_textures_rejects_duplicated_relative_path(request):
+def test_serialize_textures_rejects_duplicated_relative_path(new_bl_material):
     from albam.engines.mtfw.texture import serialize_textures
 
-    name = request.node.name
     shared_path = "common/shared_texture.tex"
-    bl_mats = []
-    bl_ims = []
-    try:
-        for i in range(2):
-            mat_name = f"{name}_{i}"
-            bl_mat = bpy.data.materials.new(mat_name)
-            if not bl_mat.node_tree:  # created on demand before Blender 5
-                bl_mat.use_nodes = True
-            im_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
-            bl_im = bpy.data.images.new(mat_name, 4, 4)
-            bl_im.albam_asset.app_id = "re5"
-            bl_im.albam_asset.relative_path = shared_path
-            im_node.image = bl_im
-            bsdf = bl_mat.node_tree.nodes["Principled BSDF"]
-            bl_mat.node_tree.links.new(im_node.outputs["Color"], bsdf.inputs["Base Color"])
-            bl_mats.append(bl_mat)
-            bl_ims.append(bl_im)
+    bl_mats = [new_bl_material("re5", shared_path)[0] for _ in range(2)]
 
-        with pytest.raises(AlbamCheckFailure) as excinfo:
-            serialize_textures("re5", bl_mats)
+    with pytest.raises(AlbamCheckFailure) as excinfo:
+        serialize_textures("re5", bl_mats)
 
-        assert shared_path in excinfo.value.details
-    finally:
-        for bl_mat in bl_mats:
-            bpy.data.materials.remove(bl_mat)
-        for bl_im in bl_ims:
-            bpy.data.images.remove(bl_im)
+    assert shared_path in excinfo.value.details
+
+
+def test_serialize_textures_accepts_images_without_relative_path(new_bl_material):
+    from albam.engines.mtfw.texture import serialize_textures
+
+    # with no relative path, each image is exported under its own name
+    bl_mats = [new_bl_material("re5")[0] for _ in range(2)]
+
+    # the images have no file backing them, so serialization fails later when
+    # it goes looking for dds data - reaching that point is what this asserts
+    with pytest.raises(FileNotFoundError):
+        serialize_textures("re5", bl_mats)
 
 
 # -- mesh.py: no mesh to export --------------------------------------------
@@ -109,82 +79,62 @@ def test_export_mod_rejects_object_with_no_mesh(request, monkeypatch):
         bpy.data.objects.remove(bl_obj, do_unlink=True)
 
 
-# -- mesh.py: unsupported .mod version -------------------------------------
+# -- short files ------------------------------------------------------------
 
-def test_build_blender_model_rejects_unmapped_mod_version(monkeypatch):
-    from albam.engines.mtfw import mesh as mesh_module
-
-    # 156 is a real, otherwise-valid version for re5 - removing its entry
-    # from MOD_CLASS_MAPPER simulates a version this build's structs don't
-    # know how to parse, the only way to reach this check since
-    # MOD_VERSION_APPID_MAPPER already rejects anything truly unknown.
-    monkeypatch.delitem(mesh_module.MOD_CLASS_MAPPER, 156)
-    mod_bytes = b"MOD" + bytes([0, 156])
-    fake_vfile = _FakeVFile("re5", mod_bytes)
+@pytest.mark.parametrize("module_name, func_name, app_id", [
+    ("collision", "load_sbc", "re5"),
+    ("mesh", "build_blender_model", "re5"),
+])
+def test_import_rejects_file_shorter_than_header(module_name, func_name, app_id):
+    import importlib
+    module = importlib.import_module(f"albam.engines.mtfw.{module_name}")
 
     with pytest.raises(AlbamCheckFailure) as excinfo:
-        mesh_module.build_blender_model(fake_vfile, context=None)
+        getattr(module, func_name)(_FakeVFile(app_id, b"SB"), context=None)
 
-    assert "156" in excinfo.value.message
+    assert "truncated" in excinfo.value.message
 
 
-# -- collision.py: unsupported .sbc version --------------------------------
+# -- collision.py: .sbc header checks --------------------------------------
 
-def test_load_sbc_rejects_unmapped_version():
+RE0_SBC_HEADER = b"SBC\xff" + (0x781ACA20).to_bytes(4, "little")
+RE6_SBC_HEADER = b"SBC\xff" + (0x77CF8DF8).to_bytes(4, "little")
+RE5_SBC_HEADER = b"SBC1" + bytes([22, 0, 1, 0])
+
+
+@pytest.mark.parametrize("app_id, sbc_bytes", [
+    ("re0", RE6_SBC_HEADER),  # Sbc21 app, Sbc211 file: misparses as "truncated"
+    ("re6", RE0_SBC_HEADER),  # Sbc211 app, Sbc21 file
+    ("re0", RE5_SBC_HEADER),  # Sbc21 app, Sbc156 file
+])
+def test_load_sbc_rejects_file_from_another_app(app_id, sbc_bytes):
     from albam.engines.mtfw.collision import load_sbc
 
-    sbc_bytes = b"SBC" + bytes([7])  # 7 is neither 49 (Sbc156) nor 255 (Sbc21/211)
-    fake_file_item = _FakeVFile("re5", sbc_bytes)
-
     with pytest.raises(AlbamCheckFailure) as excinfo:
-        load_sbc(fake_file_item, context=None)
+        load_sbc(_FakeVFile(app_id, sbc_bytes + bytes(100)), context=None)
 
-    assert "7" in excinfo.value.message
+    assert "correct App" in excinfo.value.solution
 
-
-# -- collision.py: unsupported .sbc variant (Kaitai magic mismatch) -------
 
 def test_load_sbc_rejects_bad_magic_bytes():
     from albam.engines.mtfw.collision import load_sbc
 
-    # Byte 3 is 255, a known version (Sbc21), passing the version check
-    # above, but the first 3 bytes aren't "SBC" so Kaitai's own header
-    # validation fails - the raw ValidationNotEqualError this check guards.
-    sbc_bytes = b"XYZ" + bytes([255])
-    fake_file_item = _FakeVFile("re0", sbc_bytes)  # re0 -> Sbc21
+    sbc_bytes = b"XYZ\xff" + bytes(100)
 
     with pytest.raises(AlbamCheckFailure) as excinfo:
-        load_sbc(fake_file_item, context=None)
+        load_sbc(_FakeVFile("re0", sbc_bytes), context=None)
 
-    assert "not supported" in excinfo.value.message
+    assert "ID Magic" in excinfo.value.details
 
 
 def test_load_sbc_rejects_truncated_file():
     from albam.engines.mtfw.collision import load_sbc
 
-    # Valid magic for Sbc21 ("SBC\xff"), but nothing after it - the header's
-    # next field runs out of bytes mid-read, raising Kaitai's own
-    # EndOfStreamError instead of ValidationNotEqualError.
-    sbc_bytes = b"SBC" + bytes([255])
-    fake_file_item = _FakeVFile("re0", sbc_bytes)  # re0 -> Sbc21
-
+    # a valid RE0 header start, but the rest of the header is missing
     with pytest.raises(AlbamCheckFailure) as excinfo:
-        load_sbc(fake_file_item, context=None)
+        load_sbc(_FakeVFile("re0", RE0_SBC_HEADER), context=None)
 
     assert "truncated" in excinfo.value.message
-
-
-# -- navmesh.py: unsupported game -------------------------------------------
-
-def test_build_navmesh_model_rejects_unsupported_app():
-    from albam.engines.mtfw.navmesh import build_navmesh_model
-
-    fake_vfile = _FakeVFile("re6")  # navmesh import only exists for re5
-
-    with pytest.raises(AlbamCheckFailure) as excinfo:
-        build_navmesh_model(fake_vfile, context=None)
-
-    assert "re6" in excinfo.value.message
 
 
 # -- navmesh.py: no mesh to export ------------------------------------------

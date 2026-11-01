@@ -69,13 +69,12 @@ def export_nav(bl_obj):
         )
     mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
     mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
-    if mesh_clones:
-        nav_mesh = mesh_clones[0].data
-        for v in nav_mesh.vertices:
-            vertices.append(v.co)
-        for poly in nav_mesh.polygons:
-            faces.append(poly.vertices[:])
-            face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
+    nav_mesh = mesh_clones[0].data
+    for v in nav_mesh.vertices:
+        vertices.append(v.co)
+    for poly in nav_mesh.polygons:
+        faces.append(poly.vertices[:])
+        face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
     neiborgs = build_neighbors(vertices, faces)
     for clone in mesh_clones:
         common.delete_ob(clone)
