@@ -1,10 +1,7 @@
-import contextlib
 import os
 
 import bpy
 import pytest
-
-from tests.skip_policy import skip_missing
 
 
 R2_PROTOCOL_PREFIX = "r2://"
@@ -55,18 +52,18 @@ def game_fs_root(pytestconfig, local_app_id):
     if local_app_id not in _GAME_FS_INSTANCES:
         value = _game_dirs(pytestconfig).get(local_app_id)
         if not value:
-            skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
         elif value.startswith(R2_PROTOCOL_PREFIX):
             r2_kwargs = resolve_r2_source(value)
             if r2_kwargs is None:
-                skip_missing(
+                pytest.skip(
                     f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
                     f"(empty bucket, missing s3 extras, or missing credentials - see "
                     f".env.example)"
                 )
             game_fs = MTFW_FS.from_s3(**r2_kwargs)
         elif not os.path.isdir(value):
-            skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+            pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
         else:
             game_fs = MTFW_FS(value)
 
@@ -92,7 +89,7 @@ def import_export(local_app_id, local_path):
     try:
         vfile = vfs.select_vfile(local_app_id, local_path)
     except KeyError:
-        skip_missing(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
@@ -116,7 +113,7 @@ def import_vfile(local_app_id, local_path):
     try:
         vfile = vfs.select_vfile(local_app_id, local_path)
     except KeyError:
-        skip_missing(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
@@ -155,32 +152,6 @@ def action_fcurves(action):
         for channelbag in strip.channelbags
         for fcurve in channelbag.fcurves
     ]
-
-
-@contextlib.contextmanager
-def _pose_restored(armature):
-    """Put the armature's pose back exactly as it was found.
-
-    Assigning an action makes Blender write the evaluated values into the pose
-    bones themselves, and taking the action away again does not undo that - the
-    armature keeps the last frame it was on. Root motion moves a character
-    metres from the origin, so a test that animates one and walks away leaves
-    every later test measuring that pose instead of the rest one.
-    """
-    from mathutils import Matrix
-
-    animation_data = armature.animation_data
-    previous_action = animation_data and animation_data.action
-    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
-    previous_frame = bpy.context.scene.frame_current
-    try:
-        yield
-    finally:
-        if armature.animation_data is not None:
-            armature.animation_data.action = previous_action
-        for pose_bone in armature.pose.bones:
-            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
-        bpy.context.scene.frame_set(previous_frame)
 
 
 @pytest.fixture

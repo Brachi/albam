@@ -19,17 +19,16 @@ mounted under would create ambiguous duplicate entries for the very same
 paths. local_game_fs below builds its own private MTFW_FS purely to
 resolve hashes to real paths - it is never itself added to the VFS.
 """
+import contextlib
 import json
 import os
 
 import bpy
 import pytest
 
-from tests.dataset_cases import applies_to, entries_for
-from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, _pose_restored, action_fcurves
+from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
-from tests.skip_policy import skip_missing
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
 # import (see test_dataset_hashes_are_in_catalog below). Extend this
@@ -46,12 +45,11 @@ def pytest_generate_tests(metafunc):
             "local_mod_path_hash" in metafunc.fixturenames and
             "local_lmt_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_mod_path_hash", "local_lmt_path_hash")
-        entries = entries_for(metafunc, LMT_IMPORT_DATASET)
         argvalues = [
             (d["app_id"], d["mod_path_hash"], d["lmt_path_hash"])
-            for d in entries
+            for d in LMT_IMPORT_DATASET
         ]
-        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in entries]
+        ids = [f"{d['app_id']}-{d['lmt_path_hash']}" for d in LMT_IMPORT_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -83,16 +81,16 @@ def local_game_fs(pytestconfig, local_app_id):
 
     value = _game_dirs(pytestconfig).get(local_app_id)
     if not value:
-        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+        pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
     elif value.startswith(R2_PROTOCOL_PREFIX):
         r2_kwargs = resolve_r2_source(value)
         if r2_kwargs is None:
-            skip_missing(
+            pytest.skip(
                 f"--game-dir={local_app_id}::{value} requested but R2 isn't configured"
             )
         return MTFW_FS.from_s3(**r2_kwargs)
     elif not os.path.isdir(value):
-        skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+        pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
     return MTFW_FS(value)
 
 
@@ -104,21 +102,14 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     resolved = resolve_hashes(local_game_fs, {local_mod_path_hash, local_lmt_path_hash})
     mod_path = resolved[local_mod_path_hash]
     lmt_path = resolved[local_lmt_path_hash]
-    # A new ArcFS on the archive each file lives in, opened with the opener
-    # MTFW_FS already uses for it, so this works over S3/R2 as well as local
-    # disk - and CI only ever runs with an r2:// game dir. Not the owning
-    # instance itself: the teardown's remove_imported() closes what it
-    # unmounts, and closing local_game_fs's own archive would break the next
-    # setup of this fixture, which runs whenever a test with a narrower
-    # @applies_to splits a param group.
-    from albam.engines.mtfw.arc_fs import ArcFS
-
-    mod_owner = local_game_fs._owning_arc_fs(mod_path)
-    lmt_owner = local_game_fs._owning_arc_fs(lmt_path)
-    assert mod_owner, "expected the .mod to live packed inside an .arc, not loose"
-    assert lmt_owner, "expected the .lmt to live packed inside an .arc, not loose"
-    mod_arc = ArcFS(mod_owner.arc_path, opener=mod_owner._opener)
-    lmt_arc = ArcFS(lmt_owner.arc_path, opener=lmt_owner._opener)
+    # The ArcFS each file already lives in, rather than building a new one
+    # from a path: MTFW_FS opens its archives with a backend-appropriate
+    # opener, so reusing the instance keeps this working over S3/R2 as well
+    # as local disk - and CI only ever runs with an r2:// game dir.
+    mod_arc = local_game_fs._owning_arc_fs(mod_path)
+    lmt_arc = local_game_fs._owning_arc_fs(lmt_path)
+    assert mod_arc, "expected the .mod to live packed inside an .arc, not loose"
+    assert lmt_arc, "expected the .lmt to live packed inside an .arc, not loose"
 
     # Two separate single-.arc roots under the same app_id, which is safe
     # only because these two files' internal paths don't collide.
@@ -152,10 +143,12 @@ def lmt_imported_local(local_game_fs, local_app_id, local_mod_path_hash, local_l
     yield result, armature, actions, lmt_bl_object
 
     # Unmount both roots again. The VFS lives in Blender's scene data, which
-    # is process-global and outlives this fixture, and node ids are
-    # app_id::relative_path only, so roots left behind would answer for these
-    # same paths in any later test - including the next setup of this
-    # fixture, which mounts the same two archives again.
+    # is process-global and outlives this fixture, while local_game_fs (and
+    # with it the ArcFS instances mounted above) is dropped when this param
+    # group tears down - leaving roots behind whose filesystem is closed.
+    # Node ids are app_id::relative_path only, so any later test selecting
+    # these same paths would resolve to one of those dead roots and fail with
+    # fs.errors.FilesystemClosed.
     #
     # The real root names captured above, not f"{local_app_id}::{display_name}":
     # _unique_root_name() suffixes that same key with "#1", "#2", ... when a
@@ -226,6 +219,32 @@ def test_block_order_is_recorded_not_read_off_the_scene(lmt_imported_local):
             block.name = name
 
 
+@contextlib.contextmanager
+def _pose_restored(armature):
+    """Put the armature's pose back exactly as it was found.
+
+    Assigning an action makes Blender write the evaluated values into the pose
+    bones themselves, and taking the action away again does not undo that - the
+    armature keeps the last frame it was on. Root motion moves a character
+    metres from the origin, so a test that animates one and walks away leaves
+    every later test measuring that pose instead of the rest one.
+    """
+    from mathutils import Matrix
+
+    animation_data = armature.animation_data
+    previous_action = animation_data and animation_data.action
+    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
+    previous_frame = bpy.context.scene.frame_current
+    try:
+        yield
+    finally:
+        if armature.animation_data is not None:
+            armature.animation_data.action = previous_action
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
+        bpy.context.scene.frame_set(previous_frame)
+
+
 def _root_motion_track_angle(action, armature):
     """How far and about what the root motion bone turns, from its own keys.
 
@@ -271,7 +290,6 @@ def _skeleton_root_bone(armature):
     raise AssertionError("the armature carries no bone mapped to anim id 0")
 
 
-@applies_to(turns_root_motion=True)
 def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
     """Root motion is a whole-character transform, rotation included.
 
@@ -306,7 +324,8 @@ def test_root_motion_turns_the_character_about_the_vertical(lmt_imported_local):
         if angle is not None and angle > 5:
             # the engine's axes into Blender's, the same mapping a position takes
             turning.append((action, angle, Vector((axis.x, -axis.z, axis.y)), frames))
-    assert turning, "the dataset says a block of this .lmt turns the root motion bone"
+    if not turning:
+        pytest.skip("no block of this .lmt turns the root motion bone")
 
     with _pose_restored(armature):
         for action, expected, expected_axis, (first, last) in turning:

@@ -35,7 +35,7 @@ instances:
   vertex_buffer:
     {pos: header.offset_vertex_buffer, size: header.size_vertex_buffer }
   index_buffer:
-    {pos: header.offset_index_buffer, size: (header.num_indices * 2)}
+    {pos: header.offset_index_buffer, size: (header.num_faces * 2)}
   size_top_level_:
     value: "_root.header.version == 210 or _root.header.version == 212  or _root.app_id == 'umvc3' ? _root.header.size_ + 68 : _root.header.size_ + 64"
   use_64bit_ofs:
@@ -51,8 +51,8 @@ types:
       - {id: num_meshes, type: u2}
       - {id: num_materials, type: u2}
       - {id: num_vertices, type: u4}
-      - {id: num_indices, type: u4} # was num_faces: the index count, not a face count
-      - {id: num_triangles, type: u4} # was num_edges: the triangle count
+      - {id: num_faces, type: u4}
+      - {id: num_edges, type: u4}
       - {id: size_vertex_buffer, type: u4}
       - {id: reserved_01, type: u4}
       - {id: num_groups, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
@@ -99,8 +99,8 @@ types:
       - {id: idx_anim_map, type: u1}
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
-      - {id: padding, type: u1}
-      - {id: furthest_vertex_distance, type: f4}
+      - {id: idx_mapping, type: u1}
+      - {id: length, type: f4}
       - {id: parent_distance, type: f4}
       - {id: location, type: vec3}
     instances:
@@ -154,43 +154,43 @@ types:
       - {id: topology, type: b6}
       - {id: binormal_flip, type: b1}
       - {id: bridge, type: b1}
-      - {id: vertex_index, type: u4} # was vertex_position; vertex_ofs
-      - {id: vertex_byte_offset, type: u4} # was vertex_offset; a byte offset, not a base
+      - {id: vertex_position, type: u4} #vertex_ofs
+      - {id: vertex_offset, type: u4} #vertex_base
       - {id: vertex_format, type: u4}
-      - {id: index_start, type: u4} # was face_position; index_ofs
+      - {id: face_position, type: u4} #index_ofs
       - {id: num_indices, type: u4} #index_num
-      - {id: vertex_base, type: u4} # was face_offset; index_base, but it is a vertex base
+      - {id: face_offset, type: u4} #index_base
       - {id: bone_id_start, type: u1}
       - {id: num_weight_bounds, type: u1}
       - {id: connect_id, type: u2}
-      - {id: first_index, type: u2} # was min_index
-      - {id: last_index, type: u2} # was max_index
+      - {id: min_index, type: u2}
+      - {id: max_index, type: u2}
       - {id: boundary, type: u4}
       - {id: padding, type: u8, if: _root.use_64bit_ofs}
     instances:
       size_:
         value: '_root.app_id == "umvc3" ? 56 : 48'
       indices:
-        # vertex_base is not added to the buffer position - meshes tile
-        # contiguously by index_start alone, and the last one ends exactly
-        # at header.num_indices, so there is no room for it to shift anything.
+        # face_offset is an index base (see its own comment), added to the
+        # index values rather than to the buffer position - meshes tile
+        # contiguously by face_position alone, and the last one ends exactly
+        # at header.num_faces, so there is no room for it to shift anything.
         # It is 0 in all but 9 of umvc3's 2702 .mod, which is why including
-        # it here (back when it was named face_offset and read as a byte
-        # offset) read past end of file on precisely those 9.
-        pos: _root.header.offset_index_buffer + index_start * 2
+        # it here read past end of file on precisely those 9.
+        pos: _root.header.offset_index_buffer + face_position * 2
         repeat: expr
         repeat-expr: num_indices
         type: u2
       vertices:
-        # vertex_base is the mesh's base into the vertex buffer, and
-        # vertex_index is relative to it. A model with one vertex block
+        # face_offset is the mesh's base into the vertex buffer, and
+        # vertex_position is relative to it. A model with one vertex block
         # leaves it 0, which is nearly all of them; where a second block
-        # exists its meshes restart vertex_index at 0 and carry the base
+        # exists its meshes restart vertex_position at 0 and carry the base
         # here. /stg/106/mod/0000.mod: block one ends at 60853, block two
-        # carries vertex_base 60853, and 60853 plus block two's span is
+        # carries face_offset 60853, and 60853 plus block two's span is
         # 116870, exactly header.num_vertices and the buffer's capacity.
         # Without it those meshes re-read block one and render as garbage.
-        pos: _root.header.offset_vertex_buffer + vertex_byte_offset + ((vertex_base + vertex_index) * vertex_stride)
+        pos: _root.header.offset_vertex_buffer + vertex_offset + ((face_offset + vertex_position) * vertex_stride)
         repeat: expr
         repeat-expr: num_vertices
         type:
@@ -825,7 +825,7 @@ types:
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
-      - {id: padding, type: vec3}
+      - {id: unk_01, type: vec3}
       - {id: bsphere, type: vec4}
       - {id: bbox_min, type: vec4}
       - {id: bbox_max, type: vec4}

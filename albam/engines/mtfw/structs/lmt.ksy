@@ -87,7 +87,7 @@ types:
       - {id: buffer_type, type: u1}
       - {id: usage, type: u1}
       - {id: joint_type, type: u1}
-      - {id: idx_anim_map, type: u1}
+      - {id: bone_index, type: u1}
       - {id: weight, type: f4}
       - {id: len_data, type: u4}
       - {id: ofs_data, type: u4}
@@ -101,7 +101,7 @@ types:
       - {id: buffer_type, type: u1}
       - {id: usage, type: u1}
       - {id: joint_type, type: u1}
-      - {id: idx_anim_map, type: u1}
+      - {id: bone_index, type: u1}
       - {id: weight, type: f4}
       - {id: len_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}
       - {id: ofs_data, type: {switch-on: _root.use_64bit_ofs, cases: {true: u8, false: u4, _: u4}}}

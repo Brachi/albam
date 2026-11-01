@@ -4,7 +4,6 @@ from itertools import chain
 
 import bpy
 
-from ...lib.blender import build_uvs
 from ...lib.misc import chunks
 from ...registry import blender_registry
 from .structs.hexane_edgemodel import HexaneEdgemodel
@@ -128,7 +127,7 @@ def build_blender_mesh(mesh_header, name, bl_materials, bone_names=None):
     me_ob.from_pydata(vertices, [], indices)
     _build_normals(me_ob, normals)
     _build_tangents(me_ob, tangents)
-    build_uvs(me_ob, uvs)
+    _build_uvs(me_ob, uvs)
     _build_weights(ob, edge_mesh, bone_names)
     mesh_material_path = mesh_header.materials.first_material
     if bl_materials.get(mesh_material_path):
@@ -222,3 +221,14 @@ def _build_weights(bl_obj, edge_mesh, bone_names=None):
             # 255); Blender's are 0.0-1.0 and it clamps anything above,
             # which would flatten every real weight to a full 1.0.
             vg.add((vertex_index,), weight_value / 255, "ADD")
+
+
+def _build_uvs(bl_mesh, uvs, name="uv"):
+    if not uvs:
+        return
+    uv_layer = bl_mesh.uv_layers.new(name=name)
+    per_loop_list = []
+    for loop in bl_mesh.loops:
+        offset = loop.vertex_index * 2
+        per_loop_list.extend((uvs[offset], uvs[offset + 1]))
+    uv_layer.data.foreach_set("uv", per_loop_list)

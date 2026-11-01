@@ -1672,9 +1672,6 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         if not tn.image.albam_asset.relative_path or overwrite_tex_path:
             tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
-        if type in (1, 2, 7):
-            # The shader reads these as data; an sRGB image tilts the preview normals
-            tn.image.colorspace_settings.name = "Non-Color"
         tex_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)

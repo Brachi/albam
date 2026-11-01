@@ -25,14 +25,7 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     remove_duplicate_materials_suffix: bpy.props.BoolProperty(default=True)
     export_visible: bpy.props.BoolProperty(default=False)
     force_lod255: bpy.props.BoolProperty(default=False)
-    # On by default (#281): copying the source skeleton under edited meshes
-    # writes a file that only breaks once the game animates it.
-    export_bones: bpy.props.BoolProperty(
-        default=True,
-        description="Write the skeleton from the armature: bone positions, parents, "  # noqa: F722
-                    "animation ids and mirrors. Off copies the source file's skeleton "
-                    "and ignores any rig edits",
-    )
+    export_bones: bpy.props.BoolProperty(default=False)
     no_vf_grouping: bpy.props.BoolProperty(
         default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)

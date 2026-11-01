@@ -13,8 +13,6 @@ import os
 import shutil
 import sys
 import tempfile
-import threading
-from collections import defaultdict
 
 from fs.base import FS
 from fs.enums import ResourceType
@@ -365,10 +363,6 @@ class S3LooseFS(FS):
         self.client = client
         self.bucket = bucket
         self.prefix = prefix.strip("/")
-        # Filled by _tree() on first use, not here: constructing makes no calls.
-        self._files = None
-        self._dirs = None
-        self._tree_lock = threading.Lock()
 
     def __repr__(self):
         return f"S3LooseFS({self.bucket!r}, prefix={self.prefix!r})"
@@ -379,50 +373,29 @@ class S3LooseFS(FS):
             return f"{self.prefix}/{_path}" if _path else self.prefix
         return _path
 
-    def _tree(self):
-        """(file sizes, dir children) for everything under prefix, from one
-        listing of the whole prefix, taken on first use and kept.
-
-        Asking per directory cost three requests each (head_object, a
-        one-key list to tell a directory from a miss, then the listing
-        itself), all sequential: walking a 79 directory test subset made
-        ~240 round trips, most of a test session's setup on R2. A game
-        root's listing is a few pages at most, and the view is read-only,
-        so one listing serves every later getinfo/scandir/walk.
-        """
-        with self._tree_lock:
-            if self._files is not None:
-                return self._files, self._dirs
-            files = {}
-            dirs = defaultdict(set)
-            dirs["/"]  # an empty prefix is still a valid, empty root
-            key_prefix = f"{self.prefix}/" if self.prefix else ""
-            paginator = self.client.get_paginator("list_objects_v2")
-            for result in paginator.paginate(Bucket=self.bucket, Prefix=key_prefix):
-                for obj in result.get("Contents", ()):
-                    rel = obj["Key"][len(key_prefix):]
-                    if not rel or rel.endswith("/"):
-                        continue  # the prefix itself, or a directory marker
-                    parts = rel.split("/")
-                    for i in range(len(parts)):
-                        dirs["/" + "/".join(parts[:i])].add(parts[i])
-                    files["/" + rel] = obj["Size"]
-            self._files, self._dirs = files, dirs
-            return files, dirs
-
     def getinfo(self, path, namespaces=None):
         self.check()
         _path = self.validatepath(path)
         namespaces = namespaces or ()
-        files, dirs = self._tree()
 
-        if _path in files:
+        if _path == "/":
+            return Info({"basic": {"name": "", "is_dir": True}})
+
+        key = self._key(_path)
+        try:
+            head = self.client.head_object(Bucket=self.bucket, Key=key)
+        except Exception:
+            head = None
+
+        if head is not None:
             raw_info = {"basic": {"name": basename(_path), "is_dir": False}}
             if "details" in namespaces:
-                raw_info["details"] = {"type": int(ResourceType.file), "size": files[_path]}
+                raw_info["details"] = {"type": int(ResourceType.file), "size": head["ContentLength"]}
             return Info(raw_info)
 
-        if _path in dirs:
+        # not a real object at this exact key - does anything live "under" it?
+        resp = self.client.list_objects_v2(Bucket=self.bucket, Prefix=key + "/", MaxKeys=1)
+        if resp.get("KeyCount", 0) > 0:
             raw_info = {"basic": {"name": basename(_path), "is_dir": True}}
             if "details" in namespaces:
                 raw_info["details"] = {"type": int(ResourceType.directory), "size": 0}
@@ -441,17 +414,24 @@ class S3LooseFS(FS):
         if not self.getinfo(_path).is_dir:
             raise DirectoryExpected(path)
 
-        files, dirs = self._tree()
+        key_prefix = self._key(_path)
+        if key_prefix and not key_prefix.endswith("/"):
+            key_prefix += "/"
+
         entries = []
-        for name in sorted(dirs[_path]):
-            child = _path.rstrip("/") + "/" + name
-            if child in files:
-                raw_info = {"basic": {"name": name, "is_dir": False}}
-                if "details" in namespaces:
-                    raw_info["details"] = {"type": int(ResourceType.file), "size": files[child]}
-            else:
-                raw_info = {"basic": {"name": name, "is_dir": True}}
-            entries.append(Info(raw_info))
+        paginator = self.client.get_paginator("list_objects_v2")
+        for result in paginator.paginate(Bucket=self.bucket, Prefix=key_prefix, Delimiter="/"):
+            for common_prefix in result.get("CommonPrefixes", ()):
+                name = common_prefix["Prefix"][len(key_prefix):].rstrip("/")
+                if name:
+                    entries.append(Info({"basic": {"name": name, "is_dir": True}}))
+            for obj in result.get("Contents", ()):
+                name = obj["Key"][len(key_prefix):]
+                if name:
+                    raw_info = {"basic": {"name": name, "is_dir": False}}
+                    if "details" in namespaces:
+                        raw_info["details"] = {"type": int(ResourceType.file), "size": obj["Size"]}
+                    entries.append(Info(raw_info))
 
         if page is not None:
             start, end = page

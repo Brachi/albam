@@ -22,14 +22,12 @@
   {
     "app_id": "re4uhd",
     "archive_path_hash": "097b7fcbe31774e9",
-    "payload_extension": ".evd",
-    "has_models": false
+    "payload_extension": ".evd"
   },
   {
     "app_id": "re4uhd",
     "archive_path_hash": "1cf892226107478c",
-    "payload_extension": ".evd",
-    "has_models": true
+    "payload_extension": ".evd"
   },
   {
     "app_id": "re4uhd",

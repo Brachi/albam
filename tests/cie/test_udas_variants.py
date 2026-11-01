@@ -19,7 +19,6 @@ import os
 import pytest
 
 from tests.cie.lfs_paths import resolve_archive_hashes
-from tests.dataset_cases import applies_to, entries_for
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 UDAS_VARIANT_DATASET_PATH = os.path.join(DATASETS_DIR, "udas_variant_hashes.json")
@@ -43,10 +42,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        entries = entries_for(metafunc, UDAS_VARIANT_DATASET)
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in UDAS_VARIANT_DATASET]
         ids = [f"{d['app_id']}-{d['variant']}-{d['archive_path_hash']}"
-               for d in entries]
+               for d in UDAS_VARIANT_DATASET]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -119,14 +117,16 @@ def test_byte_order_is_read_from_the_block_table(payload, local_variant):
     assert offset + size <= len(payload)
 
 
-@applies_to(variant="big_endian_yz2")
-def test_big_endian_data_block_is_a_yz2_stream(payload):
+def test_big_endian_data_block_is_a_yz2_stream(payload, local_variant):
     """The big-endian variant's DAT block is not a file table but a YZ2
     compressed stream, which is why its entries cannot be listed however the
     container itself is read: the block opens with its own compressed and
     decompressed lengths in ASCII hex, and the compressed one accounts for
     the rest of the block.
     """
+    if local_variant != "big_endian_yz2":
+        pytest.skip("only the big-endian variant holds a compressed data block")
+
     from albam.engines.cie.fs import (YZ2_HEADER_SIZE, is_yz2_block, read_udas_block_table,
                                       udas_byte_order)
 
