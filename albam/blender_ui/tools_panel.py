@@ -1201,24 +1201,76 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     return texture_code
 
 
-# The in-game naming convention for each texture_code above - the same
-# suffix the shader socket names themselves carry (#276). Only the slots
-# that convention actually covers; a code outside this map (an unconnected
-# node, or a newer slot type blender_texture_to_texture_code doesn't
-# classify at all) gets no suffix, same as before this existed.
-TEXTURE_CODE_SUFFIXES = {
-    0: "BM",
-    1: "NM",
-    2: "MM",
-    3: "LM",
-    5: "AM",
-    6: "CM",
-    7: "DNM",
-}
+# In-game texture name suffixes. The MTFrameworkGroup sockets that follow the
+# convention carry the suffix as the last word of their name ("Diffuse BM",
+# "Detail 2 DNM", ...); sockets without one ("Height Map") get no suffix.
+TEXTURE_SLOT_SUFFIXES = ("BM", "NM", "MM", "LM", "AM", "CM", "DNM")
+
+
+def texture_slot_suffix(socket_name):
+    token = socket_name.rpartition(" ")[2]
+    return token if token in TEXTURE_SLOT_SUFFIXES else None
+
+
+def has_texture_slot_suffix(name):
+    lowered = name.lower()
+    return any(lowered.endswith(f"_{s.lower()}") for s in TEXTURE_SLOT_SUFFIXES)
+
+
+def texture_stem(image):
+    """The image name without its last extension, split the same way export's
+    _handle_relative_path does ("pl00.body.png" -> "pl00.body")."""
+    before, _, _ = image.name.rpartition(".")
+    return before or image.name
+
+
+def _image_slot_suffixes():
+    """Every slot suffix each image's Color output feeds, across all materials.
+
+    relative_path belongs to the image, not the node, so the suffix is decided
+    from all of an image's uses at once. A link into a socket without a suffix
+    counts as None, so mixing it with a suffixed slot is a disagreement.
+    """
+    suffixes = {}
+    for mat in bpy.data.materials:
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE" or not node.image:
+                continue
+            for link in node.outputs["Color"].links:
+                suffixes.setdefault(node.image, set()).add(texture_slot_suffix(link.to_socket.name))
+    return suffixes
 
 
 def strict_sanitize(filename):
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+
+
+def _suffixed_texture_name(image, name, slot_suffixes, local_path):
+    """`name` with the image's slot suffix appended, or `name` unchanged.
+
+    The suffix is added only when every connected use of the image agrees on
+    one suffix, the name carries no known suffix yet, and no other image
+    already claims the suffixed name (through its relative_path or its own
+    image name), since export rejects duplicated texture paths.
+    """
+    suffixes = slot_suffixes.get(image, set())
+    if len(suffixes) != 1 or has_texture_slot_suffix(name):
+        return name
+    suffix = next(iter(suffixes))
+    if suffix is None:
+        return name
+    candidate = f"{name}_{suffix}"
+    candidate_path = (local_path + candidate + ".tex").lower()
+    for other in bpy.data.images:
+        if other == image:
+            continue
+        if other.albam_asset.relative_path.lower() == candidate_path:
+            return name
+        if strict_sanitize(texture_stem(other)).lower() == candidate.lower():
+            return name
+    return candidate
 
 
 def set_image_albam_attr(blender_material, app_id, local_path):
@@ -1250,23 +1302,18 @@ def set_image_albam_attr(blender_material, app_id, local_path):
     overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
+    slot_suffixes = _image_slot_suffixes()
     for tn in blender_material.node_tree.nodes:
         if not tn.type == "TEX_IMAGE":
             continue
         type = blender_texture_to_texture_code(tn)
         if tn.image:
-            name = tn.image.name.split(".")[0]
+            name = texture_stem(tn.image)
             name = strict_sanitize(name)
         else:
             continue
-        suffix = TEXTURE_CODE_SUFFIXES.get(type)
-        if suffix and not name.lower().endswith(f"_{suffix.lower()}"):
-            # A texture re-imported from a real game file already carries
-            # its own suffix (e.g. "pl0000_BM") - only a texture that never
-            # had one, like a freshly painted or imported image, needs it
-            # added.
-            name = f"{name}_{suffix}"
         if not tn.image.albam_asset.relative_path or overwrite_tex_path:
+            name = _suffixed_texture_name(tn.image, name, slot_suffixes, local_path)
             tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
         if type in (1, 2, 7):

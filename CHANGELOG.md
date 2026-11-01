@@ -27,8 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Tools: VF Guesser
 - Autosetter now names a texture that never had a path set after its in-game slot
   (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
-  plugged into. A texture already carrying its own suffix (e.g. one re-imported from a
-  real game file) is left alone
+  plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
+  game file), wired into slots with different suffixes, or whose suffixed name another
+  image already uses is left unsuffixed
 
 ### Fixed
 
