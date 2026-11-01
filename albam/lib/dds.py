@@ -2,6 +2,12 @@ from ctypes import Structure, c_int, c_char, sizeof
 import io
 import math
 
+from ..exceptions import AlbamCheckFailure
+
+
+def _is_power_of_two(n):
+    return n > 0 and (n & (n - 1)) == 0
+
 
 class DDSHeader(Structure):
     # https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
@@ -197,6 +203,58 @@ class DDSHeader(Structure):
                 mipmap_offsets.append(current_offset)
         return mipmap_offsets
 
+    def check_mipmap_consistency(self, source_name=""):
+        """Raise AlbamCheckFailure when dwMipMapCount, or the image's own
+        size, don't match the pixel data the header is sitting on top of.
+
+        Several DDS writers skip mipmaps but leave dwMipMapCount at 0
+        instead of 1 (the base level alone still counts as one level).
+        Trusting that 0 downstream makes calculate_mimpap_offsets() build a
+        1-entry offset list for a struct field expecting 0 entries, which
+        used to surface at export as a raw
+        ``ConsistencyError: Check failed: mipmap_offsets, expected: 0,
+        actual: 1`` - the "DDS saved without mipmaps" crash reported in
+        #support. Catching it here, against the header's own declared size,
+        turns that into an actionable message before export ever gets
+        there.
+        """
+        label = f"'{source_name}'" if source_name else "the image"
+        problems = []
+
+        if self.dwMipMapCount < 1:
+            problems.append(
+                f"the header claims {self.dwMipMapCount} mipmaps, but every DDS image "
+                "has at least the base level (1)"
+            )
+        else:
+            if self.dwMipMapCount > 1 and not (
+                _is_power_of_two(self.dwWidth) and _is_power_of_two(self.dwHeight)
+            ):
+                problems.append(
+                    f"the header claims {self.dwMipMapCount} mipmaps for a "
+                    f"{self.dwWidth}x{self.dwHeight} image, but that size isn't a power of two "
+                    "so the mip chain can't be halved cleanly down to 1x1"
+                )
+            expected_size = sum(self.mipmap_sizes) * self.image_count
+            actual_size = len(self.data)
+            if expected_size != actual_size:
+                problems.append(
+                    f"the header claims {self.dwMipMapCount} mipmap(s) for a "
+                    f"{self.dwWidth}x{self.dwHeight} image, which needs {expected_size} bytes "
+                    f"of pixel data, but the file has {actual_size} bytes"
+                )
+
+        if problems:
+            raise AlbamCheckFailure(
+                f"DDS header for {label} doesn't match its own pixel data",
+                details="; ".join(problems),
+                solution=(
+                    "Re-save the DDS file with a correct mipmap chain (most image editors "
+                    "have an option to generate or strip mipmaps), making sure its size is a "
+                    "power of two if it is to have more than one level"
+                ),
+            )
+
     @classmethod
     def from_bl_image(cls, bl_im):
         from bpy.path import abspath
@@ -214,4 +272,5 @@ class DDSHeader(Structure):
         header_data = io.BytesIO(data[:header_size])  # FIXME unnecessary copy
         header_data.readinto(dds_header)
         dds_header._dds_data = data[header_size:]
+        dds_header.check_mipmap_consistency(source_name=bl_im.name)
         return dds_header
