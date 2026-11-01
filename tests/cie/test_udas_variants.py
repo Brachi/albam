@@ -34,6 +34,13 @@ VARIANT_BYTE_ORDERS = {
     "big_endian_yz2": ">",
     "no_block_table": None,
 }
+# SHA-1 of each big-endian archive's DAT block once out of YZ2: what the
+# original C++ yz2 decoder (as JADERLINK's RE4_DASYZ2_TOOL ships it, built
+# with 32-bit words) produces for the same blocks.
+DECODED_DAT_SHA1 = {
+    "16751b2ceafb2bb9": "46c93da3015665023f81212f4787489cda84e51a",
+    "76e7d1b4720d91d4": "0aaa908fd75d27fbd3e657beb0acc8191adb46bf",
+}
 # Where a block table starts and where every archive seen puts its DAT block.
 BLOCK_TABLE_END = 0x20 + 32
 DATA_BLOCK_OFFSET = 0x400
@@ -120,15 +127,21 @@ def test_byte_order_is_read_from_the_block_table(payload, local_variant):
 
 
 @applies_to(variant="big_endian_yz2")
-def test_big_endian_data_block_is_a_yz2_stream(payload):
+def test_big_endian_data_block_is_a_yz2_stream(payload, local_archive_path_hash):
     """The big-endian variant's DAT block is not a file table but a YZ2
-    compressed stream, which is why its entries cannot be listed however the
-    container itself is read: the block opens with its own compressed and
-    decompressed lengths in ASCII hex, and the compressed one accounts for
-    the rest of the block.
+    compressed stream, so its entries can only be listed once it is decoded:
+    the block opens with its own compressed and decompressed lengths in
+    ASCII hex, and the compressed one accounts for the rest of the block.
+
+    What it decodes to is pinned by hash, since a decoder bug can keep the
+    length right and still garble the bytes (yz2's matches are looked up by
+    content, so a wrong byte early on derails later copies, not the coder).
     """
+    import hashlib
+
     from albam.engines.cie.fs import (YZ2_HEADER_SIZE, is_yz2_block, read_udas_block_table,
-                                      udas_byte_order)
+                                      split_big_endian_dat, udas_byte_order)
+    from albam.engines.cie.yz2 import decompress
 
     _block_type, size, offset = read_udas_block_table(payload, udas_byte_order(payload))[0]
     assert is_yz2_block(payload, offset)
@@ -138,14 +151,10 @@ def test_big_endian_data_block_is_a_yz2_stream(payload):
     assert YZ2_HEADER_SIZE + compressed <= size
     assert decompressed > compressed, "a block stored compressed should shrink"
 
-    # The stream decodes to exactly the size its header promises, and into
-    # a DAT block whose table holds the room files every archive carries.
-    from albam.engines.cie.fs import split_big_endian_dat
-    from albam.engines.cie.yz2 import decompress
-
     block = decompress(payload[offset:offset + size])
     assert len(block) == decompressed
-    extensions = [extension for extension, _data in split_big_endian_dat(block)]
+    assert hashlib.sha1(block).hexdigest() == DECODED_DAT_SHA1[local_archive_path_hash]
+    extensions = [extension for _index, extension, _data in split_big_endian_dat(block)]
     assert {"LIT", "SMD", "SMX", "SHD", "TEX"} <= set(extensions)
 
 

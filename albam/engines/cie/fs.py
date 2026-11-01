@@ -143,20 +143,29 @@ def is_yz2_block(payload, offset):
 
 
 def split_big_endian_dat(block):
-    """[(extension, bytes)] for each entry of a big-endian DAT block, the
-    file table the big-endian UDAS variant holds YZ2 compressed.
+    """[(index, extension, bytes)] for the entries of a big-endian DAT block,
+    the file table the big-endian UDAS variant holds YZ2 compressed. `index`
+    is the entry's position in the table, which is what it is named by.
 
     Two layouts occur, told apart the way JADERLINK's RE4_DASYZ2_TOOL does:
     the final game's, where three zero words follow the count before the
     tables start (as in the little-endian DAT), and an earlier one (the tool
     calls it the E3 version) where the tables follow the count directly.
 
-    Names and sizes are taken as loosely as that tool takes them, because
-    the archive in the earlier layout is damaged as shipped: three of its
-    extensions carry stray bytes, kept here as the letters around them, and
-    its block ends partway through an entry, so that entry is cut short and
-    the ones placed after the end come out empty. Those stay listed, empty,
-    since the table does name them.
+    The one archive in the earlier layout also names entries it does not
+    hold. Its table opens with three entries whose extensions carry stray
+    high bytes ("CA\xe1\x80", "SA\xe8\x80", "LI\xe8\x80"), and their data
+    is not in the block: every entry after them sits earlier than its offset
+    says, by exactly the span the three would have taken. Read that way, each
+    entry opens the way the same type does in the final-layout archive (an
+    .eff and a .tex byte for byte, an .aev with its magic), the entries run
+    exactly to the end of the block, and most end in the same 0xCD padding;
+    taken at face value, the block would end partway through an entry with
+    eight more placed past it. So an entry with a damaged extension is
+    taken as a leftover of the table: it is not listed, and its span is
+    subtracted from every offset after it. That rule rests on this one
+    archive; every other DAT seen has clean extensions, which leaves them
+    untouched by it.
     """
     count, *words = struct.unpack_from(">4I", block, 0)
     table_offset = BIG_ENDIAN_DAT_EARLY_TABLE_OFFSET if any(words) else BIG_ENDIAN_DAT_TABLE_OFFSET
@@ -164,13 +173,23 @@ def split_big_endian_dat(block):
         raise ValueError(f"a DAT block of {len(block)} bytes cannot hold {count} entries")
     offsets = struct.unpack_from(f">{count}I", block, table_offset)
     names_offset = table_offset + count * 4
+    names = [block[names_offset + i * 4:names_offset + i * 4 + 4] for i in range(count)]
+
+    kept = []
+    missing = 0
+    for i, (offset, name) in enumerate(zip(offsets, names)):
+        extension = name.rstrip(b"\x00")
+        if not (extension.isascii() and (extension.isalnum() or not extension)):
+            missing += offsets[i + 1] - offset if i + 1 < count else 0
+            continue
+        kept.append((i, extension.decode("ascii"), offset - missing))
 
     entries = []
-    for i, offset in enumerate(offsets):
-        end = offsets[i + 1] if i + 1 < count else len(block)
-        name = block[names_offset + i * 4:names_offset + i * 4 + 4]
-        extension = "".join(chr(c) for c in name if chr(c).isascii() and chr(c).isalnum())
-        entries.append((extension, block[offset:end]))
+    for k, (i, extension, start) in enumerate(kept):
+        end = kept[k + 1][2] if k + 1 < len(kept) else len(block)
+        if not 0 <= start <= end <= len(block):
+            raise ValueError(f"DAT entry {i} lies outside its {len(block)}-byte block")
+        entries.append((i, extension, block[start:end]))
     return entries
 
 
@@ -332,7 +351,7 @@ class LfsFS(FS):
         block = yz2.decompress(decompressed[offset:offset + size])
         return {
             f"/{self._stem}_{i:03d}.{extension.lower() or 'null'}": data
-            for i, (extension, data) in enumerate(split_big_endian_dat(block))
+            for i, extension, data in split_big_endian_dat(block)
         }
 
     def _split_container(self, struct_cls, container, decompressed):

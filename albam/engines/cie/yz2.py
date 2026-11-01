@@ -51,7 +51,17 @@ from bisect import bisect_right
 from itertools import accumulate
 
 YZ2_HEADER_SIZE = 32
-YZ2_HEADER_PATTERN = re.compile(rb"^([0-9a-f]+)\t([0-9a-f]+)\n\x00*$")
+YZ2_HEADER_PATTERN = re.compile(rb"^([0-9a-fA-F]+)\t([0-9a-fA-F]+)\n\x00*$")
+# A sanity bound on the decompressed size a header may claim, so a corrupt
+# one raises instead of allocating gigabytes. The two real blocks expand
+# 1.6x and 2.8x; a run of one repeated byte can do far better, hence the
+# generous ratio, and the floor keeps tiny blocks from tripping it.
+MAX_EXPANSION = 64
+MAX_SIZE_FLOOR = 1 << 20
+# How far past its end a stream is read. A valid one only peeks a couple of
+# bytes ahead of the last it consumes; reading further means the stream ran
+# out before the output was complete.
+MAX_OVERREAD = 4
 
 # Range coder precision: frequency tables always sum to 1 << RANGE_BITS.
 RANGE_BITS = 15
@@ -132,12 +142,24 @@ def decompress(block):
     compressed_size, out_size = sizes
     data = bytes(block[YZ2_HEADER_SIZE:YZ2_HEADER_SIZE + compressed_size])
     data_size = len(data)
+    if data_size < compressed_size:
+        raise ValueError(
+            f"YZ2 block is truncated: its header promises {compressed_size} bytes of "
+            f"stream, and only {data_size} follow"
+        )
+    if out_size > max(compressed_size * MAX_EXPANSION, MAX_SIZE_FLOOR):
+        raise ValueError(
+            f"YZ2 header is corrupt: {compressed_size} bytes cannot plausibly "
+            f"decompress to {out_size}"
+        )
 
     codes = _FrequencyTable(CODE_SYMBOLS)
     lengths = _FrequencyTable(LENGTH_SYMBOLS)
 
     # Range decoder state. Reading past the end of the input yields zeros,
-    # as yz2's input buffer does.
+    # as yz2's input buffer does, but only for a few bytes: past that the
+    # stream has run dry, and its zeros decode to matches of negative length
+    # that would never finish the output.
     width = 1 << 7
     low = data[0] if data else 0
     read = 1
@@ -145,8 +167,14 @@ def decompress(block):
     def decode_symbol(table):
         nonlocal width, low, read
         while width <= RANGE_REFILL:
-            low = ((low << 8) | (data[read] if read < data_size else 0)) & WORD_MASK
-            width = (width << 8) & WORD_MASK
+            if read >= data_size:
+                if read >= data_size + MAX_OVERREAD:
+                    raise ValueError("YZ2 stream is corrupt: it ends before its output does")
+                low = (low << 8) & WORD_MASK
+            else:
+                low = ((low << 8) | data[read]) & WORD_MASK
+            # Never past 32 bits: the loop stops once width exceeds 1 << 23.
+            width <<= 8
             read += 1
         width >>= RANGE_BITS - 1
         point = low // width
@@ -154,7 +182,8 @@ def decompress(block):
             raise ValueError("YZ2 stream is corrupt: range decoder out of bounds")
         symbol = bisect_right(table.lows, point) - 1
         low = (low - width * table.lows[symbol]) & WORD_MASK
-        width = ((width * table.widths[symbol]) & WORD_MASK) >> 1
+        # Below 1 << 18 times at most 1 << 15, halved: still within 32 bits.
+        width = (width * table.widths[symbol]) >> 1
         table.count(symbol)
         return symbol
 
@@ -166,6 +195,10 @@ def decompress(block):
             value = 0
             for _ in range(4 - length):
                 value = (value << 8) | decode_symbol(lengths)
+            if value < 3:
+                # yz2's unsigned arithmetic would wrap this into a length of
+                # gigabytes; no encoder writes it.
+                raise ValueError("YZ2 stream is corrupt: an escaped match length under 3")
             length = value
         return length - 3
 
@@ -194,6 +227,8 @@ def decompress(block):
             else:
                 size = ring_lengths[key][slot]
             source = ring_offsets[key][slot]
+            if size <= 0:
+                raise ValueError("YZ2 stream is corrupt: a match of no length")
             if pos + size > out_size:
                 raise ValueError("YZ2 stream is corrupt: a match runs past the output")
             if source is None or source >= out_size:
@@ -201,9 +236,11 @@ def decompress(block):
             if source + size <= pos:
                 out[pos:pos + size] = out[source:source + size]
             else:
-                # Overlapping its own output, which a byte-wise copy repeats.
-                for i in range(size):
-                    out[pos + i] = out[source + i]
+                # Overlapping its own output: yz2 copies byte by byte, which
+                # repeats the source..pos stretch (source is always behind
+                # pos, as every ring entry was registered before it).
+                period = out[source:pos]
+                out[pos:pos + size] = (period * (size // len(period) + 1))[:size]
             pos += size
 
         if key_pos < pos - 1:
