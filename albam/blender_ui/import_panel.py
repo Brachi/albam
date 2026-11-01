@@ -54,6 +54,23 @@ def set_path_list_file_config(self, context):
     config_mgr.save()
 
 
+def report_missing_textures(operator):
+    """Surface textures the importer couldn't find in any loaded arc (see
+    albam/engines/mtfw/texture.py) as a UI warning on `operator`. Before
+    this, a missing texture only ever showed up as a console print - users
+    hit it, didn't see it, and went on to debug the shader or the export
+    instead of just loading the right arc (#374).
+
+    Shared between ALBAM_OT_Import and ALBAM_OT_BatchImportFolder - both
+    end up importing .mod files through ALBAM_OT_Import._execute(), so both
+    can have missing textures to report.
+    """
+    from ..engines.mtfw.texture import build_missing_textures_report, get_missing_textures
+    message = build_missing_textures_report(get_missing_textures())
+    if message:
+        operator.report({'WARNING'}, message)
+
+
 def folder_descendants(vfs, folder_item):
     """Every non-folder vfile under `folder_item`, scoped to the root
     `folder_item` itself belongs to.
@@ -105,6 +122,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
+        from ..engines.mtfw.texture import reset_missing_textures
+        # Reset once here, not per-file: a batch import of a whole folder is
+        # still one import operation from the user's point of view, and
+        # should get one summary at the end, not one per .mod.
+        reset_missing_textures()
+
         batch = context.scene.albam.import_settings.batch_import_folder
         vfile = self.get_selected_item(context)
 
@@ -126,6 +149,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
             handle_operator_exception(self, "Import failed")
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
+        report_missing_textures(self)
         return {"FINISHED"}
 
     def _execute_batch(self, folder_item, context):
@@ -155,6 +179,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
         if failed:
             msg += f", {len(failed)} failed: {', '.join(failed)}"
         self.report({'INFO'}, msg)
+        report_missing_textures(self)
         return {"FINISHED"}
 
     def _make_exportable(self, vfile, bl_object, context):
@@ -508,6 +533,11 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
     bl_label = "Batch import folder"
 
     def execute(self, context):
+        from ..engines.mtfw.texture import reset_missing_textures
+        # Same reasoning as ALBAM_OT_Import.execute(): one summary for the
+        # whole folder, not one per .mod.
+        reset_missing_textures()
+
         vfs = context.scene.albam.vfs
         if len(vfs.file_list) == 0:
             self.report({'WARNING'}, 'No files loaded')
@@ -557,6 +587,7 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
         if failed:
             msg += f", {len(failed)} failed: {', '.join(failed)}"
         self.report({'INFO'}, msg)
+        report_missing_textures(self)
         return {'FINISHED'}
 
     @classmethod

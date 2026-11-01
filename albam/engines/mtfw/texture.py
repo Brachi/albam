@@ -277,6 +277,84 @@ def is_dummy_texture_path(texture_path):
     return texture_path.replace("\\", "/").lower().startswith(DUMMY_TEXTURE_PATH_PREFIX)
 
 
+# Archives that many models' materials reference textures from without
+# packing their own copy. A missing texture under one of these app_ids is
+# often not actually missing from the game - the shared archive just hasn't
+# been loaded yet. REV2's Core.arc is the one #support sees over and over
+# (hair losing its sheen): users chase the shader or the export instead of
+# just loading Core.arc first, because nothing in the UI points at it (#374).
+KNOWN_SHARED_TEXTURE_ARCHIVES = {
+    "rev2": "Core.arc",
+}
+
+# How many of the missing paths to actually list in the warning - the count
+# alone matters more once there are dozens of them (one shared archive not
+# loaded can affect every texture slot in a model).
+MAX_REPORTED_MISSING_TEXTURE_PATHS = 5
+
+# Missing textures collected across one import operation - a single file or
+# an entire batch-imported folder - so the import operator can report them
+# once at the end (see ALBAM_OT_Import in blender_ui/import_panel.py)
+# instead of each one only ever reaching the console. Keyed by
+# (app_id, texture_path) to de-duplicate: the same shared texture is
+# typically referenced by many materials, and reporting it once per
+# reference would make the count meaningless.
+_missing_textures = []
+_missing_texture_keys = set()
+
+
+def reset_missing_textures():
+    """Call once at the start of an import operation, before anything is
+    imported."""
+    _missing_textures.clear()
+    _missing_texture_keys.clear()
+
+
+def record_missing_texture(app_id, texture_path):
+    key = (app_id, texture_path)
+    if key in _missing_texture_keys:
+        return
+    _missing_texture_keys.add(key)
+    _missing_textures.append(key)
+
+
+def get_missing_textures():
+    """The (app_id, texture_path) pairs recorded since the last reset, in
+    the order they were first encountered."""
+    return list(_missing_textures)
+
+
+def build_missing_textures_report(missing):
+    """A single user-facing warning for the textures `missing` ([(app_id,
+    texture_path), ...], as returned by get_missing_textures()) names, or
+    None if there is nothing to report.
+    """
+    if not missing:
+        return None
+
+    app_ids_seen = []
+    paths = []
+    for app_id, texture_path in missing:
+        if app_id not in app_ids_seen:
+            app_ids_seen.append(app_id)
+        paths.append(texture_path)
+
+    shown = paths[:MAX_REPORTED_MISSING_TEXTURE_PATHS]
+    remainder = len(paths) - len(shown)
+    message = f"{len(paths)} texture(s) referenced by imported materials were not found: " + ", ".join(shown)
+    if remainder > 0:
+        message += f" (+{remainder} more)"
+
+    archive_hints = sorted({
+        KNOWN_SHARED_TEXTURE_ARCHIVES[app_id] for app_id in app_ids_seen
+        if app_id in KNOWN_SHARED_TEXTURE_ARCHIVES
+    })
+    if archive_hints:
+        message += ". These are usually in " + " and ".join(archive_hints) + "; load it before importing."
+
+    return message
+
+
 @blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
     app_id = vfile.app_id
@@ -360,6 +438,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
             # the path, and only the placeholder is skipped there.
             if not is_dummy_texture_path(texture_path):
                 print(f"texture_path {texture_path} not found in arc")
+                record_missing_texture(app_id, texture_path)
             textures.append(None)
             continue
         TexOrRtexCls = RtexCls if is_rtex else TexCls
