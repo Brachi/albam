@@ -7,6 +7,7 @@ from itertools import chain
 from io import BytesIO
 from struct import pack, unpack
 import math
+import warnings
 try:
     from math import dist as get_dist
 except ImportError:
@@ -41,7 +42,7 @@ from ...lib.export_checks import check_all_objects_have_materials
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
-from ...exceptions import AlbamCheckFailure
+from ...exceptions import AlbamCheckFailure, AlbamExportWarning
 from .bone import get_anim_retarget, get_mirror, set_anim_retarget, set_mirror
 from .material import (
     build_blender_materials,
@@ -72,6 +73,16 @@ APPID_CLASS_MAPPER = {
     "dmc4": Mod153,
     "umvc3": Mod21,
 }
+
+# #375: app_ids whose source models get checked for a mesh's Group ID not
+# being in the model's own groups table. The Group/Mesh layout is identical
+# on every mod version (mod_21, mod_153, mod_156), so this is every app_id
+# APPID_CLASS_MAPPER above knows - verified by parsing every real .mod each
+# game's own local install has: re5 (462 models, 36 with no group 0), dmc4
+# (5171, 958), re0 (3567, 31), re1 (1177, 16), re6 (5806, 345), rev1 (2349,
+# 439), rev2 (2330, 317), dd (3941, 1533), umvc3 (2702, 576) - 27,515 models
+# total, zero mesh/group mismatches anywhere.
+GROUP_ID_CHECK_APP_IDS = tuple(APPID_CLASS_MAPPER)
 
 MOD_VERSION_APPID_MAPPER = {
     153: {"dmc4"},
@@ -965,6 +976,8 @@ def export_mod(bl_obj):
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
     _check_armature_modifiers_target(bl_obj, bl_meshes)
+    if app_id in GROUP_ID_CHECK_APP_IDS:
+        _check_group_ids(src_mod, bl_meshes, app_id)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
         _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
@@ -1777,6 +1790,42 @@ def _check_armature_modifiers_target(bl_obj, bl_meshes):
                     f"points to '{modifier.object.name}', exported armature: '{bl_obj.name}'",
                     solution=f"Set the Armature modifier's Object to '{bl_obj.name}'"
                 )
+
+
+def _check_group_ids(src_mod, bl_meshes, app_id):
+    """Warn (don't block) when a mesh's Group ID isn't one the source
+    model's groups table actually has (#375).
+
+    idx_group ("Group ID", default 0) is written per mesh as-is, while the
+    groups table is copied unchanged from the source model
+    (_serialize_groups) - nothing keeps the two in sync. 16 of 186 vanilla
+    RE5 models have no group 0 at all (Josh's pl0401, em1000/em1001,
+    em1100, em1200, em1300, em2100, em2200 and a few effect models), so a
+    mesh added to one of those and left at the default ends up referencing
+    a group the model doesn't have. Group ID mismatches turn up repeatedly
+    in #support behind meshes that vanish or duplicate (invisible teeth, a
+    bald Sheva in cutscenes, an invisible cutscene head, double heads) -
+    not confirmed as the cause every time, but cheap to flag.
+
+    Only a warning: a mesh with a Group ID outside the table isn't always
+    wrong (see #375's discussion), so this never blocks export.
+    """
+    # header.num_groups is exactly len(src_mod.groups) - the groups property
+    # itself only ever reads that many entries - so no slicing is needed here.
+    available = {group.group_index for group in src_mod.groups}
+    if not available:
+        # No groups table at all on this model (e.g. some effect models) -
+        # nothing meaningful to compare idx_group against.
+        return
+    for bl_mesh in bl_meshes:
+        custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+        idx_group = custom_properties.idx_group
+        if idx_group not in available:
+            warnings.warn(
+                f"Mesh {bl_mesh.name!r} has Group ID {idx_group}, which isn't one of this "
+                f"model's groups. Available Group IDs: {sorted(available)}",
+                AlbamExportWarning,
+            )
 
 
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):

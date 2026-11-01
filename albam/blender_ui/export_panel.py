@@ -1,8 +1,10 @@
 import time
 import os
+import warnings
 import bpy
 
 from .error_handling import handle_operator_exception
+from ..exceptions import AlbamExportWarning
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
@@ -292,12 +294,29 @@ class ALBAM_OT_Export(bpy.types.Operator):
         active_object = bpy.context.active_object
         if active_object:
             bpy.ops.object.mode_set(mode='OBJECT')
-        try:
-            self._execute(context, item)
-        except Exception:
-            handle_operator_exception(self, "Export failed")
-            return {"CANCELLED"}
+        # Non-fatal export checks (e.g. #375's Group ID check) use
+        # warnings.warn(..., AlbamExportWarning) rather than raising, since
+        # export is meant to finish - catch_warnings is the only way to
+        # surface those to the user without threading a report callback
+        # through every export function this calls. Everything else is
+        # silenced within this block: a third-party library's own unrelated
+        # warnings.warn() (numpy, PIL, ...) must not get reported to the
+        # user as if it were an export-correctness notice.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("ignore")
+            warnings.simplefilter("always", AlbamExportWarning)
+            try:
+                self._execute(context, item)
+            except Exception:
+                handle_operator_exception(self, "Export failed")
+                return {"CANCELLED"}
+        # Reported last (after the INFO below) so it's the one left showing
+        # in the status bar, which only ever displays the most recent report
+        # of the operator call - reporting it first would let 'Export
+        # successful' immediately bury it.
         self.report({'INFO'}, 'Export successful')
+        for warning in caught:
+            self.report({'WARNING'}, str(warning.message))
         return {"FINISHED"}
 
     @staticmethod
