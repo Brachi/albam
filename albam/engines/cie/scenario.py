@@ -908,8 +908,8 @@ def _place_new_entries(bl_obj, data, original, smd, added, free):
     the header's three offsets move with it. The offset tables are relative
     to their own positions, so nothing they point at needs rewriting. That
     rests on nothing else in the file pointing past the entry table, which
-    the game bore out: a room given a second copy of every entry this way
-    loaded and drew both.
+    the game bears out: a room given a second copy of every entry this way
+    loads and draws both.
     """
     if not added:
         return 0
