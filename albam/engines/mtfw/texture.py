@@ -685,9 +685,11 @@ def serialize_textures(app_id, bl_materials):
             solution="Go to Image -> tools -> Albam and select the proper app_id for each image listed above"
         )
     if duplicated_paths:
-        raise AttributeError(
-            f"The following images have duplicated relative paths: {duplicated_paths}\n"
-            "Go to Image Editor -> Albam and select a unique relative path for each."
+        raise AlbamCheckFailure(
+            "Some images have the same relative path as another exported image",
+            details=f"Images: {duplicated_paths}",
+            solution="Go to Image Editor -> Albam and select a unique relative path "
+            "for each image listed above"
         )
     if too_long:
         paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]

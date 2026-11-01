@@ -178,10 +178,25 @@ def load_sbc(file_item, context):
         sbc = SbcCls.from_bytes(sbc_bytes)
         sbc._read()
     except kaitaistruct.ValidationNotEqualError as ex:
+        # The version byte above (49/255) only tells apart Sbc156 from
+        # Sbc21/Sbc211; a file whose byte happens to match one of those but
+        # whose actual header magic doesn't is a variant this version of
+        # Albam has no struct for.
         raise AlbamCheckFailure(
             "This .sbc file variant is not supported",
             details=f"Expected header magic {ex.expected!r}, got {ex.actual!r} for app '{app_id}'",
             solution="Double check that this file comes from a supported game/app"
+        ) from ex
+    except (kaitaistruct.ConsistencyError, kaitaistruct.EndOfStreamError) as ex:
+        # EndOfStreamError is the realistic case here: a truncated file runs
+        # out of bytes mid-read. ConsistencyError is only ever raised from
+        # the generated _check() methods, which this read path doesn't call
+        # - caught anyway in case that changes, since it means the same
+        # thing a truncated/corrupted file would.
+        raise AlbamCheckFailure(
+            "This .sbc file appears to be truncated or corrupted",
+            details=f"{type(ex).__name__}: {ex}",
+            solution="Re-extract this file from the game's archive and try importing it again"
         ) from ex
 
     bl_object_name = file_item.display_name

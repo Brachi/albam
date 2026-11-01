@@ -54,6 +54,40 @@ def test_serialize_textures_rejects_wrong_appid_image(bl_material_with_image):
     assert "re1" in excinfo.value.details
 
 
+def test_serialize_textures_rejects_duplicated_relative_path(request):
+    from albam.engines.mtfw.texture import serialize_textures
+
+    name = request.node.name
+    shared_path = "common/shared_texture.tex"
+    bl_mats = []
+    bl_ims = []
+    try:
+        for i in range(2):
+            mat_name = f"{name}_{i}"
+            bl_mat = bpy.data.materials.new(mat_name)
+            if not bl_mat.node_tree:  # created on demand before Blender 5
+                bl_mat.use_nodes = True
+            im_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
+            bl_im = bpy.data.images.new(mat_name, 4, 4)
+            bl_im.albam_asset.app_id = "re5"
+            bl_im.albam_asset.relative_path = shared_path
+            im_node.image = bl_im
+            bsdf = bl_mat.node_tree.nodes["Principled BSDF"]
+            bl_mat.node_tree.links.new(im_node.outputs["Color"], bsdf.inputs["Base Color"])
+            bl_mats.append(bl_mat)
+            bl_ims.append(bl_im)
+
+        with pytest.raises(AlbamCheckFailure) as excinfo:
+            serialize_textures("re5", bl_mats)
+
+        assert shared_path in excinfo.value.details
+    finally:
+        for bl_mat in bl_mats:
+            bpy.data.materials.remove(bl_mat)
+        for bl_im in bl_ims:
+            bpy.data.images.remove(bl_im)
+
+
 # -- mesh.py: no mesh to export --------------------------------------------
 
 def test_export_mod_rejects_object_with_no_mesh(request, monkeypatch):
@@ -123,6 +157,21 @@ def test_load_sbc_rejects_bad_magic_bytes():
         load_sbc(fake_file_item, context=None)
 
     assert "not supported" in excinfo.value.message
+
+
+def test_load_sbc_rejects_truncated_file():
+    from albam.engines.mtfw.collision import load_sbc
+
+    # Valid magic for Sbc21 ("SBC\xff"), but nothing after it - the header's
+    # next field runs out of bytes mid-read, raising Kaitai's own
+    # EndOfStreamError instead of ValidationNotEqualError.
+    sbc_bytes = b"SBC" + bytes([255])
+    fake_file_item = _FakeVFile("re0", sbc_bytes)  # re0 -> Sbc21
+
+    with pytest.raises(AlbamCheckFailure) as excinfo:
+        load_sbc(fake_file_item, context=None)
+
+    assert "truncated" in excinfo.value.message
 
 
 # -- navmesh.py: unsupported game -------------------------------------------

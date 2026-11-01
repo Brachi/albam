@@ -79,10 +79,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
-- A wrong app_id on an exported image, no mesh to export (model or navmesh),
-  an unsupported `.mod`/`.sbc` version, and importing an unsupported `.sbc`
-  variant now show a clear error instead of crashing with a bare assert,
-  `AttributeError` or a raw Kaitai validation error
+- A wrong app_id or a duplicated relative path on an exported image, no mesh
+  to export (model or navmesh), an unsupported `.mod`/`.sbc` version, and
+  importing an unsupported `.sbc` variant or a truncated/corrupted `.sbc`
+  file now show a clear error instead of crashing with a bare assert,
+  `AttributeError` or a raw Kaitai parsing error
 
 ### Changed
 
