@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertex colors losing precision on every import-export round trip
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
+- Installing the addon from GitHub's "Code > Download ZIP" instead of a release zip crashing with a bare `ModuleNotFoundError` and no indication of why
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
 - Animation blocks that never move losing their length on export, so a static
   hold played back as a single frame

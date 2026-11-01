@@ -4,15 +4,21 @@ import os
 import bpy
 
 from . import _pkg_resources_warning  # noqa: F401  (filters before `fs` is imported)
-from .lib.tools import face_attr_editor as overlay
-from .blender_ui.data import AlbamDataFactory
-from .blender_ui.asset import AlbamAsset
-from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
-from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
-from .data_loading import populate_albam_data
-from .lib import fs_registry
-from .registry import blender_registry
-from .vfs import reconnect_fs_roots
+from ._missing_dependency import reraise_as_source_zip_hint
+
+try:
+    from .lib.tools import face_attr_editor as overlay
+    from .blender_ui.data import AlbamDataFactory
+    from .blender_ui.asset import AlbamAsset
+    from .blender_ui.custom_properties import AlbamCustomPropertiesFactory
+    from .blender_ui.tools_panel import register_workspace_tools, unregister_workspace_tools
+    from .data_loading import populate_albam_data
+    from .lib import fs_registry
+    from .registry import blender_registry
+    from .vfs import reconnect_fs_roots
+except ModuleNotFoundError as ex:
+    reraise_as_source_zip_hint(ex)
+
 from .__version__ import __version__ as version
 
 __version__ = version
@@ -34,24 +40,31 @@ LOAD_POST_HANDLERS = [populate_albam_data, reconnect_fs_roots]
 
 
 def register():
-    # Load registered functions into the blender_registry
-    importlib.import_module(".blender_ui.import_panel", __package__)
-    importlib.import_module(".blender_ui.export_panel", __package__)
-    importlib.import_module(".engines.mtfw.animation", __package__)
-    importlib.import_module(".engines.mtfw.collision", __package__)
-    importlib.import_module(".engines.mtfw.archive", __package__)
-    importlib.import_module(".engines.mtfw.mesh", __package__)
-    importlib.import_module(".engines.mtfw.navmesh", __package__)
-    importlib.import_module(".engines.hexn.archive", __package__)
-    importlib.import_module(".engines.hexn.mesh", __package__)
-    importlib.import_module(".engines.hexn.animation", __package__)
-    importlib.import_module(".engines.cie.archive", __package__)
-    importlib.import_module(".engines.cie.mesh", __package__)
-    importlib.import_module(".engines.cie.scenario", __package__)
-    if os.getenv("ALBAM_ENABLE_REEN"):
-        importlib.import_module(".engines.reng.archive", __package__)
-        importlib.import_module(".engines.reng.mesh", __package__)
-        importlib.import_module(".engines.reng.texture", __package__)
+    # Load registered functions into the blender_registry. Wrapped because
+    # these are the first imports to reach kaitaistruct/pymorton - a source-
+    # zip install (#370) missing fs/bc7enc fails earlier, at module import
+    # time above, but one missing only these would otherwise surface here
+    # instead, with the same bare, unhelpful ModuleNotFoundError.
+    try:
+        importlib.import_module(".blender_ui.import_panel", __package__)
+        importlib.import_module(".blender_ui.export_panel", __package__)
+        importlib.import_module(".engines.mtfw.animation", __package__)
+        importlib.import_module(".engines.mtfw.collision", __package__)
+        importlib.import_module(".engines.mtfw.archive", __package__)
+        importlib.import_module(".engines.mtfw.mesh", __package__)
+        importlib.import_module(".engines.mtfw.navmesh", __package__)
+        importlib.import_module(".engines.hexn.archive", __package__)
+        importlib.import_module(".engines.hexn.mesh", __package__)
+        importlib.import_module(".engines.hexn.animation", __package__)
+        importlib.import_module(".engines.cie.archive", __package__)
+        importlib.import_module(".engines.cie.mesh", __package__)
+        importlib.import_module(".engines.cie.scenario", __package__)
+        if os.getenv("ALBAM_ENABLE_REEN"):
+            importlib.import_module(".engines.reng.archive", __package__)
+            importlib.import_module(".engines.reng.mesh", __package__)
+            importlib.import_module(".engines.reng.texture", __package__)
+    except ModuleNotFoundError as ex:
+        reraise_as_source_zip_hint(ex)
 
     for _, cls in blender_registry.props:
         bpy.utils.register_class(cls)
