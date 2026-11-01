@@ -1,5 +1,6 @@
 import time
 import os
+import warnings
 import bpy
 
 from .error_handling import handle_operator_exception
@@ -292,11 +293,20 @@ class ALBAM_OT_Export(bpy.types.Operator):
         active_object = bpy.context.active_object
         if active_object:
             bpy.ops.object.mode_set(mode='OBJECT')
-        try:
-            self._execute(context, item)
-        except Exception:
-            handle_operator_exception(self, "Export failed")
-            return {"CANCELLED"}
+        # Non-fatal export checks (e.g. #375's Group ID check) use
+        # warnings.warn() rather than raising, since export is meant to
+        # finish - catch_warnings is the only way to surface those to the
+        # user without threading a report callback through every export
+        # function this calls.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                self._execute(context, item)
+            except Exception:
+                handle_operator_exception(self, "Export failed")
+                return {"CANCELLED"}
+        for warning in caught:
+            self.report({'WARNING'}, str(warning.message))
         self.report({'INFO'}, 'Export successful')
         return {"FINISHED"}
 
