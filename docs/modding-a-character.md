@@ -68,7 +68,9 @@ the original name.
 | `.bin` without it | camera, lighting, collision | refuses it with an error |
 | `.tpl` | a texture list: slot -> pack id + index | reads it |
 | `.pack` (separate archive) | the texture bytes, DDS or TGA | reads it |
-| everything else | animation, script data | not read yet |
+| `.fcv` | a motion: one clip of skeletal animation | imports it onto an armature |
+| `.seq` | the playback table paired with a motion (sound and effect cues) | not read yet |
+| everything else | effects, paths, script data | not read yet |
 
 Three things follow, and they are what catches people out:
 
@@ -303,6 +305,16 @@ Two things the room's `.smd` does not cover:
   models are not built, and export leaves their entries exactly as they were.
 
 ## What does not work yet
+
+- **Motions import, but do not export.** Select an `.fcv`, pick the
+  character's armature in the FCV options and press **Import**: the clip is
+  baked into an action, one key per frame, with arms and legs solved as
+  two-bone IK so that feet and hands land where the motion puts them. That
+  bake is also why it cannot be edited as a rig and written back. Limb
+  chains that do not fit the armature are skipped with a warning in the
+  console, and so are the broken camera joints a few weapon motions carry. A motion keys bones by number, so it only makes sense
+  on the skeleton of the character whose archive it came from (or one sharing
+  its numbering). The game plays motions at 30 frames a second.
 
 - **Rooms** export their placements and their models. Moving, rotating, scaling
   or deleting the objects placed in a room's `.smd`, and editing the meshes
