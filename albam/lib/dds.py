@@ -28,6 +28,12 @@ class DDSHeader(Structure):
     DDSCAPS2_CUBEMAP_POSITIVEZ = 0x4000
     DDSCAPS2_CUBEMAP_NEGATIVEZ = 0x8000
     DDSCAPS2_VOLUME = 0x200000
+    CUBEMAP_ALL_FACES = (
+        DDSCAPS2_CUBEMAP |
+        DDSCAPS2_CUBEMAP_POSITIVEX | DDSCAPS2_CUBEMAP_NEGATIVEX |
+        DDSCAPS2_CUBEMAP_POSITIVEY | DDSCAPS2_CUBEMAP_NEGATIVEY |
+        DDSCAPS2_CUBEMAP_POSITIVEZ | DDSCAPS2_CUBEMAP_NEGATIVEZ
+    )
 
     DDPF_ALPHAPIXELS = 0x1
     DDPF_FOURCC = 0x4
@@ -107,16 +113,13 @@ class DDSHeader(Structure):
 
     @property
     def is_proper_cubemap(self):
-        return bool(
-            self.dwCaps2 |
-            self.DDSCAPS2_CUBEMAP &
-            self.DDSCAPS2_CUBEMAP_POSITIVEX &
-            self.DDSCAPS2_CUBEMAP_NEGATIVEX &
-            self.DDSCAPS2_CUBEMAP_POSITIVEY &
-            self.DDSCAPS2_CUBEMAP_NEGATIVEY &
-            self.DDSCAPS2_CUBEMAP_POSITIVEZ &
-            self.DDSCAPS2_CUBEMAP_NEGATIVEZ
-        )
+        return self.dwCaps2 & self.CUBEMAP_ALL_FACES == self.CUBEMAP_ALL_FACES
+
+    @property
+    def is_volume(self):
+        if self.dwCaps2 & self.DDSCAPS2_VOLUME:
+            return True
+        return bool(self.dwFlags & self.DDSD_DEPTH) and self.dwDepth > 1
 
     @property
     def mipmap_sizes(self):
@@ -199,51 +202,60 @@ class DDSHeader(Structure):
                 mipmap_offsets.append(current_offset)
         return mipmap_offsets
 
-    def check_mipmap_consistency(self, source_name=""):
-        """Raise AlbamCheckFailure when dwMipMapCount, or the image's own
-        size, don't match the pixel data the header is sitting on top of.
+    @staticmethod
+    def calculate_mipmap_size_halved_blocks(width, height, level, fmt):
+        """Size of a mipmap level when the block count, rather than the pixel
+        size, is halved per level. Capcom's own non-power-of-two .tex data is
+        laid out this way (e.g. a 400x400 DXT1 has 12x12 blocks at level 3,
+        not 13x13), so it can be smaller than calculate_mipmap_size()."""
+        if not fmt:
+            return DDSHeader.calculate_mipmap_size(width, height, level, fmt)
+        blocks_w = max(1, ((width + 3) // 4) >> level)
+        blocks_h = max(1, ((height + 3) // 4) >> level)
+        block_size = 8 if fmt in (b"DXT1", b"DXT4") else 16
+        return blocks_w * blocks_h * block_size
 
-        Several DDS writers skip mipmaps but leave dwMipMapCount at 0
-        instead of 1 (the base level alone still counts as one level).
-        Trusting that 0 downstream makes calculate_mimpap_offsets() build a
-        1-entry offset list for a struct field expecting 0 entries, which
-        used to surface at export as a raw
-        ``ConsistencyError: Check failed: mipmap_offsets, expected: 0,
-        actual: 1`` - the "DDS saved without mipmaps" crash reported in
-        #support. Catching it here, against the header's own declared size,
-        turns that into an actionable message before export ever gets
-        there.
+    @property
+    def has_size_checked_format(self):
+        """Whether calculate_mipmap_size() knows this pixel format's layout:
+        DXT1/3/5, or uncompressed 32 bits per pixel."""
+        fmt = self.pixelfmt_dwFourCC
+        if fmt:
+            return fmt in (b"DXT1", b"DXT3", b"DXT5")
+        return bool(self.pixelfmt_dwFlags & self.DDPF_RGB) and self.pixelfmt_dwRGBBitCount == 32
+
+    def check_mipmap_consistency(self, source_name):
+        """Raise AlbamCheckFailure when the pixel data is shorter than the
+        mipmap chain the header declares, which would otherwise make export
+        write mipmap offsets past the end of the texture.
+
+        Only data that is too short is rejected: extra bytes are harmless,
+        and a non-power-of-two chain can be laid out with either rounding
+        (see calculate_mipmap_size_halved_blocks), so the smaller of the two
+        is the minimum. Volume textures and pixel formats the size math
+        doesn't cover are not checked.
         """
-        label = f"'{source_name}'" if source_name else "the image"
-        problems = []
-
-        if self.dwMipMapCount < 1:
-            problems.append(
-                f"the header claims {self.dwMipMapCount} mipmaps, but every DDS image "
-                "has at least the base level (1)"
-            )
-        else:
-            # mipmap_sizes already halves non-power-of-two dimensions the same
-            # way calculate_mimpap_offsets does (max(1, dim >> level)), so an
-            # NPOT image with a correctly generated chain adds up fine here -
-            # this only catches sizes that don't match that same math.
-            expected_size = sum(self.mipmap_sizes) * self.image_count
-            actual_size = len(self.data)
-            if expected_size != actual_size:
-                problems.append(
-                    f"the header claims {self.dwMipMapCount} mipmap(s) for a "
-                    f"{self.dwWidth}x{self.dwHeight} image, which needs {expected_size} bytes "
-                    f"of pixel data, but the file has {actual_size} bytes"
-                )
-
-        if problems:
+        if self.is_volume or not self.has_size_checked_format:
+            return
+        w, h, fmt = self.dwWidth, self.dwHeight, self.pixelfmt_dwFourCC
+        level_sizes = (
+            min(self.calculate_mipmap_size(w, h, level, fmt),
+                self.calculate_mipmap_size_halved_blocks(w, h, level, fmt))
+            for level in range(self.dwMipMapCount)
+        )
+        min_size = sum(level_sizes) * self.image_count
+        actual_size = len(self.data)
+        if actual_size < min_size:
             raise AlbamCheckFailure(
-                f"DDS header for {label} doesn't match its own pixel data",
-                details="; ".join(problems),
+                f"DDS image '{source_name}' has less pixel data than its header declares",
+                details=(
+                    f"The header declares {self.dwMipMapCount} mipmap level(s) for a {w}x{h} "
+                    f"image, which needs at least {min_size} bytes of pixel data, "
+                    f"but the file has {actual_size}"
+                ),
                 solution=(
-                    "Re-save the DDS file with a correct mipmap chain (most image editors "
-                    "have an option to generate or strip mipmaps), or set its mipmap count "
-                    "to 1 if it should have none"
+                    "Re-save the DDS file, either with mipmaps generated or with mipmaps "
+                    "turned off"
                 ),
             )
 
@@ -251,8 +263,6 @@ class DDSHeader(Structure):
     def from_bl_image(cls, bl_im):
         from bpy.path import abspath
 
-        dds_header = cls()
-        header_size = sizeof(dds_header)
         if bl_im.packed_file:
             data = bl_im.packed_file.data
         else:
@@ -261,8 +271,17 @@ class DDSHeader(Structure):
         id_magic = data[:4]
         if not id_magic == b"DDS ":
             raise TypeError(f"Image {bl_im.name} is not a dds image. Id: {id_magic}")
+        return cls.from_dds_bytes(data, bl_im.name)
+
+    @classmethod
+    def from_dds_bytes(cls, data, source_name):
+        dds_header = cls()
+        header_size = sizeof(dds_header)
         header_data = io.BytesIO(data[:header_size])  # FIXME unnecessary copy
         header_data.readinto(dds_header)
         dds_header._dds_data = data[header_size:]
-        dds_header.check_mipmap_consistency(source_name=bl_im.name)
+        # A DDS without a mip chain may leave dwMipMapCount at 0 (GIMP,
+        # Paint.NET and NVTT do); the base level alone still counts as one.
+        dds_header.dwMipMapCount = max(1, dds_header.dwMipMapCount)
+        dds_header.check_mipmap_consistency(source_name)
         return dds_header

@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
-- Exporting a texture whose DDS file disagrees with its own header (e.g. no mipmaps actually saved despite the header claiming some) now fails with a clear message instead of a raw `ConsistencyError: Check failed: mipmap_offsets` crash
+- Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
 - Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
