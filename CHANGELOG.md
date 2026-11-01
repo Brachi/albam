@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Import warning listing materials' textures that weren't found in any loaded arc, with a hint to load `Core.arc` first for apps like Resident Evil Revelations 2 where shared textures live there
 
 ### Fixed
 
