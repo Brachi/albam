@@ -16,7 +16,7 @@ from ...lib.mt_classes import (
 )
 from .structs.xfs import Xfs
 from .structs.sdl_156 import Sdl156
-from .xfs.xfs_lot import build_xfs_lot_markers, write_xfs_lot_marker_changes
+from .xfs.layout import build_xfs_lot_markers, write_xfs_lot_marker_changes
 
 TRACK_TYPE = {
     "TYPE_UNKNOWN": 0,
