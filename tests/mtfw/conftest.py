@@ -227,3 +227,33 @@ def mount_vfs_root():
             continue  # the test removed it itself
         vfs.file_list_selected_index = index
         bpy.ops.albam.remove_imported()
+
+
+@pytest.fixture
+def new_bl_material(request):
+    """Factory for materials with one image node linked to Base Color, so
+    the export machinery picks the image up. Each call adds a material and
+    its image, both named after the test; all are removed afterwards.
+    """
+    created = []
+
+    def make(app_id, relative_path=""):
+        name = f"{request.node.name}_{len(created)}"
+        bl_mat = bpy.data.materials.new(name)
+        if not bl_mat.node_tree:  # created on demand before Blender 5
+            bl_mat.use_nodes = True
+        im_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
+        bl_im = bpy.data.images.new(name, 4, 4)
+        bl_im.albam_asset.app_id = app_id
+        bl_im.albam_asset.relative_path = relative_path
+        im_node.image = bl_im
+        bsdf = bl_mat.node_tree.nodes["Principled BSDF"]
+        bl_mat.node_tree.links.new(im_node.outputs["Color"], bsdf.inputs["Base Color"])
+        created.append((bl_mat, bl_im))
+        return bl_mat, bl_im
+
+    yield make
+
+    for bl_mat, bl_im in created:
+        bpy.data.materials.remove(bl_mat)
+        bpy.data.images.remove(bl_im)

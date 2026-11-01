@@ -111,7 +111,7 @@ def test_compression_format_is_app_id_specific(export_target):
 def test_diffuse_without_alpha_is_dxt1(export_target):
     """Same Diffuse BM slot as the alpha case above, but on a source image
     with no alpha channel (depth 24) - `.pixels` always reports RGBA (see
-    encode_bl_image_to_dds in lib/dds.py), only `.depth` tells the two apart.
+    image_to_dds in lib/blender.py), only `.depth` tells the two apart.
     """
     root_ob, bl_im = export_target
     # alpha=False still leaves bl_im.pixels as RGBA, just with depth 24
@@ -167,14 +167,16 @@ def test_already_dds_image_is_left_untouched(export_target):
 
 @pytest.mark.parametrize("export_target", ["Diffuse BM"], indirect=True)
 def test_encode_failure_raises_albam_check_failure(export_target, monkeypatch):
-    import albam.lib.dds as dds_module
+    import bc7enc
 
     root_ob, bl_im = export_target
 
     def _boom(*args, **kwargs):
         raise RuntimeError("bc7enc could not encode this image")
 
-    monkeypatch.setattr(dds_module, "pack_dds", _boom)
+    # image_to_dds (lib/blender.py) imports pack_dds from bc7enc fresh on
+    # every call, so patching it here is enough.
+    monkeypatch.setattr(bc7enc, "pack_dds", _boom)
 
     with pytest.raises(AlbamCheckFailure) as excinfo:
         _fake_export(root_ob)

@@ -25,10 +25,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
-- Export now encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
+- Export encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
+- Autosetter names a texture that never had a path set after its in-game slot
+  (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
+  plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
+  game file), wired into slots with different suffixes, or whose suffixed name another
+  image already uses is left unsuffixed
+- "Copy report to clipboard" button on the import/export error popup, so a #support
+  user can paste the full error and traceback directly, without being asked to find
+  it in the system console
 
 ### Fixed
 
+- Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
 - Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
@@ -44,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertex colors losing precision on every import-export round trip
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
+- Installing the addon from GitHub's "Code > Download ZIP" instead of a release zip crashing with a bare `ModuleNotFoundError` and no indication of why
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
 - Animation blocks that never move losing their length on export, so a static
   hold played back as a single frame
@@ -80,6 +90,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
+- A wrong app_id or a duplicated relative path on an exported image, and
+  importing a `.sbc` file with the wrong App selected or a truncated `.sbc`
+  file, now show a clear error instead of an `AttributeError` or a raw Kaitai
+  parsing error. Images with no relative path set are no longer reported as
+  duplicates of each other
 
 ### Changed
 

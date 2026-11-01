@@ -325,6 +325,12 @@ MAIN_LODS = {
 
 
 def _validate_app_id_for_mod(app_id, mod_bytes):
+    if len(mod_bytes) < 5:
+        raise AlbamCheckFailure(
+            "This .mod file appears to be truncated or corrupted",
+            details=f"The file is only {len(mod_bytes)} bytes long",
+            solution="Re-extract this file from the game's archive and try importing it again"
+        )
     id_magic = mod_bytes[0:3]
     version = mod_bytes[4]
 
@@ -368,7 +374,6 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     mod_bytes = vfile.get_bytes()
     _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
-    assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = parse(ModCls, mod_bytes, app_id)
@@ -967,8 +972,15 @@ def export_mod(bl_obj):
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
-    msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
-    assert bl_meshes, msg
+    if not bl_meshes:
+        raise AlbamCheckFailure(
+            "There is no mesh to export",
+            details=f"Object '{bl_obj.name}' has no visible mesh children"
+            if export_settings.export_visible else
+            f"Object '{bl_obj.name}' has no mesh children",
+            solution="Unhide the meshes and/or parent them to the exported object "
+            f"'{bl_obj.name}', or disable 'Export only visible meshes' if that's hiding them"
+        )
     _check_armature_modifiers_target(bl_obj, bl_meshes)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
