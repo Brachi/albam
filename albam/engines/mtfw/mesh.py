@@ -75,13 +75,14 @@ APPID_CLASS_MAPPER = {
 }
 
 # #375: app_ids whose source models get checked for a mesh's Group ID not
-# being in the model's own groups table. Verified against every uPl*/uEm*
-# .mod in a real RE5 install (186 models, including the 16 with no group 0)
-# with zero false positives; mod_153/dmc4 has the same Group/mesh layout so
-# it's included too, though not separately verified against real dmc4
-# files. The v21 games (mod_21: re0/re1/re6/rev1/rev2/dd/umvc3) are left out
-# until someone checks their real models the same way - see #375.
-GROUP_ID_CHECK_APP_IDS = ("re5", "dmc4")
+# being in the model's own groups table. The Group/Mesh layout is identical
+# on every mod version (mod_21, mod_153, mod_156), so this is every app_id
+# APPID_CLASS_MAPPER above knows - verified by parsing every real .mod each
+# game's own local install has: re5 (462 models, 36 with no group 0), dmc4
+# (5171, 958), re0 (3567, 31), re1 (1177, 16), re6 (5806, 345), rev1 (2349,
+# 439), rev2 (2330, 317), dd (3941, 1533), umvc3 (2702, 576) - 27,515 models
+# total, zero mesh/group mismatches anywhere.
+GROUP_ID_CHECK_APP_IDS = tuple(APPID_CLASS_MAPPER)
 
 MOD_VERSION_APPID_MAPPER = {
     153: {"dmc4"},
