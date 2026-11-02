@@ -324,7 +324,7 @@ INSTANCE_UNIT_CLASSES_RE5 = {
     "uOm1009": "",
     "uOm100a": "",
     "uOm100b": "",
-    "uOm100c": "",
+    "uOm100c": "Door Wooden Destructible",
     "uOm100f": "",
     "uOm1010": "",
     "uOm1011": "",

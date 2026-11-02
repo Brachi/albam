@@ -15,6 +15,7 @@ from ....lib.stage_placer.re5_item_ids import (
     get_item_type,
     get_item_types,
 )
+from ....lib.stage_placer.re5_em_classes import INFO_CLASSES, UNIT_CLASSES
 from ....lib.stage_placer.re5_instance_unit_classes import INSTANCE_UNIT_CLASSES_RE5
 from ....registry import blender_registry
 
@@ -24,6 +25,7 @@ _MARKER_KIND = "_albam_xfs_lot_marker_kind"
 _MARKER_PATH = "_albam_xfs_path"
 _MARKER_UNIT_CLASS_PATH = "_albam_xfs_unit_class_path"
 _MARKER_UNIT_CLASS = "_albam_xfs_unit_class"
+_MARKER_INFO_CLASS = "_albam_xfs_info_class"
 _MARKER_ITEM_ID_PATH = "_albam_xfs_item_id_path"
 _MARKER_ITEM_ID = "_albam_xfs_item_id"
 _MARKER_BASELINE = "_albam_xfs_baseline_transform"
@@ -75,6 +77,24 @@ _INSTANCE_UNIT_CLASS_ENUM_ITEMS = tuple(
     for unit_class, description in INSTANCE_UNIT_CLASSES_RE5.items()
 )
 _PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS = {}
+_ENEMY_INFO_CLASS_ENUM_ITEMS = tuple(
+    (
+        info_class,
+        f"{info_class} — {description}" if description else info_class,
+        description or "RE5 enemy spawn information class",
+    )
+    for info_class, description in INFO_CLASSES.items()
+)
+_ENEMY_UNIT_CLASS_ENUM_ITEMS = tuple(
+    (
+        unit_class,
+        f"{unit_class} — {description}" if description else unit_class,
+        description or "RE5 enemy unit class",
+    )
+    for unit_class, description in UNIT_CLASSES.items()
+)
+_PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS = {}
+_PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS = {}
 
 
 def _item_type_enum_items(_properties, _context):
@@ -144,6 +164,21 @@ def _item_id_updated(properties, context):
 
 def _instance_unit_class_enum_items(properties, _context):
     bl_object = properties.id_data
+    if _marker_kind(bl_object) == "enemy":
+        items = list(_ENEMY_UNIT_CLASS_ENUM_ITEMS)
+        current_class = str(bl_object.get(_MARKER_UNIT_CLASS, ""))
+        if current_class and current_class not in UNIT_CLASSES:
+            item = _PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS.get(current_class)
+            if item is None:
+                item = (
+                    current_class,
+                    f"{current_class} — unknown (preserve)",
+                    "Unmapped enemy unit class; the original value is preserved on export",
+                )
+                _PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS[current_class] = item
+            items.append(item)
+        return items
+
     items = list(_INSTANCE_UNIT_CLASS_ENUM_ITEMS)
     current_class = str(bl_object.get(_MARKER_UNIT_CLASS, ""))
     if current_class and current_class not in INSTANCE_UNIT_CLASSES_RE5:
@@ -161,13 +196,36 @@ def _instance_unit_class_enum_items(properties, _context):
 
 def _instance_unit_class_updated(properties, context):
     bl_object = properties.id_data
-    if _marker_kind(bl_object) != "instance":
+    if _marker_kind(bl_object) not in ("instance", "enemy"):
         return
 
     unit_class = properties.unit_class
     bl_object[_MARKER_UNIT_CLASS] = unit_class
     if bl_object.type == "MESH" and context is not None:
         bl_object.data = _create_visual_marker(unit_class, context)
+
+
+def _enemy_info_class_enum_items(properties, _context):
+    bl_object = properties.id_data
+    items = list(_ENEMY_INFO_CLASS_ENUM_ITEMS)
+    current_class = str(bl_object.get(_MARKER_INFO_CLASS, ""))
+    if current_class and current_class not in INFO_CLASSES:
+        item = _PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS.get(current_class)
+        if item is None:
+            item = (
+                current_class,
+                f"{current_class} — unknown (preserve)",
+                "Unmapped enemy info class; the original value is preserved on export",
+            )
+            _PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS[current_class] = item
+        items.append(item)
+    return items
+
+
+def _enemy_info_class_updated(properties, _context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) == "enemy":
+        bl_object[_MARKER_INFO_CLASS] = properties.info_class
 
 
 @blender_registry.register_custom_properties_object(
@@ -188,9 +246,15 @@ class XFSLotPlacementProperties(bpy.types.PropertyGroup):
     )
     unit_class: bpy.props.EnumProperty(
         name="Unit Class",
-        description="RE5 instance class spawned by this placement",
+        description="RE5 unit class spawned by this placement",
         items=_instance_unit_class_enum_items,
         update=_instance_unit_class_updated,
+    )
+    info_class: bpy.props.EnumProperty(
+        name="Info Class",
+        description="RE5 enemy spawn information class",
+        items=_enemy_info_class_enum_items,
+        update=_enemy_info_class_updated,
     )
 
     def draw_custom_properties(self, layout):
@@ -199,6 +263,9 @@ class XFSLotPlacementProperties(bpy.types.PropertyGroup):
             layout.prop(self, "item_type")
             layout.prop(self, "item_id")
         elif marker_kind == "instance":
+            layout.prop(self, "unit_class")
+        elif marker_kind == "enemy":
+            layout.prop(self, "info_class")
             layout.prop(self, "unit_class")
 
 
@@ -336,6 +403,39 @@ def _lot_record_locations(root):
         info, info_path = resolve_reference(info, info_path)
         if info is None:
             return
+
+        info_class_xml = _named_property(set_info, "mInfoClass")
+        if info_class_xml is None:
+            info_class_xml = _named_property(info, "mInfoClass")
+        info_class = (
+            info_class_xml.attrib.get("value", info_class_xml.text or "")
+            if info_class_xml is not None else ""
+        )
+        if (
+            info_class_xml is not None and
+            _xml_vector(_named_property(info, "mPosition")) is not None and
+            _xml_vector(_named_property(info, "mAngle")) is not None
+        ):
+            records[set_info_entry_path] = {
+                "kind": "enemy",
+                "values": (
+                    set_info, unit_class, info, info_path, unit_class_path,
+                    None, None,
+                ),
+                "info_class": info_class,
+                "set_info": set_info,
+                "set_info_path": set_info_path,
+                "set_info_entry": set_info_entry,
+                "set_info_entry_path": set_info_entry_path,
+                "set_info_container": set_info_container,
+                "set_info_parent": set_info_parent,
+                "item_container_path": None,
+                "item_entry_path": None,
+                "item_container": None,
+                "item_entry": None,
+            }
+            return
+
         item_set = _named_property(info, "mItemSet")
         if item_set is None:
             if unit_class not in INSTANCE_UNIT_CLASSES_RE5:
@@ -627,11 +727,22 @@ def _blender_angle_to_game(blender_rotation):
     return (basis.inverted() @ blender_matrix @ basis).to_euler("XYZ")
 
 
+def _game_position_to_blender(position):
+    return position[0] / 100.0, -position[2] / 100.0, position[1] / 100.0
+
+
+def _blender_position_to_game(location):
+    return location.x * 100.0, location.z * 100.0, -location.y * 100.0
+
+
 def _store_baseline(bl_object):
+    # The inactive rotation channel can be stale (e.g. rotation_quaternion
+    # stays identity while the marker uses XYZ Euler mode).
+    location, rotation, scale = bl_object.matrix_basis.decompose()
     bl_object[_MARKER_BASELINE] = json.dumps({
-        "location": list(bl_object.location),
-        "rotation": list(bl_object.rotation_quaternion),
-        "scale": list(bl_object.scale),
+        "location": list(location),
+        "rotation": list(rotation),
+        "scale": list(scale),
     })
 
 
@@ -665,7 +776,7 @@ def _transform_changes(bl_object):
 
 
 def build_xfs_lot_markers(bl_object, xml, context):
-    """Create viewport markers for item and instance placements in ``mSetInfos``."""
+    """Create viewport markers for item, instance, and enemy placements."""
     records = _lot_record_locations(xml.getroot())
     if not records:
         return
@@ -678,10 +789,10 @@ def build_xfs_lot_markers(bl_object, xml, context):
         ) = location["values"]
         marker_kind = location["kind"]
         unit_class = (
-            xml_unit_class if marker_kind == "instance"
+            xml_unit_class if marker_kind in ("instance", "enemy")
             else get_item_class(item_id, default=xml_unit_class)
         )
-        if marker_kind == "instance":
+        if marker_kind in ("instance", "enemy"):
             position = _xml_vector(_named_property(info, "mPosition"))
             angles = _xml_vector(_named_property(info, "mAngle"))
         else:
@@ -695,11 +806,7 @@ def build_xfs_lot_markers(bl_object, xml, context):
             marker_mesh,
         )
         marker.parent = bl_object
-        marker.location = (
-            position[0] / 100.0,
-            -position[2] / 100.0,
-            position[1] / 100.0,
-        )
+        marker.location = _game_position_to_blender(position)
         marker.rotation_mode = "XYZ"
         marker.rotation_euler = _game_angle_to_blender(angles)
         marker.scale = (parent_scale[0], parent_scale[2], parent_scale[1])
@@ -717,6 +824,12 @@ def build_xfs_lot_markers(bl_object, xml, context):
         marker_properties = marker.albam_custom_properties.re5__lot_placement
         if marker_kind == "instance":
             marker_properties.unit_class = unit_class
+        elif marker_kind == "enemy":
+            marker[_MARKER_INFO_CLASS] = location["info_class"]
+            if location["info_class"]:
+                marker_properties.info_class = location["info_class"]
+            if unit_class:
+                marker_properties.unit_class = unit_class
         elif item_id is not None:
             marker[_MARKER_ITEM_ID] = str(item_id)
             marker_properties.item_id = str(item_id)
@@ -761,9 +874,20 @@ def _write_marker_values(record, parent, unit_class_node, marker, marker_kind):
             else:
                 unit_class_node.text = unit_class
 
+    if marker_kind == "enemy":
+        info_class_node = _named_property(record, "mInfoClass")
+        if info_class_node is None:
+            info_class_node = _named_property(parent, "mInfoClass")
+        info_class = str(marker.get(_MARKER_INFO_CLASS, ""))
+        if info_class_node is not None and info_class:
+            if "value" in info_class_node.attrib:
+                info_class_node.set("value", info_class)
+            else:
+                info_class_node.text = info_class
+
     if "location" in changes:
         location = marker.location
-        position = (location.x * 100.0, location.z * 100.0, -location.y * 100.0)
+        position = _blender_position_to_game(location)
         parent_written = _set_xml_vector(_position_property(parent), position)
         if marker_kind == "item":
             child_written = _set_xml_vector(_named_property(record, "Pos"), position)
@@ -882,7 +1006,7 @@ def _duplicate_set_info(
     set_info_path = location["set_info_path"]
     values = location["values"]
     info_path, unit_class_path = values[3], values[4]
-    if location["kind"] == "instance":
+    if location["kind"] in ("instance", "enemy"):
         cloned_info = _xml_node_at_path(
             clone,
             _path_relative_to(info_path, set_info_path, "mpInfo"),
@@ -894,7 +1018,8 @@ def _duplicate_set_info(
                 _path_relative_to(unit_class_path, set_info_path, "mUnitClass"),
             )
         _write_marker_values(
-            clone, cloned_info, cloned_unit_class, marker, marker_kind="instance"
+            clone, cloned_info, cloned_unit_class, marker,
+            marker_kind=location["kind"],
         )
         return clone
 
@@ -995,7 +1120,7 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
     for source_paths in paths_by_set_info.values():
         location = records[source_paths[0]]
         active_paths = [path for path in source_paths if path in markers_by_path]
-        if location["kind"] == "instance":
+        if location["kind"] in ("instance", "enemy"):
             if active_paths:
                 continue
             entry = location["set_info_entry"]
