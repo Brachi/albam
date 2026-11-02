@@ -432,7 +432,8 @@ def _marker_material(tag, name, color):
     return material
 
 
-def _font_geometry(text, context):
+def _set_font_mesh(text, context):
+    "Creates temporary blender Font object, converts it to mesh, and returns the vertices and faces."
     curve = bpy.data.curves.new("ALBAM XFS lot marker label", type="FONT")
     curve.body = text
     curve.size = 0.16
@@ -447,7 +448,7 @@ def _font_geometry(text, context):
             evaluated_object, depsgraph=depsgraph
         )
         vertices = [
-            (-vertex.co.x, -vertex.co.y, vertex.co.z + 0.62)
+            (vertex.co.x, vertex.co.y, vertex.co.z + 0.5)
             for vertex in text_mesh.vertices
         ]
         faces = [tuple(polygon.vertices) for polygon in text_mesh.polygons]
@@ -467,41 +468,78 @@ def _create_visual_marker(unit_class, context):
     faces = []
     material_indices = []
 
-    def add_box_beam(start_point, end_point, width):
-        half = width / 2.0
-        minimum = [min(a, b) for a, b in zip(start_point, end_point)]
-        maximum = [max(a, b) for a, b in zip(start_point, end_point)]
-        axis = next(i for i in range(3) if minimum[i] != maximum[i])
-        for i in range(3):
-            if i != axis:
-                minimum[i] -= half
-                maximum[i] += half
-
-        x0, y0, z0 = minimum
-        x1, y1, z1 = maximum
-        offset = len(vertices)
-        vertices.extend((
-            (x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
-            (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),
-        ))
-        faces.extend(tuple(offset + i for i in face) for face in (
-            (0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
-            (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7),
-        ))
-        material_indices.extend([0] * 6)
-
     corners = (
         (-0.5, -0.5, -0.5), (-0.5, -0.5, 0.5),
         (-0.5, 0.5, -0.5), (-0.5, 0.5, 0.5),
         (0.5, -0.5, -0.5), (0.5, -0.5, 0.5),
         (0.5, 0.5, -0.5), (0.5, 0.5, 0.5),
     )
+    beam_width = 0.012
+    half_width = beam_width / 2.0
+    box_faces = (
+        (0, 2, 6, 4), (1, 5, 7, 3), (0, 1, 3, 2),
+        (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6),
+    )
+
+    def add_corner_joint(center):
+        offset = len(vertices)
+        vertices.extend(
+            tuple(coordinate + (half_width if bit else -half_width)
+                  for coordinate, bit in zip(center, corner_bits))
+            for corner_bits in (
+                (0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1),
+                (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1),
+            )
+        )
+        faces.extend(
+            tuple(offset + vertex_index for vertex_index in face)
+            for face in box_faces
+        )
+        material_indices.extend([0] * len(box_faces))
+
+    for corner in corners:
+        add_corner_joint(corner)
+
     box_edges = (
         (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
         (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
     )
+
+    def add_beam(start_point, end_point):
+        axis = next(
+            index for index, (start, end) in enumerate(zip(start_point, end_point))
+            if start != end
+        )
+        direction = 1.0 if end_point[axis] > start_point[axis] else -1.0
+        cross_axes = [index for index in range(3) if index != axis]
+        start = list(start_point)
+        end = list(end_point)
+        start[axis] += direction * half_width
+        end[axis] -= direction * half_width
+        offset = len(vertices)
+        for axis_position in (start[axis], end[axis]):
+            for first_side, second_side in (
+                (-half_width, -half_width), (half_width, -half_width),
+                (half_width, half_width), (-half_width, half_width),
+            ):
+                point = list(start_point)
+                point[axis] = axis_position
+                point[cross_axes[0]] += first_side
+                point[cross_axes[1]] += second_side
+                vertices.append(tuple(point))
+        for side in range(4):
+            next_side = (side + 1) % 4
+            face = (
+                offset + side, offset + next_side,
+                offset + 4 + next_side, offset + 4 + side,
+            )
+            if direction < 0:
+                face = tuple(reversed(face))
+            faces.append(face)
+        material_indices.extend([0] * 4)
+
     for start_index, end_index in box_edges:
-        add_box_beam(corners[start_index], corners[end_index], 0.012)
+        add_beam(corners[start_index], corners[end_index])
 
     arrow_face_start = len(faces)
     segments = 10
@@ -550,7 +588,7 @@ def _create_visual_marker(unit_class, context):
     material_indices.extend([1] * (len(faces) - arrow_face_start))
 
     if unit_class:
-        text_vertices, text_faces = _font_geometry(unit_class, context)
+        text_vertices, text_faces = _set_font_mesh(unit_class, context)
         text_offset = len(vertices)
         vertices.extend(text_vertices)
         faces.extend(
