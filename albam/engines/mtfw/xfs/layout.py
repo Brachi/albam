@@ -15,10 +15,12 @@ from ....lib.stage_placer.re5_item_ids import (
     get_item_type,
     get_item_types,
 )
+from ....lib.stage_placer.re5_instance_unit_classes import INSTANCE_UNIT_CLASSES_RE5
 from ....registry import blender_registry
 
 
 _MARKER_TAG = "_albam_xfs_lot_marker"
+_MARKER_KIND = "_albam_xfs_lot_marker_kind"
 _MARKER_PATH = "_albam_xfs_path"
 _MARKER_UNIT_CLASS_PATH = "_albam_xfs_unit_class_path"
 _MARKER_UNIT_CLASS = "_albam_xfs_unit_class"
@@ -26,6 +28,17 @@ _MARKER_ITEM_ID_PATH = "_albam_xfs_item_id_path"
 _MARKER_ITEM_ID = "_albam_xfs_item_id"
 _MARKER_BASELINE = "_albam_xfs_baseline_transform"
 _MARKER_MESH_TAG = "_albam_xfs_lot_marker_mesh"
+
+
+def _marker_kind(bl_object):
+    marker_kind = bl_object.get(_MARKER_KIND)
+    if marker_kind:
+        return marker_kind
+    if bl_object.get(_MARKER_ITEM_ID_PATH) or bl_object.get(_MARKER_ITEM_ID):
+        return "item"
+    return ""
+
+
 def _item_type_identifier(item_type):
     if not item_type:
         return "UNCATEGORIZED"
@@ -53,6 +66,15 @@ _ITEM_ENUM_ITEMS_BY_TYPE = {
 }
 _ITEM_ENUM_ITEMS_BY_TYPE[None] = tuple(enum_items())
 _PRESERVED_ITEM_ENUM_ITEMS = {}
+_INSTANCE_UNIT_CLASS_ENUM_ITEMS = tuple(
+    (
+        unit_class,
+        f"{unit_class} — {description}" if description else unit_class,
+        description or "RE5 instance unit class",
+    )
+    for unit_class, description in INSTANCE_UNIT_CLASSES_RE5.items()
+)
+_PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS = {}
 
 
 def _item_type_enum_items(_properties, _context):
@@ -104,6 +126,8 @@ def _item_id_enum_items(properties, _context):
 
 def _item_id_updated(properties, context):
     bl_object = properties.id_data
+    if _marker_kind(bl_object) != "item":
+        return
     item_id_text = properties.item_id
     bl_object[_MARKER_ITEM_ID] = item_id_text
     try:
@@ -115,7 +139,35 @@ def _item_id_updated(properties, context):
 
     bl_object[_MARKER_UNIT_CLASS] = unit_class
     if bl_object.type == "MESH" and context is not None:
-        bl_object.data = _marker_mesh(unit_class, context)
+        bl_object.data = _create_visual_marker(unit_class, context)
+
+
+def _instance_unit_class_enum_items(properties, _context):
+    bl_object = properties.id_data
+    items = list(_INSTANCE_UNIT_CLASS_ENUM_ITEMS)
+    current_class = str(bl_object.get(_MARKER_UNIT_CLASS, ""))
+    if current_class and current_class not in INSTANCE_UNIT_CLASSES_RE5:
+        item = _PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS.get(current_class)
+        if item is None:
+            item = (
+                current_class,
+                f"{current_class} — unknown (preserve)",
+                "Unmapped instance class; the original value is preserved on export",
+            )
+            _PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS[current_class] = item
+        items.append(item)
+    return items
+
+
+def _instance_unit_class_updated(properties, context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) != "instance":
+        return
+
+    unit_class = properties.unit_class
+    bl_object[_MARKER_UNIT_CLASS] = unit_class
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _create_visual_marker(unit_class, context)
 
 
 @blender_registry.register_custom_properties_object(
@@ -134,6 +186,20 @@ class XFSLotPlacementProperties(bpy.types.PropertyGroup):
         items=_item_id_enum_items,
         update=_item_id_updated,
     )
+    unit_class: bpy.props.EnumProperty(
+        name="Unit Class",
+        description="RE5 instance class spawned by this placement",
+        items=_instance_unit_class_enum_items,
+        update=_instance_unit_class_updated,
+    )
+
+    def draw_custom_properties(self, layout):
+        marker_kind = _marker_kind(self.id_data)
+        if marker_kind == "item":
+            layout.prop(self, "item_type")
+            layout.prop(self, "item_id")
+        elif marker_kind == "instance":
+            layout.prop(self, "unit_class")
 
 
 def _iter_xml_elements_with_paths(element, path=()):
@@ -272,6 +338,30 @@ def _lot_record_locations(root):
             return
         item_set = _named_property(info, "mItemSet")
         if item_set is None:
+            if unit_class not in INSTANCE_UNIT_CLASSES_RE5:
+                return
+            if (
+                _xml_vector(_named_property(info, "mPosition")) is None or
+                _xml_vector(_named_property(info, "mAngle")) is None
+            ):
+                return
+            records[set_info_entry_path] = {
+                "kind": "instance",
+                "values": (
+                    set_info, unit_class, info, info_path, unit_class_path,
+                    None, None,
+                ),
+                "set_info": set_info,
+                "set_info_path": set_info_path,
+                "set_info_entry": set_info_entry,
+                "set_info_entry_path": set_info_entry_path,
+                "set_info_container": set_info_container,
+                "set_info_parent": set_info_parent,
+                "item_container_path": None,
+                "item_entry_path": None,
+                "item_container": None,
+                "item_entry": None,
+            }
             return
         item_set_path = paths_by_element[id(item_set)]
         for (
@@ -286,6 +376,7 @@ def _lot_record_locations(root):
                 paths_by_element[id(item_id_xml)] if item_id_xml is not None else None
             )
             records[item_path] = {
+                "kind": "item",
                 "values": (
                     item_record, unit_class, info, info_path, unit_class_path,
                     item_id, item_id_path,
@@ -367,7 +458,7 @@ def _font_geometry(text, context):
         bpy.data.curves.remove(curve)
 
 
-def _marker_mesh(unit_class, context):
+def _create_visual_marker(unit_class, context):
     for mesh in bpy.data.meshes:
         if mesh.get(_MARKER_MESH_TAG) == unit_class:
             return mesh
@@ -471,7 +562,7 @@ def _marker_mesh(unit_class, context):
     mesh = bpy.data.meshes.new("ALBAM XFS lot placement marker")
     mesh.from_pydata(vertices, [], faces)
     mesh.materials.append(_marker_material(
-        "_albam_xfs_lot_box_material", "ALBAM XFS lot box", (1.0, 0.22, 0.025, 1.0)
+        "_albam_xfs_lot_box_material", "ALBAM XFS lot box", (0.42, 0.11, 0.89, 1.0)
     ))
     mesh.materials.append(_marker_material(
         "_albam_xfs_lot_arrow_material", "ALBAM XFS lot arrow", (0.04, 0.85, 0.12, 1.0)
@@ -536,7 +627,7 @@ def _transform_changes(bl_object):
 
 
 def build_xfs_lot_markers(bl_object, xml, context):
-    """Create viewport markers for child ``mItemSet`` placements in ``mSetInfos``."""
+    """Create viewport markers for item and instance placements in ``mSetInfos``."""
     records = _lot_record_locations(xml.getroot())
     if not records:
         return
@@ -547,11 +638,19 @@ def build_xfs_lot_markers(bl_object, xml, context):
             record, xml_unit_class, info, info_path, unit_class_path,
             item_id, item_id_path,
         ) = location["values"]
-        unit_class = get_item_class(item_id, default=xml_unit_class)
-        position = _xml_vector(_named_property(record, "Pos"))
-        angles = _xml_vector(_named_property(record, "Ang"))
+        marker_kind = location["kind"]
+        unit_class = (
+            xml_unit_class if marker_kind == "instance"
+            else get_item_class(item_id, default=xml_unit_class)
+        )
+        if marker_kind == "instance":
+            position = _xml_vector(_named_property(info, "mPosition"))
+            angles = _xml_vector(_named_property(info, "mAngle"))
+        else:
+            position = _xml_vector(_named_property(record, "Pos"))
+            angles = _xml_vector(_named_property(record, "Ang"))
         parent_scale = _xml_vector(_named_property(info, "mScale")) or (1, 1, 1)
-        marker_mesh = _marker_mesh(unit_class, context)
+        marker_mesh = _create_visual_marker(unit_class, context)
 
         marker = bpy.data.objects.new(
             f"{bl_object.name}_SetInfo_{marker_index:03d}",
@@ -570,15 +669,18 @@ def build_xfs_lot_markers(bl_object, xml, context):
         marker.show_in_front = True
         marker.hide_render = True
         marker[_MARKER_TAG] = True
+        marker[_MARKER_KIND] = marker_kind
         marker[_MARKER_PATH] = json.dumps(path)
         if unit_class_path is not None:
             marker[_MARKER_UNIT_CLASS_PATH] = json.dumps(unit_class_path)
         marker[_MARKER_UNIT_CLASS] = unit_class
         if item_id_path is not None:
             marker[_MARKER_ITEM_ID_PATH] = json.dumps(item_id_path)
-        if item_id is not None:
+        marker_properties = marker.albam_custom_properties.re5__lot_placement
+        if marker_kind == "instance":
+            marker_properties.unit_class = unit_class
+        elif item_id is not None:
             marker[_MARKER_ITEM_ID] = str(item_id)
-            marker_properties = marker.albam_custom_properties.re5__lot_placement
             marker_properties.item_id = str(item_id)
             item_type = get_item_type(item_id)
             item_type_identifier = _item_type_identifier(item_type)
@@ -587,7 +689,7 @@ def build_xfs_lot_markers(bl_object, xml, context):
         _store_baseline(marker)
 
 
-def _write_marker_values(record, parent, unit_class_node, marker):
+def _write_marker_values(record, parent, unit_class_node, marker, marker_kind):
     changes = _transform_changes(marker)
     item_id_path_json = marker.get(_MARKER_ITEM_ID_PATH)
     item_id_text = str(marker.get(_MARKER_ITEM_ID, ""))
@@ -613,28 +715,38 @@ def _write_marker_values(record, parent, unit_class_node, marker):
             else:
                 unit_class_node.text = mapped_unit_class
 
-    if unit_class_node is not None and "mUnitClass" in marker and not item_id_path_json:
-        unit_class = str(marker["mUnitClass"])
-        if "value" in unit_class_node.attrib:
-            unit_class_node.set("value", unit_class)
-        else:
-            unit_class_node.text = unit_class
+    if unit_class_node is not None and not item_id_path_json:
+        unit_class = str(marker.get(_MARKER_UNIT_CLASS, marker.get("mUnitClass", "")))
+        if unit_class:
+            if "value" in unit_class_node.attrib:
+                unit_class_node.set("value", unit_class)
+            else:
+                unit_class_node.text = unit_class
 
-    # cSetInfoItem repeats its child cItemSetInfo transform.
     if "location" in changes:
         location = marker.location
         position = (location.x * 100.0, location.z * 100.0, -location.y * 100.0)
-        child_written = _set_xml_vector(_named_property(record, "Pos"), position)
         parent_written = _set_xml_vector(_position_property(parent), position)
-        if not child_written or not parent_written:
-            raise ValueError(f"Cannot synchronize Pos and mPosition for {marker.name!r}")
+        if marker_kind == "item":
+            child_written = _set_xml_vector(_named_property(record, "Pos"), position)
+            if not child_written or not parent_written:
+                raise ValueError(
+                    f"Cannot synchronize Pos and mPosition for {marker.name!r}"
+                )
+        elif not parent_written:
+            raise ValueError(f"Cannot write mPosition for {marker.name!r}")
     if "rotation" in changes:
         rotation = marker.matrix_basis.decompose()[1]
         angles = _blender_angle_to_game(rotation)
-        child_written = _set_xml_vector(_named_property(record, "Ang"), angles)
         parent_written = _set_xml_vector(_named_property(parent, "mAngle"), angles)
-        if not child_written or not parent_written:
-            raise ValueError(f"Cannot synchronize Ang and mAngle for {marker.name!r}")
+        if marker_kind == "item":
+            child_written = _set_xml_vector(_named_property(record, "Ang"), angles)
+            if not child_written or not parent_written:
+                raise ValueError(
+                    f"Cannot synchronize Ang and mAngle for {marker.name!r}"
+                )
+        elif not parent_written:
+            raise ValueError(f"Cannot write mAngle for {marker.name!r}")
     if "scale" in changes:
         scale = marker.scale
         if not _set_xml_vector(
@@ -732,6 +844,22 @@ def _duplicate_set_info(
     set_info_path = location["set_info_path"]
     values = location["values"]
     info_path, unit_class_path = values[3], values[4]
+    if location["kind"] == "instance":
+        cloned_info = _xml_node_at_path(
+            clone,
+            _path_relative_to(info_path, set_info_path, "mpInfo"),
+        )
+        cloned_unit_class = None
+        if unit_class_path is not None:
+            cloned_unit_class = _xml_node_at_path(
+                clone,
+                _path_relative_to(unit_class_path, set_info_path, "mUnitClass"),
+            )
+        _write_marker_values(
+            clone, cloned_info, cloned_unit_class, marker, marker_kind="instance"
+        )
+        return clone
+
     record_relative_path = _path_relative_to(record_path, set_info_path, "mItemSet")
     if prune_to_item_entry:
         container_path = location["item_container_path"]
@@ -765,7 +893,9 @@ def _duplicate_set_info(
             clone,
             _path_relative_to(unit_class_path, set_info_path, "mUnitClass"),
         )
-    _write_marker_values(cloned_record, cloned_info, cloned_unit_class, marker)
+    _write_marker_values(
+        cloned_record, cloned_info, cloned_unit_class, marker, marker_kind="item"
+    )
     return clone
 
 
@@ -796,19 +926,23 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
             _xml_node_at_path(xml_root, tuple(unit_class_path))
             if unit_class_path is not None else None
         )
-        _write_marker_values(record, parent, unit_class_node, markers[0])
+        _write_marker_values(
+            record, parent, unit_class_node, markers[0],
+            marker_kind=records[path]["kind"],
+        )
 
     # Each additional marker represents a new placement. Copy the complete
-    # mSetInfos entry so its class, info object, item set, and transforms stay
-    # independent from the source placement.
+    # mSetInfos entry so its class, info object, and transforms stay independent.
     for path, markers in markers_by_path.items():
         location = records[path]
         if len(markers) < 2:
             continue
         container = _ensure_set_info_array(location, xml_root)
-        prune_to_item_entry = len(
-            paths_by_set_info[location["set_info_entry_path"]]
-        ) > 1
+        prune_to_item_entry = (
+            location["kind"] == "item" and len(
+                paths_by_set_info[location["set_info_entry_path"]]
+            ) > 1
+        )
         for marker in markers[1:]:
             container.append(
                 _duplicate_set_info(
@@ -817,12 +951,22 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
                 )
             )
 
-    # Remove one mItemSet entry when its mSetInfos row contains other markers;
-    # remove the whole row when this was its only placement. Do this after
+    # Remove one item-set entry when a row contains other markers, or remove
+    # the whole row for instances and single-placement item rows. Do this after
     # cloning so the source child paths still have their original indexes.
     for source_paths in paths_by_set_info.values():
         location = records[source_paths[0]]
         active_paths = [path for path in source_paths if path in markers_by_path]
+        if location["kind"] == "instance":
+            if active_paths:
+                continue
+            entry = location["set_info_entry"]
+            container = _ensure_set_info_array(location, xml_root)
+            if entry not in list(container):
+                raise ValueError("Cannot remove the deleted mSetInfos entry")
+            container.remove(entry)
+            continue
+
         if len(active_paths) == len(source_paths):
             continue
         if active_paths:
