@@ -19,6 +19,7 @@ import numpy as np
 
 from ...apps import get_app_description
 from ...lib.blender import (
+    build_uvs,
     get_bone_indices_and_weights_per_vertex,
     get_colors_per_loop,
     get_mesh_vertex_groups,
@@ -307,7 +308,7 @@ VERSIONS_USE_BONE_PALETTES = {153, 156}
 VERSIONS_BONES_BBOX_AFFECTED = {210, 211, 212}
 VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 # The versions mod-21.ksy covers, which size their index buffer as
-# num_faces * 2 rather than (num_faces * 2) - 2.
+# num_indices * 2 rather than (num_indices * 2) - 2.
 VERSIONS_MOD_21 = {210, 211, 212}
 
 MAIN_LODS = {
@@ -324,6 +325,12 @@ MAIN_LODS = {
 
 
 def _validate_app_id_for_mod(app_id, mod_bytes):
+    if len(mod_bytes) < 5:
+        raise AlbamCheckFailure(
+            "This .mod file appears to be truncated or corrupted",
+            details=f"The file is only {len(mod_bytes)} bytes long",
+            solution="Re-extract this file from the game's archive and try importing it again"
+        )
     id_magic = mod_bytes[0:3]
     version = mod_bytes[4]
 
@@ -367,7 +374,6 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
     mod_bytes = vfile.get_bytes()
     _validate_app_id_for_mod(app_id, mod_bytes)
     mod_version = mod_bytes[4]
-    assert mod_version in MOD_CLASS_MAPPER, f"Unsupported version: {mod_version}"
 
     ModCls = MOD_CLASS_MAPPER[mod_version]
     mod = parse(ModCls, mod_bytes, app_id)
@@ -435,9 +441,9 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     indices = strip_triangles_to_triangles_list(
         mesh.indices) if use_tri_strips else mesh.indices
 
-    if min(indices) >= mesh.min_index:  # backwards compability workaround
+    if min(indices) >= mesh.first_index:  # backwards compability workaround
         # convert indices for this mesh only, so they start at zero
-        indices = [tri_idx - mesh.min_index for tri_idx in indices]
+        indices = [tri_idx - mesh.first_index for tri_idx in indices]
     # Blender crashes with corrrupt indices
     assert min(indices) >= 0, "Bad face indices"
     # Blender crashes with an empty sequence
@@ -446,10 +452,10 @@ def build_blender_mesh(app_id, mod, mesh, name, bbox_data, use_tri_strips=False)
     me_ob.from_pydata(locations, [], chunks(indices, 3))
 
     _build_normals(me_ob, normals)
-    _build_uvs(me_ob, uvs_1, "uv1")
-    _build_uvs(me_ob, uvs_2, "uv2")
-    _build_uvs(me_ob, uvs_3, "uv3")
-    _build_uvs(me_ob, uvs_4, "uv4")
+    build_uvs(me_ob, uvs_1, "uv1")
+    build_uvs(me_ob, uvs_2, "uv2")
+    build_uvs(me_ob, uvs_3, "uv3")
+    build_uvs(me_ob, uvs_4, "uv4")
     _build_vertex_colors(me_ob, vertex_colors, "vc")
     _build_weights(ob, weights_per_bone)
 
@@ -662,17 +668,6 @@ def _build_normals(bl_mesh, normals):
     except AttributeError:
         # blender 4.1+
         pass
-
-
-def _build_uvs(bl_mesh, uvs, name="uv"):
-    if not uvs:
-        return
-    uv_layer = bl_mesh.uv_layers.new(name=name)
-    per_loop_list = []
-    for loop in bl_mesh.loops:
-        offset = loop.vertex_index * 2
-        per_loop_list.extend((uvs[offset], uvs[offset + 1]))
-    uv_layer.data.foreach_set("uv", per_loop_list)
 
 
 def _build_vertex_colors(bl_mesh, vertex_colors, name="imported_colors"):
@@ -972,8 +967,16 @@ def export_mod(bl_obj):
     bl_meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
     if export_settings.export_visible:
         bl_meshes = [mesh for mesh in bl_meshes if mesh.visible_get()]
-    msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
-    assert bl_meshes, msg
+    if not bl_meshes:
+        raise AlbamCheckFailure(
+            "There is no mesh to export",
+            details=f"Object '{bl_obj.name}' has no visible mesh children"
+            if export_settings.export_visible else
+            f"Object '{bl_obj.name}' has no mesh children",
+            solution="Unhide the meshes and/or parent them to the exported object "
+            f"'{bl_obj.name}', or disable 'Export only visible meshes' if that's hiding them"
+        )
+    _check_armature_modifiers_target(bl_obj, bl_meshes)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
         _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)
@@ -1015,40 +1018,47 @@ def export_mod(bl_obj):
 
     dst_mod.header.size_vertex_buffer = len(vertex_buffer)
     dst_mod.header.size_vertex_buffer_2 = len(vertex_buffer_2)
-    # num_faces is the index count, not a face count (see num_edges below,
-    # which is the actual triangle count on a triangle-list version).
+    # num_indices (named num_faces until #252) is the index count, not a face
+    # count (see num_triangles below, which is the actual triangle count on a
+    # triangle-list version).
     #
-    # The 21 formats size their index buffer as num_faces * 2, so num_faces
+    # The 21 formats size their index buffer as num_indices * 2, so num_indices
     # is exactly the number of indices. mod-153 and mod-156 size theirs as
-    # (num_faces * 2) - 2, so there it is the index count plus one, and the
+    # (num_indices * 2) - 2, so there it is the index count plus one, and the
     # trailing entry the +1 accounts for is the padding appended below.
     # Applying the +1 everywhere wrote one index too many on 21: measured
-    # against real umvc3 files, num_faces equals the summed mesh index count
+    # against real umvc3 files, num_indices equals the summed mesh index count
     # exactly, and export was producing 205 against 204, 42847 against 42846.
     if dst_mod.header.version in VERSIONS_MOD_21:
-        dst_mod.header.num_faces = len(index_buffer) // 2
+        dst_mod.header.num_indices = len(index_buffer) // 2
     else:
-        dst_mod.header.num_faces = (len(index_buffer) // 2) + 1
+        dst_mod.header.num_indices = (len(index_buffer) // 2) + 1
     if dst_mod.header.version not in VERSIONS_USE_TRISTRIPS:
-        # num_edges was initialised to 0 and never assigned, so every export
-        # wrote 0 for it. On a version that indexes triangles as a plain
+        # num_triangles (named num_edges until #252) was initialised to 0 and
+        # never assigned, so every export wrote 0 for it. On a version that indexes triangles as a plain
         # list, the two fields are one relation apart - measured across
-        # every model in the serialization dataset, num_faces equals the
-        # summed mesh index count and num_edges is exactly a third of it,
+        # every model in the serialization dataset, num_indices equals the
+        # summed mesh index count and num_triangles is exactly a third of it,
         # which is what the TODO above is pointing at: these are the index
         # count and the triangle count. Deriving it keeps the header
-        # self-consistent whatever num_faces ends up being.
+        # self-consistent whatever num_indices ends up being.
         #
         # Left alone on the tristrip versions: there the index count is not
-        # three per triangle, num_edges has no such relation to num_faces in
+        # three per triangle, num_triangles has no such relation to num_indices in
         # a real file, and recovering the triangle count needs the strip
         # decomposition rather than arithmetic.
-        dst_mod.header.num_edges = dst_mod.header.num_faces // 3
+        dst_mod.header.num_triangles = dst_mod.header.num_indices // 3
     if app_id not in ["re5"] and dst_mod.header.version not in VERSIONS_MOD_21:
-        # The trailing index the (num_faces * 2) - 2 sizing leaves room for.
+        # The trailing index the (num_indices * 2) - 2 sizing leaves room for.
         # A 21 file has no such entry: its meshes tile the index buffer
-        # exactly, the last one ending on num_faces.
+        # exactly, the last one ending on num_indices.
         index_buffer.extend((0, 0))
+    # Real 21 files pad the index buffer with zeros to a 4 byte boundary, and
+    # size_file counts that padding: an odd index count on re6 ends the
+    # buffer at 16690 and the file carries size_file 16692. Only the size
+    # needs it, the stream below starts zeroed.
+    index_buffer_padding = (
+        -len(index_buffer) % 4 if dst_mod.header.version in VERSIONS_MOD_21 else 0)
 
     final_size = sum((
         offset,
@@ -1064,6 +1074,7 @@ def export_mod(bl_obj):
         # 542808 byte one carries 542804 - while export was writing the full
         # length. size_file only exists on the 21 formats.
         len(index_buffer),
+        index_buffer_padding,
     ))
 
     dst_mod.header.size_file = final_size
@@ -1093,8 +1104,8 @@ def _init_mod_header(bl_obj, src_mod, dst_mod):
         num_meshes=0,
         num_materials=0,
         num_vertices=0,
-        num_faces=0,
-        num_edges=0,
+        num_indices=0,
+        num_triangles=0,
         size_vertex_buffer=0,
         num_groups=src_mod.header.num_groups,
         offset_bones_data=0,
@@ -1224,7 +1235,7 @@ def _derive_parent_ids(armature_ob, num_bones):
 
 
 def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
-    """Each bone's `length`: how far the furthest vertex it influences sits.
+    """Each bone's `furthest_vertex_distance`: how far the furthest vertex it influences sits.
 
     The field is `furthestVertexDistance` in Capcom's own vocabulary, and it is
     zero for a bone nothing skins to. Computed from the live meshes so that
@@ -1265,9 +1276,19 @@ def _derive_furthest_vertex_distances(armature_ob, bl_meshes, num_bones):
     return furthest
 
 
-def _derive_mirror_ids(armature_ob, app_id, num_bones):
-    """Each bone's idx_mirror, resolved from the name the rig carries."""
+def _derive_mirror_ids(armature_ob, app_id, num_bones, src_mod):
+    """Each bone's idx_mirror, resolved from the name the rig carries.
+
+    A rig imported before Mirror Bone existed (0.5.0 and earlier) carries no
+    mirror on any bone, which would write every bone as unmirrored. Such a rig
+    keeps the source file's mirrors instead; a source with no mirrors at all
+    comes out the same either way.
+    """
     bl_bones = armature_ob.data.bones[:num_bones]
+    if not any(get_mirror(armature_ob.pose.bones[b.name], app_id) for b in bl_bones):
+        src_bones = src_mod.bones_data.bones_hierarchy if src_mod.bones_data else []
+        return [src_bones[i].idx_mirror if i < len(src_bones) else NO_MIRROR
+                for i in range(len(bl_bones))]
     index_of = {bl_bone.name: i for i, bl_bone in enumerate(bl_bones)}
     ids = []
     for bl_bone in bl_bones:
@@ -1414,7 +1435,7 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_pale
         _check_bone_budget(dst_mod.header.num_bones)
         anim_map_ids = _derive_anim_map_ids(bl_obj, app_id, dst_mod.header.num_bones)
         parent_ids = _derive_parent_ids(bl_obj, dst_mod.header.num_bones)
-        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones)
+        mirror_ids = _derive_mirror_ids(bl_obj, app_id, dst_mod.header.num_bones, src_mod)
         furthest_vertex = _derive_furthest_vertex_distances(
             bl_obj, bl_meshes, dst_mod.header.num_bones)
         bones_data.bone_map = _build_bone_map(anim_map_ids)
@@ -1448,8 +1469,9 @@ def _serialize_bones_data(bl_obj, bl_meshes, src_mod, dst_mod, app_id, bone_pale
         bone.idx_anim_map = anim_map_ids[i] if export_bones else src_bone.idx_anim_map
         bone.idx_parent = parent_ids[i] if export_bones else src_bone.idx_parent
         bone.idx_mirror = mirror_ids[i] if export_bones else src_bone.idx_mirror
-        bone.idx_mapping = BONE_RECORD_PADDING if export_bones else src_bone.idx_mapping
-        bone.length = furthest_vertex[i] if export_bones else src_bone.length
+        bone.padding = BONE_RECORD_PADDING if export_bones else src_bone.padding
+        bone.furthest_vertex_distance = (
+            furthest_vertex[i] if export_bones else src_bone.furthest_vertex_distance)
         if export_bones:
             bone.parent_distance = bone_magnitudes[i]
         else:
@@ -1663,6 +1685,32 @@ def _normalize_uv(uv_x, uv_y):
     return uv_x, uv_y
 
 
+def _check_uv_range(bl_mesh, vertex_table, layer_index):
+    """Refuse a UV layer with a coordinate too large to pack as a half float.
+
+    Every UV slot stores u and the flipped v (1 - v, see _normalize_uv) with
+    pack('e', ...), which raises OverflowError from a magnitude of 65520
+    (the largest finite half float is 65504; values in between round down
+    to it). Packing the layer's most extreme coordinate once tells whether
+    any of them overflows, with pack itself as the authority on the limit.
+    """
+    uvs = vertex_table.uv[layer_index]
+    if not uvs:
+        return
+    u, v = max(uvs.values(), key=lambda uv: max(abs(uv[0]), abs(1 - uv[1])))
+    try:
+        pack('ee', u, 1 - v)
+    except OverflowError:
+        layer_name = bl_mesh.data.uv_layers[layer_index].name
+        raise AlbamCheckFailure(
+            message=f"Mesh {bl_mesh.name!r} has a UV coordinate too large to export",
+            details=(f"UV map {layer_name!r} (UV slot {layer_index + 1}) has a vertex at "
+                     f"({u}, {v}), the half-float format UVs are stored in only holds "
+                     "values up to about 65504"),
+            solution="Scale that UV map back into a normal range (close to 0-1) before exporting",
+        )
+
+
 def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
     if src_mod.header.version not in (153, 156):
         return {}
@@ -1679,9 +1727,14 @@ def _create_bone_palettes(src_mod, bl_armature, bl_meshes):
         }
         bone_indices = {bi for bi in bone_indices if bi != -1}
 
-        # TODO: check at export time for all meshes
-        msg = f"Mesh {mesh.name} is influenced by more than 32 bones, which is not supported"
-        assert len(bone_indices) <= MAX_BONE_PALETTE_SIZE, msg
+        if len(bone_indices) > MAX_BONE_PALETTE_SIZE:
+            raise AlbamCheckFailure(
+                message=f"Mesh {mesh.name!r} is influenced by too many bones",
+                details=(f"its vertex groups reference {len(bone_indices)} distinct bones, "
+                         f"the format allows at most {MAX_BONE_PALETTE_SIZE} per mesh"),
+                solution=(f"Split the mesh so each piece uses at most {MAX_BONE_PALETTE_SIZE} "
+                          "bones, or merge some of its vertex groups"),
+            )
 
         current = bone_palette['bone_indices']
         potential = current.union(bone_indices)
@@ -1746,6 +1799,58 @@ def _check_armature(bl_mesh):
     return False
 
 
+def _check_armature_modifiers_target(bl_obj, bl_meshes):
+    """Every Armature modifier has to deform with the rig being exported.
+
+    Bone palettes are built from the exported armature's bone order, while
+    vertex weights are read through the mesh's Armature modifier. If the
+    modifier points at another armature, the two orders disagree and export
+    fails much later with a bare "ValueError: 29 is not in list" (#335).
+    """
+    if bl_obj.type != 'ARMATURE':
+        return
+    for bl_mesh in bl_meshes:
+        for modifier in bl_mesh.modifiers:
+            if modifier.type != 'ARMATURE' or modifier.object is None:
+                continue
+            if modifier.object != bl_obj:
+                raise AlbamCheckFailure(
+                    "A mesh is deformed by a different armature than the one being exported",
+                    details=f"Object: {bl_mesh.name}, Armature modifier '{modifier.name}' "
+                    f"points to '{modifier.object.name}', exported armature: '{bl_obj.name}'",
+                    solution=f"Set the Armature modifier's Object to '{bl_obj.name}'"
+                )
+
+
+# num_vertices and last_index are each a u2 on every mod version (mod_21,
+# mod_153, mod_156). last_index is current_vertex_position (the running
+# total across every mesh sharing one vertex block, see no_vf_grouping
+# below) plus this mesh's own count minus one, so it overflows when meshes
+# add up; num_vertices overflows on its own for a single mesh of exactly
+# 65536 vertices, where last_index still fits. Either way Kaitai's
+# write_u2le would raise a bare struct.error naming neither the mesh nor
+# the field.
+MAX_MESH_U2 = 0xFFFF
+
+
+def _raise_vertex_count_failure(mesh_name, num_vertices, vertex_position):
+    if vertex_position:
+        details = (f"it starts at vertex index {vertex_position} of a block it shares with "
+                   f"the meshes before it of the same vertex format, and its {num_vertices} "
+                   f"vertices would take that block past index {MAX_MESH_U2}")
+        solution = ("Enable \"Don't group meshes by vertex format\" in the export settings so "
+                    "each mesh gets its own vertex block, or split the meshes into smaller pieces")
+    else:
+        details = (f"it has {num_vertices} vertices after splitting at UV seams and hard "
+                   f"edges, the format allows at most {MAX_MESH_U2} per mesh")
+        solution = "Split the mesh into smaller pieces"
+    raise AlbamCheckFailure(
+        message=f"Mesh {mesh_name!r} has too many vertices for the format",
+        details=details,
+        solution=solution,
+    )
+
+
 def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, bone_palettes=None):
     export_settings = bpy.context.scene.albam.export_settings
     app_id = bl_obj.albam_asset.app_id
@@ -1768,8 +1873,8 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
     current_vertex_format = None
     total_num_vertices = 0
 
-    face_position = 0
-    face_offset = 0  # unused for now
+    index_start = 0
+    vertex_base = 0  # unused for now
 
     for mesh_index, bl_mesh in enumerate(bl_meshes):
         face_padding = 0 if app_id not in ["re5", "dd"] else 2
@@ -1804,6 +1909,11 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
             current_vertex_position = 0
             current_vertex_format = vertex_format
 
+        num_vertices = vertex_table.count
+        last_index = current_vertex_position + num_vertices - 1
+        if num_vertices > MAX_MESH_U2 or last_index > MAX_MESH_U2:
+            _raise_vertex_count_failure(bl_mesh.name, num_vertices, current_vertex_position)
+
         if use_strips:
             triangles = triangles_list_to_triangles_strip(vertex_table.triangles)
         else:
@@ -1821,7 +1931,6 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
 
         triangles_ctypes = (ctypes.c_ushort * len(triangles))(*triangles)
         index_buffer.extend(triangles_ctypes)
-        num_vertices = vertex_table.count
 
         # Beware of vertex_format being a string type, overriden below
         custom_properties = bl_mesh.data.albam_custom_properties.get_custom_properties_for_appid(
@@ -1846,14 +1955,13 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         # assert num_vertices == len(vertices_array) // 32
         mesh.num_vertices = num_vertices
         mesh.vertex_position_2 = current_vertex_position
-        mesh.vertex_offset = current_vertex_offset
-        mesh.face_position = face_position
+        mesh.vertex_byte_offset = current_vertex_offset
+        mesh.index_start = index_start
         mesh.num_indices = num_indices
-        mesh.face_offset = face_offset
-        mesh.vertex_position = current_vertex_position
-        mesh.min_index = current_vertex_position
-        mesh.max_index = current_vertex_position + \
-            mesh.num_vertices - 1  # XXX only a short!
+        mesh.vertex_base = vertex_base
+        mesh.vertex_index = current_vertex_position
+        mesh.first_index = current_vertex_position
+        mesh.last_index = last_index
         mesh.vertex_offset_2 = current_vertex_offset_2
         mesh.idx_bone_palette = mesh_bone_palette_index
         mesh.num_weight_bounds = 1
@@ -1886,7 +1994,7 @@ def _serialize_meshes_data(bl_obj, bl_meshes, src_mod, dst_mod, materials_map, b
         current_vertex_position += num_vertices
         vertex_offset_accumulated += (num_vertices * vertex_stride)
         vertex_offset_2_accumulated += (num_vertices * vertex_stride_2)
-        face_position += (num_indices + face_padding)
+        index_start += (num_indices + face_padding)
         total_num_vertices += mesh.num_vertices
 
     if dst_mod.header.version in (153, 156, 211) and app_id != "umvc3":
@@ -2081,6 +2189,15 @@ def _export_vertices(app_id, bl_mesh, mesh, mesh_bone_palette, dst_mod, bbox_dat
         max_bones_per_vertex = MAX_BONES
     weights_per_vertex = _process_weights_for_export(
         weights_per_vertex, max_bones_per_vertex=MAX_BONES, half_float=weight_half_float)
+    uv_slots_used = (
+        vertex_format not in VERTEX_FORMATS_BRIDGE,
+        vertex_format in VERTEX_FORMATS_UV2,
+        vertex_format in VERTEX_FORMATS_UV3,
+        vertex_format in VERTEX_FORMATS_UV4,
+    )
+    for layer_index, used in enumerate(uv_slots_used):
+        if used:
+            _check_uv_range(bl_mesh, vertex_table, layer_index)
     vtx_stream = KaitaiStream(
         BytesIO(bytearray(vtx_stride * vertex_count)))
     if has_vertex_buffer_2:
@@ -2578,13 +2695,13 @@ def _set_static_mesh_weight_bounds(dst_mod, bl_mesh_ob, meshes_data):
     oabb_dimension.z = length_y * 100
     oabb_dimension.w = 0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = 255  # since it's static
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max
@@ -2702,13 +2819,13 @@ def _calculate_vertex_group_weight_bound(
     oabb_dimension.z = oabb_dimension_export[2]
     oabb_dimension.w = 0.0
 
-    unk_01 = dst_mod.Vec3(_parent=wb, _root=wb._root)
-    unk_01.x = 0.0
-    unk_01.y = 0.0
-    unk_01.z = 0.0
+    padding = dst_mod.Vec3(_parent=wb, _root=wb._root)
+    padding.x = 0.0
+    padding.y = 0.0
+    padding.z = 0.0
 
     wb.bone_id = bone_index
-    wb.unk_01 = unk_01
+    wb.padding = padding
     wb.bsphere = bsphere
     wb.bbox_min = bbox_min
     wb.bbox_max = bbox_max

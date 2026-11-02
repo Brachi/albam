@@ -1652,7 +1652,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self.buffer_type = self._io.read_u1()
             self.usage = self._io.read_u1()
             self.joint_type = self._io.read_u1()
-            self.bone_index = self._io.read_u1()
+            self.idx_anim_map = self._io.read_u1()
             self.weight = self._io.read_f4le()
             self.len_data = self._io.read_u4le()
             self.ofs_data = self._io.read_u4le()
@@ -1680,7 +1680,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_u1(self.buffer_type)
             self._io.write_u1(self.usage)
             self._io.write_u1(self.joint_type)
-            self._io.write_u1(self.bone_index)
+            self._io.write_u1(self.idx_anim_map)
             self._io.write_f4le(self.weight)
             self._io.write_u4le(self.len_data)
             self._io.write_u4le(self.ofs_data)
@@ -1746,7 +1746,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self.buffer_type = self._io.read_u1()
             self.usage = self._io.read_u1()
             self.joint_type = self._io.read_u1()
-            self.bone_index = self._io.read_u1()
+            self.idx_anim_map = self._io.read_u1()
             self.weight = self._io.read_f4le()
             _on = self._root.use_64bit_ofs
             if _on == False:
@@ -1829,7 +1829,7 @@ class Lmt(ReadWriteKaitaiStruct):
             self._io.write_u1(self.buffer_type)
             self._io.write_u1(self.usage)
             self._io.write_u1(self.joint_type)
-            self._io.write_u1(self.bone_index)
+            self._io.write_u1(self.idx_anim_map)
             self._io.write_f4le(self.weight)
             _on = self._root.use_64bit_ofs
             if _on == False:

@@ -12,6 +12,7 @@ from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
+from ..lib.common_op import _get_mesh_albam_props
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -224,12 +225,14 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="Use clones for separation",
         )
         row = layout.row()
-        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row.operator('albam.batch_props_paste', text="Batch paste material props").prop_type = "material"
+        row.operator('albam.batch_props_paste', text="Batch paste mesh props").prop_type = "mesh"
         row = layout.row()
         row.operator('albam.remove_empty_vertex_groups', text="Remove empty vertex groups")
         row = layout.row()
         row.operator('albam.remove_unused_material_slots', text="Remove unused material slots")
+        row = layout.row()
+        row.operator('albam.vf_guesser', text="Guess vertex format")
         layout.separator()
         row = layout.row()
         row.operator('albam.sort_hair_cards', text="Sort hair cards by distance")
@@ -1077,6 +1080,87 @@ WORKSPACE_TOOLS.extend([
 ])
 
 
+@blender_registry.register_blender_type
+class ALBAM_OT_VFGuesser(bpy.types.Operator):
+    '''Guess vertex format for selected meshes'''
+    bl_idname = "albam.vf_guesser"
+    bl_label = "guess vertex format"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        if selected_objects:
+            return True
+        else:
+            return False
+
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        selected_objects = [ob for ob in selected_objects if ob.type == 'MESH']
+        for bl_ob in selected_objects:
+            armature_modifier = None
+            for modifier in bl_ob.modifiers:
+                if modifier.type == 'ARMATURE':
+                    armature_modifier = modifier
+                    break
+            if armature_modifier is None:
+                print(f"Can't guess vertex format for object {bl_ob.name} without armature modifier")
+                continue
+            albam_mesh_props = _get_mesh_albam_props(bl_ob)
+            if not albam_mesh_props:
+                print(f"The object {bl_ob.name} has no Albam properties")
+                continue
+            albam_asset = bl_ob.data.albam_custom_properties.get_parent_albam_asset()
+            app_id = albam_asset.app_id
+
+            max_bones = 0
+            for v in bl_ob.data.vertices:
+                cur_bones = sum(1 for g in v.groups if g.weight > 0)
+                if cur_bones > max_bones:
+                    max_bones = cur_bones
+
+            if app_id in ("re0", "re1", "re6", "rev1", "rev2", "dd"):
+
+                if max_bones == 1:
+                    vf = "0xa8fab018"  # "SkinTB1wt"
+                elif max_bones == 2:
+                    vf = "0xc31f201c"  # "SkinTB2wt"
+                elif max_bones <= 4:
+                    vf = "0x14d40020"  # "SkinTB4wt"
+                elif max_bones > 4:
+                    vf = "0xbb424024"  # "SkinTB8wt"
+                else:
+                    raise RuntimeError(
+                        f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
+                albam_mesh_props.vertex_format = vf
+            elif app_id == "re5":
+                try:
+                    bl_mat = bl_ob.data.materials[0]
+                except IndexError:
+                    print(f"The object {bl_ob.name} has no materials")
+                    continue
+                albam_mat_props = bl_mat.albam_custom_properties.get_custom_properties_for_appid(app_id)
+                albam_mat_props.vtype = "0x0"
+                if max_bones == 1:
+                    albam_mat_props.func_skin = "0x1"
+                elif max_bones == 2:
+                    albam_mat_props.func_skin = "0x2"
+                elif max_bones <= 4:
+                    albam_mat_props.func_skin = "0x3"
+                elif max_bones > 4:
+                    albam_mat_props.vtype = "0x1"
+                    albam_mat_props.func_skin = "0x4"
+                    albam_mesh_props.vdeclbase = "0x7"
+                    albam_mesh_props.vdecl = "0x2"
+                else:
+                    raise RuntimeError(
+                        f"Can't find vertex format for {bl_ob.name} max bone infuences: {max_bones}")
+        show_message_box(message=f"Vertex format was set for {len(selected_objects)} meshes")
+        return {'FINISHED'}
+
+
 def transfer_normals(source_obj, target_objs):
     for obj in target_objs:
         if obj != source_obj:
@@ -1117,8 +1201,76 @@ def blender_texture_to_texture_code(blender_texture_image_node):
     return texture_code
 
 
+# In-game texture name suffixes. The MTFrameworkGroup sockets that follow the
+# convention carry the suffix as the last word of their name ("Diffuse BM",
+# "Detail 2 DNM", ...); sockets without one ("Height Map") get no suffix.
+TEXTURE_SLOT_SUFFIXES = ("BM", "NM", "MM", "LM", "AM", "CM", "DNM")
+
+
+def texture_slot_suffix(socket_name):
+    token = socket_name.rpartition(" ")[2]
+    return token if token in TEXTURE_SLOT_SUFFIXES else None
+
+
+def has_texture_slot_suffix(name):
+    lowered = name.lower()
+    return any(lowered.endswith(f"_{s.lower()}") for s in TEXTURE_SLOT_SUFFIXES)
+
+
+def texture_stem(image):
+    """The image name without its last extension, split the same way export's
+    _handle_relative_path does ("pl00.body.png" -> "pl00.body")."""
+    before, _, _ = image.name.rpartition(".")
+    return before or image.name
+
+
+def _image_slot_suffixes():
+    """Every slot suffix each image's Color output feeds, across all materials.
+
+    relative_path belongs to the image, not the node, so the suffix is decided
+    from all of an image's uses at once. A link into a socket without a suffix
+    counts as None, so mixing it with a suffixed slot is a disagreement.
+    """
+    suffixes = {}
+    for mat in bpy.data.materials:
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE" or not node.image:
+                continue
+            for link in node.outputs["Color"].links:
+                suffixes.setdefault(node.image, set()).add(texture_slot_suffix(link.to_socket.name))
+    return suffixes
+
+
 def strict_sanitize(filename):
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+
+
+def _suffixed_texture_name(image, name, slot_suffixes, local_path):
+    """`name` with the image's slot suffix appended, or `name` unchanged.
+
+    The suffix is added only when every connected use of the image agrees on
+    one suffix, the name carries no known suffix yet, and no other image
+    already claims the suffixed name (through its relative_path or its own
+    image name), since export rejects duplicated texture paths.
+    """
+    suffixes = slot_suffixes.get(image, set())
+    if len(suffixes) != 1 or has_texture_slot_suffix(name):
+        return name
+    suffix = next(iter(suffixes))
+    if suffix is None:
+        return name
+    candidate = f"{name}_{suffix}"
+    candidate_path = (local_path + candidate + ".tex").lower()
+    for other in bpy.data.images:
+        if other == image:
+            continue
+        if other.albam_asset.relative_path.lower() == candidate_path:
+            return name
+        if strict_sanitize(texture_stem(other)).lower() == candidate.lower():
+            return name
+    return candidate
 
 
 def set_image_albam_attr(blender_material, app_id, local_path):
@@ -1150,18 +1302,23 @@ def set_image_albam_attr(blender_material, app_id, local_path):
     overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
+    slot_suffixes = _image_slot_suffixes()
     for tn in blender_material.node_tree.nodes:
         if not tn.type == "TEX_IMAGE":
             continue
         type = blender_texture_to_texture_code(tn)
         if tn.image:
-            name = tn.image.name.split(".")[0]
+            name = texture_stem(tn.image)
             name = strict_sanitize(name)
         else:
             continue
         if not tn.image.albam_asset.relative_path or overwrite_tex_path:
+            name = _suffixed_texture_name(tn.image, name, slot_suffixes, local_path)
             tn.image.albam_asset.relative_path = local_path + name + '.tex'
         tn.image.albam_asset.app_id = app_id
+        if type in (1, 2, 7):
+            # The shader reads these as data; an sRGB image tilts the preview normals
+            tn.image.colorspace_settings.name = "Non-Color"
         tex_props = tn.image.albam_custom_properties.get_custom_properties_for_appid(app_id)
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)

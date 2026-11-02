@@ -19,9 +19,9 @@ import math
 import os
 
 import bpy
-import pytest
 
 from tests.cie.lfs_paths import resolve_archive_hashes
+from tests.dataset_cases import applies_to, entries_for
 
 DATASETS_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 DATASET_PATH = os.path.join(DATASETS_DIR, "bin_serialization_hashes.json")
@@ -36,8 +36,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in BIN_SERIALIZATION_DATASET]
-        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in BIN_SERIALIZATION_DATASET]
+        entries = entries_for(metafunc, BIN_SERIALIZATION_DATASET)
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -393,6 +394,7 @@ def test_bin_round_trip_matches_the_original_geometry(
     )
 
 
+@applies_to(has_several_models=True)
 def test_importing_several_models_from_one_archive(game_root, local_app_id,
                                                    local_archive_path_hash, _clean_scene):
     """Importing model after model from one archive keeps working.
@@ -417,8 +419,7 @@ def test_importing_several_models_from_one_archive(game_root, local_app_id,
     models = [vf for vf in vfs.file_list
               if vf.tree_node.root_id == root.name and not vf.is_root and
               vf.display_name.lower().endswith(".bin") and _is_mesh_bin(vf.get_bytes())]
-    if len(models) < 2:
-        pytest.skip("this archive holds a single model")
+    assert len(models) >= 2, "the dataset says this archive holds several models"
 
     bpy.context.scene.albam.import_options_bin.tpl_file_id = AUTO_TPL
     for vfile in models[:4]:

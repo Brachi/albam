@@ -153,18 +153,18 @@ def test_joint(parsed_lmt):
         seq = {}
         for track in tracks:
             # looks like 254 is some index for multiple service objects
-            if track.bone_index == 254:
+            if track.idx_anim_map == 254:
                 # FAILED [fig29.arc::id\\figdata\\fig29\\fig29.lmt]
                 # FAILED [uOma004_Collapse.arc::pawn\\om\\oma004\\motion\\oma004_pf.lmt]
                 assert track.joint_type != 0
-            if track.bone_index not in (254, 255):
-                key = (track.bone_index, track.usage, track.joint_type)
+            if track.idx_anim_map not in (254, 255):
+                key = (track.idx_anim_map, track.usage, track.joint_type)
                 # assert key not in bones_joint_index
                 bones_joint_index.append(key)
-                if track.bone_index not in seq:
-                    seq[track.bone_index] = [track.usage]
+                if track.idx_anim_map not in seq:
+                    seq[track.idx_anim_map] = [track.usage]
                 else:
-                    seq[track.bone_index].append(track.usage)
+                    seq[track.idx_anim_map].append(track.usage)
         for k, v in seq.items():
             if len(v) > 1:
                 # looks like it's a sequence of usage per bone [rotation, translation, scale]
@@ -184,9 +184,9 @@ def test_joint_type_usage(parsed_lmt):
         seen = set()
         for track in tracks:
             usage_str = USAGE.get(track.usage)
-            if (track.bone_index, usage_str) in seen:
-                assert track.bone_index in (0, 254, 255)
-            seen.add((track.bone_index, usage_str))
+            if (track.idx_anim_map, usage_str) in seen:
+                assert track.idx_anim_map in (0, 254, 255)
+            seen.add((track.idx_anim_map, usage_str))
 
 
 def test_lmt_blocks_are_not_empty(parsed_lmt):
@@ -215,7 +215,7 @@ def test_lmt_tracks_point_inside_the_file(parsed_lmt):
         header = block.block_header
         assert header.ofs_frame < len(src_bytes)
         for track in header.tracks:
-            assert track.bone_index <= MAX_BONE_INDEX
+            assert track.idx_anim_map <= MAX_BONE_INDEX
             assert track.ofs_data + track.len_data <= len(src_bytes)
             if track.ofs_data and track.len_data:
                 num_tracks_with_data += 1

@@ -65,6 +65,7 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     TOON = 23
     TOON_REVERSE = 24
     INDIRECT_USER = 25
+    SHININESS = 26
 
 
 TEX_TYPE_MAP_2 = {
@@ -100,6 +101,7 @@ TEX_TYPE_MAP_2 = {
     "ttoonmap": TextureType.TOON,
     "ttoonrevmap": TextureType.TOON_REVERSE,
     "tindirectmapuser": TextureType.INDIRECT_USER,
+    "tshininessmap": TextureType.SHININESS,
 }
 
 
@@ -123,6 +125,7 @@ NODE_NAMES_TO_TYPES = {
     'Toon Ramp': TextureType.TOON,
     'Toon Ramp Reverse': TextureType.TOON_REVERSE,
     'Indirect User': TextureType.INDIRECT_USER,
+    'Shininess Map': TextureType.SHININESS,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -648,6 +651,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
         blender_texture_node.location = (-600, -2100)
 
+    elif texture_code == 26:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Shininess Map"])
+        blender_texture_node.location = (-600, -2150)
+
     else:
         print("texture_code not supported", texture_code)
 
@@ -662,24 +669,32 @@ def serialize_textures(app_id, bl_materials):
     duplicated_paths = []
     too_long = []
     for im_name, data in exported_textures.items():
-        if data["image"].albam_asset.app_id != app_id:
-            bad_appid.append((im_name, data["image"].albam_asset.app_id))
-        if data["image"].albam_asset.relative_path in texture_paths:
-            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
-        texture_paths.append(data["image"].albam_asset.relative_path)
+        bl_im = data["image"]
+        if bl_im.albam_asset.app_id != app_id:
+            bad_appid.append((im_name, bl_im.albam_asset.app_id))
+        # compared as the path the file is exported to, so images with no
+        # relative path set fall back to their (unique) image name
+        render_target = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id).render_target
+        export_path = _handle_relative_path(bl_im, render_target)
+        if export_path in texture_paths:
+            duplicated_paths.append((im_name, export_path))
+        texture_paths.append(export_path)
         # the extension doesn't matter here, only what goes in the .mrl slot
         path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
         if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
             too_long.append((im_name, path_no_ext))
     if bad_appid:
-        raise AttributeError(
-            f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
-            "Go to Image -> tools -> Albam and select the proper app_id for each."
+        raise AlbamCheckFailure(
+            f"Some images have an app_id that doesn't match the exported app ({app_id})",
+            details=f"Images: {bad_appid}",
+            solution="Go to Image Editor -> Albam and select the proper app_id for each image listed above"
         )
     if duplicated_paths:
-        raise AttributeError(
-            f"The following images have duplicated relative paths: {duplicated_paths}\n"
-            "Go to Image Editor -> Albam and select a unique relative path for each."
+        raise AlbamCheckFailure(
+            "Some images have the same relative path as another exported image",
+            details=f"Images: {duplicated_paths}",
+            solution="Go to Image Editor -> Albam and select a unique relative path "
+            "for each image listed above"
         )
     if too_long:
         paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]
