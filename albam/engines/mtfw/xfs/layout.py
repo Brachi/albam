@@ -16,7 +16,15 @@ from ....lib.stage_placer.re5_item_ids import (
     get_item_types,
 )
 from ....lib.stage_placer.re5_em_classes import INFO_CLASSES, UNIT_CLASSES
-from ....lib.stage_placer.re5_instance_unit_classes import INSTANCE_UNIT_CLASSES_RE5
+from ....lib.stage_placer.re5_instance_classes import (
+    INSTANCE_MODEL_IDS as INSTANCE_MODEL_DESCRIPTIONS,
+    INSTANCE_UNIT_CLASSES_RE5,
+)
+from ....lib.stage_placer.re5_instance_names import (
+    INSTANCE_MODEL_ARC,
+    INSTANCE_MODEL_BASE,
+    INSTANCE_MODEL_PATH,
+)
 from ....registry import blender_registry
 
 
@@ -26,6 +34,7 @@ _MARKER_PATH = "_albam_xfs_path"
 _MARKER_UNIT_CLASS_PATH = "_albam_xfs_unit_class_path"
 _MARKER_UNIT_CLASS = "_albam_xfs_unit_class"
 _MARKER_INFO_CLASS = "_albam_xfs_info_class"
+_MARKER_INSTANCE_NAME = "_albam_xfs_instance_name"
 _MARKER_ITEM_ID_PATH = "_albam_xfs_item_id_path"
 _MARKER_ITEM_ID = "_albam_xfs_item_id"
 _MARKER_BASELINE = "_albam_xfs_baseline_transform"
@@ -95,6 +104,118 @@ _ENEMY_UNIT_CLASS_ENUM_ITEMS = tuple(
 )
 _PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS = {}
 _PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS = {}
+_INSTANCE_MODEL_DESCRIPTION_BY_CASEFOLD = {
+    model_id.casefold(): description
+    for model_id, description in INSTANCE_MODEL_DESCRIPTIONS.items()
+}
+_INSTANCE_MODEL_BASE_BY_CASEFOLD = {
+    model_id.casefold(): base_model
+    for model_id, base_model in INSTANCE_MODEL_BASE.items()
+}
+_INSTANCE_MODEL_ARC_BY_CASEFOLD = {
+    model_id.casefold(): arc
+    for model_id, arc in INSTANCE_MODEL_ARC.items()
+}
+_INSTANCE_MODEL_PATH_BY_CASEFOLD = {
+    model_id.casefold(): path
+    for model_id, path in INSTANCE_MODEL_PATH.items()
+}
+
+
+def _instance_name_parts(instance_name):
+    tokens = str(instance_name or "").split("_")
+    model_id = tokens[0] if tokens else ""
+    layout_id = tokens[1] if len(tokens) > 1 else ""
+    slot_token = next(
+        (
+            token for token in tokens[2:]
+            if len(token) > 1 and token[0].casefold() == "u" and token[1:].isdigit()
+        ),
+        "",
+    )
+    return model_id, layout_id, slot_token
+
+
+def _instance_name_slot(instance_name):
+    _model_id, _layout_id, slot_token = _instance_name_parts(instance_name)
+    if not slot_token:
+        return None
+    return int(slot_token[1:])
+
+
+def _instance_name_with_slot(instance_name, slot):
+    tokens = str(instance_name).split("_")
+    for index, token in enumerate(tokens[2:], start=2):
+        if len(token) > 1 and token[0].casefold() == "u" and token[1:].isdigit():
+            tokens[index] = f"{token[0]}{slot:0{len(token) - 1}d}"
+            return "_".join(tokens)
+    return None
+
+
+def _instance_model_description(model_id):
+    return _INSTANCE_MODEL_DESCRIPTION_BY_CASEFOLD.get(model_id.casefold(), "")
+
+
+def _instance_marker_label(instance_name):
+    model_id, _layout_id, _slot_token = _instance_name_parts(instance_name)
+    return model_id or "uIm"
+
+
+def _instance_name_details(instance_name):
+    model_id, layout_id, slot_token = _instance_name_parts(instance_name)
+    folded_model_id = model_id.casefold()
+    description = _instance_model_description(model_id)
+    return {
+        "model_id": model_id,
+        "description": description,
+        "layout_id": layout_id,
+        "slot_token": slot_token,
+        "base_model": _INSTANCE_MODEL_BASE_BY_CASEFOLD.get(folded_model_id, ""),
+        "archive": _INSTANCE_MODEL_ARC_BY_CASEFOLD.get(folded_model_id, ""),
+        "model_path": _INSTANCE_MODEL_PATH_BY_CASEFOLD.get(folded_model_id, ""),
+    }
+
+
+def _reserve_unique_instance_name(instance_name, used_names, used_slots):
+    instance_name = str(instance_name or "")
+    slot_info = _instance_name_slot(instance_name)
+    if not instance_name:
+        raise ValueError("Cannot duplicate a uIm instance with an empty mName")
+    if slot_info is None:
+        raise ValueError(
+            f"Cannot safely duplicate uIm mName {instance_name!r}: no U### slot was found"
+        )
+
+    slot = slot_info
+    if instance_name not in used_names and slot not in used_slots:
+        used_names.add(instance_name)
+        used_slots.add(slot)
+        return instance_name
+
+    candidate_slot = max(used_slots, default=-1) + 1
+    while True:
+        candidate_name = _instance_name_with_slot(instance_name, candidate_slot)
+        if candidate_name not in used_names and candidate_slot not in used_slots:
+            used_names.add(candidate_name)
+            used_slots.add(candidate_slot)
+            return candidate_name
+        candidate_slot += 1
+
+
+def _existing_named_instance_names(xml_root):
+    names = set()
+    slots = set()
+    for location in _get_record_locations_from_lot(xml_root).values():
+        values = location["values"]
+        if location["kind"] != "instance" or values[1] != "uIm":
+            continue
+        instance_name = location.get("instance_name", "")
+        if instance_name:
+            names.add(instance_name)
+            slot = _instance_name_slot(instance_name)
+            if slot is not None:
+                slots.add(slot)
+    return names, slots
 
 
 def _item_type_enum_items(_properties, _context):
@@ -205,6 +326,22 @@ def _instance_unit_class_updated(properties, context):
         bl_object.data = _create_visual_marker(unit_class, context)
 
 
+def _instance_name_updated(properties, context):
+    bl_object = properties.id_data
+    if (
+        _marker_kind(bl_object) != "instance" or
+        str(bl_object.get(_MARKER_UNIT_CLASS, "")) != "uIm"
+    ):
+        return
+
+    instance_name = properties.instance_name
+    bl_object[_MARKER_INSTANCE_NAME] = instance_name
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _create_visual_marker(
+            _instance_marker_label(instance_name), context
+        )
+
+
 def _enemy_info_class_enum_items(properties, _context):
     bl_object = properties.id_data
     items = list(_ENEMY_INFO_CLASS_ENUM_ITEMS)
@@ -250,6 +387,11 @@ class XFSLotPlacementProperties(bpy.types.PropertyGroup):
         items=_instance_unit_class_enum_items,
         update=_instance_unit_class_updated,
     )
+    instance_name: bpy.props.StringProperty(
+        name="Instance Name",
+        description="Full uIm mName value; the original suffixes are preserved",
+        update=_instance_name_updated,
+    )
     info_class: bpy.props.EnumProperty(
         name="Info Class",
         description="RE5 enemy spawn information class",
@@ -263,7 +405,30 @@ class XFSLotPlacementProperties(bpy.types.PropertyGroup):
             layout.prop(self, "item_type")
             layout.prop(self, "item_id")
         elif marker_kind == "instance":
-            layout.prop(self, "unit_class")
+            if str(self.id_data.get(_MARKER_UNIT_CLASS, "")) == "uIm":
+                layout.label(text="Named instance (mUnitClass = uIm)")
+                layout.prop(self, "instance_name", text="mName")
+                details = _instance_name_details(self.instance_name)
+                if details["model_id"]:
+                    model_label = details["description"] or details["model_id"]
+                    layout.label(
+                        text=f"Model: {model_label} ({details['model_id']})"
+                    )
+                if details["layout_id"] or details["slot_token"]:
+                    layout.label(
+                        text=(
+                            f"Layout: {details['layout_id'] or 'unknown'}  "
+                            f"Slot: {details['slot_token'] or 'none'}"
+                        )
+                    )
+                if details["base_model"]:
+                    layout.label(text=f"Base model: {details['base_model']}")
+                if details["archive"]:
+                    layout.label(text=f"Archive: {details['archive']}")
+                if details["model_path"]:
+                    layout.label(text=f"Model path: {details['model_path']}")
+            else:
+                layout.prop(self, "unit_class")
         elif marker_kind == "enemy":
             layout.prop(self, "info_class")
             layout.prop(self, "unit_class")
@@ -296,6 +461,12 @@ def _named_property(class_xml, name):
     )
 
 
+def _xml_property_value(node):
+    if node is None:
+        return ""
+    return str(node.attrib.get("value", node.text or ""))
+
+
 def _position_property(class_xml):
     position = _named_property(class_xml, "mPosition")
     if position is None:
@@ -323,7 +494,7 @@ def _set_xml_vector(node, values):
     return True
 
 
-def _lot_record_locations(root):
+def _get_record_locations_from_lot(root):
     elements = list(_iter_xml_elements_with_paths(root))
     paths_by_element = {id(element): path for element, path in elements}
     elements_by_path = {path: element for element, path in elements}
@@ -413,6 +584,7 @@ def _lot_record_locations(root):
         )
         if (
             info_class_xml is not None and
+            unit_class not in INSTANCE_UNIT_CLASSES_RE5 and
             _xml_vector(_named_property(info, "mPosition")) is not None and
             _xml_vector(_named_property(info, "mAngle")) is not None
         ):
@@ -451,6 +623,9 @@ def _lot_record_locations(root):
                     set_info, unit_class, info, info_path, unit_class_path,
                     None, None,
                 ),
+                "instance_name": _xml_property_value(
+                    _named_property(info, "mName")
+                ) if unit_class == "uIm" else "",
                 "set_info": set_info,
                 "set_info_path": set_info_path,
                 "set_info_entry": set_info_entry,
@@ -512,7 +687,7 @@ def _lot_records(root):
     """Return the original marker data without the XML insertion locations."""
     return {
         path: location["values"]
-        for path, location in _lot_record_locations(root).items()
+        for path, location in _get_record_locations_from_lot(root).items()
     }
 
 
@@ -777,7 +952,7 @@ def _transform_changes(bl_object):
 
 def build_xfs_lot_markers(bl_object, xml, context):
     """Create viewport markers for item, instance, and enemy placements."""
-    records = _lot_record_locations(xml.getroot())
+    records = _get_record_locations_from_lot(xml.getroot())
     if not records:
         return
     for marker_index, (
@@ -799,7 +974,13 @@ def build_xfs_lot_markers(bl_object, xml, context):
             position = _xml_vector(_named_property(record, "Pos"))
             angles = _xml_vector(_named_property(record, "Ang"))
         parent_scale = _xml_vector(_named_property(info, "mScale")) or (1, 1, 1)
-        marker_mesh = _create_visual_marker(unit_class, context)
+        instance_name = location.get("instance_name", "")
+        marker_label = (
+            _instance_marker_label(instance_name)
+            if marker_kind == "instance" and unit_class == "uIm"
+            else unit_class
+        )
+        marker_mesh = _create_visual_marker(marker_label, context)
 
         marker = bpy.data.objects.new(
             f"{bl_object.name}_SetInfo_{marker_index:03d}",
@@ -823,7 +1004,11 @@ def build_xfs_lot_markers(bl_object, xml, context):
             marker[_MARKER_ITEM_ID_PATH] = json.dumps(item_id_path)
         marker_properties = marker.albam_custom_properties.re5__lot_placement
         if marker_kind == "instance":
-            marker_properties.unit_class = unit_class
+            if unit_class == "uIm":
+                marker[_MARKER_INSTANCE_NAME] = instance_name
+                marker_properties.instance_name = instance_name
+            else:
+                marker_properties.unit_class = unit_class
         elif marker_kind == "enemy":
             marker[_MARKER_INFO_CLASS] = location["info_class"]
             if location["info_class"]:
@@ -884,6 +1069,26 @@ def _write_marker_values(record, parent, unit_class_node, marker, marker_kind):
                 info_class_node.set("value", info_class)
             else:
                 info_class_node.text = info_class
+
+    if (
+        marker_kind == "instance" and unit_class_node is not None and
+        _xml_property_value(unit_class_node) == "uIm"
+    ):
+        instance_name = marker.get(_MARKER_INSTANCE_NAME)
+        if instance_name is not None:
+            instance_name_node = _named_property(parent, "mName")
+            if instance_name_node is None:
+                raise ValueError(
+                    f"Missing mName for uIm marker {marker.name!r}"
+                )
+            if not instance_name:
+                raise ValueError(
+                    f"Empty mName on uIm marker {marker.name!r}"
+                )
+            if "value" in instance_name_node.attrib:
+                instance_name_node.set("value", str(instance_name))
+            else:
+                instance_name_node.text = str(instance_name)
 
     if "location" in changes:
         location = marker.location
@@ -1064,7 +1269,7 @@ def _duplicate_set_info(
 
 def write_xfs_lot_marker_changes(xml_root, bl_object):
     """Apply marker edits, additions, and deletions to the source XFS XML."""
-    records = _lot_record_locations(xml_root)
+    records = _get_record_locations_from_lot(xml_root)
     markers_by_path = {}
     for marker in bl_object.children_recursive:
         if marker.get(_MARKER_TAG):
@@ -1094,6 +1299,8 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
             marker_kind=records[path]["kind"],
         )
 
+    used_instance_names, used_instance_slots = _existing_named_instance_names(xml_root)
+
     # Each additional marker represents a new placement. Copy the complete
     # mSetInfos entry so its class, info object, and transforms stay independent.
     for path, markers in markers_by_path.items():
@@ -1107,6 +1314,31 @@ def write_xfs_lot_marker_changes(xml_root, bl_object):
             ) > 1
         )
         for marker in markers[1:]:
+            if location["kind"] == "instance" and location["values"][1] == "uIm":
+                original_name = str(
+                    marker.get(
+                        _MARKER_INSTANCE_NAME,
+                        location.get("instance_name", ""),
+                    )
+                )
+                unique_name = _reserve_unique_instance_name(
+                    original_name,
+                    used_instance_names,
+                    used_instance_slots,
+                )
+                if unique_name != original_name:
+                    marker[_MARKER_INSTANCE_NAME] = unique_name
+                    try:
+                        marker_properties = (
+                            marker.albam_custom_properties.re5__lot_placement
+                        )
+                    except AttributeError:
+                        marker_properties = None
+                    if (
+                        marker_properties is not None and
+                        marker_properties.instance_name != unique_name
+                    ):
+                        marker_properties.instance_name = unique_name
             container.append(
                 _duplicate_set_info(
                     location, path, marker, xml_root,
