@@ -131,11 +131,24 @@ def test_the_last_entry_growing_leaves_no_trailing_bytes(pack):
 
 
 def test_a_replacement_matching_nothing_is_an_error(pack):
-    with pytest.raises(ValueError, match="matched an entry"):
-        _rebuild_pack(pack, {"0d104000_009.dds": b""})
     # The right number, the extension the other flag would have given it.
     with pytest.raises(ValueError, match="matched an entry"):
         _rebuild_pack(pack, {"0d104000_000.tga": b""})
+
+
+def test_entries_numbered_past_the_last_are_appended(pack):
+    """A texture added in Blender is numbered from the pack's entry count up,
+    and lands laid out the way a shipped pack holding it would have it."""
+    rebuilt = _rebuild_pack(pack, {"0d104000_003.dds": FAKE_DDS + b"\x05",
+                                   "0d104000_004.tga": FAKE_TGA})
+    assert rebuilt == _build_pack(0x0D104000, [
+        (FAKE_DDS, 1), (FAKE_DDS + b"\x01" * 64, 0), (FAKE_TGA, 0),
+        (FAKE_DDS + b"\x05", 1), (FAKE_TGA, 0)])
+
+
+def test_a_gap_in_appended_entries_is_an_error(pack):
+    with pytest.raises(ValueError, match="without gaps"):
+        _rebuild_pack(pack, {"0d104000_009.dds": b""})
 
 
 def test_a_payload_that_is_not_a_pack_is_refused():
