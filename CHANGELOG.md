@@ -131,6 +131,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   animation ids and mirrors) is written from the armature and rig edits reach the game.
   Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
   saved with 0.5.0 keep the source file's mirror bones
+- MT Framework models (`.mod`) import and export through a glTF 2.0 scene built by
+  Blender's own glTF add-on, and the format code no longer touches Blender. Three things
+  look different: bones are drawn at glTF's default length, the vertex color layer is
+  stored per vertex instead of per face corner, and vertices no face uses are not imported
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically
