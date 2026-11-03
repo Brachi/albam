@@ -1,8 +1,10 @@
 import time
 import os
+import warnings
 import bpy
 
 from .error_handling import handle_operator_exception
+from ..exceptions import AlbamExportWarning
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
@@ -292,12 +294,43 @@ class ALBAM_OT_Export(bpy.types.Operator):
         active_object = bpy.context.active_object
         if active_object:
             bpy.ops.object.mode_set(mode='OBJECT')
-        try:
-            self._execute(context, item)
-        except Exception:
-            handle_operator_exception(self, "Export failed")
-            return {"CANCELLED"}
+        # Non-fatal export checks (e.g. #375's Group ID check) use
+        # warnings.warn(..., AlbamExportWarning) rather than raising, since
+        # export is meant to finish - overriding showwarning is the only way
+        # to surface those to the user without threading a report callback
+        # through every export function this calls. A third-party library's
+        # own unrelated warnings.warn() (numpy, PIL, ...) must not get
+        # reported to the user as if it were an export-correctness notice,
+        # so only AlbamExportWarning is captured here - everything else is
+        # forwarded to Python's normal warning display (the console), same
+        # as if this block didn't exist.
+        caught = []
+        original_showwarning = warnings.showwarning
+
+        def _capture_or_forward(message, category, filename, lineno, file=None, line=None):
+            if issubclass(category, AlbamExportWarning):
+                caught.append(message)
+            else:
+                original_showwarning(message, category, filename, lineno, file, line)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("always", AlbamExportWarning)
+            warnings.showwarning = _capture_or_forward
+            try:
+                self._execute(context, item)
+            except Exception:
+                handle_operator_exception(self, "Export failed")
+                return {"CANCELLED"}
+        # Reported last (after the INFO below) so it's the one left showing
+        # in the status bar, which only ever displays the most recent report
+        # of the operator call - reporting it first would let 'Export
+        # successful' immediately bury it. All caught warnings are combined
+        # into one report, since the status bar only shows the last call -
+        # reporting them one at a time would hide every warning but the one
+        # mesh that happened to be checked last.
         self.report({'INFO'}, 'Export successful')
+        if caught:
+            self.report({'WARNING'}, "; ".join(str(message) for message in caught))
         return {"FINISHED"}
 
     @staticmethod
