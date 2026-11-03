@@ -195,7 +195,13 @@ def load_lmt(vfile, context):
         custom_properties = _block_props(anim_object, app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
-        anim_props = anim_object.albam_custom_properties
+        tracks.source_action = action
+        # Keyframes start at 1 and a constant track holds a single one, so the
+        # keyed range alone would read 1 however long the block runs. The
+        # manual range keeps the block's length where Blender shows it.
+        action.use_frame_range = True
+        action.frame_start = 1
+        action.frame_end = max(1, block.block_header.num_frames)
         if lmt_ver < 67:
             col_events = _block_secondary_props(anim_object, app_id)["col_events"]
             col_events.copy_custom_properties_from(block.block_header.collision_events)
