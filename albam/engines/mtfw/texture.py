@@ -347,7 +347,9 @@ def build_missing_textures_report(missing):
     })
     if archive_hints:
         pronoun = "it" if len(archive_hints) == 1 else "them"
-        message += ". These are usually in " + " and ".join(archive_hints) + f"; load {pronoun} before importing."
+        message += (
+            ". These are usually in " + " and ".join(archive_hints) + f"; load {pronoun} before importing."
+        )
 
     return message
 
