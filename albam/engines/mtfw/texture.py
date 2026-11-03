@@ -1107,7 +1107,7 @@ def _texture_slot_for_image(bl_im_dict):
     """
     _bl_mat, node = next(iter(bl_im_dict["materials"].values()))
     socket_name = node.outputs["Color"].links[0].to_socket.name
-    return NODE_NAMES_TO_TYPES.get(socket_name)
+    return NODE_NAMES_TO_TYPES[socket_name]
 
 
 def _choose_export_dds_fourcc(texture_slot, has_alpha):
@@ -1125,7 +1125,7 @@ def _choose_export_dds_fourcc(texture_slot, has_alpha):
     addon's own importer - or any supported MT Framework game - can read
     back. Those are RE Engine (reng/hexn) formats.
     """
-    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL):
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL, TextureType.NORMAL_DETAIL_2):
         return "DXT5"
     if texture_slot == TextureType.SPECULAR:
         return "DXT1"
@@ -1140,7 +1140,7 @@ def _choose_export_compression_format(app_id, texture_slot, has_alpha):
     two never disagree about a given game's Specular or Diffuse code.
     """
     bm_alpha, bm_no_alpha, mm, nm = TEX_COMPRESSION.get(app_id, DEFAULT_TEX_COMPRESSION)
-    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL):
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL, TextureType.NORMAL_DETAIL_2):
         return nm
     if texture_slot == TextureType.SPECULAR:
         return mm
@@ -1208,12 +1208,13 @@ def check_dds_textures(func):
     def wrapper(*args, **kwargs):
         bl_objects = [a for a in args if isinstance(a, bpy.types.Object)]
         if not bl_objects:
-            result = func(*args, **kwargs)
+            return func(*args, **kwargs)
         # No more than one root object in export functions
         meshes = [c for c in bl_objects[0].children_recursive if c.type == "MESH"]
         materials = get_bl_materials(meshes)
         images = get_bl_teximage_nodes(materials)
         to_apply = []
+        errors = []
         for bl_im_name, bl_im_dict in images.items():
             image = bl_im_dict["image"]
             app_id = image.albam_asset.app_id
@@ -1225,16 +1226,24 @@ def check_dds_textures(func):
             try:
                 dds_bytes, compression_format = _plan_non_dds_image_encode(bl_im_dict)
             except Exception as err:
-                raise AlbamCheckFailure(
-                    f"Could not convert image '{bl_im_name}' to DDS for export",
-                    details=f"materials: {list(bl_im_dict['materials'].keys())} - {err}",
-                    solution=(
-                        "Convert the image to DDS externally (e.g. in GIMP or the NVIDIA "
-                        "Photoshop plugin), matching its texture slot's compression "
-                        "(diffuse/normal/specular), and reassign it in the material"
-                    ),
-                ) from err
+                errors.append((bl_im_name, bl_im_dict, err))
+                continue
             to_apply.append((image, app_id, dds_bytes, compression_format))
+        if errors:
+            names = ", ".join(name for name, _, _ in errors)
+            details = "; ".join(
+                f"{name} (materials: {list(bl_im_dict['materials'].keys())}) - {err}"
+                for name, bl_im_dict, err in errors
+            )
+            raise AlbamCheckFailure(
+                f"Could not convert {len(errors)} image(s) to DDS for export: {names}",
+                details=details,
+                solution=(
+                    "Convert the image(s) to DDS externally (e.g. in GIMP or the NVIDIA "
+                    "Photoshop plugin), matching each texture slot's compression "
+                    "(diffuse/normal/specular), and reassign them in the material(s)"
+                ),
+            )
         for image, app_id, dds_bytes, compression_format in to_apply:
             _apply_non_dds_image_encode(image, app_id, dds_bytes, compression_format)
         result = func(*args, **kwargs)
