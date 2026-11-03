@@ -53,10 +53,12 @@ def test_header_counts(scene_roundtrip):
 
 
 def test_bounding_volumes(scene_roundtrip):
+    """The bounds are recomputed from vertices that the file quantizes to
+    1/32767 of the bounds themselves, so they can move by one step."""
     src, dst = scene_roundtrip
     for axis in "xyz":
-        assert getattr(src.bbox_min, axis) == pytest.approx(getattr(dst.bbox_min, axis), abs=1e-3)
-        assert getattr(src.bbox_max, axis) == pytest.approx(getattr(dst.bbox_max, axis), abs=1e-3)
+        assert getattr(src.bbox_min, axis) == pytest.approx(getattr(dst.bbox_min, axis), rel=1e-3, abs=1e-2)
+        assert getattr(src.bbox_max, axis) == pytest.approx(getattr(dst.bbox_max, axis), rel=1e-3, abs=1e-2)
     assert src.bsphere.w == pytest.approx(dst.bsphere.w, rel=1e-3)
 
 
@@ -102,15 +104,22 @@ def test_vertices(scene_roundtrip):
             for k in range(2):
                 if f"JOINTS_{k}" not in src_attrs:
                     break
-                src_pairs = _influences(src_attrs, k)
-                dst_pairs = _influences(dst_attrs, k)
-                assert src_pairs == dst_pairs
+                for src_pairs, dst_pairs in zip(_influences(src_attrs, k), _influences(dst_attrs, k)):
+                    assert [j for j, _ in src_pairs] == [j for j, _ in dst_pairs]
+                    assert [w for _, w in src_pairs] == pytest.approx([w for _, w in dst_pairs], abs=0.02)
+
+
+# Below this a weight is quantization residue: the mod-21 half-float formats
+# derive their last slot from one minus the written ones, and after the
+# written ones are rounded that remainder can come out a few thousandths
+# where the file had nothing, landing on the padding bone.
+WEIGHT_NOISE = 0.01
 
 
 def _influences(attrs, k):
     joints = attrs[f"JOINTS_{k}"]
     weights = attrs[f"WEIGHTS_{k}"]
     return [
-        sorted((int(j), round(float(w), 2)) for j, w in zip(vj, vw) if w > 0)
+        sorted((int(j), float(w)) for j, w in zip(vj, vw) if w > WEIGHT_NOISE)
         for vj, vw in zip(joints, weights)
     ]

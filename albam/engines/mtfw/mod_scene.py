@@ -1947,6 +1947,10 @@ def _export_vertices(app_id, mesh_input, mesh, mesh_bone_palette, dst_mod, bbox_
             if vertex_format == 0xdb7da014:  # very strange bridge format
                 bone_indices.insert(1, 128)
                 bone_indices.insert(3, 128)
+                # The only bridge format with no weight bytes: its first
+                # weight lives in position.w and the second is the
+                # remainder, the way _get_weights reads it back.
+                vertex_struct.position.w = round(weight_values[0] / 255 * 32767)
             vertex_struct.bone_indices = bone_indices
             if dst_mod.header.version not in (153, 156) and vertex_format not in VERTEX_FORMATS_BRIDGE:
                 if MAX_BONES == 2:
