@@ -332,12 +332,8 @@ def build_missing_textures_report(missing):
     if not missing:
         return None
 
-    app_ids_seen = []
-    paths = []
-    for app_id, texture_path in missing:
-        if app_id not in app_ids_seen:
-            app_ids_seen.append(app_id)
-        paths.append(texture_path)
+    app_ids_seen = {app_id for app_id, _ in missing}
+    paths = [texture_path for _, texture_path in missing]
 
     shown = paths[:MAX_REPORTED_MISSING_TEXTURE_PATHS]
     remainder = len(paths) - len(shown)
@@ -350,7 +346,8 @@ def build_missing_textures_report(missing):
         if app_id in KNOWN_SHARED_TEXTURE_ARCHIVES
     })
     if archive_hints:
-        message += ". These are usually in " + " and ".join(archive_hints) + "; load it before importing."
+        pronoun = "it" if len(archive_hints) == 1 else "them"
+        message += ". These are usually in " + " and ".join(archive_hints) + f"; load {pronoun} before importing."
 
     return message
 
