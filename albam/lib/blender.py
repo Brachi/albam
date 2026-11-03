@@ -191,6 +191,18 @@ def get_model_bounding_sphere(blender_objects):
     return center + [radius]
 
 
+def build_uvs(bl_mesh, uvs, name="uv"):
+    """Add a UV layer from a flat per-vertex [u0, v0, u1, v1, ...] list."""
+    if not uvs:
+        return
+    uv_layer = bl_mesh.uv_layers.new(name=name)
+    per_loop_list = []
+    for loop in bl_mesh.loops:
+        offset = loop.vertex_index * 2
+        per_loop_list.extend((uvs[offset], uvs[offset + 1]))
+    uv_layer.data.foreach_set("uv", per_loop_list)
+
+
 def get_uvs_per_loop(blender_mesh_object, layer_index):
     """
     Return {loop_index: (uv_x, uv_y)}, one entry per mesh corner (as opposed

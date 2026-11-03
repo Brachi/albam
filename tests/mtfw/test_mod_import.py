@@ -14,7 +14,9 @@ import os
 import bpy
 import pytest
 
+from tests.dataset_cases import applies_to, entries_for
 from tests.mtfw.conftest import clear_scene, import_vfile
+from tests.mtfw.mod_facts import mod_facts
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
 
 # Committed, fixed dataset - explicit, hash-only, catalog-verified files to
@@ -30,8 +32,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_mod_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_mod_path_hash")
-        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in MOD_IMPORT_DATASET]
-        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in MOD_IMPORT_DATASET]
+        entries = entries_for(metafunc, MOD_IMPORT_DATASET)
+        argvalues = [(d["app_id"], d["mod_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['mod_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -84,6 +87,18 @@ def imported_mod(game_fs_root, local_app_id, local_mod_path_hash):
     clear_scene()
 
 
+def test_dataset_facts_match_the_file(imported_mod, local_mod_path_hash):
+    """The facts @applies_to selects on are true of the model (see
+    tests/mtfw/mod_facts.py)."""
+    mod, _bl_meshes, bl_armatures = imported_mod
+    entry = next(e for e in MOD_IMPORT_DATASET if e["mod_path_hash"] == local_mod_path_hash)
+    facts = mod_facts(mod)
+    assert {k: entry[k] for k in facts} == facts
+    # what test_mod_import_builds_skeleton relies on: an armature in the
+    # file is an armature in the scene, and no armature is none
+    assert bool(bl_armatures) == facts["has_armature"]
+
+
 def test_mod_import_builds_geometry(imported_mod):
     mod, bl_meshes, _bl_armatures = imported_mod
 
@@ -129,6 +144,7 @@ def test_mod_import_builds_materials(imported_mod):
             assert group.node_tree.name == MTFW_SHADER_NODEGROUP_NAME
 
 
+@applies_to(has_armature=True)
 def test_mod_import_builds_skeleton(imported_mod):
     """A skinned model's armature must be complete and acyclic, and every
     vertex group must name a real bone - a mismatch there means the bone
@@ -136,8 +152,6 @@ def test_mod_import_builds_skeleton(imported_mod):
     """
     _mod, bl_meshes, bl_armatures = imported_mod
 
-    if not bl_armatures:
-        pytest.skip("model has no skeleton")
     assert len(bl_armatures) == 1
     bones = bl_armatures[0].data.bones
     assert len(bones) > 0

@@ -59,12 +59,6 @@ class ModBoneCustomProperties(bpy.types.PropertyGroup):
         default=False,
         options=set(),
     )
-    chain_length: bpy.props.IntProperty(
-        name="Chain Length",
-        description="Joints the solver owns, plus the target",
-        default=0,
-        options=set(),
-    )
 
 
 def get_bone_custom_properties(pose_bone, app_id):
@@ -89,14 +83,8 @@ def get_chain_target(pose_bone, app_id):
     return get_bone_custom_properties(pose_bone, app_id).chain_target
 
 
-def get_chain_length(pose_bone, app_id):
-    return get_bone_custom_properties(pose_bone, app_id).chain_length
-
-
-def set_chain_target(pose_bone, app_id, chain_length):
-    props = get_bone_custom_properties(pose_bone, app_id)
-    props.chain_target = True
-    props.chain_length = chain_length
+def set_chain_target(pose_bone, app_id):
+    get_bone_custom_properties(pose_bone, app_id).chain_target = True
 
 
 def get_mirror(pose_bone, app_id):

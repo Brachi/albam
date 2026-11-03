@@ -65,6 +65,7 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     TOON = 23
     TOON_REVERSE = 24
     INDIRECT_USER = 25
+    SHININESS = 26
 
 
 TEX_TYPE_MAP_2 = {
@@ -100,6 +101,7 @@ TEX_TYPE_MAP_2 = {
     "ttoonmap": TextureType.TOON,
     "ttoonrevmap": TextureType.TOON_REVERSE,
     "tindirectmapuser": TextureType.INDIRECT_USER,
+    "tshininessmap": TextureType.SHININESS,
 }
 
 
@@ -123,6 +125,7 @@ NODE_NAMES_TO_TYPES = {
     'Toon Ramp': TextureType.TOON,
     'Toon Ramp Reverse': TextureType.TOON_REVERSE,
     'Indirect User': TextureType.INDIRECT_USER,
+    'Shininess Map': TextureType.SHININESS,
 }
 
 NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
@@ -647,6 +650,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
     elif texture_code == 25:
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
         blender_texture_node.location = (-600, -2100)
+
+    elif texture_code == 26:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Shininess Map"])
+        blender_texture_node.location = (-600, -2150)
 
     else:
         print("texture_code not supported", texture_code)
