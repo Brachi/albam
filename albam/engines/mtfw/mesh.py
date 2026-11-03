@@ -74,16 +74,6 @@ APPID_CLASS_MAPPER = {
     "umvc3": Mod21,
 }
 
-# #375: app_ids whose source models get checked for a mesh's Group ID not
-# being in the model's own groups table. The Group/Mesh layout is identical
-# on every mod version (mod_21, mod_153, mod_156), so this is every app_id
-# APPID_CLASS_MAPPER above knows - verified by parsing every real .mod each
-# game's own local install has: re5 (462 models, 36 with no group 0), dmc4
-# (5171, 958), re0 (3567, 31), re1 (1177, 16), re6 (5806, 345), rev1 (2349,
-# 439), rev2 (2330, 317), dd (3941, 1533), umvc3 (2702, 576) - 27,515 models
-# total, zero mesh/group mismatches anywhere.
-GROUP_ID_CHECK_APP_IDS = tuple(APPID_CLASS_MAPPER)
-
 MOD_VERSION_APPID_MAPPER = {
     153: {"dmc4"},
     156: {"re5"},
@@ -976,8 +966,14 @@ def export_mod(bl_obj):
     msg = f"There is no mesh to export. Try to unhide or parent them to the exported object {bl_obj.name}"
     assert bl_meshes, msg
     _check_armature_modifiers_target(bl_obj, bl_meshes)
-    if app_id in GROUP_ID_CHECK_APP_IDS:
-        _check_group_ids(src_mod, bl_meshes, app_id)
+    # #375: the Group/Mesh layout is identical on every mod version (mod_21,
+    # mod_153, mod_156), so this check applies to every app_id that reaches
+    # this point - verified by parsing every real .mod each game's own local
+    # install has: re5 (462 models, 36 with no group 0), dmc4 (5171, 958),
+    # re0 (3567, 31), re1 (1177, 16), re6 (5806, 345), rev1 (2349, 439), rev2
+    # (2330, 317), dd (3941, 1533), umvc3 (2702, 576) - 27,515 models total,
+    # zero mesh/group mismatches anywhere.
+    _check_group_ids(src_mod, bl_meshes, app_id)
 
     with _autofix_meshes(bl_meshes, export_settings.export_autofix) as bl_meshes:
         _serialize_top_level_mod(app_id, bl_meshes, src_mod, dst_mod)

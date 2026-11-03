@@ -296,15 +296,26 @@ class ALBAM_OT_Export(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
         # Non-fatal export checks (e.g. #375's Group ID check) use
         # warnings.warn(..., AlbamExportWarning) rather than raising, since
-        # export is meant to finish - catch_warnings is the only way to
-        # surface those to the user without threading a report callback
-        # through every export function this calls. Everything else is
-        # silenced within this block: a third-party library's own unrelated
-        # warnings.warn() (numpy, PIL, ...) must not get reported to the
-        # user as if it were an export-correctness notice.
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("ignore")
+        # export is meant to finish - overriding showwarning is the only way
+        # to surface those to the user without threading a report callback
+        # through every export function this calls. A third-party library's
+        # own unrelated warnings.warn() (numpy, PIL, ...) must not get
+        # reported to the user as if it were an export-correctness notice,
+        # so only AlbamExportWarning is captured here - everything else is
+        # forwarded to Python's normal warning display (the console), same
+        # as if this block didn't exist.
+        caught = []
+        original_showwarning = warnings.showwarning
+
+        def _capture_or_forward(message, category, filename, lineno, file=None, line=None):
+            if issubclass(category, AlbamExportWarning):
+                caught.append(message)
+            else:
+                original_showwarning(message, category, filename, lineno, file, line)
+
+        with warnings.catch_warnings():
             warnings.simplefilter("always", AlbamExportWarning)
+            warnings.showwarning = _capture_or_forward
             try:
                 self._execute(context, item)
             except Exception:
@@ -313,10 +324,13 @@ class ALBAM_OT_Export(bpy.types.Operator):
         # Reported last (after the INFO below) so it's the one left showing
         # in the status bar, which only ever displays the most recent report
         # of the operator call - reporting it first would let 'Export
-        # successful' immediately bury it.
+        # successful' immediately bury it. All caught warnings are combined
+        # into one report, since the status bar only shows the last call -
+        # reporting them one at a time would hide every warning but the one
+        # mesh that happened to be checked last.
         self.report({'INFO'}, 'Export successful')
-        for warning in caught:
-            self.report({'WARNING'}, str(warning.message))
+        if caught:
+            self.report({'WARNING'}, "; ".join(str(message) for message in caught))
         return {"FINISHED"}
 
     @staticmethod
