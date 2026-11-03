@@ -18,6 +18,11 @@ import numpy as np
 # custom properties, which Blender's glTF exporter also puts in extras.
 EXTRAS_KEY = "ALBAM"
 
+# Per-vertex attribute naming the source vertex an exported vertex came from,
+# for a writer that wants one vertex per source vertex and attribute set
+# rather than one per corner (see albam.lib.gltf_blender.export_objects).
+VERTEX_ATTRIBUTE = "_ALBAM_VERTEX"
+
 # glTF primitive modes
 TRIANGLES = 4
 

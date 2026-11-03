@@ -24,7 +24,7 @@ import numpy as np
 
 from ...exceptions import AlbamCheckFailure
 from ...lib.kaitai_utils import adopt, check_recursive
-from ...lib.scene import EXTRAS_KEY, Material, Mesh, Node, Primitive, Scene, Skin
+from ...lib.scene import EXTRAS_KEY, VERTEX_ATTRIBUTE, Material, Mesh, Node, Primitive, Scene, Skin
 from ...lib.tristrips import strip_triangles_to_triangles_list, triangles_list_to_triangles_strip
 from .structs.mod_153 import Mod153
 from .structs.mod_156 import Mod156
@@ -1467,6 +1467,40 @@ class Skeleton:
         return magnitudes, locations, parent_space, inverse_bind
 
 
+def merge_split_vertices(primitive):
+    """One vertex per (source vertex, UVs, color): what the .mod needs and
+    what albam's own export vertex table produced.
+
+    Blender's glTF exporter splits a vertex wherever any corner attribute
+    differs, normals included, and its custom normals come back from storage
+    a little different per corner, so a vertex that was one in the file
+    comes out as several. The source vertex rides along in VERTEX_ATTRIBUTE;
+    without it the primitive is left as it is. The first split's normal and
+    tangent are kept, the way the vertex table kept the first corner's.
+    """
+    attributes = primitive.attributes
+    if VERTEX_ATTRIBUTE not in attributes:
+        return primitive
+    count = primitive.vertex_count
+    columns = [np.rint(attributes[VERTEX_ATTRIBUTE].reshape(count, -1)).astype(np.int64)]
+    for name in sorted(attributes):
+        if name.startswith("TEXCOORD_") or name.startswith("COLOR_") or name == COLOR_ATTRIBUTE:
+            values = attributes[name].reshape(count, -1).astype(np.float64)
+            columns.append(np.rint(values * 1e6).astype(np.int64))
+    key = np.concatenate(columns, axis=1)
+    _, first, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    if len(first) == count:
+        merged_attributes = {k: v for k, v in attributes.items() if k != VERTEX_ATTRIBUTE}
+        return Primitive(attributes=merged_attributes, indices=primitive.indices,
+                         material=primitive.material, mode=primitive.mode)
+    merged_attributes = {
+        name: array[first] for name, array in attributes.items() if name != VERTEX_ATTRIBUTE}
+    indices = None if primitive.indices is None else inverse[primitive.indices].astype(np.uint32)
+    return Primitive(attributes=merged_attributes, indices=indices,
+                     material=primitive.material, mode=primitive.mode)
+
+
 def _mesh_inputs(scene, root, skeleton):
     """Every mesh node under the root, in export order, as MeshInput."""
     root_extras = scene.nodes[root].extras.get(EXTRAS_KEY, {})
@@ -1485,6 +1519,7 @@ def _mesh_inputs(scene, root, skeleton):
         for primitive in mesh.primitives:
             if primitive.indices is None or primitive.mode != 4:
                 continue
+            primitive = merge_split_vertices(primitive)
             material_name = node_extras.get("material_name") or mesh_extras.get("material_name")
             if material_name is None and primitive.material is not None:
                 material_name = scene.materials[primitive.material].name
@@ -2168,7 +2203,7 @@ def scene_to_mod(scene, src_mod, app_id, settings, serialize_materials):
     bone_palettes = create_bone_palettes(
         src_mod.header.version,
         [(m.name, {bone_index for pairs in m.influences for bone_index, _ in pairs}) for m in mesh_inputs],
-    ) if skeleton is not None else {}
+    )
     bones_data = _serialize_bones_data(
         skeleton, mesh_inputs, src_mod, dst_mod, app_id, settings, bone_palettes)
     if bones_data is not None:

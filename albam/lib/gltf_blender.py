@@ -7,9 +7,10 @@ import os
 import tempfile
 
 import bpy
+import numpy as np
 
 from .gltf import read_glb, write_glb
-from .scene import EXTRAS_KEY
+from .scene import EXTRAS_KEY, VERTEX_ATTRIBUTE
 
 # Options for bpy.ops.import_scene.gltf. Ones a Blender version lacks are
 # dropped, so the same call runs on every version albam supports.
@@ -102,14 +103,28 @@ def import_scene(scene, include_materials=False):
 
 def export_objects(objects):
     """The Scene Blender's glTF exporter makes of `objects` (which have to
-    be in the view layer, so they can be selected)."""
+    be in the view layer, so they can be selected).
+
+    Every exported vertex carries the index of the Blender vertex it came
+    from in the VERTEX_ATTRIBUTE attribute. The exporter makes one vertex
+    per distinct set of corner attributes, and Blender's custom normals
+    come back from storage a little different per corner, so a vertex that
+    was one in the file comes out as several; with the index along, a writer
+    can merge them back the way albam's own vertex table did.
+    """
     if bpy.context.mode != "OBJECT" and bpy.context.active_object:
         bpy.ops.object.mode_set(mode="OBJECT")
     previous_selection = [ob for ob in bpy.context.view_layer.objects if ob.select_get()]
     previous_active = bpy.context.view_layer.objects.active
     fd, path = tempfile.mkstemp(suffix=".glb")
     os.close(fd)
+    tagged = []
     try:
+        for ob in objects:
+            if ob.type == "MESH" and VERTEX_ATTRIBUTE not in ob.data.attributes:
+                attribute = ob.data.attributes.new(VERTEX_ATTRIBUTE, "FLOAT", "POINT")
+                attribute.data.foreach_set("value", np.arange(len(ob.data.vertices), dtype=np.float32))
+                tagged.append(ob.data)
         for ob in bpy.context.view_layer.objects:
             ob.select_set(False)
         for ob in objects:
@@ -123,6 +138,10 @@ def export_objects(objects):
             scene = read_glb(f.read())
     finally:
         os.remove(path)
+        for bl_mesh in tagged:
+            attribute = bl_mesh.attributes.get(VERTEX_ATTRIBUTE)
+            if attribute is not None:
+                bl_mesh.attributes.remove(attribute)
         for ob in bpy.context.view_layer.objects:
             ob.select_set(ob in previous_selection)
         bpy.context.view_layer.objects.active = previous_active
@@ -131,10 +150,21 @@ def export_objects(objects):
 
 def pop_extras(id_data):
     """Remove and return the ALBAM extras Blender's importer stored on an ID
-    (object, mesh, bone) as a custom property."""
+    (object, mesh, bone) as a custom property.
+
+    Blender keeps a JSON object as a property group, except when a value
+    does not fit an ID property (an int past 32 bits, say), in which case
+    the importer stores the whole object as its Python repr; that comes
+    back empty here, so only small, flat extras can be read this way. A
+    caller with more to say puts an index in the extras and keeps the rest
+    on its own Scene.
+    """
     if id_data is None or EXTRAS_KEY not in id_data.keys():
         return {}
     value = id_data[EXTRAS_KEY]
-    extras = value.to_dict() if hasattr(value, "to_dict") else dict(value)
+    if isinstance(value, str):
+        extras = {}
+    else:
+        extras = value.to_dict() if hasattr(value, "to_dict") else dict(value)
     del id_data[EXTRAS_KEY]
     return extras

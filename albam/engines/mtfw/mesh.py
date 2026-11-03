@@ -71,11 +71,15 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
         _apply_bone_extras(bl_object, app_id)
 
     materials = build_blender_materials(vfile, context, mod, bl_object_name)
+    # The node extras name the scene mesh; the mesh's own extras hold the
+    # rest and are read off the scene, not off what Blender stored of them.
+    scene_meshes = {mesh.extras[EXTRAS_KEY]["mesh_index"]: mesh for mesh in scene.meshes}
     for ob in objects:
         if ob.type != "MESH":
             continue
-        pop_extras(ob)
-        extras = pop_extras(ob.data)
+        mesh_index = pop_extras(ob).get("mesh_index")
+        pop_extras(ob.data)
+        extras = scene_meshes[mesh_index].extras[EXTRAS_KEY]
         _name_layers(ob.data)
         _apply_mesh_props(ob.data, app_id, extras.get("mesh_props", {}))
         material = materials.get(extras.get("material_hash"))
