@@ -48,3 +48,22 @@ def parse(kaitai_cls, data, *params):
     obj = kaitai_cls(*params, KaitaiStream(BytesIO(data)))
     obj._read()
     return obj
+
+
+def adopt(kaitai_obj, parent, root):
+    """Re-home `kaitai_obj` (and everything under it) into another struct
+    tree, so a section parsed from one file can be written as part of
+    another: `_check()` refuses a child whose `_root` is not the writer's.
+    """
+    kaitai_obj._parent = parent
+    for key, value in vars(kaitai_obj).items():
+        if key in _BACKREFERENCE_KEYS:
+            continue
+        if isinstance(value, ReadWriteKaitaiStruct):
+            adopt(value, kaitai_obj, root)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, ReadWriteKaitaiStruct):
+                    adopt(item, kaitai_obj, root)
+    kaitai_obj._root = root
+    return kaitai_obj

@@ -3,7 +3,6 @@ call fail raw (#369): a mesh's own bone count, the u2 vertex count and
 vertex-index fields of each mesh, and a UV value too large for the
 half-float format each slot packs into.
 """
-from types import SimpleNamespace
 
 import bpy
 import pytest
@@ -19,46 +18,16 @@ def local_app_id():
 
 
 def test_export_refuses_a_mesh_influenced_by_more_than_32_bones():
-    """Synthetic: no game data needed. A mesh whose vertex groups reference
+    """Synthetic: no game data needed. A mesh whose vertices are weighted to
     more than MAX_BONE_PALETTE_SIZE distinct bones can't fit in one bone
     palette no matter how palettes are split, so this is a hard limit on
     the mesh itself, not the grouping logic below it.
     """
-    from albam.engines.mtfw.mesh import _create_bone_palettes
+    from albam.engines.mtfw.mod_scene import create_bone_palettes
     from albam.exceptions import AlbamCheckFailure
 
-    armature_data = bpy.data.armatures.new("rig")
-    armature = bpy.data.objects.new("rig", armature_data)
-    mesh_data = bpy.data.meshes.new("mesh")
-    mesh_ob = bpy.data.objects.new("mesh", mesh_data)
-    previous_active = bpy.context.view_layer.objects.active
-    try:
-        bpy.context.scene.collection.objects.link(armature)
-        bpy.context.view_layer.objects.active = armature
-        bpy.ops.object.mode_set(mode="EDIT")
-        for i in range(33):
-            edit_bone = armature_data.edit_bones.new(str(i))
-            edit_bone.tail = (0.0, 0.0, 0.1)
-        bpy.ops.object.mode_set(mode="OBJECT")
-
-        bpy.context.scene.collection.objects.link(mesh_ob)
-        mesh_data.vertices.add(33)
-        mesh_data.update()
-        for i in range(33):
-            vg = mesh_ob.vertex_groups.new(name=str(i))
-            vg.add([i], 1.0, 'REPLACE')
-
-        src_mod = SimpleNamespace(header=SimpleNamespace(version=153))
-        with pytest.raises(AlbamCheckFailure, match="too many bones"):
-            _create_bone_palettes(src_mod, armature, [mesh_ob])
-    finally:
-        if armature.mode != "OBJECT":
-            bpy.ops.object.mode_set(mode="OBJECT")
-        bpy.data.objects.remove(mesh_ob, do_unlink=True)
-        bpy.data.objects.remove(armature, do_unlink=True)
-        bpy.data.meshes.remove(mesh_data)
-        bpy.data.armatures.remove(armature_data)
-        bpy.context.view_layer.objects.active = previous_active
+    with pytest.raises(AlbamCheckFailure, match="too many bones"):
+        create_bone_palettes(153, [("mesh", set(range(33)))])
 
 
 @pytest.fixture
@@ -78,21 +47,42 @@ def re5_model(pytestconfig, game_fs_root):
         clear_scene()
 
 
-def _pad_to_vertex_count(bl_mesh, count):
-    """Add loose vertices to bl_mesh until it exports exactly `count`
-    vertices. Export keeps vertices no triangle references, so each one
-    adds exactly one exported vertex. They get the first vertex's main
-    bone, since export refuses unweighted vertices on a skinned model."""
-    from albam.engines.mtfw.mesh import _build_export_vertex_table
+def _exported_vertex_count(bl_mesh):
+    from albam.lib.gltf_blender import export_objects
 
-    missing = count - _build_export_vertex_table(bl_mesh).count
+    scene = export_objects([bl_mesh])
+    return sum(p.vertex_count for m in scene.meshes for p in m.primitives)
+
+
+def _pad_to_vertex_count(bl_mesh, count):
+    """Add triangles of new vertices to bl_mesh until it exports exactly
+    `count` vertices. A vertex no face references is dropped on the way
+    through glTF, so every added vertex sits on a face; the faces share no
+    attributes that differ between corners, so none of them splits. They
+    get the first vertex's main bone, since export refuses unweighted
+    vertices on a skinned model."""
+    import bmesh
+
+    missing = count - _exported_vertex_count(bl_mesh)
     assert missing >= 0
     first_new = len(bl_mesh.data.vertices)
-    bl_mesh.data.vertices.add(missing)
+    bm = bmesh.new()
+    bm.from_mesh(bl_mesh.data)
+    new_verts = [bm.verts.new((i * 0.001, 0.0, -10.0)) for i in range(missing)]
+    for i in range(0, missing, 3):
+        corners = new_verts[i:i + 3]
+        # the remainder borrows from the previous face: a shared new vertex
+        # has identical corners, so it still exports as one vertex
+        while len(corners) < 3:
+            corners.append(new_verts[i - 1 - (3 - len(corners))])
+        bm.faces.new(corners)
+    bm.to_mesh(bl_mesh.data)
+    bm.free()
     bl_mesh.data.update()
     group_index = bl_mesh.data.vertices[0].groups[0].group
     bl_mesh.vertex_groups[group_index].add(
         range(first_new, first_new + missing), 1.0, 'REPLACE')
+    assert _exported_vertex_count(bl_mesh) == count
 
 
 def _meshes(bl_object):
@@ -122,7 +112,7 @@ def test_export_refuses_a_mesh_sharing_a_block_past_the_u2_limit(re5_model):
     """Grouped by vertex format, a mesh's last index is the running total of
     the block it shares, so two meshes of one format summing past 65535
     can't be addressed, and the error points at the setting that fixes it."""
-    from albam.engines.mtfw.mesh import _build_export_vertex_table, export_mod
+    from albam.engines.mtfw.mesh import export_mod
     from albam.exceptions import AlbamCheckFailure
 
     bpy.context.scene.albam.export_settings.no_vf_grouping = False
@@ -134,7 +124,6 @@ def test_export_refuses_a_mesh_sharing_a_block_past_the_u2_limit(re5_model):
     assert vtypes[0] == vtypes[1]
     _pad_to_vertex_count(first, 40000)
     _pad_to_vertex_count(second, 40000)
-    assert _build_export_vertex_table(second).count == 40000
 
     with pytest.raises(AlbamCheckFailure, match="too many vertices") as excinfo:
         export_mod(re5_model)
@@ -157,26 +146,12 @@ def test_export_refuses_a_single_mesh_of_65536_vertices(re5_model):
     assert mesh.name in excinfo.value.message
 
 
-@pytest.fixture
-def uv_mesh():
-    """A synthetic one-triangle mesh with two UV maps, the second named so
-    the error can be checked for it."""
-    mesh_data = bpy.data.meshes.new("uv_mesh")
-    mesh_data.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2)])
-    mesh_data.uv_layers.new(name="first")
-    mesh_data.uv_layers.new(name="second")
-    mesh_ob = bpy.data.objects.new("uv_mesh", mesh_data)
-    try:
-        yield mesh_ob
-    finally:
-        bpy.data.objects.remove(mesh_ob, do_unlink=True)
-        bpy.data.meshes.remove(mesh_data)
+def _uvs(u, v):
+    """A one-triangle UV layer as the scene carries it: glTF flips v to
+    1 - v, which is also the file's convention."""
+    import numpy as np
 
-
-def _set_uv(mesh_ob, layer_index, u, v):
-    for loop_uv in mesh_ob.data.uv_layers[layer_index].data:
-        loop_uv.uv = (0.5, 0.5)
-    mesh_ob.data.uv_layers[layer_index].data[0].uv = (u, v)
+    return np.array([(u, 1 - v), (0.5, 0.5), (0.5, 0.5)], dtype=np.float32)
 
 
 @pytest.mark.parametrize("u, v", [
@@ -186,20 +161,17 @@ def _set_uv(mesh_ob, layer_index, u, v):
     # v itself would pack
     (0.5, -65519.0),
 ])
-def test_export_refuses_a_uv_too_large_for_half_float(uv_mesh, u, v):
+def test_export_refuses_a_uv_too_large_for_half_float(u, v):
     """65520 is where pack('e', ...) starts raising OverflowError (the
     largest finite half float is 65504; values in between round down)."""
-    from albam.engines.mtfw.mesh import _build_export_vertex_table, _check_uv_range
+    from albam.engines.mtfw.mod_scene import _check_uv_range
     from albam.exceptions import AlbamCheckFailure
 
-    _set_uv(uv_mesh, 1, u, v)
-    vertex_table = _build_export_vertex_table(uv_mesh)
-
-    _check_uv_range(uv_mesh, vertex_table, 0)
+    _check_uv_range("uv_mesh", _uvs(0.5, 0.5), 0)
     with pytest.raises(AlbamCheckFailure, match="too large to export") as excinfo:
-        _check_uv_range(uv_mesh, vertex_table, 1)
+        _check_uv_range("uv_mesh", _uvs(u, v), 1)
     assert "uv_mesh" in excinfo.value.message
-    assert "'second'" in excinfo.value.details
+    assert "UV slot 2" in excinfo.value.details
 
 
 @pytest.mark.parametrize("u, v", [
@@ -207,15 +179,14 @@ def test_export_refuses_a_uv_too_large_for_half_float(uv_mesh, u, v):
     # flipped to -65519
     (0.5, 65520.0),
 ])
-def test_export_accepts_a_uv_that_rounds_into_half_float(uv_mesh, u, v):
-    from albam.engines.mtfw.mesh import _build_export_vertex_table, _check_uv_range
+def test_export_accepts_a_uv_that_rounds_into_half_float(u, v):
+    from albam.engines.mtfw.mod_scene import _check_uv_range
 
-    _set_uv(uv_mesh, 0, u, v)
-    _check_uv_range(uv_mesh, _build_export_vertex_table(uv_mesh), 0)
+    _check_uv_range("uv_mesh", _uvs(u, v), 0)
 
 
 def test_normalize_uv_flips_v_and_drops_negative_zero():
-    from albam.engines.mtfw.mesh import _normalize_uv
+    from albam.engines.mtfw.mod_scene import _normalize_uv
 
     assert _normalize_uv(0.5, 0.5) == (0.5, 0.5)
     # -0.0 is replaced with 0.0 (forbidden for half floats), and y is

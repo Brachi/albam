@@ -29,7 +29,9 @@ from contextlib import contextmanager
 import bpy
 import pytest
 
-from albam.engines.mtfw.mesh import (
+import numpy as np
+
+from albam.engines.mtfw.mod_scene import (
     _bones_with_exported_weight,
     _calculate_weight_bounds,
     _encode_half_float_weight_slots,
@@ -113,9 +115,15 @@ def weight_bound_rig_8():
 
 
 def _bound_bone_ids(armature, mesh_obj, max_bones_per_vertex=4, half_float=False):
+    """The filter runs on the arrays the scene carries: positions, the
+    per-vertex influences and the bones' rest positions."""
     meshes_data = _FakeMeshesData()
+    weights_per_vertex = get_bone_indices_and_weights_per_vertex(mesh_obj)
+    positions = np.array([v.co[:] for v in mesh_obj.data.vertices])
+    influences = [weights_per_vertex.get(i, []) for i in range(len(positions))]
+    bone_heads_cm = {i: np.zeros(3) for i in range(len(armature.data.bones))}
     weight_bounds = _calculate_weight_bounds(
-        armature, mesh_obj, Mod156, meshes_data, max_bones_per_vertex, half_float)
+        Mod156, meshes_data, positions, influences, bone_heads_cm, max_bones_per_vertex, half_float)
     return {wb.bone_id for wb in weight_bounds}
 
 

@@ -70,7 +70,7 @@ def _model_space_head(mod, bone_index):
     means taking the inverse bind matrix out of bbox space first: skipping
     it put re6 6cf30bd3cd1bd1e3's midline at x = 0.28 instead of 0, and
     every bone of that rig then looked unmirrorable."""
-    from albam.engines.mtfw.mesh import (
+    from albam.engines.mtfw.mod_scene import (
         _create_bbox_data, _transform_inverse_bind_matrix, _transform_parent_matrix)
 
     if getattr(mod, "app_id", None) == "umvc3":
@@ -544,7 +544,7 @@ def _visible_triangles(mod, mesh):
     rather than its buffer slot (see test_vertex_buffer_bytes for why slots
     can't be compared), rotated to a canonical first corner so winding is
     kept, and without the zero-area ones, which draw nothing."""
-    from albam.lib.blender import strip_triangles_to_triangles_list
+    from albam.lib.tristrips import strip_triangles_to_triangles_list
 
     indices = list(mesh.indices)
     if mod.header.version in VERSIONS_TRISTRIP:
