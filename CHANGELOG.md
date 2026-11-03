@@ -37,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - "Copy report to clipboard" button on the import/export error popup, so a #support
   user can paste the full error and traceback directly, without being asked to find
   it in the system console
+- Import of Ultimate Marvel vs. Capcom 3 characters, materials, textures and
+  archives. No export yet for this game
 
 ### Fixed
 
@@ -98,6 +100,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   file, now show a clear error instead of an `AttributeError` or a raw Kaitai
   parsing error. Images with no relative path set are no longer reported as
   duplicates of each other
+- Reopening a `.blend` with an archive or folder already added to the VFS
+  raising a `KeyError` on import, instead of remounting the root
+- Files exported earlier in a session going stale after saving and reopening
+  the `.blend`
+- Exporting a model with no armature crashing, instead of just skipping its
+  (nonexistent) bones data
+- Importing a `.lmt` raising `AttributeError` on Blender 4.4 and later, since
+  Blender moved actions' fcurves and groups behind layers and slots
+- The extension zip only bundling dependency wheels for the machine that
+  built it, so the add-on failed to enable on other platforms
+- Importing any model on Blender 5.x printing a deprecation warning once per
+  material
+- A bone's exported weight bound skipping a vertex whose weight looked
+  negligible but rounded up to a real nonzero value on export, leaving that
+  bone's bounding box too small in the exported file
+- Export always forcing a mesh's `disp` flag to true for RE0, RE1, RE6,
+  Revelations, Revelations 2 and Dragon's Dogma, overwriting whatever the
+  mesh actually had set
+- Autorename Bones not carrying a bone's Mirror Bone link through the rename
 
 ### Changed
 
