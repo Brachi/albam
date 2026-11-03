@@ -1311,9 +1311,9 @@ class XfsXmlSerializer:
 
     def _class_index_for_node(self, class_xml, create=False):
         if (
-            class_xml.attrib.get('name') == 'null'
-            or class_xml.attrib.get('value') == 'None'
-            or class_xml.attrib.get('ref') is not None
+            class_xml.attrib.get('name') == 'null' or
+            class_xml.attrib.get('value') == 'None' or
+            class_xml.attrib.get('ref') is not None
         ):
             return None
         class_index_attr = class_xml.attrib.get('class_index')
@@ -1381,8 +1381,8 @@ class XfsXmlSerializer:
                 type_id, self.property_type_info['scalar_sizes'].get(type_id)
             )
             if (
-                size is None
-                and type_id in self.property_type_info['vector_property_types']
+                size is None and
+                type_id in self.property_type_info['vector_property_types']
             ):
                 values = self._simple_value_nodes(prop_xml)
                 if values:
@@ -1635,9 +1635,9 @@ class XfsXmlSerializer:
     def _encode_reference(self, class_xml):
         class_name = class_xml.attrib.get('name', '')
         if (
-            class_name == 'null'
-            or class_xml.attrib.get('reference_kind') == 'null'
-            or class_xml.attrib.get('value') == 'None'
+            class_name == 'null' or
+            class_xml.attrib.get('reference_kind') == 'null' or
+            class_xml.attrib.get('value') == 'None'
         ):
             return (
                 self._pack_uint(0xFFFE, 16, 'null-reference tag') +
