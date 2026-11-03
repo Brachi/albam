@@ -7,6 +7,7 @@ from io import BytesIO
 from .structs.nav_156 import Nav156
 from ...registry import blender_registry
 from ...vfs import VirtualFileData, VirtualFile
+from ...exceptions import AlbamCheckFailure
 from .collision import mesh_rescale
 from ...lib import common_op as common
 from ...lib.kaitai_utils import check_recursive
@@ -16,7 +17,13 @@ from ...lib.misc import number_to_color
 @blender_registry.register_import_function(app_id="re5", extension="nav", albam_asset_type="NAVMESH")
 def build_navmesh_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Object:
     app_id = vfile.app_id
-    assert app_id == "re5", f"The game {app_id} is not supported yet"
+    if app_id != "re5":
+        raise AlbamCheckFailure(
+            f"Navmesh (.nav) import is not supported for '{app_id}'",
+            details="Only RE5 navmeshes can be imported",
+            solution="Re-import this file with the app set to RE5, or skip this file "
+            "if it doesn't belong to RE5"
+        )
     nav_bytes = vfile.get_bytes()
     ModCls = Nav156
     nav = ModCls.from_bytes(nav_bytes)
@@ -54,16 +61,20 @@ def export_nav(bl_obj):
     vfiles = []
 
     meshes = [c for c in bl_obj.children_recursive if c.type == "MESH"]
-    assert meshes, "There is no mesh to export"
+    if not meshes:
+        raise AlbamCheckFailure(
+            "There is no mesh to export",
+            details=f"Object '{bl_obj.name}' has no mesh children",
+            solution=f"Add a mesh as a child of the exported object '{bl_obj.name}'"
+        )
     mesh_clones = [common.clone_mesh(mesh) for mesh in meshes]
     mesh_clones = [mesh_rescale(clone) for clone in mesh_clones]
-    if mesh_clones:
-        nav_mesh = mesh_clones[0].data
-        for v in nav_mesh.vertices:
-            vertices.append(v.co)
-        for poly in nav_mesh.polygons:
-            faces.append(poly.vertices[:])
-            face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
+    nav_mesh = mesh_clones[0].data
+    for v in nav_mesh.vertices:
+        vertices.append(v.co)
+    for poly in nav_mesh.polygons:
+        faces.append(poly.vertices[:])
+        face_flags[poly.index] = _mat_name_to_flags(poly, meshes[0])
     neiborgs = build_neighbors(vertices, faces)
     for clone in mesh_clones:
         common.delete_ob(clone)

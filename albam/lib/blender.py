@@ -425,6 +425,82 @@ def is_blimage_dds(bl_im):
     return is_dds
 
 
+def image_rgba_top_down(bl_image):
+    """The image's pixels as 8-bit RGBA bytes, top row first.
+
+    Blender stores rows bottom-up as floats; DDS and the block encoders want
+    them top-down and 8-bit.
+    """
+    width, height = bl_image.size
+    return _image_rgba(bl_image).reshape(height, width * 4)[::-1].tobytes()
+
+
+def _image_rgba(bl_image):
+    import numpy as np
+
+    width, height = bl_image.size
+    pixels = np.empty(width * height * 4, dtype=np.float32)
+    bl_image.pixels.foreach_get(pixels)
+    return (np.clip(pixels, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
+def image_to_dds(bl_image, fourcc="DXT1", mipmaps=True):
+    """The image encoded as a DDS: block-compressed as DXT1, DXT5, BC5 or
+    BC7, or - with `fourcc` None - uncompressed A8R8G8B8. A full mip chain
+    unless `mipmaps` is False; never one for an uncompressed image."""
+    from bc7enc import pack_dds
+    from .dds import DDSHeader
+
+    width, height = _require_pixels(bl_image)
+    if fourcc is None:
+        header = DDSHeader(dwHeight=height, dwWidth=width)
+        header.set_constants()
+        header.set_variables(compressed=False)
+        return bytes(header) + _bgra(image_rgba_top_down(bl_image))
+
+    blocks = pack_dds(image_rgba_top_down(bl_image), width, height, fourcc, mipmaps=mipmaps)
+    header = DDSHeader(
+        dwHeight=height,
+        dwWidth=width,
+        dwMipMapCount=max(width, height).bit_length() if mipmaps else 0,
+        pixelfmt_dwFourCC=fourcc.encode(),
+    )
+    header.set_constants()
+    header.set_variables()
+    return bytes(header) + blocks
+
+
+def _require_pixels(bl_image):
+    """The image's (width, height), refusing an image with none: one whose
+    file is missing reads as 0x0 rather than failing, and would otherwise be
+    written as an empty texture."""
+    width, height = bl_image.size
+    if not width or not height:
+        raise AlbamCheckFailure(
+            f"Image {bl_image.name} has no pixels to encode",
+            details="Blender could not load it, so there is nothing to export",
+            solution="Check the image's file path, or reload it",
+        )
+    return width, height
+
+
+def image_to_tga(bl_image):
+    """The image as an uncompressed 32-bit TGA, rows top-down (descriptor
+    0x20) - how every TGA RE4UHD ships is laid out."""
+    import struct
+
+    width, height = _require_pixels(bl_image)
+    # Image type 2 (uncompressed true colour), 32 bits per pixel.
+    header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 0x20)
+    return header + _bgra(image_rgba_top_down(bl_image))
+
+
+def _bgra(rgba):
+    import numpy as np
+
+    return np.frombuffer(rgba, dtype=np.uint8).reshape(-1, 4)[:, [2, 1, 0, 3]].tobytes()
+
+
 def get_dist(point_a, point_b):
     x1, y1, z1 = point_a
     x2, y2, z2 = point_b
