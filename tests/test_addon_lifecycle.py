@@ -7,44 +7,12 @@ register() did - both the bpy classes it registered and the shared,
 session-lived state it touched - or repeated enable/disable cycles crash
 outright or leak state that keeps growing.
 
-These tests drive register()/unregister() from a subprocess rather than the
-live pytest process: this session already called register() once of its own
-(see tests/conftest.py's pytest_sessionstart), so cycling it again in-process
-would corrupt that shared session instead of just failing cleanly. Each
-scenario gets its own fresh subprocess.
+These tests drive register()/unregister() from a fresh subprocess per
+scenario (see tests/subprocess_script.py).
 """
 import ast
-import subprocess
-import sys
-import textwrap
 
-
-# bpy segfaults during interpreter finalization once register() has run
-# (reproducible under 4.2 with a single register() and no unregister() at
-# all), so each script ends with os._exit() to skip finalization altogether -
-# otherwise the subprocess exit status says nothing about what it tested.
-# .github/workflows/tests.yml works around the same segfault for pytest itself.
-EXIT_WITHOUT_FINALIZING = """
-sys.stdout.flush()
-os._exit(0)
-"""
-
-
-def _run(script):
-    # bpy itself writes startup noise (e.g. a color management config line)
-    # to stdout ahead of anything the script prints, so only the last line
-    # is the script's own output.
-    script = "import os\nimport sys\n" + textwrap.dedent(script) + EXIT_WITHOUT_FINALIZING
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, (
-        f"subprocess failed (exit {result.returncode})\n"
-        f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
-    )
-    return result.stdout.strip().splitlines()[-1]
+from tests.subprocess_script import run_script
 
 
 def test_register_unregister_survives_a_second_cycle():
@@ -61,7 +29,7 @@ def test_register_unregister_survives_a_second_cycle():
         RuntimeError: unregister_class(...):, missing bl_rna attribute from
         '_RNAMeta' instance (may not be registered)
     """
-    output = _run(
+    output = run_script(
         """
         import bpy
         from albam import register, unregister
@@ -83,7 +51,7 @@ def test_unregister_removes_load_post_handlers_it_added():
     # added, so a register()/unregister()/register() cycle (an addon
     # disable followed by a re-enable) doesn't leave duplicates behind
     # that fire twice on every future load.
-    output = _run(
+    output = run_script(
         """
         import bpy
         from albam import LOAD_POST_HANDLERS, register, unregister
@@ -115,7 +83,7 @@ def test_unregister_tolerates_an_already_removed_load_post_handler():
     # the time unregister() runs (e.g. some other teardown path removed it
     # first) - unregister() must not raise ValueError out of list.remove()
     # in that case.
-    output = _run(
+    output = run_script(
         """
         import bpy
         from albam import LOAD_POST_HANDLERS, register, unregister

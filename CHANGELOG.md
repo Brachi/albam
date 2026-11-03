@@ -30,9 +30,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   catches a texture renamed past the duplicate-path check without a `.tex`
   actually landing at the new name, which the game reads as a crash or an
   endless load rather than a missing file
+- Export warning when a mesh's Group ID isn't one of the ones in the model's groups table
+- Export encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
+- Import warning listing materials' textures that weren't found in any loaded arc, with a hint to load `Core.arc` first for apps like Resident Evil Revelations 2 where shared textures live there
+- Export now checks three preconditions before writing and raises a clear error instead
+  of a raw crash: a mesh influenced by more than 32 bones, a mesh whose vertex count
+  or vertex index would overflow the format's 16-bit fields, and a UV coordinate too
+  large for the half-float format to store
+- Autosetter now names a texture that never had a path set after its in-game slot
+  (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
+  plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
+  game file), wired into slots with different suffixes, or whose suffixed name another
+  image already uses is left unsuffixed
+- "Copy report to clipboard" button on the import/export error popup, so a #support
+  user can paste the full error and traceback directly, without being asked to find
+  it in the system console
+- Import of Ultimate Marvel vs. Capcom 3 characters, materials, textures and
+  archives. No export yet for this game
 
 ### Fixed
 
+- Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
 - Exporting a `.mod` whose mesh has its Armature modifier pointing at another armature now says so, instead of failing with `ValueError: N is not in list`
@@ -48,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Vertex colors losing precision on every import-export round trip
 - Vertices export with multiple attributes, causing artifacts around UV seams
 - Crash when disabling and re-enabling the addon within the same Blender session
+- Installing the addon from GitHub's "Code > Download ZIP" instead of a release zip crashing with a bare `ModuleNotFoundError` and no indication of why
 - Duplicate file-load handlers left behind after disabling and re-enabling the addon
 - Animation blocks that never move losing their length on export, so a static
   hold played back as a single frame
@@ -84,6 +103,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   field is gone: it no longer has to be hand-edited to a non-zero number to
   add an animation, and setting it to 0 can no longer delete the block from
   the exported file
+- A wrong app_id or a duplicated relative path on an exported image, and
+  importing a `.sbc` file with the wrong App selected or a truncated `.sbc`
+  file, now show a clear error instead of an `AttributeError` or a raw Kaitai
+  parsing error. Images with no relative path set are no longer reported as
+  duplicates of each other
+- Reopening a `.blend` with an archive or folder already added to the VFS
+  raising a `KeyError` on import, instead of remounting the root
+- Files exported earlier in a session going stale after saving and reopening
+  the `.blend`
+- Exporting a model with no armature crashing, instead of just skipping its
+  (nonexistent) bones data
+- Importing a `.lmt` raising `AttributeError` on Blender 4.4 and later, since
+  Blender moved actions' fcurves and groups behind layers and slots
+- The extension zip only bundling dependency wheels for the machine that
+  built it, so the add-on failed to enable on other platforms
+- Importing any model on Blender 5.x printing a deprecation warning once per
+  material
+- A bone's exported weight bound skipping a vertex whose weight looked
+  negligible but rounded up to a real nonzero value on export, leaving that
+  bone's bounding box too small in the exported file
+- Export always forcing a mesh's `disp` flag to true for RE0, RE1, RE6,
+  Revelations, Revelations 2 and Dragon's Dogma, overwriting whatever the
+  mesh actually had set
+- Autorename Bones not carrying a bone's Mirror Bone link through the rename
 
 ### Changed
 
