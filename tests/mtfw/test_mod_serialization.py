@@ -132,7 +132,7 @@ def test_export_header(mod_imported_local, mod_exported_local):
     dheader = mod_exported_local.header
 
     bones_data_error = _bones_data_error(mod_imported_local, mod_exported_local)
-    assert (sheader.version in (210, 211, 212) and not bones_data_error) or sheader.version == 156
+    assert (sheader.version in (153, 210, 211, 212) and not bones_data_error) or sheader.version == 156
 
     assert sheader.ident == dheader.ident == b"MOD\x00"
     assert sheader.version == dheader.version
@@ -140,10 +140,10 @@ def test_export_header(mod_imported_local, mod_exported_local):
     assert sheader.num_bones == dheader.num_bones
     assert sheader.num_materials == dheader.num_materials
     assert (sheader.version in (210, 211, 212) and sheader.reserved_01 == dheader.reserved_01 or
-            sheader.version == 156 and not getattr(dheader, "reserved_01", None))
+            sheader.version in (153, 156) and not getattr(dheader, "reserved_01", None))
     assert sheader.num_groups == dheader.num_groups
     assert sheader.num_meshes == dheader.num_meshes
-    assert ((sheader.version in (210, 211, 212) and sheader.num_vertices == dheader.num_vertices) or
+    assert ((sheader.version in (153, 210, 211, 212) and sheader.num_vertices == dheader.num_vertices) or
             sheader.version == 156)  # given 2nd vertex buffer unknowns
 
     assert sheader.offset_bones_data == dheader.offset_bones_data
@@ -179,11 +179,12 @@ def test_export_top_level(mod_imported_local, mod_exported_local):
 # Apps whose bones carry a rest rotation in the source file. albam's armature
 # keeps only each bone's head position, so export has nothing to rebuild a
 # rotated basis from and writes an identity one, with the translation
-# components landing on permuted axes. Every other app's bone matrices happen
-# to be axis-aligned, which hides it. Fixing it means carrying the rotation
+# components landing on permuted axes (dmc4 wp000's bones 6-11 are turned
+# 90 degrees about z in the file and come back unrotated). Every other app's
+# bone matrices happen to be axis-aligned, which hides it. Fixing it means carrying the rotation
 # through Blender as a real per-bone custom property, the way idx_anim_map
 # already is.
-APPS_BONE_REST_ROTATION_NOT_EXPORTED = {"umvc3"}
+APPS_BONE_REST_ROTATION_NOT_EXPORTED = {"dmc4", "umvc3"}
 
 
 @applies_to(has_armature=True)
@@ -194,7 +195,7 @@ def test_export_bones_data(mod_imported_local, mod_exported_local, local_app_id,
     sbd = mod_imported_local.bones_data
     dbd = mod_exported_local.bones_data
     bones_data_error = _bones_data_error(mod_imported_local, mod_exported_local)
-    assert ((mod_exported_local.header.version in (210, 211, 212) and not bones_data_error) or
+    assert ((mod_exported_local.header.version in (153, 210, 211, 212) and not bones_data_error) or
             mod_exported_local.header.version == 156)
 
     assert mod_imported_local.bones_data_size_ == mod_exported_local.bones_data_size_ - bones_data_error
@@ -286,7 +287,9 @@ def test_materials_data(mod_imported_local, mod_exported_local, local_app_id):
     dst = mod_exported_local.materials_data
 
     assert src.size_ == dst.size_
-    if mod_imported_local.header.version == 156:
+    # 153 and 156 list textures and materials only, with no material names
+    # or hashes to compare.
+    if mod_imported_local.header.version in (153, 156):
         return
     # Version 211 identifies a material by a hash rather than by name, so
     # material_names doesn't exist on it at all - except for umvc3's own 211,
