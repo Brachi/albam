@@ -31,6 +31,34 @@ def _game_dirs(pytestconfig):
     return parsed
 
 
+def _build_game_fs(pytestconfig, local_app_id):
+    """The MTFW_FS --game-dir's value for local_app_id describes, freshly
+    built (a brand new S3/R2 key listing for the r2:// case) - the mounting
+    half of game_fs_root(), factored out so resolve_hashes_with_remount()
+    can get a second, independent instance without touching
+    _GAME_FS_INSTANCES' cache. Skips (raising via skip_missing) exactly as
+    game_fs_root does for a bad/missing --game-dir.
+    """
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+    from tests.mtfw.r2_config import resolve_r2_source
+
+    value = _game_dirs(pytestconfig).get(local_app_id)
+    if not value:
+        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+    elif value.startswith(R2_PROTOCOL_PREFIX):
+        r2_kwargs = resolve_r2_source(value)
+        if r2_kwargs is None:
+            skip_missing(
+                f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
+                f"(empty bucket, missing s3 extras, or missing credentials - see "
+                f".env.example)"
+            )
+        return MTFW_FS.from_s3(**r2_kwargs)
+    elif not os.path.isdir(value):
+        skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+    return MTFW_FS(value)
+
+
 @pytest.fixture(scope="session")
 def game_fs_root(pytestconfig, local_app_id):
     """
@@ -49,33 +77,40 @@ def game_fs_root(pytestconfig, local_app_id):
     (a real RE5 install has ~1200 archives) - that cost is paid once per
     app_id per session, not per test.
     """
-    from albam.engines.mtfw.arc_fs import MTFW_FS
-    from tests.mtfw.r2_config import resolve_r2_source
-
     if local_app_id not in _GAME_FS_INSTANCES:
-        value = _game_dirs(pytestconfig).get(local_app_id)
-        if not value:
-            skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
-        elif value.startswith(R2_PROTOCOL_PREFIX):
-            r2_kwargs = resolve_r2_source(value)
-            if r2_kwargs is None:
-                skip_missing(
-                    f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
-                    f"(empty bucket, missing s3 extras, or missing credentials - see "
-                    f".env.example)"
-                )
-            game_fs = MTFW_FS.from_s3(**r2_kwargs)
-        elif not os.path.isdir(value):
-            skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
-        else:
-            game_fs = MTFW_FS(value)
-
+        game_fs = _build_game_fs(pytestconfig, local_app_id)
         bpy.context.scene.albam.apps.app_selected = local_app_id
         vfs = bpy.context.scene.albam.vfs
         vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")
         _GAME_FS_INSTANCES[local_app_id] = game_fs
 
     return _GAME_FS_INSTANCES[local_app_id]
+
+
+def resolve_hashes_with_remount(pytestconfig, local_app_id, game_fs, target_hashes, attempts=2):
+    """resolve_hashes(game_fs, target_hashes), retrying up to `attempts`
+    more times against a brand new S3/R2 key listing (each mounted as its
+    own extra VFS root, alongside game_fs_root's own) before giving up.
+
+    A fresh listing of the exact same R2 bucket/prefix has been observed to
+    come back without an archive a sibling pytest-xdist worker's listing of
+    that same prefix found in the very same CI run (confirmed via
+    MTFW_FS.failed_arcs being empty - the archive isn't failing to load,
+    it's simply absent from this particular listing) - a second,
+    independent listing has a chance not to repeat that, where retrying the
+    same already-built game_fs cannot.
+    """
+    from tests.mtfw.scripts.catalog_paths import resolve_hashes
+
+    fs = game_fs
+    for _ in range(attempts):
+        try:
+            return resolve_hashes(fs, target_hashes)
+        except KeyError:
+            fs = _build_game_fs(pytestconfig, local_app_id)
+            vfs = bpy.context.scene.albam.vfs
+            vfs.add_fs_root(local_app_id, fs, display_name=f"{local_app_id}-retry")
+    return resolve_hashes(fs, target_hashes)
 
 
 def import_export(local_app_id, local_path):
