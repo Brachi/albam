@@ -19,8 +19,8 @@ doc: |
 
   space division types (rCollision::ESPACE_DIVISION_TYPE):
     0 = BVH_QUAD, 1 = BVH_BINARY, 2 = GRID, 3 = MAX
-  -> header.unk_02 / header.unk_03 hold exactly this enum; the REV1 "grid"
-     files are simply `SpaceDivisionTypeTriangle == GRID`.
+  -> header.space_div_type_part / header.space_div_type_triangle hold exactly
+     this enum; the REV1 "grid" files are simply `space_div_type_triangle == GRID`.
 
 seq:
   - {id: header, type: sbc_header}
