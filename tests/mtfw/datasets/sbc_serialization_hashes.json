@@ -2,5 +2,17 @@
     {
         "app_id": "re5",
         "sbc_path_hash": "bbc4ee5dda3b4655"
+    },
+    {
+        "app_id": "rev2",
+        "sbc_path_hash": "f66cbf53d30bd88f"
+    },
+    {
+        "app_id": "rev2",
+        "sbc_path_hash": "964c1f400fd5307d"
+    },
+    {
+        "app_id": "re6",
+        "sbc_path_hash": "959032db79ccac98"
     }
 ]
