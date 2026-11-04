@@ -34,16 +34,35 @@ def test_serialize_textures_rejects_wrong_appid_image(new_bl_material):
     assert "re1" in excinfo.value.details
 
 
-def test_serialize_textures_rejects_duplicated_relative_path(new_bl_material):
+def _pack_dxt1(bl_im, block):
+    from albam.lib.dds import DDSHeader
+
+    header = DDSHeader(dwWidth=4, dwHeight=4, pixelfmt_dwFourCC=b"DXT1", dwMipMapCount=1)
+    header.set_constants()
+    header.set_variables(compressed=True)
+    data = bytes(header) + block
+    bl_im.pack(data=data, data_len=len(data))
+
+
+@pytest.mark.parametrize("same_pixels", [True, False])
+def test_serialize_textures_same_relative_path(new_bl_material, same_pixels):
     from albam.engines.mtfw.texture import serialize_textures
 
+    # e.g. pl_VTF and pl_VTF.001, the same game texture imported twice
     shared_path = "common/shared_texture.tex"
-    bl_mats = [new_bl_material("re5", shared_path)[0] for _ in range(2)]
+    (mat_a, im_a), (mat_b, im_b) = [new_bl_material("re5", shared_path) for _ in range(2)]
+    _pack_dxt1(im_a, b"\x00" * 8)
+    _pack_dxt1(im_b, b"\x00" * 8 if same_pixels else b"\xff" * 8)
+
+    if same_pixels:
+        exported = serialize_textures("re5", [mat_a, mat_b])
+        assert exported[im_a.name]["serialized_vfile"] is exported[im_b.name]["serialized_vfile"]
+        return
 
     with pytest.raises(AlbamCheckFailure) as excinfo:
-        serialize_textures("re5", bl_mats)
-
+        serialize_textures("re5", [mat_a, mat_b])
     assert shared_path in excinfo.value.details
+    assert "pixel data" in excinfo.value.details
 
 
 def test_serialize_textures_accepts_images_without_relative_path(new_bl_material):
@@ -56,6 +75,34 @@ def test_serialize_textures_accepts_images_without_relative_path(new_bl_material
     # it goes looking for dds data - reaching that point is what this asserts
     with pytest.raises(FileNotFoundError):
         serialize_textures("re5", bl_mats)
+
+
+@pytest.mark.parametrize("fourcc, prop_format, expected", [
+    (b"DXT5", 31, (31, False)),  # the property picks within the DDS's family
+    (b"DXT5", 20, (24, True)),   # DXT1 code on DXT5 data: derived from slot + header
+    (b"DX10", 31, None),         # nothing to derive from: refused
+])
+def test_tex157_compression_format_follows_dds_header(fourcc, prop_format, expected):
+    from types import SimpleNamespace
+    from albam.engines.mtfw.texture import _resolve_compression_format_21
+    from albam.lib.dds import DDSHeader
+
+    header = DDSHeader.from_dds_bytes(
+        bytes(DDSHeader(id_magic=b"DDS ", dwWidth=4, dwHeight=4, pixelfmt_dwFourCC=fourcc)) + bytes(16), "im")
+    link = SimpleNamespace(to_socket=SimpleNamespace(name="Diffuse BM"))
+    node = SimpleNamespace(outputs={"Color": SimpleNamespace(links=[link])})
+    dict_tex = {"image": SimpleNamespace(name="pl_BM"), "materials": {"mat": (None, node)}}
+
+    if expected is None:
+        with pytest.raises(AlbamCheckFailure) as excinfo:
+            _resolve_compression_format_21("re1", dict_tex, prop_format, header)
+        assert "pl_BM" in excinfo.value.details and "DX10" in excinfo.value.details
+        return
+
+    compression_format, warning = _resolve_compression_format_21("re1", dict_tex, prop_format, header)
+    assert (compression_format, bool(warning)) == expected
+    if warning:
+        assert "pl_BM" in warning and str(prop_format) in warning and "DXT5" in warning
 
 
 # -- mesh.py: no mesh to export --------------------------------------------

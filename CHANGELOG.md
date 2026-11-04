@@ -50,6 +50,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- Exporting two images that point at the same texture path (e.g. `pl_VTF` and `pl_VTF.001`
+  after importing a model twice) refusing to export and asking for a unique path, even when
+  both are the same texture. Identical images are now exported once; images that really
+  differ fail with a message saying what differs (size, settings or pixel data)
+- Exporting a texture for Resident Evil 0, 1, 6, Revelations 1 and 2, Dragon's Dogma and
+  UMvC3 writing a compression format that contradicts its DDS data (black screen, endless
+  loading or glowing textures in game). The DDS header now decides the block format; the
+  image's Compression Format property only picks among the codes that match it, and a
+  mismatching one is replaced with a warning. A DDS format the game can't use (e.g. a DX10
+  header) fails with a clear message
 - Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
