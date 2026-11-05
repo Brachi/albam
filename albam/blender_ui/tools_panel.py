@@ -1837,8 +1837,8 @@ def _set_bone_layers(armature_ob):
             for fragment in fragments:
                 normalized_fragment = fragment.casefold()
                 if (
-                    normalized_fragment in normalized_name
-                    and len(normalized_fragment) > best_matching_fragment_length
+                    normalized_fragment in normalized_name and
+                    len(normalized_fragment) > best_matching_fragment_length
                 ):
                     best_matching_collection = candidate_collection
                     best_matching_fragment_length = len(normalized_fragment)
