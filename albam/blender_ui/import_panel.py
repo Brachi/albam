@@ -98,7 +98,7 @@ class AlbamImportSettings(bpy.types.PropertyGroup):
     batch_import_folder: bpy.props.BoolProperty(default=False)
     use_collections: bpy.props.BoolProperty(
         default=False,
-        description="Place meshes with a nonzero Group ID in child collections",
+        description="Create collections for imported objects and group meshes by nonzero Group ID",
     )
 
 
@@ -112,11 +112,11 @@ def _mesh_group_id(bl_object, app_id):
     return getattr(custom_properties, "idx_group", 0)
 
 
-def _move_imported_objects_to_collections(context, bl_container, app_id, group_by_id):
+def _move_imported_objects_to_collections(context, bl_container, app_id):
     """Put an imported object hierarchy in a base collection.
 
-    When requested, meshes with nonzero Group IDs are placed in child
-    collections. Objects without a Group ID stay directly in the base.
+    Meshes with nonzero Group IDs are placed in child collections. Objects
+    without a Group ID stay directly in the base.
     """
     base_collection = bpy.data.collections.new(bl_container.name)
     context.scene.collection.children.link(base_collection)
@@ -124,7 +124,7 @@ def _move_imported_objects_to_collections(context, bl_container, app_id, group_b
     imported_objects = (bl_container, *bl_container.children_recursive)
 
     for bl_object in imported_objects:
-        group_id = _mesh_group_id(bl_object, app_id) if group_by_id else 0
+        group_id = _mesh_group_id(bl_object, app_id)
         target_collection = base_collection
         if group_id:
             target_collection = group_collections.get(group_id)
@@ -237,12 +237,8 @@ class ALBAM_OT_Import(bpy.types.Operator):
             except RuntimeError:
                 pass
 
-        _move_imported_objects_to_collections(
-            context,
-            bl_container,
-            vfile.app_id,
-            context.scene.albam.import_settings.use_collections,
-        )
+        if context.scene.albam.import_settings.use_collections:
+            _move_imported_objects_to_collections(context, bl_container, vfile.app_id)
         return bl_container
 
     @classmethod
@@ -543,7 +539,7 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
         layout = self.layout
         layout.prop(import_settings, "import_only_main_lods", text="Import main LODs only")
         layout.prop(import_settings, "batch_import_folder", text="Batch import folder (.mod)")
-        layout.prop(import_settings, "use_collections", text="Group meshes by Group ID")
+        layout.prop(import_settings, "use_collections", text="Move to Blender collections")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
