@@ -32,10 +32,17 @@ CHAIN_TARGET_OFFSET = {37: 2, 38: 2, 42: 3, 43: 3, 44: 3, 48: 2, 49: 2}
 ROOT_MOTION_BONE_ID = 255
 ROOT_MOTION_BONE_NAME = 'root_motion'
 ROOT_BONE_NAME = '0'
+LMT_ASSET_TYPE = "ANIMATION"
 
 
 def _block_props(anim_object, app_id):
-    return anim_object.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    return anim_object.albam_custom_properties.get_custom_properties_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
+
+
+def _block_secondary_props(anim_object, app_id):
+    return anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(
+        app_id, asset_type=LMT_ASSET_TYPE)
 
 
 def set_block_index(anim_object, app_id, block_index):
@@ -86,6 +93,9 @@ def load_lmt(vfile, context):
         anim_object_name = f"{vfile.display_name}.{str(block_index).zfill(4)}"
         anim_object = bpy.data.objects.new(anim_object_name, None)
         anim_object.parent = bl_object
+        # Which .lmt this block actually belongs to (#295) - independent of
+        # where the Outliner lets it end up parented. See _lmt_blocks.
+        anim_object.albam_lmt_block_owner = bl_object
         # Which slot of the file this block is, which is what identifies it.
         # The tree order it would otherwise be read back in is name order, and
         # names stop agreeing with block order - see _lmt_blocks.
@@ -100,16 +110,10 @@ def load_lmt(vfile, context):
         action.use_fake_user = True
         channels = get_action_channels(action, armature.name)
 
-        tracks = anim_object.albam_custom_properties.get_custom_properties_secondary_for_appid(app_id)[
-            "tracks"]
+        tracks = _block_secondary_props(anim_object, app_id)["tracks"]
         chains = _find_chains(block.block_header.tracks, lmt_ver)
-        # Workaround for cases when same bone index has more than 3 anim tracks
-        last_usage = {}
-        duplicated_bids = {}
-        for track_index, track in enumerate(block.block_header.tracks):
-            if duplicated_bids.get(track.idx_anim_map, None) is None:
-                duplicated_bids[track.idx_anim_map] = 0
-
+        track_keys = get_track_keys((t.idx_anim_map, t.usage) for t in block.block_header.tracks)
+        for track_index, (track, key) in enumerate(zip(block.block_header.tracks, track_keys)):
             # Custom attributes for a track
             item = tracks.tracks.add()
             item.copy_custom_properties_from(track)
@@ -126,18 +130,6 @@ def load_lmt(vfile, context):
                     bounds = LMTKeyframeBounds(track.bounds)
                     keyframes.bounds = bounds
 
-            try:
-                lu = last_usage[track.idx_anim_map][-1]
-                if lu >= track.usage:
-                    duplicated_bids[track.idx_anim_map] += 1
-                last_usage[track.idx_anim_map].append(track.usage)
-            except KeyError:
-                last_usage[track.idx_anim_map] = [track.usage]
-
-            if duplicated_bids[track.idx_anim_map] == 0:
-                key = str(track.idx_anim_map)
-            else:
-                key = str(track.idx_anim_map) + "_" + str(duplicated_bids[track.idx_anim_map])
             bone_index = mapping.get(key)
 
             # Set motion root bone
@@ -160,11 +152,6 @@ def load_lmt(vfile, context):
                                                    key,
                                                    mapping,
                                                    app_id)
-            if track.joint_type != 0:
-                action[f"{USAGE.get(track.usage)}_{key}"] = track.joint_type
-
-            action[f"rd_{USAGE.get(track.usage)}_{key}"] = str(track.reference_data)
-
             track_type = USAGE[track.usage]
             keyframes.track_type = USAGE[track.usage]
             if track.len_data > 0:
@@ -205,34 +192,30 @@ def load_lmt(vfile, context):
         block_chains.append((channels, set(chains)))
 
         # building custom attributes of lmt metadata
-        custom_properties = anim_object.albam_custom_properties.get_custom_properties_for_appid(
-            app_id)
+        custom_properties = _block_props(anim_object, app_id)
         custom_properties.copy_custom_properties_from(block.block_header)
         custom_properties.action = action
+        tracks.source_action = action
         # Keyframes start at 1 and a constant track holds a single one, so the
         # keyed range alone would read 1 however long the block runs. The
         # manual range keeps the block's length where Blender shows it.
         action.use_frame_range = True
         action.frame_start = 1
         action.frame_end = max(1, block.block_header.num_frames)
-        anim_props = anim_object.albam_custom_properties
         if lmt_ver < 67:
-            col_events = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "col_events"]
+            col_events = _block_secondary_props(anim_object, app_id)["col_events"]
             col_events.copy_custom_properties_from(block.block_header.collision_events)
             for attr_index, attribute in enumerate(block.block_header.collision_events.attributes):
                 item = col_events.attributes.add()
                 item.copy_custom_properties_from(attribute)
 
-            motion_se = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "motion_se"]
+            motion_se = _block_secondary_props(anim_object, app_id)["motion_se"]
             motion_se.copy_custom_properties_from(block.block_header.motion_sound_effects)
             for attr_index, attribute in enumerate(block.block_header.motion_sound_effects.attributes):
                 item = motion_se.attributes.add()
                 item.copy_custom_properties_from(attribute)
         else:
-            seq_infos = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "sequence_infos"]
+            seq_infos = _block_secondary_props(anim_object, app_id)["sequence_infos"]
             # seq_info.copy_custom_properties_from(block.block_header.sequence_infos)
             for s_index, s_info in enumerate(block.block_header.sequence_infos):
                 item = seq_infos.sequence_info.add()
@@ -241,8 +224,7 @@ def load_lmt(vfile, context):
                     a_item = item.attributes.add()
                     a_item.copy_custom_properties_from(s_attr)
 
-            keyframe_infos = anim_props.get_custom_properties_secondary_for_appid(app_id)[
-                "keyframe_infos"]
+            keyframe_infos = _block_secondary_props(anim_object, app_id)["keyframe_infos"]
             if len(block.block_header.key_infos) > 0:
                 for k_index, k_info in enumerate(block.block_header.key_infos):
                     item = keyframe_infos.keyframe_info.add()
@@ -334,6 +316,29 @@ def _find_chains(tracks, version):
         if offset is not None:
             chains[track.idx_anim_map + offset] = offset
     return chains
+
+
+def get_track_keys(tracks):
+    """The animation id each of a block's tracks belongs to, in track order.
+
+    `tracks` is the block's (bone_index, usage) pairs. A bone is keyed once per
+    usage, in increasing usage order, except for the bones carrying placement,
+    which can be keyed again for the same usage. A usage that does not increase
+    therefore starts another bone sharing the same id: the first is "<id>", the
+    next "<id>_1", and so on - the ids import gives the bones it creates for
+    them. Export reads the same keys off the tracks it encodes, to tell which
+    of the block's stored tracks each one takes the place of.
+    """
+    last_usage = {}
+    repeats = {}
+    keys = []
+    for bone_index, usage in tracks:
+        if bone_index in last_usage and last_usage[bone_index] >= usage:
+            repeats[bone_index] = repeats.get(bone_index, 0) + 1
+        last_usage[bone_index] = usage
+        repeat = repeats.get(bone_index, 0)
+        keys.append(str(bone_index) if repeat == 0 else f"{bone_index}_{repeat}")
+    return keys
 
 
 def _create_bone_mapping(armature_obj, app_id):

@@ -50,10 +50,24 @@ types:
       - {id: surface_attr, type: u4} # 0
       - {id: unk_02, type: u4}
 
-  bvh_node: # 80 bytes unloaded
+  bvh_node: # 80 bytes
+    doc: |
+      Node in binary bounding volume hierarchy tree
+      bit - is actually u1 value + u1 padding it contains 8 flags
+      first 6 almost certainly unused by the games and the last two define what is in the child_index
+      0 - index of the bvh_node, 1 - index of the face (leaf)
+      For box A0 and A1
+      b0: A0.min.x < A1.min.x
+      b1: A0.min.y < A1.min.y
+      b2: A0.min.z < A1.min.z
+      b3: A0.max.x > A1.max.x
+      b4: A0.max.y > A1.max.y
+      b5: A0.max.z > A1.max.z
+      b6: is a leaf in the right node
+      b7: is a leaf in the left node
     seq:
       - {id: boxes, type: bbox4, repeat: expr, repeat-expr: 2}
-      - {id: bit, type: u2} # always 0-255 nodeType ?
+      - {id: bit, type: u2}
       - {id: child_index, type: u2, repeat: expr, repeat-expr: 2} # references to a box
       - {id: nulls, type: u1, repeat: expr, repeat-expr: 10}
 

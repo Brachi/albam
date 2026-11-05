@@ -20,6 +20,7 @@ import os
 import threading
 import zlib
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from fs.base import FS
 from fs.enums import ResourceType
@@ -37,6 +38,8 @@ from .structs.hexane_ssg import HexaneSsg
 from ...lib.s3 import S3LooseFS, build_s3_client, s3_opener
 
 ANIM_CLIP_EXTENSION = ".animclip"
+# Archives opened at once by HexnFS.from_s3().
+S3_OPEN_WORKERS = 8
 
 # The content types an id_magic 5 archive may hold to be mounted: .edgemodel,
 # .matb, .hkx and a .dds's TPKH/TPKD pair. An allowlist, so the cutscene/mocap
@@ -378,11 +381,22 @@ class HexnFS(MultiFS):
         self._s3_prefix = prefix.strip("/")
 
         opener = s3_opener(client, bucket)
-        for ssg_key in sorted(find_ssg_keys_s3(client, bucket, prefix)):
+
+        def open_ssg(ssg_key):
             try:
-                ssg_fs = SsgFS(ssg_key, opener=opener)
+                return SsgFS(ssg_key, opener=opener), None
             except Exception as e:
-                self.failed_ssgs.append((ssg_key, e))
+                return None, e
+
+        # Each archive's header is a round trip of its own, and none depends
+        # on another, so they're fetched concurrently; they're still added in
+        # sorted key order, as a local install adds them.
+        ssg_keys = sorted(find_ssg_keys_s3(client, bucket, prefix))
+        with ThreadPoolExecutor(max_workers=S3_OPEN_WORKERS) as pool:
+            opened = list(pool.map(open_ssg, ssg_keys))
+        for ssg_key, (ssg_fs, error) in zip(ssg_keys, opened):
+            if error is not None:
+                self.failed_ssgs.append((ssg_key, error))
                 continue
             self.add_fs(ssg_key, ssg_fs, priority=_ssg_priority(ssg_key, ssg_fs))
 

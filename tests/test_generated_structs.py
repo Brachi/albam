@@ -14,12 +14,15 @@ rename has already happened once, between the 0.11 pre-release and the
 import os
 import shutil
 import subprocess
+import sys
 
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINES_DIR = os.path.join(REPO_ROOT, "albam", "engines")
-COMPILER = "kaitai-struct-compiler"
+# The pinned compiler albam's parsers are generated with; it downloads and
+# verifies the release on first use, and runs it on Java.
+KSC = os.path.join(REPO_ROOT, "scripts", "ksc.py")
 
 # Names albam assigns to on a generated Mesh to keep a lazily-written
 # buffer from being serialized twice (albam/engines/mtfw/mesh.py). Listed
@@ -52,7 +55,8 @@ def test_ksy_files_are_found():
     assert len(_ksy_files()) > 15
 
 
-@pytest.mark.skipif(shutil.which(COMPILER) is None, reason=f"{COMPILER} not installed")
+@pytest.mark.skipif(shutil.which("java") is None and not os.environ.get("JAVA_HOME"),
+                    reason="Java not installed (scripts/ksc.py runs the compiler on it)")
 def test_every_ksy_file_compiles(tmp_path):
     """`ks-version: 0.10` unquoted is read by YAML as the float 0.1, which
     the compiler rejects as below its minimum supported version - so a
@@ -60,7 +64,7 @@ def test_every_ksy_file_compiles(tmp_path):
     versions avoid it; this keeps them that way.
     """
     result = subprocess.run(
-        [COMPILER, "--target", "python", "-w", "--outdir", str(tmp_path), *_ksy_files()],
+        [sys.executable, KSC, "--target", "python", "-w", "--outdir", str(tmp_path), *_ksy_files()],
         capture_output=True,
         text=True,
     )
