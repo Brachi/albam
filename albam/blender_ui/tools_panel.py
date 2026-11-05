@@ -1311,28 +1311,41 @@ def rename_bones(armature_ob, app_id, body_type):
 def _set_bone_layers(armature_ob):
     """Assign renamed bones to Albam collections and color them by group."""
     armature = armature_ob.data
+    assignments = []
+    for bone in armature.bones:
+        normalized_name = bone.name.casefold()
+        best_matching_collection = None
+        best_matching_fragment_length = 0
+        for candidate_collection, fragments in BONE_COLLECTIONS.items():
+            for fragment in fragments:
+                normalized_fragment = fragment.casefold()
+                if (
+                    normalized_fragment in normalized_name
+                    and len(normalized_fragment) > best_matching_fragment_length
+                ):
+                    best_matching_collection = candidate_collection
+                    best_matching_fragment_length = len(normalized_fragment)
+
+        # Controller prefixes take precedence over body-part tokens such as
+        # "hand" or "knee" (for example, ctr_hand_r).
+        if normalized_name == "ctr" or normalized_name.startswith("ctr_"):
+            collection_name = "Controllers"
+        else:
+            collection_name = best_matching_collection or "Others"
+
+        assignments.append((bone, collection_name))
+
+    used_collection_names = {name for _, name in assignments}
     collections = {}
     for collection_name in BONE_COLLECTIONS:
         collection = armature.collections.get(collection_name)
-        if collection is None:
+        if collection is None and collection_name in used_collection_names:
             collection = armature.collections.new(collection_name)
             collection.is_visible = True
-        collections[collection_name] = collection
+        if collection is not None:
+            collections[collection_name] = collection
 
-    for bone in armature.bones:
-        normalized_name = bone.name.casefold()
-        # The most specific token wins (e.g. thigh_twist over thigh).
-        matching_groups = [
-            (fragment.casefold(), collection_name)
-            for collection_name, fragments in BONE_COLLECTIONS.items()
-            for fragment in fragments
-            if fragment.casefold() in normalized_name
-        ]
-        collection_name = (
-            max(matching_groups, key=lambda match: len(match[0]))[1]
-            if matching_groups else "Other"
-        )
-
+    for bone, collection_name in assignments:
         # Remove stale membership so repeated autorename runs keep one Albam
         # group per bone. Other, differently named collections are untouched.
         for collection in collections.values():

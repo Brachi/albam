@@ -744,21 +744,26 @@ NAME_FIXES = {
 
 
 BONE_COLLECTIONS = {
-    "Main Bones": ["pelvis", "spine_upper", "spine_lower", "neck", "head"],
-    "Legs Main": ["thigh", "knee", "calf", "foot", "toe"],
-    "Legs Twist": ["thigh_twist", "calf_twist", "foot_twist"],
-    "Arms Main": ["clavicle", "upperarm", "elbow", "lowerarm", "hand"],
-    "Hands Main": ["palm", "thumb", "index", "middle", "ring", "pinky"],
+    "Main Bones": ["pelvis", "spine_upper", "spine_lower", "neck", "head", "thigh", "calf", "foot",
+                   "toe", "clavicle", "upperarm", "lowerarm", "hand", "breast"],
+    "Twist Bones": ["thigh_twist", "calf_twist", "foot_twist", "clavicle_twist_l",
+                    "upperarm_clavicle_twist_l", "upperarm_lowerarm_twist_l", "lowerarm_twist_l",
+                    "lowerarm_hand_twist_l", "knee", "elbow"],
+    "Hands": ["palm", "thumb", "index", "middle", "ring", "pinky"],
+    "Controllers": ["ctr"],
+    "Facial": ["jaw", "lip", "cheek", "eyebrow", "eyelid", "eye_side", "eyelash", "nose", 'chin', "nostril"],
+    "Mouth": ["teeth", "tongue"],
     "Eyes": ["eye"],
-    "Other": [],
+    "Others": [],
 }
 
 BONE_COLLECTION_COLORS = {
-    "Main Bones": "THEME01",
-    "Legs Main": "THEME02",
-    "Legs Twist": "THEME03",
-    "Arms Main": "THEME04",
-    "Hands Main": "THEME05",
-    "Eyes": "THEME06",
-    "Other": "THEME07",
+    "Main Bones": "THEME03",
+    "Twist Bones": "THEME05",
+    "Controllers": "THEME02",
+    "Hands": "THEME06",
+    "Facial": "THEME04",
+    "Mouth": "THEME07",
+    "Eyes": "THEME14",
+    "Others": "THEME20",
 }
