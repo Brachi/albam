@@ -22,6 +22,7 @@ import pytest
 
 from tests.conftest import vfs_root_names
 from tests.cie.lfs_paths import resolve_archive_hashes
+from tests.dataset_cases import applies_to, entries_for
 from tests.cie.synthetic_bin import bone_table, build_mesh_bin
 from tests.cie.test_bin_serialization import _is_mesh_bin
 
@@ -52,8 +53,9 @@ def pytest_generate_tests(metafunc):
     if ("local_app_id" in metafunc.fixturenames and
             "local_archive_path_hash" in metafunc.fixturenames):
         argnames = ("local_app_id", "local_archive_path_hash")
-        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in EXPORT_FIDELITY_DATASET]
-        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in EXPORT_FIDELITY_DATASET]
+        entries = entries_for(metafunc, EXPORT_FIDELITY_DATASET)
+        argvalues = [(d["app_id"], d["archive_path_hash"]) for d in entries]
+        ids = [f"{d['app_id']}-{d['archive_path_hash']}" for d in entries]
         metafunc.parametrize(argnames, argvalues, ids=ids, scope="session")
 
 
@@ -278,6 +280,7 @@ def test_the_repeats_survive_a_trip_through_a_blend_file(tmp_path, _clean_scene)
     assert exported[3][2] == bone_table(original)[3][2]
 
 
+@applies_to(has_repeated_bone_id=True)
 def test_shipped_models_with_a_repeated_bone_id_round_trip(
         game_root, local_app_id, local_archive_path_hash, _clean_scene):
     """The same thing, against whatever the game actually ships.
@@ -337,8 +340,7 @@ def test_shipped_models_with_a_repeated_bone_id_round_trip(
                     f"{vfile.display_name} moved a repeated entry for bone {bone_id}")
         repeated.append(vfile.display_name)
 
-    if not repeated:
-        pytest.skip(f"none of this archive's {len(models)} models repeats a bone id")
+    assert repeated, "the dataset says a model in this archive repeats a bone id"
 
 
 def test_a_bone_duplicated_in_blender_stays_its_own_bone(tmp_path, _clean_scene):
