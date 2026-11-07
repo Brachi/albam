@@ -361,13 +361,19 @@ def serialize_materials_data(model_asset, bl_objects, src_mod, dst_mod):
     serialize_func = MAPPER_SERIALIZE_FUNCS[dst_mod.header.version]()
     materials_data, mrl = serialize_func(model_asset, bl_materials, exported_textures, src_mod, dst_mod)
 
-    return materials_data, mrl, [t["serialized_vfile"] for t in exported_textures.values()]
+    return materials_data, mrl, _unique_texture_vfiles(exported_textures)
+
+
+def _unique_texture_vfiles(exported_textures):
+    """Images merged by serialize_textures share one vfile; it's exported once."""
+    vfiles = {id(t["serialized_vfile"]): t["serialized_vfile"] for t in exported_textures.values()}
+    return list(vfiles.values())
 
 
 def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, src_mod, dst_mod):
     app_id = model_asset.app_id
     dst_mod.header.num_materials = len(bl_materials)
-    dst_mod.header.num_textures = len(exported_textures)
+    dst_mod.header.num_textures = len(_unique_texture_vfiles(exported_textures))
     dst_mod.materials_data = dst_mod.MaterialsData(_parent=dst_mod, _root=dst_mod._root)
     dst_mod.materials_data.textures = []
     dst_mod.materials_data.materials = []

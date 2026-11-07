@@ -1038,8 +1038,7 @@ def export_mod(bl_obj):
     #
     # The 21 formats size their index buffer as num_indices * 2, so num_indices
     # is exactly the number of indices. mod-153 and mod-156 size theirs as
-    # (num_indices * 2) - 2, so there it is the index count plus one, and the
-    # trailing entry the +1 accounts for is the padding appended below.
+    # (num_indices * 2) - 2, so there it is the index count plus one.
     # Applying the +1 everywhere wrote one index too many on 21: measured
     # against real umvc3 files, num_indices equals the summed mesh index count
     # exactly, and export was producing 205 against 204, 42847 against 42846.
@@ -1062,11 +1061,10 @@ def export_mod(bl_obj):
         # a real file, and recovering the triangle count needs the strip
         # decomposition rather than arithmetic.
         dst_mod.header.num_triangles = dst_mod.header.num_indices // 3
-    if app_id not in ["re5"] and dst_mod.header.version not in VERSIONS_MOD_21:
-        # The trailing index the (num_indices * 2) - 2 sizing leaves room for.
-        # A 21 file has no such entry: its meshes tile the index buffer
-        # exactly, the last one ending on num_indices.
-        index_buffer.extend((0, 0))
+    # The index buffer holds exactly the indices the meshes reference, on
+    # every version: (num_indices * 2) - 2 bytes on 153 and 156, given the
+    # + 1 above, and num_indices * 2 on 21. Real dmc4 files end exactly
+    # where that sized buffer ends, with no trailing index after it.
     # Real 21 files pad the index buffer with zeros to a 4 byte boundary, and
     # size_file counts that padding: an odd index count on re6 ends the
     # buffer at 16690 and the file carries size_file 16692. Only the size

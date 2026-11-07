@@ -33,11 +33,8 @@ def _game_dirs(pytestconfig):
 
 def _build_game_fs(pytestconfig, local_app_id):
     """The MTFW_FS --game-dir's value for local_app_id describes, freshly
-    built (a brand new S3/R2 key listing for the r2:// case) - the mounting
-    half of game_fs_root(), factored out so resolve_hashes_with_remount()
-    can get a second, independent instance without touching
-    _GAME_FS_INSTANCES' cache. Skips (raising via skip_missing) exactly as
-    game_fs_root does for a bad/missing --game-dir.
+    built (a brand new S3/R2 key listing for the r2:// case). Skips
+    (raising via skip_missing) for a bad/missing --game-dir.
     """
     from albam.engines.mtfw.arc_fs import MTFW_FS
     from tests.mtfw.r2_config import resolve_r2_source
@@ -76,6 +73,13 @@ def game_fs_root(pytestconfig, local_app_id):
     Scanning + flattening a full local game install's tree can take a while
     (a real RE5 install has ~1200 archives) - that cost is paid once per
     app_id per session, not per test.
+
+    local_app_id has to come from parametrizing it at session scope, never
+    from a module defining its own local_app_id fixture: this fixture is
+    only rebuilt when the local_app_id definition it was built from is torn
+    down, and a session-scoped fixture defined in one module is not torn
+    down before the next module runs, so every later module on the same
+    xdist worker would get the previous module's game.
     """
     if local_app_id not in _GAME_FS_INSTANCES:
         game_fs = _build_game_fs(pytestconfig, local_app_id)
@@ -85,32 +89,6 @@ def game_fs_root(pytestconfig, local_app_id):
         _GAME_FS_INSTANCES[local_app_id] = game_fs
 
     return _GAME_FS_INSTANCES[local_app_id]
-
-
-def resolve_hashes_with_remount(pytestconfig, local_app_id, game_fs, target_hashes, attempts=2):
-    """resolve_hashes(game_fs, target_hashes), retrying up to `attempts`
-    more times against a brand new S3/R2 key listing (each mounted as its
-    own extra VFS root, alongside game_fs_root's own) before giving up.
-
-    A fresh listing of the exact same R2 bucket/prefix has been observed to
-    come back without an archive a sibling pytest-xdist worker's listing of
-    that same prefix found in the very same CI run (confirmed via
-    MTFW_FS.failed_arcs being empty - the archive isn't failing to load,
-    it's simply absent from this particular listing) - a second,
-    independent listing has a chance not to repeat that, where retrying the
-    same already-built game_fs cannot.
-    """
-    from tests.mtfw.scripts.catalog_paths import resolve_hashes
-
-    fs = game_fs
-    for _ in range(attempts):
-        try:
-            return resolve_hashes(fs, target_hashes)
-        except KeyError:
-            fs = _build_game_fs(pytestconfig, local_app_id)
-            vfs = bpy.context.scene.albam.vfs
-            vfs.add_fs_root(local_app_id, fs, display_name=f"{local_app_id}-retry")
-    return resolve_hashes(fs, target_hashes)
 
 
 def import_export(local_app_id, local_path):
