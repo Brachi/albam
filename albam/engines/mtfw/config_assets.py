@@ -565,14 +565,55 @@ def _collect_sdl_track_elements(tracks_xml):
 
     collect_entries(tracks_xml)
 
-    indexed = [element.get("index") is not None for element, _ in track_elements]
-    if any(indexed) and not all(indexed):
-        raise ValueError("SDL track index must be specified for every track or none")
-    if all(indexed):
-        track_elements.sort(key=lambda pair: _read_xml_int(pair[0], "index"))
-        indices = [_read_xml_int(element, "index") for element, _ in track_elements]
-        if indices != list(range(len(track_elements))):
-            raise ValueError("SDL track indices must be unique and contiguous from zero")
+    # Existing indices preserve the original binary track-table order, which
+    # can differ from the XML tree's depth-first order. Treat them as ordering
+    # hints, then repair gaps and duplicates automatically so adding or
+    # removing a track does not require hand-renumbering the XML.
+    indexed_entries = []
+    duplicate_entries = []
+    unindexed_entries = []
+    first_entry_by_index = {}
+    original_index_by_element = {}
+    has_explicit_indices = False
+    for document_order, pair in enumerate(track_elements):
+        element, _ = pair
+        original_index_by_element[id(element)] = None
+        raw_index = element.get("index")
+        if raw_index is None:
+            unindexed_entries.append((document_order, pair))
+            continue
+
+        has_explicit_indices = True
+        index = _read_xml_int(element, "index")
+        if index < 0:
+            raise ValueError("SDL track index cannot be negative")
+        entry = (index, document_order, pair)
+        if index in first_entry_by_index:
+            # A copied track often starts with the same index as its source.
+            # Keep the first entry in its old position and append the copy.
+            duplicate_entries.append(entry)
+        else:
+            first_entry_by_index[index] = entry
+            original_index_by_element[id(element)] = index
+            indexed_entries.append(entry)
+
+    if has_explicit_indices:
+        indexed_entries.sort(key=lambda entry: (entry[0], entry[1]))
+        duplicate_entries.sort(key=lambda entry: entry[1])
+        track_elements = (
+            [entry[2] for entry in indexed_entries]
+            + [entry[2] for entry in duplicate_entries]
+            + [pair for _, pair in unindexed_entries]
+        )
+
+    old_index_to_new = {}
+    for new_index, (element, _) in enumerate(track_elements):
+        old_index = element.get("index")
+        if old_index is not None:
+            old_index = _read_xml_int(element, "index")
+            old_index_to_new.setdefault(old_index, new_index)
+        element.set("index", str(new_index))
+
     if not track_elements or track_elements[0][0].tag != "TYPE_ROOT":
         raise ValueError("SDL XML tracks must start with a TYPE_ROOT track")
 
@@ -580,12 +621,18 @@ def _collect_sdl_track_elements(tracks_xml):
         id(element): track_index
         for track_index, (element, _) in enumerate(track_elements)
     }
-    return track_elements, track_index_by_element
+    index_remap = old_index_to_new if has_explicit_indices else None
+    return (
+        track_elements,
+        track_index_by_element,
+        index_remap,
+        original_index_by_element,
+    )
 
 
 def _sdl_parent_from_xml(
     element, track_type, structural_parent, track_index, track_count,
-    track_index_by_element,
+    track_index_by_element, old_index_to_new,
 ):
     if track_type in SDL_MOVE_LINE_TRACK_TYPES:
         # Older generated XML used parent for this value. Keep accepting it
@@ -602,6 +649,12 @@ def _sdl_parent_from_xml(
         # Preserve explicit parent fields from XML created by earlier versions;
         # new XML expresses the same link by nesting.
         parent = _sdl_value_to_int(element.get("parent"))
+        if old_index_to_new is not None:
+            if parent not in old_index_to_new:
+                raise ValueError(
+                    f"SDL parent index {parent} does not identify a track in the XML"
+                )
+            parent = old_index_to_new[parent]
     else:
         parent = (
             track_index_by_element[id(structural_parent)]
@@ -622,7 +675,7 @@ def _sdl_parent_from_xml(
 
 def _parse_sdl_track_entry(
     element, structural_parent, track_index, track_count, track_index_by_element,
-    app_id,
+    old_index_to_new, original_index_by_element, app_id,
 ):
     track_type = TRACK_TYPE[element.tag]
     data_xml = element.find("data")
@@ -640,6 +693,18 @@ def _parse_sdl_track_entry(
         )
     else:
         prop_type = _sdl_prop_type_value(prop_type_attr)
+    if (
+        track_type == TRACK_TYPE["TYPE_REF"]
+        and prop_type == 2
+        and old_index_to_new is not None
+        and original_index_by_element[id(element)] is not None
+    ):
+        # TYPE_REF/TYPE_CLASSREF values are absolute SDL track indices too.
+        # Remap references on surviving original tracks; references to a
+        # removed or otherwise missing target become the format's null value.
+        for item in data_entry:
+            old_target = _sdl_value_to_int(_read_xml_value(item, "value"))
+            item.set("value", str(old_index_to_new.get(old_target, 0)))
     if data_entry and any(
         item.tag != RV_MT_PROP_TYPES_RE5.get(prop_type) for item in data_entry
     ):
@@ -659,6 +724,7 @@ def _parse_sdl_track_entry(
         track_index,
         track_count,
         track_index_by_element,
+        old_index_to_new,
     )
     track = {
         "type": track_type,
@@ -671,7 +737,10 @@ def _parse_sdl_track_entry(
     return track, data_entry
 
 
-def _parse_sdl_track_entries(track_elements, track_index_by_element, app_id):
+def _parse_sdl_track_entries(
+    track_elements, track_index_by_element, old_index_to_new,
+    original_index_by_element, app_id
+):
     track_count = len(track_elements)
     tracks = []
     track_data = []
@@ -682,6 +751,8 @@ def _parse_sdl_track_entries(track_elements, track_index_by_element, app_id):
             track_index,
             track_count,
             track_index_by_element,
+            old_index_to_new,
+            original_index_by_element,
             app_id,
         )
         tracks.append(track)
@@ -824,9 +895,20 @@ def _write_sdl_bytes(header_values, tracks, track_data, layout, app_id):
 def xml_to_sdl_bytes(root_xml, app_id):
     _get_sdl_dti_hashes(app_id)
     header_values, tracks_xml = _parse_sdl_xml_document(root_xml)
-    track_elements, track_index_by_element = _collect_sdl_track_elements(tracks_xml)
+    (
+        track_elements,
+        track_index_by_element,
+        old_index_to_new,
+        original_index_by_element,
+    ) = (
+        _collect_sdl_track_elements(tracks_xml)
+    )
     tracks, track_data = _parse_sdl_track_entries(
-        track_elements, track_index_by_element, app_id
+        track_elements,
+        track_index_by_element,
+        old_index_to_new,
+        original_index_by_element,
+        app_id,
     )
     layout = _calculate_sdl_layout(tracks, track_data)
     return _write_sdl_bytes(header_values, tracks, track_data, layout, app_id)
