@@ -76,15 +76,19 @@ def AlbamCustomPropertiesFactory(kind: str):
         appid_map = {}
         appid_map_secondary = {}
         subpanel_type = SUBPANEL_BASE.get(registry_name, None)
-        is_object_registry = registry_name == "custom_properties_object"
+        is_asset_type_registry = registry_name in {
+            "custom_properties_object",
+            "custom_properties_bone",
+        }
         registry = getattr(blender_registry, registry_name)
 
         for app_id, props_dict in registry.items():
             for name, (cls, is_secondary, display_name, asset_type) in props_dict.items():
                 data[f"{app_id}__{name}"] = bpy.props.PointerProperty(type=cls)
                 if not is_secondary:
-                    if is_object_registry:
-                        # For objects, support multiple asset types per app_id
+                    if is_asset_type_registry:
+                        # Objects and pose bones can carry independent groups
+                        # for different Albam asset types (e.g. model and physics).
                         if app_id not in appid_map:
                             appid_map[app_id] = {}
                         appid_map[app_id][asset_type] = {
@@ -99,8 +103,8 @@ def AlbamCustomPropertiesFactory(kind: str):
                         }
                 else:
                     _create_custom_properties_secondary_subpanel(app_id, display_name, name, subpanel_type)
-                    if is_object_registry:
-                        # For objects, store secondary props by asset_type
+                    if is_asset_type_registry:
+                        # Store secondary props by asset_type for both registries.
                         if app_id not in appid_map_secondary:
                             appid_map_secondary[app_id] = {}
                         if asset_type not in appid_map_secondary[app_id]:
@@ -598,6 +602,36 @@ class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
     bl_region_type = 'WINDOW'
     bl_context = "object"
     CONTEXT_ITEM_NAME = "object"
+
+    @classmethod
+    def poll(cls, context):
+        bl_object = getattr(context, "object", None)
+        if bl_object is not None and (
+                bl_object.get("_albam_ccl_preview", False)
+                or (bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl")):
+            # CCL file and primitive metadata have dedicated, concise panels.
+            return False
+        return super().poll(context)
+
+    def draw(self, context):
+        bl_object = context.object
+        if not bl_object.get("_albam_ccl_preview", False):
+            return super().draw(context)
+
+        albam_asset = bl_object.albam_custom_properties.get_parent_albam_asset()
+        if not albam_asset:
+            return
+        app_name = next((app[1] for app in APPS if app[0] == albam_asset.app_id), albam_asset.app_id)
+        custom_props = bl_object.albam_custom_properties.get_custom_properties_for_appid(
+            albam_asset.app_id)
+        props_name = bl_object.albam_custom_properties.get_custom_properties_name()
+        layout = self.layout
+        layout.use_property_split = True
+        layout.label(text=f"{props_name} ({app_name})", icon="PROPERTIES")
+        column = layout.column()
+        column.enabled = False
+        for prop_name in custom_props.__annotations__:
+            column.prop(custom_props, prop_name)
 
 
 SUBPANEL_BASE = {
