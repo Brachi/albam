@@ -60,10 +60,10 @@ def chn_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_chn_
     exported_vfile = bpy.context.scene.albam.exported.select_vfile(local_app_id, chn_path)
     assert exported_vfile
 
-    source_chn = Chn.from_bytes(vfile_chn.get_bytes())
-    source_chn._read()
-    assert source_chn.chain_infos
-    for chain_info in source_chn.chain_infos:
+    src_chn = Chn.from_bytes(vfile_chn.get_bytes())
+    src_chn._read()
+    assert src_chn.chain_infos
+    for chain_info in src_chn.chain_infos:
         chain_ids = [joint.ref_joint_no for joint in chain_info.joints]
         assert chain_info.chain_type in (1, 2)
         assert all(
@@ -74,11 +74,11 @@ def chn_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_chn_
         if len(chain_ids) > 1:
             assert all(0 <= anim_id <= 0xFF for anim_id in chain_ids)
     assert any(len(chain_info.joints) >
-               1 for chain_info in source_chn.chain_infos)
+               1 for chain_info in src_chn.chain_infos)
 
-    exported_chn = Chn.from_bytes(exported_vfile.get_bytes())
-    exported_chn._read()
-    return source_chn, exported_chn
+    dst_chn = Chn.from_bytes(exported_vfile.get_bytes())
+    dst_chn._read()
+    return src_chn, dst_chn
 
 
 @pytest.fixture(scope="session")
@@ -92,54 +92,54 @@ def chn_exported_local(chn_export_local):
 
 
 def test_export_header(chn_imported_local, chn_exported_local):
-    source_chn = chn_imported_local
-    exported_chn = chn_exported_local
+    src = chn_imported_local
+    dst_chn = chn_exported_local
 
-    assert source_chn.magic == exported_chn.magic
-    assert source_chn.version == exported_chn.version
-    assert source_chn.num_chain_infos == exported_chn.num_chain_infos
-    assert source_chn.reserve == exported_chn.reserve
-    assert source_chn.data_size == exported_chn.data_size
-    assert len(source_chn.chain_infos) == len(exported_chn.chain_infos)
+    assert src.magic == dst_chn.magic
+    assert src.version == dst_chn.version
+    assert src.num_chain_infos == dst_chn.num_chain_infos
+    assert src.reserve == dst_chn.reserve
+    assert src.data_size == dst_chn.data_size
+    assert len(src.chain_infos) == len(dst_chn.chain_infos)
 
-    for source_chain, exported_chain in zip(source_chn.chain_infos, exported_chn.chain_infos):
-        assert source_chain.num_joints == exported_chain.num_joints
-        assert source_chain.chain_type == exported_chain.chain_type
-        assert source_chain.grav_scaler == pytest.approx(exported_chain.grav_scaler)
-        assert source_chain.time_scaler == pytest.approx(exported_chain.time_scaler)
-        assert source_chain.dump_scaler == pytest.approx(exported_chain.dump_scaler)
+    for src_chain, dst_chain in zip(src.chain_infos, dst_chn.chain_infos):
+        assert src_chain.num_joints == dst_chain.num_joints
+        assert src_chain.chain_type == dst_chain.chain_type
+        assert src_chain.grav_scaler == pytest.approx(dst_chain.grav_scaler)
+        assert src_chain.time_scaler == pytest.approx(dst_chain.time_scaler)
+        assert src_chain.dump_scaler == pytest.approx(dst_chain.dump_scaler)
 
 
 def test_export_joint_info(chn_imported_local, chn_exported_local):
-    source_chn = chn_imported_local
-    exported_chn = chn_exported_local
+    src_chn = chn_imported_local
+    dst_chn = chn_exported_local
 
-    for source_chain, exported_chain in zip(source_chn.chain_infos, exported_chn.chain_infos):
-        source_joints = source_chain.joints
-        exported_joints = exported_chain.joints
-        assert len(source_joints) == len(exported_joints)
+    for src_chain, dst_chain in zip(src_chn.chain_infos, dst_chn.chain_infos):
+        src_joints = src_chain.joints
+        dst_joints = dst_chain.joints
+        assert len(src_joints) == len(dst_joints)
 
-        for index, (source_joint, exported_joint) in enumerate(zip(source_joints, exported_joints)):
+        for index, (src_joint, dst_joint) in enumerate(zip(src_joints, dst_joints)):
             for field in ("x", "y", "z"):
-                assert getattr(source_joint.min_angle, field) == pytest.approx(
-                    getattr(exported_joint.min_angle, field))
-                assert getattr(source_joint.max_angle, field) == pytest.approx(
-                    getattr(exported_joint.max_angle, field))
+                assert getattr(src_joint.min_angle, field) == pytest.approx(
+                    getattr(dst_joint.min_angle, field))
+                assert getattr(src_joint.max_angle, field) == pytest.approx(
+                    getattr(dst_joint.max_angle, field))
             for field in (
                     "attr", "spring_coef", "dumping_coef", "mass", "restrict_flag",
                     "col_shape", "col_radius", "air_regist", "friction", "soft_coef",
                     "bend_regist"):
-                assert getattr(source_joint, field) == pytest.approx(
-                    getattr(exported_joint, field))
+                assert getattr(src_joint, field) == pytest.approx(
+                    getattr(dst_joint, field))
 
             expected_neighbors = []
             if index > 0:
-                expected_neighbors.append(source_joints[index - 1].ref_joint_no)
-            if index + 1 < len(source_joints):
-                expected_neighbors.append(source_joints[index + 1].ref_joint_no)
+                expected_neighbors.append(src_joints[index - 1].ref_joint_no)
+            if index + 1 < len(src_joints):
+                expected_neighbors.append(src_joints[index + 1].ref_joint_no)
 
-            assert exported_joint.ref_joint_no == source_joint.ref_joint_no
-            assert exported_joint.node_num == len(expected_neighbors)
-            assert exported_joint.node_joint_no[:exported_joint.node_num] == expected_neighbors
-            assert exported_joint.node_joint_no[exported_joint.node_num:] == (
-                [0] * (8 - exported_joint.node_num))
+            assert dst_joint.ref_joint_no == src_joint.ref_joint_no
+            assert dst_joint.node_num == len(expected_neighbors)
+            assert dst_joint.node_joint_no[:dst_joint.node_num] == expected_neighbors
+            assert dst_joint.node_joint_no[dst_joint.node_num:] == (
+                [0] * (8 - dst_joint.node_num))

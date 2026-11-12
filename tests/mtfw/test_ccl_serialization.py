@@ -60,11 +60,11 @@ def ccl_export_local(game_fs_root, local_app_id, local_mod_path_hash, local_ccl_
     exported_vfile = bpy.context.scene.albam.exported.select_vfile(local_app_id, ccl_path)
     assert exported_vfile
 
-    source_ccl = Ccl156.from_bytes(vfile_ccl.get_bytes())
-    source_ccl._read()
-    exported_ccl = Ccl156.from_bytes(exported_vfile.get_bytes())
-    exported_ccl._read()
-    return source_ccl, exported_ccl
+    src_ccl = Ccl156.from_bytes(vfile_ccl.get_bytes())
+    src_ccl._read()
+    dst_ccl = Ccl156.from_bytes(exported_vfile.get_bytes())
+    dst_ccl._read()
+    return src_ccl, dst_ccl
 
 
 @pytest.fixture(scope="session")
@@ -78,22 +78,22 @@ def ccl_exported_local(ccl_export_local):
 
 
 def test_export_header(ccl_imported_local, ccl_exported_local):
-    source_ccl = ccl_imported_local
-    exported_ccl = ccl_exported_local
+    src_ccl = ccl_imported_local
+    dst_ccl = ccl_exported_local
 
-    assert source_ccl.magic == exported_ccl.magic
-    assert source_ccl.version == exported_ccl.version
-    assert source_ccl.num_col_infos == exported_ccl.num_col_infos
-    assert source_ccl.data_size == exported_ccl.data_size
-    assert len(source_ccl.col_infos) == len(exported_ccl.col_infos)
+    assert src_ccl.magic == dst_ccl.magic
+    assert src_ccl.version == dst_ccl.version
+    assert src_ccl.num_col_infos == dst_ccl.num_col_infos
+    assert src_ccl.data_size == dst_ccl.data_size
+    assert len(src_ccl.col_infos) == len(dst_ccl.col_infos)
 
 
 def test_export_col_infos(ccl_imported_local, ccl_exported_local):
-    source_records = ccl_imported_local.col_infos
-    exported_records = ccl_exported_local.col_infos
-    assert len(source_records) == len(exported_records)
+    src_records = ccl_imported_local.col_infos
+    dst_records = ccl_exported_local.col_infos
+    assert len(src_records) == len(dst_records)
 
-    for source_record, exported_record in zip(source_records, exported_records):
+    for source_record, exported_record in zip(src_records, dst_records):
         for field in ("attr", "ref_joint_no", "pair_joint_no", "shape", "id"):
             assert getattr(source_record, field) == getattr(exported_record, field)
         for field in ("position", "extent", "angle"):
