@@ -60,6 +60,7 @@ def _new_preview(root_object, armature, record, pose_bone, anim_id,
 
     preview = bpy.data.objects.new(name, mesh)
     preview.parent = root_object
+    preview.show_in_front = True
     preview.display_type = "WIRE"
     preview.color = _CHN_COLOR
     preview.hide_select = True
