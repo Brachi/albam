@@ -51,6 +51,21 @@ def _active_pose_bone(context):
     return armature.pose.bones.get(active_bone.name) if active_bone else None
 
 
+def _sync_preview_bone_name(preview_object, primitive_props):
+    armature = primitive_props.armature
+    if armature is None or armature.type != "ARMATURE":
+        return primitive_props.reference_bone_name
+
+    for pose_bone in armature.pose.bones:
+        bone_props = get_ccl_bone_properties(pose_bone)
+        if any(record.preview_object == preview_object for record in bone_props.records):
+            if primitive_props.reference_bone_name != pose_bone.name:
+                primitive_props.reference_bone_name = pose_bone.name
+                preview_object["albam_ccl_bone_name"] = pose_bone.name
+            return pose_bone.name
+    return primitive_props.reference_bone_name
+
+
 def _draw_ccl_bone_editor(layout, pose_bone):
     bl_object = find_ccl_file_for_armature(pose_bone.id_data)
     if bl_object is None:
@@ -101,23 +116,6 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     if record.shape == "OBB":
         layout.prop(record, "angle")
     layout.prop(record, "id")
-
-
-def _sidebar_target(context):
-    pose_bone = _active_pose_bone(context)
-    if pose_bone is not None and find_ccl_file_for_armature(pose_bone.id_data):
-        return pose_bone.id_data, pose_bone
-
-    active_object = getattr(context, "active_object", None)
-    if active_object is None:
-        return None, None
-    if active_object.type == "ARMATURE":
-        return (active_object, None) if find_ccl_file_for_armature(active_object) else (None, None)
-    if active_object.type == "EMPTY" and active_object.albam_asset.extension == "ccl":
-        file_props = get_ccl_file_properties(active_object)
-        if file_props and file_props.armature:
-            return file_props.armature, None
-    return None, None
 
 
 @blender_registry.register_blender_type
@@ -212,23 +210,21 @@ class ALBAM_OT_CCLRefreshPreview(bpy.types.Operator):
         return {"FINISHED"}
 
 @blender_registry.register_blender_type
-class ALBAM_PT_CCLSidebarEditor(bpy.types.Panel):
-    bl_idname = "ALBAM_PT_CCLSidebarEditor"
-    bl_label = "Chain Collision"
-    bl_category = "Albam [Beta]"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
+class ALBAM_PT_CCLBoneProperties(bpy.types.Panel):
+    bl_idname = "ALBAM_PT_CCLBoneProperties"
+    bl_label = "Chain Collision (Albam)"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "bone"
 
     @classmethod
     def poll(cls, context):
-        armature, _ = _sidebar_target(context)
-        return armature is not None
+        pose_bone = _active_pose_bone(context)
+        return (pose_bone is not None
+                and find_ccl_file_for_armature(pose_bone.id_data) is not None)
 
     def draw(self, context):
-        armature, pose_bone = _sidebar_target(context)
-        if pose_bone is None:
-            self.layout.label(text=f"Select a bone on {armature.name} in Pose Mode")
-            return
+        pose_bone = _active_pose_bone(context)
         _draw_ccl_bone_editor(self.layout, pose_bone)
 
 
@@ -276,10 +272,11 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
                 layout.label(text="No primitive objects are linked to this CCL file", icon="ERROR")
             for child in children:
                 props = get_ccl_primitive_properties(child)
+                bone_name = _sync_preview_bone_name(child, props)
                 box = layout.box()
                 box.label(text=child.name, icon="MESH_UVSPHERE")
                 box.label(
-                    text=f"Bone: {props.reference_bone_name}  ·  Anim ID: {props.anim_id}",
+                    text=f"Bone: {bone_name}  ·  Anim ID: {props.anim_id}",
                     icon="BONE_DATA")
                 if props.shape == "CAPSULE":
                     tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
@@ -287,7 +284,8 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
             return
 
         props = get_ccl_primitive_properties(bl_object)
-        layout.label(text=f"Bone: {props.reference_bone_name}", icon="BONE_DATA")
+        bone_name = _sync_preview_bone_name(bl_object, props)
+        layout.label(text=f"Bone: {bone_name}", icon="BONE_DATA")
         layout.label(text=f"Anim ID: {props.anim_id}")
         layout.label(text=f"Record: {props.record_index if props.record_index >= 0 else 'new'}")
         layout.label(text=f"Shape: {props.shape.title()}")
