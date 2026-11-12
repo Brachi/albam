@@ -15,10 +15,10 @@ from .chain_props import (
 
 _SHAPE_INDEX = {"SPHERE": 0, "CAPSULE": 1, "AABB": 2, "OBB": 3}
 _MATERIALS = (
-    ("Albam CCL Sphere", (0.25, 0.75, 1.0, 0.55)),
-    ("Albam CCL Capsule", (1.0, 0.35, 0.12, 0.55)),
-    ("Albam CCL AABB", (1.0, 0.72, 0.12, 0.45)),
-    ("Albam CCL OBB", (0.95, 0.25, 0.75, 0.45)),
+    ("Albam CCL Sphere", (0.27, 0.81, 0.42, 0.45)),
+    ("Albam CCL Capsule", (0.56, 0.72, 0.16, 0.45)),
+    ("Albam CCL AABB", (0.47, 0.11, 0.58, 0.45)),
+    ("Albam CCL OBB", (0.81, 0.91, 0.57, 0.45)),
 )
 
 

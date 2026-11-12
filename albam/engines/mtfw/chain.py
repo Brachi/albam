@@ -1,4 +1,4 @@
-"""RE5 chain-collision (.ccl) import and export."""
+"""RE5 chain-collision (.ccl) and chain-simulation (.chn) import and export."""
 
 import json
 import math
@@ -12,10 +12,14 @@ from .bone import get_anim_retarget
 from .chain_preview import rebuild_ccl_preview
 from .chain_props import (
     find_ccl_file_for_armature,
+    find_chn_file_for_armature,
     get_ccl_bone_properties,
     get_ccl_file_properties,
+    get_chn_file_properties,
 )
+from .chn_preview import rebuild_chn_previews
 from .structs.ccl_156 import Ccl156
+from .structs.chn import Chn
 from ...exceptions import AlbamCheckFailure
 from ...lib.kaitai_utils import check_recursive, parse
 from ...registry import blender_registry
@@ -27,6 +31,11 @@ _CCL_VERSION = 0x80618
 _CCL_HEADER_SIZE = 16
 _CCL_RECORD_SIZE = 64
 _SHAPE_TO_INT = {"SPHERE": 0, "CAPSULE": 1, "AABB": 2, "OBB": 3}
+_CHN_MAGIC = b"CHN\x00"
+_CHN_VERSION = 0x80618
+_CHN_HEADER_SIZE = 16
+_CHN_CHAIN_INFO_SIZE = 32
+_CHN_JOINT_INFO_SIZE = 96
 
 
 def _parse_ccl(data):
@@ -114,6 +123,129 @@ def _bone_map(armature):
     return result, duplicates
 
 
+def _parse_chn(data):
+    if len(data) < _CHN_HEADER_SIZE:
+        raise AlbamCheckFailure(
+            "This .chn file appears to be truncated or corrupted",
+            details=f"The file is only {len(data)} bytes long",
+            solution="Re-extract the file from the game's archive and try again",
+        )
+    if data[:4] != _CHN_MAGIC:
+        raise AlbamCheckFailure(
+            "The selected file is not a supported .chn resource",
+            details=f"Expected CHN magic, found {data[:4]!r}",
+            solution="Select an RE5 chain-simulation file with the CHN format",
+        )
+
+    version = int.from_bytes(data[4:8], "little")
+    data_size = int.from_bytes(data[8:12], "little")
+    num_chains = data[12]
+    expected_size = _CHN_HEADER_SIZE + data_size
+    if version != _CHN_VERSION:
+        raise AlbamCheckFailure(
+            "This .chn version is not supported",
+            details=f"Found version 0x{version:x}; 0x{_CHN_VERSION:x} is supported",
+            solution="Use a .chn file from a supported MT Framework game",
+        )
+    if len(data) != expected_size:
+        raise AlbamCheckFailure(
+            "This .chn file has an inconsistent size",
+            details=(f"Header declares {data_size} data bytes, but the file contains {len(data)} "
+                     f"bytes; expected {expected_size}"),
+            solution="Re-extract the .chn file and try importing it again",
+        )
+
+    try:
+        chn = parse(Chn, data)
+        table_end = _CHN_HEADER_SIZE + _CHN_CHAIN_INFO_SIZE * num_chains
+        joint_ranges = []
+        for chain_info in chn.chain_infos:
+            if int(chain_info.chain_type) not in (1, 2):
+                raise ValueError(
+                    f"Chain {chain_info.index} has unsupported type {chain_info.chain_type}")
+            joint_start = chain_info.joints_pos
+            joint_end = joint_start + _CHN_JOINT_INFO_SIZE * chain_info.num_joints
+            if chain_info.num_joints and (joint_start < table_end or joint_end > expected_size):
+                raise ValueError(
+                    f"Chain {chain_info.index} joint range {joint_start:#x}..{joint_end:#x} "
+                    f"is outside the CHN data section")
+            if chain_info.num_joints:
+                joint_ranges.append((joint_start, joint_end, chain_info.index))
+            # Resolve each lazy instance now so malformed offsets fail during import.
+            _ = chain_info.joints
+            for joint_index, joint in enumerate(chain_info.joints):
+                if int(joint.col_shape) not in (1, 2):
+                    raise ValueError(
+                        f"Chain {chain_info.index} joint {joint_index} has unsupported "
+                        f"collision shape {joint.col_shape}")
+                if joint.node_num > 8:
+                    raise ValueError(
+                        f"Chain {chain_info.index} joint {joint_index} declares "
+                        f"{joint.node_num} nodes; CHN supports at most 8")
+        joint_ranges.sort()
+        for previous, current in zip(joint_ranges, joint_ranges[1:]):
+            if current[0] < previous[1]:
+                raise ValueError(
+                    f"Chain {previous[2]} and chain {current[2]} joint data overlap")
+        return chn
+    except AlbamCheckFailure:
+        raise
+    except Exception as ex:
+        raise AlbamCheckFailure(
+            "This .chn file could not be parsed",
+            details=f"{type(ex).__name__}: {ex}",
+            solution="Check that this is a valid RE5 CHN resource",
+        ) from ex
+
+
+def _load_chn_joint(dst, src, chain_index, joint_index, source_joint_index=None):
+    dst.chain_index = chain_index
+    dst.joint_index = joint_index
+    dst.source_joint_index = (joint_index if source_joint_index is None else source_joint_index)
+    dst.preview_object = None
+    dst.ref_joint_no = src.ref_joint_no
+    dst.attr = str(src.attr)
+    dst.node_num = src.node_num
+    dst.min_angle = (src.min_angle.x, src.min_angle.y, src.min_angle.z)
+    dst.spring_coef = src.spring_coef
+    dst.max_angle = (src.max_angle.x, src.max_angle.y, src.max_angle.z)
+    dst.dumping_coef = src.dumping_coef
+    dst.mass = src.mass
+    dst.restrict_flag = src.restrict_flag
+    dst.col_shape = int(src.col_shape)
+    dst.col_radius = src.col_radius
+    dst.air_regist = src.air_regist
+    dst.node_joint_no = tuple(src.node_joint_no)
+    dst.friction = src.friction
+    dst.soft_coef = src.soft_coef
+    dst.bend_regist = src.bend_regist
+
+
+def _chn_joint_id_from_bone(pose_bone):
+    raw_id = get_anim_retarget(pose_bone, "re5")
+    if not raw_id:
+        raise AlbamCheckFailure(
+            f"Bone {pose_bone.name!r} has no animation joint ID",
+            details="CHN joints address bones through the model's Anim Retarget IDs",
+            solution="Set an Anim Retarget ID on this bone before exporting its CHN joint",
+        )
+    try:
+        joint_id = int(raw_id.split("_", 1)[0])
+    except ValueError as ex:
+        raise AlbamCheckFailure(
+            f"Bone {pose_bone.name!r} has an invalid animation joint ID",
+            details=f"Anim Retarget is {raw_id!r}",
+            solution="Set Anim Retarget to a numeric bone ID used by the model",
+        ) from ex
+    if not 0 <= joint_id <= 0xFFFF:
+        raise AlbamCheckFailure(
+            f"Bone {pose_bone.name!r} has an out-of-range CHN joint ID",
+            details=f"Joint ID {joint_id} does not fit the CHN u2 field",
+            solution="Set an Anim Retarget ID between 0 and 65535",
+        )
+    return joint_id
+
+
 def _load_record(dst, src, record_index):
     dst.record_index = record_index
     dst.ref_joint_no = src.ref_joint_no
@@ -183,6 +315,77 @@ def load_ccl(vfile, context) -> bpy.types.Object:
     return bl_object
 
 
+@blender_registry.register_import_function(
+    app_id="re5", extension="chn", albam_asset_type="PHYSICS")
+def load_chn(vfile, context) -> bpy.types.Object:
+    if vfile.app_id != "re5":
+        raise AlbamCheckFailure(
+            "CHN import is currently supported for Resident Evil 5",
+            details=f"The selected app is {vfile.app_id!r}",
+            solution="Select Resident Evil 5 and import the corresponding .chn file",
+        )
+    armature = context.scene.albam.import_options_chain.armature
+    if armature is None or armature.type != "ARMATURE":
+        raise AlbamCheckFailure(
+            "Choose a skeleton before importing this .chn file",
+            details="CHN joint IDs refer to bones in the model skeleton",
+            solution="Select the target armature in the CHN import options",
+        )
+    if find_chn_file_for_armature(armature):
+        raise AlbamCheckFailure(
+            f"Armature {armature.name!r} already has an imported .chn file",
+            details="CHN joint data is stored on the armature's pose bones",
+            solution="Use the existing CHN settings, or remove that CHN file before importing a replacement",
+        )
+
+    chn = _parse_chn(vfile.get_bytes())
+    joint_map, duplicate_ids = _bone_map(armature)
+    for pose_bone in armature.pose.bones:
+        bone_props = get_ccl_bone_properties(pose_bone)
+        bone_props.chn_joints.clear()
+        bone_props.active_chn_joint_index = 0
+    unresolved = 0
+    total_joints = 0
+    bl_object = bpy.data.objects.new(vfile.display_name, None)
+    bl_object.empty_display_type = "PLAIN_AXES"
+    bl_object.empty_display_size = 0.01
+    bl_object.hide_render = True
+    bl_object["_albam_chn_root"] = True
+    bl_object["_albam_chn_suppress_update"] = True
+
+    file_props = get_chn_file_properties(bl_object)
+    file_props.armature = armature
+    file_props.chain_count = len(chn.chain_infos)
+    file_props.duplicate_joint_ids = ", ".join(map(str, sorted(duplicate_ids)))
+    for chain_index, chain_info in enumerate(chn.chain_infos):
+        total_joints += chain_info.num_joints
+        chain_props = file_props.chains.add()
+        chain_props.chain_index = chain_index
+        chain_props.num_joints = chain_info.num_joints
+        chain_props.chain_type = int(chain_info.chain_type)
+        chain_props.grav_scaler = chain_info.grav_scaler
+        chain_props.time_scaler = chain_info.time_scaler
+        chain_props.dump_scaler = chain_info.dump_scaler
+        for joint_index, src_joint in enumerate(chain_info.joints):
+            pose_bone = joint_map.get(src_joint.ref_joint_no)
+            if pose_bone is None:
+                joint_props = file_props.orphans.add()
+                unresolved += 1
+            else:
+                joint_props = get_ccl_bone_properties(pose_bone).chn_joints.add()
+            node_count = min(max(int(src_joint.node_num), 0), len(src_joint.node_joint_no))
+            unresolved += sum(
+                1 for node_joint_no in src_joint.node_joint_no[:node_count]
+                if node_joint_no not in joint_map)
+            _load_chn_joint(joint_props, src_joint, chain_index, joint_index)
+
+    file_props.total_joints = total_joints
+    file_props.unresolved_joints = unresolved
+    bl_object["_albam_chn_suppress_update"] = False
+    rebuild_chn_previews(bl_object)
+    return bl_object
+
+
 def _uint32(value, label):
     try:
         result = int(value)
@@ -205,11 +408,147 @@ def _set_vec3(dst, values):
     values = tuple(float(value) for value in values)
     if not all(math.isfinite(value) for value in values):
         raise AlbamCheckFailure(
-            "Invalid CCL vector value",
-            details=f"CCL coordinates and angles must be finite, found {values!r}",
+            "Invalid chain vector value",
+            details=f"Chain coordinates and angles must be finite, found {values!r}",
             solution="Replace NaN or infinity values with finite numbers",
         )
     dst.x, dst.y, dst.z = values
+
+
+def _chn_uint(value, bits, label):
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as ex:
+        raise AlbamCheckFailure(
+            f"Invalid CHN {label}",
+            details=f"Expected an unsigned {bits}-bit integer, found {value!r}",
+            solution=f"Enter a whole number from 0 to {(1 << bits) - 1}",
+        ) from ex
+    if not 0 <= result < (1 << bits):
+        raise AlbamCheckFailure(
+            f"Invalid CHN {label}",
+            details=f"{result} does not fit the unsigned {bits}-bit field",
+            solution=f"Enter a whole number from 0 to {(1 << bits) - 1}",
+        )
+    return result
+
+
+def _chn_finite(value, label):
+    result = float(value)
+    if not math.isfinite(result):
+        raise AlbamCheckFailure(
+            f"Invalid CHN {label}",
+            details=f"Expected a finite number, found {result!r}",
+            solution="Replace NaN or infinity with a finite number",
+        )
+    return result
+
+
+def _apply_chn_joint(dst, record, pose_bone=None):
+    node_count = _chn_uint(record.node_num, 8, "node count")
+    if node_count > 8:
+        raise AlbamCheckFailure(
+            "Invalid CHN node count",
+            details=f"A joint can reference at most 8 nodes, found {node_count}",
+            solution="Set Node Count to a value from 0 to 8",
+        )
+    node_joint_ids = tuple(_chn_uint(value, 8, "node joint ID")
+                           for value in record.node_joint_no)
+    if len(node_joint_ids) != 8:
+        raise AlbamCheckFailure(
+            "Invalid CHN node joint list",
+            details=f"Expected 8 node IDs, found {len(node_joint_ids)}",
+            solution="Keep all 8 Node Joint IDs fields",
+        )
+
+    dst.attr = _chn_uint(record.attr, 32, "attribute mask")
+    dst.ref_joint_no = (
+        _chn_joint_id_from_bone(pose_bone) if pose_bone is not None
+        else _chn_uint(record.ref_joint_no, 16, "reference Anim ID"))
+    dst.node_num = node_count
+    _set_vec3(dst.min_angle, record.min_angle)
+    dst.spring_coef = _chn_finite(record.spring_coef, "spring coefficient")
+    _set_vec3(dst.max_angle, record.max_angle)
+    dst.dumping_coef = _chn_finite(record.dumping_coef, "damping coefficient")
+    dst.mass = _chn_finite(record.mass, "mass")
+    dst.restrict_flag = _chn_uint(record.restrict_flag, 8, "restrict flag")
+    dst.col_shape = _chn_uint(record.col_shape, 8, "collision shape")
+    if dst.col_shape not in (1, 2):
+        raise AlbamCheckFailure(
+            "Invalid CHN collision shape",
+            details=f"CHN supports Sphere (1) or Capsule (2), found {dst.col_shape}",
+            solution="Choose Sphere or Capsule",
+        )
+    dst.col_radius = _chn_finite(record.col_radius, "collision radius")
+    dst.air_regist = _chn_finite(record.air_regist, "air resistance")
+    dst.node_joint_no = list(node_joint_ids)
+    dst.friction = _chn_finite(record.friction, "friction")
+    dst.soft_coef = _chn_finite(record.soft_coef, "soft coefficient")
+    dst.bend_regist = _chn_finite(record.bend_regist, "bend resistance")
+
+
+def _serialize_chn(chn):
+    """Serialize updated CHN chains, preserving source record reserve fields."""
+    chn.num_chain_infos = len(chn.chain_infos)
+    data_size = _CHN_CHAIN_INFO_SIZE * len(chn.chain_infos)
+    for chain_info in chn.chain_infos:
+        chain_info.num_joints = len(chain_info._m_joints)
+        data_size += _CHN_JOINT_INFO_SIZE * chain_info.num_joints
+    if data_size > 0xFFFFFFFF:
+        raise AlbamCheckFailure(
+            "The CHN data is too large to export",
+            details=f"The serialized data section would be {data_size} bytes",
+            solution="Reduce the number of joint records in the CHN chains",
+        )
+    chn.data_size = data_size
+
+    next_joint_pos = _CHN_HEADER_SIZE + _CHN_CHAIN_INFO_SIZE * len(chn.chain_infos)
+    for chain_info in chn.chain_infos:
+        chain_info.joint_info_offset = next_joint_pos - chain_info.position
+        chain_info._invalidate_joints_pos()
+        next_joint_pos += _CHN_JOINT_INFO_SIZE * chain_info.num_joints
+
+    stream = KaitaiStream(BytesIO(bytearray(_CHN_HEADER_SIZE + data_size)))
+    chn._io = stream
+    for chain_info in chn.chain_infos:
+        chain_info._io = stream
+        for joint in chain_info._m_joints:
+            joint._io = stream
+            joint.min_angle._io = stream
+            joint.max_angle._io = stream
+
+    check_recursive(chn)
+    # Write the header tables first, then each lazy joint array at its new offset.
+    chn._write__seq()
+    for chain_info in chn.chain_infos:
+        stream.seek(chain_info.joints_pos)
+        for joint in chain_info._m_joints:
+            joint._write__seq()
+    return stream.to_byte_array()
+
+
+def _new_chn_joint(parent, root):
+    joint = Chn.JointInfo(_parent=parent, _root=root)
+    joint.reserve0 = 0
+    joint.reserve1 = [0, 0]
+    joint.min_angle = Chn.Vec3(_parent=joint, _root=root)
+    joint.min_angle.x = joint.min_angle.y = joint.min_angle.z = 0.0
+    joint.spring_coef = 0.0
+    joint.max_angle = Chn.Vec3(_parent=joint, _root=root)
+    joint.max_angle.x = joint.max_angle.y = joint.max_angle.z = 0.0
+    joint.dumping_coef = 0.0
+    joint.mass = 0.0
+    joint.restrict_flag = 0
+    joint.col_shape = 1
+    joint.reserve2 = b"\x00\x00"
+    joint.col_radius = 1.0
+    joint.air_regist = 0.0
+    joint.node_joint_no = [0] * 8
+    joint.friction = 0.0
+    joint.soft_coef = 0.0
+    joint.bend_regist = 0.0
+    joint.reserve = [0, 0, 0]
+    return joint
 
 
 def _apply_record(dst, pose_bone, record):
@@ -331,6 +670,155 @@ def export_ccl(bl_object):
     ccl._write(stream)
     vfile = VirtualFileData(asset.app_id, asset.relative_path,
                             data_bytes=stream.to_byte_array())
+    return [vfile]
+
+
+@blender_registry.register_export_function(app_id="re5", extension="chn")
+def export_chn(bl_object):
+    asset = bl_object.albam_asset
+    if asset.app_id != "re5" or asset.extension != "chn":
+        raise AlbamCheckFailure(
+            "This object is not a supported RE5 CHN asset",
+            details=f"Asset app/extension: {asset.app_id!r}/{asset.extension!r}",
+            solution="Select a CHN asset imported for Resident Evil 5",
+        )
+
+    original_bytes = asset.original_bytes
+    chn = _parse_chn(original_bytes)
+    file_props = get_chn_file_properties(bl_object)
+    armature = file_props.armature if file_props else None
+    if armature is None or armature.type != "ARMATURE":
+        raise AlbamCheckFailure(
+            "The skeleton used by this CHN file is missing",
+            details="The CHN file object no longer points to its imported armature",
+            solution="Restore the armature pointer on the CHN file properties",
+        )
+    if len(file_props.chains) != len(chn.chain_infos):
+        raise AlbamCheckFailure(
+            "The CHN chain settings no longer match the source file",
+            details=(f"File contains {len(chn.chain_infos)} chains, but Albam has "
+                     f"{len(file_props.chains)} chain settings"),
+            solution="Re-import the CHN file to restore its chain settings",
+        )
+
+    chain_props_by_index = {}
+    for chain_props in file_props.chains:
+        chain_index = chain_props.chain_index
+        if not 0 <= chain_index < len(chn.chain_infos) or chain_index in chain_props_by_index:
+            raise AlbamCheckFailure(
+                "The CHN chain settings have invalid indices",
+                details=f"Found duplicate or out-of-range chain index {chain_index}",
+                solution="Re-import the CHN file to restore its chain settings",
+            )
+        chain_props_by_index[chain_index] = chain_props
+
+    joints_by_chain = {index: [] for index in range(len(chn.chain_infos))}
+    for pose_bone in armature.pose.bones:
+        for record in get_ccl_bone_properties(pose_bone).chn_joints:
+            if not 0 <= record.chain_index < len(chn.chain_infos):
+                raise AlbamCheckFailure(
+                    "A bone CHN joint points to a missing chain",
+                    details=f"Bone {pose_bone.name!r} refers to chain {record.chain_index}",
+                    solution="Attach the joint to an existing chain before exporting",
+                )
+            joints_by_chain[record.chain_index].append((record, pose_bone))
+    for record in file_props.orphans:
+        if not 0 <= record.chain_index < len(chn.chain_infos):
+            raise AlbamCheckFailure(
+                "An orphan CHN joint points to a missing chain",
+                details=f"Orphan record refers to chain {record.chain_index}",
+                solution="Attach the orphan to an existing chain before exporting",
+            )
+        joints_by_chain[record.chain_index].append((record, None))
+
+    for chain_index, chain_info in enumerate(chn.chain_infos):
+        chain_props = chain_props_by_index.get(chain_index)
+        if chain_props is None:
+            raise AlbamCheckFailure(
+                "A CHN chain setting is missing",
+                details=f"No settings are stored for chain {chain_index}",
+                solution="Re-import the CHN file to restore all chain settings",
+            )
+        if not 0 <= chain_props.num_joints <= 0xFF:
+            raise AlbamCheckFailure(
+                "Invalid CHN joint count",
+                details=f"Chain {chain_index} has {chain_props.num_joints} joint slots",
+                solution="Use a joint count from 0 to 255",
+            )
+        chain_info.chain_type = _chn_uint(chain_props.chain_type, 8, "chain type")
+        chain_info.grav_scaler = _chn_finite(chain_props.grav_scaler, "gravity scale")
+        chain_info.time_scaler = _chn_finite(chain_props.time_scaler, "time scale")
+        chain_info.dump_scaler = _chn_finite(chain_props.dump_scaler, "damping scale")
+
+        chain_records = joints_by_chain[chain_index]
+        if len(chain_records) != chain_props.num_joints:
+            raise AlbamCheckFailure(
+                f"Chain {chain_index} has missing or extra bone assignments",
+                details=(f"Header declares {chain_props.num_joints} joints, but "
+                         f"{len(chain_records)} bone/orphan records are assigned"),
+                solution="Attach one bone or orphan record for every joint index in the chain",
+            )
+        ordered_records = [None] * chain_props.num_joints
+        seen_source_indices = set()
+        for record, pose_bone in chain_records:
+            if record.chain_index != chain_index:
+                raise AlbamCheckFailure(
+                    "A CHN joint is stored under the wrong chain",
+                    details=(f"Chain {chain_index} contains a record marked for chain "
+                             f"{record.chain_index}"),
+                    solution="Restore the original chain assignment before exporting",
+                )
+            if not 0 <= record.joint_index < chain_props.num_joints:
+                raise AlbamCheckFailure(
+                    f"Chain {chain_index} has an invalid joint index",
+                    details=f"Joint index {record.joint_index} is outside the chain",
+                    solution="Use contiguous joint indices from 0 to the chain size minus 1",
+                )
+            if ordered_records[record.joint_index] is not None:
+                raise AlbamCheckFailure(
+                    f"Chain {chain_index} has duplicate joint indices",
+                    details=f"Joint index {record.joint_index} appears more than once",
+                    solution="Keep one CHN joint assignment for each joint index",
+                )
+            if record.source_joint_index < -1:
+                raise AlbamCheckFailure(
+                    f"Chain {chain_index} has an invalid source joint reference",
+                    details=f"Source joint index {record.source_joint_index} is below -1",
+                    solution="Re-import the CHN file to restore its source joint mapping",
+                )
+            if record.source_joint_index >= 0:
+                if (record.source_joint_index >= chain_info.num_joints
+                        or record.source_joint_index in seen_source_indices):
+                    raise AlbamCheckFailure(
+                        f"Chain {chain_index} has invalid source joint references",
+                        details=f"Source joint index {record.source_joint_index} is invalid or repeated",
+                        solution="Re-import the CHN file to restore its source joint mapping",
+                    )
+                seen_source_indices.add(record.source_joint_index)
+            ordered_records[record.joint_index] = (record, pose_bone)
+
+        if any(item is None for item in ordered_records):
+            missing = [index for index, item in enumerate(ordered_records) if item is None]
+            raise AlbamCheckFailure(
+                f"Chain {chain_index} has gaps in its joint indices",
+                details=f"Missing joint indices: {missing}",
+                solution="Use a contiguous sequence of joint indices starting at zero",
+            )
+
+        source_joints = list(chain_info.joints)
+        output_joints = []
+        for record, pose_bone in ordered_records:
+            if record.source_joint_index >= 0:
+                dst = source_joints[record.source_joint_index]
+            else:
+                dst = _new_chn_joint(chain_info, chn)
+            _apply_chn_joint(dst, record, pose_bone)
+            output_joints.append(dst)
+        chain_info.num_joints = len(output_joints)
+        chain_info.joints = output_joints
+
+    output_bytes = _serialize_chn(chn)
+    vfile = VirtualFileData(asset.app_id, asset.relative_path, data_bytes=output_bytes)
     return [vfile]
 
 

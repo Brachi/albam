@@ -115,10 +115,14 @@ def register():
     # before this existed; _lmt_blocks treats that the same as a match, so
     # those scenes keep exporting exactly as they did.
     bpy.types.Object.albam_lmt_block_owner = bpy.props.PointerProperty(type=bpy.types.Object)
-    # File metadata lives on the CCL parent; each child uses the physics custom
-    # properties group to identify its reference bone.
-    from .engines.mtfw.chain_props import CCLFileProperties
+    # File metadata lives on each chain file object; the physics custom
+    # properties group stores bone-level CCL and CHN data.
+    from .engines.mtfw.chain_props import (
+        CCLFileProperties, CHNFileProperties, CHNJointPreviewProperties)
     bpy.types.Object.albam_ccl_file = bpy.props.PointerProperty(type=CCLFileProperties)
+    bpy.types.Object.albam_chn_file = bpy.props.PointerProperty(type=CHNFileProperties)
+    bpy.types.Object.albam_chn_joint_preview = bpy.props.PointerProperty(
+        type=CHNJointPreviewProperties)
 
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
@@ -137,7 +141,8 @@ def register():
 def unregister():
     overlay.unregister_overlay()
 
-    for property_name in ("albam_ccl_file",):
+    for property_name in (
+            "albam_ccl_file", "albam_chn_file", "albam_chn_joint_preview"):
         if hasattr(bpy.types.Object, property_name):
             delattr(bpy.types.Object, property_name)
 

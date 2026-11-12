@@ -1,4 +1,4 @@
-"""Blender properties for editable RE5 chain-collision records."""
+"""Blender properties for editable RE5 chain-collision and simulation data."""
 
 import bpy
 
@@ -66,12 +66,119 @@ class CCLPrimitiveProperties(bpy.types.PropertyGroup):
     shape: bpy.props.StringProperty(name="Shape", options=set())
 
 
+def _update_chn_preview(self, context):
+    owner = self.id_data
+    root_object = _chn_root_from_owner(owner, context)
+    if root_object is None or root_object.get("_albam_chn_suppress_update", False):
+        return
+    from .chn_preview import rebuild_chn_previews
+
+    rebuild_chn_previews(root_object)
+
+
+def _chn_root_from_owner(owner, context):
+    if isinstance(owner, bpy.types.Object):
+        if owner.get("_albam_chn_root", False):
+            return owner
+        if owner.type == "ARMATURE":
+            return find_chn_file_for_armature(owner)
+    armature = getattr(context, "active_object", None) if context is not None else None
+    return find_chn_file_for_armature(armature)
+
+
+def _update_chn_header_preview(self, context):
+    root_object = self.id_data
+    if (not isinstance(root_object, bpy.types.Object)
+            or root_object.get("_albam_chn_suppress_update", False)):
+        return
+    from .chn_preview import rebuild_chn_previews
+
+    rebuild_chn_previews(root_object)
+
+
+@blender_registry.register_blender_prop
+class CHNJointProperties(bpy.types.PropertyGroup):
+    """One rChain JointInfo stored on its reference PoseBone or as a file orphan."""
+
+    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    source_joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    preview_object: bpy.props.PointerProperty(
+        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
+    ref_joint_no: bpy.props.IntProperty(name="Reference Anim ID", default=0, min=0, max=65535,
+                                        update=_update_chn_preview)
+    attr: bpy.props.StringProperty(name="Attribute Mask", default="0", update=_update_chn_preview)
+    node_num: bpy.props.IntProperty(
+        name="Node Count", description="Number of active node joint IDs (maximum 8)",
+        default=0, min=0, max=8, update=_update_chn_preview)
+    min_angle: bpy.props.FloatVectorProperty(
+        name="Minimum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
+    spring_coef: bpy.props.FloatProperty(
+        name="Spring Coefficient", default=0.0, update=_update_chn_preview)
+    max_angle: bpy.props.FloatVectorProperty(
+        name="Maximum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
+    dumping_coef: bpy.props.FloatProperty(
+        name="Damping Coefficient", default=0.0, update=_update_chn_preview)
+    mass: bpy.props.FloatProperty(name="Mass", default=0.0, update=_update_chn_preview)
+    restrict_flag: bpy.props.IntProperty(
+        name="Restrict Flag", default=0, min=0, max=255, update=_update_chn_preview)
+    col_shape: bpy.props.IntProperty(
+        name="Collision Shape (1=sphere, 2=capsule)", default=1, min=1, max=2,
+        update=_update_chn_preview)
+    col_radius: bpy.props.FloatProperty(
+        name="Collision Radius (cm)", default=0.0, min=0.0, update=_update_chn_preview)
+    air_regist: bpy.props.FloatProperty(
+        name="Air Resistance", default=0.0, update=_update_chn_preview)
+    node_joint_no: bpy.props.IntVectorProperty(
+        name="Node Joint IDs", size=8, default=(0, 0, 0, 0, 0, 0, 0, 0), min=0, max=255,
+        update=_update_chn_preview)
+    friction: bpy.props.FloatProperty(name="Friction", default=0.0, update=_update_chn_preview)
+    soft_coef: bpy.props.FloatProperty(
+        name="Soft Coefficient", default=0.0, update=_update_chn_preview)
+    bend_regist: bpy.props.FloatProperty(
+        name="Bend Resistance", default=0.0, update=_update_chn_preview)
+
+
 @blender_registry.register_custom_properties_bone(
     "physics_ccl_bone", ("re5",), asset_type="PHYSICS")
 @blender_registry.register_blender_prop
 class CCLBoneProperties(bpy.types.PropertyGroup):
     records: bpy.props.CollectionProperty(type=CCLRecordProperties)
     active_record_index: bpy.props.IntProperty(default=0, min=0)
+    chn_joints: bpy.props.CollectionProperty(type=CHNJointProperties)
+    active_chn_joint_index: bpy.props.IntProperty(default=0, min=0)
+
+
+@blender_registry.register_blender_prop
+class CHNChainProperties(bpy.types.PropertyGroup):
+    """Header settings for one CHN chain on its file root."""
+
+    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    num_joints: bpy.props.IntProperty(name="Joints", default=0, min=0, max=255)
+    chain_type: bpy.props.IntProperty(
+        name="Chain Info Type (1=chain, 2=shake)", default=1, min=1, max=2,
+        update=_update_chn_header_preview)
+    grav_scaler: bpy.props.FloatProperty(
+        name="Gravity Scale", default=0.0, update=_update_chn_header_preview)
+    time_scaler: bpy.props.FloatProperty(
+        name="Time Scale", default=0.0, update=_update_chn_header_preview)
+    dump_scaler: bpy.props.FloatProperty(
+        name="Damping Scale", default=0.0, update=_update_chn_header_preview)
+
+
+@blender_registry.register_blender_prop
+class CHNFileProperties(bpy.types.PropertyGroup):
+    armature: bpy.props.PointerProperty(
+        name="Armature", type=bpy.types.Object,
+        description="Skeleton this CHN file is attached to")
+    total_joints: bpy.props.IntProperty(name="Joints", default=0, min=0)
+    chain_count: bpy.props.IntProperty(name="Chain Info Entries", default=0, min=0, max=255)
+    unresolved_joints: bpy.props.IntProperty(name="Unresolved Bone References", default=0, min=0)
+    duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    chains: bpy.props.CollectionProperty(type=CHNChainProperties)
+    active_chain_index: bpy.props.IntProperty(default=0, min=0)
+    orphans: bpy.props.CollectionProperty(type=CHNJointProperties)
+    active_orphan_index: bpy.props.IntProperty(default=0, min=0)
 
 
 @blender_registry.register_blender_prop
@@ -94,6 +201,24 @@ def get_ccl_file_properties(bl_object):
     return bl_object.albam_ccl_file
 
 
+def get_chn_file_properties(bl_object):
+    return bl_object.albam_chn_file
+
+
+@blender_registry.register_blender_prop
+class CHNJointPreviewProperties(bpy.types.PropertyGroup):
+    armature: bpy.props.PointerProperty(name="Armature", type=bpy.types.Object)
+    reference_bone_name: bpy.props.StringProperty(name="Reference Bone")
+    anim_id: bpy.props.IntProperty(name="Anim ID", default=-1)
+    chain_index: bpy.props.IntProperty(name="Chain Index", default=-1)
+    joint_index: bpy.props.IntProperty(name="Joint Index", default=-1)
+    shape: bpy.props.StringProperty(name="Shape")
+
+
+def get_chn_joint_preview_properties(bl_object):
+    return bl_object.albam_chn_joint_preview
+
+
 def get_ccl_primitive_properties(bl_object):
     return bl_object.albam_custom_properties.get_custom_properties_for_appid(
         "re5", asset_type="PHYSICS")
@@ -106,6 +231,18 @@ def find_ccl_file_for_armature(armature):
         if bl_object.type != "EMPTY" or bl_object.albam_asset.extension != "ccl":
             continue
         file_props = get_ccl_file_properties(bl_object)
+        if file_props and file_props.armature == armature:
+            return bl_object
+    return None
+
+
+def find_chn_file_for_armature(armature):
+    if armature is None:
+        return None
+    for bl_object in tuple(bpy.data.objects):
+        if bl_object.type != "EMPTY" or not bl_object.get("_albam_chn_root", False):
+            continue
+        file_props = get_chn_file_properties(bl_object)
         if file_props and file_props.armature == armature:
             return bl_object
     return None

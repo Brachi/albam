@@ -1,4 +1,4 @@
-"""Import options and bone-property controls for RE5 CCL files."""
+"""Import options and bone-property controls for RE5 chain files."""
 
 import json
 
@@ -9,10 +9,14 @@ from .bone import get_anim_retarget
 from .chain_preview import rebuild_ccl_preview
 from .chain_props import (
     find_ccl_file_for_armature,
+    find_chn_file_for_armature,
     get_ccl_bone_properties,
     get_ccl_file_properties,
     get_ccl_primitive_properties,
+    get_chn_file_properties,
+    get_chn_joint_preview_properties,
 )
+from .chn_preview import rebuild_chn_previews
 
 
 def _filter_armatures(self, obj):
@@ -40,6 +44,22 @@ def poll_import_operator_for_ccl(panel_class, context):
     return bool(context.scene.albam.import_options_chain.armature)
 
 
+@blender_registry.register_import_options_custom_draw_func(extension="chn")
+def draw_chn_options(panel_instance, context):
+    panel_instance.bl_label = "CHN Options"
+    panel_instance.layout.prop(context.scene.albam.import_options_chain, "armature")
+
+
+@blender_registry.register_import_options_custom_poll_func(extension="chn")
+def poll_chn_options(panel_instance, context):
+    return True
+
+
+@blender_registry.register_import_operator_poll_func(extension="chn")
+def poll_import_operator_for_chn(panel_class, context):
+    return bool(context.scene.albam.import_options_chain.armature)
+
+
 def _active_pose_bone(context):
     pose_bone = getattr(context, "active_pose_bone", None)
     if pose_bone is not None:
@@ -64,6 +84,18 @@ def _sync_preview_bone_name(preview_object, primitive_props):
                 preview_object["albam_ccl_bone_name"] = pose_bone.name
             return pose_bone.name
     return primitive_props.reference_bone_name
+
+
+def _sync_chn_preview_bone_name(preview_object, preview_props):
+    armature = preview_props.armature
+    if armature is None or armature.type != "ARMATURE":
+        return preview_props.reference_bone_name
+    for pose_bone in armature.pose.bones:
+        if any(record.preview_object == preview_object
+               for record in get_ccl_bone_properties(pose_bone).chn_joints):
+            preview_props.reference_bone_name = pose_bone.name
+            return pose_bone.name
+    return preview_props.reference_bone_name
 
 
 def _draw_ccl_bone_editor(layout, pose_bone):
@@ -118,11 +150,91 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     layout.prop(record, "id")
 
 
+def _draw_chn_joint_fields(layout, record, show_reference_id=True):
+    if show_reference_id:
+        layout.prop(record, "ref_joint_no")
+    layout.prop(record, "attr")
+    layout.prop(record, "node_num")
+    layout.label(text="Node Joint IDs (Anim IDs)")
+    for start in (0, 4):
+        row = layout.row(align=True)
+        for node_index in range(start, start + 4):
+            row.prop(record, "node_joint_no", index=node_index, text=str(node_index + 1))
+    layout.prop(record, "min_angle")
+    layout.prop(record, "spring_coef")
+    layout.prop(record, "max_angle")
+    layout.prop(record, "dumping_coef")
+    layout.prop(record, "mass")
+    layout.prop(record, "restrict_flag")
+    layout.prop(record, "col_shape")
+    layout.prop(record, "col_radius")
+    layout.prop(record, "air_regist")
+    layout.prop(record, "friction")
+    layout.prop(record, "soft_coef")
+    layout.prop(record, "bend_regist")
+
+
+def _draw_chn_bone_editor(layout, pose_bone):
+    root_object = find_chn_file_for_armature(pose_bone.id_data)
+    if root_object is None:
+        return
+    file_props = get_chn_file_properties(root_object)
+    bone_props = get_ccl_bone_properties(pose_bone)
+    layout.use_property_split = True
+    layout.label(text=root_object.name, icon="PHYSICS")
+    if file_props.duplicate_joint_ids:
+        layout.label(
+            text=f"Duplicate Anim Retarget IDs: {file_props.duplicate_joint_ids}",
+            icon="INFO")
+
+    row = layout.row(align=True)
+    row.template_list(
+        "ALBAM_UL_CHNJointItems", "", bone_props, "chn_joints",
+        bone_props, "active_chn_joint_index", rows=3)
+    buttons = row.column(align=True)
+    buttons.operator("albam.chn_add_joint", icon="ADD", text="")
+    buttons.operator("albam.chn_remove_joint", icon="REMOVE", text="")
+
+    index = bone_props.active_chn_joint_index
+    if not 0 <= index < len(bone_props.chn_joints):
+        return
+    record = bone_props.chn_joints[index]
+    layout.separator()
+    layout.label(text=f"Bone: {pose_bone.name}", icon="BONE_DATA")
+    raw_anim_id = get_anim_retarget(pose_bone, "re5")
+    layout.label(text=f"Anim ID: {raw_anim_id or 'unmapped'}")
+    layout.label(text=f"Chain Info {record.chain_index} · Joint {record.joint_index}")
+    if record.preview_object:
+        layout.label(text=f"Preview: {record.preview_object.name}", icon="OBJECT_DATA")
+    _draw_chn_joint_fields(layout, record, show_reference_id=False)
+
+
 @blender_registry.register_blender_type
 class ALBAM_UL_CCLRecords(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         row.label(text=f"{item.shape.title()} · record {item.record_index if item.record_index >= 0 else 'new'}")
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_CHNJointItems(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        owner = getattr(data, "id_data", None)
+        owner_is_file = getattr(owner, "type", None) == "EMPTY"
+        label = f"Chain Info {item.chain_index} · Joint {item.joint_index}"
+        if owner_is_file:
+            label += f" · Anim {item.ref_joint_no}"
+        layout.label(
+            text=label, icon="BONE_DATA")
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_CHNChains(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        chain_type = {1: "Chain", 2: "Shake"}.get(item.chain_type, f"Type {item.chain_type}")
+        layout.label(
+            text=f"Chain Info {index} · Type: {chain_type} · {item.num_joints} joints",
+            icon="PHYSICS")
 
 
 @blender_registry.register_blender_type
@@ -193,6 +305,199 @@ class ALBAM_OT_CCLRemoveRecord(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _chn_chain_enum_items(self, context):
+    pose_bone = _active_pose_bone(context)
+    root_object = find_chn_file_for_armature(pose_bone.id_data) if pose_bone else None
+    if root_object is None:
+        return [("0", "No CHN file", "Import a CHN file onto this skeleton first")]
+    file_props = get_chn_file_properties(root_object)
+    return [
+        (str(chain.chain_index), f"Chain Info {chain.chain_index}",
+         f"Add this bone as a joint to Chain Info {chain.chain_index}")
+        for chain in file_props.chains
+    ] or [("0", "No Chain Info entries", "The imported CHN file has no Chain Info entries")]
+
+
+def _chn_anim_id(pose_bone):
+    raw_id = get_anim_retarget(pose_bone, "re5")
+    if not raw_id:
+        return None
+    try:
+        return int(raw_id.split("_", 1)[0])
+    except ValueError:
+        return None
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
+    bl_idname = "albam.chn_add_joint"
+    bl_label = "Add Bone to Chain Info"
+
+    chain_index: bpy.props.EnumProperty(name="Target Chain Info", items=_chn_chain_enum_items)
+
+    @classmethod
+    def poll(cls, context):
+        pose_bone = _active_pose_bone(context)
+        if pose_bone is None or not get_anim_retarget(pose_bone, "re5"):
+            return False
+        root_object = find_chn_file_for_armature(pose_bone.id_data)
+        return bool(root_object and get_chn_file_properties(root_object).chains)
+
+    def invoke(self, context, event):
+        pose_bone = _active_pose_bone(context)
+        root_object = find_chn_file_for_armature(pose_bone.id_data)
+        if root_object:
+            file_props = get_chn_file_properties(root_object)
+            if file_props.chains:
+                selected_index = min(file_props.active_chain_index, len(file_props.chains) - 1)
+                self.chain_index = str(file_props.chains[selected_index].chain_index)
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def draw(self, context):
+        self.layout.prop(self, "chain_index")
+
+    def execute(self, context):
+        pose_bone = _active_pose_bone(context)
+        root_object = find_chn_file_for_armature(pose_bone.id_data)
+        if root_object is None:
+            self.report({"ERROR"}, "No CHN file is attached to this skeleton")
+            return {"CANCELLED"}
+        anim_id = _chn_anim_id(pose_bone)
+        try:
+            chain_index = int(self.chain_index)
+        except ValueError:
+            chain_index = None
+        if anim_id is None or not 0 <= anim_id <= 0xFFFF or chain_index is None:
+            self.report({"ERROR"}, "The active bone needs a numeric Anim Retarget ID")
+            return {"CANCELLED"}
+
+        file_props = get_chn_file_properties(root_object)
+        chain_props = next(
+            (chain for chain in file_props.chains if chain.chain_index == chain_index), None)
+        if chain_props is None:
+            self.report({"ERROR"}, "Choose an existing Chain Info entry")
+            return {"CANCELLED"}
+        if chain_props.num_joints >= 0xFF:
+            self.report({"ERROR"}, "A Chain Info entry cannot contain more than 255 joints")
+            return {"CANCELLED"}
+
+        assigned_ids = {
+            _chn_anim_id(bone)
+            for bone in pose_bone.id_data.pose.bones
+            for record in get_ccl_bone_properties(bone).chn_joints
+            if record.chain_index == chain_index
+        }
+        assigned_ids.update(
+            record.ref_joint_no for record in file_props.orphans
+            if record.chain_index == chain_index)
+        if anim_id in assigned_ids:
+            self.report({"ERROR"}, "This Anim ID is already in the selected Chain Info entry")
+            return {"CANCELLED"}
+
+        root_object["_albam_chn_suppress_update"] = True
+        joint = get_ccl_bone_properties(pose_bone).chn_joints.add()
+        joint.chain_index = chain_index
+        joint.joint_index = chain_props.num_joints
+        joint.source_joint_index = -1
+        joint.ref_joint_no = anim_id
+        joint.attr = "0"
+        joint.node_num = 0
+        joint.min_angle = (0.0, 0.0, 0.0)
+        joint.spring_coef = 0.0
+        joint.max_angle = (0.0, 0.0, 0.0)
+        joint.dumping_coef = 0.0
+        joint.mass = 0.0
+        joint.restrict_flag = 0
+        joint.col_shape = 1
+        joint.col_radius = 1.0
+        joint.air_regist = 0.0
+        joint.node_joint_no = (0, 0, 0, 0, 0, 0, 0, 0)
+        joint.friction = 0.0
+        joint.soft_coef = 0.0
+        joint.bend_regist = 0.0
+        chain_props.num_joints += 1
+        file_props.total_joints += 1
+        get_ccl_bone_properties(pose_bone).active_chn_joint_index = (
+            len(get_ccl_bone_properties(pose_bone).chn_joints) - 1)
+        root_object["_albam_chn_suppress_update"] = False
+        rebuild_chn_previews(root_object)
+        return {"FINISHED"}
+
+
+def _compact_chn_chain(root_object, chain_index, removed_joint_index):
+    file_props = get_chn_file_properties(root_object)
+    armature = file_props.armature
+    root_object["_albam_chn_suppress_update"] = True
+    for pose_bone in armature.pose.bones:
+        for record in get_ccl_bone_properties(pose_bone).chn_joints:
+            if (record.chain_index == chain_index
+                    and record.joint_index > removed_joint_index):
+                record.joint_index -= 1
+    for record in file_props.orphans:
+        if record.chain_index == chain_index and record.joint_index > removed_joint_index:
+            record.joint_index -= 1
+    chain_props = next(
+        chain for chain in file_props.chains if chain.chain_index == chain_index)
+    chain_props.num_joints -= 1
+    file_props.total_joints -= 1
+    root_object["_albam_chn_suppress_update"] = False
+    rebuild_chn_previews(root_object)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNRemoveJoint(bpy.types.Operator):
+    bl_idname = "albam.chn_remove_joint"
+    bl_label = "Remove Bone from Chain Info"
+
+    @classmethod
+    def poll(cls, context):
+        pose_bone = _active_pose_bone(context)
+        if pose_bone is None:
+            return False
+        props = get_ccl_bone_properties(pose_bone)
+        return (0 <= props.active_chn_joint_index < len(props.chn_joints)
+                and find_chn_file_for_armature(pose_bone.id_data) is not None)
+
+    def execute(self, context):
+        pose_bone = _active_pose_bone(context)
+        bone_props = get_ccl_bone_properties(pose_bone)
+        record = bone_props.chn_joints[bone_props.active_chn_joint_index]
+        root_object = find_chn_file_for_armature(pose_bone.id_data)
+        chain_index, joint_index = record.chain_index, record.joint_index
+        bone_props.chn_joints.remove(bone_props.active_chn_joint_index)
+        bone_props.active_chn_joint_index = min(
+            bone_props.active_chn_joint_index, max(0, len(bone_props.chn_joints) - 1))
+        _compact_chn_chain(root_object, chain_index, joint_index)
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNRemoveOrphan(bpy.types.Operator):
+    bl_idname = "albam.chn_remove_orphan"
+    bl_label = "Remove Unmatched CHN Joint"
+
+    @classmethod
+    def poll(cls, context):
+        root_object = getattr(context, "object", None)
+        if root_object is None or not root_object.get("_albam_chn_root", False):
+            return False
+        file_props = get_chn_file_properties(root_object)
+        return 0 <= file_props.active_orphan_index < len(file_props.orphans)
+
+    def execute(self, context):
+        root_object = context.object
+        file_props = get_chn_file_properties(root_object)
+        record = file_props.orphans[file_props.active_orphan_index]
+        chain_index, joint_index = record.chain_index, record.joint_index
+        root_object["_albam_chn_suppress_update"] = True
+        file_props.orphans.remove(file_props.active_orphan_index)
+        file_props.active_orphan_index = min(
+            file_props.active_orphan_index, max(0, len(file_props.orphans) - 1))
+        root_object["_albam_chn_suppress_update"] = False
+        _compact_chn_chain(root_object, chain_index, joint_index)
+        return {"FINISHED"}
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_CCLRefreshPreview(bpy.types.Operator):
     bl_idname = "albam.ccl_refresh_preview"
@@ -209,10 +514,31 @@ class ALBAM_OT_CCLRefreshPreview(bpy.types.Operator):
         rebuild_ccl_preview(bl_object)
         return {"FINISHED"}
 
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNRefreshPreview(bpy.types.Operator):
+    bl_idname = "albam.chn_refresh_preview"
+    bl_label = "Refresh CHN Preview"
+
+    @classmethod
+    def poll(cls, context):
+        bl_object = getattr(context, "object", None)
+        if bl_object and bl_object.get("_albam_chn_root", False):
+            return True
+        return bool(bl_object and bl_object.type == "ARMATURE"
+                    and find_chn_file_for_armature(bl_object))
+
+    def execute(self, context):
+        bl_object = context.object
+        root_object = (bl_object if bl_object.get("_albam_chn_root", False)
+                       else find_chn_file_for_armature(bl_object))
+        rebuild_chn_previews(root_object)
+        return {"FINISHED"}
+
 @blender_registry.register_blender_type
 class ALBAM_PT_CCLBoneProperties(bpy.types.Panel):
     bl_idname = "ALBAM_PT_CCLBoneProperties"
-    bl_label = "Chain Collision (Albam)"
+    bl_label = "Chain Physics (Albam)"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "bone"
@@ -221,17 +547,25 @@ class ALBAM_PT_CCLBoneProperties(bpy.types.Panel):
     def poll(cls, context):
         pose_bone = _active_pose_bone(context)
         return (pose_bone is not None
-                and find_ccl_file_for_armature(pose_bone.id_data) is not None)
+                and (find_ccl_file_for_armature(pose_bone.id_data) is not None
+                     or find_chn_file_for_armature(pose_bone.id_data) is not None))
 
     def draw(self, context):
         pose_bone = _active_pose_bone(context)
-        _draw_ccl_bone_editor(self.layout, pose_bone)
+        has_ccl = find_ccl_file_for_armature(pose_bone.id_data) is not None
+        has_chn = find_chn_file_for_armature(pose_bone.id_data) is not None
+        if has_ccl:
+            _draw_ccl_bone_editor(self.layout, pose_bone)
+        if has_ccl and has_chn:
+            self.layout.separator()
+        if has_chn:
+            _draw_chn_bone_editor(self.layout, pose_bone)
 
 
 @blender_registry.register_blender_type
 class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
     bl_idname = "ALBAM_PT_CCLObjectBindings"
-    bl_label = "CCL Bone Binding (Albam)"
+    bl_label = "Chain File Settings (Albam)"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "object"
@@ -241,7 +575,11 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
         bl_object = getattr(context, "object", None)
         if bl_object is None:
             return False
-        if bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl":
+        if (bl_object.get("_albam_chn_joint_preview", False)
+                or bl_object.get("_albam_chn_root", False)):
+            return True
+        if (bl_object.type == "EMPTY"
+                and bl_object.albam_asset.extension in {"ccl", "chn"}):
             return True
         primitive = None
         if bl_object.get("_albam_ccl_preview", False):
@@ -251,6 +589,12 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
     def draw(self, context):
         bl_object = context.object
         layout = self.layout
+        if bl_object.get("_albam_chn_joint_preview", False):
+            _draw_chn_joint_preview_binding(layout, bl_object)
+            return
+        if bl_object.type == "EMPTY" and bl_object.get("_albam_chn_root", False):
+            _draw_chn_file_editor(layout, bl_object)
+            return
         if bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl":
             file_props = get_ccl_file_properties(bl_object)
             armature_name = file_props.armature.name if file_props.armature else "Missing"
@@ -292,3 +636,63 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
         if props.shape == "CAPSULE":
             tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
             layout.label(text=f"Tail bone: {tail}")
+
+
+def _draw_chn_file_editor(layout, bl_object):
+    file_props = get_chn_file_properties(bl_object)
+    layout.use_property_split = True
+    armature_name = file_props.armature.name if file_props.armature else "Missing"
+    layout.label(text=f"Armature: {armature_name}", icon="ARMATURE_DATA")
+    layout.label(text=f"Chain Info entries: {file_props.chain_count}")
+    layout.label(text=f"Joints in file: {file_props.total_joints}")
+    if file_props.unresolved_joints:
+        layout.label(
+            text=f"Unmatched bone references: {file_props.unresolved_joints}",
+            icon="ERROR")
+    if file_props.duplicate_joint_ids:
+        layout.label(text=f"Duplicate Anim IDs: {file_props.duplicate_joint_ids}", icon="INFO")
+    row = layout.row(align=True)
+    row.template_list(
+        "ALBAM_UL_CHNChains", "", file_props, "chains",
+        file_props, "active_chain_index", rows=4)
+    layout.operator("albam.chn_refresh_preview", icon="FILE_REFRESH")
+    chain_index = file_props.active_chain_index
+    if 0 <= chain_index < len(file_props.chains):
+        chain = file_props.chains[chain_index]
+        layout.label(text=f"Chain Info {chain.chain_index} · {chain.num_joints} joints")
+        layout.prop(chain, "chain_type")
+        layout.prop(chain, "grav_scaler")
+        layout.prop(chain, "time_scaler")
+        layout.prop(chain, "dump_scaler")
+
+    if file_props.orphans:
+        layout.separator()
+        layout.label(text="Joints without a matching bone", icon="ERROR")
+        row = layout.row(align=True)
+        row.template_list(
+            "ALBAM_UL_CHNJointItems", "orphans", file_props, "orphans",
+            file_props, "active_orphan_index", rows=3)
+        row.operator("albam.chn_remove_orphan", icon="REMOVE", text="")
+        orphan_index = file_props.active_orphan_index
+        if 0 <= orphan_index < len(file_props.orphans):
+            _draw_chn_joint_fields(layout, file_props.orphans[orphan_index])
+
+    previews = sorted(
+        (child for child in bl_object.children
+         if child.get("_albam_chn_joint_preview", False)),
+        key=lambda child: child.name,
+    )
+    if previews:
+        layout.separator()
+        layout.label(text=f"Collision previews: {len(previews)}", icon="MESH_DATA")
+
+
+def _draw_chn_joint_preview_binding(layout, bl_object):
+    props = get_chn_joint_preview_properties(bl_object)
+    armature_name = props.armature.name if props.armature else "Missing"
+    bone_name = _sync_chn_preview_bone_name(bl_object, props)
+    layout.label(text=f"Armature: {armature_name}", icon="ARMATURE_DATA")
+    layout.label(text=f"Bone: {bone_name}", icon="BONE_DATA")
+    layout.label(text=f"Anim ID: {props.anim_id}")
+    layout.label(text=f"Chain Info: {props.chain_index} · Joint: {props.joint_index}")
+    layout.label(text=f"Shape: {props.shape.title()}")
