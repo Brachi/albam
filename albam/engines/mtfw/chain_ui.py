@@ -7,6 +7,7 @@ import bpy
 from ...registry import blender_registry
 from .bone import get_anim_retarget
 from .chain_preview import rebuild_ccl_preview
+from .chn_graph import decompose_edges, remove_node_from_strands
 from .chain_props import (
     find_ccl_file_for_armature,
     find_chn_file_for_armature,
@@ -153,10 +154,10 @@ def _draw_ccl_bone_editor(layout, pose_bone):
 def _draw_chn_joint_fields(layout, record, show_reference_id=True):
     if show_reference_id:
         layout.prop(record, "ref_joint_no")
-    layout.prop(record, "attr")
-    layout.label(
-        text="Node links use previous/next JointInfo entries on export",
-        icon="INFO")
+    layout.prop(record, "attr_constraint")
+    layout.prop(record, "attr_attached")
+    layout.prop(record, "attr_no_rotate")
+    layout.separator()
     layout.prop(record, "min_angle")
     layout.prop(record, "spring_coef")
     layout.prop(record, "max_angle")
@@ -191,6 +192,9 @@ def _draw_chn_bone_editor(layout, pose_bone):
     buttons = row.column(align=True)
     buttons.operator("albam.chn_add_joint", icon="ADD", text="")
     buttons.operator("albam.chn_remove_joint", icon="REMOVE", text="")
+    layout.operator(
+        "albam.chn_add_strand_from_selection", icon="CON_TRACKTO",
+        text="Add Selected Bones as Strand")
 
     index = bone_props.active_chn_joint_index
     if not 0 <= index < len(bone_props.chn_joints):
@@ -210,7 +214,8 @@ def _draw_chn_bone_editor(layout, pose_bone):
 class ALBAM_UL_CCLRecords(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
-        row.label(text=f"{item.shape.title()} · record {item.record_index if item.record_index >= 0 else 'new'}")
+        row.label(
+            text=f"{item.shape.title()} · record {item.record_index if item.record_index >= 0 else 'new'}")
 
 
 @blender_registry.register_blender_type
@@ -232,6 +237,19 @@ class ALBAM_UL_CHNChains(bpy.types.UIList):
         layout.label(
             text=f"Chain Info {index} · Type: {chain_type} · {item.num_joints} joints",
             icon="PHYSICS")
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_CHNStrands(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        ids = [joint.anim_id for joint in item.joints]
+        summary = " → ".join(str(anim_id) for anim_id in ids[:5])
+        if len(ids) > 5:
+            summary += " → …"
+        if item.closed:
+            summary += " · closed"
+        name = item.name or f"Strand {index + 1}"
+        layout.label(text=f"{name} · {summary or 'empty'}", icon="CON_TRACKTO")
 
 
 @blender_registry.register_blender_type
@@ -280,8 +298,8 @@ class ALBAM_OT_CCLRemoveRecord(bpy.types.Operator):
             return False
         records = get_ccl_bone_properties(pose_bone).records
         index = get_ccl_bone_properties(pose_bone).active_record_index
-        return bool(records and 0 <= index < len(records)
-                    and find_ccl_file_for_armature(pose_bone.id_data))
+        return bool(records and 0 <= index < len(records) and
+                    find_ccl_file_for_armature(pose_bone.id_data))
 
     def execute(self, context):
         pose_bone = _active_pose_bone(context)
@@ -302,6 +320,124 @@ class ALBAM_OT_CCLRemoveRecord(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _chn_records_for_chain(root_object, chain_index):
+    file_props = get_chn_file_properties(root_object)
+    armature = file_props.armature
+    records = []
+    if armature is not None:
+        for pose_bone in armature.pose.bones:
+            records.extend(
+                (record, pose_bone)
+                for record in get_ccl_bone_properties(pose_bone).chn_joints
+                if record.chain_index == chain_index
+            )
+    records.extend((record, None) for record in file_props.orphans
+                   if record.chain_index == chain_index)
+    return records
+
+
+def _replace_chn_strands(chain_props, strand_data):
+    chain_props.strands.clear()
+    for strand_index, data in enumerate(strand_data):
+        strand = chain_props.strands.add()
+        strand.strand_index = strand_index
+        strand.closed = bool(data.get("closed", False))
+        strand.name = data.get("name") or f"Strand {strand_index + 1}"
+        for anim_id in data.get("joints", ()):
+            strand.joints.add().anim_id = anim_id
+    chain_props.active_strand_index = min(
+        chain_props.active_strand_index, max(0, len(chain_props.strands) - 1))
+
+
+def _append_chn_strand(chain_props, anim_ids, closed=False, name=None):
+    strand = chain_props.strands.add()
+    strand.strand_index = len(chain_props.strands) - 1
+    strand.name = name or f"Strand {strand.strand_index + 1}"
+    strand.closed = closed
+    for anim_id in anim_ids:
+        strand.joints.add().anim_id = anim_id
+    chain_props.active_strand_index = strand.strand_index
+    return strand
+
+
+def _remove_chn_joint_from_strands(chain_props, anim_id):
+    current = [
+        {"joints": [joint.anim_id for joint in strand.joints], "closed": strand.closed,
+         "name": strand.name}
+        for strand in chain_props.strands
+    ]
+    updated = remove_node_from_strands(current, anim_id)
+    _replace_chn_strands(chain_props, updated)
+    chain_props.topology_dirty = True
+
+
+def _strand_ids_for_removed_joint(record, pose_bone, chain_records):
+    source_id = (record.source_ref_joint_no
+                 if record.source_ref_joint_no >= 0 else record.ref_joint_no)
+    source_ids = {
+        item.source_ref_joint_no if item.source_ref_joint_no >= 0 else item.ref_joint_no
+        for item, _bone in chain_records
+    }
+    ids = {source_id}
+    candidates = [record.ref_joint_no]
+    anim_id = _chn_anim_id(pose_bone) if pose_bone is not None else None
+    if anim_id is not None:
+        candidates.append(anim_id)
+    ids.update(candidate for candidate in candidates
+               if candidate == source_id or candidate not in source_ids)
+    return ids
+
+
+def _rebuild_chn_strands_from_raw(chain_props, records):
+    if not records:
+        return False
+    anim_ids = [record.ref_joint_no for record, _pose_bone in records]
+    if len(anim_ids) != len(set(anim_ids)):
+        return False
+    known = set(anim_ids)
+    edges = []
+    for record, _pose_bone in records:
+        try:
+            slots = bytes.fromhex(record.raw_node_slots)
+        except ValueError:
+            slots = b""
+        if len(slots) != 8 or not 0 <= record.raw_node_num <= 8:
+            return False
+        edges.extend(
+            (record.ref_joint_no, target)
+            for target in slots[:record.raw_node_num]
+            if target in known and target != record.ref_joint_no
+        )
+    _replace_chn_strands(chain_props, decompose_edges(anim_ids, edges))
+    chain_props.topology_dirty = False
+    return True
+
+
+def _autofill_chn_strands_from_hierarchy(chain_props, records):
+    id_by_bone = {}
+    anim_ids = []
+    for record, pose_bone in records:
+        anim_id = _chn_anim_id(pose_bone) if pose_bone is not None else record.ref_joint_no
+        if anim_id is None:
+            continue
+        anim_ids.append(anim_id)
+        if pose_bone is not None:
+            id_by_bone[pose_bone.name] = anim_id
+    if len(anim_ids) != len(set(anim_ids)):
+        return False
+    edges = []
+    for record, pose_bone in records:
+        if pose_bone is None or pose_bone.parent is None:
+            continue
+        parent_id = id_by_bone.get(pose_bone.parent.name)
+        child_id = id_by_bone.get(pose_bone.name)
+        if parent_id is not None and child_id is not None:
+            edges.append((parent_id, child_id))
+    _replace_chn_strands(chain_props, decompose_edges(anim_ids, edges))
+    chain_props.topology_dirty = True
+    return True
+
+
 def _chn_chain_enum_items(self, context):
     pose_bone = _active_pose_bone(context)
     root_object = find_chn_file_for_armature(pose_bone.id_data) if pose_bone else None
@@ -310,7 +446,7 @@ def _chn_chain_enum_items(self, context):
     file_props = get_chn_file_properties(root_object)
     return [
         (str(chain.chain_index), f"Chain Info {chain.chain_index}",
-         f"Add this bone as a joint to Chain Info {chain.chain_index}")
+         f"Add or link joints in Chain Info {chain.chain_index}")
         for chain in file_props.chains
     ] or [("0", "No Chain Info entries", "The imported CHN file has no Chain Info entries")]
 
@@ -323,6 +459,213 @@ def _chn_anim_id(pose_bone):
         return int(raw_id.split("_", 1)[0])
     except ValueError:
         return None
+
+
+def _active_chn_chain(root_object):
+    file_props = get_chn_file_properties(root_object)
+    if not 0 <= file_props.active_chain_index < len(file_props.chains):
+        return None
+    return file_props.chains[file_props.active_chain_index]
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNRebuildStrands(bpy.types.Operator):
+    bl_idname = "albam.chn_rebuild_strands"
+    bl_label = "Rebuild Strands from Raw Links"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        root = getattr(context, "object", None)
+        return bool(root and root.get("_albam_chn_root", False) and _active_chn_chain(root))
+
+    def execute(self, context):
+        root = context.object
+        chain = _active_chn_chain(root)
+        if not _rebuild_chn_strands_from_raw(
+                chain, _chn_records_for_chain(root, chain.chain_index)):
+            self.report({"ERROR"}, "Raw node slots are missing or Anim IDs are duplicated")
+            return {"CANCELLED"}
+        rebuild_chn_previews(root)
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNAutoFillLinks(bpy.types.Operator):
+    bl_idname = "albam.chn_autofill_links"
+    bl_label = "Auto-fill Strands from Bone Hierarchy"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        root = getattr(context, "object", None)
+        return bool(root and root.get("_albam_chn_root", False) and _active_chn_chain(root))
+
+    def execute(self, context):
+        root = context.object
+        chain = _active_chn_chain(root)
+        if not _autofill_chn_strands_from_hierarchy(
+                chain, _chn_records_for_chain(root, chain.chain_index)):
+            self.report({"ERROR"}, "Duplicate Anim IDs prevent an unambiguous graph")
+            return {"CANCELLED"}
+        rebuild_chn_previews(root)
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNRemoveStrand(bpy.types.Operator):
+    bl_idname = "albam.chn_remove_strand"
+    bl_label = "Remove Strand"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        root = getattr(context, "object", None)
+        chain = _active_chn_chain(root) if root and root.get("_albam_chn_root", False) else None
+        return bool(chain and 0 <= chain.active_strand_index < len(chain.strands))
+
+    def execute(self, context):
+        root = context.object
+        chain = _active_chn_chain(root)
+        chain.strands.remove(chain.active_strand_index)
+        for index, strand in enumerate(chain.strands):
+            strand.strand_index = index
+        chain.active_strand_index = min(
+            chain.active_strand_index, max(0, len(chain.strands) - 1))
+        chain.topology_dirty = True
+        rebuild_chn_previews(root)
+        return {"FINISHED"}
+
+
+def _selected_bone_path(context, active_bone):
+    selected = list(getattr(context, "selected_pose_bones", ()) or (active_bone,))
+    if active_bone not in selected:
+        selected.append(active_bone)
+    selected_names = {bone.name for bone in selected}
+    children = {bone.name: [] for bone in selected}
+    roots = []
+    for bone in selected:
+        if bone.parent is not None and bone.parent.name in selected_names:
+            children[bone.parent.name].append(bone)
+        else:
+            roots.append(bone)
+    if len(roots) != 1:
+        return None
+    ordered = []
+    current = roots[0]
+    while current is not None:
+        ordered.append(current)
+        descendants = children[current.name]
+        if len(descendants) > 1:
+            return None
+        current = descendants[0] if descendants else None
+    return ordered if len(ordered) == len(selected) else None
+
+
+def _create_chn_joint_for_bone(pose_bone, chain_index, anim_id):
+    bone_props = get_ccl_bone_properties(pose_bone)
+    joint = bone_props.chn_joints.add()
+    joint.chain_index = chain_index
+    joint.joint_index = -1
+    joint.source_joint_index = -1
+    joint.source_ref_joint_no = anim_id
+    joint.ref_joint_no = anim_id
+    joint.attr = "0"
+    joint.min_angle = (0.0, 0.0, 0.0)
+    joint.spring_coef = 0.0
+    joint.max_angle = (0.0, 0.0, 0.0)
+    joint.dumping_coef = 0.0
+    joint.mass = 0.0
+    joint.restrict_flag = 0
+    joint.col_shape = "SPHERE"
+    joint.col_radius = 1.0
+    joint.air_regist = 0.0
+    joint.friction = 0.0
+    joint.soft_coef = 0.0
+    joint.bend_regist = 0.0
+    bone_props.active_chn_joint_index = len(bone_props.chn_joints) - 1
+    return joint
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
+    bl_idname = "albam.chn_add_strand_from_selection"
+    bl_label = "Add Selected Bones as Strand"
+    bl_options = {"UNDO"}
+
+    chain_index: bpy.props.EnumProperty(name="Target Chain Info", items=_chn_chain_enum_items)
+
+    @classmethod
+    def poll(cls, context):
+        pose_bone = _active_pose_bone(context)
+        return bool(pose_bone and find_chn_file_for_armature(pose_bone.id_data))
+
+    def invoke(self, context, event):
+        pose_bone = _active_pose_bone(context)
+        root = find_chn_file_for_armature(pose_bone.id_data)
+        if root:
+            file_props = get_chn_file_properties(root)
+            if file_props.chains:
+                selected = min(file_props.active_chain_index, len(file_props.chains) - 1)
+                self.chain_index = str(file_props.chains[selected].chain_index)
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def draw(self, context):
+        self.layout.prop(self, "chain_index")
+
+    def execute(self, context):
+        active_bone = _active_pose_bone(context)
+        root = find_chn_file_for_armature(active_bone.id_data)
+        path = _selected_bone_path(context, active_bone)
+        if path is None:
+            self.report({"ERROR"}, "Select one unbranched parent-to-child bone path")
+            return {"CANCELLED"}
+        try:
+            chain_index = int(self.chain_index)
+        except ValueError:
+            chain_index = -1
+        file_props = get_chn_file_properties(root)
+        chain = next((item for item in file_props.chains
+                      if item.chain_index == chain_index), None)
+        if chain is None:
+            self.report({"ERROR"}, "Choose an existing Chain Info entry")
+            return {"CANCELLED"}
+
+        anim_ids = [_chn_anim_id(bone) for bone in path]
+        if any(anim_id is None or not 0 <= anim_id <= 0xFFFF for anim_id in anim_ids):
+            self.report({"ERROR"}, "Every selected bone needs a numeric Anim Retarget ID")
+            return {"CANCELLED"}
+        if len(anim_ids) != len(set(anim_ids)):
+            self.report({"ERROR"}, "Selected bones have duplicate Anim IDs")
+            return {"CANCELLED"}
+
+        chain_records = _chn_records_for_chain(root, chain_index)
+        known_ids = {
+            _chn_anim_id(bone) if bone is not None else record.ref_joint_no
+            for record, bone in chain_records
+        }
+        if len(known_ids) != len(chain_records):
+            self.report({"ERROR"}, "The Chain Info already contains duplicate Anim IDs")
+            return {"CANCELLED"}
+        if chain.num_joints + sum(anim_id not in known_ids for anim_id in anim_ids) > 0xFF:
+            self.report({"ERROR"}, "A Chain Info entry cannot contain more than 255 joints")
+            return {"CANCELLED"}
+
+        root["_albam_chn_suppress_update"] = True
+        for position, (bone, anim_id) in enumerate(zip(path, anim_ids)):
+            existing = next((record for record in get_ccl_bone_properties(bone).chn_joints
+                             if record.chain_index == chain_index), None)
+            if existing is None:
+                existing = _create_chn_joint_for_bone(bone, chain_index, anim_id)
+                existing.joint_index = chain.num_joints
+                existing.attr = "1" if position == 0 else "2"
+                chain.num_joints += 1
+                file_props.total_joints += 1
+        _append_chn_strand(chain, anim_ids)
+        chain.topology_dirty = True
+        root["_albam_chn_suppress_update"] = False
+        rebuild_chn_previews(root)
+        return {"FINISHED"}
 
 
 @blender_registry.register_blender_type
@@ -396,6 +739,7 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.chain_index = chain_index
         joint.joint_index = chain_props.num_joints
         joint.source_joint_index = -1
+        joint.source_ref_joint_no = anim_id
         joint.ref_joint_no = anim_id
         joint.attr = "0"
         joint.min_angle = (0.0, 0.0, 0.0)
@@ -404,7 +748,7 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.dumping_coef = 0.0
         joint.mass = 0.0
         joint.restrict_flag = 0
-        joint.col_shape = 1
+        joint.col_shape = "SPHERE"
         joint.col_radius = 1.0
         joint.air_regist = 0.0
         joint.friction = 0.0
@@ -412,6 +756,8 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.bend_regist = 0.0
         chain_props.num_joints += 1
         file_props.total_joints += 1
+        _append_chn_strand(chain_props, [anim_id])
+        chain_props.topology_dirty = True
         get_ccl_bone_properties(pose_bone).active_chn_joint_index = (
             len(get_ccl_bone_properties(pose_bone).chn_joints) - 1)
         root_object["_albam_chn_suppress_update"] = False
@@ -425,8 +771,7 @@ def _compact_chn_chain(root_object, chain_index, removed_joint_index):
     root_object["_albam_chn_suppress_update"] = True
     for pose_bone in armature.pose.bones:
         for record in get_ccl_bone_properties(pose_bone).chn_joints:
-            if (record.chain_index == chain_index
-                    and record.joint_index > removed_joint_index):
+            if (record.chain_index == chain_index and record.joint_index > removed_joint_index):
                 record.joint_index -= 1
     for record in file_props.orphans:
         if record.chain_index == chain_index and record.joint_index > removed_joint_index:
@@ -450,8 +795,8 @@ class ALBAM_OT_CHNRemoveJoint(bpy.types.Operator):
         if pose_bone is None:
             return False
         props = get_ccl_bone_properties(pose_bone)
-        return (0 <= props.active_chn_joint_index < len(props.chn_joints)
-                and find_chn_file_for_armature(pose_bone.id_data) is not None)
+        return (0 <= props.active_chn_joint_index < len(props.chn_joints) and
+                find_chn_file_for_armature(pose_bone.id_data) is not None)
 
     def execute(self, context):
         pose_bone = _active_pose_bone(context)
@@ -459,6 +804,13 @@ class ALBAM_OT_CHNRemoveJoint(bpy.types.Operator):
         record = bone_props.chn_joints[bone_props.active_chn_joint_index]
         root_object = find_chn_file_for_armature(pose_bone.id_data)
         chain_index, joint_index = record.chain_index, record.joint_index
+        chain_props = next(
+            chain for chain in get_chn_file_properties(root_object).chains
+            if chain.chain_index == chain_index)
+        chain_records = _chn_records_for_chain(root_object, chain_index)
+        ids_to_remove = _strand_ids_for_removed_joint(record, pose_bone, chain_records)
+        for joint_id in ids_to_remove:
+            _remove_chn_joint_from_strands(chain_props, joint_id)
         bone_props.chn_joints.remove(bone_props.active_chn_joint_index)
         bone_props.active_chn_joint_index = min(
             bone_props.active_chn_joint_index, max(0, len(bone_props.chn_joints) - 1))
@@ -484,6 +836,12 @@ class ALBAM_OT_CHNRemoveOrphan(bpy.types.Operator):
         file_props = get_chn_file_properties(root_object)
         record = file_props.orphans[file_props.active_orphan_index]
         chain_index, joint_index = record.chain_index, record.joint_index
+        chain_props = next(chain for chain in file_props.chains
+                           if chain.chain_index == chain_index)
+        chain_records = _chn_records_for_chain(root_object, chain_index)
+        ids_to_remove = _strand_ids_for_removed_joint(record, None, chain_records)
+        for joint_id in ids_to_remove:
+            _remove_chn_joint_from_strands(chain_props, joint_id)
         root_object["_albam_chn_suppress_update"] = True
         file_props.orphans.remove(file_props.active_orphan_index)
         file_props.active_orphan_index = min(
@@ -520,8 +878,8 @@ class ALBAM_OT_CHNRefreshPreview(bpy.types.Operator):
         bl_object = getattr(context, "object", None)
         if bl_object and bl_object.get("_albam_chn_root", False):
             return True
-        return bool(bl_object and bl_object.type == "ARMATURE"
-                    and find_chn_file_for_armature(bl_object))
+        return bool(bl_object and bl_object.type == "ARMATURE" and
+                    find_chn_file_for_armature(bl_object))
 
     def execute(self, context):
         bl_object = context.object
@@ -529,6 +887,7 @@ class ALBAM_OT_CHNRefreshPreview(bpy.types.Operator):
                        else find_chn_file_for_armature(bl_object))
         rebuild_chn_previews(root_object)
         return {"FINISHED"}
+
 
 @blender_registry.register_blender_type
 class ALBAM_PT_CCLBoneProperties(bpy.types.Panel):
@@ -541,9 +900,9 @@ class ALBAM_PT_CCLBoneProperties(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         pose_bone = _active_pose_bone(context)
-        return (pose_bone is not None
-                and (find_ccl_file_for_armature(pose_bone.id_data) is not None
-                     or find_chn_file_for_armature(pose_bone.id_data) is not None))
+        return (pose_bone is not None and
+                (find_ccl_file_for_armature(pose_bone.id_data) is not None or
+                 find_chn_file_for_armature(pose_bone.id_data) is not None))
 
     def draw(self, context):
         pose_bone = _active_pose_bone(context)
@@ -570,11 +929,9 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
         bl_object = getattr(context, "object", None)
         if bl_object is None:
             return False
-        if (bl_object.get("_albam_chn_joint_preview", False)
-                or bl_object.get("_albam_chn_root", False)):
+        if (bl_object.get("_albam_chn_joint_preview", False) or bl_object.get("_albam_chn_root", False)):
             return True
-        if (bl_object.type == "EMPTY"
-                and bl_object.albam_asset.extension in {"ccl", "chn"}):
+        if (bl_object.type == "EMPTY" and bl_object.albam_asset.extension in {"ccl", "chn"}):
             return True
         primitive = None
         if bl_object.get("_albam_ccl_preview", False):
@@ -644,6 +1001,10 @@ def _draw_chn_file_editor(layout, bl_object):
         layout.label(
             text=f"Unmatched bone references: {file_props.unresolved_joints}",
             icon="ERROR")
+    if file_props.unresolved_links:
+        layout.label(
+            text=f"Links to joints outside their Chain Info: {file_props.unresolved_links}",
+            icon="ERROR")
     if file_props.duplicate_joint_ids:
         layout.label(text=f"Duplicate Anim IDs: {file_props.duplicate_joint_ids}", icon="INFO")
     row = layout.row(align=True)
@@ -655,10 +1016,19 @@ def _draw_chn_file_editor(layout, bl_object):
     if 0 <= chain_index < len(file_props.chains):
         chain = file_props.chains[chain_index]
         layout.label(text=f"Chain Info {chain.chain_index} · {chain.num_joints} joints")
+        layout.label(text=f"Graph strands: {len(chain.strands)}" +
+                     (" · modified" if chain.topology_dirty else " · source links"))
         layout.prop(chain, "chain_type")
         layout.prop(chain, "grav_scaler")
         layout.prop(chain, "time_scaler")
         layout.prop(chain, "dump_scaler")
+        layout.template_list(
+            "ALBAM_UL_CHNStrands", "", chain, "strands",
+            chain, "active_strand_index", rows=4)
+        layout.operator("albam.chn_remove_strand", icon="REMOVE", text="Remove Strand")
+        row = layout.row(align=True)
+        row.operator("albam.chn_rebuild_strands", icon="FILE_REFRESH")
+        row.operator("albam.chn_autofill_links", icon="CON_TRACKTO")
 
     if file_props.orphans:
         layout.separator()

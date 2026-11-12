@@ -119,7 +119,7 @@ def test_export_joint_info(chn_imported_local, chn_exported_local):
         dst_joints = dst_chain.joints
         assert len(src_joints) == len(dst_joints)
 
-        for index, (src_joint, dst_joint) in enumerate(zip(src_joints, dst_joints)):
+        for src_joint, dst_joint in zip(src_joints, dst_joints):
             for field in ("x", "y", "z"):
                 assert getattr(src_joint.min_angle, field) == pytest.approx(
                     getattr(dst_joint.min_angle, field))
@@ -132,14 +132,12 @@ def test_export_joint_info(chn_imported_local, chn_exported_local):
                 assert getattr(src_joint, field) == pytest.approx(
                     getattr(dst_joint, field))
 
-            expected_neighbors = []
-            if index > 0:
-                expected_neighbors.append(src_joints[index - 1].ref_joint_no)
-            if index + 1 < len(src_joints):
-                expected_neighbors.append(src_joints[index + 1].ref_joint_no)
+            # CHN topology is stored in node_joint_no, independently of
+            # JointInfo record order. Compare the serialized graph itself.
+            expected_neighbors = src_joint.node_joint_no[:src_joint.node_num]
 
             assert dst_joint.ref_joint_no == src_joint.ref_joint_no
-            assert dst_joint.node_num == len(expected_neighbors)
+            assert dst_joint.node_num == src_joint.node_num
             assert dst_joint.node_joint_no[:dst_joint.node_num] == expected_neighbors
             assert dst_joint.node_joint_no[dst_joint.node_num:] == (
                 [0] * (8 - dst_joint.node_num))

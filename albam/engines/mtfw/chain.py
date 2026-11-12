@@ -7,9 +7,9 @@ from io import BytesIO
 import bpy
 from kaitaistruct import KaitaiStream
 
-from . import chain_props as _chain_props  # register the PropertyGroups
 from .bone import get_anim_retarget
 from .chain_preview import rebuild_ccl_preview
+from .chn_graph import decompose_edges, ordered_links_from_strands
 from .chain_props import (
     find_ccl_file_for_armature,
     find_chn_file_for_armature,
@@ -202,6 +202,9 @@ def _load_chn_joint(dst, src, chain_index, joint_index, source_joint_index=None)
     dst.chain_index = chain_index
     dst.joint_index = joint_index
     dst.source_joint_index = (joint_index if source_joint_index is None else source_joint_index)
+    dst.source_ref_joint_no = int(src.ref_joint_no)
+    dst.raw_node_num = int(src.node_num)
+    dst.raw_node_slots = bytes(src.node_joint_no).hex()
     dst.preview_object = None
     dst.ref_joint_no = src.ref_joint_no
     dst.attr = str(src.attr)
@@ -211,7 +214,7 @@ def _load_chn_joint(dst, src, chain_index, joint_index, source_joint_index=None)
     dst.dumping_coef = src.dumping_coef
     dst.mass = src.mass
     dst.restrict_flag = src.restrict_flag
-    dst.col_shape = int(src.col_shape)
+    dst.col_shape = "CAPSULE" if int(src.col_shape) == 2 else "SPHERE"
     dst.col_radius = src.col_radius
     dst.air_regist = src.air_regist
     dst.friction = src.friction
@@ -343,6 +346,7 @@ def load_chn(vfile, context) -> bpy.types.Object:
         bone_props.chn_joints.clear()
         bone_props.active_chn_joint_index = 0
     unresolved = 0
+    unresolved_links = 0
     total_joints = 0
     bl_object = bpy.data.objects.new(vfile.display_name, None)
     bl_object.empty_display_type = "PLAIN_AXES"
@@ -364,6 +368,8 @@ def load_chn(vfile, context) -> bpy.types.Object:
         chain_props.grav_scaler = chain_info.grav_scaler
         chain_props.time_scaler = chain_info.time_scaler
         chain_props.dump_scaler = chain_info.dump_scaler
+        chain_props.topology_dirty = False
+        chain_records = []
         for joint_index, src_joint in enumerate(chain_info.joints):
             pose_bone = joint_map.get(src_joint.ref_joint_no)
             if pose_bone is None:
@@ -376,9 +382,40 @@ def load_chn(vfile, context) -> bpy.types.Object:
                 1 for node_joint_no in src_joint.node_joint_no[:node_count]
                 if node_joint_no not in joint_map)
             _load_chn_joint(joint_props, src_joint, chain_index, joint_index)
+            chain_records.append(joint_props)
+
+        anim_ids = [record.ref_joint_no for record in chain_records]
+        # Duplicate IDs make the graph ambiguous. Keep the original slots for
+        # lossless export and leave strand authoring empty until the user fixes it.
+        known_ids = set(anim_ids)
+        edges = []
+        for record in chain_records:
+            try:
+                raw_slots = bytes.fromhex(record.raw_node_slots)
+            except ValueError:
+                raw_slots = b""
+            node_count = min(max(record.raw_node_num, 0), len(raw_slots))
+            unresolved_links += sum(
+                1 for target_id in raw_slots[:node_count]
+                if target_id not in known_ids
+            )
+            edges.extend(
+                (record.ref_joint_no, target_id)
+                for target_id in raw_slots[:node_count]
+                if target_id in known_ids and target_id != record.ref_joint_no
+            )
+        if len(anim_ids) == len(known_ids):
+            for strand_index, strand_data in enumerate(decompose_edges(anim_ids, edges)):
+                strand = chain_props.strands.add()
+                strand.strand_index = strand_index
+                strand.closed = strand_data["closed"]
+                strand.name = f"Strand {strand_index + 1}"
+                for anim_id in strand_data["joints"]:
+                    strand.joints.add().anim_id = anim_id
 
     file_props.total_joints = total_joints
     file_props.unresolved_joints = unresolved
+    file_props.unresolved_links = unresolved_links
     bl_object["_albam_chn_suppress_update"] = False
     rebuild_chn_previews(bl_object)
     return bl_object
@@ -475,6 +512,96 @@ def _build_chn_topology(ordered_records, chain_index):
     return topology
 
 
+def _chn_topology_for_chain(chain_props, ordered_records, chain_index):
+    """Choose exact source slots, authored strands, or the legacy path fallback."""
+    anim_ids = [
+        _chn_record_anim_id(record, pose_bone)
+        for record, pose_bone in ordered_records
+    ]
+    identity_changed = any(
+        anim_id != (record.source_ref_joint_no
+                    if record.source_ref_joint_no >= 0 else record.ref_joint_no)
+        for anim_id, (record, _pose_bone) in zip(anim_ids, ordered_records)
+    )
+    if not chain_props.topology_dirty:
+        raw_topology = []
+        for record, _pose_bone in ordered_records:
+            if record.raw_node_num < 0:
+                raw_topology = []
+                break
+            try:
+                slots = tuple(bytes.fromhex(record.raw_node_slots))
+            except ValueError:
+                slots = ()
+            if len(slots) != 8 or not 0 <= record.raw_node_num <= 8:
+                raw_topology = []
+                break
+            # Only the first node_num entries are meaningful. Real files often
+            # carry 0xCD in the unused tail (the MSVC debug-heap fill pattern),
+            # so normalize that tail instead of treating it as CHN data.
+            node_count = record.raw_node_num
+            raw_topology.append((node_count, slots[:node_count] + (0,) * (8 - node_count)))
+        if len(raw_topology) == len(ordered_records) and not identity_changed:
+            return raw_topology
+
+        # Scenes saved before the strand model have no raw slot cache. Preserve
+        # their former export behavior until they are rebuilt or edited.
+        if not chain_props.strands:
+            return _build_chn_topology(ordered_records, chain_index)
+
+    if len(anim_ids) != len(set(anim_ids)):
+        raise AlbamCheckFailure(
+            f"Chain Info {chain_index} has duplicate joint Anim IDs",
+            details=f"Joint IDs in this Chain Info are {anim_ids}",
+            solution="Give each joint in the Chain Info a unique Anim Retarget ID",
+        )
+    records_by_id = set(anim_ids)
+    id_remap = {
+        (record.source_ref_joint_no
+         if record.source_ref_joint_no >= 0 else record.ref_joint_no): anim_id
+        for anim_id, (record, _pose_bone) in zip(anim_ids, ordered_records)
+    }
+    authored_strands = []
+    for strand in chain_props.strands:
+        ids = [id_remap.get(joint.anim_id, joint.anim_id) for joint in strand.joints]
+        missing = [anim_id for anim_id in ids if anim_id not in records_by_id]
+        if missing:
+            raise AlbamCheckFailure(
+                f"Chain Info {chain_index} has a strand pointing to a missing joint",
+                details=f"Strand references Anim IDs {sorted(set(missing))}",
+                solution="Remove the missing IDs from the strand or add those joints to the ChainInfo",
+            )
+        authored_strands.append({"joints": ids, "closed": strand.closed})
+
+    raw_links = {}
+    for anim_id, (record, _pose_bone) in zip(anim_ids, ordered_records):
+        if record.raw_node_num < 0:
+            continue
+        try:
+            slots = bytes.fromhex(record.raw_node_slots)
+        except ValueError:
+            slots = b""
+        if len(slots) == 8 and 0 <= record.raw_node_num <= 8:
+            raw_links[anim_id] = {
+                id_remap.get(target, target)
+                for target in slots[:record.raw_node_num]
+            }
+    ordered_links = ordered_links_from_strands(authored_strands, raw_links)
+
+    topology_by_id = {}
+    for anim_id in anim_ids:
+        neighbors = ordered_links.get(anim_id, [])
+        if len(neighbors) > 8:
+            raise AlbamCheckFailure(
+                "A CHN joint has too many graph links",
+                details=f"Anim ID {anim_id} has {len(neighbors)} links; CHN supports at most 8",
+                solution="Split the graph or remove links until each joint has at most 8 neighbors",
+            )
+        encoded = tuple(_chn_uint(target, 8, "node joint ID") for target in neighbors)
+        topology_by_id[anim_id] = (len(encoded), encoded + (0,) * (8 - len(encoded)))
+    return [topology_by_id[anim_id] for anim_id in anim_ids]
+
+
 def _apply_chn_joint(dst, record, pose_bone, topology):
     node_count = _chn_uint(topology[0], 8, "node count")
     if node_count > 8:
@@ -502,11 +629,11 @@ def _apply_chn_joint(dst, record, pose_bone, topology):
     dst.dumping_coef = _chn_finite(record.dumping_coef, "damping coefficient")
     dst.mass = _chn_finite(record.mass, "mass")
     dst.restrict_flag = _chn_uint(record.restrict_flag, 8, "restrict flag")
-    dst.col_shape = _chn_uint(record.col_shape, 8, "collision shape")
-    if dst.col_shape not in (1, 2):
+    dst.col_shape = {"SPHERE": 1, "CAPSULE": 2}.get(record.col_shape)
+    if dst.col_shape is None:
         raise AlbamCheckFailure(
             "Invalid CHN collision shape",
-            details=f"CHN supports Sphere (1) or Capsule (2), found {dst.col_shape}",
+            details=f"Unknown CHN collision shape {record.col_shape!r}",
             solution="Choose Sphere or Capsule",
         )
     dst.col_radius = _chn_finite(record.col_radius, "collision radius")
@@ -817,8 +944,8 @@ def export_chn(bl_object):
                     solution="Re-import the CHN file to restore its source joint mapping",
                 )
             if record.source_joint_index >= 0:
-                if (record.source_joint_index >= chain_info.num_joints
-                        or record.source_joint_index in seen_source_indices):
+                if (record.source_joint_index >= chain_info.num_joints or
+                        record.source_joint_index in seen_source_indices):
                     raise AlbamCheckFailure(
                         f"Chain {chain_index} has invalid source joint references",
                         details=f"Source joint index {record.source_joint_index} is invalid or repeated",
@@ -835,7 +962,7 @@ def export_chn(bl_object):
                 solution="Use a contiguous sequence of joint indices starting at zero",
             )
 
-        topology = _build_chn_topology(ordered_records, chain_index)
+        topology = _chn_topology_for_chain(chain_props, ordered_records, chain_index)
         source_joints = list(chain_info.joints)
         output_joints = []
         for joint_index, (record, pose_bone) in enumerate(ordered_records):

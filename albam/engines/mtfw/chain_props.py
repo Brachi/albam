@@ -88,12 +88,33 @@ def _chn_root_from_owner(owner, context):
 
 def _update_chn_header_preview(self, context):
     root_object = self.id_data
-    if (not isinstance(root_object, bpy.types.Object)
-            or root_object.get("_albam_chn_suppress_update", False)):
+    if (not isinstance(root_object, bpy.types.Object) or
+            root_object.get("_albam_chn_suppress_update", False)):
         return
     from .chn_preview import rebuild_chn_previews
 
     rebuild_chn_previews(root_object)
+
+
+def _chn_attr_bit_getter(bit):
+    def getter(self):
+        try:
+            return bool(int(self.attr) & bit)
+        except (TypeError, ValueError):
+            return False
+
+    return getter
+
+
+def _chn_attr_bit_setter(bit):
+    def setter(self, value):
+        try:
+            attr = int(self.attr)
+        except (TypeError, ValueError):
+            attr = 0
+        self.attr = str(attr | bit if value else attr & ~bit)
+
+    return setter
 
 
 @blender_registry.register_blender_prop
@@ -103,11 +124,25 @@ class CHNJointProperties(bpy.types.PropertyGroup):
     chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
     joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
     source_joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    source_ref_joint_no: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    raw_node_num: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    raw_node_slots: bpy.props.StringProperty(default="", options={"HIDDEN"})
     preview_object: bpy.props.PointerProperty(
         name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
     ref_joint_no: bpy.props.IntProperty(name="Reference Anim ID", default=0, min=0, max=65535,
                                         update=_update_chn_preview)
-    attr: bpy.props.StringProperty(name="Attribute Mask", default="0", update=_update_chn_preview)
+    # Keep the original mask hidden so unknown bits and older .blend files
+    # remain intact; expose the three documented bits as individual toggles.
+    attr: bpy.props.StringProperty(default="0", options={"HIDDEN"}, update=_update_chn_preview)
+    attr_constraint: bpy.props.BoolProperty(
+        name="Constraint", description="Pin this joint to its reference bone (bit 1)",
+        get=_chn_attr_bit_getter(1), set=_chn_attr_bit_setter(1))
+    attr_attached: bpy.props.BoolProperty(
+        name="Attached", description="Attach this joint to another chain node (bit 2)",
+        get=_chn_attr_bit_getter(2), set=_chn_attr_bit_setter(2))
+    attr_no_rotate: bpy.props.BoolProperty(
+        name="No Rotate", description="Disable rotation for this joint (bit 4)",
+        get=_chn_attr_bit_getter(4), set=_chn_attr_bit_setter(4))
     min_angle: bpy.props.FloatVectorProperty(
         name="Minimum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
     spring_coef: bpy.props.FloatProperty(
@@ -119,9 +154,15 @@ class CHNJointProperties(bpy.types.PropertyGroup):
     mass: bpy.props.FloatProperty(name="Mass", default=0.0, update=_update_chn_preview)
     restrict_flag: bpy.props.IntProperty(
         name="Restrict Flag", default=0, min=0, max=255, update=_update_chn_preview)
-    col_shape: bpy.props.IntProperty(
-        name="Collision Shape (1=sphere, 2=capsule)", default=1, min=1, max=2,
-        update=_update_chn_preview)
+    col_shape: bpy.props.EnumProperty(
+        name="Collision Shape",
+        items=(
+            ("SPHERE", "Sphere", "Spherical collision shape", 1),
+            ("CAPSULE", "Capsule", "Capsule extending to connected graph neighbors", 2),
+        ),
+        default="SPHERE",
+        update=_update_chn_preview,
+    )
     col_radius: bpy.props.FloatProperty(
         name="Collision Radius (cm)", default=0.0, min=0.0, update=_update_chn_preview)
     air_regist: bpy.props.FloatProperty(
@@ -144,11 +185,31 @@ class CCLBoneProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop
+class CHNStrandJointProperties(bpy.types.PropertyGroup):
+    """A reference to a joint Anim ID in the owning ChainInfo."""
+
+    anim_id: bpy.props.IntProperty(default=0)
+
+
+@blender_registry.register_blender_prop
+class CHNStrandProperties(bpy.types.PropertyGroup):
+    """An editable path through joints in one ChainInfo graph."""
+
+    strand_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    name: bpy.props.StringProperty(default="")
+    closed: bpy.props.BoolProperty(default=False)
+    joints: bpy.props.CollectionProperty(type=CHNStrandJointProperties)
+
+
+@blender_registry.register_blender_prop
 class CHNChainProperties(bpy.types.PropertyGroup):
     """Header settings for one CHN chain on its file root."""
 
     chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
     num_joints: bpy.props.IntProperty(name="Joints", default=0, min=0, max=255)
+    topology_dirty: bpy.props.BoolProperty(default=False, options={"HIDDEN"})
+    strands: bpy.props.CollectionProperty(type=CHNStrandProperties)
+    active_strand_index: bpy.props.IntProperty(default=0, min=0)
     chain_type: bpy.props.IntProperty(
         name="Chain Info Type (1=chain, 2=shake)", default=1, min=1, max=2,
         update=_update_chn_header_preview)
@@ -168,6 +229,7 @@ class CHNFileProperties(bpy.types.PropertyGroup):
     total_joints: bpy.props.IntProperty(name="Joints", default=0, min=0)
     chain_count: bpy.props.IntProperty(name="Chain Info Entries", default=0, min=0, max=255)
     unresolved_joints: bpy.props.IntProperty(name="Unresolved Bone References", default=0, min=0)
+    unresolved_links: bpy.props.IntProperty(name="Unresolved Graph Links", default=0, min=0)
     duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})
     chains: bpy.props.CollectionProperty(type=CHNChainProperties)
     active_chain_index: bpy.props.IntProperty(default=0, min=0)
