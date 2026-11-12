@@ -205,7 +205,6 @@ def _load_chn_joint(dst, src, chain_index, joint_index, source_joint_index=None)
     dst.preview_object = None
     dst.ref_joint_no = src.ref_joint_no
     dst.attr = str(src.attr)
-    dst.node_num = src.node_num
     dst.min_angle = (src.min_angle.x, src.min_angle.y, src.min_angle.z)
     dst.spring_coef = src.spring_coef
     dst.max_angle = (src.max_angle.x, src.max_angle.y, src.max_angle.z)
@@ -215,7 +214,6 @@ def _load_chn_joint(dst, src, chain_index, joint_index, source_joint_index=None)
     dst.col_shape = int(src.col_shape)
     dst.col_radius = src.col_radius
     dst.air_regist = src.air_regist
-    dst.node_joint_no = tuple(src.node_joint_no)
     dst.friction = src.friction
     dst.soft_coef = src.soft_coef
     dst.bend_regist = src.bend_regist
@@ -444,16 +442,48 @@ def _chn_finite(value, label):
     return result
 
 
-def _apply_chn_joint(dst, record, pose_bone=None):
-    node_count = _chn_uint(record.node_num, 8, "node count")
+def _chn_record_anim_id(record, pose_bone):
+    if pose_bone is not None:
+        return _chn_joint_id_from_bone(pose_bone)
+    return _chn_uint(record.ref_joint_no, 16, "reference Anim ID")
+
+
+def _build_chn_topology(ordered_records, chain_index):
+    """Build an undirected path graph from consecutive JointInfo slots."""
+    anim_ids = [
+        _chn_record_anim_id(record, pose_bone)
+        for record, pose_bone in ordered_records
+    ]
+    if len(anim_ids) != len(set(anim_ids)):
+        raise AlbamCheckFailure(
+            f"Chain Info {chain_index} has duplicate joint Anim IDs",
+            details=f"Joint IDs in this Chain Info are {anim_ids}",
+            solution="Give each joint in the Chain Info a unique Anim Retarget ID",
+        )
+
+    topology = []
+    for index in range(len(anim_ids)):
+        neighbor_ids = []
+        if index > 0:
+            neighbor_ids.append(anim_ids[index - 1])
+        if index + 1 < len(anim_ids):
+            neighbor_ids.append(anim_ids[index + 1])
+        encoded_neighbors = tuple(
+            _chn_uint(anim_id, 8, "node joint ID") for anim_id in neighbor_ids)
+        padded_neighbors = encoded_neighbors + (0,) * (8 - len(encoded_neighbors))
+        topology.append((len(encoded_neighbors), padded_neighbors))
+    return topology
+
+
+def _apply_chn_joint(dst, record, pose_bone, topology):
+    node_count = _chn_uint(topology[0], 8, "node count")
     if node_count > 8:
         raise AlbamCheckFailure(
             "Invalid CHN node count",
             details=f"A joint can reference at most 8 nodes, found {node_count}",
             solution="Set Node Count to a value from 0 to 8",
         )
-    node_joint_ids = tuple(_chn_uint(value, 8, "node joint ID")
-                           for value in record.node_joint_no)
+    node_joint_ids = topology[1]
     if len(node_joint_ids) != 8:
         raise AlbamCheckFailure(
             "Invalid CHN node joint list",
@@ -805,14 +835,15 @@ def export_chn(bl_object):
                 solution="Use a contiguous sequence of joint indices starting at zero",
             )
 
+        topology = _build_chn_topology(ordered_records, chain_index)
         source_joints = list(chain_info.joints)
         output_joints = []
-        for record, pose_bone in ordered_records:
+        for joint_index, (record, pose_bone) in enumerate(ordered_records):
             if record.source_joint_index >= 0:
                 dst = source_joints[record.source_joint_index]
             else:
                 dst = _new_chn_joint(chain_info, chn)
-            _apply_chn_joint(dst, record, pose_bone)
+            _apply_chn_joint(dst, record, pose_bone, topology[joint_index])
             output_joints.append(dst)
         chain_info.num_joints = len(output_joints)
         chain_info.joints = output_joints

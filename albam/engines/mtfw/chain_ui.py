@@ -154,12 +154,9 @@ def _draw_chn_joint_fields(layout, record, show_reference_id=True):
     if show_reference_id:
         layout.prop(record, "ref_joint_no")
     layout.prop(record, "attr")
-    layout.prop(record, "node_num")
-    layout.label(text="Node Joint IDs (Anim IDs)")
-    for start in (0, 4):
-        row = layout.row(align=True)
-        for node_index in range(start, start + 4):
-            row.prop(record, "node_joint_no", index=node_index, text=str(node_index + 1))
+    layout.label(
+        text="Node links use previous/next JointInfo entries on export",
+        icon="INFO")
     layout.prop(record, "min_angle")
     layout.prop(record, "spring_coef")
     layout.prop(record, "max_angle")
@@ -401,7 +398,6 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.source_joint_index = -1
         joint.ref_joint_no = anim_id
         joint.attr = "0"
-        joint.node_num = 0
         joint.min_angle = (0.0, 0.0, 0.0)
         joint.spring_coef = 0.0
         joint.max_angle = (0.0, 0.0, 0.0)
@@ -411,7 +407,6 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.col_shape = 1
         joint.col_radius = 1.0
         joint.air_regist = 0.0
-        joint.node_joint_no = (0, 0, 0, 0, 0, 0, 0, 0)
         joint.friction = 0.0
         joint.soft_coef = 0.0
         joint.bend_regist = 0.0

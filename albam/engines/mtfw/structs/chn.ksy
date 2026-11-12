@@ -100,7 +100,7 @@ types:
       - {id: reserve2, size: 2}
       - {id: col_radius, type: f4}
       - {id: air_regist, type: f4}
-      - {id: node_joint_no, type: u1, repeat: expr, repeat-expr: 8}
+      - {id: node_joint_no, type: u1, repeat: expr, repeat-expr: 8} # topology graph, junk after node_num
       - {id: friction, type: f4}
       - {id: soft_coef, type: f4}
       - {id: bend_regist, type: f4}

@@ -15,13 +15,10 @@ class Chn(ReadWriteKaitaiStruct):
     rChain::getExt -> "chn").  DMC4 (2008) does not have this class - its cloth
     chain is rCnsChain, extension "clt".
     
-    Provenance (RE5 symbols in re5_dump.hpp, DMC4 SE symbols in
-    DevilMayCry4SpecialEdition.exe.h / .map):
-    
-      rChain::Header      /* 0x10 */  magic, version, data_size, chain_info_num, reserve[3]
-      rChain::ChainInfo   /* 0x20 */  joint_info_num, chain_type, reserve, joint_info_offset,
+      rChain::Header      0x10  magic, version, data_size, chain_info_num, reserve[3]
+      rChain::ChainInfo   0x20  joint_info_num, chain_type, reserve, joint_info_offset,
                                       reserve1[2], grav_scaler, time_scaler, dump_scaler, freserve
-      rChain::JointInfo   /* 0x60 */  attr, ref_joint_no, node_num, reserve0, reserve1[2],
+      rChain::JointInfo   0x60  attr, ref_joint_no, node_num, reserve0, reserve1[2],
                                       min_angle, spring_coef, max_angle, dumping_coef, mass,
                                       restrict_flag, col_shape, reserve2[2], col_radius,
                                       air_regist, node_joint_no[8], friction, soft_coef,
@@ -38,12 +35,7 @@ class Chn(ReadWriteKaitaiStruct):
         chain_info_position + joint_info_offset      (chain_info_position = 16 + 32 * index)
     
     and data_size = 32 * chain_info_num + 96 * sum(joint_info_num).
-    File size = 16 + data_size.
-    
-    The previous version of this template never compiled: `body` was written as a
-    key next to `instances` instead of inside it, and `offset` was a YAML list.
-    The byte layout of its records was correct, but every field was unnamed; the
-    names below come from the symbols.
+    File size = 16 + data_size
     """
 
     class ChainType(IntEnum):

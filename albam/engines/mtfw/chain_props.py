@@ -108,9 +108,6 @@ class CHNJointProperties(bpy.types.PropertyGroup):
     ref_joint_no: bpy.props.IntProperty(name="Reference Anim ID", default=0, min=0, max=65535,
                                         update=_update_chn_preview)
     attr: bpy.props.StringProperty(name="Attribute Mask", default="0", update=_update_chn_preview)
-    node_num: bpy.props.IntProperty(
-        name="Node Count", description="Number of active node joint IDs (maximum 8)",
-        default=0, min=0, max=8, update=_update_chn_preview)
     min_angle: bpy.props.FloatVectorProperty(
         name="Minimum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
     spring_coef: bpy.props.FloatProperty(
@@ -129,9 +126,6 @@ class CHNJointProperties(bpy.types.PropertyGroup):
         name="Collision Radius (cm)", default=0.0, min=0.0, update=_update_chn_preview)
     air_regist: bpy.props.FloatProperty(
         name="Air Resistance", default=0.0, update=_update_chn_preview)
-    node_joint_no: bpy.props.IntVectorProperty(
-        name="Node Joint IDs", size=8, default=(0, 0, 0, 0, 0, 0, 0, 0), min=0, max=255,
-        update=_update_chn_preview)
     friction: bpy.props.FloatProperty(name="Friction", default=0.0, update=_update_chn_preview)
     soft_coef: bpy.props.FloatProperty(
         name="Soft Coefficient", default=0.0, update=_update_chn_preview)
