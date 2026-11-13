@@ -11,7 +11,14 @@ from gpu_extras.batch import batch_for_shader
 
 
 from ..registry import blender_registry
-from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
+from ..engines.mtfw.bone import (
+    MTFW_APP_IDS,
+    fill_empty_anim_retarget_ids,
+    get_anim_retarget,
+    get_mirror,
+    guess_mirrors,
+    set_mirror,
+)
 from ..engines.mtfw.texture import TEX_COMPRESSION
 from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
@@ -396,6 +403,8 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="",
         )
         row = layout.row()
+        row.operator("albam.fill_empty_anim_retarget_ids", text="Fill empty Anim IDs")
+        row = layout.row()
         row.operator('albam.guess_bone_mirrors', text="Guess bone mirrors")
         layout.separator()
         row = layout.row()
@@ -646,6 +655,35 @@ class ALBAM_OT_AutoRenameBones(bpy.types.Operator):
         rename_bones(armature_ob[0], app_id, bone_names_preset)
         show_message_box(message="Armature bones were renamed")
         return {'FINISHED'}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_FillEmptyAnimRetargetIDs(bpy.types.Operator):
+    bl_idname = "albam.fill_empty_anim_retarget_ids"
+    bl_label = "Fill Empty Anim IDs"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        app_id = context.scene.albam.apps.app_selected
+        return app_id in MTFW_APP_IDS and any(
+            obj.type == "ARMATURE" for obj in context.selected_objects
+        )
+
+    def execute(self, context):
+        app_id = context.scene.albam.apps.app_selected
+        armature = next(obj for obj in context.selected_objects if obj.type == "ARMATURE")
+        try:
+            assigned_ids = fill_empty_anim_retarget_ids(armature, app_id)
+        except ValueError as ex:
+            self.report({"ERROR"}, str(ex))
+            return {"CANCELLED"}
+
+        if not assigned_ids:
+            self.report({"INFO"}, "No empty Anim Retarget IDs")
+        else:
+            self.report({"INFO"}, f"Assigned {len(assigned_ids)} Anim IDs")
+        return {"FINISHED"}
 
 
 @blender_registry.register_blender_type

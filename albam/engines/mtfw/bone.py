@@ -79,6 +79,51 @@ def set_anim_retarget(pose_bone, app_id, value):
     get_bone_custom_properties(pose_bone, app_id).anim_retarget = value
 
 
+def _available_anim_retarget_ids(used_ids, count):
+    available = [
+        anim_id for anim_id in range(256)
+        if anim_id not in used_ids and anim_id not in (254, 255)
+    ]
+    if len(available) < count:
+        raise ValueError(
+            f"Cannot assign IDs to {count} bones: only {len(available)} unused Anim IDs "
+            "remain after reserving 254 and 255"
+        )
+    return available[:count]
+
+
+def fill_empty_anim_retarget_ids(armature, app_id):
+    if armature is None or armature.type != "ARMATURE":
+        raise ValueError("Select an armature before filling empty Anim Retarget IDs")
+    if app_id not in MTFW_APP_IDS:
+        raise ValueError(f"Unsupported app ID for Anim Retarget: {app_id!r}")
+
+    used_ids = {254, 255}
+    empty_bones = []
+    for pose_bone in armature.pose.bones:
+        raw_id = get_anim_retarget(pose_bone, app_id)
+        if not raw_id:
+            empty_bones.append(pose_bone)
+            continue
+
+        value = raw_id.split("_", 1)[0]
+        if not value.isascii() or not value.isdigit():
+            raise ValueError(
+                f"Bone {pose_bone.name!r} has an invalid Anim Retarget ID: {raw_id!r}"
+            )
+        anim_id = int(value)
+        if anim_id > 255:
+            raise ValueError(
+                f"Bone {pose_bone.name!r} has an invalid Anim Retarget ID: {raw_id!r}"
+            )
+        used_ids.add(anim_id)
+
+    assigned_ids = _available_anim_retarget_ids(used_ids, len(empty_bones))
+    for pose_bone, anim_id in zip(empty_bones, assigned_ids):
+        set_anim_retarget(pose_bone, app_id, str(anim_id))
+    return assigned_ids
+
+
 def get_chain_target(pose_bone, app_id):
     return get_bone_custom_properties(pose_bone, app_id).chain_target
 
