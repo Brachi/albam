@@ -117,7 +117,7 @@ def register():
     bpy.types.Object.albam_lmt_block_owner = bpy.props.PointerProperty(type=bpy.types.Object)
     # File metadata lives on each chain file object; the physics custom
     # properties group stores bone-level CCL and CHN data.
-    from .engines.mtfw.chain_props import (
+    from .engines.mtfw.chain.properties import (
         CCLFileProperties, CHNFileProperties, CHNJointPreviewProperties)
     bpy.types.Object.albam_ccl_file = bpy.props.PointerProperty(type=CCLFileProperties)
     bpy.types.Object.albam_chn_file = bpy.props.PointerProperty(type=CHNFileProperties)

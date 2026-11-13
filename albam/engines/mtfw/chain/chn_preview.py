@@ -3,10 +3,10 @@
 import bpy
 from mathutils import Vector
 
-from .bone import get_anim_retarget
-from .chain_preview import _append_capsule, _append_sphere
-from .chn_graph import ordered_links_from_strands
-from .chain_props import (
+from ..bone import get_anim_retarget
+from .ccl_preview import _append_capsule, _append_sphere
+from .graph import ordered_links_from_strands
+from .properties import (
     get_ccl_bone_properties,
     get_chn_file_properties,
     get_chn_joint_preview_properties,

@@ -7,10 +7,10 @@ from io import BytesIO
 import bpy
 from kaitaistruct import KaitaiStream
 
-from .bone import get_anim_retarget
-from .chain_preview import rebuild_ccl_preview
-from .chn_graph import decompose_edges, ordered_links_from_strands
-from .chain_props import (
+from ..bone import get_anim_retarget
+from .ccl_preview import rebuild_ccl_preview
+from .graph import decompose_edges, ordered_links_from_strands
+from .properties import (
     find_ccl_file_for_armature,
     find_chn_file_for_armature,
     get_ccl_bone_properties,
@@ -18,12 +18,12 @@ from .chain_props import (
     get_chn_file_properties,
 )
 from .chn_preview import rebuild_chn_previews
-from .structs.ccl_156 import Ccl156
-from .structs.chn import Chn
-from ...exceptions import AlbamCheckFailure
-from ...lib.kaitai_utils import check_recursive, parse
-from ...registry import blender_registry
-from ...vfs import VirtualFileData
+from ..structs.ccl_156 import Ccl156
+from ..structs.chn import Chn
+from ....exceptions import AlbamCheckFailure
+from ....lib.kaitai_utils import check_recursive, parse
+from ....registry import blender_registry
+from ....vfs import VirtualFileData
 
 
 _CCL_MAGIC = b"CCL\x00"
@@ -978,7 +978,3 @@ def export_chn(bl_object):
     output_bytes = _serialize_chn(chn)
     vfile = VirtualFileData(asset.app_id, asset.relative_path, data_bytes=output_bytes)
     return [vfile]
-
-
-# Importing these modules runs their Blender registration decorators.
-from . import chain_ui as _chain_ui  # noqa: E402,F401

@@ -2,12 +2,12 @@
 
 import bpy
 
-from ...registry import blender_registry
+from ....registry import blender_registry
 
 
 def _update_ccl_record(self, context):
     # Keep property registration independent from preview construction.
-    from .chain_preview import rebuild_armature_previews
+    from .ccl_preview import rebuild_armature_previews
 
     armature = self.id_data
     if not isinstance(armature, bpy.types.Object) and context is not None:

@@ -403,9 +403,9 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
             text="",
         )
         row = layout.row()
-        row.operator("albam.fill_empty_anim_retarget_ids", text="Fill empty Anim IDs")
-        row = layout.row()
         row.operator('albam.guess_bone_mirrors', text="Guess bone mirrors")
+        row = layout.row()
+        row.operator("albam.fill_empty_anim_retarget_ids", text="Fill empty Anim IDs")
         layout.separator()
         row = layout.row()
         row.operator('albam.separate_by_material', text="Separate by material")

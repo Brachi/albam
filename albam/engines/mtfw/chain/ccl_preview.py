@@ -5,8 +5,8 @@ import math
 import bpy
 from mathutils import Euler, Matrix, Vector
 
-from .bone import get_anim_retarget
-from .chain_props import (
+from ..bone import get_anim_retarget
+from .properties import (
     get_ccl_bone_properties,
     get_ccl_file_properties,
     get_ccl_primitive_properties,
