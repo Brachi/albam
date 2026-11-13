@@ -13,8 +13,8 @@ from .properties import (
 )
 
 
-_CHN_MATERIAL_NAME = "Albam CHN Collision"
-_CHN_COLOR = (1.0, 0.32, 0.06, 0.42)
+CHN_MATERIAL_NAME = "Albam CHN Collision"
+CHN_COLOR = (1.0, 0.32, 0.06, 0.42)
 
 
 def _joint_preview_name(record, anim_id):
@@ -94,10 +94,10 @@ def _links_for_chain(chain_props, records):
 
 
 def _collision_material():
-    material = bpy.data.materials.get(_CHN_MATERIAL_NAME)
+    material = bpy.data.materials.get(CHN_MATERIAL_NAME)
     if material is None:
-        material = bpy.data.materials.new(_CHN_MATERIAL_NAME)
-    material.diffuse_color = _CHN_COLOR
+        material = bpy.data.materials.new(CHN_MATERIAL_NAME)
+    material.diffuse_color = CHN_COLOR
     return material
 
 
@@ -131,7 +131,7 @@ def _new_preview(root_object, armature, record, pose_bone, anim_id,
     preview.matrix_parent_inverse = root_object.matrix_world.inverted_safe()
     preview.show_in_front = True
     preview.display_type = "WIRE"
-    preview.color = _CHN_COLOR
+    preview.color = CHN_COLOR
     preview.hide_select = True
     preview.hide_render = True
     preview["_albam_chn_joint_preview"] = True

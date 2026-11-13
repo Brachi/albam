@@ -19,34 +19,34 @@ def _update_ccl_record(self, context):
 @blender_registry.register_blender_prop
 class CCLRecordProperties(bpy.types.PropertyGroup):
     # -1 identifies a record created in Blender rather than loaded from the file.
-    record_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    ref_joint_no: bpy.props.IntProperty(default=0, options={"HIDDEN"})
+    record_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    ref_joint_no: bpy.props.IntProperty(default=0, options={"HIDDEN"})  # noqa: F821
     preview_object: bpy.props.PointerProperty(
-        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
+        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})  # noqa: F821
 
-    attr: bpy.props.StringProperty(name="Attribute", default="1", update=_update_ccl_record)
+    attr: bpy.props.StringProperty(name="Attribute", default="1", update=_update_ccl_record)  # noqa: F821
     pair_joint_no: bpy.props.IntProperty(
         name="Tail Joint ID", default=65535, min=0, max=65535, update=_update_ccl_record)
     shape: bpy.props.EnumProperty(
-        name="Shape",
+        name="Shape",  # noqa: F821
         items=(
-            ("SPHERE", "Sphere", "Sphere centered at Position"),
-            ("CAPSULE", "Capsule", "Capsule between the reference and tail joints"),
-            ("AABB", "AABB", "Axis-aligned box"),
-            ("OBB", "OBB", "Oriented box"),
+            ("SPHERE", "Sphere", "Sphere centered at Position"),  # noqa: F821
+            ("CAPSULE", "Capsule", "Capsule between the reference and tail joints"),  # noqa: F821
+            ("AABB", "AABB", "Axis-aligned box"),  # noqa: F821
+            ("OBB", "OBB", "Oriented box"),  # noqa: F821
         ),
-        default="SPHERE",
+        default="SPHERE",  # noqa: F821
         update=_update_ccl_record,
     )
     position: bpy.props.FloatVectorProperty(
-        name="Position (cm)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)
-    id: bpy.props.StringProperty(name="ID", default="0", update=_update_ccl_record)
+        name="Position (cm)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)  # noqa: F821
+    id: bpy.props.StringProperty(name="ID", default="0", update=_update_ccl_record)  # noqa: F821
     extent: bpy.props.FloatVectorProperty(
-        name="Extent (cm)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)
+        name="Extent (cm)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)  # noqa: F821
     radius: bpy.props.FloatProperty(
-        name="Radius (cm)", default=1.0, min=0.0, update=_update_ccl_record)
+        name="Radius (cm)", default=1.0, min=0.0, update=_update_ccl_record)  # noqa: F821
     angle: bpy.props.FloatVectorProperty(
-        name="Angle (radians)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)
+        name="Angle (radians)", size=3, default=(0.0, 0.0, 0.0), update=_update_ccl_record)  # noqa: F821
 
 
 @blender_registry.register_custom_properties_object(
@@ -56,14 +56,14 @@ class CCLPrimitiveProperties(bpy.types.PropertyGroup):
     """Visible identity link from a generated child mesh to its owning bone record."""
 
     armature: bpy.props.PointerProperty(
-        name="Armature", type=bpy.types.Object, options=set())
+        name="Armature", type=bpy.types.Object, options=set())  # noqa: F821
     reference_bone_name: bpy.props.StringProperty(name="Reference Bone", options=set())
     anim_id: bpy.props.IntProperty(name="Anim ID", default=-1, options=set())
-    pair_joint_id: bpy.props.IntProperty(name="Pair Joint ID", default=-1, options={"HIDDEN"})
+    pair_joint_id: bpy.props.IntProperty(name="Pair Joint ID", default=-1, options={"HIDDEN"})  # noqa: F821
     pair_bone_name: bpy.props.StringProperty(name="Tail Bone", options=set())
     record_index: bpy.props.IntProperty(name="Record Index", default=-1, options=set())
-    record_slot: bpy.props.IntProperty(name="Record Slot", default=-1, options={"HIDDEN"})
-    shape: bpy.props.StringProperty(name="Shape", options=set())
+    record_slot: bpy.props.IntProperty(name="Record Slot", default=-1, options={"HIDDEN"})  # noqa: F821
+    shape: bpy.props.StringProperty(name="Shape", options=set())  # noqa: F821
 
 
 def _update_chn_preview(self, context):
@@ -121,24 +121,24 @@ def _chn_attr_bit_setter(bit):
 class CHNJointProperties(bpy.types.PropertyGroup):
     """One rChain JointInfo stored on its reference PoseBone or as a file orphan."""
 
-    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    source_joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    source_ref_joint_no: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    raw_node_num: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    raw_node_slots: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    source_joint_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    source_ref_joint_no: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    raw_node_num: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    raw_node_slots: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
     preview_object: bpy.props.PointerProperty(
-        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
+        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})  # noqa: F821
     ref_joint_no: bpy.props.IntProperty(name="Reference Anim ID", default=0, min=0, max=65535,
                                         update=_update_chn_preview)
     # Keep the original mask hidden so unknown bits and older .blend files
     # remain intact; expose the three documented bits as individual toggles.
-    attr: bpy.props.StringProperty(default="0", options={"HIDDEN"}, update=_update_chn_preview)
+    attr: bpy.props.StringProperty(default="0", options={"HIDDEN"}, update=_update_chn_preview)  # noqa: F821
     attr_constraint: bpy.props.BoolProperty(
-        name="Constraint", description="Pin this joint to its reference bone (bit 1)",
+        name="Constraint", description="Pin this joint to its reference bone (bit 1)",  # noqa: F821
         get=_chn_attr_bit_getter(1), set=_chn_attr_bit_setter(1))
     attr_attached: bpy.props.BoolProperty(
-        name="Attached", description="Attach this joint to another chain node (bit 2)",
+        name="Attached", description="Attach this joint to another chain node (bit 2)",  # noqa: F821
         get=_chn_attr_bit_getter(2), set=_chn_attr_bit_setter(2))
     attr_no_rotate: bpy.props.BoolProperty(
         name="No Rotate", description="Disable rotation for this joint (bit 4)",
@@ -151,23 +151,23 @@ class CHNJointProperties(bpy.types.PropertyGroup):
         name="Maximum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
     dumping_coef: bpy.props.FloatProperty(
         name="Damping Coefficient", default=0.0, update=_update_chn_preview)
-    mass: bpy.props.FloatProperty(name="Mass", default=0.0, update=_update_chn_preview)
+    mass: bpy.props.FloatProperty(name="Mass", default=0.0, update=_update_chn_preview)  # noqa: F821
     restrict_flag: bpy.props.IntProperty(
         name="Restrict Flag", default=0, min=0, max=255, update=_update_chn_preview)
     col_shape: bpy.props.EnumProperty(
         name="Collision Shape",
         items=(
-            ("SPHERE", "Sphere", "Spherical collision shape", 1),
-            ("CAPSULE", "Capsule", "Capsule extending to connected graph neighbors", 2),
+            ("SPHERE", "Sphere", "Spherical collision shape", 1),  # noqa: F821
+            ("CAPSULE", "Capsule", "Capsule extending to connected graph neighbors", 2),  # noqa: F821
         ),
-        default="SPHERE",
+        default="SPHERE",  # noqa: F821
         update=_update_chn_preview,
     )
     col_radius: bpy.props.FloatProperty(
         name="Collision Radius (cm)", default=0.0, min=0.0, update=_update_chn_preview)
     air_regist: bpy.props.FloatProperty(
         name="Air Resistance", default=0.0, update=_update_chn_preview)
-    friction: bpy.props.FloatProperty(name="Friction", default=0.0, update=_update_chn_preview)
+    friction: bpy.props.FloatProperty(name="Friction", default=0.0, update=_update_chn_preview)  # noqa: F821
     soft_coef: bpy.props.FloatProperty(
         name="Soft Coefficient", default=0.0, update=_update_chn_preview)
     bend_regist: bpy.props.FloatProperty(
@@ -195,7 +195,7 @@ class CHNStrandJointProperties(bpy.types.PropertyGroup):
 class CHNStrandProperties(bpy.types.PropertyGroup):
     """An editable path through joints in one ChainInfo graph."""
 
-    strand_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    strand_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
     name: bpy.props.StringProperty(default="")
     closed: bpy.props.BoolProperty(default=False)
     joints: bpy.props.CollectionProperty(type=CHNStrandJointProperties)
@@ -205,9 +205,9 @@ class CHNStrandProperties(bpy.types.PropertyGroup):
 class CHNChainProperties(bpy.types.PropertyGroup):
     """Header settings for one CHN chain on its file root."""
 
-    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    num_joints: bpy.props.IntProperty(name="Joints", default=0, min=0, max=255)
-    topology_dirty: bpy.props.BoolProperty(default=False, options={"HIDDEN"})
+    chain_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    num_joints: bpy.props.IntProperty(name="Joints", default=0, min=0, max=255)  # noqa: F821
+    topology_dirty: bpy.props.BoolProperty(default=False, options={"HIDDEN"})  # noqa: F821
     strands: bpy.props.CollectionProperty(type=CHNStrandProperties)
     active_strand_index: bpy.props.IntProperty(default=0, min=0)
     chain_type: bpy.props.IntProperty(
@@ -224,13 +224,13 @@ class CHNChainProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class CHNFileProperties(bpy.types.PropertyGroup):
     armature: bpy.props.PointerProperty(
-        name="Armature", type=bpy.types.Object,
-        description="Skeleton this CHN file is attached to")
-    total_joints: bpy.props.IntProperty(name="Joints", default=0, min=0)
+        name="Armature", type=bpy.types.Object,  # noqa: F821
+        description="Skeleton this CHN file is attached to")  # noqa: F821
+    total_joints: bpy.props.IntProperty(name="Joints", default=0, min=0)  # noqa: F821
     chain_count: bpy.props.IntProperty(name="Chain Info Entries", default=0, min=0, max=255)
     unresolved_joints: bpy.props.IntProperty(name="Unresolved Bone References", default=0, min=0)
     unresolved_links: bpy.props.IntProperty(name="Unresolved Graph Links", default=0, min=0)
-    duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
     chains: bpy.props.CollectionProperty(type=CHNChainProperties)
     active_chain_index: bpy.props.IntProperty(default=0, min=0)
     orphans: bpy.props.CollectionProperty(type=CHNJointProperties)
@@ -240,12 +240,12 @@ class CHNFileProperties(bpy.types.PropertyGroup):
 @blender_registry.register_blender_prop
 class CCLFileProperties(bpy.types.PropertyGroup):
     armature: bpy.props.PointerProperty(
-        name="Armature", type=bpy.types.Object,
-        description="Skeleton this CCL file is attached to")
-    record_count: bpy.props.IntProperty(name="Records", default=0, min=0)
+        name="Armature", type=bpy.types.Object,  # noqa: F821
+        description="Skeleton this CCL file is attached to")  # noqa: F821
+    record_count: bpy.props.IntProperty(name="Records", default=0, min=0)  # noqa: F821
     unresolved_records: bpy.props.IntProperty(
-        name="Records without a matching bone", default=0, min=0, options={"HIDDEN"})
-    duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})
+        name="Records without a matching bone", default=0, min=0, options={"HIDDEN"})  # noqa: F821
+    duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
 
 
 def get_ccl_bone_properties(pose_bone):
@@ -263,12 +263,12 @@ def get_chn_file_properties(bl_object):
 
 @blender_registry.register_blender_prop
 class CHNJointPreviewProperties(bpy.types.PropertyGroup):
-    armature: bpy.props.PointerProperty(name="Armature", type=bpy.types.Object)
+    armature: bpy.props.PointerProperty(name="Armature", type=bpy.types.Object)  # noqa: F821
     reference_bone_name: bpy.props.StringProperty(name="Reference Bone")
     anim_id: bpy.props.IntProperty(name="Anim ID", default=-1)
     chain_index: bpy.props.IntProperty(name="Chain Index", default=-1)
     joint_index: bpy.props.IntProperty(name="Joint Index", default=-1)
-    shape: bpy.props.StringProperty(name="Shape")
+    shape: bpy.props.StringProperty(name="Shape")  # noqa: F821
 
 
 def get_chn_joint_preview_properties(bl_object):
