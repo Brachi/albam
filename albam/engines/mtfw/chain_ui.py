@@ -1,6 +1,7 @@
 """Import options and bone-property controls for RE5 chain files."""
 
 import json
+import math
 
 import bpy
 
@@ -172,6 +173,150 @@ def _draw_chn_joint_fields(layout, record, show_reference_id=True):
     layout.prop(record, "bend_regist")
 
 
+CHN_JOINT_COPY_FIELDS = (
+    "attr",
+    "min_angle",
+    "spring_coef",
+    "max_angle",
+    "dumping_coef",
+    "mass",
+    "restrict_flag",
+    "col_shape",
+    "col_radius",
+    "air_regist",
+    "friction",
+    "soft_coef",
+    "bend_regist",
+)
+CHN_JOINT_COPY_VECTOR_FIELDS = {"min_angle", "max_angle"}
+CHN_JOINT_CLIPBOARD_KEY = "_albam_chn_joint_settings"
+
+
+def _copy_chn_joint_settings(record):
+    settings = {}
+    for field in CHN_JOINT_COPY_FIELDS:
+        value = getattr(record, field)
+        settings[field] = list(value) if field in CHN_JOINT_COPY_VECTOR_FIELDS else value
+    return settings
+
+
+def _paste_chn_joint_settings(record, settings):
+    if not isinstance(settings, dict):
+        raise ValueError("Clipboard CHN joint settings are invalid")
+    missing_fields = set(CHN_JOINT_COPY_FIELDS) - settings.keys()
+    if missing_fields:
+        raise ValueError(f"CHN settings are missing fields: {', '.join(sorted(missing_fields))}")
+
+    values = {}
+    for field in CHN_JOINT_COPY_FIELDS:
+        value = settings[field]
+        if field in CHN_JOINT_COPY_VECTOR_FIELDS:
+            if (not isinstance(value, (list, tuple)) or len(value) != 3 or
+                    any(not _is_finite_number(component) for component in value)):
+                raise ValueError(f"CHN setting {field} must have three values")
+            value = tuple(value)
+        elif field == "attr":
+            if not isinstance(value, str):
+                raise ValueError("CHN setting attr must be a string")
+        elif field == "col_shape":
+            if not isinstance(value, str) or value not in {"SPHERE", "CAPSULE"}:
+                raise ValueError("CHN setting col_shape is invalid")
+        elif field == "restrict_flag":
+            if (not isinstance(value, int) or isinstance(value, bool) or
+                    not 0 <= value <= 255):
+                raise ValueError("CHN setting restrict_flag must be between 0 and 255")
+        elif not _is_finite_number(value) or (field == "col_radius" and value < 0):
+            raise ValueError(f"CHN setting {field} must be a valid number")
+        values[field] = value
+
+    for field, value in values.items():
+        setattr(record, field, value)
+
+
+def _is_finite_number(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool) and
+            math.isfinite(value))
+
+
+def _active_chn_bone_record(context):
+    pose_bone = _active_pose_bone(context)
+    if pose_bone is None or find_chn_file_for_armature(pose_bone.id_data) is None:
+        return None
+    bone_props = get_ccl_bone_properties(pose_bone)
+    index = bone_props.active_chn_joint_index
+    if not 0 <= index < len(bone_props.chn_joints):
+        return None
+    return pose_bone, bone_props.chn_joints[index]
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNCopyJointSettings(bpy.types.Operator):
+    bl_idname = "albam.chn_copy_joint_settings"
+    bl_label = "Copy CHN Joint Settings"
+    bl_description = "Copy editable settings from the active CHN joint"
+
+    @classmethod
+    def poll(cls, context):
+        return _active_chn_bone_record(context) is not None
+
+    def execute(self, context):
+        active = _active_chn_bone_record(context)
+        if active is None:
+            self.report({"ERROR"}, "No active CHN joint on the selected bone")
+            return {"CANCELLED"}
+        _, record = active
+        context.scene.albam.clipboard.update_buffer({
+            CHN_JOINT_CLIPBOARD_KEY: {
+                "version": 1,
+                "settings": _copy_chn_joint_settings(record),
+            }
+        })
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CHNPasteJointSettings(bpy.types.Operator):
+    bl_idname = "albam.chn_paste_joint_settings"
+    bl_label = "Paste CHN Joint Settings"
+    bl_description = "Paste settings into the active CHN joint, preserving its identity"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_chn_bone_record(context) is not None
+
+    def execute(self, context):
+        active = _active_chn_bone_record(context)
+        if active is None:
+            self.report({"ERROR"}, "No active CHN joint on the selected bone")
+            return {"CANCELLED"}
+
+        payload = context.scene.albam.clipboard.get_buffer().get(CHN_JOINT_CLIPBOARD_KEY)
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            self.report({"ERROR"}, "Clipboard does not contain copied CHN joint settings")
+            return {"CANCELLED"}
+        settings = payload.get("settings")
+        if not isinstance(settings, dict):
+            self.report({"ERROR"}, "Clipboard CHN joint settings are invalid")
+            return {"CANCELLED"}
+
+        pose_bone, record = active
+        root_object = find_chn_file_for_armature(pose_bone.id_data)
+        was_suppressed = root_object.get("_albam_chn_suppress_update", False)
+        root_object["_albam_chn_suppress_update"] = True
+        try:
+            _paste_chn_joint_settings(record, settings)
+        except ValueError as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        finally:
+            root_object["_albam_chn_suppress_update"] = was_suppressed
+
+        if not was_suppressed:
+            rebuild_chn_previews(root_object)
+        return {"FINISHED"}
+
+
 def _draw_chn_bone_editor(layout, pose_bone):
     root_object = find_chn_file_for_armature(pose_bone.id_data)
     if root_object is None:
@@ -192,6 +337,9 @@ def _draw_chn_bone_editor(layout, pose_bone):
     buttons = row.column(align=True)
     buttons.operator("albam.chn_add_joint", icon="ADD", text="")
     buttons.operator("albam.chn_remove_joint", icon="REMOVE", text="")
+    buttons.separator()
+    buttons.operator("albam.chn_copy_joint_settings", icon="COPYDOWN", text="")
+    buttons.operator("albam.chn_paste_joint_settings", icon="PASTEDOWN", text="")
     layout.operator(
         "albam.chn_add_strand_from_selection", icon="CON_TRACKTO",
         text="Add Selected Bones as Strand")
