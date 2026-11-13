@@ -607,11 +607,11 @@ class ALBAM_PT_CustomPropertiesCollision(ALBAM_PT_CustomPropertiesBase):
     def poll(cls, context):
         bl_object = getattr(context, "object", None)
         if bl_object is not None and (
-                bl_object.get("_albam_ccl_preview", False)
-                or bl_object.get("_albam_chn_joint_preview", False)
-                or bl_object.get("_albam_chn_root", False)
-                or (bl_object.type == "EMPTY"
-                    and bl_object.albam_asset.extension in {"ccl", "chn"})):
+                bl_object.get("_albam_ccl_preview", False) or
+                bl_object.get("_albam_chn_joint_preview", False) or
+                bl_object.get("_albam_chn_root", False) or
+                (bl_object.type == "EMPTY" and
+                 bl_object.albam_asset.extension in {"ccl", "chn"})):
             # Chain file and primitive metadata have dedicated, concise panels.
             return False
         return super().poll(context)
