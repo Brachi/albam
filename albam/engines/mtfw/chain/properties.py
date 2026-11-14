@@ -144,14 +144,18 @@ class CHNJointProperties(bpy.types.PropertyGroup):
         name="No Rotate", description="Disable rotation for this joint (bit 4)",
         get=_chn_attr_bit_getter(4), set=_chn_attr_bit_setter(4))
     min_angle: bpy.props.FloatVectorProperty(
-        name="Minimum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
+        name="Minimum Angle", size=3, unit="ROTATION",
+        description="Per-axis minimum rotation; stored in radians",  # noqa: F821
+        default=(-3.14, -3.14, -3.14), update=_update_chn_preview)
     spring_coef: bpy.props.FloatProperty(
-        name="Spring Coefficient", default=0.0, update=_update_chn_preview)
+        name="Spring Coefficient", default=10.0, update=_update_chn_preview)
     max_angle: bpy.props.FloatVectorProperty(
-        name="Maximum Angle", size=3, default=(0, 0, 0), update=_update_chn_preview)
+        name="Maximum Angle", size=3, unit="ROTATION",
+        description="Per-axis maximum rotation; stored in radians",  # noqa: F821
+        default=(3.14, 3.14, 3.14), update=_update_chn_preview)
     dumping_coef: bpy.props.FloatProperty(
-        name="Damping Coefficient", default=0.0, update=_update_chn_preview)
-    mass: bpy.props.FloatProperty(name="Mass", default=0.0, update=_update_chn_preview)  # noqa: F821
+        name="Damping Coefficient", default=0.2, update=_update_chn_preview)
+    mass: bpy.props.FloatProperty(name="Mass", default=1.0, update=_update_chn_preview)  # noqa: F821
     restrict_flag: bpy.props.IntProperty(
         name="Restrict Flag", default=0, min=0, max=255, update=_update_chn_preview)
     col_shape: bpy.props.EnumProperty(
@@ -164,12 +168,12 @@ class CHNJointProperties(bpy.types.PropertyGroup):
         update=_update_chn_preview,
     )
     col_radius: bpy.props.FloatProperty(
-        name="Collision Radius (cm)", default=0.0, min=0.0, update=_update_chn_preview)
+        name="Collision Radius (cm)", default=5.0, min=0.0, update=_update_chn_preview)
     air_regist: bpy.props.FloatProperty(
-        name="Air Resistance", default=0.0, update=_update_chn_preview)
+        name="Air Resistance", default=0.1, update=_update_chn_preview)
     friction: bpy.props.FloatProperty(name="Friction", default=0.0, update=_update_chn_preview)  # noqa: F821
     soft_coef: bpy.props.FloatProperty(
-        name="Soft Coefficient", default=0.0, update=_update_chn_preview)
+        name="Soft Coefficient", default=0.8, update=_update_chn_preview)
     bend_regist: bpy.props.FloatProperty(
         name="Bend Resistance", default=0.0, update=_update_chn_preview)
 
@@ -233,6 +237,11 @@ class CHNFileProperties(bpy.types.PropertyGroup):
     duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
     chains: bpy.props.CollectionProperty(type=CHNChainProperties)
     active_chain_index: bpy.props.IntProperty(default=0, min=0)
+    show_angle_limits: bpy.props.BoolProperty(
+        name="Show Angle Limits",
+        description=("Draw per-axis CHN angle limits as colored arcs around each "
+                     "reference bone in the 3D View"),
+        default=False, update=_update_chn_header_preview)  # noqa: F821
     orphans: bpy.props.CollectionProperty(type=CHNJointProperties)
     active_orphan_index: bpy.props.IntProperty(default=0, min=0)
 

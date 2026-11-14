@@ -13,8 +13,8 @@ from .properties import (
 )
 
 
-_SHAPE_INDEX = {"SPHERE": 0, "CAPSULE": 1, "AABB": 2, "OBB": 3}
-_MATERIALS = (
+CCL_SHAPE_INDEX = {"SPHERE": 0, "CAPSULE": 1, "AABB": 2, "OBB": 3}
+CCL_MATERIALS = (
     ("Albam CCL Sphere", (0.27, 0.81, 0.42, 0.45)),
     ("Albam CCL Capsule", (0.56, 0.72, 0.16, 0.45)),
     ("Albam CCL AABB", (0.47, 0.11, 0.58, 0.45)),
@@ -164,7 +164,7 @@ def _append_capsule(vertices, faces, face_materials, start, end, radius, materia
 def _record_geometry(armature, joint_map, pose_bone, record,
                      vertices, faces, face_materials):
     shape = record.shape
-    material_index = _SHAPE_INDEX.get(shape)
+    material_index = CCL_SHAPE_INDEX.get(shape)
     if material_index is None:
         return
 
@@ -203,7 +203,7 @@ def _record_geometry(armature, joint_map, pose_bone, record,
 
 def _preview_materials():
     materials = []
-    for name, color in _MATERIALS:
+    for name, color in CCL_MATERIALS:
         material = bpy.data.materials.get(name)
         if material is None:
             material = bpy.data.materials.new(name)
@@ -236,8 +236,10 @@ def _preview_object_name(pose_bone, record, collection_index):
 
 def _create_preview_object(bl_object, armature, joint_map, pose_bone, record, collection_index,
                            name, vertices, faces, material):
+    bone_origin = _bone_matrix(armature, pose_bone).translation
     mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(vertices, [], faces)
+    mesh_vertices = [tuple(Vector(vertex) - bone_origin) for vertex in vertices]
+    mesh.from_pydata(mesh_vertices, [], faces)
     mesh.materials.append(material)
     for polygon in mesh.polygons:
         polygon.material_index = 0
@@ -245,6 +247,7 @@ def _create_preview_object(bl_object, armature, joint_map, pose_bone, record, co
 
     preview_object = bpy.data.objects.new(name, mesh)
     preview_object.parent = bl_object
+    preview_object.matrix_parent_inverse = bl_object.matrix_world.inverted_safe()
     for collection in bl_object.users_collection:
         collection.objects.link(preview_object)
     preview_object.hide_select = True
@@ -256,6 +259,12 @@ def _create_preview_object(bl_object, armature, joint_map, pose_bone, record, co
     raw_anim_id = get_anim_retarget(pose_bone, "re5")
     anim_id = int(raw_anim_id.split("_", 1)[0]) if raw_anim_id else -1
     preview_object["albam_ccl_joint_id"] = anim_id
+
+    copy_location = preview_object.constraints.new(type="COPY_LOCATION")
+    copy_location.target = armature
+    copy_location.subtarget = pose_bone.name
+    copy_location.target_space = "WORLD"
+    copy_location.owner_space = "WORLD"
 
     bound_props = get_ccl_primitive_properties(preview_object)
     bound_props.armature = armature
@@ -292,7 +301,7 @@ def rebuild_ccl_preview(bl_object):
             face_materials = []
             _record_geometry(armature, joint_map, pose_bone, record,
                              vertices, faces, face_materials)
-            material_index = _SHAPE_INDEX.get(record.shape)
+            material_index = CCL_SHAPE_INDEX.get(record.shape)
             if material_index is None:
                 continue
             _create_preview_object(

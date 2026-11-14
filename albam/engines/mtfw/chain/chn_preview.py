@@ -1,6 +1,7 @@
 """Build CCL-style child mesh previews for CHN joints stored on pose bones."""
 
 import bpy
+from math import cos, pi, sin
 from mathutils import Vector
 
 from ..bone import get_anim_retarget
@@ -14,11 +15,21 @@ from .properties import (
 
 
 CHN_MATERIAL_NAME = "Albam CHN Collision"
-CHN_COLOR = (1.0, 0.32, 0.06, 0.42)
+CHN_COLOR = (0.0, 0.49, 0.55, 1.0)
+CHN_ANGLE_COLORS = (
+    (0.95, 0.12, 0.10, 1.0),  # X
+    (0.14, 0.82, 0.20, 1.0),  # Y
+    (0.12, 0.35, 1.0, 1.0),  # Z
+)
+CHN_ANGLE_AXES = ("X", "Y", "Z")
 
 
 def _joint_preview_name(record, anim_id):
     return f"CHN_{anim_id:03d}_C{record.chain_index:03d}_J{record.joint_index:03d}"
+
+
+def _angle_preview_name(record, anim_id, axis):
+    return f"{_joint_preview_name(record, anim_id)}_ANGLE_{axis}"
 
 
 def _bone_world_matrix(armature, pose_bone):
@@ -101,6 +112,15 @@ def _collision_material():
     return material
 
 
+def _angle_material(axis_index):
+    name = f"Albam CHN Angle {CHN_ANGLE_AXES[axis_index]}"
+    material = bpy.data.materials.get(name)
+    if material is None:
+        material = bpy.data.materials.new(name)
+    material.diffuse_color = CHN_ANGLE_COLORS[axis_index]
+    return material
+
+
 def _remove_previews(root_object, file_props):
     pose_bones = file_props.armature.pose.bones if file_props.armature else ()
     for pose_bone in pose_bones:
@@ -109,7 +129,8 @@ def _remove_previews(root_object, file_props):
     for record in file_props.orphans:
         record.preview_object = None
     for child in tuple(root_object.children):
-        if not child.get("_albam_chn_joint_preview", False):
+        if not (child.get("_albam_chn_joint_preview", False) or
+                child.get("_albam_chn_angle_preview", False)):
             continue
         old_mesh = child.data if child.type == "MESH" else None
         bpy.data.objects.remove(child, do_unlink=True)
@@ -154,6 +175,83 @@ def _new_preview(root_object, armature, record, pose_bone, anim_id,
     record.preview_object = preview
 
 
+def _new_angle_preview(root_object, armature, record, pose_bone, anim_id,
+                       axis_index, vertices, edges, origin):
+    axis = CHN_ANGLE_AXES[axis_index]
+    name = _angle_preview_name(record, anim_id, axis)
+    mesh = bpy.data.meshes.new(name)
+    local_vertices = [tuple(Vector(vertex) - origin) for vertex in vertices]
+    mesh.from_pydata(local_vertices, edges, [])
+    mesh.materials.append(_angle_material(axis_index))
+    mesh.update()
+
+    preview = bpy.data.objects.new(name, mesh)
+    preview.parent = root_object
+    preview.matrix_parent_inverse = root_object.matrix_world.inverted_safe()
+    preview.show_in_front = True
+    preview.display_type = "WIRE"
+    preview.color = CHN_ANGLE_COLORS[axis_index]
+    preview.hide_select = True
+    preview.hide_render = True
+    preview["_albam_chn_angle_preview"] = True
+    for collection in root_object.users_collection:
+        collection.objects.link(preview)
+
+    copy_location = preview.constraints.new(type="COPY_LOCATION")
+    copy_location.target = armature
+    copy_location.subtarget = pose_bone.name
+    copy_location.target_space = "WORLD"
+    copy_location.owner_space = "WORLD"
+
+
+def _angle_arc_geometry(matrix, origin, axis_index, minimum, maximum, radius):
+    """Build a colored line arc in the reference bone's local axis plane."""
+    local_axes = (
+        Vector((1.0, 0.0, 0.0)),
+        Vector((0.0, 1.0, 0.0)),
+        Vector((0.0, 0.0, 1.0)),
+    )
+    basis = matrix.to_3x3()
+    axis = (basis @ local_axes[axis_index]).normalized()
+    first = basis @ local_axes[(axis_index + 1) % 3]
+    first = (first - axis * first.dot(axis)).normalized()
+    second = axis.cross(first).normalized()
+
+    sweep = maximum - minimum
+    segments = max(1, min(128, int(abs(sweep) / (pi / 24.0)) + 1))
+    vertices = []
+    edges = []
+
+    def point(angle, point_radius=radius):
+        return origin + point_radius * (first * cos(angle) + second * sin(angle))
+
+    for index in range(segments + 1):
+        angle = minimum + sweep * index / segments
+        vertices.append(point(angle))
+        if index:
+            edges.append((index - 1, index))
+
+    # Endpoint ticks also make a zero-width range visible.
+    for angle in (minimum, maximum):
+        start = len(vertices)
+        vertices.extend((point(angle, radius * 0.88), point(angle, radius * 1.12)))
+        edges.append((start, start + 1))
+
+    return vertices, edges
+
+
+def _use_object_wire_colors():
+    """Make per-object preview colors visible in this screen's 3D Views."""
+    screen = bpy.context.screen
+    if screen is None:
+        return
+    for area in screen.areas:
+        if area.type == "VIEW_3D":
+            shading = area.spaces.active.shading
+            if shading.wireframe_color_type != "OBJECT":
+                shading.wireframe_color_type = "OBJECT"
+
+
 def rebuild_chn_previews(root_object):
     if root_object is None or root_object.type != "EMPTY":
         return
@@ -162,6 +260,7 @@ def rebuild_chn_previews(root_object):
     _remove_previews(root_object, file_props)
     if armature is None or armature.type != "ARMATURE":
         return
+    _use_object_wire_colors()
 
     record_map = {}
     mapped_records = []
@@ -184,6 +283,7 @@ def rebuild_chn_previews(root_object):
     }
 
     material = _collision_material()
+    show_angle_limits = file_props.show_angle_limits
     for record, reference_bone in mapped_records:
         matrix = _bone_world_matrix(armature, reference_bone)
         if matrix is None:
@@ -219,3 +319,17 @@ def rebuild_chn_previews(root_object):
                                     center, endpoint, radius, 0)
         _new_preview(root_object, armature, record, reference_bone, anim_id,
                      vertices, faces, material, center)
+        if show_angle_limits:
+            rest_bone = armature.data.bones.get(reference_bone.name)
+            angle_radius = max(0.03 * world_scale,
+                               (rest_bone.length if rest_bone else 0.0) *
+                               world_scale * 0.18,
+                               radius * 1.25)
+            for axis_index, (minimum, maximum) in enumerate(
+                    zip(record.min_angle, record.max_angle)):
+                arc_vertices, arc_edges = _angle_arc_geometry(
+                    matrix, center, axis_index, minimum, maximum,
+                    angle_radius * (1.0 + 0.06 * axis_index))
+                _new_angle_preview(
+                    root_object, armature, record, reference_bone, anim_id,
+                    axis_index, arc_vertices, arc_edges, center)

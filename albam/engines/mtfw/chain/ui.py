@@ -73,6 +73,23 @@ def _active_pose_bone(context):
     return armature.pose.bones.get(active_bone.name) if active_bone else None
 
 
+def _pose_bone_for_anim_id(armature, anim_id):
+    "Get bone name by Anim ID"
+    if armature is None or armature.type != "ARMATURE":
+        return None
+    for pose_bone in sorted(armature.pose.bones, key=lambda bone: bone.name):
+        raw_id = get_anim_retarget(pose_bone, "re5")
+        if not raw_id:
+            continue
+        try:
+            bone_anim_id = int(raw_id.split("_", 1)[0])
+        except ValueError:
+            continue
+        if bone_anim_id == anim_id:
+            return pose_bone
+    return None
+
+
 def _sync_preview_bone_name(preview_object, primitive_props):
     armature = primitive_props.armature
     if armature is None or armature.type != "ARMATURE":
@@ -141,7 +158,13 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     layout.prop(record, "attr")
     layout.prop(record, "shape")
     if record.shape == "CAPSULE":
-        layout.prop(record, "pair_joint_no")
+        row = layout.row(align=True)
+        row.prop(record, "pair_joint_no")
+        tail_bone = _pose_bone_for_anim_id(file_props.armature, record.pair_joint_no)
+        if tail_bone is None:
+            row.label(text="Bone not found", icon="ERROR")
+        else:
+            row.label(text=tail_bone.name)
     layout.prop(record, "position")
     if record.shape != "SPHERE":
         layout.prop(record, "extent")
@@ -719,18 +742,6 @@ def _create_chn_joint_for_bone(pose_bone, chain_index, anim_id):
     joint.source_ref_joint_no = anim_id
     joint.ref_joint_no = anim_id
     joint.attr = "0"
-    joint.min_angle = (0.0, 0.0, 0.0)
-    joint.spring_coef = 0.0
-    joint.max_angle = (0.0, 0.0, 0.0)
-    joint.dumping_coef = 0.0
-    joint.mass = 0.0
-    joint.restrict_flag = 0
-    joint.col_shape = "SPHERE"
-    joint.col_radius = 1.0
-    joint.air_regist = 0.0
-    joint.friction = 0.0
-    joint.soft_coef = 0.0
-    joint.bend_regist = 0.0
     bone_props.active_chn_joint_index = len(bone_props.chn_joints) - 1
     return joint
 
@@ -806,9 +817,10 @@ class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
             if existing is None:
                 existing = _create_chn_joint_for_bone(bone, chain_index, anim_id)
                 existing.joint_index = chain.num_joints
-                existing.attr = "1" if position == 0 else "2"
                 chain.num_joints += 1
                 file_props.total_joints += 1
+            existing.attr_constraint = position == 0
+            existing.attr_attached = position != 0
         _append_chn_strand(chain, anim_ids)
         chain.topology_dirty = True
         root["_albam_chn_suppress_update"] = False
@@ -890,18 +902,6 @@ class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
         joint.source_ref_joint_no = anim_id
         joint.ref_joint_no = anim_id
         joint.attr = "0"
-        joint.min_angle = (0.0, 0.0, 0.0)
-        joint.spring_coef = 0.0
-        joint.max_angle = (0.0, 0.0, 0.0)
-        joint.dumping_coef = 0.0
-        joint.mass = 0.0
-        joint.restrict_flag = 0
-        joint.col_shape = "SPHERE"
-        joint.col_radius = 1.0
-        joint.air_regist = 0.0
-        joint.friction = 0.0
-        joint.soft_coef = 0.0
-        joint.bend_regist = 0.0
         chain_props.num_joints += 1
         file_props.total_joints += 1
         _append_chn_strand(chain_props, [anim_id])
@@ -1120,7 +1120,7 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
                 box = layout.box()
                 box.label(text=child.name, icon="MESH_UVSPHERE")
                 box.label(
-                    text=f"Bone: {bone_name}  ·  Anim ID: {props.anim_id}",
+                    text=f"Bone Name: {bone_name}  ·  Anim ID: {props.anim_id}",
                     icon="BONE_DATA")
                 if props.shape == "CAPSULE":
                     tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
@@ -1129,7 +1129,7 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
 
         props = get_ccl_primitive_properties(bl_object)
         bone_name = _sync_preview_bone_name(bl_object, props)
-        layout.label(text=f"Bone: {bone_name}", icon="BONE_DATA")
+        layout.label(text=f"Bone Name: {bone_name}")
         layout.label(text=f"Anim ID: {props.anim_id}")
         layout.label(text=f"Record: {props.record_index if props.record_index >= 0 else 'new'}")
         layout.label(text=f"Shape: {props.shape.title()}")
@@ -1160,6 +1160,9 @@ def _draw_chn_file_editor(layout, bl_object):
         "ALBAM_UL_CHNChains", "", file_props, "chains",
         file_props, "active_chain_index", rows=4)
     layout.operator("albam.chn_refresh_preview", icon="FILE_REFRESH")
+    layout.prop(file_props, "show_angle_limits")
+    if file_props.show_angle_limits:
+        layout.label(text="Angle axes: X red · Y green · Z blue")
     chain_index = file_props.active_chain_index
     if 0 <= chain_index < len(file_props.chains):
         chain = file_props.chains[chain_index]
@@ -1195,9 +1198,17 @@ def _draw_chn_file_editor(layout, bl_object):
          if child.get("_albam_chn_joint_preview", False)),
         key=lambda child: child.name,
     )
+    angle_previews = [
+        child for child in bl_object.children
+        if child.get("_albam_chn_angle_preview", False)
+    ]
     if previews:
         layout.separator()
-        layout.label(text=f"Collision previews: {len(previews)}", icon="MESH_DATA")
+        layout.label(
+            text=f"Collision previews: {len(previews)}", icon="MESH_DATA")
+    if angle_previews:
+        layout.label(
+            text=f"Angle limit arcs: {len(angle_previews)}")
 
 
 def _draw_chn_joint_preview_binding(layout, bl_object):
@@ -1205,7 +1216,7 @@ def _draw_chn_joint_preview_binding(layout, bl_object):
     armature_name = props.armature.name if props.armature else "Missing"
     bone_name = _sync_chn_preview_bone_name(bl_object, props)
     layout.label(text=f"Armature: {armature_name}", icon="ARMATURE_DATA")
-    layout.label(text=f"Bone: {bone_name}", icon="BONE_DATA")
+    layout.label(text=f"Bone Name: {bone_name}", icon="BONE_DATA")
     layout.label(text=f"Anim ID: {props.anim_id}")
     layout.label(text=f"Chain Info: {props.chain_index} · Joint: {props.joint_index}")
     layout.label(text=f"Shape: {props.shape.title()}")
