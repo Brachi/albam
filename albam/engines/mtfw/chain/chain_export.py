@@ -364,6 +364,21 @@ def _new_chn_joint(parent, root):
     return joint
 
 
+def _new_chn_chain_info(index, parent):
+    chain_info = Chn.ChainInfo(index, _parent=parent, _root=parent)
+    chain_info.num_joints = 0
+    chain_info.chain_type = Chn.ChainType.chain
+    chain_info.reserve = 0
+    chain_info.joint_info_offset = 0
+    chain_info.reserve1 = [0, 0]
+    chain_info.grav_scaler = 1.0
+    chain_info.time_scaler = 1.0
+    chain_info.dump_scaler = 1.0
+    chain_info.freserve = 0.0
+    chain_info.joints = []
+    return chain_info
+
+
 def _apply_record(dst, pose_bone, record):
     dst.attr = _uint32(record.attr, "attribute")
     dst.ref_joint_no = _joint_id_from_bone(pose_bone)
@@ -506,26 +521,43 @@ def export_chn(bl_object):
             details="The CHN file object no longer points to its imported armature",
             solution="Restore the armature pointer on the CHN file properties",
         )
-    if len(file_props.chains) != len(chn.chain_infos):
+    source_chain_count = len(chn.chain_infos)
+    chain_count = len(file_props.chains)
+    if chain_count < source_chain_count:
         raise AlbamCheckFailure(
             "The CHN chain settings no longer match the source file",
-            details=(f"File contains {len(chn.chain_infos)} chains, but Albam has "
-                     f"{len(file_props.chains)} chain settings"),
-            solution="Re-import the CHN file to restore its chain settings",
+            details=(f"The source file contains {source_chain_count} Chain Info entries, "
+                     f"but Albam has {chain_count} chain settings"),
+            solution="Restore the source Chain Info entries before exporting",
+        )
+    if chain_count > 0xFF:
+        raise AlbamCheckFailure(
+            "The CHN file contains too many Chain Info entries",
+            details=f"The CHN header supports at most 255 entries, found {chain_count}",
+            solution="Remove Chain Info entries until the count is 255 or fewer",
         )
 
     chain_props_by_index = {}
     for chain_props in file_props.chains:
         chain_index = chain_props.chain_index
-        if not 0 <= chain_index < len(chn.chain_infos) or chain_index in chain_props_by_index:
+        if not 0 <= chain_index < chain_count or chain_index in chain_props_by_index:
             raise AlbamCheckFailure(
                 "The CHN chain settings have invalid indices",
                 details=f"Found duplicate or out-of-range chain index {chain_index}",
-                solution="Re-import the CHN file to restore its chain settings",
+                solution="Use unique contiguous Chain Info indices starting at zero",
             )
         chain_props_by_index[chain_index] = chain_props
+    missing_chain_indices = sorted(set(range(chain_count)) - set(chain_props_by_index))
+    if missing_chain_indices:
+        raise AlbamCheckFailure(
+            "A CHN chain setting is missing",
+            details=f"No settings are stored for Chain Info indices {missing_chain_indices}",
+            solution="Restore a setting for every Chain Info entry before exporting",
+        )
+    for chain_index in range(source_chain_count, chain_count):
+        chn.chain_infos.append(_new_chn_chain_info(chain_index, chn))
 
-    joints_by_chain = {index: [] for index in range(len(chn.chain_infos))}
+    joints_by_chain = {index: [] for index in range(chain_count)}
     for pose_bone in armature.pose.bones:
         for record in get_ccl_bone_properties(pose_bone).chn_joints:
             if not 0 <= record.chain_index < len(chn.chain_infos):

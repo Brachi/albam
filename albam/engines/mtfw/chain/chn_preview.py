@@ -22,6 +22,11 @@ CHN_ANGLE_COLORS = (
     (0.12, 0.35, 1.0, 1.0),  # Z
 )
 CHN_ANGLE_AXES = ("X", "Y", "Z")
+CHN_STRAND_COLORS = (
+    (1.0, 0.32, 0.0, 1.0),   # orange
+    (1.0, 0.02, 0.85, 1.0),  # magenta
+    (1.0, 0.88, 0.0, 1.0),   # yellow
+)
 
 
 def _joint_preview_name(record, anim_id):
@@ -121,6 +126,16 @@ def _angle_material(axis_index):
     return material
 
 
+def _strand_material(color_index):
+    color = CHN_STRAND_COLORS[color_index % len(CHN_STRAND_COLORS)]
+    name = f"Albam CHN Strand {color_index % len(CHN_STRAND_COLORS) + 1}"
+    material = bpy.data.materials.get(name)
+    if material is None:
+        material = bpy.data.materials.new(name)
+    material.diffuse_color = color
+    return material
+
+
 def _remove_previews(root_object, file_props):
     pose_bones = file_props.armature.pose.bones if file_props.armature else ()
     for pose_bone in pose_bones:
@@ -130,7 +145,8 @@ def _remove_previews(root_object, file_props):
         record.preview_object = None
     for child in tuple(root_object.children):
         if not (child.get("_albam_chn_joint_preview", False) or
-                child.get("_albam_chn_angle_preview", False)):
+                child.get("_albam_chn_angle_preview", False) or
+                child.get("_albam_chn_strand_preview", False)):
             continue
         old_mesh = child.data if child.type == "MESH" else None
         bpy.data.objects.remove(child, do_unlink=True)
@@ -202,6 +218,92 @@ def _new_angle_preview(root_object, armature, record, pose_bone, anim_id,
     copy_location.subtarget = pose_bone.name
     copy_location.target_space = "WORLD"
     copy_location.owner_space = "WORLD"
+
+
+def _new_strand_preview(root_object, chain_index, strand_index,
+                        vertices, edges):
+    color_index = chain_index + strand_index
+    name = f"CHN_C{chain_index:03d}_S{strand_index:03d}_LINKS"
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([tuple(vertex) for vertex in vertices], edges, [])
+    mesh.materials.append(_strand_material(color_index))
+    mesh.update()
+
+    preview = bpy.data.objects.new(name, mesh)
+    preview.parent = root_object
+    preview.matrix_parent_inverse = root_object.matrix_world.inverted_safe()
+    preview.show_in_front = True
+    preview.display_type = "WIRE"
+    preview.color = CHN_STRAND_COLORS[color_index % len(CHN_STRAND_COLORS)]
+    preview.hide_select = True
+    preview.hide_render = True
+    preview["_albam_chn_strand_preview"] = True
+    preview["albam_chn_chain_index"] = chain_index
+    preview["albam_chn_strand_index"] = strand_index
+    for collection in root_object.users_collection:
+        collection.objects.link(preview)
+
+
+def _append_directed_edge(vertices, edges, start, end):
+    direction = end - start
+    length = direction.length
+    if length <= 1e-8:
+        return
+    direction /= length
+    arrow_length = length * 0.22
+    reference = (Vector((0.0, 0.0, 1.0)) if abs(direction.z) < 0.9
+                 else Vector((0.0, 1.0, 0.0)))
+    side = direction.cross(reference).normalized() * arrow_length * 0.55
+
+    start_index = len(vertices)
+    vertices.extend((start.copy(), end.copy()))
+    edges.append((start_index, start_index + 1))
+
+    left = end - direction * arrow_length + side
+    right = end - direction * arrow_length - side
+    vertices.extend((left, right))
+    edges.extend((
+        (start_index + 1, start_index + 2),
+        (start_index + 1, start_index + 3),
+        (start_index + 2, start_index + 3),
+    ))
+
+
+def _rebuild_strand_previews(root_object, armature, file_props,
+                             record_map, records_by_chain):
+    for chain in file_props.chains:
+        records = records_by_chain.get(chain.chain_index, ())
+        id_remap = {}
+        for record, pose_bone in records:
+            anim_id = _record_anim_id(record, pose_bone)
+            id_remap[record.ref_joint_no] = anim_id
+            if record.source_ref_joint_no >= 0:
+                id_remap[record.source_ref_joint_no] = anim_id
+
+        for strand_index, strand in enumerate(chain.strands):
+            sequence = []
+            for strand_joint in strand.joints:
+                anim_id = id_remap.get(strand_joint.anim_id, strand_joint.anim_id)
+                pair = record_map.get((chain.chain_index, anim_id))
+                pose_bone = pair[1] if pair else None
+                matrix = (_bone_world_matrix(armature, pose_bone)
+                          if pose_bone is not None else None)
+                sequence.append(
+                    matrix.translation.copy() if matrix is not None else None)
+
+            vertices = []
+            edges = []
+            for start, end in zip(sequence, sequence[1:]):
+                if start is not None and end is not None:
+                    _append_directed_edge(vertices, edges, start, end)
+            if strand.closed and len(sequence) > 2:
+                start, end = sequence[-1], sequence[0]
+                if start is not None and end is not None:
+                    _append_directed_edge(vertices, edges, start, end)
+
+            if edges:
+                _new_strand_preview(
+                    root_object, chain.chain_index, strand_index, vertices, edges)
 
 
 def _angle_arc_geometry(matrix, origin, axis_index, minimum, maximum, radius):
@@ -333,3 +435,6 @@ def rebuild_chn_previews(root_object):
                 _new_angle_preview(
                     root_object, armature, record, reference_bone, anim_id,
                     axis_index, arc_vertices, arc_edges, center)
+    if file_props.show_strand_links:
+        _rebuild_strand_previews(
+            root_object, armature, file_props, record_map, records_by_chain)

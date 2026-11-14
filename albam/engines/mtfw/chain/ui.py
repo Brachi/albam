@@ -129,10 +129,6 @@ def _draw_ccl_bone_editor(layout, pose_bone):
         layout.label(
             text=f"{file_props.unresolved_records} records have no matching bone",
             icon="ERROR")
-    if file_props.duplicate_joint_ids:
-        layout.label(
-            text=f"Duplicate Anim Retarget IDs: {file_props.duplicate_joint_ids}",
-            icon="INFO")
 
     row = layout.row(align=True)
     row.template_list(
@@ -344,28 +340,25 @@ def _draw_chn_bone_editor(layout, pose_bone):
     root_object = find_chn_file_for_armature(pose_bone.id_data)
     if root_object is None:
         return
-    file_props = get_chn_file_properties(root_object)
     bone_props = get_ccl_bone_properties(pose_bone)
     layout.use_property_split = True
     layout.label(text=root_object.name, icon="PHYSICS")
-    if file_props.duplicate_joint_ids:
-        layout.label(
-            text=f"Duplicate Anim Retarget IDs: {file_props.duplicate_joint_ids}",
-            icon="INFO")
 
     row = layout.row(align=True)
     row.template_list(
         "ALBAM_UL_CHNJointItems", "", bone_props, "chn_joints",
         bone_props, "active_chn_joint_index", rows=3)
     buttons = row.column(align=True)
-    buttons.operator("albam.chn_add_joint", icon="ADD", text="")
     buttons.operator("albam.chn_remove_joint", icon="REMOVE", text="")
     buttons.separator()
     buttons.operator("albam.chn_copy_joint_settings", icon="COPYDOWN", text="")
     buttons.operator("albam.chn_paste_joint_settings", icon="PASTEDOWN", text="")
     layout.operator(
-        "albam.chn_add_strand_from_selection", icon="CON_TRACKTO",
-        text="Add Selected Bones as Strand")
+        "albam.chn_add_strand_from_selection", icon="ADD",
+        text="Create New Strand from Selected Bones")
+    layout.operator(
+        "albam.chn_link_bones_to_strand", icon="CON_TRACKTO",
+        text="Link Selected Bones to Existing Strand")
 
     index = bone_props.active_chn_joint_index
     if not 0 <= index < len(bone_props.chn_joints):
@@ -389,14 +382,18 @@ class ALBAM_UL_CCLRecords(bpy.types.UIList):
             text=f"{item.shape.title()} · record {item.record_index if item.record_index >= 0 else 'new'}")
 
 
+# List in pose bone panel
 @blender_registry.register_blender_type
 class ALBAM_UL_CHNJointItems(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         owner = getattr(data, "id_data", None)
         owner_is_file = getattr(owner, "type", None) == "EMPTY"
-        label = f"Chain Info {item.chain_index} · Joint {item.joint_index}"
+        label = f"Chain Info {item.chain_index}"
         if owner_is_file:
             label += f" · Anim {item.ref_joint_no}"
+        strand_names = _chn_strand_names_for_joint(owner, item)
+        label += f" → {', '.join(strand_names) if strand_names else 'Unassigned'}"
+        label += f" → Joint {item.joint_index}"
         layout.label(
             text=label, icon="BONE_DATA")
 
@@ -421,6 +418,47 @@ class ALBAM_UL_CHNStrands(bpy.types.UIList):
             summary += " · closed"
         name = item.name or f"Strand {index + 1}"
         layout.label(text=f"{name} · {summary or 'empty'}", icon="CON_TRACKTO")
+
+
+def _chn_strand_names_for_joint(owner, joint):
+    if getattr(owner, "type", None) == "EMPTY" and owner.get("_albam_chn_root", False):
+        root_object = owner
+    elif getattr(owner, "type", None) == "ARMATURE":
+        root_object = find_chn_file_for_armature(owner)
+    else:
+        root_object = None
+    if root_object is None:
+        return []
+
+    file_props = get_chn_file_properties(root_object)
+    chain = next((item for item in file_props.chains
+                  if item.chain_index == joint.chain_index), None)
+    if chain is None:
+        return []
+
+    anim_ids = {joint.ref_joint_no}
+    if joint.source_ref_joint_no >= 0:
+        anim_ids.add(joint.source_ref_joint_no)
+    armature = file_props.armature
+    if armature is not None and armature.type == "ARMATURE":
+        for pose_bone in armature.pose.bones:
+            if not any(record.chain_index == joint.chain_index and
+                       record.joint_index == joint.joint_index
+                       for record in get_ccl_bone_properties(pose_bone).chn_joints):
+                continue
+            raw_id = get_anim_retarget(pose_bone, "re5")
+            if raw_id:
+                try:
+                    anim_ids.add(int(raw_id.split("_", 1)[0]))
+                except ValueError:
+                    pass
+            break
+
+    return [
+        strand.name or f"Strand {index + 1}"
+        for index, strand in enumerate(chain.strands)
+        if any(item.anim_id in anim_ids for item in strand.joints)
+    ]
 
 
 @blender_registry.register_blender_type
@@ -622,6 +660,52 @@ def _chn_chain_enum_items(self, context):
     ] or [("0", "No Chain Info entries", "The imported CHN file has no Chain Info entries")]
 
 
+CHN_NEW_CHAIN_INFO_OPTION = "__NEW_CHAIN_INFO__"
+
+
+def _chn_chain_enum_items_with_new(self, context):
+    items = _chn_chain_enum_items(self, context)
+    if items and items[0][2] == "Import a CHN file onto this skeleton first":
+        return items
+    items = [item for item in items if item[1] != "No Chain Info entries"]
+    items.append((CHN_NEW_CHAIN_INFO_OPTION, "New Chain Info",
+                  "Create a new Chain Info entry for this strand"))
+    return items
+
+
+def _chn_chain_enum_items_with_strands(self, context):
+    pose_bone = _active_pose_bone(context)
+    root_object = find_chn_file_for_armature(pose_bone.id_data) if pose_bone else None
+    if root_object is None:
+        return [("0", "No CHN file", "Import a CHN file onto this skeleton first")]
+    file_props = get_chn_file_properties(root_object)
+    return [
+        (str(chain.chain_index), f"Chain Info {chain.chain_index}",
+         f"Choose a strand from Chain Info {chain.chain_index}")
+        for chain in file_props.chains if chain.strands
+    ] or [("0", "No strands", "Create a strand before linking bones to it")]
+
+
+def _chn_strand_enum_items(self, context):
+    pose_bone = _active_pose_bone(context)
+    root_object = find_chn_file_for_armature(pose_bone.id_data) if pose_bone else None
+    if root_object is None:
+        return [("0", "No CHN file", "Import a CHN file onto this skeleton first")]
+    try:
+        chain_index = int(self.chain_index)
+    except (TypeError, ValueError):
+        return [("0", "Choose a Chain Info", "Select a Chain Info entry first")]
+    chain = next((item for item in get_chn_file_properties(root_object).chains
+                  if item.chain_index == chain_index), None)
+    if chain is None or not chain.strands:
+        return [("0", "No strands", "Choose a Chain Info that contains a strand")]
+    return [
+        (str(index), strand.name or f"Strand {index + 1}",
+         f"{len(strand.joints)} joints")
+        for index, strand in enumerate(chain.strands)
+    ]
+
+
 def _chn_anim_id(pose_bone):
     raw_id = get_anim_retarget(pose_bone, "re5")
     if not raw_id:
@@ -749,10 +833,11 @@ def _create_chn_joint_for_bone(pose_bone, chain_index, anim_id):
 @blender_registry.register_blender_type
 class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
     bl_idname = "albam.chn_add_strand_from_selection"
-    bl_label = "Add Selected Bones as Strand"
+    bl_label = "Create New Strand from Selected Bones"
     bl_options = {"UNDO"}
 
-    chain_index: bpy.props.EnumProperty(name="Target Chain Info", items=_chn_chain_enum_items)
+    chain_index: bpy.props.EnumProperty(
+        name="Target Chain Info", items=_chn_chain_enum_items_with_new)
 
     @classmethod
     def poll(cls, context):
@@ -767,6 +852,8 @@ class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
             if file_props.chains:
                 selected = min(file_props.active_chain_index, len(file_props.chains) - 1)
                 self.chain_index = str(file_props.chains[selected].chain_index)
+            else:
+                self.chain_index = CHN_NEW_CHAIN_INFO_OPTION
         return context.window_manager.invoke_props_dialog(self, width=360)
 
     def draw(self, context):
@@ -779,15 +866,23 @@ class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
         if path is None:
             self.report({"ERROR"}, "Select one unbranched parent-to-child bone path")
             return {"CANCELLED"}
-        try:
-            chain_index = int(self.chain_index)
-        except ValueError:
-            chain_index = -1
         file_props = get_chn_file_properties(root)
-        chain = next((item for item in file_props.chains
-                      if item.chain_index == chain_index), None)
-        if chain is None:
-            self.report({"ERROR"}, "Choose an existing Chain Info entry")
+        create_new_chain = self.chain_index == CHN_NEW_CHAIN_INFO_OPTION
+        if create_new_chain:
+            chain_index = len(file_props.chains)
+            if chain_index >= 0xFF:
+                self.report({"ERROR"}, "A CHN file cannot contain more than 255 Chain Info entries")
+                return {"CANCELLED"}
+            chain = None
+        else:
+            try:
+                chain_index = int(self.chain_index)
+            except ValueError:
+                chain_index = -1
+            chain = next((item for item in file_props.chains
+                          if item.chain_index == chain_index), None)
+        if not create_new_chain and chain is None:
+            self.report({"ERROR"}, "Choose an existing Chain Info entry or New Chain Info")
             return {"CANCELLED"}
 
         anim_ids = [_chn_anim_id(bone) for bone in path]
@@ -806,11 +901,18 @@ class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
         if len(known_ids) != len(chain_records):
             self.report({"ERROR"}, "The Chain Info already contains duplicate Anim IDs")
             return {"CANCELLED"}
-        if chain.num_joints + sum(anim_id not in known_ids for anim_id in anim_ids) > 0xFF:
+        current_joint_count = chain.num_joints if chain is not None else 0
+        if current_joint_count + sum(anim_id not in known_ids for anim_id in anim_ids) > 0xFF:
             self.report({"ERROR"}, "A Chain Info entry cannot contain more than 255 joints")
             return {"CANCELLED"}
 
         root["_albam_chn_suppress_update"] = True
+        if create_new_chain:
+            chain = file_props.chains.add()
+            chain.chain_index = chain_index
+            chain.topology_dirty = True
+            file_props.chain_count = len(file_props.chains)
+            file_props.active_chain_index = chain_index
         for position, (bone, anim_id) in enumerate(zip(path, anim_ids)):
             existing = next((record for record in get_ccl_bone_properties(bone).chn_joints
                              if record.chain_index == chain_index), None)
@@ -823,93 +925,146 @@ class ALBAM_OT_CHNAddStrandFromSelection(bpy.types.Operator):
             existing.attr_attached = position != 0
         _append_chn_strand(chain, anim_ids)
         chain.topology_dirty = True
+        file_props.active_chain_index = chain_index
         root["_albam_chn_suppress_update"] = False
         rebuild_chn_previews(root)
         return {"FINISHED"}
 
 
 @blender_registry.register_blender_type
-class ALBAM_OT_CHNAddJoint(bpy.types.Operator):
-    bl_idname = "albam.chn_add_joint"
-    bl_label = "Add Bone to Chain Info"
+class ALBAM_OT_CHNLinkBonesToStrand(bpy.types.Operator):
+    bl_idname = "albam.chn_link_bones_to_strand"
+    bl_label = "Link Selected Bones to Existing Strand"
+    bl_options = {"UNDO"}
 
-    chain_index: bpy.props.EnumProperty(name="Target Chain Info", items=_chn_chain_enum_items)
+    chain_index: bpy.props.EnumProperty(
+        name="Target Chain Info", items=_chn_chain_enum_items_with_strands)
+    strand_index: bpy.props.EnumProperty(
+        name="Target Strand", items=_chn_strand_enum_items)
 
     @classmethod
     def poll(cls, context):
         pose_bone = _active_pose_bone(context)
-        if pose_bone is None or not get_anim_retarget(pose_bone, "re5"):
+        if pose_bone is None:
             return False
         root_object = find_chn_file_for_armature(pose_bone.id_data)
-        return bool(root_object and get_chn_file_properties(root_object).chains)
+        file_props = get_chn_file_properties(root_object) if root_object else None
+        return bool(file_props and any(chain.strands for chain in file_props.chains))
 
     def invoke(self, context, event):
         pose_bone = _active_pose_bone(context)
         root_object = find_chn_file_for_armature(pose_bone.id_data)
-        if root_object:
-            file_props = get_chn_file_properties(root_object)
-            if file_props.chains:
-                selected_index = min(file_props.active_chain_index, len(file_props.chains) - 1)
-                self.chain_index = str(file_props.chains[selected_index].chain_index)
-        return context.window_manager.invoke_props_dialog(self, width=360)
+        file_props = get_chn_file_properties(root_object)
+        chain = next((item for item in file_props.chains
+                      if item.chain_index == file_props.active_chain_index and item.strands), None)
+        if chain is None:
+            chain = next(item for item in file_props.chains if item.strands)
+        self.chain_index = str(chain.chain_index)
+        self.strand_index = str(min(chain.active_strand_index, len(chain.strands) - 1))
+        return context.window_manager.invoke_props_dialog(self, width=420)
 
     def draw(self, context):
         self.layout.prop(self, "chain_index")
+        self.layout.prop(self, "strand_index")
 
     def execute(self, context):
-        pose_bone = _active_pose_bone(context)
-        root_object = find_chn_file_for_armature(pose_bone.id_data)
-        if root_object is None:
-            self.report({"ERROR"}, "No CHN file is attached to this skeleton")
-            return {"CANCELLED"}
-        anim_id = _chn_anim_id(pose_bone)
-        try:
-            chain_index = int(self.chain_index)
-        except ValueError:
-            chain_index = None
-        if anim_id is None or not 0 <= anim_id <= 0xFFFF or chain_index is None:
-            self.report({"ERROR"}, "The active bone needs a numeric Anim Retarget ID")
+        active_bone = _active_pose_bone(context)
+        root_object = find_chn_file_for_armature(active_bone.id_data)
+        path = _selected_bone_path(context, active_bone)
+        if path is None:
+            self.report({"ERROR"}, "Select one unbranched parent-to-child bone path")
             return {"CANCELLED"}
 
         file_props = get_chn_file_properties(root_object)
-        chain_props = next(
-            (chain for chain in file_props.chains if chain.chain_index == chain_index), None)
-        if chain_props is None:
-            self.report({"ERROR"}, "Choose an existing Chain Info entry")
+        try:
+            chain_index = int(self.chain_index)
+            strand_index = int(self.strand_index)
+        except (TypeError, ValueError):
+            self.report({"ERROR"}, "Choose both a Chain Info and a strand")
             return {"CANCELLED"}
-        if chain_props.num_joints >= 0xFF:
+        chain = next((item for item in file_props.chains
+                      if item.chain_index == chain_index), None)
+        if chain is None or not 0 <= strand_index < len(chain.strands):
+            self.report({"ERROR"}, "Choose an existing Chain Info and strand")
+            return {"CANCELLED"}
+        strand = chain.strands[strand_index]
+
+        anim_ids = [_chn_anim_id(bone) for bone in path]
+        if any(anim_id is None or not 0 <= anim_id <= 0xFFFF for anim_id in anim_ids):
+            self.report({"ERROR"}, "Every selected bone needs a numeric Anim Retarget ID")
+            return {"CANCELLED"}
+        if len(anim_ids) != len(set(anim_ids)):
+            self.report({"ERROR"}, "Selected bones have duplicate Anim IDs")
+            return {"CANCELLED"}
+
+        chain_records = _chn_records_for_chain(root_object, chain_index)
+        current_ids = []
+        for record, bone in chain_records:
+            current_id = _chn_anim_id(bone) if bone is not None else None
+            current_ids.append(record.ref_joint_no if current_id is None else current_id)
+        if len(current_ids) != len(set(current_ids)):
+            self.report({"ERROR"}, "The Chain Info already contains duplicate Anim IDs")
+            return {"CANCELLED"}
+        known_ids = set(current_ids)
+        if chain.num_joints + sum(anim_id not in known_ids for anim_id in anim_ids) > 0xFF:
             self.report({"ERROR"}, "A Chain Info entry cannot contain more than 255 joints")
             return {"CANCELLED"}
 
-        assigned_ids = {
-            _chn_anim_id(bone)
-            for bone in pose_bone.id_data.pose.bones
-            for record in get_ccl_bone_properties(bone).chn_joints
-            if record.chain_index == chain_index
-        }
-        assigned_ids.update(
-            record.ref_joint_no for record in file_props.orphans
-            if record.chain_index == chain_index)
-        if anim_id in assigned_ids:
-            self.report({"ERROR"}, "This Anim ID is already in the selected Chain Info entry")
+        id_remap = {}
+        for record, pose_bone in chain_records:
+            current_id = _chn_anim_id(pose_bone) if pose_bone is not None else None
+            if current_id is None:
+                current_id = record.ref_joint_no
+            source_id = (record.source_ref_joint_no
+                         if record.source_ref_joint_no >= 0 else record.ref_joint_no)
+            id_remap[source_id] = current_id
+        strand_ids = [id_remap.get(joint.anim_id, joint.anim_id) for joint in strand.joints]
+        overlap = 0
+        for count in range(min(len(strand_ids), len(anim_ids)), 0, -1):
+            if strand_ids[-count:] == anim_ids[:count]:
+                overlap = count
+                break
+        if set(strand_ids).intersection(anim_ids) and overlap == 0:
+            self.report(
+                {"ERROR"},
+                "The selected path overlaps this strand; start from its last bone",
+            )
+            return {"CANCELLED"}
+        ids_to_link = anim_ids[overlap:]
+        if not ids_to_link:
+            self.report({"INFO"}, "The selected bones are already at the end of this strand")
             return {"CANCELLED"}
 
+        was_suppressed = root_object.get("_albam_chn_suppress_update", False)
         root_object["_albam_chn_suppress_update"] = True
-        joint = get_ccl_bone_properties(pose_bone).chn_joints.add()
-        joint.chain_index = chain_index
-        joint.joint_index = chain_props.num_joints
-        joint.source_joint_index = -1
-        joint.source_ref_joint_no = anim_id
-        joint.ref_joint_no = anim_id
-        joint.attr = "0"
-        chain_props.num_joints += 1
-        file_props.total_joints += 1
-        _append_chn_strand(chain_props, [anim_id])
-        chain_props.topology_dirty = True
-        get_ccl_bone_properties(pose_bone).active_chn_joint_index = (
-            len(get_ccl_bone_properties(pose_bone).chn_joints) - 1)
-        root_object["_albam_chn_suppress_update"] = False
-        rebuild_chn_previews(root_object)
+        try:
+            for path_index in range(overlap, len(path)):
+                bone = path[path_index]
+                anim_id = anim_ids[path_index]
+                existing = next((record for record in get_ccl_bone_properties(bone).chn_joints
+                                 if record.chain_index == chain_index), None)
+                if existing is None:
+                    existing = _create_chn_joint_for_bone(bone, chain_index, anim_id)
+                    existing.joint_index = chain.num_joints
+                    chain.num_joints += 1
+                    file_props.total_joints += 1
+                is_first_joint = not strand_ids and path_index == overlap
+                existing.attr_constraint = is_first_joint
+                existing.attr_attached = not is_first_joint
+                strand.joints.add().anim_id = anim_id
+                get_ccl_bone_properties(bone).active_chn_joint_index = next(
+                    index for index, record in enumerate(
+                        get_ccl_bone_properties(bone).chn_joints)
+                    if record.chain_index == chain_index
+                )
+            chain.topology_dirty = True
+            chain.active_strand_index = strand_index
+            file_props.active_chain_index = chain_index
+        finally:
+            root_object["_albam_chn_suppress_update"] = was_suppressed
+
+        if not was_suppressed:
+            rebuild_chn_previews(root_object)
         return {"FINISHED"}
 
 
@@ -1163,6 +1318,10 @@ def _draw_chn_file_editor(layout, bl_object):
     layout.prop(file_props, "show_angle_limits")
     if file_props.show_angle_limits:
         layout.label(text="Angle axes: X red · Y green · Z blue")
+    layout.prop(file_props, "show_strand_links")
+    if file_props.show_strand_links:
+        layout.label(text="Arrows follow the stored strand order")
+        layout.label(text="Strand colors cycle: orange · magenta · yellow")
     chain_index = file_props.active_chain_index
     if 0 <= chain_index < len(file_props.chains):
         chain = file_props.chains[chain_index]
@@ -1202,6 +1361,10 @@ def _draw_chn_file_editor(layout, bl_object):
         child for child in bl_object.children
         if child.get("_albam_chn_angle_preview", False)
     ]
+    strand_previews = [
+        child for child in bl_object.children
+        if child.get("_albam_chn_strand_preview", False)
+    ]
     if previews:
         layout.separator()
         layout.label(
@@ -1209,6 +1372,8 @@ def _draw_chn_file_editor(layout, bl_object):
     if angle_previews:
         layout.label(
             text=f"Angle limit arcs: {len(angle_previews)}")
+    if strand_previews:
+        layout.label(text=f"Strand link previews: {len(strand_previews)}")
 
 
 def _draw_chn_joint_preview_binding(layout, bl_object):

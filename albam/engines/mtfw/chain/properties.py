@@ -146,13 +146,13 @@ class CHNJointProperties(bpy.types.PropertyGroup):
     min_angle: bpy.props.FloatVectorProperty(
         name="Minimum Angle", size=3, unit="ROTATION",
         description="Per-axis minimum rotation; stored in radians",  # noqa: F821
-        default=(-3.14, -3.14, -3.14), update=_update_chn_preview)
+        default=(-0.055, -0.055, -0.055), update=_update_chn_preview)
     spring_coef: bpy.props.FloatProperty(
         name="Spring Coefficient", default=10.0, update=_update_chn_preview)
     max_angle: bpy.props.FloatVectorProperty(
         name="Maximum Angle", size=3, unit="ROTATION",
         description="Per-axis maximum rotation; stored in radians",  # noqa: F821
-        default=(3.14, 3.14, 3.14), update=_update_chn_preview)
+        default=(0.055, 0.055, 0.055), update=_update_chn_preview)
     dumping_coef: bpy.props.FloatProperty(
         name="Damping Coefficient", default=0.2, update=_update_chn_preview)
     mass: bpy.props.FloatProperty(name="Mass", default=1.0, update=_update_chn_preview)  # noqa: F821
@@ -241,6 +241,10 @@ class CHNFileProperties(bpy.types.PropertyGroup):
         name="Show Angle Limits",
         description=("Draw per-axis CHN angle limits as colored arcs around each "
                      "reference bone in the 3D View"),
+        default=False, update=_update_chn_header_preview)  # noqa: F821
+    show_strand_links: bpy.props.BoolProperty(
+        name="Show Strand Links",
+        description="Draw strand links and direction arrows between reference bones",
         default=False, update=_update_chn_header_preview)  # noqa: F821
     orphans: bpy.props.CollectionProperty(type=CHNJointProperties)
     active_orphan_index: bpy.props.IntProperty(default=0, min=0)
