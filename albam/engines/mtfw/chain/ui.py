@@ -716,6 +716,104 @@ def _chn_anim_id(pose_bone):
         return None
 
 
+def _chn_record_anim_id(record, pose_bone):
+    anim_id = _chn_anim_id(pose_bone) if pose_bone is not None else None
+    return record.ref_joint_no if anim_id is None else anim_id
+
+
+def _chn_strand_id_map(chain_records):
+    """Map source and edited joint IDs to the IDs used by the current bones."""
+    result = {}
+    for record, pose_bone in chain_records:
+        anim_id = _chn_record_anim_id(record, pose_bone)
+        result[record.ref_joint_no] = anim_id
+        if record.source_ref_joint_no >= 0:
+            result[record.source_ref_joint_no] = anim_id
+    return result
+
+
+def _remove_chn_joints_no_longer_in_strands(
+        root_object, chain, removed_strand_ids, chain_records, id_remap):
+    """Drop bone data for removed-strand joints not used by another strand."""
+    remaining_ids = {
+        id_remap.get(joint.anim_id, joint.anim_id)
+        for strand in chain.strands
+        for joint in strand.joints
+    }
+    exclusive_ids = removed_strand_ids - remaining_ids
+    if not exclusive_ids:
+        return
+
+    records_by_anim_id = {}
+    for record, pose_bone in chain_records:
+        anim_id = _chn_record_anim_id(record, pose_bone)
+        records_by_anim_id.setdefault(anim_id, []).append(record)
+    joint_indices = {
+        records[0].joint_index
+        for anim_id, records in records_by_anim_id.items()
+        if anim_id in exclusive_ids and len(records) == 1
+    }
+    if not joint_indices:
+        return
+
+    file_props = get_chn_file_properties(root_object)
+    armature = file_props.armature
+    was_suppressed = root_object.get("_albam_chn_suppress_update", False)
+    root_object["_albam_chn_suppress_update"] = True
+    try:
+        if armature is not None and armature.type == "ARMATURE":
+            for pose_bone in armature.pose.bones:
+                bone_props = get_ccl_bone_properties(pose_bone)
+                removed_collection_indices = [
+                    index for index, record in enumerate(bone_props.chn_joints)
+                    if (record.chain_index == chain.chain_index and
+                        record.joint_index in joint_indices)
+                ]
+                for index in reversed(removed_collection_indices):
+                    bone_props.chn_joints.remove(index)
+                bone_props.active_chn_joint_index -= sum(
+                    index < bone_props.active_chn_joint_index
+                    for index in removed_collection_indices)
+                bone_props.active_chn_joint_index = min(
+                    bone_props.active_chn_joint_index,
+                    max(0, len(bone_props.chn_joints) - 1))
+
+        removed_orphan_indices = [
+            index for index, record in enumerate(file_props.orphans)
+            if (record.chain_index == chain.chain_index and
+                record.joint_index in joint_indices)
+        ]
+        for index in reversed(removed_orphan_indices):
+            file_props.orphans.remove(index)
+        file_props.unresolved_joints = max(
+            0, file_props.unresolved_joints - len(removed_orphan_indices))
+        file_props.active_orphan_index -= sum(
+            index < file_props.active_orphan_index
+            for index in removed_orphan_indices)
+        file_props.active_orphan_index = min(
+            file_props.active_orphan_index, max(0, len(file_props.orphans) - 1))
+
+        pose_bones = (armature.pose.bones
+                      if armature is not None and armature.type == "ARMATURE" else ())
+        for pose_bone in pose_bones:
+            for record in get_ccl_bone_properties(pose_bone).chn_joints:
+                if record.chain_index == chain.chain_index:
+                    record.joint_index -= sum(
+                        removed_index < record.joint_index
+                        for removed_index in joint_indices)
+        for record in file_props.orphans:
+            if record.chain_index == chain.chain_index:
+                record.joint_index -= sum(
+                    removed_index < record.joint_index
+                    for removed_index in joint_indices)
+
+        removed_count = len(joint_indices)
+        chain.num_joints = max(0, chain.num_joints - removed_count)
+        file_props.total_joints = max(0, file_props.total_joints - removed_count)
+    finally:
+        root_object["_albam_chn_suppress_update"] = was_suppressed
+
+
 def _active_chn_chain(root_object):
     file_props = get_chn_file_properties(root_object)
     if not 0 <= file_props.active_chain_index < len(file_props.chains):
@@ -771,6 +869,9 @@ class ALBAM_OT_CHNAutoFillLinks(bpy.types.Operator):
 class ALBAM_OT_CHNRemoveStrand(bpy.types.Operator):
     bl_idname = "albam.chn_remove_strand"
     bl_label = "Remove Strand"
+    bl_description = (
+        "Remove this strand and its unused joint data; joints shared with other strands stay"
+    )
     bl_options = {"UNDO"}
 
     @classmethod
@@ -782,13 +883,26 @@ class ALBAM_OT_CHNRemoveStrand(bpy.types.Operator):
     def execute(self, context):
         root = context.object
         chain = _active_chn_chain(root)
+        chain_records = _chn_records_for_chain(root, chain.chain_index)
+        id_remap = _chn_strand_id_map(chain_records)
+        strand = chain.strands[chain.active_strand_index]
+        removed_strand_ids = {
+            id_remap.get(joint.anim_id, joint.anim_id)
+            for joint in strand.joints
+        }
         chain.strands.remove(chain.active_strand_index)
+        _remove_chn_joints_no_longer_in_strands(
+            root, chain, removed_strand_ids, chain_records, id_remap)
         for index, strand in enumerate(chain.strands):
             strand.strand_index = index
         chain.active_strand_index = min(
             chain.active_strand_index, max(0, len(chain.strands) - 1))
         chain.topology_dirty = True
         rebuild_chn_previews(root)
+        screen = getattr(context, "screen", None)
+        if screen is not None:
+            for area in screen.areas:
+                area.tag_redraw()
         return {"FINISHED"}
 
 
