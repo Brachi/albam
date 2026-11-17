@@ -144,6 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   Revelations, Revelations 2 and Dragon's Dogma, overwriting whatever the
   mesh actually had set
 - Autorename Bones not carrying a bone's Mirror Bone link through the rename
+- Autosetter compression format value for Diffuse maps with alpha transparency
 
 ### Changed
 
@@ -157,6 +158,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
   saved with 0.5.0 keep the source file's mirror bones
 - Bone renamer now creates bone collections
+- Custom texture path field in now hidden, Autosetter uses .mod file directory
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically

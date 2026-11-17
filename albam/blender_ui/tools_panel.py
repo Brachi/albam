@@ -3,7 +3,7 @@ import bpy
 import re
 import gpu
 import blf
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from bpy.app.handlers import persistent
 from bpy_extras import view3d_utils
 from mathutils.bvhtree import BVHTree
@@ -11,6 +11,8 @@ from gpu_extras.batch import batch_for_shader
 
 
 from ..registry import blender_registry
+from ..lib.dds import DDSHeader
+from ..lib.blender import is_blimage_dds
 from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
 from ..engines.mtfw.texture import TEX_COMPRESSION
 from ..lib.bone_names import (
@@ -288,8 +290,10 @@ class AlbamArmatures(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="tools_settings")
 class ToolsSettings(bpy.types.PropertyGroup):
-    default_path = "path\\to_textures\\"
-    relative_path_to_textures: bpy.props.StringProperty(default=default_path)
+    asettr_overwrite_tex_path: bpy.props.BoolProperty(default=False)
+    asettr_use_custom_path: bpy.props.BoolProperty(default=False)
+    asettr_default_path = "path\\to_textures\\"
+    asettr_relative_path_to_textures: bpy.props.StringProperty(default=asettr_default_path)
     bone_names_enum = bpy.props.EnumProperty(
         name="",
         description="select surface",
@@ -303,7 +307,6 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
-    overwrite_tex_path: bpy.props.BoolProperty(default=False)
     sorting_dbg_draw: bpy.props.BoolProperty(default=False)
     face_group: bpy.props.IntProperty(name='Type')  # noqa: F821
     surface_attr: bpy.props.IntProperty(name='Surface attributes')  # noqa: F821
@@ -384,15 +387,18 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
             context.scene.albam.tools_settings,
-            "overwrite_tex_path",
+            "asettr_overwrite_tex_path",
             text="Overwrite path if exists",
         )
-        row = layout.row()
-        row.prop(
-            context.scene.albam.tools_settings,
-            "relative_path_to_textures",
-            text="",
-        )
+        if DEV_MODE:
+            row = layout.row()
+            row.prop(context.scene.albam.tools_settings, "asettr_use_custom_path", text="Use custom path")
+            row = layout.row()
+            row.prop(
+                context.scene.albam.tools_settings,
+                "asettr_relative_path_to_textures",
+                text="",
+            )
         layout.separator()
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
@@ -523,15 +529,34 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
 
     def execute(self, context):
         app_id = context.scene.albam.apps.app_selected
-        local_path = bpy.context.scene.albam.tools_settings.relative_path_to_textures
-        meshes = {ob.data for ob in bpy.context.selected_objects if ob.type == 'MESH'}
-        if not meshes:
-            meshes = {child.data for child in bpy.context.selected_objects[0].children
-                      if child.type == 'MESH'}
-        for ob in meshes:
-            mat = ob.materials[0]
+        tools_settings = context.scene.albam.tools_settings
+        custom_path = tools_settings.asettr_relative_path_to_textures
+        use_custom_path = tools_settings.asettr_use_custom_path
+        bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
+        if not bl_objects:
+            show_message_box(message="There is no mesh in selection")
+            return {'CANCELLED'}
+        processed_objects = 0
+        for bl_ob in bl_objects:
+            parent = bl_ob.parent
+            if parent is None:
+                print(f"Warning: {bl_ob.name} has no parent")
+                continue
+            if use_custom_path:
+                local_path = custom_path
+            else:
+                mod_path = getattr(parent.albam_asset, "relative_path", None)
+                if not mod_path:
+                    print(f"Warning: {parent.name} has no .mod path, skipping {bl_ob.name}")
+                    continue
+                local_path = f"{PureWindowsPath(mod_path).parent}\\"
+            try:
+                mat = bl_ob.data.materials[0]
+            except IndexError:
+                continue
             set_image_albam_attr(mat, app_id, local_path)
-        show_message_box(message=f"Texture params were autoset for {len(meshes)} meshes")
+            processed_objects += 1
+        show_message_box(message=f"Texture params were autoset for {processed_objects} meshes")
         return {'FINISHED'}
 
 
@@ -1749,7 +1774,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev2": 32,
         "re6": 0,
     }
-    overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
+    overwrite_tex_path = bpy.context.scene.albam.tools_settings.asettr_overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
     slot_suffixes = _image_slot_suffixes()
@@ -1773,7 +1798,15 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)
             if type == 0:
-                tex_props.compression_format = tex_compr_preset[1]
+                if is_blimage_dds(tn.image):
+                    dds_header = DDSHeader.from_bl_image(tn.image)
+                    has_alpha_channel = (
+                        dds_header.pixelfmt_dwFourCC in (b"DXT3", b"DXT5") or
+                        bool(dds_header.pixelfmt_dwFlags & DDSHeader.DDPF_ALPHAPIXELS)
+                    )
+                else:
+                    has_alpha_channel = tn.image.depth in (32, 64, 128)
+                tex_props.compression_format = tex_compr_preset[0 if has_alpha_channel else 1]
             if type == 1:
                 tex_props.compression_format = tex_compr_preset[3]
             if type == 2:
