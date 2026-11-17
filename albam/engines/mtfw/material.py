@@ -1251,17 +1251,22 @@ def check_mtfw_shader_group(func):
     return wrapper
 
 
-def _has_mtfw_shader_group(bl_mat):
-    mtfw_shader_group = None
-    try:
-        mtfw_shader_group = bpy.data.node_groups[MTFW_SHADER_NODEGROUP_NAME]
-    except KeyError:
+def _is_mtfw_shader_group(node_tree):
+    # Appending a material from another .blend brings its own copy of the
+    # group, which Blender names "MT Framework shader.001" and so on.
+    if node_tree is None:
         return False
-    existing_mtfw_shader_groups = [
-        n for n in bl_mat.node_tree.nodes if isinstance(n, bpy.types.ShaderNodeGroup) and
-        n.node_tree is mtfw_shader_group
-    ]
-    return bool(existing_mtfw_shader_groups)
+    base, _, suffix = node_tree.name.rpartition(".")
+    return node_tree.name == MTFW_SHADER_NODEGROUP_NAME or (
+        base == MTFW_SHADER_NODEGROUP_NAME and suffix.isdigit()
+    )
+
+
+def _has_mtfw_shader_group(bl_mat):
+    return any(
+        isinstance(n, bpy.types.ShaderNodeGroup) and _is_mtfw_shader_group(n.node_tree)
+        for n in bl_mat.node_tree.nodes
+    )
 
 
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))
