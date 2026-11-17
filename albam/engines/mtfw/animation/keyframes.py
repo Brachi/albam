@@ -163,7 +163,7 @@ class LMTKeyFrames:
         dst_track.buffer_type = kf_type
         dst_track.usage = usage
         dst_track.joint_type = 0
-        dst_track.bone_index = bone_index
+        dst_track.idx_anim_map = bone_index
         dst_track.reference_data = []
 
         if static:

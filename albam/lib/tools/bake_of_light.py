@@ -4,36 +4,13 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import PureWindowsPath
 
-from bc7enc import pack_dds
 from ..common_op import _get_albam_mat_props
-from ..dds import DDSHeader
+from ..blender import image_to_dds
 
 
 def _new_bake_target(lightmap_name, size):
     """Temporal image used only as Cycles' bake target."""
     return bpy.data.images.new(f"__albam_bake__{lightmap_name}", size, size)
-
-
-def _image_to_dds(bl_image):
-    """Encode Blender RGBA image as DXT1 DDS"""
-    width, height = bl_image.size
-    rgba = bytes(max(0, min(255, round(value * 255))) for value in bl_image.pixels[:])
-    row_size = width * 4
-    rgba = b"".join(
-        rgba[row * row_size:(row + 1) * row_size]
-        for row in range(height - 1, -1, -1)
-    )
-    blocks = pack_dds(rgba, width, height, "DXT1", mipmaps=True)
-    mipmap_count = max(width, height).bit_length()
-    header = DDSHeader(
-        dwHeight=height,
-        dwWidth=width,
-        dwMipMapCount=mipmap_count,
-        pixelfmt_dwFourCC=b"DXT1",
-    )
-    header.set_constants()
-    header.set_variables()
-    return bytes(header) + blocks
 
 
 def _replace_bake_target(baked_image, replaced_image, lightmap_name, app_id, mod_path):
@@ -58,7 +35,7 @@ def _replace_bake_target(baked_image, replaced_image, lightmap_name, app_id, mod
     final_image.pixels.foreach_set(baked_image.pixels[:])
     final_image.update()
 
-    dds = _image_to_dds(final_image)
+    dds = image_to_dds(final_image)
     # Workaround for strange Blender behavior: it rises Save/Discard dialog in Image tab
     # if we update the image data directly. Swapping with the temporary file prevents this.
     original_filepath = final_image.filepath_raw

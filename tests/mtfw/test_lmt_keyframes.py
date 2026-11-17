@@ -178,22 +178,36 @@ class _FakeFcurve:
 
 
 class _FakeAction:
-    def __init__(self, last_frame):
+    def __init__(self, last_frame, use_frame_range=False):
         self.frame_range = (1.0, float(last_frame))
+        self.use_frame_range = use_frame_range
 
 
-class _FakeProps:
-    def __init__(self, num_frames):
-        self.num_frames = num_frames
+class _FakeProps(dict):
+    """A block's property group as a .blend saved before #273 holds it:
+    `num_frames` no longer registered, but still stored and read with get()."""
+
+    def __init__(self, num_frames=None):
+        super().__init__({} if num_frames is None else {"num_frames": num_frames})
 
 
 def test_a_block_that_never_moves_keeps_its_length():
     """A constant track needs one keyframe, however long the block runs.
 
-    Reading the length off the action there turns a static hold into a single
+    Reading the length off the keys there turns a static hold into a single
     frame: the pose stays right and the timing is destroyed, which is worse
     than a wrong pose because nothing about the exported file looks wrong.
+    Import keeps the length as the action's manual frame range.
     """
+    from albam.engines.mtfw.animation.animation_export import _block_length
+
+    action = _FakeAction(60, use_frame_range=True)
+    fcurves = [_FakeFcurve([1.0]) for _ in range(57)]
+    assert _block_length(action, fcurves, _FakeProps()) == 60
+
+
+def test_a_legacy_block_that_never_moves_keeps_its_stored_length():
+    """A .blend saved before #273 has no manual range, only num_frames."""
     from albam.engines.mtfw.animation.animation_export import _block_length
 
     action = _FakeAction(1)
@@ -201,7 +215,7 @@ def test_a_block_that_never_moves_keeps_its_length():
     assert _block_length(action, fcurves, _FakeProps(60)) == 60
 
 
-def test_an_action_with_keyframes_decides_its_own_length():
+def test_a_legacy_action_with_keyframes_decides_its_own_length():
     """Including when the intent is to shorten the block - an edited action is
     the authority on how long it runs, so the stored length must not win.
     """
@@ -218,7 +232,7 @@ def test_a_block_with_no_stored_length_falls_back_to_the_action():
 
     action = _FakeAction(1)
     fcurves = [_FakeFcurve([1.0])]
-    assert _block_length(action, fcurves, _FakeProps(0)) == 1
+    assert _block_length(action, fcurves, _FakeProps()) == 1
 
 
 def test_restoring_w_survives_a_quantized_over_unit_quaternion():

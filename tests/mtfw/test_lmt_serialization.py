@@ -154,20 +154,20 @@ def test_export_anim_block(lmt_imported_local, lmt_exported_local):
             stracks = [tr for _, tr in enumerate(sab.block_header.tracks)]
             dtracks = [tr for _, tr in enumerate(dab.block_header.tracks)]
             for strack in stracks:
-                bone = strack.bone_index
+                bone = strack.idx_anim_map
                 dbone = -1
                 for dtrack in dtracks:
-                    if dtrack.bone_index == bone:
-                        dbone = dtrack.bone_index
+                    if dtrack.idx_anim_map == bone:
+                        dbone = dtrack.idx_anim_map
                 if dbone == -1:
                     print(bone)
             j = 0
             for str, dtr in zip(stracks, dtracks):
-                print("amim_block:", i, "track:", j, "bone index:", str.bone_index)
+                print("amim_block:", i, "track:", j, "bone index:", str.idx_anim_map)
                 # current code buffer type selection isn't that reliable for static frames
                 assert str.usage == dtr.usage
                 assert str.joint_type == dtr.joint_type
-                assert str.bone_index == dtr.bone_index
+                assert str.idx_anim_map == dtr.idx_anim_map
                 assert str.weight == dtr.weight
                 # Re-encoding a track shifts its fallback value in the last
                 # decimals, so this is a tolerance rather than equality.

@@ -21,6 +21,7 @@ pytest.importorskip("moto")
 pytest.importorskip("smart_open")
 
 from moto import mock_aws  # noqa: E402
+from albam.lib.s3 import CACHE_DIR_ENV_VAR  # noqa: E402
 
 from albam.engines.mtfw import EXTENSION_TO_FILE_ID  # noqa: E402
 from albam.engines.mtfw.arc_fs import MTFW_FS  # noqa: E402
@@ -161,6 +162,9 @@ def get_object_calls(s3_client, monkeypatch):
         return client
 
     monkeypatch.setattr(boto3, "client", spying_client_factory)
+    # The disk cache wraps get_object outside the spy, so a range an earlier
+    # test already fetched would never reach it.
+    monkeypatch.setenv(CACHE_DIR_ENV_VAR, "")
     return calls
 
 

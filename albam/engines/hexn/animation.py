@@ -602,6 +602,11 @@ def build_blender_action(armature_object, decoded_clip, action_name, bone_names,
         armature_object.animation_data.action_slot = action.slots[-1]
 
     pose_bones = armature_object.pose.bones
+    # Bones this clip doesn't key keep whatever the previous action left in
+    # their channels, and the identity basis described above is what they
+    # need to follow their parents.
+    for pose_bone in pose_bones:
+        pose_bone.matrix_basis = Matrix.Identity(4)
     bones = armature_object.data.bones
     animated = {}
     for bone_idx in sorted(decoded_clip.bones):

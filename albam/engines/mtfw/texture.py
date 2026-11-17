@@ -11,6 +11,7 @@ from ...exceptions import AlbamCheckFailure
 from ...lib.blender import (
     get_bl_teximage_nodes,
     get_bl_materials,
+    image_to_dds,
     is_blimage_dds,
 )
 from ...lib.dds import DDSHeader
@@ -26,13 +27,6 @@ from .structs.mrl import Mrl
 
 
 APP_USES_64BIT_OFS = {"umvc3"}
-
-
-class TextureType2(Enum):  # TODO: unify
-    # TODO: complete
-    DIFFUSE = 20
-    SPECULAR = 25
-    NORMAL = 31
 
 
 class TextureType(Enum):  # TODO: TextureTypeSlot
@@ -65,6 +59,7 @@ class TextureType(Enum):  # TODO: TextureTypeSlot
     TOON = 23
     TOON_REVERSE = 24
     INDIRECT_USER = 25
+    SHININESS = 26
 
 
 TEX_TYPE_MAP_2 = {
@@ -100,6 +95,7 @@ TEX_TYPE_MAP_2 = {
     "ttoonmap": TextureType.TOON,
     "ttoonrevmap": TextureType.TOON_REVERSE,
     "tindirectmapuser": TextureType.INDIRECT_USER,
+    "tshininessmap": TextureType.SHININESS,
 }
 
 
@@ -123,13 +119,7 @@ NODE_NAMES_TO_TYPES = {
     'Toon Ramp': TextureType.TOON,
     'Toon Ramp Reverse': TextureType.TOON_REVERSE,
     'Indirect User': TextureType.INDIRECT_USER,
-}
-
-NODE_NAMES_TO_TYPES_2 = {  # TODO: unify
-    'Diffuse BM': TextureType2.DIFFUSE,
-    'Normal NM': TextureType2.NORMAL,
-    'Specular MM': TextureType2.SPECULAR,
-    'Detail DNM': TextureType2.NORMAL
+    'Shininess Map': TextureType.SHININESS,
 }
 
 
@@ -158,11 +148,9 @@ TEX_FORMAT_MAPPER = {
     '\x15\x00\x00\x00': b"",
 }
 
-# FIXME: take into account type of texture (BM/NM/MM, etc.)
-DDS_FORMAT_MAP = {
-    b"DXT1": 20,
-    b"DXT5": 31,
-}
+# The Tex157 code written for an uncompressed 32-bit DDS whose
+# compression_format property isn't one of the uncompressed codes.
+UNCOMPRESSED_COMPRESSION_FORMAT = 14
 
 APPID_SERIALIZE_MAPPER = {
     "re0": lambda: _serialize_texture_21,
@@ -274,6 +262,83 @@ def is_dummy_texture_path(texture_path):
     return texture_path.replace("\\", "/").lower().startswith(DUMMY_TEXTURE_PATH_PREFIX)
 
 
+# Archives that many models' materials reference textures from without
+# packing their own copy. A missing texture under one of these app_ids is
+# often not actually missing from the game - the shared archive just hasn't
+# been loaded yet. REV2's Core.arc is the one #support sees over and over
+# (hair losing its sheen): users chase the shader or the export instead of
+# just loading Core.arc first, because nothing in the UI points at it (#374).
+KNOWN_SHARED_TEXTURE_ARCHIVES = {
+    "rev2": "Core.arc",
+}
+
+# How many of the missing paths to actually list in the warning - the count
+# alone matters more once there are dozens of them (one shared archive not
+# loaded can affect every texture slot in a model).
+MAX_REPORTED_MISSING_TEXTURE_PATHS = 5
+
+# Missing textures collected across one import operation - a single file or
+# an entire batch-imported folder - so the import operator can report them
+# once at the end (see ALBAM_OT_Import in blender_ui/import_panel.py)
+# instead of each one only ever reaching the console. Keyed by
+# (app_id, texture_path) to de-duplicate: the same shared texture is
+# typically referenced by many materials, and reporting it once per
+# reference would make the count meaningless.
+_missing_textures = []
+_missing_texture_keys = set()
+
+
+def reset_missing_textures():
+    """Call once at the start of an import operation, before anything is
+    imported."""
+    _missing_textures.clear()
+    _missing_texture_keys.clear()
+
+
+def record_missing_texture(app_id, texture_path):
+    key = (app_id, texture_path)
+    if key in _missing_texture_keys:
+        return
+    _missing_texture_keys.add(key)
+    _missing_textures.append(key)
+
+
+def get_missing_textures():
+    """The (app_id, texture_path) pairs recorded since the last reset, in
+    the order they were first encountered."""
+    return list(_missing_textures)
+
+
+def build_missing_textures_report(missing):
+    """A single user-facing warning for the textures `missing` ([(app_id,
+    texture_path), ...], as returned by get_missing_textures()) names, or
+    None if there is nothing to report.
+    """
+    if not missing:
+        return None
+
+    app_ids_seen = {app_id for app_id, _ in missing}
+    paths = [texture_path for _, texture_path in missing]
+
+    shown = paths[:MAX_REPORTED_MISSING_TEXTURE_PATHS]
+    remainder = len(paths) - len(shown)
+    message = f"{len(paths)} texture(s) referenced by imported materials were not found: " + ", ".join(shown)
+    if remainder > 0:
+        message += f" (+{remainder} more)"
+
+    archive_hints = sorted({
+        KNOWN_SHARED_TEXTURE_ARCHIVES[app_id] for app_id in app_ids_seen
+        if app_id in KNOWN_SHARED_TEXTURE_ARCHIVES
+    })
+    if archive_hints:
+        pronoun = "it" if len(archive_hints) == 1 else "them"
+        message += (
+            ". These are usually in " + " and ".join(archive_hints) + f"; load {pronoun} before importing."
+        )
+
+    return message
+
+
 @blender_registry.register_import_function(app_id="re5", extension="tex", albam_asset_type="TEXTURE")
 def import_texture(vfile: VirtualFile, context: bpy.types.Context) -> bpy.types.Image:
     app_id = vfile.app_id
@@ -357,6 +422,7 @@ def build_blender_textures(app_id, context, parsed_mod, mrl=None, *, root_id):
             # the path, and only the placeholder is skipped there.
             if not is_dummy_texture_path(texture_path):
                 print(f"texture_path {texture_path} not found in arc")
+                record_missing_texture(app_id, texture_path)
             textures.append(None)
             continue
         TexOrRtexCls = RtexCls if is_rtex else TexCls
@@ -648,6 +714,10 @@ def texture_code_to_blender_texture(texture_code, blender_texture_node, blender_
         link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Indirect User"])
         blender_texture_node.location = (-600, -2100)
 
+    elif texture_code == 26:
+        link(blender_texture_node.outputs["Color"], shader_node_grp.inputs["Shininess Map"])
+        blender_texture_node.location = (-600, -2150)
+
     else:
         print("texture_code not supported", texture_code)
 
@@ -658,28 +728,20 @@ def serialize_textures(app_id, bl_materials):
     serialize_func = APPID_SERIALIZE_MAPPER[app_id]()
 
     bad_appid = []
-    texture_paths = []
-    duplicated_paths = []
     too_long = []
     for im_name, data in exported_textures.items():
-        if data["image"].albam_asset.app_id != app_id:
-            bad_appid.append((im_name, data["image"].albam_asset.app_id))
-        if data["image"].albam_asset.relative_path in texture_paths:
-            duplicated_paths.append((im_name, data["image"].albam_asset.relative_path))
-        texture_paths.append(data["image"].albam_asset.relative_path)
+        bl_im = data["image"]
+        if bl_im.albam_asset.app_id != app_id:
+            bad_appid.append((im_name, bl_im.albam_asset.app_id))
         # the extension doesn't matter here, only what goes in the .mrl slot
         path_no_ext = _handle_relative_path(data["image"]).rpartition(".")[0]
         if len(path_no_ext) > MRL_TEXTURE_PATH_MAX_LEN:
             too_long.append((im_name, path_no_ext))
     if bad_appid:
-        raise AttributeError(
-            f"The following images have an incorrect app_id (needs: {app_id}): {bad_appid}\n"
-            "Go to Image -> tools -> Albam and select the proper app_id for each."
-        )
-    if duplicated_paths:
-        raise AttributeError(
-            f"The following images have duplicated relative paths: {duplicated_paths}\n"
-            "Go to Image Editor -> Albam and select a unique relative path for each."
+        raise AlbamCheckFailure(
+            f"Some images have an app_id that doesn't match the exported app ({app_id})",
+            details=f"Images: {bad_appid}",
+            solution="Go to Image Editor -> Albam and select the proper app_id for each image listed above"
         )
     if too_long:
         paths = [f"{im_name} -> {path} ({len(path)} characters)" for im_name, path in too_long]
@@ -695,8 +757,81 @@ def serialize_textures(app_id, bl_materials):
     for dict_tex in exported_textures.values():
         vfile = serialize_func(app_id, dict_tex)
         dict_tex["serialized_vfile"] = vfile
+    _merge_same_path_textures(app_id, exported_textures)
+    _warn_about_compression_formats(exported_textures)
 
     return exported_textures
+
+
+def _warn_about_compression_formats(exported_textures):
+    warnings = [d["compression_warning"] for d in exported_textures.values() if d.get("compression_warning")]
+    if not warnings:
+        return
+    from ...blender_ui.tools_panel import show_message_box
+    preview = "; ".join(warnings[:3])
+    if len(warnings) > 3:
+        preview += f"; +{len(warnings) - 3} more"
+    show_message_box(preview, title="Warning", icon='ERROR')
+
+
+def _merge_same_path_textures(app_id, exported_textures):
+    """Images that export to the same path (typically `pl_VTF` and
+    `pl_VTF.001`, the same game texture imported twice) and serialize to the
+    same bytes are one texture: every one of them is given the first one's
+    vfile, so it's written once and every material slot still points at
+    that path. Same path with different bytes is a real conflict.
+    """
+    first_by_path = {}
+    conflicts = []
+    for im_name, dict_tex in exported_textures.items():
+        vfile = dict_tex["serialized_vfile"]
+        first = first_by_path.setdefault(vfile.relative_path, (im_name, dict_tex))
+        if first[1] is dict_tex:
+            continue
+        first_name, first_dict = first
+        if first_dict["serialized_vfile"].data_bytes == vfile.data_bytes:
+            dict_tex["serialized_vfile"] = first_dict["serialized_vfile"]
+            continue
+        differences = _describe_texture_differences(app_id, first_dict["image"], dict_tex["image"])
+        conflicts.append(f"'{first_name}' and '{im_name}' -> {vfile.relative_path}: {differences}")
+
+    if conflicts:
+        raise AlbamCheckFailure(
+            "Some images export to the same texture path but would write different textures there",
+            details="; ".join(conflicts),
+            solution=("If both images are meant to be the same game texture, make them match: "
+                      "point the second image's material slots at the first image (or copy its "
+                      "DDS and its settings in Image Editor -> Albam). If one of them is a "
+                      "texture you edited, use that image in every material that uses this path"),
+        )
+
+
+def _describe_texture_differences(app_id, im_a, im_b):
+    differences = []
+    if tuple(im_a.size) != tuple(im_b.size):
+        differences.append(f"size {im_a.size[0]}x{im_a.size[1]} vs {im_b.size[0]}x{im_b.size[1]}")
+
+    props_a = im_a.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    props_b = im_b.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    for name in props_a.__annotations__:
+        value_a, value_b = getattr(props_a, name), getattr(props_b, name)
+        if value_a != value_b:
+            differences.append(f"{name} {value_a} vs {value_b}")
+
+    if _image_bytes(im_a) != _image_bytes(im_b):
+        differences.append("different pixel data")
+
+    return ", ".join(differences) or "different exported .tex data"
+
+
+def _image_bytes(bl_im):
+    if bl_im.packed_file:
+        return bl_im.packed_file.data
+    try:
+        with open(bpy.path.abspath(bl_im.filepath), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
 
 
 def _check_is_power_of_two(image):
@@ -763,7 +898,6 @@ def _serialize_texture_21(app_id, dict_tex):
     bl_im = dict_tex["image"]
     custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
     is_rtex = custom_properties.render_target
-    # compression_format = custom_properties.compression_format or _infer_compression_format(dict_tex)
 
     if is_rtex:
         tex = Rtex157(app_id)
@@ -795,6 +929,10 @@ def _serialize_texture_21(app_id, dict_tex):
         dds_data_size = len(tex.dds_data)
 
     custom_properties.set_to_dest(tex)
+    if not is_rtex:
+        tex.compression_format, warning = _resolve_compression_format_21(
+            app_id, dict_tex, custom_properties.compression_format, dds_header)
+        dict_tex["compression_warning"] = warning
     check_recursive(tex)
 
     final_size = tex.size_before_data_ + dds_data_size
@@ -805,46 +943,55 @@ def _serialize_texture_21(app_id, dict_tex):
     return vf
 
 
-def _infer_compression_format(dict_tex):
-    """
-    Infer the type of texture based on its usage in materials.
-    E.g. if the bl_image is linked to a "BM" socket, it's diffuse.
-    """
-    # NOTE: this logic is duplicated in `_gather_tex_types`
+def _resolve_compression_format_21(app_id, dict_tex, prop_format, dds_header):
+    """The compression_format to write for a Tex157 texture, and a warning
+    or None.
 
-    DEFAULT_COMPRESSION_FORMAT = TextureType2.DIFFUSE
+    The DDS header decides the block format (TEX_FORMAT_MAPPER's family:
+    DXT1, DXT5 or uncompressed). Several codes share a family (e.g. 24 for
+    diffuse with alpha, 31 for normal maps, both DXT5), so the image's
+    property picks the code when it belongs to that family. When it doesn't,
+    the game would read the pixel data with the wrong layout, so a code is
+    derived from the header and the texture slot instead.
+    """
+    fourcc = dds_header.pixelfmt_dwFourCC
+    if TEX_FORMAT_MAPPER.get(prop_format) == fourcc:
+        return prop_format, None
+
     bl_im = dict_tex["image"]
-    materials_dict = dict_tex["materials"]
-    materials = [m[0] for m in materials_dict.values()]
+    dds_format = _describe_dds_format(dds_header)
+    derived = _derive_compression_format_21(app_id, dict_tex, dds_header)
+    if derived is None:
+        raise AlbamCheckFailure(
+            f"Image '{bl_im.name}' is a DDS format this game's textures can't use",
+            details=(f"Image: {bl_im.name}, DDS holds: {dds_format}, "
+                     f"compression_format property: {prop_format}"),
+            solution=("Save the DDS as DXT1/BC1 (no alpha, specular) or DXT5/BC3 (alpha, normal maps), "
+                      "without the DX10 header, or use a PNG/TGA and let export encode it"),
+        )
+    warning = (f"{bl_im.name}: compression_format {prop_format} doesn't match its DDS ({dds_format}), "
+               f"exported as {derived}")
+    return derived, warning
 
-    if not materials:
-        # means texture is disconnected, could still happend
-        # TODO: update then blender.lib function is updated
-        return DEFAULT_COMPRESSION_FORMAT.value
 
-    # Arbitrarily using the first material where the image is used to infer its type.
-    # TODO: report discrepancies in texture usage (e.g. texture used both as Diffuse and Lightmap)
-    bl_mat = materials[0]
-    image_nodes = [node for node in bl_mat.node_tree.nodes if node.type == "TEX_IMAGE"]
-    im_nodes = [node for node in image_nodes if node.image.name == bl_im.name]
-    im_node = im_nodes[0] if im_nodes else None
-    if not im_node:
-        return DEFAULT_COMPRESSION_FORMAT.value
-    links = im_node.outputs["Color"].links
-    if not links:
-        return DEFAULT_COMPRESSION_FORMAT.value
-    mtfw_shader_link_name = links[0].to_socket.name
-    try:
-        tex_type = NODE_NAMES_TO_TYPES_2[mtfw_shader_link_name]
-    except KeyError:
-        print(f"Can\'t get correct compression_format for image '{bl_im.name}'."
-              "Node '{mtfw_shader_link_name}' not supported yet. "
-              "Using default {DEFAULT_COMPRESSION_FORMAT}. "
-              "Set compression_format manually for now."
-              )
-        tex_type = DEFAULT_COMPRESSION_FORMAT
+def _derive_compression_format_21(app_id, dict_tex, dds_header):
+    fourcc = dds_header.pixelfmt_dwFourCC
+    if fourcc in (b"DXT1", b"DXT5"):
+        texture_slot = _texture_slot_for_image(dict_tex)
+        return _choose_export_compression_format(app_id, texture_slot, has_alpha=fourcc == b"DXT5")
+    if not fourcc and dds_header.pixelfmt_dwRGBBitCount == 32:
+        return UNCOMPRESSED_COMPRESSION_FORMAT
+    return None
 
-    return tex_type.value
+
+def _describe_dds_format(dds_header):
+    fourcc = dds_header.pixelfmt_dwFourCC
+    if fourcc == b"DX10":
+        dxgi_format = int.from_bytes(dds_header.data[:4], "little")
+        return f"DX10 header, DXGI format {dxgi_format}"
+    if fourcc:
+        return fourcc.decode("ascii", "replace")
+    return f"uncompressed {dds_header.pixelfmt_dwRGBBitCount}-bit"
 
 
 def _handle_relative_path(bl_im, render_target=False):
@@ -1053,40 +1200,183 @@ class Tex157CustomProperties(bpy.types.PropertyGroup):  # noqa: F821
             setattr(dst, name, hex(src_value))
 
 
+# Per-app_id, per-slot compression_format codes: (BM alpha, BM no alpha,
+# MM/Specular, NM/Normal). This is also the table the Autosetter
+# (set_image_albam_attr, blender_ui/tools_panel.py) assigns from, moved
+# here so the two can share one copy instead of risking two tables that
+# quietly disagree - e.g. re1 alone uses 19 for Specular, where every
+# other game here uses 25.
+TEX_COMPRESSION = {
+    "re0": (24, 20, 25, 31),
+    "re1": (24, 20, 19, 31),
+    "rev1": (23, 19, 25, 31),
+    "rev2": (24, 20, 25, 31),
+    "re6": (24, 20, 25, 31),
+    "dd": (24, 20, 25, 31),
+}
+
+# TEX_COMPRESSION has no entry for every Tex157 app_id - umvc3 is Tex157
+# (APPID_TEXCLS_MAP) but isn't covered by TEX_COMPRESSION or the
+# Autosetter's own else-branch (which assumes Tex112's encoded_type
+# instead) either, a pre-existing gap. These are the values most of
+# TEX_COMPRESSION's own entries already use, so they are a reasonable
+# default rather than a new guess.
+DEFAULT_TEX_COMPRESSION = (24, 20, 25, 31)
+
+
+def _texture_slot_for_image(bl_im_dict):
+    """
+    The texture slot (TextureType) a non-DDS image is wired into, read from
+    the shader socket its TEX_IMAGE node feeds - the same socket-name
+    mapping _gather_tex_types (material.py) uses to serialize set_texture
+    commands. get_bl_teximage_nodes() only ever records a node that has at
+    least one outgoing link, so there is always one to read here.
+
+    An image can be wired into more than one material; the first one
+    get_bl_teximage_nodes recorded is as good a guess as any, since there is
+    no per-material override for how a given image gets exported.
+    """
+    _bl_mat, node = next(iter(bl_im_dict["materials"].values()))
+    socket_name = node.outputs["Color"].links[0].to_socket.name
+    return NODE_NAMES_TO_TYPES[socket_name]
+
+
+def _choose_export_dds_fourcc(texture_slot, has_alpha):
+    """
+    Pick the DDS block format (for bc7enc's pack_dds) for a non-DDS image
+    being encoded on export, from its texture slot and alpha channel - not
+    a single guess for every texture. Unlike the engine's own
+    compression_format code (_choose_export_compression_format), the fourCC
+    itself is not app_id-specific: every TEX_COMPRESSION entry maps Normal
+    to DXT5 and Specular to DXT1 regardless of game.
+
+    BC5/BC7 are deliberately never picked: no code in TEX_FORMAT_MAPPER maps
+    to either, and DDSHeader.get_block_size() (lib/dds.py) does not
+    recognize them, so a DDS written with them would not be a format this
+    addon's own importer - or any supported MT Framework game - can read
+    back. Those are RE Engine (reng/hexn) formats.
+    """
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL, TextureType.NORMAL_DETAIL_2):
+        return "DXT5"
+    if texture_slot == TextureType.SPECULAR:
+        return "DXT1"
+    return "DXT5" if has_alpha else "DXT1"
+
+
+def _choose_export_compression_format(app_id, texture_slot, has_alpha):
+    """
+    The Tex157 compression_format code matching the fourCC
+    _choose_export_dds_fourcc would pick for the same slot/alpha, read from
+    TEX_COMPRESSION - the same per-app_id table the Autosetter uses, so the
+    two never disagree about a given game's Specular or Diffuse code.
+    """
+    bm_alpha, bm_no_alpha, mm, nm = TEX_COMPRESSION.get(app_id, DEFAULT_TEX_COMPRESSION)
+    if texture_slot in (TextureType.NORMAL, TextureType.NORMAL_DETAIL, TextureType.NORMAL_DETAIL_2):
+        return nm
+    if texture_slot == TextureType.SPECULAR:
+        return mm
+    return bm_alpha if has_alpha else bm_no_alpha
+
+
+def _plan_non_dds_image_encode(bl_im_dict):
+    """
+    Compute the DDS bytes and compression_format for a non-DDS image
+    (PNG, TGA, ...), without mutating the image yet - see check_dds_textures,
+    which only applies every image's plan once every one of them has
+    encoded successfully, so one image's encode failure can't leave an
+    earlier image in the same export half-converted.
+    """
+    bl_im = bl_im_dict["image"]
+    app_id = bl_im.albam_asset.app_id
+    texture_slot = _texture_slot_for_image(bl_im_dict)
+    has_alpha = bl_im.depth in (32, 64, 128)
+    dds_fourcc = _choose_export_dds_fourcc(texture_slot, has_alpha)
+    dds_bytes = image_to_dds(bl_im, fourcc=dds_fourcc)
+    compression_format = _choose_export_compression_format(app_id, texture_slot, has_alpha)
+    return dds_bytes, compression_format
+
+
+def _apply_non_dds_image_encode(bl_im, app_id, dds_bytes, compression_format):
+    """
+    Replace a non-DDS image's packed data with dds_bytes, and set its
+    compression_format to match, instead of export refusing the whole model
+    and sending the user off to pick a DDS format externally by hand - a
+    mismatch between that hand-picked format and the compression setting is
+    one of the most common reported texture problems (black screen,
+    glowing texture, ERR09 crashes).
+
+    The image keeps its name, path and material links - only its packed
+    data and (for Tex157 games) compression_format change - so every later
+    export step sees an ordinary DDS image, same as one the user built
+    externally with the right format.
+    """
+    bl_im.source = "FILE"
+    bl_im.pack(data=dds_bytes, data_len=len(dds_bytes))
+
+    custom_properties = bl_im.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    if hasattr(custom_properties, "compression_format"):
+        # Tex112 (re5/dmc4) has no such field - its compression_format is
+        # read straight from the DDS fourCC at serialize time instead (see
+        # _serialize_texture_156), so there is nothing to set for it here.
+        custom_properties.compression_format = compression_format
+
+
 def check_dds_textures(func):
     """
-    Function decorator that checks if all the meshes of a bl_object
-    have materials that use dds textures only
-    Raises AlbamCheckFailure with the list of
-    non-dds textures and materials where they are used
+    Function decorator that encodes any non-DDS image used by a bl_object's
+    materials as DDS before exporting, instead of refusing the whole export
+    and telling the user to convert it externally by hand. A render target
+    has no pixel data to encode and is skipped, same as before; an image
+    that is already DDS is left exactly as it is.
+
+    Every non-DDS image is encoded (_plan_non_dds_image_encode) before any
+    of them is actually applied to an image (_apply_non_dds_image_encode):
+    one image's encode failure - raised as an AlbamCheckFailure rather than
+    a raw exception - then aborts the export without leaving some other
+    image in the same model half-converted.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         bl_objects = [a for a in args if isinstance(a, bpy.types.Object)]
         if not bl_objects:
-            result = func(*args, **kwargs)
+            return func(*args, **kwargs)
         # No more than one root object in export functions
         meshes = [c for c in bl_objects[0].children_recursive if c.type == "MESH"]
         materials = get_bl_materials(meshes)
         images = get_bl_teximage_nodes(materials)
-        non_dds = []
+        to_apply = []
+        errors = []
         for bl_im_name, bl_im_dict in images.items():
-            app_id = bl_im_dict["image"].albam_asset.app_id
             image = bl_im_dict["image"]
-            custom_propertins = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
-            if custom_propertins.render_target is True:
+            app_id = image.albam_asset.app_id
+            custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+            if custom_properties.render_target is True:
                 continue
-            if not is_blimage_dds(bl_im_dict["image"]):
-                non_dds.append((bl_im_name, bl_im_dict))
-        if any(non_dds):
-            data = [
-                f"Texture: {bl_im_name} -> materials: {list(bl_im_dict['materials'].keys())}"
-                for bl_im_name, bl_im_dict in non_dds
-            ]
+            if is_blimage_dds(image):
+                continue
+            try:
+                dds_bytes, compression_format = _plan_non_dds_image_encode(bl_im_dict)
+            except Exception as err:
+                errors.append((bl_im_name, bl_im_dict, err))
+                continue
+            to_apply.append((image, app_id, dds_bytes, compression_format))
+        if errors:
+            names = ", ".join(name for name, _, _ in errors)
+            details = "; ".join(
+                f"{name} (materials: {list(bl_im_dict['materials'].keys())}) - {err}"
+                for name, bl_im_dict, err in errors
+            )
             raise AlbamCheckFailure(
-                "The materials to export contain some images that are not DDS",
-                details=" ".join(data),
-                solution="Edit the images externally (e.g. in GIMP) and reassign in the materials listed")
+                f"Could not convert {len(errors)} image(s) to DDS for export: {names}",
+                details=details,
+                solution=(
+                    "Convert the image(s) to DDS externally (e.g. in GIMP or the NVIDIA "
+                    "Photoshop plugin), matching each texture slot's compression "
+                    "(diffuse/normal/specular), and reassign them in the material(s)"
+                ),
+            )
+        for image, app_id, dds_bytes, compression_format in to_apply:
+            _apply_non_dds_image_encode(image, app_id, dds_bytes, compression_format)
         result = func(*args, **kwargs)
 
         return result

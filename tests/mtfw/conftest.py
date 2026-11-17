@@ -1,7 +1,10 @@
+import contextlib
 import os
 
 import bpy
 import pytest
+
+from tests.skip_policy import skip_missing
 
 
 R2_PROTOCOL_PREFIX = "r2://"
@@ -28,6 +31,31 @@ def _game_dirs(pytestconfig):
     return parsed
 
 
+def _build_game_fs(pytestconfig, local_app_id):
+    """The MTFW_FS --game-dir's value for local_app_id describes, freshly
+    built (a brand new S3/R2 key listing for the r2:// case). Skips
+    (raising via skip_missing) for a bad/missing --game-dir.
+    """
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+    from tests.mtfw.r2_config import resolve_r2_source
+
+    value = _game_dirs(pytestconfig).get(local_app_id)
+    if not value:
+        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+    elif value.startswith(R2_PROTOCOL_PREFIX):
+        r2_kwargs = resolve_r2_source(value)
+        if r2_kwargs is None:
+            skip_missing(
+                f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
+                f"(empty bucket, missing s3 extras, or missing credentials - see "
+                f".env.example)"
+            )
+        return MTFW_FS.from_s3(**r2_kwargs)
+    elif not os.path.isdir(value):
+        skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+    return MTFW_FS(value)
+
+
 @pytest.fixture(scope="session")
 def game_fs_root(pytestconfig, local_app_id):
     """
@@ -45,28 +73,16 @@ def game_fs_root(pytestconfig, local_app_id):
     Scanning + flattening a full local game install's tree can take a while
     (a real RE5 install has ~1200 archives) - that cost is paid once per
     app_id per session, not per test.
+
+    local_app_id has to come from parametrizing it at session scope, never
+    from a module defining its own local_app_id fixture: this fixture is
+    only rebuilt when the local_app_id definition it was built from is torn
+    down, and a session-scoped fixture defined in one module is not torn
+    down before the next module runs, so every later module on the same
+    xdist worker would get the previous module's game.
     """
-    from albam.engines.mtfw.arc_fs import MTFW_FS
-    from tests.mtfw.r2_config import resolve_r2_source
-
     if local_app_id not in _GAME_FS_INSTANCES:
-        value = _game_dirs(pytestconfig).get(local_app_id)
-        if not value:
-            pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
-        elif value.startswith(R2_PROTOCOL_PREFIX):
-            r2_kwargs = resolve_r2_source(value)
-            if r2_kwargs is None:
-                pytest.skip(
-                    f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
-                    f"(empty bucket, missing s3 extras, or missing credentials - see "
-                    f".env.example)"
-                )
-            game_fs = MTFW_FS.from_s3(**r2_kwargs)
-        elif not os.path.isdir(value):
-            pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
-        else:
-            game_fs = MTFW_FS(value)
-
+        game_fs = _build_game_fs(pytestconfig, local_app_id)
         bpy.context.scene.albam.apps.app_selected = local_app_id
         vfs = bpy.context.scene.albam.vfs
         vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")
@@ -89,7 +105,7 @@ def import_export(local_app_id, local_path):
     try:
         vfile = vfs.select_vfile(local_app_id, local_path)
     except KeyError:
-        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+        skip_missing(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
@@ -113,7 +129,7 @@ def import_vfile(local_app_id, local_path):
     try:
         vfile = vfs.select_vfile(local_app_id, local_path)
     except KeyError:
-        pytest.skip(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
+        skip_missing(f"{local_path!r} not found under --game-dir for app_id={local_app_id!r}")
 
     result = bpy.ops.albam.import_vfile()
     assert result == {"FINISHED"}
@@ -152,6 +168,32 @@ def action_fcurves(action):
         for channelbag in strip.channelbags
         for fcurve in channelbag.fcurves
     ]
+
+
+@contextlib.contextmanager
+def _pose_restored(armature):
+    """Put the armature's pose back exactly as it was found.
+
+    Assigning an action makes Blender write the evaluated values into the pose
+    bones themselves, and taking the action away again does not undo that - the
+    armature keeps the last frame it was on. Root motion moves a character
+    metres from the origin, so a test that animates one and walks away leaves
+    every later test measuring that pose instead of the rest one.
+    """
+    from mathutils import Matrix
+
+    animation_data = armature.animation_data
+    previous_action = animation_data and animation_data.action
+    previous_pose = {pb.name: pb.matrix_basis.copy() for pb in armature.pose.bones}
+    previous_frame = bpy.context.scene.frame_current
+    try:
+        yield
+    finally:
+        if armature.animation_data is not None:
+            armature.animation_data.action = previous_action
+        for pose_bone in armature.pose.bones:
+            pose_bone.matrix_basis = previous_pose.get(pose_bone.name, Matrix.Identity(4))
+        bpy.context.scene.frame_set(previous_frame)
 
 
 @pytest.fixture
@@ -198,3 +240,33 @@ def mount_vfs_root():
             continue  # the test removed it itself
         vfs.file_list_selected_index = index
         bpy.ops.albam.remove_imported()
+
+
+@pytest.fixture
+def new_bl_material(request):
+    """Factory for materials with one image node linked to Base Color, so
+    the export machinery picks the image up. Each call adds a material and
+    its image, both named after the test; all are removed afterwards.
+    """
+    created = []
+
+    def make(app_id, relative_path=""):
+        name = f"{request.node.name}_{len(created)}"
+        bl_mat = bpy.data.materials.new(name)
+        if not bl_mat.node_tree:  # created on demand before Blender 5
+            bl_mat.use_nodes = True
+        im_node = bl_mat.node_tree.nodes.new("ShaderNodeTexImage")
+        bl_im = bpy.data.images.new(name, 4, 4)
+        bl_im.albam_asset.app_id = app_id
+        bl_im.albam_asset.relative_path = relative_path
+        im_node.image = bl_im
+        bsdf = bl_mat.node_tree.nodes["Principled BSDF"]
+        bl_mat.node_tree.links.new(im_node.outputs["Color"], bsdf.inputs["Base Color"])
+        created.append((bl_mat, bl_im))
+        return bl_mat, bl_im
+
+    yield make
+
+    for bl_mat, bl_im in created:
+        bpy.data.materials.remove(bl_mat)
+        bpy.data.images.remove(bl_im)

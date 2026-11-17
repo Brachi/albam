@@ -40,7 +40,7 @@ instances:
   vertex_buffer_2:
     {pos: header.offset_vertex_buffer_2, size: header.size_vertex_buffer_2, if: header.offset_vertex_buffer_2 > 0}
   index_buffer:
-    {pos: header.offset_index_buffer, size: (header.num_faces * 2) - 2, if: header.offset_index_buffer > 0}
+    {pos: header.offset_index_buffer, size: (header.num_indices * 2) - 2, if: header.offset_index_buffer > 0}
   size_top_level_:
     value: _root.header.size_ + 104
 
@@ -54,8 +54,8 @@ types:
       - {id: num_meshes, type: u2}
       - {id: num_materials, type: u2}
       - {id: num_vertices, type: u4}
-      - {id: num_faces, type: u4}
-      - {id: num_edges, type: u4}
+      - {id: num_indices, type: u4} # was num_faces: the index count, not a face count
+      - {id: num_triangles, type: u4} # was num_edges: the triangle count
       - {id: size_vertex_buffer, type: u4}
       - {id: size_vertex_buffer_2, type: u4}
       - {id: num_textures, type: u4}
@@ -149,8 +149,8 @@ types:
       - {id: idx_anim_map, type: u1}
       - {id: idx_parent, type: u1}
       - {id: idx_mirror, type: u1}
-      - {id: idx_mapping, type: u1}
-      - {id: length, type: f4}
+      - {id: padding, type: u1}
+      - {id: furthest_vertex_distance, type: f4}
       - {id: parent_distance, type: f4}
       - {id: location, type: vec3}
     instances:
@@ -268,16 +268,16 @@ types:
       - {id: shadow_receive, type: b1}
       - {id: sort, type: b1}
       - {id: num_vertices, type: u2}
-      - {id: max_index, type: u2}
+      - {id: last_index, type: u2} # was max_index
       - {id: vertex_position_2, type: u4}
-      - {id: vertex_offset, type: u4}
+      - {id: vertex_byte_offset, type: u4} # was vertex_offset; a byte offset, not a base
       - {id: vertex_offset_2, type: u4} # second vertex buffer offset
-      - {id: face_position, type: u4} # index_ofs
+      - {id: index_start, type: u4} # was face_position; index_ofs
       - {id: num_indices, type: u4}
-      - {id: face_offset, type: u4} # index_base
+      - {id: vertex_base, type: u4} # was face_offset; index_base, but it is a vertex base
       - {id: vdeclbase, type: u1}
       - {id: vdecl, type: u1}
-      - {id: min_index, type: u2}
+      - {id: first_index, type: u2} # was min_index
       - {id: num_weight_bounds, type: u1}
       - {id: idx_bone_palette, type: u1} # envelope
       - {id: rcn_base, type: u2} 
@@ -286,24 +286,29 @@ types:
       size_:
         value: 52
       indices:
-        # face_offset is an index base (see its own comment), added to the
-        # index values rather than to the buffer position - meshes tile
-        # contiguously by face_position alone, and the last one ends exactly
-        # at header.num_faces, so there is no room for it to shift anything.
+        # vertex_base is not added to the buffer position - meshes tile
+        # contiguously by index_start alone, and the last one ends exactly
+        # at header.num_indices, so there is no room for it to shift anything.
         # It is 0 in all but 9 of umvc3's 2702 .mod, which is why including
-        # it here read past end of file on precisely those 9.
-        pos: _root.header.offset_index_buffer + face_position * 2
+        # it here (back when it was named face_offset and read as a byte
+        # offset) read past end of file on precisely those 9.
+        pos: _root.header.offset_index_buffer + index_start * 2
         repeat: expr
         repeat-expr: num_indices
         type: u2
       vertices:
-        # XXX min_index and vertex_position_2 are equal most of the time
-        # But if using vertex_position_2 when they are not, vertices import wrongly
-        # needs investigation
-        pos: "min_index > vertex_position_2 ?  _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset : _root.header.offset_vertex_buffer + (min_index * vertex_stride) + vertex_offset"
+        # vertex_base is the mesh's base into the vertex buffer and
+        # first_index is relative to it. Indices are 16-bit, so a model past
+        # 65536 vertices restarts first_index at 0 for its later meshes and
+        # carries the offset here. RE5 /pawn/om/om0988/model/om09882.mod:
+        # block one ends at 65095, block two has vertex_base 65096, and its
+        # last index 47916 lands on 113012, header.num_vertices - 1. Every
+        # RE5 and DMC4 .mod with a nonzero vertex_base tiles its buffer
+        # exactly with it added, and overlaps without it. Same as mod-21.
+        pos: _root.header.offset_vertex_buffer + vertex_byte_offset + ((vertex_base + first_index) * vertex_stride)
         repeat: expr
           #repeat-expr: num_vertices # TODO: special case
-        repeat-expr: "min_index > vertex_position_2 ? max_index - min_index + 1 : num_vertices"
+        repeat-expr: "first_index > vertex_position_2 ? last_index - first_index + 1 : num_vertices"
         type:
           switch-on: _root.materials_data.materials[idx_material].vtype
           cases:
@@ -327,7 +332,7 @@ types:
   weight_bound:
     seq:
       - {id: bone_id, type: u4}
-      - {id: unk_01, type: vec3}
+      - {id: padding, type: vec3}
       - {id: bsphere, type: vec4}
       - {id: bbox_min, type: vec4}
       - {id: bbox_max, type: vec4}

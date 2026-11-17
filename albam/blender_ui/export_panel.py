@@ -1,8 +1,10 @@
 import time
 import os
+import warnings
 import bpy
 
 from .error_handling import handle_operator_exception
+from ..exceptions import AlbamExportWarning
 from ..registry import blender_registry
 from ..vfs import (
     ALBAM_OT_VirtualFileSystemSaveFileBase,
@@ -25,7 +27,14 @@ class AlbamExportSettings(bpy.types.PropertyGroup):
     remove_duplicate_materials_suffix: bpy.props.BoolProperty(default=True)
     export_visible: bpy.props.BoolProperty(default=False)
     force_lod255: bpy.props.BoolProperty(default=False)
-    export_bones: bpy.props.BoolProperty(default=False)
+    # On by default (#281): copying the source skeleton under edited meshes
+    # writes a file that only breaks once the game animates it.
+    export_bones: bpy.props.BoolProperty(
+        default=True,
+        description="Write the skeleton from the armature: bone positions, parents, "  # noqa: F722
+                    "animation ids and mirrors. Off copies the source file's skeleton "
+                    "and ignores any rig edits",
+    )
     no_vf_grouping: bpy.props.BoolProperty(
         default=False)  # dd weapons and armor requires it
     force_max_num_weights: bpy.props.BoolProperty(default=False)
@@ -285,12 +294,43 @@ class ALBAM_OT_Export(bpy.types.Operator):
         active_object = bpy.context.active_object
         if active_object:
             bpy.ops.object.mode_set(mode='OBJECT')
-        try:
-            self._execute(context, item)
-        except Exception:
-            handle_operator_exception(self, "Export failed")
-            return {"CANCELLED"}
+        # Non-fatal export checks (e.g. #375's Group ID check) use
+        # warnings.warn(..., AlbamExportWarning) rather than raising, since
+        # export is meant to finish - overriding showwarning is the only way
+        # to surface those to the user without threading a report callback
+        # through every export function this calls. A third-party library's
+        # own unrelated warnings.warn() (numpy, PIL, ...) must not get
+        # reported to the user as if it were an export-correctness notice,
+        # so only AlbamExportWarning is captured here - everything else is
+        # forwarded to Python's normal warning display (the console), same
+        # as if this block didn't exist.
+        caught = []
+        original_showwarning = warnings.showwarning
+
+        def _capture_or_forward(message, category, filename, lineno, file=None, line=None):
+            if issubclass(category, AlbamExportWarning):
+                caught.append(message)
+            else:
+                original_showwarning(message, category, filename, lineno, file, line)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("always", AlbamExportWarning)
+            warnings.showwarning = _capture_or_forward
+            try:
+                self._execute(context, item)
+            except Exception:
+                handle_operator_exception(self, "Export failed")
+                return {"CANCELLED"}
+        # Reported last (after the INFO below) so it's the one left showing
+        # in the status bar, which only ever displays the most recent report
+        # of the operator call - reporting it first would let 'Export
+        # successful' immediately bury it. All caught warnings are combined
+        # into one report, since the status bar only shows the last call -
+        # reporting them one at a time would hide every warning but the one
+        # mesh that happened to be checked last.
         self.report({'INFO'}, 'Export successful')
+        if caught:
+            self.report({'WARNING'}, "; ".join(str(message) for message in caught))
         return {"FINISHED"}
 
     @staticmethod
@@ -424,8 +464,32 @@ class ALBAM_OT_Pack(bpy.types.Operator):
             "remove_unused_textures": context.scene.albam.export_settings.remove_unused_textures,
         }
         archive = writer(path_i, files_e, **options)
+        # Everything is built before anything is written, so a failure in
+        # either step (a pack not found, a numbering check) leaves no
+        # half-written mod on disk.
+        companion_writer = blender_registry.companion_archive_writer_registry.get(
+            (item_i.app_id, extension))
+        companions = companion_writer(path_i, files_e, **options) if companion_writer else {}
+
         with open(self.filepath, "wb") as f:
             f.write(archive)
+
+        # A companion's relative path is laid out from the parent of the
+        # archive's own folder: that is where the game, and the importer,
+        # look for what sits beside an archive's folder (RE4 UHD's texture
+        # packs, BIO4/ImagePackHD/ beside BIO4/Em/). Saving into the install,
+        # or into a mod folder that mirrors its layout, then just works, and
+        # re-importing the saved archive finds what was written with it.
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(self.filepath)))
+        written = []
+        for relative_path, data in companions.items():
+            companion_path = os.path.join(base_dir, relative_path)
+            os.makedirs(os.path.dirname(companion_path), exist_ok=True)
+            with open(companion_path, "wb") as f:
+                f.write(data)
+            written.append(companion_path)
+        if written:
+            self.report({'INFO'}, f"Also wrote {', '.join(sorted(written))}")
 
     @classmethod
     def poll(cls, context):

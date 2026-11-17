@@ -12,6 +12,7 @@ from ...lib.misc import chunks
 from ...exceptions import AlbamCheckFailure
 from .structs.re4_uhd_bin import Re4UhdBin
 from .material import build_blender_materials
+from .textures import TextureExport
 
 
 # Bones are stored as LOCAL offsets from parent in millimeters (confirmed via debug:
@@ -165,9 +166,14 @@ def build_blender_model(vfile: VirtualFile, context: bpy.types.Context) -> bpy.t
             loop_normals.append(_decode_normal(n))
         bl_mesh.normals_split_custom_set(loop_normals)
 
-    bl_mesh.albam_custom_properties.get_custom_properties_for_appid(
-        "re4uhd").set_from_source(bin.header)
-    _apply_materials(bl_mesh, bin, mat_face_ranges, _resolve_tpl(vfile, bin, context))
+    if bin.header.flags & BIN_FLAG_VERTEX_COLORS and bin.vertex_colors:
+        _build_vertex_colors(bl_mesh, bin.vertex_colors)
+
+    mesh_properties = bl_mesh.albam_custom_properties.get_custom_properties_for_appid("re4uhd")
+    mesh_properties.set_from_source(bin.header)
+    tpl_vfile = _resolve_tpl(vfile, bin, context)
+    mesh_properties.tpl_id = tpl_vfile.display_name if tpl_vfile else ""
+    _apply_materials(bl_mesh, bin, mat_face_ranges, tpl_vfile)
     bl_mesh_ob = bpy.data.objects.new(f"{bl_object_name}.000", bl_mesh)
     _build_shape_keys(bl_mesh_ob, bin)
 
@@ -240,6 +246,9 @@ class BinCIEMeshCustomProperties(bpy.types.PropertyGroup):
     # How many TPL slots the materials address. The count is what pairs a
     # model with the right .tpl in its archive.
     num_tpl: bpy.props.IntProperty(name="TPL Slots", default=0, options=set())  # noqa: F821
+    # The .tpl import resolved for the model (see choose_tpl) - the one a
+    # texture added in Blender becomes a new slot of. Not in the header.
+    tpl_id: bpy.props.StringProperty(name="TPL", default="", options=set())  # noqa: F821
 
     def set_from_source(self, bin_header):
         self.vertex_scale = bin_header.vertex_scale
@@ -1042,7 +1051,7 @@ def _weight_key(bl_mesh_ob, vertex, group_ids):
     return tuple(bone_ids), tuple(percents), len(influences)
 
 
-def _collect_geometry(bl_mesh_objs, armature):
+def _collect_geometry(bl_mesh_objs, armature, matrix=None):
     """Everything per-corner the format needs, in the order it stores it.
 
     `armature` is the one the bone table is written from (see export_bin),
@@ -1062,6 +1071,10 @@ def _collect_geometry(bl_mesh_objs, armature):
     (bl_mesh_ob, vertex index) per corner - the Blender vertex a corner was
     built from, which is what a morph's per-corner deltas are keyed against
     (see _serialize_morphs).
+
+    `matrix`, when given, is what every mesh is baked with instead: a room
+    model is exported in its own space, which is neither where it is placed
+    nor relative to any armature (see scenario.export_smd).
     """
     groups = []
     positions = []
@@ -1071,6 +1084,7 @@ def _collect_geometry(bl_mesh_objs, armature):
     weight_table = []
     weight_lookup = {}
     source_vertices = []
+    explicit_matrix = matrix
 
     all_bones = list(armature.data.bones) if armature else []
     # The same repeats _serialize_bones reads, so a weight and the bone table
@@ -1121,8 +1135,8 @@ def _collect_geometry(bl_mesh_objs, armature):
         # object's own placement in the scene happened to be, while the bones
         # they are meant to bind to stayed exactly where they started -
         # skinning a moved mesh to an unmoved skeleton.
-        matrix = bl_mesh_ob.matrix_world
-        if armature:
+        matrix = explicit_matrix if explicit_matrix is not None else bl_mesh_ob.matrix_world
+        if armature and explicit_matrix is None:
             matrix = armature.matrix_world.inverted_safe() @ matrix
         normal_matrix = matrix.to_3x3().inverted_safe().transposed()
 
@@ -1241,42 +1255,95 @@ def _strips_from_triangles(triangles):
     Blender loops. Across a UV seam nothing merges, so no strip crosses it,
     which is exactly right.
 
-    Greedy: take a triangle, extend as far as the shared edge and the winding
-    allow, start again. Strips are kept separate rather than stitched with
-    degenerate triangles - the format allows any number of them per material,
-    so there is nothing to gain by joining them and no degenerate winding to
-    get wrong.
+    Every corner is a whole vertex in the file, so a strip costs its
+    triangles plus two, and fewer strips is the only saving there is. Strips
+    are kept separate rather than stitched with degenerate triangles: the
+    format allows any number of them per material, and stitching costs the
+    same two corners a new strip does.
+
+    Greedy, with the usual refinements: the next strip starts from the
+    unused triangle with the fewest unused neighbours, so the edges of a
+    patch are not stranded as single triangles; it is grown from each of the
+    start triangle's three rotations, keeping the longest; and it is grown
+    from both ends. Measured on the shipped models of four rooms and four
+    character and enemy archives, this needs 1.56 and 1.39 corners per
+    triangle where the shipped files use 1.63 and 1.40.
     """
+    import heapq
+
     edges = {}
     for index, (a, b, c) in enumerate(triangles):
         for edge in ((a, b), (b, c), (c, a)):
             edges.setdefault(frozenset(edge), []).append(index)
-
+    neighbours = [set() for _ in triangles]
+    for owners in edges.values():
+        for i in owners:
+            neighbours[i].update(o for o in owners if o != i)
     used = [False] * len(triangles)
-    strips = []
-    for start in range(len(triangles)):
-        if used[start]:
-            continue
-        used[start] = True
-        strip = list(triangles[start])
+    # Unused neighbours per triangle, kept current as strips are taken.
+    degree = [len(n) for n in neighbours]
+
+    def extend(strip, taken, taken_set, flipped=False):
+        """Grow `strip` at its end while a triangle on its last edge winds
+        the way the next corner's parity needs; `flipped` inverts that
+        rule, for a strip being grown reversed (see below)."""
         while True:
-            # The parity of the corner about to be appended decides which way
-            # round the next triangle has to read: an even one traverses the
-            # strip's last edge forwards, an odd one backwards.
             a, b = strip[-2], strip[-1]
-            forwards = len(strip) % 2 == 0
-            found = None
+            forwards = (len(strip) % 2 == 0) is not flipped
+            best = None
             for candidate in edges.get(frozenset((a, b)), ()):
-                if used[candidate]:
+                if used[candidate] or candidate in taken_set:
                     continue
                 if _traverses(triangles[candidate], a, b) is forwards:
-                    found = candidate
-                    break
-            if found is None:
-                break
-            used[found] = True
-            strip.append(_third_corner(triangles[found], a, b))
-        strips.append(strip)
+                    if best is None or degree[candidate] < degree[best]:
+                        best = candidate
+            if best is None:
+                return
+            taken.append(best)
+            taken_set.add(best)
+            strip.append(_third_corner(triangles[best], a, b))
+
+    # Entries go stale as degrees drop; a popped one that no longer matches
+    # is skipped, since its current degree was pushed when it changed.
+    heap = [(degree[i], i) for i in range(len(triangles))]
+    heapq.heapify(heap)
+    strips = []
+    while heap:
+        d, start = heapq.heappop(heap)
+        if used[start] or d != degree[start]:
+            continue
+        a, b, c = triangles[start]
+        best_strip, best_taken = None, None
+        for rotation in ((a, b, c), (b, c, a), (c, a, b)):
+            strip, taken, taken_set = list(rotation), [start], {start}
+            extend(strip, taken, taken_set)
+            # Reversing an even strip keeps every triangle's winding, so it
+            # simply grows at what was its start.
+            if len(strip) % 2 == 0:
+                strip.reverse()
+                extend(strip, taken, taken_set)
+            else:
+                # Reversing an odd strip flips every triangle, so the
+                # reversed one is extended with the winding rule flipped
+                # too, and reversed back - which only restores the winding
+                # if it stays odd, so an odd number of additions loses one.
+                length = len(strip)
+                strip.reverse()
+                extend(strip, taken, taken_set, flipped=True)
+                if (len(strip) - length) % 2:
+                    strip.pop()
+                    taken_set.discard(taken.pop())
+                strip.reverse()
+            if best_strip is None or len(taken) > len(best_taken):
+                best_strip, best_taken = strip, taken
+        for t in best_taken:
+            used[t] = True
+        for t in best_taken:
+            for n in neighbours[t]:
+                if not used[n]:
+                    degree[n] -= 1
+                    heapq.heappush(heap, (degree[n], n))
+        strips.append(best_strip)
     return strips
 
 
@@ -1296,22 +1363,18 @@ def _third_corner(triangle, first, second):
     return triangle[0]
 
 
-# What _texture_slot found at a material input, when it found no image there.
+# What _bound_image found at a material input, when it found no image there.
 SLOT_EMPTY = "empty"  # nothing is wired into the input
 SLOT_UNRESOLVED = "unresolved"  # a texture node is, but it holds no image
 
 
-def _texture_slot(bl_material, input_name, app_id):
-    """The .tpl slot the image wired into `input_name` came from, or
-    SLOT_EMPTY / SLOT_UNRESOLVED when there is no image to read it off.
+def _bound_image(bl_material, input_name):
+    """The image wired into `input_name` of the material's shader group, or
+    SLOT_EMPTY / SLOT_UNRESOLVED when there is none.
 
     A material's texture references are bindings, not values, so a bound one
     lives in the node tree rather than in the material's custom properties -
     which is what makes swapping a texture in Blender an edit export can see.
-    Import records which .tpl slot each image came from on the image itself;
-    this reads it back. An image that did not come from the model's .tpl has
-    no slot to name it by, so it reads as 0xFF: still a binding, just one the
-    format cannot express.
 
     No image bound is not the same as no texture - see _serialize_material.
     """
@@ -1330,14 +1393,49 @@ def _texture_slot(bl_material, input_name, app_id):
                 # find. It stands for the slot without saying which one.
                 found = SLOT_UNRESOLVED
                 continue
-            custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(
-                app_id)
-            index = custom_properties.tpl_index
-            return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
+            return image
     return found
 
 
-def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
+def _texture_slot(bl_material, input_name, app_id, slots=None):
+    """The .tpl slot to write for the image wired into `input_name`, or
+    SLOT_EMPTY / SLOT_UNRESOLVED when there is no image to read it off.
+
+    `slots` ({image name: slot}) is what textures.TextureExport worked out,
+    new slots included. Without it, the slot import recorded on the image is
+    the answer, and an image albam did not import reads as 0xFF: still a
+    binding, just one the format cannot express.
+    """
+    image = _bound_image(bl_material, input_name)
+    if image in (SLOT_EMPTY, SLOT_UNRESOLVED):
+        return image
+    if slots and image.name in slots:
+        return slots[image.name]
+    custom_properties = image.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    index = custom_properties.tpl_index
+    return index if 0 <= index < NO_TEXTURE else NO_TEXTURE
+
+
+def _texture_export(bl_obj, bl_mesh_objs, bl_materials, app_id):
+    """The textures.TextureExport for a model's materials."""
+    bindings = []
+    carried = {}
+    for bl_material in bl_materials:
+        if bl_material is None:
+            continue
+        custom_properties = bl_material.albam_custom_properties.get_custom_properties_for_appid(
+            app_id)
+        for field, input_name in _TEXTURE_SLOT_INPUTS:
+            carried[(bl_material.name, field)] = getattr(custom_properties, field)
+            image = _bound_image(bl_material, input_name)
+            if image not in (SLOT_EMPTY, SLOT_UNRESOLVED):
+                bindings.append((bl_material, field, image))
+    mesh_properties = bl_mesh_objs[0].data.albam_custom_properties.get_custom_properties_for_appid(
+        app_id)
+    return TextureExport(app_id, bl_obj.name, mesh_properties.tpl_id, bindings, carried)
+
+
+def _serialize_material(dst_bin, bl_material, strip_lengths, app_id, slots=None):
     """One material plus the face-index block that follows it inline.
 
     Each strip becomes one entry of type 6, whose fcount is how many corners
@@ -1357,7 +1455,7 @@ def _serialize_material(dst_bin, bl_material, strip_lengths, app_id):
         # then overrides them wherever an image is actually bound.
         custom_properties.copy_custom_properties_to(dst_material)
         for field, input_name in _TEXTURE_SLOT_INPUTS:
-            index = _texture_slot(bl_material, input_name, app_id)
+            index = _texture_slot(bl_material, input_name, app_id, slots)
             if index == SLOT_UNRESOLVED:
                 # The texture behind this slot could not be found on import,
                 # so there is no image to read an index off and the carried
@@ -1598,6 +1696,106 @@ def _serialize_morphs(dst_bin, bl_mesh_objs, source_vertices, extra_scale, armat
     return dst_morphs
 
 
+# The color attribute a model's vertex colours are imported into and exported
+# from. Only models whose header sets BIN_FLAG_VERTEX_COLORS use them - in
+# shipped files, a few of the models a room is built from, where they appear
+# to carry baked lighting - and every other model stores zeros or white there.
+VERTEX_COLOR_ATTRIBUTE = "albam_vertex_color"
+
+
+def _build_vertex_colors(bl_mesh, colors):
+    """One colour per vertex: import builds a Blender vertex per file vertex
+    (see build_blender_model), so the file's array maps onto them as is."""
+    if len(colors) < len(bl_mesh.vertices):
+        # Not seen in a shipped file; the colours are left out rather than
+        # half applied.
+        return
+    attribute = bl_mesh.color_attributes.new(VERTEX_COLOR_ATTRIBUTE, "BYTE_COLOR", "POINT")
+    values = []
+    for color in colors[:len(bl_mesh.vertices)]:
+        values.extend((color.r / 255, color.g / 255, color.b / 255, color.a / 255))
+    # color_srgb is the one that round-trips a byte colour's stored values.
+    attribute.data.foreach_set("color_srgb", values)
+
+
+def _vertex_colors(dst_bin, source_vertices, default):
+    """A colour entry per corner, from the colour attribute of the vertex the
+    corner was built from, or `default` (r, g, b, a) where there is none."""
+    dst_colors = []
+    for bl_mesh_ob, vertex_index in source_vertices:
+        attribute = bl_mesh_ob.data.color_attributes.get(VERTEX_COLOR_ATTRIBUTE)
+        if attribute is not None and attribute.domain == "POINT":
+            rgba = tuple(round(c * 255) for c in attribute.data[vertex_index].color_srgb)
+        else:
+            rgba = default
+        dst_color = dst_bin.Rgba(_parent=dst_bin, _root=dst_bin._root)
+        dst_color.r, dst_color.g, dst_color.b, dst_color.a = rgba
+        dst_color._check()
+        dst_colors.append(dst_color)
+    return dst_colors
+
+
+def export_room_model(bl_mesh, template_bytes, app_id="re4uhd"):
+    """A model embedded in a room's .smd, written from `bl_mesh` (a mesh
+    datablock), as bytes - see scenario.export_smd.
+
+    Room models are written in their own space, the mesh's coordinates as
+    they are: where the model stands is the entry placing it, not something
+    baked into its vertices. Every one of them carries a single bone at the
+    origin, which import drops along with the armature, and the shipped
+    model being replaced (`template_bytes`) is what says what that bone, the
+    weights, the flags and the weight-index buffers were; they are kept from
+    it as they are. Vertex colours come from VERTEX_COLOR_ATTRIBUTE where the
+    model uses them, and are otherwise zero, as shipped room models store.
+    """
+    from mathutils import Matrix
+
+    template = Re4UhdBin.from_bytes(template_bytes)
+    template._read()
+    if template.header.offset_morphs:
+        raise AlbamCheckFailure(
+            f"{bl_mesh.name} is a room model with morphs, which albam can't write yet",
+        )
+    bl_mesh_ob = bpy.data.objects.new("__albam_room_model__", bl_mesh)
+    try:
+        (groups, positions, normals, uvs, _weight_indices,
+         _weight_table, source_vertices) = _collect_geometry(
+            [bl_mesh_ob], None, matrix=Matrix.Identity(4))
+        num_vertices = len(positions)
+        if num_vertices > MAX_VERTICES:
+            raise AlbamCheckFailure(
+                f"{bl_mesh.name} has too much geometry to export: {num_vertices} face "
+                f"corners, and the format counts them in 16 bits",
+                solution="Reduce the polygon count, or split the model",
+            )
+
+        dst_bin = Re4UhdBin()
+        dst_bin.header = _serialize_header(dst_bin, bl_mesh_ob)
+        dst_bin.bones = []
+        for bone in template.bones:
+            dst_bone = dst_bin.Bone(_parent=dst_bin, _root=dst_bin._root)
+            for attribute in ("bone_id", "parent", "filler", "x", "y", "z"):
+                setattr(dst_bone, attribute, getattr(bone, attribute))
+            dst_bone._check()
+            dst_bin.bones.append(dst_bone)
+        dst_bin.weights = _serialize_weights(dst_bin, [
+            (tuple(w.bone_ids), tuple(w.weights), w.count) for w in (template.weights or [])])
+        dst_bin.vertex_positions = _serialize_vec3s(dst_bin, positions)
+        dst_bin.normals = _serialize_normals(dst_bin, normals)
+        dst_bin.texcoords = _serialize_uvs(dst_bin, uvs)
+        if template.header.offset_index_buffer:
+            dst_bin.indexes = [0] * num_vertices
+            dst_bin.indexes2 = [0] * num_vertices
+        uses_colors = bool(template.header.flags & BIN_FLAG_VERTEX_COLORS)
+        dst_bin.vertex_colors = _vertex_colors(
+            dst_bin, source_vertices, (255, 255, 255, 255) if uses_colors else (0, 0, 0, 0))
+        dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
+                             for bl_material, strip_lengths in groups]
+        return _layout_and_write(dst_bin, num_vertices, template_header=template.header)
+    finally:
+        bpy.data.objects.remove(bl_mesh_ob)
+
+
 @blender_registry.register_export_function(app_id="re4uhd", extension="bin")
 def export_bin(bl_obj):
     """Serialize a Blender object back to a mesh .bin.
@@ -1655,8 +1853,12 @@ def export_bin(bl_obj):
         dst_bin.indexes = list(weight_indices)
         dst_bin.indexes2 = list(weight_indices)
     dst_bin.vertex_colors = _serialize_colors(dst_bin, num_vertices)
-    dst_bin.materials = [_serialize_material(dst_bin, bl_material, strip_lengths, app_id)
-                         for bl_material, strip_lengths in groups]
+    textures = _texture_export(bl_obj, bl_mesh_objs, [m for m, _ in groups], app_id)
+    if textures.num_slots is not None:
+        dst_bin.header.num_tpl = max(dst_bin.header.num_tpl, textures.num_slots)
+    dst_bin.materials = [
+        _serialize_material(dst_bin, bl_material, strip_lengths, app_id, textures.slots)
+        for bl_material, strip_lengths in groups]
 
     # Left unassigned rather than assigned None when there is nothing to
     # write - these are conditional Kaitai instances, and the generated
@@ -1680,7 +1882,7 @@ def export_bin(bl_obj):
             dst_bin.symmetry_table = dst_symmetry
 
     data_bytes = _layout_and_write(dst_bin, num_vertices)
-    return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)]
+    return [VirtualFileData(app_id, asset.relative_path, data_bytes=data_bytes)] + textures.vfiles
 
 
 def _serialize_header(dst_bin, bl_mesh_ob):
@@ -1819,7 +2021,7 @@ def _serialize_colors(dst_bin, count):
     return dst_colors
 
 
-def _layout_and_write(dst_bin, num_vertices):
+def _layout_and_write(dst_bin, num_vertices, template_header=None):
     """Place every block, fill in the header, and serialize.
 
     Offsets are all explicit in the header, so the file's layout is ours to
@@ -1828,6 +2030,12 @@ def _layout_and_write(dst_bin, num_vertices):
     format allows 0x40, which stops before the four trailing offsets, and
     0x50, which is exactly those four present - and writing the largest means
     never having to decide.
+
+    `template_header`, when given, is the header of the shipped model this
+    one replaces, and its flags, version and weight-index buffers are kept
+    rather than derived: a room model sets flag bits nothing here derives
+    (see BIN_FLAG_VERTEX_COLORS) and carries weight-index buffers without a
+    weight table (see export_room_model).
     """
     header = dst_bin.header
     header.num_bones = len(dst_bin.bones)
@@ -1852,6 +2060,10 @@ def _layout_and_write(dst_bin, num_vertices):
     tagged = has_bone_pairs or has_symmetry
     header.version_flags = VERSION_FLAGS_WITH_TAGS if tagged else VERSION_FLAGS_PLAIN
     header.unk_01 = UNK_01_WITH_TAGS if tagged else UNK_01_PLAIN
+    if template_header is not None:
+        header.flags = template_header.flags
+        header.version_flags = template_header.version_flags
+        header.unk_01 = template_header.unk_01
 
     offset = HEADER_SIZE
     header.offset_bones = HEADER_SIZE
@@ -1885,7 +2097,8 @@ def _layout_and_write(dst_bin, num_vertices):
     # table, and shipped models without one leave their offsets at 0. They
     # hold the same values as each other: no shipped model was found where
     # the second differs from the first.
-    weighted = bool(dst_bin.weights)
+    weighted = bool(dst_bin.weights) or bool(
+        template_header is not None and template_header.offset_index_buffer)
     header.offset_index_buffer = offset if weighted else 0
     if weighted:
         offset = _align(offset + num_vertices * INDEX_SIZE)

@@ -246,6 +246,20 @@ class Sbc156(ReadWriteKaitaiStruct):
 
 
     class BvhNode(ReadWriteKaitaiStruct):
+        """Node in binary bounding volume hierarchy tree
+        bit - is actually u1 value + u1 padding it contains 8 flags
+        first 6 almost certainly unused by the games and the last two define what is in the child_index
+        0 - index of the bvh_node, 1 - index of the face (leaf)
+        For box A0 and A1
+        b0: A0.min.x < A1.min.x
+        b1: A0.min.y < A1.min.y
+        b2: A0.min.z < A1.min.z
+        b3: A0.max.x > A1.max.x
+        b4: A0.max.y > A1.max.y
+        b5: A0.max.z > A1.max.z
+        b6: is a leaf in the right node
+        b7: is a leaf in the left node
+        """
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sbc156.BvhNode, self).__init__(_io)
             self._parent = _parent

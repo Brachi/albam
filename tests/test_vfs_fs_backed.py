@@ -224,20 +224,36 @@ def test_get_bytes_remounts_a_root_the_registry_lost(tmp_path):
     assert fs_registry.get(vfile.root_vfile.fs_key) is not None
 
 
-def test_get_bytes_on_an_unmountable_root_says_why():
-    """An export root's MemoryFS only ever existed in this process - there's
-    no path to mount it again from, so the error naming it must say that
-    rather than surfacing the internal registry key.
+def test_export_root_is_rebuilt_from_its_saved_bytes():
+    """An export root's MemoryFS lives only in this process, so a new session
+    (here, an emptied fs_registry) rebuilds it from the bytes saved on its
+    files. Before that, every exported file was lost on reopening (#308).
     """
     exported = bpy.context.scene.albam.exported
     exported.add_export_root(
-        "re5", "export-root", [VirtualFileData("re5", "a.mod", data_bytes=b"bytes")]
+        "re5", "export-root", [VirtualFileData("re5", "a.mod", data_bytes=b"bytes\x00more")]
     )
     vfile = exported.select_vfile("re5", "a.mod")
 
     fs_registry.clear()
 
-    with pytest.raises(RuntimeError, match="export-root"):
+    assert vfile.get_bytes() == b"bytes\x00more"
+
+
+def test_get_bytes_on_an_unmountable_root_says_why():
+    """An export saved by an older Albam kept no bytes to rebuild from, so the
+    error must name the root rather than surface the internal registry key.
+    """
+    exported = bpy.context.scene.albam.exported
+    root = exported.add_export_root(
+        "re5", "old-export-root", [VirtualFileData("re5", "b.mod", data_bytes=b"bytes")]
+    )
+    root.bytes_saved = False
+    vfile = exported.select_vfile("re5", "b.mod")
+
+    fs_registry.clear()
+
+    with pytest.raises(RuntimeError, match="old-export-root"):
         vfile.get_bytes()
 
 

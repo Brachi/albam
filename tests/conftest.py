@@ -8,11 +8,18 @@ import pytest
 from albam import register, unregister
 from albam.blender_ui.error_handling import RERAISE_ERRORS_ENV_VAR
 from albam.lib import fs_registry
+from tests.skip_policy import is_missing_input
 
 
 # Written by pytest_sessionfinish so CI can recover the real exit status when
 # the interpreter segfaults on the way out - see the comment there.
 EXIT_STATUS_FILE_ENV_VAR = "ALBAM_PYTEST_EXIT_STATUS_FILE"
+# nodeid -> the (major, minor) its @requires_blender asks for, recorded at
+# collection before deselection, for test_skip_policy.py.
+BLENDER_GATES = pytest.StashKey[dict]()
+# Under xdist, nodeids the workers deselected by Blender version, already
+# added to the controller's summary.
+WORKER_DESELECTED = pytest.StashKey[set]()
 
 
 def pytest_sessionstart():
@@ -175,6 +182,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "applies_to(**facts): run only on dataset entries with these facts "
+        "(see tests/dataset_cases.py)")
+    config.addinivalue_line(
+        "markers", "requires_blender(major, minor): deselected on an earlier Blender "
+        "(see tests/skip_policy.py)")
+
     # Validate eagerly, once, at startup - not from within a fixture, where a
     # malformed value would otherwise only surface once each parametrized
     # test actually runs it, as one raw traceback per test instead of a
@@ -277,3 +291,59 @@ def remove_new_vfs_roots(before):
             continue  # already removed as part of an earlier root's own cleanup
         vfs.file_list_selected_index = index
         bpy.ops.albam.remove_imported()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Deselect what doesn't apply to the running Blender (see
+    tests/skip_policy.py): it isn't a missing input, so it isn't a skip."""
+    gates = config.stash.setdefault(BLENDER_GATES, {})
+    running = tuple(bpy.app.version[:2])
+    kept, deselected = [], []
+    for item in items:
+        marker = item.get_closest_marker("requires_blender")
+        if marker is not None:
+            gates[item.nodeid] = tuple(marker.args)
+            if running < tuple(marker.args):
+                deselected.append(item)
+                continue
+        kept.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = kept
+    # Under xdist only the workers collect, so the controller's summary never
+    # hears of these; pytest_testnodedown passes them on.
+    if hasattr(config, "workeroutput"):
+        config.workeroutput["blender_deselected"] = [item.nodeid for item in deselected]
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error):
+    """Count the tests an xdist worker deselected by Blender version in the
+    controller's summary, once each: every worker collects, and deselects,
+    the whole suite."""
+    nodeids = getattr(node, "workeroutput", {}).get("blender_deselected", [])
+    counted = node.config.stash.setdefault(WORKER_DESELECTED, set())
+    new = [nodeid for nodeid in nodeids if nodeid not in counted]
+    counted.update(new)
+    reporter = node.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None and new:
+        reporter.stats.setdefault("deselected", []).extend(new)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Fail a skip that isn't a missing input (see tests/skip_policy.py)."""
+    outcome = yield
+    report = outcome.get_result()
+    if not report.skipped or hasattr(report, "wasxfail") or call.excinfo is None:
+        return
+    skipped = call.excinfo.value
+    if is_missing_input(item, skipped):
+        return
+    report.outcome = "failed"
+    report.longrepr = (
+        f"skipped with {skipped.msg!r}, which isn't a missing input. A skip here only "
+        f"means data, a package or a tool the test needs isn't available: a test that "
+        f"doesn't apply to some files uses @applies_to, and one that doesn't apply to "
+        f"this Blender uses @requires_blender (see tests/skip_policy.py)."
+    )

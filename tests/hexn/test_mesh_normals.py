@@ -82,9 +82,9 @@ def test_normals_are_unit_length_and_shading_is_smooth(
                 assert abs(mag - 1.0) < 0.01, (
                     f"mesh {mi} vertex {vi}: expected a unit-length normal, got magnitude {mag}"
                 )
-    if not checked:
-        import pytest
-        pytest.skip("no lod-0 mesh in this model has a vertex_stride >= 24")
+    assert checked, (
+        "no lod-0 mesh in this model has a vertex_stride >= 24; an entry without one needs a "
+        "fact and @applies_to (tests/dataset_cases.py)")
 
 
 def test_tangent_orthogonal_to_normal(
@@ -161,6 +161,6 @@ def test_tangent_orthogonal_to_normal(
                     f"({outlier_fraction:.1%}) had a non-orthogonal tangent - expected a rare few "
                     f"outliers at most, this looks like a systemic decode error"
                 )
-    if not checked:
-        import pytest
-        pytest.skip("no lod-0 mesh in this model has vertex_stride == 52")
+    assert checked, (
+        "no lod-0 mesh in this model has vertex_stride == 52; an entry without one needs a "
+        "fact and @applies_to (tests/dataset_cases.py)")

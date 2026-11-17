@@ -36,6 +36,7 @@ from mathutils import Euler, Quaternion
 from tests.mtfw.conftest import R2_PROTOCOL_PREFIX, _game_dirs, action_fcurves
 from tests.mtfw.r2_config import resolve_r2_source
 from tests.mtfw.scripts.catalog_paths import resolve_hashes
+from tests.skip_policy import skip_missing
 
 # Same committed dataset as test_lmt_single_arc_import.py - one re5
 # model + pose pair, hash-only, verified against the app_id's catalog by
@@ -117,14 +118,14 @@ def local_game_fs(pytestconfig, local_app_id):
 
     value = _game_dirs(pytestconfig).get(local_app_id)
     if not value:
-        pytest.skip(f"No --game-dir supplied for app_id={local_app_id!r}")
+        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
     elif value.startswith(R2_PROTOCOL_PREFIX):
         r2_kwargs = resolve_r2_source(value)
         if r2_kwargs is None:
-            pytest.skip(f"--game-dir={local_app_id}::{value} requested but R2 isn't configured")
+            skip_missing(f"--game-dir={local_app_id}::{value} requested but R2 isn't configured")
         return MTFW_FS.from_s3(**r2_kwargs)
     elif not os.path.isdir(value):
-        pytest.skip(f"--game-dir={local_app_id}::{value} does not exist")
+        skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
     return MTFW_FS(value)
 
 

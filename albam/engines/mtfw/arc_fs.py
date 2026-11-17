@@ -10,6 +10,7 @@ callers can ask for a relative path without knowing which archive (or loose
 file) it comes from.
 """
 import os
+import time
 import zlib
 
 from fs.base import FS
@@ -392,9 +393,10 @@ class MTFW_FS(MultiFS):
         return self
 
     def _init_common(self):
-        # (arc_path, exception) for archives that didn't parse - a handful of
-        # RE5's .arc files use a different/unsupported layout (see arc.ksy);
-        # skipped rather than failing the whole game filesystem.
+        # (arc_path, exception) for archives that didn't parse after 3
+        # attempts each - a handful of RE5's .arc files use a different/
+        # unsupported layout (see arc.ksy); skipped rather than failing the
+        # whole game filesystem.
         self.failed_arcs = []
         # lazily built - see _ensure_index()
         self._owner = None
@@ -404,9 +406,23 @@ class MTFW_FS(MultiFS):
 
     def _load_arcs(self, arc_specs):
         for arc_path, opener in arc_specs:
-            try:
-                arc_fs = ArcFS(arc_path, opener=opener)
-            except Exception as e:
+            arc_fs, e = None, None
+            # A handful of RE5's .arc files use a genuinely different/
+            # unsupported layout and fail every attempt identically - those
+            # still end up skipped below. This retry only matters for a
+            # transient read error (a dropped connection, a throttled S3/R2
+            # range request under heavy concurrent load), which looks the
+            # same as a bad archive on the first attempt but succeeds on a
+            # later one.
+            for attempt in range(3):
+                try:
+                    arc_fs = ArcFS(arc_path, opener=opener)
+                    break
+                except Exception as exc:
+                    e = exc
+                    if attempt < 2:
+                        time.sleep(0.5 * (attempt + 1))
+            if arc_fs is None:
                 self.failed_arcs.append((arc_path, e))
                 continue
             self.add_fs(arc_path, arc_fs)
