@@ -601,9 +601,9 @@ def _collect_sdl_track_elements(tracks_xml):
         indexed_entries.sort(key=lambda entry: (entry[0], entry[1]))
         duplicate_entries.sort(key=lambda entry: entry[1])
         track_elements = (
-            [entry[2] for entry in indexed_entries]
-            + [entry[2] for entry in duplicate_entries]
-            + [pair for _, pair in unindexed_entries]
+            [entry[2] for entry in indexed_entries] +
+            [entry[2] for entry in duplicate_entries] +
+            [pair for _, pair in unindexed_entries]
         )
 
     old_index_to_new = {}
@@ -694,10 +694,10 @@ def _parse_sdl_track_entry(
     else:
         prop_type = _sdl_prop_type_value(prop_type_attr)
     if (
-        track_type == TRACK_TYPE["TYPE_REF"]
-        and prop_type == 2
-        and old_index_to_new is not None
-        and original_index_by_element[id(element)] is not None
+        track_type == TRACK_TYPE["TYPE_REF"] and
+        prop_type == 2 and
+        old_index_to_new is not None and
+        original_index_by_element[id(element)] is not None
     ):
         # TYPE_REF/TYPE_CLASSREF values are absolute SDL track indices too.
         # Remap references on surviving original tracks; references to a
