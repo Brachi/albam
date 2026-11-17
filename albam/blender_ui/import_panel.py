@@ -132,8 +132,11 @@ def _move_imported_objects_to_collections(context, bl_container, app_id):
     """Put an imported object hierarchy in a base collection.
 
     Meshes with nonzero Group IDs are placed in child collections. Objects
-    without a Group ID stay directly in the base.
+    without a Group ID stay directly in the base. Containers that aren't
+    objects (a texture import returns an Image) are left where they are.
     """
+    if not isinstance(bl_container, bpy.types.Object):
+        return
     base_collection = bpy.data.collections.new(bl_container.name)
     context.scene.collection.children.link(base_collection)
     group_collections = {}

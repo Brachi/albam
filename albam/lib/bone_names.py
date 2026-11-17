@@ -746,9 +746,9 @@ NAME_FIXES = {
 BONE_COLLECTIONS = {
     "Main Bones": ["pelvis", "spine_upper", "spine_lower", "neck", "head", "thigh", "calf", "foot",
                    "toe", "clavicle", "upperarm", "lowerarm", "hand", "breast"],
-    "Twist Bones": ["thigh_twist", "calf_twist", "foot_twist", "clavicle_twist_l",
-                    "upperarm_clavicle_twist_l", "upperarm_lowerarm_twist_l", "lowerarm_twist_l",
-                    "lowerarm_hand_twist_l", "knee", "elbow"],
+    "Twist Bones": ["thigh_twist", "calf_twist", "foot_twist", "clavicle_twist",
+                    "upperarm_clavicle_twist", "upperarm_lowerarm_twist", "lowerarm_twist",
+                    "lowerarm_hand_twist", "knee", "elbow"],
     "Hands": ["palm", "thumb", "index", "middle", "ring", "pinky"],
     "Controllers": ["ctr"],
     "Facial": ["jaw", "lip", "cheek", "eyebrow", "eyelid", "eye_side", "eyelash", "nose", 'chin', "nostril"],
