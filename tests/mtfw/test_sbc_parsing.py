@@ -78,7 +78,7 @@ def test_parsed_sbc(parsed_sbc):
     magic = sbc.header.indent
     assert magic[3] in SBC_MAGIC_ID
     if magic[3] == 255:
-        assert sbc.header.unk_00 in SBC21_VERSION
+        assert sbc.header.version in SBC21_VERSION
         for info in sbc.sbc_bvhc:
             assert info.num_nodes > 0
         assert sbc.bvh.num_nodes > 0
