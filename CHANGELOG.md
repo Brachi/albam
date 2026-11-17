@@ -150,6 +150,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   animation ids and mirrors) is written from the armature and rig edits reach the game.
   Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
   saved with 0.5.0 keep the source file's mirror bones
+- Bone renamer now creates bone collections
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically

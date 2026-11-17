@@ -13,7 +13,13 @@ from gpu_extras.batch import batch_for_shader
 from ..registry import blender_registry
 from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
 from ..engines.mtfw.texture import TEX_COMPRESSION
-from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+from ..lib.bone_names import (
+    BONE_COLLECTION_COLORS,
+    BONE_COLLECTIONS,
+    BONES_BODY,
+    BONES_HEAD,
+    NAME_FIXES,
+)
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
@@ -1815,6 +1821,58 @@ def rename_bones(armature_ob, app_id, body_type):
         mirror = get_mirror(pose_bone, app_id)
         if mirror in renamed:
             set_mirror(pose_bone, app_id, renamed[mirror])
+
+    _set_bone_layers(armature_ob)
+
+
+def _set_bone_layers(armature_ob):
+    """Assign renamed bones to Albam collections and color them by group."""
+    armature = armature_ob.data
+    assignments = []
+    for bone in armature.bones:
+        normalized_name = bone.name.casefold()
+        best_matching_collection = None
+        best_matching_fragment_length = 0
+        for candidate_collection, fragments in BONE_COLLECTIONS.items():
+            for fragment in fragments:
+                normalized_fragment = fragment.casefold()
+                if (
+                    normalized_fragment in normalized_name and
+                    len(normalized_fragment) > best_matching_fragment_length
+                ):
+                    best_matching_collection = candidate_collection
+                    best_matching_fragment_length = len(normalized_fragment)
+
+        # Controller prefixes take precedence over body-part tokens such as
+        # "hand" or "knee" (for example, ctr_hand_r).
+        if normalized_name == "ctr" or normalized_name.startswith("ctr_"):
+            collection_name = "Controllers"
+        else:
+            collection_name = best_matching_collection or "Others"
+
+        assignments.append((bone, collection_name))
+
+    used_collection_names = {name for _, name in assignments}
+    collections = {}
+    for collection_name in BONE_COLLECTIONS:
+        collection = armature.collections.get(collection_name)
+        if collection is None and collection_name in used_collection_names:
+            collection = armature.collections.new(collection_name)
+            collection.is_visible = True
+        if collection is not None:
+            collections[collection_name] = collection
+
+    for bone, collection_name in assignments:
+        # Remove stale membership so repeated autorename runs keep one Albam
+        # group per bone. Other, differently named collections are untouched.
+        for collection in collections.values():
+            collection.unassign(bone)
+        collections[collection_name].assign(bone)
+        color_palette = BONE_COLLECTION_COLORS[collection_name]
+        bone.color.palette = color_palette
+        armature_ob.pose.bones[bone.name].color.palette = color_palette
+
+    armature.show_bone_colors = True
 
 
 def merge_vgroups(vg_a, vg_b):
