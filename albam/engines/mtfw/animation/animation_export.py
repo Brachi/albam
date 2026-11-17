@@ -43,9 +43,9 @@ def _local_space_to_parent_translation(frame, pose_bone, app_id):
             lmt_rest = Vector((rest.x, rest.z, -rest.y))
             return frame + lmt_rest
 
-    # A chain goal was imported without a parent-space conversion, so it must
-    # leave the same way. Use the marker because ids 19 and 23 can also be
-    # ordinary foot tracks in files that do not declare a chain.
+    # A chain's goal was imported without a parent-space conversion, so it must
+    # leave the same way. Only marked goals qualify: ids 19 and 23 are ordinary
+    # foot tracks in files that declare no chain.
     if get_chain_target(pose_bone, app_id):
         rest = bone.matrix_local.to_translation()
         return frame + Vector((rest.x, rest.z, -rest.y))

@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   it in the system console
 - Import of Ultimate Marvel vs. Capcom 3 characters, materials, textures and
   archives. No export yet for this game
+- Add an option to move imported files into Blender collections
 
 ### Fixed
 
@@ -91,6 +92,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autorename Bones applying one game's name corrections to every rig renamed
   afterwards in the same Blender session, silently giving them plausible but
   wrong bone names
+- Resident Evil 5 and Devil May Cry 4 models with more than 65536 vertices importing with
+  stretched, spiky meshes, because their later meshes re-read the start of the vertex buffer
+- Exporting a material appended from another `.blend` failing with "Some materials are not
+  using the 'MT Framework shader' group", since appending renames the group's copy to
+  `MT Framework shader.001`
 - Two archives added under the same name sharing one file-tree state, so
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
@@ -138,6 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   Revelations, Revelations 2 and Dragon's Dogma, overwriting whatever the
   mesh actually had set
 - Autorename Bones not carrying a bone's Mirror Bone link through the rename
+- Autosetter compression format value for Diffuse maps with alpha transparency
 
 ### Changed
 
@@ -150,6 +157,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   animation ids and mirrors) is written from the armature and rig edits reach the game.
   Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
   saved with 0.5.0 keep the source file's mirror bones
+- Bone renamer now creates bone collections
+- Custom texture path field in now hidden, Autosetter uses .mod file directory
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically
