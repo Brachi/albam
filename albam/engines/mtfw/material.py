@@ -1263,6 +1263,8 @@ def _is_mtfw_shader_group(node_tree):
 
 
 def _has_mtfw_shader_group(bl_mat):
+    if bl_mat.node_tree is None:
+        return False
     return any(
         isinstance(n, bpy.types.ShaderNodeGroup) and _is_mtfw_shader_group(n.node_tree)
         for n in bl_mat.node_tree.nodes
