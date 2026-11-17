@@ -92,6 +92,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autorename Bones applying one game's name corrections to every rig renamed
   afterwards in the same Blender session, silently giving them plausible but
   wrong bone names
+- Resident Evil 5 and Devil May Cry 4 models with more than 65536 vertices importing with
+  stretched, spiky meshes, because their later meshes re-read the start of the vertex buffer
+- Exporting a material appended from another `.blend` failing with "Some materials are not
+  using the 'MT Framework shader' group", since appending renames the group's copy to
+  `MT Framework shader.001`
 - Two archives added under the same name sharing one file-tree state, so
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
