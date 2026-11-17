@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   it in the system console
 - Import of Ultimate Marvel vs. Capcom 3 characters, materials, textures and
   archives. No export yet for this game
+- Add an option to move imported files into Blender collections
 
 ### Fixed
 
