@@ -144,13 +144,13 @@ class CHNJointProperties(bpy.types.PropertyGroup):
         name="No Rotate", description="Disable rotation for this joint (bit 4)",
         get=_chn_attr_bit_getter(4), set=_chn_attr_bit_setter(4))
     min_angle: bpy.props.FloatVectorProperty(
-        name="Minimum Angle", size=3, unit="ROTATION",
+        name="Minimum Angle", size=3, unit="ROTATION",  # noqa: F821
         description="Per-axis minimum rotation; stored in radians",  # noqa: F821
         default=(-0.055, -0.055, -0.055), update=_update_chn_preview)
     spring_coef: bpy.props.FloatProperty(
         name="Spring Coefficient", default=10.0, update=_update_chn_preview)
     max_angle: bpy.props.FloatVectorProperty(
-        name="Maximum Angle", size=3, unit="ROTATION",
+        name="Maximum Angle", size=3, unit="ROTATION",  # noqa: F821
         description="Per-axis maximum rotation; stored in radians",  # noqa: F821
         default=(0.055, 0.055, 0.055), update=_update_chn_preview)
     dumping_coef: bpy.props.FloatProperty(
