@@ -515,6 +515,17 @@ class ALBAM_OT_TransferNormal(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _find_mod_path(bl_ob):
+    """The relative path of the nearest ancestor imported from a .mod file."""
+    ancestor = bl_ob.parent
+    while ancestor is not None:
+        mod_path = getattr(ancestor.albam_asset, "relative_path", None)
+        if mod_path:
+            return mod_path
+        ancestor = ancestor.parent
+    return None
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
     '''Set custom properties for new textures automaticly'''
@@ -534,22 +545,23 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
         use_custom_path = tools_settings.asettr_use_custom_path
         bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
         if not bl_objects:
+            # Selecting just the model's root object autosets all of its meshes
+            bl_objects = {child for ob in context.selected_objects
+                          for child in ob.children_recursive if child.type == 'MESH'}
+        if not bl_objects:
             show_message_box(message="There is no mesh in selection")
             return {'CANCELLED'}
         processed_objects = 0
         for bl_ob in bl_objects:
-            parent = bl_ob.parent
-            if parent is None:
-                print(f"Warning: {bl_ob.name} has no parent")
-                continue
             if use_custom_path:
                 local_path = custom_path
             else:
-                mod_path = getattr(parent.albam_asset, "relative_path", None)
+                mod_path = _find_mod_path(bl_ob)
                 if not mod_path:
-                    print(f"Warning: {parent.name} has no .mod path, skipping {bl_ob.name}")
+                    print(f"Warning: no parent of {bl_ob.name} has a .mod path, skipping it")
                     continue
-                local_path = f"{PureWindowsPath(mod_path).parent}\\"
+                mod_dir = str(PureWindowsPath(mod_path).parent)
+                local_path = "" if mod_dir == "." else f"{mod_dir}\\"
             try:
                 mat = bl_ob.data.materials[0]
             except IndexError:
