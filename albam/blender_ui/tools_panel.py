@@ -1,18 +1,33 @@
 import bmesh
 import bpy
 import re
-from pathlib import Path
+import gpu
+import blf
+from pathlib import Path, PureWindowsPath
+from bpy.app.handlers import persistent
 from bpy_extras import view3d_utils
 from mathutils.bvhtree import BVHTree
+from gpu_extras.batch import batch_for_shader
 
 
 from ..registry import blender_registry
+from ..lib.dds import DDSHeader
+from ..lib.blender import is_blimage_dds
 from ..engines.mtfw.bone import get_anim_retarget, get_mirror, guess_mirrors, set_mirror
-from ..lib.bone_names import BONES_BODY, BONES_HEAD, NAME_FIXES
+from ..engines.mtfw.texture import TEX_COMPRESSION
+from ..lib.bone_names import (
+    BONE_COLLECTION_COLORS,
+    BONE_COLLECTIONS,
+    BONES_BODY,
+    BONES_HEAD,
+    NAME_FIXES,
+)
 from ..lib.tools.handshaker import handshake, dump_frames, frames_path
 from ..lib.tools.bake_of_light import bake_light
 from ..lib.tools.card_sorter import sort_hair_cards
 from ..lib.common_op import _get_mesh_albam_props
+from ..lib.tools.face_painter import SBC_COLOR_PALETTE, NAV_FACE_FLAGS_DESC, SBC_RUNTIME_ATTR_DESC
+from ..lib.misc import number_to_color
 
 BONE_NAMES = {
     "Body": BONES_BODY,
@@ -21,18 +36,142 @@ BONE_NAMES = {
 
 DEV_MODE = False
 WORKSPACE_TOOLS = []
+FACE_PAINTER_TOOL_ID = "albam.material_painter_tool"
+FACE_PAINTER_TIMER_INTERVAL = 0.1
+_FACE_PAINTER_SHADING_STATES = {}
+_FACE_PAINTER_PALETTE_DRAW_HANDLERS = []
+
+
+def _restore_face_painter_shading(state):
+    try:
+        state["space"].shading.type = state["shading_type"]
+    except (AttributeError, ReferenceError):
+        pass
+
+
+def _track_face_painter_area(area):
+    area_key = area.as_pointer()
+    state = _FACE_PAINTER_SHADING_STATES.get(area_key)
+    if state:
+        try:
+            if state["area"] == area:
+                return
+        except ReferenceError:
+            pass
+        _restore_face_painter_shading(state)
+
+    space = area.spaces.active
+    _FACE_PAINTER_SHADING_STATES[area_key] = {
+        "area": area,
+        "space": space,
+        "shading_type": space.shading.type,
+    }
+    space.shading.type = 'SOLID'
+
+
+def _build_face_painter_bvh(edit_mesh):
+    """Build a fresh BVH for the current stroke's edit mesh."""
+    edit_mesh.faces.ensure_lookup_table()
+    return BVHTree.FromBMesh(edit_mesh)
+
+
+def _remove_face_painter_palette_draw_handler(handler):
+    try:
+        _FACE_PAINTER_PALETTE_DRAW_HANDLERS.remove(handler)
+    except ValueError:
+        return
+
+    try:
+        bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+    except (ReferenceError, RuntimeError, ValueError):
+        pass
+
+
+def _cleanup_face_painter_palette_draw_handlers(_filepath=None):
+    for handler in tuple(_FACE_PAINTER_PALETTE_DRAW_HANDLERS):
+        _remove_face_painter_palette_draw_handler(handler)
+
+
+@persistent
+def _face_painter_palette_load_pre(_filepath):
+    _cleanup_face_painter_palette_draw_handlers()
+
+
+def _face_painter_lifecycle_timer():
+    active_area_keys = set()
+    window_manager = bpy.context.window_manager
+    if window_manager:
+        for window in window_manager.windows:
+            try:
+                active_object = window.view_layer.objects.active
+                if (
+                    not active_object or
+                    active_object.type != 'MESH' or
+                    active_object.mode != 'EDIT'
+                ):
+                    continue
+
+                tool = window.workspace.tools.from_space_view3d_mode(
+                    'EDIT_MESH',
+                    create=False,
+                )
+                if not tool or tool.idname != FACE_PAINTER_TOOL_ID:
+                    continue
+
+                for area in window.screen.areas:
+                    if area.type == 'VIEW_3D':
+                        active_area_keys.add(area.as_pointer())
+                        _track_face_painter_area(area)
+            except (AttributeError, ReferenceError):
+                continue
+
+    for area_key, state in list(_FACE_PAINTER_SHADING_STATES.items()):
+        if area_key not in active_area_keys:
+            _restore_face_painter_shading(state)
+            del _FACE_PAINTER_SHADING_STATES[area_key]
+
+    return FACE_PAINTER_TIMER_INTERVAL
+
+
+def _ensure_face_painter_lifecycle_timer():
+    if not bpy.app.timers.is_registered(_face_painter_lifecycle_timer):
+        bpy.app.timers.register(
+            _face_painter_lifecycle_timer,
+            first_interval=FACE_PAINTER_TIMER_INTERVAL,
+            persistent=True,
+        )
+
+
+def _stop_face_painter_lifecycle_timer():
+    if bpy.app.timers.is_registered(_face_painter_lifecycle_timer):
+        bpy.app.timers.unregister(_face_painter_lifecycle_timer)
+
+    for state in _FACE_PAINTER_SHADING_STATES.values():
+        _restore_face_painter_shading(state)
+    _FACE_PAINTER_SHADING_STATES.clear()
 
 
 def register_workspace_tools():
+    if _face_painter_palette_load_pre not in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.append(_face_painter_palette_load_pre)
+
     for tool_cls in WORKSPACE_TOOLS:
         bpy.utils.register_tool(
             tool_cls,
             after=(tool_cls.after,) if tool_cls.after != "" else None,
             group=(tool_cls.after == ""),
         )
+    _ensure_face_painter_lifecycle_timer()
 
 
 def unregister_workspace_tools():
+    _cleanup_face_painter_palette_draw_handlers()
+    try:
+        bpy.app.handlers.load_pre.remove(_face_painter_palette_load_pre)
+    except ValueError:
+        pass
+
+    _stop_face_painter_lifecycle_timer()
     for tool_cls in reversed(WORKSPACE_TOOLS):
         bpy.utils.unregister_tool(tool_cls)
 
@@ -65,6 +204,47 @@ def face_preset_update(self, context):
     sur, spec = presets[id]
     context.scene.albam.tools_settings.surface_attr = sur
     context.scene.albam.tools_settings.special_attr = spec
+
+
+def get_active_face_paint_mode(context):
+    obj = context.active_object
+    if obj and obj.type == 'MESH':
+        try:
+            albam_asset = obj.data.albam_custom_properties.get_parent_albam_asset()
+        except Exception:
+            albam_asset = None
+        if albam_asset is not None:
+            asset_type = str(getattr(albam_asset, 'asset_type', '')).upper()
+            mode_map = {
+                'COLLISION': 'SBC',
+                'NAVMESH': 'Nav',
+            }
+            if asset_type in mode_map:
+                return mode_map[asset_type]
+
+    return context.scene.albam.tools_settings.face_paint_mode
+
+
+def extract_material_id_from_name(material_name, paint_mode):
+    material_name = material_name.replace("_", ".").split(".", 1)[0]
+    mode_prefix = f"{paint_mode} "
+    if not material_name.startswith(mode_prefix):
+        return None
+
+    material_id_text = material_name[len(mode_prefix):]
+    if not material_id_text.isdecimal():
+        return None
+
+    return int(material_id_text)
+
+
+def get_material_purpose(material_id, paint_mode):
+    purpose_descriptions = (
+        SBC_RUNTIME_ATTR_DESC
+        if paint_mode == "SBC"
+        else NAV_FACE_FLAGS_DESC
+    )
+    return purpose_descriptions.get(material_id, "Unregistered")
 
 
 @blender_registry.register_blender_type
@@ -110,8 +290,10 @@ class AlbamArmatures(bpy.types.PropertyGroup):
 
 @blender_registry.register_blender_prop_albam(name="tools_settings")
 class ToolsSettings(bpy.types.PropertyGroup):
-    default_path = "path\\to_textures\\"
-    relative_path_to_textures: bpy.props.StringProperty(default=default_path)
+    asettr_overwrite_tex_path: bpy.props.BoolProperty(default=False)
+    asettr_use_custom_path: bpy.props.BoolProperty(default=False)
+    asettr_default_path = "path\\to_textures\\"
+    asettr_relative_path_to_textures: bpy.props.StringProperty(default=asettr_default_path)
     bone_names_enum = bpy.props.EnumProperty(
         name="",
         description="select surface",
@@ -125,7 +307,6 @@ class ToolsSettings(bpy.types.PropertyGroup):
     vg_a: bpy.props.StringProperty()
     vg_b: bpy.props.StringProperty()
     use_clones: bpy.props.BoolProperty(default=False)
-    overwrite_tex_path: bpy.props.BoolProperty(default=False)
     sorting_dbg_draw: bpy.props.BoolProperty(default=False)
     face_group: bpy.props.IntProperty(name='Type')  # noqa: F821
     surface_attr: bpy.props.IntProperty(name='Surface attributes')  # noqa: F821
@@ -145,7 +326,6 @@ class ToolsSettings(bpy.types.PropertyGroup):
         update=face_preset_update
     )
     face_preset: face_preset_enum
-    overwrite_tex_path: bpy.props.BoolProperty(default=False)
     lm_resolution_enum = bpy.props.EnumProperty(
         name="Lightmap Resolution",
         description="Set the side of the baked lightmap",
@@ -169,6 +349,16 @@ class ToolsSettings(bpy.types.PropertyGroup):
     )
     lm_mode: lm_mode_enum
     lm_name: bpy.props.StringProperty(default='generic_LM')  # noqa: F821
+    face_paint_mode_enum = bpy.props.EnumProperty(
+        name="Face Paint Mode",
+        description="Mode for painting face properties",
+        items=[
+            ("SBC", "Collision", "Paint with collision materials", 1),
+            ("Nav", "Navmesh", "Paint with navmesh materials", 2),
+        ],
+        default="SBC",
+    )
+    face_paint_mode: face_paint_mode_enum
 
 
 @blender_registry.register_blender_type
@@ -197,15 +387,18 @@ class ALBAM_PT_ToolsPanel(bpy.types.Panel):
         row.operator('albam.autoset_tex_params', text="Autoset texture params")
         row.prop(
             context.scene.albam.tools_settings,
-            "overwrite_tex_path",
+            "asettr_overwrite_tex_path",
             text="Overwrite path if exists",
         )
-        row = layout.row()
-        row.prop(
-            context.scene.albam.tools_settings,
-            "relative_path_to_textures",
-            text="",
-        )
+        if DEV_MODE:
+            row = layout.row()
+            row.prop(context.scene.albam.tools_settings, "asettr_use_custom_path", text="Use custom path")
+            row = layout.row()
+            row.prop(
+                context.scene.albam.tools_settings,
+                "asettr_relative_path_to_textures",
+                text="",
+            )
         layout.separator()
         row = layout.row()
         row.operator('albam.autorename_bones', text="Autorename bones")
@@ -322,6 +515,17 @@ class ALBAM_OT_TransferNormal(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _find_mod_path(bl_ob):
+    """The relative path of the nearest ancestor imported from a .mod file."""
+    ancestor = bl_ob.parent
+    while ancestor is not None:
+        mod_path = getattr(ancestor.albam_asset, "relative_path", None)
+        if mod_path:
+            return mod_path
+        ancestor = ancestor.parent
+    return None
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
     '''Set custom properties for new textures automaticly'''
@@ -336,15 +540,35 @@ class ALBAM_OT_AutoSetTexParams(bpy.types.Operator):
 
     def execute(self, context):
         app_id = context.scene.albam.apps.app_selected
-        local_path = bpy.context.scene.albam.tools_settings.relative_path_to_textures
-        meshes = {ob.data for ob in bpy.context.selected_objects if ob.type == 'MESH'}
-        if not meshes:
-            meshes = {child.data for child in bpy.context.selected_objects[0].children
-                      if child.type == 'MESH'}
-        for ob in meshes:
-            mat = ob.materials[0]
+        tools_settings = context.scene.albam.tools_settings
+        custom_path = tools_settings.asettr_relative_path_to_textures
+        use_custom_path = tools_settings.asettr_use_custom_path
+        bl_objects = {ob for ob in context.selected_objects if ob.type == 'MESH'}
+        if not bl_objects:
+            # Selecting just the model's root object autosets all of its meshes
+            bl_objects = {child for ob in context.selected_objects
+                          for child in ob.children_recursive if child.type == 'MESH'}
+        if not bl_objects:
+            show_message_box(message="There is no mesh in selection")
+            return {'CANCELLED'}
+        processed_objects = 0
+        for bl_ob in bl_objects:
+            if use_custom_path:
+                local_path = custom_path
+            else:
+                mod_path = _find_mod_path(bl_ob)
+                if not mod_path:
+                    print(f"Warning: no parent of {bl_ob.name} has a .mod path, skipping it")
+                    continue
+                mod_dir = str(PureWindowsPath(mod_path).parent)
+                local_path = "" if mod_dir == "." else f"{mod_dir}\\"
+            try:
+                mat = bl_ob.data.materials[0]
+            except IndexError:
+                continue
             set_image_albam_attr(mat, app_id, local_path)
-        show_message_box(message=f"Texture params were autoset for {len(meshes)} meshes")
+            processed_objects += 1
+        show_message_box(message=f"Texture params were autoset for {processed_objects} meshes")
         return {'FINISHED'}
 
 
@@ -869,12 +1093,21 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             self.report({'WARNING'}, "The tool works only in Edit Mode!")
             return {'CANCELLED'}
 
-        # Store the original shading type and color type to restore later
-        self.space = context.space_data
-        self.orig_shading_type = self.space.shading.type
-        self.orig_color_type = self.space.shading.color_type
+        # Keep solid shading for the full time this workspace tool is active.
+        _ensure_face_painter_lifecycle_timer()
+        _track_face_painter_area(context.area)
 
-        self.space.shading.type = 'MATERIAL'
+        context.tool_settings.mesh_select_mode = (False, False, True)
+
+        if context.active_object.data.total_face_sel:
+            bpy.ops.mesh.select_all(action='DESELECT')
+
+        mode = get_active_face_paint_mode(context)
+        context.scene.albam.tools_settings.face_paint_mode = mode
+
+        self.mesh_object = context.active_object
+        self.edit_mesh = bmesh.from_edit_mesh(self.mesh_object.data)
+        self.bvh = _build_face_painter_bvh(self.edit_mesh)
 
         # paint on LMB press
         self.paint_face(context, event)
@@ -884,8 +1117,8 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
 
     def paint_face(self, context, event):
         """Raycast with BVHTree to BMesh"""
-        obj = context.active_object
-        if not obj or obj.type != 'MESH':
+        bl_ob = self.mesh_object
+        if not bl_ob or bl_ob.type != 'MESH':
             return
 
         region = context.region
@@ -897,27 +1130,22 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
         ray_dir = view3d_utils.region_2d_to_vector_3d(region, rv3d, coord)
 
         # Get local coordinates of the ray in the object's space
-        inv_matrix = obj.matrix_world.inverted()
+        inv_matrix = bl_ob.matrix_world.inverted()
         origin_local = inv_matrix @ ray_origin
         dir_local = inv_matrix.to_3x3() @ ray_dir
 
-        # BMesh + BVHTree
-        bm = bmesh.from_edit_mesh(obj.data)
-        bm.faces.ensure_lookup_table()
-        bvh = BVHTree.FromBMesh(bm)
-
-        location, normal, face_index, distance = bvh.ray_cast(origin_local, dir_local)
+        location, normal, face_index, distance = self.bvh.ray_cast(origin_local, dir_local)
 
         if face_index is not None:
-            active_mat_idx = obj.active_material_index
+            active_mat_idx = bl_ob.active_material_index
 
-            if not obj.data.materials:
+            if not bl_ob.data.materials:
                 self.report({'WARNING'}, "The object has no materials assigned!")
                 return
 
-            if bm.faces[face_index].material_index != active_mat_idx:
-                bm.faces[face_index].material_index = active_mat_idx
-                bmesh.update_edit_mesh(obj.data)
+            if self.edit_mesh.faces[face_index].material_index != active_mat_idx:
+                self.edit_mesh.faces[face_index].material_index = active_mat_idx
+                bmesh.update_edit_mesh(bl_ob.data)
                 context.area.tag_redraw()
 
     def modal(self, context, event):
@@ -929,17 +1157,247 @@ class VIEW3D_OT_material_paint_modal(bpy.types.Operator):
             return {'FINISHED'}
 
         elif event.type in {'ESC', 'RIGHTMOUSE'}:
-            self.restore_viewport()
             return {'CANCELLED'}
 
         # Allows to use camera navigation while the tool is active
         return {'PASS_THROUGH'}
 
-    def restore_viewport(self):
-        """Restore Viewport"""
-        if hasattr(self, 'space') and self.space:
-            self.space.shading.type = self.orig_shading_type
-            self.space.shading.color_type = self.orig_color_type
+
+HEADER_H = 40
+FOOTER_H = 60
+GRID_COLUMNS = 8
+CELL_SIZE = 20
+GAP = 4
+PANEL_W = 196
+PANEL_BG = (0.08, 0.08, 0.08, 0.97)
+PANEL_BORDER = (0.25, 0.25, 0.25, 1.0)
+
+
+def _gpu_draw_rect(x, y, w, h, color):
+    """
+    Draw a rectangle in the 3D view using GPU shader.
+    x, y: bottom-left corner coordinates
+    w, h: width and height of the rectangle
+    color: RGBA tuple for the rectangle color
+    """
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    vertices = (
+        (x, y),
+        (x + w, y),
+        (x + w, y + h),
+        (x, y + h),
+    )
+    indices = (
+        (0, 1, 2),
+        (0, 2, 3),
+    )
+    batch = batch_for_shader(
+        shader,
+        'TRIS',
+        {"pos": vertices},
+        indices=indices,
+    )
+    shader.bind()
+    shader.uniform_float("color", color)
+
+    batch.draw(shader)
+
+
+def _blf_draw_text(font_id, x, y, text, size=12):
+    """Draw text in the 3D view using BLF."""
+    blf.position(font_id, x, y, 0)
+    blf.size(font_id, size)
+    blf.draw(font_id, text)
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_MaterialPalette(bpy.types.Operator):
+    bl_idname = "albam.mat_palette_popup"
+    bl_label = "Material Palette"
+
+    _draw_handler = None
+
+    def invoke(self, context, event):
+        self.palette_origin_x = event.mouse_region_x
+        self.palette_origin_y = event.mouse_region_y
+        self.mouse_region_x = event.mouse_region_x
+        self.mouse_region_y = event.mouse_region_y
+        self.hovered_palette_index = -1
+        self.mesh_object = context.active_object
+        self.face_paint_mode = get_active_face_paint_mode(context)
+        context.scene.albam.tools_settings.face_paint_mode = self.face_paint_mode
+        self.palette_material_ids = self.get_palette_material_ids()
+
+        self._draw_handler = bpy.types.SpaceView3D.draw_handler_add(
+            self.draw_palette,
+            (),
+            'WINDOW',
+            'POST_PIXEL',
+        )
+        _FACE_PAINTER_PALETTE_DRAW_HANDLERS.append(self._draw_handler)
+
+        context.window_manager.modal_handler_add(self)
+        context.area.tag_redraw()
+
+        return {'RUNNING_MODAL'}
+
+    def extract_mat_id(self, material_name):
+        """Return this paint mode's numeric material ID, or None if it doesn't match."""
+        return extract_material_id_from_name(material_name, self.face_paint_mode)
+
+    def get_palette_material_ids(self):
+        """Get numeric IDs parsed from the object's material names."""
+        if not self.mesh_object or self.mesh_object.type != 'MESH':
+            return []
+
+        palette_material_ids = []
+        for material in self.mesh_object.data.materials:
+            if not material:
+                continue
+
+            material_id = self.extract_mat_id(material.name)
+            if material_id is not None:
+                palette_material_ids.append(material_id)
+
+        return palette_material_ids
+
+    def modal(self, context, event):
+        if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
+            self.palette_origin_x = event.mouse_region_x
+            self.palette_origin_y = event.mouse_region_y
+            self.mouse_region_x = event.mouse_region_x
+            self.mouse_region_y = event.mouse_region_y
+            self.hovered_palette_index = -1
+            context.area.tag_redraw()
+
+        elif event.type == 'MOUSEMOVE':
+            self.mouse_region_x = event.mouse_region_x
+            self.mouse_region_y = event.mouse_region_y
+            self.update_hover()
+            context.area.tag_redraw()
+
+        elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+            if self.hovered_palette_index >= 0:
+                self.select_material(self.hovered_palette_index)
+
+            self.finish(context)
+            return {'FINISHED'}
+
+        elif event.type in {'ESC', }:
+            self.finish(context)
+            return {'CANCELLED'}
+
+        return {'RUNNING_MODAL'}
+
+    def finish(self, context):
+        self._cleanup(context)
+
+    def cancel(self, context):
+        self._cleanup(context)
+
+    def _cleanup(self, context=None):
+        if self._draw_handler is not None:
+            _remove_face_painter_palette_draw_handler(self._draw_handler)
+            self._draw_handler = None
+
+        try:
+            area = context.area if context is not None else None
+            if area is not None:
+                area.tag_redraw()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+
+    def cell_position(self, palette_index):
+        column = palette_index % GRID_COLUMNS
+        row = palette_index // GRID_COLUMNS
+        cell_x = self.palette_origin_x + GAP + column * (CELL_SIZE + GAP)
+        panel_top = self.palette_origin_y + HEADER_H + CELL_SIZE
+        cell_y = panel_top - HEADER_H - CELL_SIZE - row * (CELL_SIZE + GAP)
+        return cell_x, cell_y
+
+    def update_hover(self):
+        self.hovered_palette_index = -1
+        for palette_index in range(len(self.palette_material_ids)):
+            cell_x, cell_y = self.cell_position(palette_index)
+            if (
+                cell_x <= self.mouse_region_x <= cell_x + CELL_SIZE and
+                cell_y <= self.mouse_region_y <= cell_y + CELL_SIZE
+            ):
+                self.hovered_palette_index = palette_index
+                break
+
+    def select_material(self, palette_index):
+        selected_material_id = self.palette_material_ids[palette_index]
+        if not self.mesh_object or self.mesh_object.type != 'MESH':
+            return
+
+        for material_slot_index, material in enumerate(self.mesh_object.data.materials):
+            if not material:
+                continue
+
+            material_id = self.extract_mat_id(material.name)
+            if selected_material_id == material_id:
+                self.mesh_object.active_material_index = material_slot_index
+                break
+
+    def panel_geometry(self):
+        row_count = max(1, (len(self.palette_material_ids) + GRID_COLUMNS - 1) // GRID_COLUMNS)
+        grid_height = row_count * CELL_SIZE + (row_count - 1) * GAP
+        panel_height = HEADER_H + grid_height + FOOTER_H
+        panel_top = self.palette_origin_y + HEADER_H + CELL_SIZE
+        return panel_top, panel_top - panel_height, panel_height
+
+    def draw_palette(self):
+        panel_top, panel_bottom, panel_height = self.panel_geometry()
+        self.panel_x = self.palette_origin_x
+        self.panel_y = panel_bottom
+
+        _gpu_draw_rect(
+            self.panel_x - 2,
+            panel_bottom - 2,
+            PANEL_W + 4,
+            panel_height + 4,
+            PANEL_BORDER,
+        )
+        _gpu_draw_rect(self.panel_x, panel_bottom, PANEL_W, panel_height, PANEL_BG)
+        self.draw_header(panel_top)
+        self.draw_cells()
+        self.draw_footer()
+
+    def draw_header(self, panel_top):
+        _blf_draw_text(
+            0,
+            self.panel_x + 12,
+            panel_top - 24,
+            "Albam Material Palette",
+            13,
+        )
+
+    def draw_cells(self):
+        if self.hovered_palette_index >= 0:
+            cell_x, cell_y = self.cell_position(self.hovered_palette_index)
+            _gpu_draw_rect(
+                cell_x - 2,
+                cell_y - 2,
+                CELL_SIZE + 4,
+                CELL_SIZE + 4,
+                (1.0, 1.0, 1.0, 1.0),
+            )
+
+        for palette_index, material_id in enumerate(self.palette_material_ids):
+            cell_x, cell_y = self.cell_position(palette_index)
+            if self.face_paint_mode == "SBC":
+                color = SBC_COLOR_PALETTE.get(material_id, number_to_color(material_id))
+            else:
+                color = number_to_color(material_id)
+            _gpu_draw_rect(cell_x, cell_y, CELL_SIZE, CELL_SIZE, color)
+
+    def draw_footer(self):
+        if self.hovered_palette_index >= 0:
+            hovered_material_id = self.palette_material_ids[self.hovered_palette_index]
+            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 36, f"Material ID: {hovered_material_id}", 12)
+            purpose = get_material_purpose(hovered_material_id, self.face_paint_mode)
+            _blf_draw_text(0, self.panel_x + 12, self.panel_y + 12, f"Purpose: {purpose}", 12)
 
 
 class ALBAM_WT_Handshaker(bpy.types.WorkSpaceTool):
@@ -1008,8 +1466,42 @@ class ALBAM_WT_FacePainter(bpy.types.WorkSpaceTool):
         Path(__file__).parent.parent / "lib" / "icons" / "ops.generic.albam_face_paint")
     bl_keymap = (
         ("albam.material_paint_modal", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        ("albam.mat_palette_popup", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
     )
     after = "albam.face_prop_edit"
+
+    @staticmethod
+    def draw_settings(context, layout, tool):
+        paint_mode = get_active_face_paint_mode(context)
+        settings_row = layout.row(align=True)
+        settings_row.label(text=f"Painting mode: {paint_mode}")
+
+        active_object = context.active_object
+        active_material = (
+            active_object.active_material
+            if active_object and active_object.type == 'MESH'
+            else None
+        )
+        if active_material:
+            settings_row.label(text=active_material.name, icon='MATERIAL')
+            color_swatch = settings_row.row(align=True)
+            color_swatch.ui_units_x = 3.0
+            color_swatch.enabled = False
+            color_swatch.prop(
+                active_material,
+                "diffuse_color",
+                text="",
+                emboss=True,
+            )
+            material_id = extract_material_id_from_name(
+                active_material.name,
+                paint_mode,
+            )
+            purpose = get_material_purpose(material_id, paint_mode)
+            purpose_row = layout.row(align=True)
+            purpose_row.label(text=f"Purpose: {purpose}")
+        else:
+            settings_row.label(text="No active material", icon='MATERIAL')
 
 
 class ALBAM_WT_VGMerger(bpy.types.WorkSpaceTool):
@@ -1274,15 +1766,10 @@ def _suffixed_texture_name(image, name, slot_suffixes, local_path):
 
 
 def set_image_albam_attr(blender_material, app_id, local_path):
-    TEX_COMPRESSION = {
-        "re0": (24, 20, 25, 31),  # BM alpha, BM no alpha, MM, NM
-        "re1": (24, 20, 19, 31),
-        "rev1": (23, 19, 25, 31),
-        "rev2": (24, 20, 25, 31),
-        "re6": (24, 20, 25, 31),
-        "dd": (24, 20, 25, 31),
-    }
-
+    # TEX_COMPRESSION (imported above) is the one shared table for both this
+    # Autosetter and export's own non-DDS-texture encoding
+    # (check_dds_textures), so the two can't quietly disagree on a game's
+    # Specular/Diffuse compression_format code.
     VERSION = {
         "re0": "0x9d",
         "re1": "0x9d",
@@ -1299,7 +1786,7 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         "rev2": 32,
         "re6": 0,
     }
-    overwrite_tex_path = bpy.context.scene.albam.tools_settings.overwrite_tex_path
+    overwrite_tex_path = bpy.context.scene.albam.tools_settings.asettr_overwrite_tex_path
     if not blender_material or not blender_material.node_tree:
         return
     slot_suffixes = _image_slot_suffixes()
@@ -1323,7 +1810,15 @@ def set_image_albam_attr(blender_material, app_id, local_path):
         if app_id in TEX_COMPRESSION:
             tex_compr_preset = TEX_COMPRESSION.get(app_id)
             if type == 0:
-                tex_props.compression_format = tex_compr_preset[1]
+                if is_blimage_dds(tn.image):
+                    dds_header = DDSHeader.from_bl_image(tn.image)
+                    has_alpha_channel = (
+                        dds_header.pixelfmt_dwFourCC in (b"DXT3", b"DXT5") or
+                        bool(dds_header.pixelfmt_dwFlags & DDSHeader.DDPF_ALPHAPIXELS)
+                    )
+                else:
+                    has_alpha_channel = tn.image.depth in (32, 64, 128)
+                tex_props.compression_format = tex_compr_preset[0 if has_alpha_channel else 1]
             if type == 1:
                 tex_props.compression_format = tex_compr_preset[3]
             if type == 2:
@@ -1371,6 +1866,58 @@ def rename_bones(armature_ob, app_id, body_type):
         mirror = get_mirror(pose_bone, app_id)
         if mirror in renamed:
             set_mirror(pose_bone, app_id, renamed[mirror])
+
+    _set_bone_layers(armature_ob)
+
+
+def _set_bone_layers(armature_ob):
+    """Assign renamed bones to Albam collections and color them by group."""
+    armature = armature_ob.data
+    assignments = []
+    for bone in armature.bones:
+        normalized_name = bone.name.casefold()
+        best_matching_collection = None
+        best_matching_fragment_length = 0
+        for candidate_collection, fragments in BONE_COLLECTIONS.items():
+            for fragment in fragments:
+                normalized_fragment = fragment.casefold()
+                if (
+                    normalized_fragment in normalized_name and
+                    len(normalized_fragment) > best_matching_fragment_length
+                ):
+                    best_matching_collection = candidate_collection
+                    best_matching_fragment_length = len(normalized_fragment)
+
+        # Controller prefixes take precedence over body-part tokens such as
+        # "hand" or "knee" (for example, ctr_hand_r).
+        if normalized_name == "ctr" or normalized_name.startswith("ctr_"):
+            collection_name = "Controllers"
+        else:
+            collection_name = best_matching_collection or "Others"
+
+        assignments.append((bone, collection_name))
+
+    used_collection_names = {name for _, name in assignments}
+    collections = {}
+    for collection_name in BONE_COLLECTIONS:
+        collection = armature.collections.get(collection_name)
+        if collection is None and collection_name in used_collection_names:
+            collection = armature.collections.new(collection_name)
+            collection.is_visible = True
+        if collection is not None:
+            collections[collection_name] = collection
+
+    for bone, collection_name in assignments:
+        # Remove stale membership so repeated autorename runs keep one Albam
+        # group per bone. Other, differently named collections are untouched.
+        for collection in collections.values():
+            collection.unassign(bone)
+        collections[collection_name].assign(bone)
+        color_palette = BONE_COLLECTION_COLORS[collection_name]
+        bone.color.palette = color_palette
+        armature_ob.pose.bones[bone.name].color.palette = color_palette
+
+    armature.show_bone_colors = True
 
 
 def merge_vgroups(vg_a, vg_b):

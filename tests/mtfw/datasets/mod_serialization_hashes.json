@@ -46,5 +46,13 @@
         "has_armature": false,
         "has_vertex_colors": true,
         "has_mirrors": false
+    },
+    {
+        "app_id": "dmc4",
+        "mod_path_hash": "940d6a6b53e8c80e",
+        "mod_version": 153,
+        "has_armature": true,
+        "has_vertex_colors": false,
+        "has_mirrors": false
     }
 ]

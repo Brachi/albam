@@ -361,13 +361,19 @@ def serialize_materials_data(model_asset, bl_objects, src_mod, dst_mod):
     serialize_func = MAPPER_SERIALIZE_FUNCS[dst_mod.header.version]()
     materials_data, mrl = serialize_func(model_asset, bl_materials, exported_textures, src_mod, dst_mod)
 
-    return materials_data, mrl, [t["serialized_vfile"] for t in exported_textures.values()]
+    return materials_data, mrl, _unique_texture_vfiles(exported_textures)
+
+
+def _unique_texture_vfiles(exported_textures):
+    """Images merged by serialize_textures share one vfile; it's exported once."""
+    vfiles = {id(t["serialized_vfile"]): t["serialized_vfile"] for t in exported_textures.values()}
+    return list(vfiles.values())
 
 
 def _serialize_materials_data_156(model_asset, bl_materials, exported_textures, src_mod, dst_mod):
     app_id = model_asset.app_id
     dst_mod.header.num_materials = len(bl_materials)
-    dst_mod.header.num_textures = len(exported_textures)
+    dst_mod.header.num_textures = len(_unique_texture_vfiles(exported_textures))
     dst_mod.materials_data = dst_mod.MaterialsData(_parent=dst_mod, _root=dst_mod._root)
     dst_mod.materials_data.textures = []
     dst_mod.materials_data.materials = []
@@ -1245,17 +1251,24 @@ def check_mtfw_shader_group(func):
     return wrapper
 
 
-def _has_mtfw_shader_group(bl_mat):
-    mtfw_shader_group = None
-    try:
-        mtfw_shader_group = bpy.data.node_groups[MTFW_SHADER_NODEGROUP_NAME]
-    except KeyError:
+def _is_mtfw_shader_group(node_tree):
+    # Appending a material from another .blend brings its own copy of the
+    # group, which Blender names "MT Framework shader.001" and so on.
+    if node_tree is None:
         return False
-    existing_mtfw_shader_groups = [
-        n for n in bl_mat.node_tree.nodes if isinstance(n, bpy.types.ShaderNodeGroup) and
-        n.node_tree is mtfw_shader_group
-    ]
-    return bool(existing_mtfw_shader_groups)
+    base, _, suffix = node_tree.name.rpartition(".")
+    return node_tree.name == MTFW_SHADER_NODEGROUP_NAME or (
+        base == MTFW_SHADER_NODEGROUP_NAME and suffix.isdigit()
+    )
+
+
+def _has_mtfw_shader_group(bl_mat):
+    if bl_mat.node_tree is None:
+        return False
+    return any(
+        isinstance(n, bpy.types.ShaderNodeGroup) and _is_mtfw_shader_group(n.node_tree)
+        for n in bl_mat.node_tree.nodes
+    )
 
 
 @blender_registry.register_custom_properties_material("mod_156_material", ("re5",))

@@ -9,6 +9,22 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Sbc21(ReadWriteKaitaiStruct):
+    """FIELD NAMES:
+      file header        = rCollision::Header
+      info[]             = rCollision::PartsInfo
+      face[]             = rCollision::Triangle
+      vertex[]           = rCollision::Vertex
+      collision_type[]   = rCollision::MaterialInfo (: nCollision::ScrMaterialInfo)
+      pairs[]            = rCollision::Leaf
+      bvh_collision      = cBVHCollision::Header + cBVHCollision::NodeQuad
+      pair_aabb[]        = cGridCollisionRegistInfo (first 28 bytes)
+      grco               = cGridCollision (mMagic 'grco', mVersion 2009111700)
+    
+    space division types (rCollision::ESPACE_DIVISION_TYPE):
+      0 = BVH_QUAD, 1 = BVH_BINARY, 2 = GRID, 3 = MAX
+    -> header.unk_02 / header.unk_03 hold exactly this enum; the REV1 "grid"
+       files are simply `SpaceDivisionTypeTriangle == GRID`.
+    """
     def __init__(self, _io=None, _parent=None, _root=None):
         super(Sbc21, self).__init__(_io)
         self._parent = _parent
@@ -25,16 +41,27 @@ class Sbc21(ReadWriteKaitaiStruct):
             finally:
                 self.sbc_info.append(_t_sbc_info)
 
+        self.pair_aabbs = []
+        for i in range((self.header.num_pairs if self.header.is_grid else 0)):
+            _t_pair_aabbs = Sbc21.PairAabb(self._io, self, self._root)
+            try:
+                _t_pair_aabbs._read()
+            finally:
+                self.pair_aabbs.append(_t_pair_aabbs)
+
         self.sbc_bvhc = []
-        for i in range(self.header.num_objects):
+        for i in range((1 if self.header.is_grid else self.header.num_objects)):
             _t_sbc_bvhc = Sbc21.BvhCollision(self._io, self, self._root)
             try:
                 _t_sbc_bvhc._read()
             finally:
                 self.sbc_bvhc.append(_t_sbc_bvhc)
 
-        self.bvh = Sbc21.BvhCollision(self._io, self, self._root)
-        self.bvh._read()
+        if (not (self.header.is_grid)):
+            pass
+            self.bvh = Sbc21.BvhCollision(self._io, self, self._root)
+            self.bvh._read()
+
         self.faces = []
         for i in range(self.header.num_faces):
             _t_faces = Sbc21.Face(self._io, self, self._root)
@@ -67,6 +94,11 @@ class Sbc21(ReadWriteKaitaiStruct):
             finally:
                 self.pairs_collections.append(_t_pairs_collections)
 
+        if self.header.is_grid:
+            pass
+            self.grco = Sbc21.GrcoBlock(self._io, self, self._root)
+            self.grco._read()
+
         self._dirty = False
 
 
@@ -77,11 +109,18 @@ class Sbc21(ReadWriteKaitaiStruct):
             pass
             self.sbc_info[i]._fetch_instances()
 
+        for i in range(len(self.pair_aabbs)):
+            pass
+            self.pair_aabbs[i]._fetch_instances()
+
         for i in range(len(self.sbc_bvhc)):
             pass
             self.sbc_bvhc[i]._fetch_instances()
 
-        self.bvh._fetch_instances()
+        if (not (self.header.is_grid)):
+            pass
+            self.bvh._fetch_instances()
+
         for i in range(len(self.faces)):
             pass
             self.faces[i]._fetch_instances()
@@ -98,6 +137,10 @@ class Sbc21(ReadWriteKaitaiStruct):
             pass
             self.pairs_collections[i]._fetch_instances()
 
+        if self.header.is_grid:
+            pass
+            self.grco._fetch_instances()
+
 
 
     def _write__seq(self, io=None):
@@ -107,11 +150,18 @@ class Sbc21(ReadWriteKaitaiStruct):
             pass
             self.sbc_info[i]._write__seq(self._io)
 
+        for i in range(len(self.pair_aabbs)):
+            pass
+            self.pair_aabbs[i]._write__seq(self._io)
+
         for i in range(len(self.sbc_bvhc)):
             pass
             self.sbc_bvhc[i]._write__seq(self._io)
 
-        self.bvh._write__seq(self._io)
+        if (not (self.header.is_grid)):
+            pass
+            self.bvh._write__seq(self._io)
+
         for i in range(len(self.faces)):
             pass
             self.faces[i]._write__seq(self._io)
@@ -127,6 +177,10 @@ class Sbc21(ReadWriteKaitaiStruct):
         for i in range(len(self.pairs_collections)):
             pass
             self.pairs_collections[i]._write__seq(self._io)
+
+        if self.header.is_grid:
+            pass
+            self.grco._write__seq(self._io)
 
 
 
@@ -144,8 +198,17 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.sbc_info[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"sbc_info", self, self.sbc_info[i]._parent)
 
-        if len(self.sbc_bvhc) != self.header.num_objects:
-            raise kaitaistruct.ConsistencyError(u"sbc_bvhc", self.header.num_objects, len(self.sbc_bvhc))
+        if len(self.pair_aabbs) != (self.header.num_pairs if self.header.is_grid else 0):
+            raise kaitaistruct.ConsistencyError(u"pair_aabbs", (self.header.num_pairs if self.header.is_grid else 0), len(self.pair_aabbs))
+        for i in range(len(self.pair_aabbs)):
+            pass
+            if self.pair_aabbs[i]._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"pair_aabbs", self._root, self.pair_aabbs[i]._root)
+            if self.pair_aabbs[i]._parent != self:
+                raise kaitaistruct.ConsistencyError(u"pair_aabbs", self, self.pair_aabbs[i]._parent)
+
+        if len(self.sbc_bvhc) != (1 if self.header.is_grid else self.header.num_objects):
+            raise kaitaistruct.ConsistencyError(u"sbc_bvhc", (1 if self.header.is_grid else self.header.num_objects), len(self.sbc_bvhc))
         for i in range(len(self.sbc_bvhc)):
             pass
             if self.sbc_bvhc[i]._root != self._root:
@@ -153,10 +216,13 @@ class Sbc21(ReadWriteKaitaiStruct):
             if self.sbc_bvhc[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"sbc_bvhc", self, self.sbc_bvhc[i]._parent)
 
-        if self.bvh._root != self._root:
-            raise kaitaistruct.ConsistencyError(u"bvh", self._root, self.bvh._root)
-        if self.bvh._parent != self:
-            raise kaitaistruct.ConsistencyError(u"bvh", self, self.bvh._parent)
+        if (not (self.header.is_grid)):
+            pass
+            if self.bvh._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"bvh", self._root, self.bvh._root)
+            if self.bvh._parent != self:
+                raise kaitaistruct.ConsistencyError(u"bvh", self, self.bvh._parent)
+
         if len(self.faces) != self.header.num_faces:
             raise kaitaistruct.ConsistencyError(u"faces", self.header.num_faces, len(self.faces))
         for i in range(len(self.faces)):
@@ -192,6 +258,13 @@ class Sbc21(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"pairs_collections", self._root, self.pairs_collections[i]._root)
             if self.pairs_collections[i]._parent != self:
                 raise kaitaistruct.ConsistencyError(u"pairs_collections", self, self.pairs_collections[i]._parent)
+
+        if self.header.is_grid:
+            pass
+            if self.grco._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"grco", self._root, self.grco._root)
+            if self.grco._parent != self:
+                raise kaitaistruct.ConsistencyError(u"grco", self, self.grco._parent)
 
         self._dirty = False
 
@@ -491,7 +564,7 @@ class Sbc21(ReadWriteKaitaiStruct):
             self._root = _root
 
         def _read(self):
-            self.unk_01 = self._io.read_f4le()
+            self.attribute = self._io.read_u4le()
             self.unk_02 = self._io.read_u2le()
             self.unk_03 = self._io.read_u2le()
             self.unk_04 = []
@@ -517,7 +590,7 @@ class Sbc21(ReadWriteKaitaiStruct):
 
         def _write__seq(self, io=None):
             super(Sbc21.CollisionType, self)._write__seq(io)
-            self._io.write_f4le(self.unk_01)
+            self._io.write_u4le(self.attribute)
             self._io.write_u2le(self.unk_02)
             self._io.write_u2le(self.unk_03)
             for i in range(len(self.unk_04)):
@@ -632,6 +705,146 @@ class Sbc21(ReadWriteKaitaiStruct):
             self._dirty = False
 
 
+    class GrcoBlock(ReadWriteKaitaiStruct):
+        """'grco' == Grid Collision.  Grid cells index the collision *leaves*
+        (`pairs_collections`): a cell covers regist_params[leaf_start : leaf_start
+        + leaf_num].  With flg_static_mode == 0 the grid is rebuilt on load and the
+        file stores neither the cells nor the params (not seen in REV1 files).
+        """
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc21.GrcoBlock, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.magic = self._io.read_bytes(4)
+            if not self.magic == b"\x67\x72\x63\x6F":
+                raise kaitaistruct.ValidationNotEqualError(b"\x67\x72\x63\x6F", self.magic, self._io, u"/types/grco_block/seq/0")
+            self.version = self._io.read_u4le()
+            self.bounding_box = Sbc21.Bbox4(self._io, self, self._root)
+            self.bounding_box._read()
+            self.grid_num_x = self._io.read_u2le()
+            self.grid_num_z = self._io.read_u2le()
+            self.cell_mode = self._io.read_u1()
+            self.flg_static_mode = self._io.read_u1()
+            self.cells = []
+            for i in range(self.grid_num_x * self.grid_num_z):
+                _t_cells = Sbc21.GrcoCell(self._io, self, self._root)
+                try:
+                    _t_cells._read()
+                finally:
+                    self.cells.append(_t_cells)
+
+            self.num_regist_params = self._io.read_u4le()
+            self.regist_params_u16 = []
+            for i in range((self.num_regist_params if self.cell_mode == 1 else 0)):
+                self.regist_params_u16.append(self._io.read_u2le())
+
+            self.regist_params_u32 = []
+            for i in range((self.num_regist_params if self.cell_mode == 0 else 0)):
+                self.regist_params_u32.append(self._io.read_u4le())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            self.bounding_box._fetch_instances()
+            for i in range(len(self.cells)):
+                pass
+                self.cells[i]._fetch_instances()
+
+            for i in range(len(self.regist_params_u16)):
+                pass
+
+            for i in range(len(self.regist_params_u32)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Sbc21.GrcoBlock, self)._write__seq(io)
+            self._io.write_bytes(self.magic)
+            self._io.write_u4le(self.version)
+            self.bounding_box._write__seq(self._io)
+            self._io.write_u2le(self.grid_num_x)
+            self._io.write_u2le(self.grid_num_z)
+            self._io.write_u1(self.cell_mode)
+            self._io.write_u1(self.flg_static_mode)
+            for i in range(len(self.cells)):
+                pass
+                self.cells[i]._write__seq(self._io)
+
+            self._io.write_u4le(self.num_regist_params)
+            for i in range(len(self.regist_params_u16)):
+                pass
+                self._io.write_u2le(self.regist_params_u16[i])
+
+            for i in range(len(self.regist_params_u32)):
+                pass
+                self._io.write_u4le(self.regist_params_u32[i])
+
+
+
+        def _check(self):
+            if len(self.magic) != 4:
+                raise kaitaistruct.ConsistencyError(u"magic", 4, len(self.magic))
+            if not self.magic == b"\x67\x72\x63\x6F":
+                raise kaitaistruct.ValidationNotEqualError(b"\x67\x72\x63\x6F", self.magic, None, u"/types/grco_block/seq/0")
+            if self.bounding_box._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self._root, self.bounding_box._root)
+            if self.bounding_box._parent != self:
+                raise kaitaistruct.ConsistencyError(u"bounding_box", self, self.bounding_box._parent)
+            if len(self.cells) != self.grid_num_x * self.grid_num_z:
+                raise kaitaistruct.ConsistencyError(u"cells", self.grid_num_x * self.grid_num_z, len(self.cells))
+            for i in range(len(self.cells)):
+                pass
+                if self.cells[i]._root != self._root:
+                    raise kaitaistruct.ConsistencyError(u"cells", self._root, self.cells[i]._root)
+                if self.cells[i]._parent != self:
+                    raise kaitaistruct.ConsistencyError(u"cells", self, self.cells[i]._parent)
+
+            if len(self.regist_params_u16) != (self.num_regist_params if self.cell_mode == 1 else 0):
+                raise kaitaistruct.ConsistencyError(u"regist_params_u16", (self.num_regist_params if self.cell_mode == 1 else 0), len(self.regist_params_u16))
+            for i in range(len(self.regist_params_u16)):
+                pass
+
+            if len(self.regist_params_u32) != (self.num_regist_params if self.cell_mode == 0 else 0):
+                raise kaitaistruct.ConsistencyError(u"regist_params_u32", (self.num_regist_params if self.cell_mode == 0 else 0), len(self.regist_params_u32))
+            for i in range(len(self.regist_params_u32)):
+                pass
+
+            self._dirty = False
+
+
+    class GrcoCell(ReadWriteKaitaiStruct):
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc21.GrcoCell, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.leaf_num = self._io.read_u2le()
+            self.padding = self._io.read_u2le()
+            self.leaf_start = self._io.read_u4le()
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+
+
+        def _write__seq(self, io=None):
+            super(Sbc21.GrcoCell, self)._write__seq(io)
+            self._io.write_u2le(self.leaf_num)
+            self._io.write_u2le(self.padding)
+            self._io.write_u4le(self.leaf_start)
+
+
+        def _check(self):
+            self._dirty = False
+
+
     class Info(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sbc21.Info, self).__init__(_io)
@@ -720,6 +933,75 @@ class Sbc21(ReadWriteKaitaiStruct):
         def _invalidate_size_(self):
             del self._m_size_
 
+    class PairAabb(ReadWriteKaitaiStruct):
+        """28 bytes: { f4 min[3]; u4 pair_index; f4 max[3] }.
+        `pair_index` runs 0..num_pairs-1 in file order (mRegistParam).
+        """
+        def __init__(self, _io=None, _parent=None, _root=None):
+            super(Sbc21.PairAabb, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+
+        def _read(self):
+            self.aabb_min = []
+            for i in range(3):
+                self.aabb_min.append(self._io.read_f4le())
+
+            self.pair_index = self._io.read_u4le()
+            self.aabb_max = []
+            for i in range(3):
+                self.aabb_max.append(self._io.read_f4le())
+
+            self._dirty = False
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.aabb_min)):
+                pass
+
+            for i in range(len(self.aabb_max)):
+                pass
+
+
+
+        def _write__seq(self, io=None):
+            super(Sbc21.PairAabb, self)._write__seq(io)
+            for i in range(len(self.aabb_min)):
+                pass
+                self._io.write_f4le(self.aabb_min[i])
+
+            self._io.write_u4le(self.pair_index)
+            for i in range(len(self.aabb_max)):
+                pass
+                self._io.write_f4le(self.aabb_max[i])
+
+
+
+        def _check(self):
+            if len(self.aabb_min) != 3:
+                raise kaitaistruct.ConsistencyError(u"aabb_min", 3, len(self.aabb_min))
+            for i in range(len(self.aabb_min)):
+                pass
+
+            if len(self.aabb_max) != 3:
+                raise kaitaistruct.ConsistencyError(u"aabb_max", 3, len(self.aabb_max))
+            for i in range(len(self.aabb_max)):
+                pass
+
+            self._dirty = False
+
+        @property
+        def size_(self):
+            if hasattr(self, '_m_size_'):
+                return self._m_size_
+
+            self._m_size_ = 28
+            return getattr(self, '_m_size_', None)
+
+        def _invalidate_size_(self):
+            del self._m_size_
+
     class SFacePair(ReadWriteKaitaiStruct):
         def __init__(self, _io=None, _parent=None, _root=None):
             super(Sbc21.SFacePair, self).__init__(_io)
@@ -774,9 +1056,9 @@ class Sbc21(ReadWriteKaitaiStruct):
             self.indent = self._io.read_bytes(4)
             if not self.indent == b"\x53\x42\x43\xFF":
                 raise kaitaistruct.ValidationNotEqualError(b"\x53\x42\x43\xFF", self.indent, self._io, u"/types/sbc_header/seq/0")
-            self.unk_00 = self._io.read_u4le()
-            self.unk_02 = self._io.read_u4le()
-            self.unk_03 = self._io.read_u4le()
+            self.version = self._io.read_u4le()
+            self.space_div_type_part = self._io.read_u4le()
+            self.space_div_type_triangle = self._io.read_u4le()
             self.num_objects = self._io.read_u2le()
             self.num_stages = self._io.read_u2le()
             self.num_pairs = self._io.read_u4le()
@@ -803,9 +1085,9 @@ class Sbc21(ReadWriteKaitaiStruct):
         def _write__seq(self, io=None):
             super(Sbc21.SbcHeader, self)._write__seq(io)
             self._io.write_bytes(self.indent)
-            self._io.write_u4le(self.unk_00)
-            self._io.write_u4le(self.unk_02)
-            self._io.write_u4le(self.unk_03)
+            self._io.write_u4le(self.version)
+            self._io.write_u4le(self.space_div_type_part)
+            self._io.write_u4le(self.space_div_type_triangle)
             self._io.write_u2le(self.num_objects)
             self._io.write_u2le(self.num_stages)
             self._io.write_u4le(self.num_pairs)
@@ -835,6 +1117,17 @@ class Sbc21(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"bounding_box", self, self.bounding_box._parent)
             self._dirty = False
 
+        @property
+        def is_grid(self):
+            """True when the file uses the REV1 pair-AABB + 'grco' grid layout."""
+            if hasattr(self, '_m_is_grid'):
+                return self._m_is_grid
+
+            self._m_is_grid = self.space_div_type_triangle != 0
+            return getattr(self, '_m_is_grid', None)
+
+        def _invalidate_is_grid(self):
+            del self._m_is_grid
         @property
         def size_(self):
             if hasattr(self, '_m_size_'):

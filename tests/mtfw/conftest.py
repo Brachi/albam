@@ -31,6 +31,31 @@ def _game_dirs(pytestconfig):
     return parsed
 
 
+def _build_game_fs(pytestconfig, local_app_id):
+    """The MTFW_FS --game-dir's value for local_app_id describes, freshly
+    built (a brand new S3/R2 key listing for the r2:// case). Skips
+    (raising via skip_missing) for a bad/missing --game-dir.
+    """
+    from albam.engines.mtfw.arc_fs import MTFW_FS
+    from tests.mtfw.r2_config import resolve_r2_source
+
+    value = _game_dirs(pytestconfig).get(local_app_id)
+    if not value:
+        skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
+    elif value.startswith(R2_PROTOCOL_PREFIX):
+        r2_kwargs = resolve_r2_source(value)
+        if r2_kwargs is None:
+            skip_missing(
+                f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
+                f"(empty bucket, missing s3 extras, or missing credentials - see "
+                f".env.example)"
+            )
+        return MTFW_FS.from_s3(**r2_kwargs)
+    elif not os.path.isdir(value):
+        skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
+    return MTFW_FS(value)
+
+
 @pytest.fixture(scope="session")
 def game_fs_root(pytestconfig, local_app_id):
     """
@@ -48,28 +73,16 @@ def game_fs_root(pytestconfig, local_app_id):
     Scanning + flattening a full local game install's tree can take a while
     (a real RE5 install has ~1200 archives) - that cost is paid once per
     app_id per session, not per test.
+
+    local_app_id has to come from parametrizing it at session scope, never
+    from a module defining its own local_app_id fixture: this fixture is
+    only rebuilt when the local_app_id definition it was built from is torn
+    down, and a session-scoped fixture defined in one module is not torn
+    down before the next module runs, so every later module on the same
+    xdist worker would get the previous module's game.
     """
-    from albam.engines.mtfw.arc_fs import MTFW_FS
-    from tests.mtfw.r2_config import resolve_r2_source
-
     if local_app_id not in _GAME_FS_INSTANCES:
-        value = _game_dirs(pytestconfig).get(local_app_id)
-        if not value:
-            skip_missing(f"No --game-dir supplied for app_id={local_app_id!r}")
-        elif value.startswith(R2_PROTOCOL_PREFIX):
-            r2_kwargs = resolve_r2_source(value)
-            if r2_kwargs is None:
-                skip_missing(
-                    f"--game-dir={local_app_id}::{value} requested but R2 isn't configured "
-                    f"(empty bucket, missing s3 extras, or missing credentials - see "
-                    f".env.example)"
-                )
-            game_fs = MTFW_FS.from_s3(**r2_kwargs)
-        elif not os.path.isdir(value):
-            skip_missing(f"--game-dir={local_app_id}::{value} does not exist")
-        else:
-            game_fs = MTFW_FS(value)
-
+        game_fs = _build_game_fs(pytestconfig, local_app_id)
         bpy.context.scene.albam.apps.app_selected = local_app_id
         vfs = bpy.context.scene.albam.vfs
         vfs.add_fs_root(local_app_id, game_fs, display_name=f"{local_app_id}-local")

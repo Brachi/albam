@@ -25,6 +25,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Face Painter tool for quicker editing of game data stored as materials (nav, sbc)
 - Vertex Groups Merger now has an option for batch merge
 - Tools: VF Guesser
+- Color Palette to Face Painter tool
+- Warning when writing a `.mod`/`.mrl` into an `.arc` references a texture path
+  that isn't among the arc's own entries or any other arc the VFS has loaded -
+  catches a texture renamed past the duplicate-path check without a `.tex`
+  actually landing at the new name, which the game reads as a crash or an
+  endless load rather than a missing file
+- Export warning when a mesh's Group ID isn't one of the ones in the model's groups table
+- Export encodes a non-DDS texture (PNG, TGA, etc.) to DDS instead of refusing it, picking the compression format from the texture's slot (diffuse/normal/specular) and alpha channel and setting the compression property to match, so the two can never disagree
+- Import warning listing materials' textures that weren't found in any loaded arc, with a hint to load `Core.arc` first for apps like Resident Evil Revelations 2 where shared textures live there
+- Export now checks three preconditions before writing and raises a clear error instead
+  of a raw crash: a mesh influenced by more than 32 bones, a mesh whose vertex count
+  or vertex index would overflow the format's 16-bit fields, and a UV coordinate too
+  large for the half-float format to store
 - Autosetter now names a texture that never had a path set after its in-game slot
   (`_BM`, `_NM`, `_MM`, `_LM`, `_AM`, `_CM`, `_DNM`), based on which shader socket it's
   plugged into. A texture already carrying a suffix (e.g. one re-imported from a real
@@ -33,10 +46,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - "Copy report to clipboard" button on the import/export error popup, so a #support
   user can paste the full error and traceback directly, without being asked to find
   it in the system console
+- Import of Ultimate Marvel vs. Capcom 3 characters, materials, textures and
+  archives. No export yet for this game
+- Add an option to move imported files into Blender collections
 
 ### Fixed
 
-- Exporting a non-power-of-two texture with mipmaps writing mipmap offsets and data laid out differently from the game's own `.tex` files from mipmap 3 on, and importing one giving a DDS whose smaller mipmaps image editors read from the wrong place
+- Exporting a non-power-of-two texture with mipmaps for Resident Evil 5 or Devil May Cry 4
+  writing mipmap offsets and data laid out differently from the game's own `.tex` files from
+  mipmap 3 on, and importing one giving a DDS whose smaller mipmaps image editors read from
+  the wrong place
+- Exporting two images that point at the same texture path (e.g. `pl_VTF` and `pl_VTF.001`
+  after importing a model twice) refusing to export and asking for a unique path, even when
+  both are the same texture. Identical images are now exported once; images that really
+  differ fail with a message saying what differs (size, settings or pixel data)
+- Exporting a texture for Resident Evil 0, 1, 6, Revelations 1 and 2, Dragon's Dogma and
+  UMvC3 writing a compression format that contradicts its DDS data (black screen, endless
+  loading or glowing textures in game). The DDS header now decides the block format; the
+  image's Compression Format property only picks among the codes that match it, and a
+  mismatching one is replaced with a warning. A DDS format the game can't use (e.g. a DX10
+  header) fails with a clear message
 - Exporting a texture from a DDS saved without mipmaps (mipmap count 0, as GIMP, Paint.NET and NVTT write it) failing with `ConsistencyError: Check failed: mipmap_offsets`. A DDS with less pixel data than its header's mipmap count needs now fails with a clear message instead
 - Exporting a material that uses `FShininessMap` (e.g. Resident Evil: Revelations enemies) dropping its shininess texture and the flags that go with it, which broke the material in game
 - MT Framework shader preview tilting every normal per UV island when no detail map is linked, and the Autosetter leaving added normal, specular and detail images as sRGB
@@ -67,6 +96,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Autorename Bones applying one game's name corrections to every rig renamed
   afterwards in the same Blender session, silently giving them plausible but
   wrong bone names
+- Resident Evil 5 and Devil May Cry 4 models with more than 65536 vertices importing with
+  stretched, spiky meshes, because their later meshes re-read the start of the vertex buffer
+- Exporting a material appended from another `.blend` failing with "Some materials are not
+  using the 'MT Framework shader' group", since appending renames the group's copy to
+  `MT Framework shader.001`
 - Two archives added under the same name sharing one file-tree state, so
   expanding either one listed both archives' contents
 - "Batch import folder" importing a second, same-named archive's identically
@@ -95,6 +129,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   file, now show a clear error instead of an `AttributeError` or a raw Kaitai
   parsing error. Images with no relative path set are no longer reported as
   duplicates of each other
+- Reopening a `.blend` with an archive or folder already added to the VFS
+  raising a `KeyError` on import, instead of remounting the root
+- Files exported earlier in a session going stale after saving and reopening
+  the `.blend`
+- Exporting a model with no armature crashing, instead of just skipping its
+  (nonexistent) bones data
+- Importing a `.lmt` raising `AttributeError` on Blender 4.4 and later, since
+  Blender moved actions' fcurves and groups behind layers and slots
+- The extension zip only bundling dependency wheels for the machine that
+  built it, so the add-on failed to enable on other platforms
+- Importing any model on Blender 5.x printing a deprecation warning once per
+  material
+- A bone's exported weight bound skipping a vertex whose weight looked
+  negligible but rounded up to a real nonzero value on export, leaving that
+  bone's bounding box too small in the exported file
+- Export always forcing a mesh's `disp` flag to true for RE0, RE1, RE6,
+  Revelations, Revelations 2 and Dragon's Dogma, overwriting whatever the
+  mesh actually had set
+- Autorename Bones not carrying a bone's Mirror Bone link through the rename
+- Autosetter compression format value for Diffuse maps with alpha transparency
+- Export failing with a file-not-found error on images that have no file on disk, such as
+  ones generated in Blender
 
 ### Changed
 
@@ -107,6 +163,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   animation ids and mirrors) is written from the armature and rig edits reach the game.
   Turning it off copies the source file's skeleton as before. Rigs from `.blend` files
   saved with 0.5.0 keep the source file's mirror bones
+- Bone renamer now creates bone collections
+- Custom texture path field in now hidden, Autosetter uses .mod file directory
 ### Removed
 
 - Split UV Seams tool, no longer needed now that export splits vertices automatically

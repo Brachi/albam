@@ -16,6 +16,10 @@ def get_app_description(app_id):
 # good: a new app is appended with a new number, never inserted, or every
 # file saved by an earlier version silently comes back naming a different
 # game.
+#
+# RE4UHD's "(experimental)" suffix flags it as less mature than the other
+# apps here: its exporters are newer, less battle-tested, and more likely
+# to need a follow-up fix after a mod comes back wrong.
 APPS = [
     ("re0", "Resident Evil 0", "", 0),
     ("re1", "Resident Evil 1", "", 1),
@@ -26,7 +30,7 @@ APPS = [
     ("dd", "Dragon's Dogma", "", 11),
     ("dmc4", "Devil May Cry 4", "", 12),
     ("umvc3", "UMVC3", "", 13),
-    ("re4uhd", "Resident Evil 4 UHD", "", 14),
+    ("re4uhd", "Resident Evil 4 UHD (experimental)", "", 14),
     ("reorc", "Resident Evil: ORC", "", 15),
 ]
 

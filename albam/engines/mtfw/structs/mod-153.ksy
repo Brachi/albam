@@ -289,10 +289,15 @@ types:
         repeat-expr: num_indices
         type: u2
       vertices:
-        # XXX vertex_index and vertex_position_2 are equal most of the time
-        # But if using vertex_position_2 when they are not, vertices import wrongly
-        # needs investigation
-        pos: "first_index > vertex_position_2 ?  _root.header.offset_vertex_buffer + (first_index * vertex_stride) + vertex_byte_offset : _root.header.offset_vertex_buffer + (first_index * vertex_stride) + vertex_byte_offset"
+        # vertex_base is the mesh's base into the vertex buffer and
+        # first_index is relative to it. Indices are 16-bit, so a model past
+        # 65536 vertices restarts first_index at 0 for its later meshes and
+        # carries the offset here. RE5 /pawn/om/om0988/model/om09882.mod:
+        # block one ends at 65095, block two has vertex_base 65096, and its
+        # last index 47916 lands on 113012, header.num_vertices - 1. Every
+        # RE5 and DMC4 .mod with a nonzero vertex_base tiles its buffer
+        # exactly with it added, and overlaps without it. Same as mod-21.
+        pos: _root.header.offset_vertex_buffer + vertex_byte_offset + ((vertex_base + first_index) * vertex_stride)
         repeat: expr
           #repeat-expr: num_vertices # TODO: special case
         repeat-expr: "first_index > vertex_position_2 ? last_index - first_index + 1 : num_vertices"

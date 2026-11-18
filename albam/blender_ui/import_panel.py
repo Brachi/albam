@@ -54,6 +54,22 @@ def set_path_list_file_config(self, context):
     config_mgr.save()
 
 
+def report_missing_textures(operator):
+    """Surface textures the importer couldn't find in any loaded arc (see
+    albam/engines/mtfw/texture.py) as a UI warning on `operator`. A console
+    print alone is easy to miss, and users chase the shader or the export
+    instead of just loading the right arc.
+
+    Shared between ALBAM_OT_Import and ALBAM_OT_BatchImportFolder - both
+    end up importing .mod files through ALBAM_OT_Import._execute(), so both
+    can have missing textures to report.
+    """
+    from ..engines.mtfw.texture import build_missing_textures_report, get_missing_textures
+    message = build_missing_textures_report(get_missing_textures())
+    if message:
+        operator.report({'WARNING'}, message)
+
+
 def folder_descendants(vfs, folder_item):
     """Every non-folder vfile under `folder_item`, scoped to the root
     `folder_item` itself belongs to.
@@ -96,6 +112,49 @@ class AlbamApps(bpy.types.PropertyGroup):
 class AlbamImportSettings(bpy.types.PropertyGroup):
     import_only_main_lods: bpy.props.BoolProperty(default=True)
     batch_import_folder: bpy.props.BoolProperty(default=False)
+    use_collections: bpy.props.BoolProperty(
+        default=False,
+        description="Create collections for imported objects and group meshes by nonzero Group ID",
+    )
+
+
+def _mesh_group_id(bl_object, app_id):
+    if bl_object.type != "MESH":
+        return 0
+    try:
+        custom_properties = bl_object.data.albam_custom_properties.get_custom_properties_for_appid(app_id)
+    except (AttributeError, KeyError):
+        return 0
+    return getattr(custom_properties, "idx_group", 0)
+
+
+def _move_imported_objects_to_collections(context, bl_container, app_id):
+    """Put an imported object hierarchy in a base collection.
+
+    Meshes with nonzero Group IDs are placed in child collections. Objects
+    without a Group ID stay directly in the base. Containers that aren't
+    objects (a texture import returns an Image) are left where they are.
+    """
+    if not isinstance(bl_container, bpy.types.Object):
+        return
+    base_collection = bpy.data.collections.new(bl_container.name)
+    context.scene.collection.children.link(base_collection)
+    group_collections = {}
+    imported_objects = (bl_container, *bl_container.children_recursive)
+
+    for bl_object in imported_objects:
+        group_id = _mesh_group_id(bl_object, app_id)
+        target_collection = base_collection
+        if group_id:
+            target_collection = group_collections.get(group_id)
+            if target_collection is None:
+                target_collection = bpy.data.collections.new(f"Group ID {group_id}")
+                base_collection.children.link(target_collection)
+                group_collections[group_id] = target_collection
+
+        for old_collection in tuple(bl_object.users_collection):
+            old_collection.objects.unlink(bl_object)
+        target_collection.objects.link(bl_object)
 
 
 @blender_registry.register_blender_type
@@ -105,6 +164,12 @@ class ALBAM_OT_Import(bpy.types.Operator):
     bl_label = "import item"
 
     def execute(self, context):  # pragma: no cover
+        from ..engines.mtfw.texture import reset_missing_textures
+        # Reset once here, not per-file: a batch import of a whole folder is
+        # still one import operation from the user's point of view, and
+        # should get one summary at the end, not one per .mod.
+        reset_missing_textures()
+
         batch = context.scene.albam.import_settings.batch_import_folder
         vfile = self.get_selected_item(context)
 
@@ -124,8 +189,10 @@ class ALBAM_OT_Import(bpy.types.Operator):
 
         except Exception:
             handle_operator_exception(self, "Import failed")
+            report_missing_textures(self)
             return {"CANCELLED"}
         self.report({'INFO'}, 'Import successful')
+        report_missing_textures(self)
         return {"FINISHED"}
 
     def _execute_batch(self, folder_item, context):
@@ -155,6 +222,7 @@ class ALBAM_OT_Import(bpy.types.Operator):
         if failed:
             msg += f", {len(failed)} failed: {', '.join(failed)}"
         self.report({'INFO'}, msg)
+        report_missing_textures(self)
         return {"FINISHED"}
 
     def _make_exportable(self, vfile, bl_object, context):
@@ -196,6 +264,9 @@ class ALBAM_OT_Import(bpy.types.Operator):
                 bpy.context.collection.objects.link(child)
             except RuntimeError:
                 pass
+
+        if context.scene.albam.import_settings.use_collections:
+            _move_imported_objects_to_collections(context, bl_container, vfile.app_id)
         return bl_container
 
     @classmethod
@@ -496,6 +567,7 @@ class ALBAM_WM_OT_ImportOptions(bpy.types.Operator):
         layout = self.layout
         layout.prop(import_settings, "import_only_main_lods", text="Import main LODs only")
         layout.prop(import_settings, "batch_import_folder", text="Batch import folder (.mod)")
+        layout.prop(import_settings, "use_collections", text="Move to Blender collections")
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
@@ -508,6 +580,11 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
     bl_label = "Batch import folder"
 
     def execute(self, context):
+        from ..engines.mtfw.texture import reset_missing_textures
+        # Same reasoning as ALBAM_OT_Import.execute(): one summary for the
+        # whole folder, not one per .mod.
+        reset_missing_textures()
+
         vfs = context.scene.albam.vfs
         if len(vfs.file_list) == 0:
             self.report({'WARNING'}, 'No files loaded')
@@ -557,6 +634,7 @@ class ALBAM_OT_BatchImportFolder(bpy.types.Operator):
         if failed:
             msg += f", {len(failed)} failed: {', '.join(failed)}"
         self.report({'INFO'}, msg)
+        report_missing_textures(self)
         return {'FINISHED'}
 
     @classmethod
