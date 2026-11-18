@@ -145,6 +145,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
   mesh actually had set
 - Autorename Bones not carrying a bone's Mirror Bone link through the rename
 - Autosetter compression format value for Diffuse maps with alpha transparency
+- Export failing with a file-not-found error on images that have no file on disk, such as
+  ones generated in Blender
 
 ### Changed
 
