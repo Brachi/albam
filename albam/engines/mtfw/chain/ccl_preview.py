@@ -50,11 +50,10 @@ def _joint_map(armature):
     return result
 
 
-def _append_sphere(vertices, faces, face_materials, center, radius, material_index):
+def _append_sphere(vertices, faces, face_materials, center, radius, material_index,
+                   segments=16, rings=8):
     if radius <= 0.0:
         return
-    segments = 16
-    rings = 8
     first_pole = len(vertices)
     vertices.append(tuple(center + Vector((0.0, 0.0, -radius))))
     ring_starts = []
@@ -107,11 +106,13 @@ def _append_box(vertices, faces, face_materials, center, axes, material_index):
     face_materials.extend((material_index,) * 6)
 
 
-def _append_capsule(vertices, faces, face_materials, start, end, radius, material_index):
+def _append_capsule(vertices, faces, face_materials, start, end, radius, material_index,
+                    segments=16, hemisphere_steps=6, sphere_rings=8):
     direction = end - start
     distance = direction.length
     if distance <= 1e-7:
-        _append_sphere(vertices, faces, face_materials, start, radius, material_index)
+        _append_sphere(vertices, faces, face_materials, start, radius, material_index,
+                       segments=segments, rings=sphere_rings)
         return
     if radius <= 0.0:
         return
@@ -120,8 +121,6 @@ def _append_capsule(vertices, faces, face_materials, start, end, radius, materia
     reference = Vector((1.0, 0.0, 0.0)) if abs(axis.x) < 0.9 else Vector((0.0, 1.0, 0.0))
     tangent = axis.cross(reference).normalized()
     bitangent = axis.cross(tangent).normalized()
-    segments = 16
-    hemisphere_steps = 6
     rings = []
 
     for step in range(1, hemisphere_steps + 1):

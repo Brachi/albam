@@ -590,7 +590,9 @@ def export_chn(bl_object):
                 details=f"Chain {chain_index} has {chain_props.num_joints} joint slots",
                 solution="Use a joint count from 0 to 255",
             )
-        chain_info.chain_type = _chn_uint(chain_props.chain_type, 8, "chain type")
+        chain_type = {"CHAIN": 1, "SHAKE": 2}.get(
+            chain_props.chain_type, chain_props.chain_type)
+        chain_info.chain_type = _chn_uint(chain_type, 8, "chain type")
         chain_info.grav_scaler = _chn_finite(chain_props.grav_scaler, "gravity scale")
         chain_info.time_scaler = _chn_finite(chain_props.time_scaler, "time scale")
         chain_info.dump_scaler = _chn_finite(chain_props.dump_scaler, "damping scale")

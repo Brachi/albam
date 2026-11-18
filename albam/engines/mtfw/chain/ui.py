@@ -145,10 +145,10 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     record = bone_props.records[index]
     raw_id = get_anim_retarget(pose_bone, "re5")
     layout.separator()
-    layout.label(text=f"Reference bone: {pose_bone.name}", icon="BONE_DATA")
+    layout.label(text=f"Bone Name: {pose_bone.name}",)
     layout.label(text=f"Anim ID: {raw_id or 'unmapped'}")
     if record.preview_object:
-        layout.label(text=f"Bound object: {record.preview_object.name}", icon="OBJECT_DATA")
+        layout.label(text=f"Preview Object: {record.preview_object.name}", icon="OBJECT_DATA")
     else:
         layout.label(text="Preview object is not built", icon="ERROR")
     layout.prop(record, "attr")
@@ -365,12 +365,12 @@ def _draw_chn_bone_editor(layout, pose_bone):
         return
     record = bone_props.chn_joints[index]
     layout.separator()
-    layout.label(text=f"Bone Name: {pose_bone.name}", icon="BONE_DATA")
+    layout.label(text=f"Bone Name: {pose_bone.name}")
     raw_anim_id = get_anim_retarget(pose_bone, "re5")
     layout.label(text=f"Anim ID: {raw_anim_id or 'unmapped'}")
     layout.label(text=f"Chain Info {record.chain_index} · Joint {record.joint_index}")
     if record.preview_object:
-        layout.label(text=f"Preview: {record.preview_object.name}", icon="OBJECT_DATA")
+        layout.label(text=f"Preview Object: {record.preview_object.name}", icon="OBJECT_DATA")
     _draw_chn_joint_fields(layout, record, show_reference_id=False)
 
 
@@ -401,7 +401,9 @@ class ALBAM_UL_CHNJointItems(bpy.types.UIList):
 @blender_registry.register_blender_type
 class ALBAM_UL_CHNChains(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        chain_type = {1: "Chain", 2: "Shake"}.get(item.chain_type, f"Type {item.chain_type}")
+        chain_type = {
+            "CHAIN": "Chain", "SHAKE": "Shake", 1: "Chain", 2: "Shake",
+        }.get(item.chain_type, f"Type {item.chain_type}")
         layout.label(
             text=f"Chain Info {index} · Type: {chain_type} · {item.num_joints} joints",
             icon="PHYSICS")
@@ -411,9 +413,7 @@ class ALBAM_UL_CHNChains(bpy.types.UIList):
 class ALBAM_UL_CHNStrands(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         ids = [joint.anim_id for joint in item.joints]
-        summary = " → ".join(str(anim_id) for anim_id in ids[:5])
-        if len(ids) > 5:
-            summary += " → …"
+        summary = " → ".join(str(anim_id) for anim_id in ids)
         if item.closed:
             summary += " · closed"
         name = item.name or f"Strand {index + 1}"
@@ -1408,6 +1408,7 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
 
 
 def _draw_chn_file_editor(layout, bl_object):
+    """CHN Editor panel for the imported root object"""
     file_props = get_chn_file_properties(bl_object)
     layout.use_property_split = True
     armature_name = file_props.armature.name if file_props.armature else "Missing"
@@ -1429,13 +1430,22 @@ def _draw_chn_file_editor(layout, bl_object):
         "ALBAM_UL_CHNChains", "", file_props, "chains",
         file_props, "active_chain_index", rows=4)
     layout.operator("albam.chn_refresh_preview", icon="FILE_REFRESH")
+    layout.prop(file_props, "show_collision_primitives")
     layout.prop(file_props, "show_angle_limits")
     if file_props.show_angle_limits:
-        layout.label(text="Angle axes: X red · Y green · Z blue")
+        legend = layout.row().split(factor=0.42, align=True)
+        legend.column()
+        legend.column().label(text="Angle axes: X red · Y green · Z blue")
     layout.prop(file_props, "show_strand_links")
     if file_props.show_strand_links:
-        layout.label(text="Arrows follow the stored strand order")
-        layout.label(text="Strand colors cycle: orange · magenta · yellow")
+        legend = layout.column()
+        for text in (
+            "Arrows follow the stored strand order",
+            "Strand colors cycle: orange · magenta · yellow",
+        ):
+            row = legend.row().split(factor=0.42, align=True)
+            row.column()
+            row.column().label(text=text)
     chain_index = file_props.active_chain_index
     if 0 <= chain_index < len(file_props.chains):
         chain = file_props.chains[chain_index]

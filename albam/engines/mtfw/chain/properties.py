@@ -214,9 +214,15 @@ class CHNChainProperties(bpy.types.PropertyGroup):
     topology_dirty: bpy.props.BoolProperty(default=False, options={"HIDDEN"})  # noqa: F821
     strands: bpy.props.CollectionProperty(type=CHNStrandProperties)
     active_strand_index: bpy.props.IntProperty(default=0, min=0)
-    chain_type: bpy.props.IntProperty(
-        name="Chain Info Type (1=chain, 2=shake)", default=1, min=1, max=2,
-        update=_update_chn_header_preview)
+    chain_type: bpy.props.EnumProperty(
+        name="Chain Info Type",
+        items=(
+            ("CHAIN", "Chain", "Standard chain simulation", "NONE", 1),
+            ("SHAKE", "Shake", "Shake chain simulation", "NONE", 2),
+        ),
+        default="CHAIN",
+        update=_update_chn_header_preview,
+    )
     grav_scaler: bpy.props.FloatProperty(
         name="Gravity Scale", default=0.0, update=_update_chn_header_preview)
     time_scaler: bpy.props.FloatProperty(
@@ -237,6 +243,10 @@ class CHNFileProperties(bpy.types.PropertyGroup):
     duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
     chains: bpy.props.CollectionProperty(type=CHNChainProperties)
     active_chain_index: bpy.props.IntProperty(default=0, min=0)
+    show_collision_primitives: bpy.props.BoolProperty(
+        name="Show Collision Primitives",
+        description="Show the CHN sphere and capsule collision previews in the 3D View",
+        default=True, update=_update_chn_header_preview)  # noqa: F821
     show_angle_limits: bpy.props.BoolProperty(
         name="Show Angle Limits",
         description=("Draw per-axis CHN angle limits as colored arcs around each "

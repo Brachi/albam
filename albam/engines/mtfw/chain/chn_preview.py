@@ -27,6 +27,9 @@ CHN_STRAND_COLORS = (
     (1.0, 0.02, 0.85, 1.0),  # magenta
     (1.0, 0.88, 0.0, 1.0),   # yellow
 )
+CHN_SPHERE_SEGMENTS = 8
+CHN_SPHERE_RINGS = 4
+CHN_CAPSULE_HEMISPHERE_STEPS = 3
 
 
 def _joint_preview_name(record, anim_id):
@@ -148,14 +151,18 @@ def _remove_previews(root_object, file_props):
                 child.get("_albam_chn_angle_preview", False) or
                 child.get("_albam_chn_strand_preview", False)):
             continue
-        old_mesh = child.data if child.type == "MESH" else None
+        old_data_type = child.type
+        old_data = child.data if old_data_type in {"MESH", "CURVE"} else None
         bpy.data.objects.remove(child, do_unlink=True)
-        if old_mesh and old_mesh.users == 0:
-            bpy.data.meshes.remove(old_mesh)
+        if old_data and old_data.users == 0:
+            if old_data_type == "MESH":
+                bpy.data.meshes.remove(old_data)
+            else:
+                bpy.data.curves.remove(old_data)
 
 
 def _new_preview(root_object, armature, record, pose_bone, anim_id,
-                 vertices, faces, material, origin):
+                 vertices, faces, material, origin, show_collision_primitives):
     name = _joint_preview_name(record, anim_id)
     mesh = bpy.data.meshes.new(name)
     local_vertices = [tuple(Vector(vertex) - origin) for vertex in vertices]
@@ -171,6 +178,7 @@ def _new_preview(root_object, armature, record, pose_bone, anim_id,
     preview.color = CHN_COLOR
     preview.hide_select = True
     preview.hide_render = True
+    preview.hide_viewport = not show_collision_primitives
     preview["_albam_chn_joint_preview"] = True
     for collection in root_object.users_collection:
         collection.objects.link(preview)
@@ -303,7 +311,8 @@ def _rebuild_strand_previews(root_object, armature, file_props,
 
             if edges:
                 _new_strand_preview(
-                    root_object, chain.chain_index, strand_index, vertices, edges)
+                    root_object, chain.chain_index, strand_index,
+                    vertices, edges)
 
 
 def _angle_arc_geometry(matrix, origin, axis_index, minimum, maximum, radius):
@@ -385,6 +394,7 @@ def rebuild_chn_previews(root_object):
     }
 
     material = _collision_material()
+    show_collision_primitives = file_props.show_collision_primitives
     show_angle_limits = file_props.show_angle_limits
     for record, reference_bone in mapped_records:
         matrix = _bone_world_matrix(armature, reference_bone)
@@ -402,7 +412,9 @@ def rebuild_chn_previews(root_object):
         faces = []
         face_materials = []
         if record.col_shape == "SPHERE":
-            _append_sphere(vertices, faces, face_materials, center, radius, 0)
+            _append_sphere(
+                vertices, faces, face_materials, center, radius, 0,
+                segments=CHN_SPHERE_SEGMENTS, rings=CHN_SPHERE_RINGS)
         elif record.col_shape == "CAPSULE":
             links = links_by_chain.get(record.chain_index, {})
             neighbor_ids = links.get(anim_id, set())
@@ -414,13 +426,19 @@ def rebuild_chn_previews(root_object):
                 if next_matrix is not None:
                     endpoints.append(next_matrix.translation.copy())
             if not endpoints:
-                _append_sphere(vertices, faces, face_materials, center, radius, 0)
+                _append_sphere(
+                    vertices, faces, face_materials, center, radius, 0,
+                    segments=CHN_SPHERE_SEGMENTS, rings=CHN_SPHERE_RINGS)
             else:
                 for endpoint in endpoints:
                     _append_capsule(vertices, faces, face_materials,
-                                    center, endpoint, radius, 0)
+                                    center, endpoint, radius, 0,
+                                    segments=CHN_SPHERE_SEGMENTS,
+                                    hemisphere_steps=CHN_CAPSULE_HEMISPHERE_STEPS,
+                                    sphere_rings=CHN_SPHERE_RINGS)
         _new_preview(root_object, armature, record, reference_bone, anim_id,
-                     vertices, faces, material, center)
+                     vertices, faces, material, center,
+                     show_collision_primitives)
         if show_angle_limits:
             rest_bone = armature.data.bones.get(reference_bone.name)
             angle_radius = max(0.03 * world_scale,

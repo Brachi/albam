@@ -305,7 +305,10 @@ def load_chn(vfile, context) -> bpy.types.Object:
         chain_props = file_props.chains.add()
         chain_props.chain_index = chain_index
         chain_props.num_joints = chain_info.num_joints
-        chain_props.chain_type = int(chain_info.chain_type)
+        chain_props.chain_type = {
+            1: "CHAIN",
+            2: "SHAKE",
+        }[int(chain_info.chain_type)]
         chain_props.grav_scaler = chain_info.grav_scaler
         chain_props.time_scaler = chain_info.time_scaler
         chain_props.dump_scaler = chain_info.dump_scaler
