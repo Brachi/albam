@@ -205,8 +205,9 @@ class DDSHeader(Structure):
 
     def calculate_mimpap_offsets(self, base_offset, halved_blocks=False):
         """Offset of every mipmap level of every image, the first one at
-        `base_offset`. `halved_blocks` picks the layout, as in _level_sizes."""
-        level_sizes = self._level_sizes(halved_blocks)
+        `base_offset`. `halved_blocks` asks for the halved layout, used only
+        where data_in_halved_blocks_layout() converts the data to it."""
+        level_sizes = self._level_sizes(halved_blocks and self._has_two_block_layouts())
         current_offset = base_offset
         mipmap_offsets = [current_offset]
         for im in range(self.image_count):
