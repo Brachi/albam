@@ -123,11 +123,20 @@ class DDSHeader(Structure):
 
     @property
     def mipmap_sizes(self):
-        h = self.dwWidth
-        w = self.dwHeight
-        fmt = self.pixelfmt_dwFourCC
-        # FIXME: last 2 seem always duplicate
-        return [self.calculate_mipmap_size(w, h, i, fmt) for i in range(self.dwMipMapCount)]
+        """Size of each mipmap level of one image, laid out as the DDS spec
+        does: each level's pixel size is halved, then rounded up to blocks."""
+        return self._level_sizes(halved_blocks=False)
+
+    @property
+    def mipmap_sizes_halved_blocks(self):
+        """Size of each mipmap level of one image, laid out as Tex112 (RE5,
+        DMC4) .tex files are (see calculate_mipmap_size_halved_blocks)."""
+        return self._level_sizes(halved_blocks=True)
+
+    def _level_sizes(self, halved_blocks):
+        size = self.calculate_mipmap_size_halved_blocks if halved_blocks else self.calculate_mipmap_size
+        w, h, fmt = self.dwWidth, self.dwHeight, self.pixelfmt_dwFourCC
+        return [size(w, h, level, fmt) for level in range(self.dwMipMapCount)]
 
     @staticmethod
     def get_block_size(fmt):
@@ -179,6 +188,10 @@ class DDSHeader(Structure):
     def data(self):
         return self._dds_data
 
+    @data.setter
+    def data(self, value):
+        self._dds_data = value
+
     @property
     def image_count(self):
         return 6 if self.is_proper_cubemap else 1
@@ -190,7 +203,11 @@ class DDSHeader(Structure):
     def calculate_mipmap_count(self):
         return self.static_calculate_mipmap_count(self.dwWidth, self.dwHeight)
 
-    def calculate_mimpap_offsets(self, base_offset):
+    def calculate_mimpap_offsets(self, base_offset, halved_blocks=False):
+        """Offset of every mipmap level of every image, the first one at
+        `base_offset`. `halved_blocks` asks for the halved layout, used only
+        where data_in_halved_blocks_layout() converts the data to it."""
+        level_sizes = self._level_sizes(halved_blocks and self._has_two_block_layouts())
         current_offset = base_offset
         mipmap_offsets = [current_offset]
         for im in range(self.image_count):
@@ -198,14 +215,14 @@ class DDSHeader(Structure):
                 # Don't calculate last offset since we already start with one extra
                 if im == self.image_count - 1 and i == self.dwMipMapCount - 1:
                     break
-                current_offset += self.mipmap_sizes[i]
+                current_offset += level_sizes[i]
                 mipmap_offsets.append(current_offset)
         return mipmap_offsets
 
     @staticmethod
     def calculate_mipmap_size_halved_blocks(width, height, level, fmt):
         """Size of a mipmap level when the block count, rather than the pixel
-        size, is halved per level. Capcom's own non-power-of-two .tex data is
+        size, is halved per level. RE5 non-power-of-two .tex (Tex112) data is
         laid out this way (e.g. a 400x400 DXT1 has 12x12 blocks at level 3,
         not 13x13), so it can be smaller than calculate_mipmap_size()."""
         if not fmt:
@@ -214,6 +231,71 @@ class DDSHeader(Structure):
         blocks_h = max(1, ((height + 3) // 4) >> level)
         block_size = 8 if fmt in (b"DXT1", b"DXT4") else 16
         return blocks_w * blocks_h * block_size
+
+    @staticmethod
+    def _level_blocks(width, height, level, halved_blocks):
+        """(columns, rows) of 4x4 blocks in a block-compressed mipmap level."""
+        if halved_blocks:
+            return max(1, ((width + 3) // 4) >> level), max(1, ((height + 3) // 4) >> level)
+        return (max(1, width >> level) + 3) // 4, (max(1, height >> level) + 3) // 4
+
+    def data_in_halved_blocks_layout(self):
+        """The pixel data laid out as Tex112 (RE5, DMC4) .tex files store it (see
+        calculate_mipmap_size_halved_blocks).
+
+        Data as long as the DDS spec's layout needs is taken to be in that
+        layout, which is what image editors write, and has each level cropped
+        to the smaller block grid. Shorter data is taken to be in the halved
+        layout already and is returned as is.
+        """
+        if not self._has_two_block_layouts():
+            return self.data
+        if len(self.data) < sum(self.mipmap_sizes) * self.image_count:
+            return self.data
+        return self._relayout(from_halved=False)
+
+    def data_in_dds_spec_layout(self):
+        """The pixel data laid out as the DDS spec does, for data that is in
+        the halved layout of Tex112 (RE5, DMC4) .tex files: each level is padded
+        to the larger block grid by repeating its last block column and row,
+        so DDS readers find every level where they look for it. Data at
+        least as long as the spec's layout needs is returned as is.
+        """
+        if not self._has_two_block_layouts():
+            return self.data
+        if len(self.data) >= sum(self.mipmap_sizes) * self.image_count:
+            return self.data
+        if len(self.data) < sum(self.mipmap_sizes_halved_blocks) * self.image_count:
+            return self.data
+        return self._relayout(from_halved=True)
+
+    def _has_two_block_layouts(self):
+        """Whether the two block layouts differ for this image: only for a
+        block-compressed, non-power-of-two image with mipmaps."""
+        if self.is_volume or not self.pixelfmt_dwFourCC or not self.has_size_checked_format:
+            return False
+        return self.mipmap_sizes != self.mipmap_sizes_halved_blocks
+
+    def _relayout(self, from_halved):
+        w, h = self.dwWidth, self.dwHeight
+        block_size = 8 if self.pixelfmt_dwFourCC in (b"DXT1", b"DXT4") else 16
+        data = self.data
+        out = []
+        pos = 0
+        for _ in range(self.image_count):
+            for level in range(self.dwMipMapCount):
+                src_w, src_h = self._level_blocks(w, h, level, from_halved)
+                dst_w, dst_h = self._level_blocks(w, h, level, not from_halved)
+                row_len = src_w * block_size
+                for y in range(dst_h):
+                    start = pos + min(y, src_h - 1) * row_len
+                    row = data[start:start + min(src_w, dst_w) * block_size]
+                    out.append(row)
+                    if dst_w > src_w:
+                        out.append(row[-block_size:] * (dst_w - src_w))
+                pos += src_h * row_len
+        out.append(data[pos:])
+        return b"".join(out)
 
     @property
     def has_size_checked_format(self):
