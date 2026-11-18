@@ -7,7 +7,7 @@ import bpy
 
 from ....registry import blender_registry
 from ..bone import get_anim_retarget
-from .ccl_preview import rebuild_ccl_preview
+from .ccl_preview import rebuild_armature_previews, rebuild_ccl_preview
 from .graph import decompose_edges, remove_node_from_strands
 from .properties import (
     find_ccl_file_for_armature,
@@ -137,6 +137,9 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     buttons = row.column(align=True)
     buttons.operator("albam.ccl_add_record", icon="ADD", text="")
     buttons.operator("albam.ccl_remove_record", icon="REMOVE", text="")
+    buttons.separator()
+    buttons.operator("albam.ccl_copy_record_settings", icon="COPYDOWN", text="")
+    buttons.operator("albam.ccl_paste_record_settings", icon="PASTEDOWN", text="")
     layout.operator("albam.ccl_refresh_preview", icon="FILE_REFRESH")
 
     index = bone_props.active_record_index
@@ -171,7 +174,144 @@ def _draw_ccl_bone_editor(layout, pose_bone):
     layout.prop(record, "id")
 
 
+CCL_RECORD_COPY_FIELDS = (
+    "attr",
+    "pair_joint_no",
+    "shape",
+    "position",
+    "id",
+    "extent",
+    "radius",
+    "angle",
+)
+CCL_RECORD_COPY_VECTOR_FIELDS = {"position", "extent", "angle"}
+CCL_RECORD_CLIPBOARD_KEY = "_albam_ccl_record_settings"
+
+
+def _copy_ccl_record_settings(record):
+    settings = {}
+    for field in CCL_RECORD_COPY_FIELDS:
+        value = getattr(record, field)
+        settings[field] = list(value) if field in CCL_RECORD_COPY_VECTOR_FIELDS else value
+    return settings
+
+
+def _paste_ccl_record_settings(record, settings):
+    if not isinstance(settings, dict):
+        raise ValueError("Clipboard CCL record settings are invalid")
+    missing_fields = set(CCL_RECORD_COPY_FIELDS) - settings.keys()
+    if missing_fields:
+        raise ValueError(f"CCL settings are missing fields: {', '.join(sorted(missing_fields))}")
+
+    values = {}
+    for field in CCL_RECORD_COPY_FIELDS:
+        value = settings[field]
+        if field in CCL_RECORD_COPY_VECTOR_FIELDS:
+            if (not isinstance(value, (list, tuple)) or len(value) != 3 or
+                    any(not _is_finite_number(component) for component in value)):
+                raise ValueError(f"CCL setting {field} must have three finite values")
+            value = tuple(value)
+        elif field in {"attr", "id"}:
+            if not isinstance(value, str):
+                raise ValueError(f"CCL setting {field} must be a string")
+        elif field == "shape":
+            if not isinstance(value, str) or value not in {"SPHERE", "CAPSULE", "AABB", "OBB"}:
+                raise ValueError("CCL setting shape is invalid")
+        elif field == "pair_joint_no":
+            if (not isinstance(value, int) or isinstance(value, bool) or
+                    not 0 <= value <= 65535):
+                raise ValueError("CCL setting pair_joint_no must be between 0 and 65535")
+        elif not _is_finite_number(value) or (field == "radius" and value < 0):
+            raise ValueError(f"CCL setting {field} must be a valid number")
+        values[field] = value
+
+    for field, value in values.items():
+        setattr(record, field, value)
+
+
+def _active_ccl_bone_record(context):
+    pose_bone = _active_pose_bone(context)
+    if pose_bone is None or find_ccl_file_for_armature(pose_bone.id_data) is None:
+        return None
+    bone_props = get_ccl_bone_properties(pose_bone)
+    index = bone_props.active_record_index
+    if not 0 <= index < len(bone_props.records):
+        return None
+    return pose_bone, bone_props.records[index]
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CCLCopyRecordSettings(bpy.types.Operator):
+    bl_idname = "albam.ccl_copy_record_settings"
+    bl_label = "Copy CCL Record Settings"
+    bl_description = "Copy editable settings from the active CCL record"
+
+    @classmethod
+    def poll(cls, context):
+        return _active_ccl_bone_record(context) is not None
+
+    def execute(self, context):
+        active = _active_ccl_bone_record(context)
+        if active is None:
+            self.report({"ERROR"}, "No active CCL record on the selected bone")
+            return {"CANCELLED"}
+        _pose_bone, record = active
+        context.scene.albam.clipboard.update_buffer({
+            CCL_RECORD_CLIPBOARD_KEY: {
+                "version": 1,
+                "settings": _copy_ccl_record_settings(record),
+            }
+        })
+        return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CCLPasteRecordSettings(bpy.types.Operator):
+    bl_idname = "albam.ccl_paste_record_settings"
+    bl_label = "Paste CCL Record Settings"
+    bl_description = "Paste settings into the active CCL record, preserving its bone binding"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_ccl_bone_record(context) is not None
+
+    def execute(self, context):
+        active = _active_ccl_bone_record(context)
+        if active is None:
+            self.report({"ERROR"}, "No active CCL record on the selected bone")
+            return {"CANCELLED"}
+        payload = context.scene.albam.clipboard.get_buffer().get(CCL_RECORD_CLIPBOARD_KEY)
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            self.report({"ERROR"}, "Clipboard does not contain copied CCL record settings")
+            return {"CANCELLED"}
+        settings = payload.get("settings")
+        if not isinstance(settings, dict):
+            self.report({"ERROR"}, "Clipboard CCL record settings are invalid")
+            return {"CANCELLED"}
+
+        pose_bone, record = active
+        armature = pose_bone.id_data
+        was_suppressed = armature.get("_albam_ccl_suppress_update", False)
+        armature["_albam_ccl_suppress_update"] = True
+        try:
+            _paste_ccl_record_settings(record, settings)
+        except ValueError as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        finally:
+            if was_suppressed:
+                armature["_albam_ccl_suppress_update"] = was_suppressed
+            else:
+                del armature["_albam_ccl_suppress_update"]
+
+        if not was_suppressed:
+            rebuild_armature_previews(armature)
+        return {"FINISHED"}
+
+
 def _draw_chn_joint_fields(layout, record, show_reference_id=True):
+    """CHN params for a panel for a bone in Pose mode"""
     if show_reference_id:
         layout.prop(record, "ref_joint_no")
     layout.prop(record, "attr_constraint")
@@ -825,6 +965,9 @@ def _active_chn_chain(root_object):
 class ALBAM_OT_CHNRebuildStrands(bpy.types.Operator):
     bl_idname = "albam.chn_rebuild_strands"
     bl_label = "Rebuild Strands from Raw Links"
+    bl_description = (
+        "Replace the active Chain Info strands with paths rebuilt from its raw CHN node links"
+    )
     bl_options = {"UNDO"}
 
     @classmethod
@@ -847,6 +990,9 @@ class ALBAM_OT_CHNRebuildStrands(bpy.types.Operator):
 class ALBAM_OT_CHNAutoFillLinks(bpy.types.Operator):
     bl_idname = "albam.chn_autofill_links"
     bl_label = "Auto-fill Strands from Bone Hierarchy"
+    bl_description = (
+        "Replace the active Chain Info strands with paths inferred from the armature bone hierarchy"
+    )
     bl_options = {"UNDO"}
 
     @classmethod
@@ -1449,13 +1595,14 @@ def _draw_chn_file_editor(layout, bl_object):
     chain_index = file_props.active_chain_index
     if 0 <= chain_index < len(file_props.chains):
         chain = file_props.chains[chain_index]
-        layout.label(text=f"Chain Info {chain.chain_index} · {chain.num_joints} joints")
-        layout.label(text=f"Graph strands: {len(chain.strands)}" +
-                     (" · modified" if chain.topology_dirty else " · source links"))
         layout.prop(chain, "chain_type")
         layout.prop(chain, "grav_scaler")
         layout.prop(chain, "time_scaler")
         layout.prop(chain, "dump_scaler")
+        layout.separator()
+        layout.label(text=f"Chain Info {chain.chain_index} · {chain.num_joints} joints")
+        layout.label(text=f"Graph strands: {len(chain.strands)}" +
+                     (" · modified" if chain.topology_dirty else " · source links"))
         layout.template_list(
             "ALBAM_UL_CHNStrands", "", chain, "strands",
             chain, "active_strand_index", rows=4)
@@ -1489,10 +1636,6 @@ def _draw_chn_file_editor(layout, bl_object):
         child for child in bl_object.children
         if child.get("_albam_chn_strand_preview", False)
     ]
-    if previews:
-        layout.separator()
-        layout.label(
-            text=f"Collision previews: {len(previews)}", icon="MESH_DATA")
     if angle_previews:
         layout.label(
             text=f"Angle limit arcs: {len(angle_previews)}")

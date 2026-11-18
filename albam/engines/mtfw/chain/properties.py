@@ -13,6 +13,8 @@ def _update_ccl_record(self, context):
     if not isinstance(armature, bpy.types.Object) and context is not None:
         armature = getattr(context, "active_object", None)
     if isinstance(armature, bpy.types.Object) and armature.type == "ARMATURE":
+        if armature.get("_albam_ccl_suppress_update", False):
+            return
         rebuild_armature_previews(armature)
 
 
