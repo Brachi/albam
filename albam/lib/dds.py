@@ -129,8 +129,8 @@ class DDSHeader(Structure):
 
     @property
     def mipmap_sizes_halved_blocks(self):
-        """Size of each mipmap level of one image, laid out as RE5 and DMC4
-        .tex files are (see calculate_mipmap_size_halved_blocks)."""
+        """Size of each mipmap level of one image, laid out as Tex112 (RE5,
+        DMC4) .tex files are (see calculate_mipmap_size_halved_blocks)."""
         return self._level_sizes(halved_blocks=True)
 
     def _level_sizes(self, halved_blocks):
@@ -221,7 +221,7 @@ class DDSHeader(Structure):
     @staticmethod
     def calculate_mipmap_size_halved_blocks(width, height, level, fmt):
         """Size of a mipmap level when the block count, rather than the pixel
-        size, is halved per level. RE5 and DMC4 non-power-of-two .tex data is
+        size, is halved per level. RE5 non-power-of-two .tex (Tex112) data is
         laid out this way (e.g. a 400x400 DXT1 has 12x12 blocks at level 3,
         not 13x13), so it can be smaller than calculate_mipmap_size()."""
         if not fmt:
@@ -239,7 +239,7 @@ class DDSHeader(Structure):
         return (max(1, width >> level) + 3) // 4, (max(1, height >> level) + 3) // 4
 
     def data_in_halved_blocks_layout(self):
-        """The pixel data laid out as RE5 and DMC4 .tex files store it (see
+        """The pixel data laid out as Tex112 (RE5, DMC4) .tex files store it (see
         calculate_mipmap_size_halved_blocks).
 
         Data as long as the DDS spec's layout needs is taken to be in that
@@ -255,7 +255,7 @@ class DDSHeader(Structure):
 
     def data_in_dds_spec_layout(self):
         """The pixel data laid out as the DDS spec does, for data that is in
-        the halved layout of RE5 and DMC4 .tex files: each level is padded
+        the halved layout of Tex112 (RE5, DMC4) .tex files: each level is padded
         to the larger block grid by repeating its last block column and row,
         so DDS readers find every level where they look for it. Data at
         least as long as the spec's layout needs is returned as is.
