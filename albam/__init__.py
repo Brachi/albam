@@ -133,6 +133,8 @@ def register():
 
     register_workspace_tools()
     overlay.register_overlay()
+    from .engines.mtfw.chain import register_handlers as register_chain_handlers
+    register_chain_handlers()
 
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
@@ -140,6 +142,8 @@ def register():
 
 def unregister():
     overlay.unregister_overlay()
+    from .engines.mtfw.chain import unregister_handlers as unregister_chain_handlers
+    unregister_chain_handlers()
 
     for property_name in (
             "albam_ccl_file", "albam_chn_file", "albam_chn_joint_preview"):

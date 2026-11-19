@@ -4,10 +4,16 @@ import json
 import math
 
 import bpy
+from bpy.app.handlers import persistent
 
 from ....registry import blender_registry
 from ..bone import get_anim_retarget
-from .ccl_preview import rebuild_armature_previews, rebuild_ccl_preview
+from .ccl_preview import (
+    rebuild_armature_previews,
+    rebuild_ccl_preview,
+    sync_ccl_preview_nodes,
+    update_ccl_preview_highlight,
+)
 from .graph import decompose_edges, remove_node_from_strands
 from .properties import (
     find_ccl_file_for_armature,
@@ -18,7 +24,108 @@ from .properties import (
     get_chn_file_properties,
     get_chn_joint_preview_properties,
 )
-from .chn_preview import rebuild_chn_previews
+from .chn_preview import rebuild_chn_previews, update_chn_strand_highlight
+
+
+_ACTIVE_PREVIEW_HIGHLIGHT_ROOT = None
+_CCL_NODE_SIGNATURES = {}
+
+
+@persistent
+def preview_highlight_handler(scene, depsgraph):
+    global _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    view_layer = getattr(depsgraph, "view_layer", None)
+    if view_layer is None:
+        context = bpy.context
+        view_layer = getattr(context, "view_layer", None)
+    active_object = view_layer.objects.active if view_layer is not None else None
+    active_root = _preview_root_for(active_object)
+    try:
+        root_changed = active_root != _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    except ReferenceError:
+        _ACTIVE_PREVIEW_HIGHLIGHT_ROOT = None
+        root_changed = True
+    if active_root is not None and _is_ccl_root(active_root):
+        node_signature, expected_count = _ccl_node_data_signature(active_root)
+        root_key = active_root.as_pointer()
+        needs_sync = (
+            root_changed or _CCL_NODE_SIGNATURES.get(root_key) != node_signature or
+            len(get_ccl_file_properties(active_root).nodes) != expected_count)
+        if needs_sync:
+            sync_ccl_preview_nodes(active_root)
+            _CCL_NODE_SIGNATURES[root_key] = node_signature
+            if not root_changed:
+                update_ccl_preview_highlight(active_root, active_object)
+    elif active_root is not None and root_changed:
+        update_chn_strand_highlight(active_root, active_object)
+    if not root_changed:
+        return
+
+    previous_root = _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    _ACTIVE_PREVIEW_HIGHLIGHT_ROOT = active_root
+    if previous_root is not None:
+        try:
+            _update_preview_root_highlight(previous_root, None)
+        except ReferenceError:
+            pass
+    if active_root is not None:
+        _update_preview_root_highlight(active_root, active_object)
+
+
+def reset_preview_highlight_state():
+    global _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    root_object = _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    _ACTIVE_PREVIEW_HIGHLIGHT_ROOT = None
+    _CCL_NODE_SIGNATURES.clear()
+    if root_object is not None:
+        try:
+            _update_preview_root_highlight(root_object, None)
+        except ReferenceError:
+            pass
+
+
+def _preview_root_for(active_object):
+    if active_object is None or active_object.type != "EMPTY":
+        return None
+    if _is_ccl_root(active_object) or active_object.get("_albam_chn_root", False):
+        return active_object
+    return None
+
+
+def _is_ccl_root(bl_object):
+    return bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl"
+
+
+def _update_preview_root_highlight(root_object, active_object):
+    if root_object.get("_albam_chn_root", False):
+        update_chn_strand_highlight(root_object, active_object)
+    else:
+        update_ccl_preview_highlight(root_object, active_object)
+
+
+def _ccl_node_data_signature(root_object):
+    file_props = get_ccl_file_properties(root_object)
+    armature = file_props.armature
+    if armature is None or armature.type != "ARMATURE":
+        return None, 0
+
+    bones = []
+    node_count = 0
+    for pose_bone in sorted(armature.pose.bones, key=lambda bone: bone.name):
+        records = get_ccl_bone_properties(pose_bone).records
+        raw_anim_id = get_anim_retarget(pose_bone, "re5")
+        record_signature = []
+        for record_slot, record in enumerate(records):
+            preview = record.preview_object
+            record_signature.append((
+                record_slot,
+                record.record_index,
+                record.shape,
+                preview.as_pointer() if preview is not None else 0,
+            ))
+        node_count += len(record_signature)
+        bones.append((pose_bone.name, raw_anim_id, tuple(record_signature)))
+    return (armature.as_pointer(), tuple(bones)), node_count
 
 
 def _filter_armatures(self, obj):
@@ -520,6 +627,17 @@ class ALBAM_UL_CCLRecords(bpy.types.UIList):
         row = layout.row(align=True)
         row.label(
             text=f"{item.shape.title()} · record {item.record_index if item.record_index >= 0 else 'new'}")
+
+
+@blender_registry.register_blender_type
+class ALBAM_UL_CCLNodes(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        record_label = item.record_index if item.record_index >= 0 else "new"
+        row.label(
+            text=(f"{item.bone_name} · Anim ID {item.anim_id} · "
+                  f"{item.shape.title()} · Record {record_label}"),
+            icon="BONE_DATA")
 
 
 # List in pose bone panel
@@ -1421,10 +1539,19 @@ class ALBAM_OT_CCLRefreshPreview(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
+        bl_object = getattr(context, "object", None)
+        if (bl_object is not None and bl_object.type == "EMPTY" and
+                bl_object.albam_asset.extension == "ccl"):
+            return True
         pose_bone = _active_pose_bone(context)
         return pose_bone is not None and bool(find_ccl_file_for_armature(pose_bone.id_data))
 
     def execute(self, context):
+        bl_object = getattr(context, "object", None)
+        if (bl_object is not None and bl_object.type == "EMPTY" and
+                bl_object.albam_asset.extension == "ccl"):
+            rebuild_ccl_preview(bl_object)
+            return {"FINISHED"}
         pose_bone = _active_pose_bone(context)
         bl_object = find_ccl_file_for_armature(pose_bone.id_data)
         rebuild_ccl_preview(bl_object)
@@ -1511,35 +1638,7 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
             _draw_chn_file_editor(layout, bl_object)
             return
         if bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl":
-            file_props = get_ccl_file_properties(bl_object)
-            armature_name = file_props.armature.name if file_props.armature else "Missing"
-            layout.label(text=f"Armature: {armature_name}", icon="ARMATURE_DATA")
-            layout.label(text=f"Records in file: {file_props.record_count}")
-            if file_props.unresolved_records:
-                layout.label(
-                    text=f"Unmatched bone references: {file_props.unresolved_records}",
-                    icon="ERROR")
-            if file_props.duplicate_joint_ids:
-                layout.label(text=f"Duplicate Anim IDs: {file_props.duplicate_joint_ids}",
-                             icon="INFO")
-            children = sorted(
-                (child for child in bl_object.children
-                 if child.get("_albam_ccl_preview", False)),
-                key=lambda child: child.name,
-            )
-            if not children:
-                layout.label(text="No primitive objects are linked to this CCL file", icon="ERROR")
-            for child in children:
-                props = get_ccl_primitive_properties(child)
-                bone_name = _sync_preview_bone_name(child, props)
-                box = layout.box()
-                box.label(text=child.name, icon="MESH_UVSPHERE")
-                box.label(
-                    text=f"Bone Name: {bone_name}  ·  Anim ID: {props.anim_id}",
-                    icon="BONE_DATA")
-                if props.shape == "CAPSULE":
-                    tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
-                    box.label(text=f"Tail bone: {tail}")
+            _draw_ccl_file_editor(layout, bl_object)
             return
 
         props = get_ccl_primitive_properties(bl_object)
@@ -1551,6 +1650,45 @@ class ALBAM_PT_CCLObjectBindings(bpy.types.Panel):
         if props.shape == "CAPSULE":
             tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
             layout.label(text=f"Tail bone: {tail}")
+
+
+def _draw_ccl_file_editor(layout, bl_object):
+    """CCL preview controls and collision-node list for the imported root."""
+    file_props = get_ccl_file_properties(bl_object)
+    layout.use_property_split = True
+    armature_name = file_props.armature.name if file_props.armature else "Missing"
+    layout.label(text=f"Armature: {armature_name}", icon="ARMATURE_DATA")
+    layout.label(text=f"Records in file: {file_props.record_count}")
+    if file_props.unresolved_records:
+        layout.label(
+            text=f"Unmatched bone references: {file_props.unresolved_records}",
+            icon="ERROR")
+    if file_props.duplicate_joint_ids:
+        layout.label(text=f"Duplicate Anim IDs: {file_props.duplicate_joint_ids}", icon="INFO")
+
+    row = layout.row()
+    row.template_list(
+        "ALBAM_UL_CCLNodes", "", file_props, "nodes",
+        file_props, "active_node_index", rows=4)
+    layout.operator("albam.ccl_refresh_preview", icon="FILE_REFRESH")
+    layout.prop(file_props, "show_collision_primitives")
+    if not file_props.nodes:
+        layout.label(text="No collision nodes are linked to this CCL file", icon="INFO")
+        return
+
+    node_index = file_props.active_node_index
+    if not 0 <= node_index < len(file_props.nodes):
+        return
+    node = file_props.nodes[node_index]
+    layout.separator()
+    layout.label(text=f"Bone Name: {node.bone_name}")
+    layout.label(text=f"Anim ID: {node.anim_id}")
+    record_label = node.record_index if node.record_index >= 0 else "new"
+    layout.label(text=f"{node.shape.title()} · Record {record_label}")
+    if node.shape == "CAPSULE" and node.preview_object:
+        props = get_ccl_primitive_properties(node.preview_object)
+        tail = props.pair_bone_name or f"joint {props.pair_joint_id}"
+        layout.label(text=f"Tail bone: {tail}")
 
 
 def _draw_chn_file_editor(layout, bl_object):

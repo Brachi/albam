@@ -6,6 +6,7 @@ import bpy
 from mathutils import Euler, Matrix, Vector
 
 from ..bone import get_anim_retarget
+from ....lib.viewport_highlight import set_active_preview_highlight
 from .properties import (
     get_ccl_bone_properties,
     get_ccl_file_properties,
@@ -292,7 +293,8 @@ def rebuild_ccl_preview(bl_object):
     _remove_preview_children(bl_object)
     joint_map = _joint_map(armature)
     materials = _preview_materials()
-    for pose_bone in armature.pose.bones:
+    file_props.nodes.clear()
+    for pose_bone in sorted(armature.pose.bones, key=lambda bone: bone.name):
         bone_props = get_ccl_bone_properties(pose_bone)
         for collection_index, record in enumerate(bone_props.records):
             vertices = []
@@ -303,7 +305,7 @@ def rebuild_ccl_preview(bl_object):
             material_index = CCL_SHAPE_INDEX.get(record.shape)
             if material_index is None:
                 continue
-            _create_preview_object(
+            preview_object = _create_preview_object(
                 bl_object,
                 armature,
                 joint_map,
@@ -315,6 +317,91 @@ def rebuild_ccl_preview(bl_object):
                 faces,
                 materials[material_index],
             )
+            preview_object.hide_viewport = not file_props.show_collision_primitives
+            node = file_props.nodes.add()
+            node.bone_name = pose_bone.name
+            raw_anim_id = get_anim_retarget(pose_bone, "re5")
+            node.anim_id = int(raw_anim_id.split("_", 1)[0]) if raw_anim_id else -1
+            node.shape = record.shape
+            node.record_index = record.record_index
+            node.record_slot = collection_index
+            node.preview_object = preview_object
+    file_props.active_node_index = min(
+        file_props.active_node_index, max(0, len(file_props.nodes) - 1))
+    view_layer = getattr(bpy.context, "view_layer", None)
+    active_object = view_layer.objects.active if view_layer is not None else None
+    update_ccl_preview_highlight(bl_object, active_object)
+
+
+def update_ccl_preview_highlight(root_object, active_object):
+    """Outline the active list item only while its CCL root is active."""
+    file_props = get_ccl_file_properties(root_object)
+    root_is_active = (
+        active_object == root_object and file_props.show_collision_primitives)
+    active_index = file_props.active_node_index
+    nodes = file_props.nodes
+    selected_object = (
+        nodes[active_index].preview_object
+        if root_is_active and 0 <= active_index < len(nodes) else None)
+    set_active_preview_highlight(
+        (node.preview_object for node in nodes), selected_object)
+
+
+def sync_ccl_preview_nodes(root_object):
+    """Keep the root UIList aligned with bone records after bone renames."""
+    file_props = get_ccl_file_properties(root_object)
+    armature = file_props.armature
+    if armature is None or armature.type != "ARMATURE":
+        return False
+
+    expected_nodes = []
+    for pose_bone in sorted(armature.pose.bones, key=lambda bone: bone.name):
+        records = get_ccl_bone_properties(pose_bone).records
+        raw_anim_id = get_anim_retarget(pose_bone, "re5")
+        try:
+            anim_id = int(raw_anim_id.split("_", 1)[0]) if raw_anim_id else -1
+        except ValueError:
+            anim_id = -1
+        for record_slot, record in enumerate(records):
+            if record.shape not in CCL_SHAPE_INDEX:
+                continue
+            expected_nodes.append((
+                pose_bone.name,
+                anim_id,
+                record.shape,
+                record.record_index,
+                record_slot,
+                record.preview_object,
+            ))
+
+    nodes = file_props.nodes
+    is_current = len(nodes) == len(expected_nodes) and all(
+        (node.bone_name, node.anim_id, node.shape, node.record_index,
+         node.record_slot, node.preview_object) == expected
+        for node, expected in zip(nodes, expected_nodes)
+    )
+    if is_current:
+        return False
+
+    active_node = (nodes[file_props.active_node_index]
+                   if 0 <= file_props.active_node_index < len(nodes) else None)
+    active_preview = active_node.preview_object if active_node else None
+    active_key = ((active_node.bone_name, active_node.record_slot, active_node.record_index)
+                  if active_node and active_preview is None else None)
+
+    nodes.clear()
+    new_active_index = 0
+    for index, expected in enumerate(expected_nodes):
+        node = nodes.add()
+        (node.bone_name, node.anim_id, node.shape, node.record_index,
+         node.record_slot, node.preview_object) = expected
+        if active_preview is not None and node.preview_object == active_preview:
+            new_active_index = index
+        elif active_key is not None and (
+                node.bone_name, node.record_slot, node.record_index) == active_key:
+            new_active_index = index
+    file_props.active_node_index = min(new_active_index, max(0, len(nodes) - 1))
+    return True
 
 
 def rebuild_armature_previews(armature):

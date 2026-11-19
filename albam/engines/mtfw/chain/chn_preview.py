@@ -5,6 +5,7 @@ from math import cos, pi, sin
 from mathutils import Vector
 
 from ..bone import get_anim_retarget
+from ....lib.viewport_highlight import set_active_preview_highlight
 from .ccl_preview import _append_capsule, _append_sphere
 from .graph import ordered_links_from_strands
 from .properties import (
@@ -140,6 +141,7 @@ def _strand_material(color_index):
 
 
 def _remove_previews(root_object, file_props):
+    _remove_legacy_highlight_overlays(root_object)
     pose_bones = file_props.armature.pose.bones if file_props.armature else ()
     for pose_bone in pose_bones:
         for record in get_ccl_bone_properties(pose_bone).chn_joints:
@@ -159,6 +161,17 @@ def _remove_previews(root_object, file_props):
                 bpy.data.meshes.remove(old_data)
             else:
                 bpy.data.curves.remove(old_data)
+
+
+def _remove_legacy_highlight_overlays(root_object):
+    """Remove bevel overlays created by earlier CHN preview versions."""
+    for child in tuple(root_object.children):
+        if not child.get("_albam_preview_highlight_overlay", False):
+            continue
+        curve = child.data if child.type == "CURVE" else None
+        bpy.data.objects.remove(child, do_unlink=True)
+        if curve is not None and curve.users == 0:
+            bpy.data.curves.remove(curve)
 
 
 def _new_preview(root_object, armature, record, pose_bone, anim_id,
@@ -281,12 +294,7 @@ def _rebuild_strand_previews(root_object, armature, file_props,
                              record_map, records_by_chain):
     for chain in file_props.chains:
         records = records_by_chain.get(chain.chain_index, ())
-        id_remap = {}
-        for record, pose_bone in records:
-            anim_id = _record_anim_id(record, pose_bone)
-            id_remap[record.ref_joint_no] = anim_id
-            if record.source_ref_joint_no >= 0:
-                id_remap[record.source_ref_joint_no] = anim_id
+        id_remap = _strand_id_remap(records)
 
         for strand_index, strand in enumerate(chain.strands):
             sequence = []
@@ -349,6 +357,17 @@ def _angle_arc_geometry(matrix, origin, axis_index, minimum, maximum, radius):
         edges.append((start, start + 1))
 
     return vertices, edges
+
+
+def _strand_id_remap(records):
+    """Map stored strand IDs to the current IDs used by CHN preview records."""
+    id_remap = {}
+    for record, pose_bone in records:
+        anim_id = _record_anim_id(record, pose_bone)
+        id_remap[record.ref_joint_no] = anim_id
+        if record.source_ref_joint_no >= 0:
+            id_remap[record.source_ref_joint_no] = anim_id
+    return id_remap
 
 
 def _use_object_wire_colors():
@@ -456,3 +475,46 @@ def rebuild_chn_previews(root_object):
     if file_props.show_strand_links:
         _rebuild_strand_previews(
             root_object, armature, file_props, record_map, records_by_chain)
+    view_layer = getattr(bpy.context, "view_layer", None)
+    active_object = view_layer.objects.active if view_layer is not None else None
+    update_chn_strand_highlight(root_object, active_object)
+
+
+def update_chn_strand_highlight(root_object, active_object):
+    """Highlight collision previews belonging to the selected strand."""
+    _remove_legacy_highlight_overlays(root_object)
+    file_props = get_chn_file_properties(root_object)
+    joint_previews = tuple(
+        child for child in root_object.children
+        if child.get("_albam_chn_joint_preview", False)
+    )
+    selected_previews = ()
+    if (active_object == root_object and file_props.show_collision_primitives and
+            0 <= file_props.active_chain_index < len(file_props.chains)):
+        chain = file_props.chains[file_props.active_chain_index]
+        strand_index = chain.active_strand_index
+        if 0 <= strand_index < len(chain.strands):
+            records = []
+            armature = file_props.armature
+            if armature is not None and armature.type == "ARMATURE":
+                for pose_bone in armature.pose.bones:
+                    records.extend(
+                        (record, pose_bone)
+                        for record in get_ccl_bone_properties(pose_bone).chn_joints
+                        if record.chain_index == chain.chain_index
+                    )
+            records.extend(
+                (record, None) for record in file_props.orphans
+                if record.chain_index == chain.chain_index
+            )
+            id_remap = _strand_id_remap(records)
+            selected_ids = {
+                id_remap.get(joint.anim_id, joint.anim_id)
+                for joint in chain.strands[strand_index].joints
+            }
+            selected_previews = tuple(
+                preview for preview in joint_previews
+                if (preview.albam_chn_joint_preview.chain_index == chain.chain_index and
+                    preview.albam_chn_joint_preview.anim_id in selected_ids)
+            )
+    set_active_preview_highlight(joint_previews, active_objects=selected_previews)

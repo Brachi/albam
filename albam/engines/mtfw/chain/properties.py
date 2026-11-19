@@ -25,7 +25,6 @@ class CCLRecordProperties(bpy.types.PropertyGroup):
     ref_joint_no: bpy.props.IntProperty(default=0, options={"HIDDEN"})  # noqa: F821
     preview_object: bpy.props.PointerProperty(
         name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})  # noqa: F821
-
     attr: bpy.props.StringProperty(name="Attribute", default="1", update=_update_ccl_record)  # noqa: F821
     pair_joint_no: bpy.props.IntProperty(
         name="Tail Joint ID", default=65535, min=0, max=65535, update=_update_ccl_record)
@@ -88,6 +87,32 @@ def _chn_root_from_owner(owner, context):
     return find_chn_file_for_armature(armature)
 
 
+def _update_ccl_file_preview(file_props, context):
+    root_object = file_props.id_data
+    if (not isinstance(root_object, bpy.types.Object) or
+            root_object.get("_albam_ccl_suppress_update", False)):
+        return
+    for node in file_props.nodes:
+        if node.preview_object is not None:
+            node.preview_object.hide_viewport = not file_props.show_collision_primitives
+    from .ccl_preview import update_ccl_preview_highlight
+
+    active_object = (context.view_layer.objects.active
+                     if context is not None else None)
+    update_ccl_preview_highlight(root_object, active_object)
+
+
+def _update_ccl_active_node(file_props, context):
+    root_object = file_props.id_data
+    if not isinstance(root_object, bpy.types.Object):
+        return
+    from .ccl_preview import update_ccl_preview_highlight
+
+    active_object = (context.view_layer.objects.active
+                     if context is not None else None)
+    update_ccl_preview_highlight(root_object, active_object)
+
+
 def _update_chn_header_preview(self, context):
     root_object = self.id_data
     if (not isinstance(root_object, bpy.types.Object) or
@@ -96,6 +121,21 @@ def _update_chn_header_preview(self, context):
     from .chn_preview import rebuild_chn_previews
 
     rebuild_chn_previews(root_object)
+
+
+def _update_chn_selection_highlight(self, context):
+    root_object = self.id_data
+    if (not isinstance(root_object, bpy.types.Object) or
+            not root_object.get("_albam_chn_root", False) or
+            root_object.get("_albam_chn_suppress_update", False)):
+        return
+    from .chn_preview import update_chn_strand_highlight
+
+    if context is None:
+        context = bpy.context
+    view_layer = getattr(context, "view_layer", None)
+    active_object = view_layer.objects.active if view_layer is not None else None
+    update_chn_strand_highlight(root_object, active_object)
 
 
 def _chn_attr_bit_getter(bit):
@@ -215,7 +255,8 @@ class CHNChainProperties(bpy.types.PropertyGroup):
     num_joints: bpy.props.IntProperty(name="Joints", default=0, min=0, max=255)  # noqa: F821
     topology_dirty: bpy.props.BoolProperty(default=False, options={"HIDDEN"})  # noqa: F821
     strands: bpy.props.CollectionProperty(type=CHNStrandProperties)
-    active_strand_index: bpy.props.IntProperty(default=0, min=0)
+    active_strand_index: bpy.props.IntProperty(
+        default=0, min=0, update=_update_chn_selection_highlight)
     chain_type: bpy.props.EnumProperty(
         name="Chain Info Type",
         items=(
@@ -244,7 +285,8 @@ class CHNFileProperties(bpy.types.PropertyGroup):
     unresolved_links: bpy.props.IntProperty(name="Unresolved Graph Links", default=0, min=0)
     duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
     chains: bpy.props.CollectionProperty(type=CHNChainProperties)
-    active_chain_index: bpy.props.IntProperty(default=0, min=0)
+    active_chain_index: bpy.props.IntProperty(
+        default=0, min=0, update=_update_chn_selection_highlight)
     show_collision_primitives: bpy.props.BoolProperty(
         name="Show Collision Primitives",
         description="Show the CHN sphere and capsule collision previews in the 3D View",
@@ -263,6 +305,19 @@ class CHNFileProperties(bpy.types.PropertyGroup):
 
 
 @blender_registry.register_blender_prop
+class CCLNodeProperties(bpy.types.PropertyGroup):
+    """One CCL collision preview entry shown in the file-root UIList."""
+
+    bone_name: bpy.props.StringProperty(options={"HIDDEN"})
+    anim_id: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    shape: bpy.props.StringProperty(options={"HIDDEN"})
+    record_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    record_slot: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    preview_object: bpy.props.PointerProperty(
+        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
+
+
+@blender_registry.register_blender_prop
 class CCLFileProperties(bpy.types.PropertyGroup):
     armature: bpy.props.PointerProperty(
         name="Armature", type=bpy.types.Object,  # noqa: F821
@@ -271,6 +326,15 @@ class CCLFileProperties(bpy.types.PropertyGroup):
     unresolved_records: bpy.props.IntProperty(
         name="Records without a matching bone", default=0, min=0, options={"HIDDEN"})  # noqa: F821
     duplicate_joint_ids: bpy.props.StringProperty(default="", options={"HIDDEN"})  # noqa: F821
+    nodes: bpy.props.CollectionProperty(type=CCLNodeProperties)
+    active_node_index: bpy.props.IntProperty(
+        default=0, min=0, update=_update_ccl_active_node)
+    show_collision_primitives: bpy.props.BoolProperty(
+        name="Show Collision Primitives",
+        description="Show the CCL collision nodes in the 3D View",
+        default=True,
+        update=_update_ccl_file_preview,
+    )  # noqa: F821
 
 
 def get_ccl_bone_properties(pose_bone):
