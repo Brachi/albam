@@ -444,7 +444,10 @@ class ALBAM_PT_CustomPropertiesBase(bpy.types.Panel):
 
         self.layout.separator(factor=3.0)
         # for cases when the main custom properties class is empty
-        if getattr(custom_props, "__annotations__", None):
+        custom_draw = getattr(custom_props, "draw_custom_properties", None)
+        if callable(custom_draw):
+            custom_draw(self.layout)
+        elif getattr(custom_props, "__annotations__", None):
             for k in custom_props.__annotations__:
                 self.layout.prop(custom_props, k)
 
@@ -481,9 +484,13 @@ class ALBAM_PT_CustomPropertiesMaterialSubPanelBase(bpy.types.Panel):
         custom_props = custom_props_sec.get(self.custom_props_to_draw)
         if not custom_props:
             return
-        for k in custom_props.__annotations__:
-            # TODO: don't draw if marked as "HIDDEN"
-            layout.prop(custom_props, k)
+        custom_draw = getattr(custom_props, "draw_custom_properties", None)
+        if callable(custom_draw):
+            custom_draw(layout)
+        else:
+            for k in custom_props.__annotations__:
+                # TODO: don't draw if marked as "HIDDEN"
+                layout.prop(custom_props, k)
 
     @classmethod
     def poll(cls, context):

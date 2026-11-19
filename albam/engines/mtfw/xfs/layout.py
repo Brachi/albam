@@ -1,0 +1,1377 @@
+"""Blender placeholders for object placements stored in MTFW XFS .lot files."""
+
+import copy
+import json
+import math
+import xml.etree.ElementTree as ET
+
+import bpy
+from mathutils import Euler, Matrix, Quaternion
+
+from ....lib.stage_placer.re5_item_ids import (
+    enum_items,
+    get_item_class,
+    get_item_name,
+    get_item_type,
+    get_item_types,
+)
+from ....lib.stage_placer.re5_em_classes import INFO_CLASSES, UNIT_CLASSES
+from ....lib.stage_placer.re5_instance_classes import (
+    INSTANCE_MODEL_IDS as INSTANCE_MODEL_DESCRIPTIONS,
+    INSTANCE_UNIT_CLASSES_RE5,
+)
+from ....lib.stage_placer.re5_instance_names import (
+    INSTANCE_MODEL_ARC,
+    INSTANCE_MODEL_BASE,
+    INSTANCE_MODEL_PATH,
+)
+from ....registry import blender_registry
+
+
+_MARKER_TAG = "_albam_xfs_lot_marker"
+_MARKER_KIND = "_albam_xfs_lot_marker_kind"
+_MARKER_PATH = "_albam_xfs_path"
+_MARKER_UNIT_CLASS_PATH = "_albam_xfs_unit_class_path"
+_MARKER_UNIT_CLASS = "_albam_xfs_unit_class"
+_MARKER_INFO_CLASS = "_albam_xfs_info_class"
+_MARKER_INSTANCE_NAME = "_albam_xfs_instance_name"
+_MARKER_ITEM_ID_PATH = "_albam_xfs_item_id_path"
+_MARKER_ITEM_ID = "_albam_xfs_item_id"
+_MARKER_BASELINE = "_albam_xfs_baseline_transform"
+_MARKER_MESH_TAG = "_albam_xfs_lot_marker_mesh"
+
+
+def _marker_kind(bl_object):
+    marker_kind = bl_object.get(_MARKER_KIND)
+    if marker_kind:
+        return marker_kind
+    if bl_object.get(_MARKER_ITEM_ID_PATH) or bl_object.get(_MARKER_ITEM_ID):
+        return "item"
+    return ""
+
+
+def _item_type_identifier(item_type):
+    if not item_type:
+        return "UNCATEGORIZED"
+    normalized = "".join(
+        char if char.isalnum() else "_" for char in item_type.upper()
+    ).strip("_")
+    return f"TYPE_{normalized}"
+
+
+_ITEM_TYPE_BY_IDENTIFIER = {
+    _item_type_identifier(item_type): item_type
+    for item_type in get_item_types()
+}
+_ITEM_TYPE_ENUM_ITEMS = tuple(
+    (
+        identifier,
+        item_type.title() if item_type else "Uncategorized",
+        f"Show {item_type or 'uncategorized'} Item IDs",
+    )
+    for identifier, item_type in _ITEM_TYPE_BY_IDENTIFIER.items()
+)
+_ITEM_ENUM_ITEMS_BY_TYPE = {
+    item_type: tuple(enum_items(item_type=item_type))
+    for item_type in _ITEM_TYPE_BY_IDENTIFIER.values()
+}
+_ITEM_ENUM_ITEMS_BY_TYPE[None] = tuple(enum_items())
+_PRESERVED_ITEM_ENUM_ITEMS = {}
+_INSTANCE_UNIT_CLASS_ENUM_ITEMS = tuple(
+    (
+        unit_class,
+        f"{unit_class} — {description}" if description else unit_class,
+        description or "RE5 instance unit class",
+    )
+    for unit_class, description in INSTANCE_UNIT_CLASSES_RE5.items()
+)
+_PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS = {}
+_ENEMY_INFO_CLASS_ENUM_ITEMS = tuple(
+    (
+        info_class,
+        f"{info_class} — {description}" if description else info_class,
+        description or "RE5 enemy spawn information class",
+    )
+    for info_class, description in INFO_CLASSES.items()
+)
+_ENEMY_UNIT_CLASS_ENUM_ITEMS = tuple(
+    (
+        unit_class,
+        f"{unit_class} — {description}" if description else unit_class,
+        description or "RE5 enemy unit class",
+    )
+    for unit_class, description in UNIT_CLASSES.items()
+)
+_PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS = {}
+_PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS = {}
+_INSTANCE_MODEL_DESCRIPTION_BY_CASEFOLD = {
+    model_id.casefold(): description
+    for model_id, description in INSTANCE_MODEL_DESCRIPTIONS.items()
+}
+_INSTANCE_MODEL_BASE_BY_CASEFOLD = {
+    model_id.casefold(): base_model
+    for model_id, base_model in INSTANCE_MODEL_BASE.items()
+}
+_INSTANCE_MODEL_ARC_BY_CASEFOLD = {
+    model_id.casefold(): arc
+    for model_id, arc in INSTANCE_MODEL_ARC.items()
+}
+_INSTANCE_MODEL_PATH_BY_CASEFOLD = {
+    model_id.casefold(): path
+    for model_id, path in INSTANCE_MODEL_PATH.items()
+}
+
+
+def _instance_name_parts(instance_name):
+    tokens = str(instance_name or "").split("_")
+    model_id = tokens[0] if tokens else ""
+    layout_id = tokens[1] if len(tokens) > 1 else ""
+    slot_token = next(
+        (
+            token for token in tokens[2:]
+            if len(token) > 1 and token[0].casefold() == "u" and token[1:].isdigit()
+        ),
+        "",
+    )
+    return model_id, layout_id, slot_token
+
+
+def _instance_name_slot(instance_name):
+    _model_id, _layout_id, slot_token = _instance_name_parts(instance_name)
+    if not slot_token:
+        return None
+    return int(slot_token[1:])
+
+
+def _instance_name_with_slot(instance_name, slot):
+    tokens = str(instance_name).split("_")
+    for index, token in enumerate(tokens[2:], start=2):
+        if len(token) > 1 and token[0].casefold() == "u" and token[1:].isdigit():
+            tokens[index] = f"{token[0]}{slot:0{len(token) - 1}d}"
+            return "_".join(tokens)
+    return None
+
+
+def _instance_model_description(model_id):
+    return _INSTANCE_MODEL_DESCRIPTION_BY_CASEFOLD.get(model_id.casefold(), "")
+
+
+def _instance_marker_label(instance_name):
+    model_id, _layout_id, _slot_token = _instance_name_parts(instance_name)
+    return model_id or "uIm"
+
+
+def _instance_name_details(instance_name):
+    model_id, layout_id, slot_token = _instance_name_parts(instance_name)
+    folded_model_id = model_id.casefold()
+    description = _instance_model_description(model_id)
+    return {
+        "model_id": model_id,
+        "description": description,
+        "layout_id": layout_id,
+        "slot_token": slot_token,
+        "base_model": _INSTANCE_MODEL_BASE_BY_CASEFOLD.get(folded_model_id, ""),
+        "archive": _INSTANCE_MODEL_ARC_BY_CASEFOLD.get(folded_model_id, ""),
+        "model_path": _INSTANCE_MODEL_PATH_BY_CASEFOLD.get(folded_model_id, ""),
+    }
+
+
+def _reserve_unique_instance_name(instance_name, used_names, used_slots):
+    instance_name = str(instance_name or "")
+    slot_info = _instance_name_slot(instance_name)
+    if not instance_name:
+        raise ValueError("Cannot duplicate a uIm instance with an empty mName")
+    if slot_info is None:
+        raise ValueError(
+            f"Cannot safely duplicate uIm mName {instance_name!r}: no U### slot was found"
+        )
+
+    slot = slot_info
+    if instance_name not in used_names and slot not in used_slots:
+        used_names.add(instance_name)
+        used_slots.add(slot)
+        return instance_name
+
+    candidate_slot = max(used_slots, default=-1) + 1
+    while True:
+        candidate_name = _instance_name_with_slot(instance_name, candidate_slot)
+        if candidate_name not in used_names and candidate_slot not in used_slots:
+            used_names.add(candidate_name)
+            used_slots.add(candidate_slot)
+            return candidate_name
+        candidate_slot += 1
+
+
+def _existing_named_instance_names(xml_root):
+    names = set()
+    slots = set()
+    for location in _get_record_locations_from_lot(xml_root).values():
+        values = location["values"]
+        if location["kind"] != "instance" or values[1] != "uIm":
+            continue
+        instance_name = location.get("instance_name", "")
+        if instance_name:
+            names.add(instance_name)
+            slot = _instance_name_slot(instance_name)
+            if slot is not None:
+                slots.add(slot)
+    return names, slots
+
+
+def _item_type_enum_items(_properties, _context):
+    return _ITEM_TYPE_ENUM_ITEMS
+
+
+def _item_id_enum_items(properties, _context):
+    bl_object = properties.id_data
+    item_type = _ITEM_TYPE_BY_IDENTIFIER.get(properties.item_type)
+    enum_items_for_type = _ITEM_ENUM_ITEMS_BY_TYPE.get(
+        item_type, _ITEM_ENUM_ITEMS_BY_TYPE[None]
+    )
+    items = list(enum_items_for_type)
+    listed_ids = {item[0] for item in items}
+    current_id = str(bl_object.get(_MARKER_ITEM_ID, ""))
+    if current_id and current_id not in listed_ids:
+        # Keep dynamically-created strings alive for Blender's EnumProperty.
+        item = _PRESERVED_ITEM_ENUM_ITEMS.get(current_id)
+        if item is None:
+            try:
+                numeric_id = int(current_id)
+            except (TypeError, ValueError):
+                numeric_id = None
+            unit_class = (
+                get_item_class(numeric_id) if numeric_id is not None else None
+            )
+            readable_name = get_item_name(numeric_id) if numeric_id is not None else ""
+            if unit_class is not None:
+                label = f"{current_id} — {unit_class}"
+                if readable_name:
+                    label += f" ({readable_name})"
+                label += " (outside selected category)"
+                description = "Current Item ID; changing it replaces this value"
+            elif readable_name:
+                label = f"{current_id} — {readable_name} (no class mapping)"
+                description = "No class mapping is known; the original ID is preserved on export"
+            else:
+                label = f"{current_id} — unknown (preserve)"
+                description = "Unknown ID; the original value is preserved on export"
+            item = (
+                current_id,
+                label,
+                description,
+            )
+            _PRESERVED_ITEM_ENUM_ITEMS[current_id] = item
+        items.append(item)
+    return items
+
+
+def _item_id_updated(properties, context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) != "item":
+        return
+    item_id_text = properties.item_id
+    bl_object[_MARKER_ITEM_ID] = item_id_text
+    try:
+        unit_class = get_item_class(int(item_id_text))
+    except (TypeError, ValueError):
+        unit_class = None
+    if unit_class is None:
+        return
+
+    bl_object[_MARKER_UNIT_CLASS] = unit_class
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _create_visual_marker(unit_class, context)
+
+
+def _instance_unit_class_enum_items(properties, _context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) == "enemy":
+        items = list(_ENEMY_UNIT_CLASS_ENUM_ITEMS)
+        current_class = str(bl_object.get(_MARKER_UNIT_CLASS, ""))
+        if current_class and current_class not in UNIT_CLASSES:
+            item = _PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS.get(current_class)
+            if item is None:
+                item = (
+                    current_class,
+                    f"{current_class} — unknown (preserve)",
+                    "Unmapped enemy unit class; the original value is preserved on export",
+                )
+                _PRESERVED_ENEMY_UNIT_CLASS_ENUM_ITEMS[current_class] = item
+            items.append(item)
+        return items
+
+    items = list(_INSTANCE_UNIT_CLASS_ENUM_ITEMS)
+    current_class = str(bl_object.get(_MARKER_UNIT_CLASS, ""))
+    if current_class and current_class not in INSTANCE_UNIT_CLASSES_RE5:
+        item = _PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS.get(current_class)
+        if item is None:
+            item = (
+                current_class,
+                f"{current_class} — unknown (preserve)",
+                "Unmapped instance class; the original value is preserved on export",
+            )
+            _PRESERVED_INSTANCE_UNIT_CLASS_ENUM_ITEMS[current_class] = item
+        items.append(item)
+    return items
+
+
+def _instance_unit_class_updated(properties, context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) not in ("instance", "enemy"):
+        return
+
+    unit_class = properties.unit_class
+    bl_object[_MARKER_UNIT_CLASS] = unit_class
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _create_visual_marker(unit_class, context)
+
+
+def _instance_name_updated(properties, context):
+    bl_object = properties.id_data
+    if (
+        _marker_kind(bl_object) != "instance" or
+        str(bl_object.get(_MARKER_UNIT_CLASS, "")) != "uIm"
+    ):
+        return
+
+    instance_name = properties.instance_name
+    bl_object[_MARKER_INSTANCE_NAME] = instance_name
+    if bl_object.type == "MESH" and context is not None:
+        bl_object.data = _create_visual_marker(
+            _instance_marker_label(instance_name), context
+        )
+
+
+def _enemy_info_class_enum_items(properties, _context):
+    bl_object = properties.id_data
+    items = list(_ENEMY_INFO_CLASS_ENUM_ITEMS)
+    current_class = str(bl_object.get(_MARKER_INFO_CLASS, ""))
+    if current_class and current_class not in INFO_CLASSES:
+        item = _PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS.get(current_class)
+        if item is None:
+            item = (
+                current_class,
+                f"{current_class} — unknown (preserve)",
+                "Unmapped enemy info class; the original value is preserved on export",
+            )
+            _PRESERVED_ENEMY_INFO_CLASS_ENUM_ITEMS[current_class] = item
+        items.append(item)
+    return items
+
+
+def _enemy_info_class_updated(properties, _context):
+    bl_object = properties.id_data
+    if _marker_kind(bl_object) == "enemy":
+        bl_object[_MARKER_INFO_CLASS] = properties.info_class
+
+
+@blender_registry.register_custom_properties_object(
+    "lot_placement", ("re5",), asset_type="CONFIG"
+)
+@blender_registry.register_blender_prop
+class XFSLotPlacementProperties(bpy.types.PropertyGroup):
+    item_type: bpy.props.EnumProperty(
+        name="Item Type",
+        description="Filter the available RE5 Item IDs",
+        items=_item_type_enum_items,
+    )
+    item_id: bpy.props.EnumProperty(
+        name="Item ID",
+        description="RE5 item spawned by this LOT placement",
+        items=_item_id_enum_items,
+        update=_item_id_updated,
+    )
+    unit_class: bpy.props.EnumProperty(
+        name="Unit Class",
+        description="RE5 unit class spawned by this placement",
+        items=_instance_unit_class_enum_items,
+        update=_instance_unit_class_updated,
+    )
+    instance_name: bpy.props.StringProperty(
+        name="Instance Name",
+        description="Full uIm mName value; the original suffixes are preserved",
+        update=_instance_name_updated,
+    )
+    info_class: bpy.props.EnumProperty(
+        name="Info Class",
+        description="RE5 enemy spawn information class",
+        items=_enemy_info_class_enum_items,
+        update=_enemy_info_class_updated,
+    )
+
+    def draw_custom_properties(self, layout):
+        marker_kind = _marker_kind(self.id_data)
+        if marker_kind == "item":
+            layout.prop(self, "item_type")
+            layout.prop(self, "item_id")
+        elif marker_kind == "instance":
+            if str(self.id_data.get(_MARKER_UNIT_CLASS, "")) == "uIm":
+                layout.label(text="Named instance (mUnitClass = uIm)")
+                layout.prop(self, "instance_name", text="mName")
+                details = _instance_name_details(self.instance_name)
+                if details["model_id"]:
+                    model_label = details["description"] or details["model_id"]
+                    layout.label(
+                        text=f"Model: {model_label} ({details['model_id']})"
+                    )
+                if details["layout_id"] or details["slot_token"]:
+                    layout.label(
+                        text=(
+                            f"Layout: {details['layout_id'] or 'unknown'}  "
+                            f"Slot: {details['slot_token'] or 'none'}"
+                        )
+                    )
+                if details["base_model"]:
+                    layout.label(text=f"Base model: {details['base_model']}")
+                if details["archive"]:
+                    layout.label(text=f"Archive: {details['archive']}")
+                if details["model_path"]:
+                    layout.label(text=f"Model path: {details['model_path']}")
+            else:
+                layout.prop(self, "unit_class")
+        elif marker_kind == "enemy":
+            layout.prop(self, "info_class")
+            layout.prop(self, "unit_class")
+
+
+def _iter_xml_elements_with_paths(element, path=()):
+    yield element, path
+    for index, child in enumerate(element):
+        yield from _iter_xml_elements_with_paths(child, path + (index,))
+
+
+def _xml_node_at_path(root, path):
+    node = root
+    for index in path:
+        children = list(node)
+        if index >= len(children):
+            raise ValueError(f"XFS XML node path {path!r} no longer exists")
+        node = children[index]
+    return node
+
+
+def _named_property(class_xml, name):
+    name = name.casefold()
+    return next(
+        (
+            child for child in class_xml
+            if child.attrib.get("name", "").casefold() == name
+        ),
+        None,
+    )
+
+
+def _xml_property_value(node):
+    if node is None:
+        return ""
+    return str(node.attrib.get("value", node.text or ""))
+
+
+def _position_property(class_xml):
+    position = _named_property(class_xml, "mPosition")
+    if position is None:
+        position = _named_property(class_xml, "Position")
+    return position
+
+
+def _xml_vector(node):
+    if node is None:
+        return None
+    component_names = ("x", "y", "z")
+    if not all(name in node.attrib for name in component_names):
+        return None
+    try:
+        return tuple(float(node.attrib[name]) for name in component_names)
+    except ValueError:
+        return None
+
+
+def _set_xml_vector(node, values):
+    if node is None or not all(name in node.attrib for name in ("x", "y", "z")):
+        return False
+    for name, value in zip(("x", "y", "z"), values):
+        node.set(name, repr(float(value)))
+    return True
+
+
+def _get_record_locations_from_lot(root):
+    elements = list(_iter_xml_elements_with_paths(root))
+    paths_by_element = {id(element): path for element, path in elements}
+    elements_by_path = {path: element for element, path in elements}
+    inline_objects = {
+        element.attrib["id"]: (element, path)
+        for element, path in elements
+        if element.tag == "classref" and "id" in element.attrib and len(element)
+    }
+    records = {}
+
+    def resolve_reference(element, path):
+        if not len(element) and "ref" in element.attrib:
+            target = inline_objects.get(element.attrib["ref"])
+            if target is None:
+                return None, None
+            return target
+        return element, path
+
+    def has_item_transform(element):
+        return (
+            _xml_vector(_named_property(element, "Pos")) is not None and
+            _xml_vector(_named_property(element, "Ang")) is not None
+        )
+
+    def item_entries(
+        element, path, visited=None, container_path=None, entry_path=None
+    ):
+        if element.tag == "array":
+            for child in element:
+                child_path = paths_by_element[id(child)]
+                yield from item_entries(
+                    child, child_path, visited,
+                    container_path=path, entry_path=child_path,
+                )
+            return
+
+        element, path = resolve_reference(element, path)
+        if element is None:
+            return
+        visited = set() if visited is None else visited
+        if path in visited:
+            return
+        visited.add(path)
+        if element.tag == "classref" and has_item_transform(element):
+            yield path, element, container_path, entry_path
+            return
+        for child in element:
+            child_path = paths_by_element[id(child)]
+            if child.tag in ("classref", "array"):
+                yield from item_entries(
+                    child, child_path, visited, container_path, entry_path
+                )
+
+    def add_record(element, path, set_info_container=None):
+        if element.tag != "classref":
+            return
+        set_info_entry = element
+        set_info_entry_path = path
+        set_info_parent = elements_by_path.get(path[:-1])
+        element, path = resolve_reference(element, path)
+        if element is None:
+            return
+        set_info = element
+        set_info_path = path
+        unit_class_xml = _named_property(element, "mUnitClass")
+        unit_class = (
+            unit_class_xml.attrib.get("value", unit_class_xml.text or "")
+            if unit_class_xml is not None else ""
+        )
+        unit_class_path = (
+            paths_by_element[id(unit_class_xml)] if unit_class_xml is not None else None
+        )
+        info = _named_property(element, "mpInfo")
+        if info is None or info.tag != "classref":
+            return
+        info_path = paths_by_element[id(info)]
+        info, info_path = resolve_reference(info, info_path)
+        if info is None:
+            return
+
+        info_class_xml = _named_property(set_info, "mInfoClass")
+        if info_class_xml is None:
+            info_class_xml = _named_property(info, "mInfoClass")
+        info_class = (
+            info_class_xml.attrib.get("value", info_class_xml.text or "")
+            if info_class_xml is not None else ""
+        )
+        if (
+            info_class_xml is not None and
+            unit_class not in INSTANCE_UNIT_CLASSES_RE5 and
+            _xml_vector(_named_property(info, "mPosition")) is not None and
+            _xml_vector(_named_property(info, "mAngle")) is not None
+        ):
+            records[set_info_entry_path] = {
+                "kind": "enemy",
+                "values": (
+                    set_info, unit_class, info, info_path, unit_class_path,
+                    None, None,
+                ),
+                "info_class": info_class,
+                "set_info": set_info,
+                "set_info_path": set_info_path,
+                "set_info_entry": set_info_entry,
+                "set_info_entry_path": set_info_entry_path,
+                "set_info_container": set_info_container,
+                "set_info_parent": set_info_parent,
+                "item_container_path": None,
+                "item_entry_path": None,
+                "item_container": None,
+                "item_entry": None,
+            }
+            return
+
+        item_set = _named_property(info, "mItemSet")
+        if item_set is None:
+            if unit_class not in INSTANCE_UNIT_CLASSES_RE5:
+                return
+            if (
+                _xml_vector(_named_property(info, "mPosition")) is None or
+                _xml_vector(_named_property(info, "mAngle")) is None
+            ):
+                return
+            records[set_info_entry_path] = {
+                "kind": "instance",
+                "values": (
+                    set_info, unit_class, info, info_path, unit_class_path,
+                    None, None,
+                ),
+                "instance_name": _xml_property_value(
+                    _named_property(info, "mName")
+                ) if unit_class == "uIm" else "",
+                "set_info": set_info,
+                "set_info_path": set_info_path,
+                "set_info_entry": set_info_entry,
+                "set_info_entry_path": set_info_entry_path,
+                "set_info_container": set_info_container,
+                "set_info_parent": set_info_parent,
+                "item_container_path": None,
+                "item_entry_path": None,
+                "item_container": None,
+                "item_entry": None,
+            }
+            return
+        item_set_path = paths_by_element[id(item_set)]
+        for (
+            item_path, item_record, item_container_path, item_entry_path
+        ) in item_entries(item_set, item_set_path):
+            item_id_xml = _named_property(item_record, "ItemId")
+            try:
+                item_id = int(item_id_xml.attrib.get("value"))
+            except (AttributeError, TypeError, ValueError):
+                item_id = None
+            item_id_path = (
+                paths_by_element[id(item_id_xml)] if item_id_xml is not None else None
+            )
+            records[item_path] = {
+                "kind": "item",
+                "values": (
+                    item_record, unit_class, info, info_path, unit_class_path,
+                    item_id, item_id_path,
+                ),
+                "set_info": set_info,
+                "set_info_path": set_info_path,
+                "set_info_entry": set_info_entry,
+                "set_info_entry_path": set_info_entry_path,
+                "set_info_container": set_info_container,
+                "set_info_parent": set_info_parent,
+                "item_container_path": item_container_path,
+                "item_entry_path": item_entry_path,
+                "item_container": elements_by_path.get(item_container_path),
+                "item_entry": elements_by_path.get(item_entry_path),
+            }
+
+    for element, path in elements:
+        is_mset_infos = (
+            element.tag == "array" and element.attrib.get("name", "").casefold() == "msetinfos"
+        )
+        if is_mset_infos:
+            for child in element:
+                add_record(child, paths_by_element[id(child)], element)
+        elif (
+            element.tag == "classref" and element.attrib.get("name", "").casefold() == "msetinfos"
+        ):
+            add_record(element, path)
+
+    return records
+
+
+def _lot_records(root):
+    """Return the original marker data without the XML insertion locations."""
+    return {
+        path: location["values"]
+        for path, location in _get_record_locations_from_lot(root).items()
+    }
+
+
+def _marker_material(tag, name, color):
+    for material in bpy.data.materials:
+        if material.get(tag):
+            return material
+
+    material = bpy.data.materials.new(name)
+    material[tag] = True
+    material.diffuse_color = color
+    material.use_nodes = True
+    principled = material.node_tree.nodes.get("Principled BSDF")
+    if principled is not None:
+        principled.inputs["Base Color"].default_value = color
+        principled.inputs["Roughness"].default_value = 0.38
+    return material
+
+
+def _set_font_mesh(text, context):
+    "Creates temporary blender Font object, converts it to mesh, and returns the vertices and faces."
+    curve = bpy.data.curves.new("ALBAM XFS lot marker label", type="FONT")
+    curve.body = text
+    curve.size = 0.16
+    curve.align_x = "CENTER"
+    curve.align_y = "CENTER"
+    temporary_object = bpy.data.objects.new("ALBAM XFS lot marker label", curve)
+    context.collection.objects.link(temporary_object)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        evaluated_object = temporary_object.evaluated_get(depsgraph)
+        text_mesh = bpy.data.meshes.new_from_object(
+            evaluated_object, depsgraph=depsgraph
+        )
+        vertices = [
+            (vertex.co.x, vertex.co.y, vertex.co.z + 0.5)
+            for vertex in text_mesh.vertices
+        ]
+        faces = [tuple(polygon.vertices) for polygon in text_mesh.polygons]
+        bpy.data.meshes.remove(text_mesh)
+        return vertices, faces
+    finally:
+        bpy.data.objects.remove(temporary_object, do_unlink=True)
+        bpy.data.curves.remove(curve)
+
+
+def _create_visual_marker(unit_class, context):
+    for mesh in bpy.data.meshes:
+        if mesh.get(_MARKER_MESH_TAG) == unit_class:
+            return mesh
+
+    vertices = []
+    faces = []
+    material_indices = []
+
+    corners = (
+        (-0.5, -0.5, -0.5), (-0.5, -0.5, 0.5),
+        (-0.5, 0.5, -0.5), (-0.5, 0.5, 0.5),
+        (0.5, -0.5, -0.5), (0.5, -0.5, 0.5),
+        (0.5, 0.5, -0.5), (0.5, 0.5, 0.5),
+    )
+    beam_width = 0.012
+    half_width = beam_width / 2.0
+    box_faces = (
+        (0, 2, 6, 4), (1, 5, 7, 3), (0, 1, 3, 2),
+        (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6),
+    )
+
+    def add_corner_joint(center):
+        offset = len(vertices)
+        vertices.extend(
+            tuple(coordinate + (half_width if bit else -half_width)
+                  for coordinate, bit in zip(center, corner_bits))
+            for corner_bits in (
+                (0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1),
+                (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1),
+            )
+        )
+        faces.extend(
+            tuple(offset + vertex_index for vertex_index in face)
+            for face in box_faces
+        )
+        material_indices.extend([0] * len(box_faces))
+
+    for corner in corners:
+        add_corner_joint(corner)
+
+    box_edges = (
+        (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
+        (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
+    )
+
+    def add_beam(start_point, end_point):
+        axis = next(
+            index for index, (start, end) in enumerate(zip(start_point, end_point))
+            if start != end
+        )
+        direction = 1.0 if end_point[axis] > start_point[axis] else -1.0
+        cross_axes = [index for index in range(3) if index != axis]
+        start = list(start_point)
+        end = list(end_point)
+        start[axis] += direction * half_width
+        end[axis] -= direction * half_width
+        offset = len(vertices)
+        for axis_position in (start[axis], end[axis]):
+            for first_side, second_side in (
+                (-half_width, -half_width), (half_width, -half_width),
+                (half_width, half_width), (-half_width, half_width),
+            ):
+                point = list(start_point)
+                point[axis] = axis_position
+                point[cross_axes[0]] += first_side
+                point[cross_axes[1]] += second_side
+                vertices.append(tuple(point))
+        for side in range(4):
+            next_side = (side + 1) % 4
+            face = (
+                offset + side, offset + next_side,
+                offset + 4 + next_side, offset + 4 + side,
+            )
+            if direction < 0:
+                face = tuple(reversed(face))
+            faces.append(face)
+        material_indices.extend([0] * 4)
+
+    for start_index, end_index in box_edges:
+        add_beam(corners[start_index], corners[end_index])
+
+    arrow_face_start = len(faces)
+    segments = 10
+
+    def add_cylinder_y(y_start, y_end, radius):
+        start = len(vertices)
+        for y in (y_start, y_end):
+            for index in range(segments):
+                angle = (2.0 * math.pi * index) / segments
+                vertices.append((radius * math.cos(angle), y,
+                                 radius * math.sin(angle)))
+        for index in range(segments):
+            next_index = (index + 1) % segments
+            if y_end >= y_start:
+                faces.append((start + index, start + segments + index,
+                              start + segments + next_index, start + next_index))
+            else:
+                faces.append((start + index, start + next_index,
+                              start + segments + next_index, start + segments + index))
+        if y_end >= y_start:
+            faces.append(tuple(start + index for index in range(segments)))
+            faces.append(tuple(start + segments + index for index in reversed(range(segments))))
+        else:
+            faces.append(tuple(start + index for index in reversed(range(segments))))
+            faces.append(tuple(start + segments + index for index in range(segments)))
+
+    def add_cone_y(y_base, y_tip, radius):
+        start = len(vertices)
+        for index in range(segments):
+            angle = (2.0 * math.pi * index) / segments
+            vertices.append((radius * math.cos(angle), y_base,
+                             radius * math.sin(angle)))
+        tip = len(vertices)
+        vertices.append((0.0, y_tip, 0.0))
+        for index in range(segments):
+            next_index = (index + 1) % segments
+            if y_tip >= y_base:
+                faces.append((start + index, tip, start + next_index))
+            else:
+                faces.append((start + index, start + next_index, tip))
+        faces.append(tuple(start + index for index in range(segments)))
+
+    # The arrow starts at the placement origin and points along Blender's local Y+.
+    add_cylinder_y(0.0, 0.40, 0.055)
+    add_cone_y(0.38, 0.88, 0.17)
+    material_indices.extend([1] * (len(faces) - arrow_face_start))
+
+    if unit_class:
+        text_vertices, text_faces = _set_font_mesh(unit_class, context)
+        text_offset = len(vertices)
+        vertices.extend(text_vertices)
+        faces.extend(
+            tuple(text_offset + vertex_index for vertex_index in face)
+            for face in text_faces
+        )
+        material_indices.extend([2] * len(text_faces))
+
+    mesh = bpy.data.meshes.new("ALBAM XFS lot placement marker")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(_marker_material(
+        "_albam_xfs_lot_box_material", "ALBAM XFS lot box", (0.42, 0.11, 0.89, 1.0)
+    ))
+    mesh.materials.append(_marker_material(
+        "_albam_xfs_lot_arrow_material", "ALBAM XFS lot arrow", (0.04, 0.85, 0.12, 1.0)
+    ))
+    mesh.materials.append(_marker_material(
+        "_albam_xfs_lot_text_material", "ALBAM XFS lot label", (1.0, 1.0, 1.0, 1.0)
+    ))
+    for polygon, material_index in zip(mesh.polygons, material_indices):
+        polygon.material_index = material_index
+    mesh.update()
+    mesh[_MARKER_MESH_TAG] = unit_class
+    return mesh
+
+
+def _game_angle_to_blender(angles):
+    basis = Matrix.Rotation(math.pi / 2.0, 4, "X")
+    game_rotation = Euler(angles, "XYZ").to_matrix().to_4x4()
+    return (basis @ game_rotation @ basis.inverted()).to_euler("XYZ")
+
+
+def _blender_angle_to_game(blender_rotation):
+    basis = Matrix.Rotation(math.pi / 2.0, 4, "X")
+    blender_matrix = blender_rotation.to_matrix().to_4x4()
+    return (basis.inverted() @ blender_matrix @ basis).to_euler("XYZ")
+
+
+def _game_position_to_blender(position):
+    return position[0] / 100.0, -position[2] / 100.0, position[1] / 100.0
+
+
+def _blender_position_to_game(location):
+    return location.x * 100.0, location.z * 100.0, -location.y * 100.0
+
+
+def _store_baseline(bl_object):
+    # The inactive rotation channel can be stale (e.g. rotation_quaternion
+    # stays identity while the marker uses XYZ Euler mode).
+    location, rotation, scale = bl_object.matrix_basis.decompose()
+    bl_object[_MARKER_BASELINE] = json.dumps({
+        "location": list(location),
+        "rotation": list(rotation),
+        "scale": list(scale),
+    })
+
+
+def _transform_changes(bl_object):
+    baseline_text = bl_object.get(_MARKER_BASELINE)
+    if not baseline_text:
+        return {"location", "rotation", "scale"}
+    baseline = json.loads(baseline_text)
+    location, rotation, scale = bl_object.matrix_basis.decompose()
+    baseline_rotation = Quaternion(baseline["rotation"])
+    rotation.normalize()
+    baseline_rotation.normalize()
+    changes = set()
+    if any(
+        not math.isclose(
+            float(value), float(original), rel_tol=1e-7, abs_tol=1e-7
+        )
+        for value, original in zip(location, baseline["location"])
+    ):
+        changes.add("location")
+    if any(
+        not math.isclose(
+            float(value), float(original), rel_tol=1e-7, abs_tol=1e-7
+        )
+        for value, original in zip(scale, baseline["scale"])
+    ):
+        changes.add("scale")
+    if 1.0 - abs(rotation.dot(baseline_rotation)) > 1e-8:
+        changes.add("rotation")
+    return changes
+
+
+def build_xfs_lot_markers(bl_object, xml, context):
+    """Create viewport markers for item, instance, and enemy placements."""
+    records = _get_record_locations_from_lot(xml.getroot())
+    if not records:
+        return
+    for marker_index, (
+        path, location,
+    ) in enumerate(records.items()):
+        (
+            record, xml_unit_class, info, info_path, unit_class_path,
+            item_id, item_id_path,
+        ) = location["values"]
+        marker_kind = location["kind"]
+        unit_class = (
+            xml_unit_class if marker_kind in ("instance", "enemy")
+            else get_item_class(item_id, default=xml_unit_class)
+        )
+        if marker_kind in ("instance", "enemy"):
+            position = _xml_vector(_named_property(info, "mPosition"))
+            angles = _xml_vector(_named_property(info, "mAngle"))
+        else:
+            position = _xml_vector(_named_property(record, "Pos"))
+            angles = _xml_vector(_named_property(record, "Ang"))
+        parent_scale = _xml_vector(_named_property(info, "mScale")) or (1, 1, 1)
+        instance_name = location.get("instance_name", "")
+        marker_label = (
+            _instance_marker_label(instance_name)
+            if marker_kind == "instance" and unit_class == "uIm"
+            else unit_class
+        )
+        marker_mesh = _create_visual_marker(marker_label, context)
+
+        marker = bpy.data.objects.new(
+            f"{bl_object.name}_SetInfo_{marker_index:03d}",
+            marker_mesh,
+        )
+        marker.parent = bl_object
+        marker.location = _game_position_to_blender(position)
+        marker.rotation_mode = "XYZ"
+        marker.rotation_euler = _game_angle_to_blender(angles)
+        marker.scale = (parent_scale[0], parent_scale[2], parent_scale[1])
+        marker.display_type = "SOLID"
+        marker.show_in_front = True
+        marker.hide_render = True
+        marker[_MARKER_TAG] = True
+        marker[_MARKER_KIND] = marker_kind
+        marker[_MARKER_PATH] = json.dumps(path)
+        if unit_class_path is not None:
+            marker[_MARKER_UNIT_CLASS_PATH] = json.dumps(unit_class_path)
+        marker[_MARKER_UNIT_CLASS] = unit_class
+        if item_id_path is not None:
+            marker[_MARKER_ITEM_ID_PATH] = json.dumps(item_id_path)
+        marker_properties = marker.albam_custom_properties.re5__lot_placement
+        if marker_kind == "instance":
+            if unit_class == "uIm":
+                marker[_MARKER_INSTANCE_NAME] = instance_name
+                marker_properties.instance_name = instance_name
+            else:
+                marker_properties.unit_class = unit_class
+        elif marker_kind == "enemy":
+            marker[_MARKER_INFO_CLASS] = location["info_class"]
+            if location["info_class"]:
+                marker_properties.info_class = location["info_class"]
+            if unit_class:
+                marker_properties.unit_class = unit_class
+        elif item_id is not None:
+            marker[_MARKER_ITEM_ID] = str(item_id)
+            marker_properties.item_id = str(item_id)
+            item_type = get_item_type(item_id)
+            item_type_identifier = _item_type_identifier(item_type)
+            if item_type_identifier in _ITEM_TYPE_BY_IDENTIFIER:
+                marker_properties.item_type = item_type_identifier
+        _store_baseline(marker)
+
+
+def _write_marker_values(record, parent, unit_class_node, marker, marker_kind):
+    changes = _transform_changes(marker)
+    item_id_path_json = marker.get(_MARKER_ITEM_ID_PATH)
+    item_id_text = str(marker.get(_MARKER_ITEM_ID, ""))
+    if item_id_path_json and item_id_text:
+        item_id_node = _named_property(record, "ItemId")
+        if item_id_node is None:
+            raise ValueError(f"Missing ItemId for XFS lot marker {marker.name!r}")
+        try:
+            item_id = int(item_id_text)
+        except ValueError:
+            raise ValueError(
+                f"Invalid ItemId {item_id_text!r} on XFS lot marker {marker.name!r}"
+            ) from None
+        if "value" in item_id_node.attrib:
+            item_id_node.set("value", str(item_id))
+        else:
+            item_id_node.text = str(item_id)
+
+        mapped_unit_class = get_item_class(item_id)
+        if mapped_unit_class is not None and unit_class_node is not None:
+            if "value" in unit_class_node.attrib:
+                unit_class_node.set("value", mapped_unit_class)
+            else:
+                unit_class_node.text = mapped_unit_class
+
+    if unit_class_node is not None and not item_id_path_json:
+        unit_class = str(marker.get(_MARKER_UNIT_CLASS, marker.get("mUnitClass", "")))
+        if unit_class:
+            if "value" in unit_class_node.attrib:
+                unit_class_node.set("value", unit_class)
+            else:
+                unit_class_node.text = unit_class
+
+    if marker_kind == "enemy":
+        info_class_node = _named_property(record, "mInfoClass")
+        if info_class_node is None:
+            info_class_node = _named_property(parent, "mInfoClass")
+        info_class = str(marker.get(_MARKER_INFO_CLASS, ""))
+        if info_class_node is not None and info_class:
+            if "value" in info_class_node.attrib:
+                info_class_node.set("value", info_class)
+            else:
+                info_class_node.text = info_class
+
+    if (
+        marker_kind == "instance" and unit_class_node is not None and
+        _xml_property_value(unit_class_node) == "uIm"
+    ):
+        instance_name = marker.get(_MARKER_INSTANCE_NAME)
+        if instance_name is not None:
+            instance_name_node = _named_property(parent, "mName")
+            if instance_name_node is None:
+                raise ValueError(
+                    f"Missing mName for uIm marker {marker.name!r}"
+                )
+            if not instance_name:
+                raise ValueError(
+                    f"Empty mName on uIm marker {marker.name!r}"
+                )
+            if "value" in instance_name_node.attrib:
+                instance_name_node.set("value", str(instance_name))
+            else:
+                instance_name_node.text = str(instance_name)
+
+    if "location" in changes:
+        location = marker.location
+        position = _blender_position_to_game(location)
+        parent_written = _set_xml_vector(_position_property(parent), position)
+        if marker_kind == "item":
+            child_written = _set_xml_vector(_named_property(record, "Pos"), position)
+            if not child_written or not parent_written:
+                raise ValueError(
+                    f"Cannot synchronize Pos and mPosition for {marker.name!r}"
+                )
+        elif not parent_written:
+            raise ValueError(f"Cannot write mPosition for {marker.name!r}")
+    if "rotation" in changes:
+        rotation = marker.matrix_basis.decompose()[1]
+        angles = _blender_angle_to_game(rotation)
+        parent_written = _set_xml_vector(_named_property(parent, "mAngle"), angles)
+        if marker_kind == "item":
+            child_written = _set_xml_vector(_named_property(record, "Ang"), angles)
+            if not child_written or not parent_written:
+                raise ValueError(
+                    f"Cannot synchronize Ang and mAngle for {marker.name!r}"
+                )
+        elif not parent_written:
+            raise ValueError(f"Cannot write mAngle for {marker.name!r}")
+    if "scale" in changes:
+        scale = marker.scale
+        if not _set_xml_vector(
+            _named_property(parent, "mScale"), (scale.x, scale.z, scale.y)
+        ):
+            raise ValueError(f"Cannot write mScale for XFS lot marker {marker.name!r}")
+
+
+def _ensure_set_info_array(location, xml_root):
+    container = location["set_info_container"]
+    if container is not None:
+        return container
+
+    entry = location["set_info_entry"]
+    parent = location["set_info_parent"]
+    if parent is None or entry not in list(parent):
+        raise ValueError("Cannot find the mSetInfos array for this marker")
+
+    attributes = {
+        key: value for key, value in entry.attrib.items()
+        if key in {"name", "flags", "size", "reserved"}
+    }
+    property_type = None
+    class_index = parent.attrib.get("class_index")
+    property_name = entry.attrib.get("name", "mSetInfos")
+    metadata = xml_root.find("_xfs_metadata")
+    if metadata is not None and class_index is not None and property_name:
+        for class_def in metadata.findall("class_def"):
+            if class_def.attrib.get("index") != class_index:
+                continue
+            property_def = next(
+                (
+                    prop for prop in class_def.findall("property")
+                    if prop.attrib.get("name") == property_name
+                ),
+                None,
+            )
+            if property_def is not None:
+                property_type = property_def.attrib.get("type_id")
+            break
+    attributes["name"] = property_name
+    attributes["type"] = property_type or "classref"
+    array = ET.Element("array", attrib=attributes)
+    children = list(parent)
+    index = children.index(entry)
+    parent.remove(entry)
+    array.append(entry)
+    parent.insert(index, array)
+    location["set_info_container"] = array
+    location["set_info_entry"] = entry
+    return array
+
+
+def _clone_inline_record(record, xml_root):
+    duplicate = copy.deepcopy(record)
+    next_id = max(
+        (int(element.attrib["id"]) for element in xml_root.iter()
+         if element.tag == "classref" and "id" in element.attrib),
+        default=0,
+    ) + 1
+    id_map = {}
+    for element in duplicate.iter():
+        old_id = element.attrib.get("id")
+        if old_id is not None:
+            id_map[old_id] = str(next_id)
+            next_id += 1
+    for element in duplicate.iter():
+        if element.attrib.get("id") in id_map:
+            element.set("id", id_map[element.attrib["id"]])
+        if element.attrib.get("ref") in id_map:
+            element.set("ref", id_map[element.attrib["ref"]])
+    return duplicate
+
+
+def _path_relative_to(path, root_path, label):
+    if path is None or path[:len(root_path)] != root_path:
+        raise ValueError(
+            f"Cannot safely duplicate this XFS lot placement: {label} is outside mSetInfos"
+        )
+    return path[len(root_path):]
+
+
+def _remove_item_entry(location):
+    container = location["item_container"]
+    entry = location["item_entry"]
+    if container is None or entry is None or entry not in list(container):
+        raise ValueError("Cannot remove this mItemSet entry safely")
+    container.remove(entry)
+
+
+def _duplicate_set_info(
+    location, record_path, marker, xml_root, prune_to_item_entry=False
+):
+    clone = _clone_inline_record(location["set_info"], xml_root)
+    set_info_path = location["set_info_path"]
+    values = location["values"]
+    info_path, unit_class_path = values[3], values[4]
+    if location["kind"] in ("instance", "enemy"):
+        cloned_info = _xml_node_at_path(
+            clone,
+            _path_relative_to(info_path, set_info_path, "mpInfo"),
+        )
+        cloned_unit_class = None
+        if unit_class_path is not None:
+            cloned_unit_class = _xml_node_at_path(
+                clone,
+                _path_relative_to(unit_class_path, set_info_path, "mUnitClass"),
+            )
+        _write_marker_values(
+            clone, cloned_info, cloned_unit_class, marker,
+            marker_kind=location["kind"],
+        )
+        return clone
+
+    record_relative_path = _path_relative_to(record_path, set_info_path, "mItemSet")
+    if prune_to_item_entry:
+        container_path = location["item_container_path"]
+        entry_path = location["item_entry_path"]
+        if container_path is None or entry_path is None:
+            raise ValueError("Cannot isolate this mItemSet entry for duplication")
+        cloned_container = _xml_node_at_path(
+            clone,
+            _path_relative_to(container_path, set_info_path, "mItemSet array"),
+        )
+        cloned_entry = _xml_node_at_path(
+            clone,
+            _path_relative_to(entry_path, set_info_path, "mItemSet entry"),
+        )
+        if cloned_entry not in list(cloned_container):
+            raise ValueError("Cannot isolate this mItemSet entry for duplication")
+        for child in list(cloned_container):
+            if child is not cloned_entry:
+                cloned_container.remove(child)
+    cloned_record = _xml_node_at_path(
+        clone,
+        record_relative_path,
+    )
+    cloned_info = _xml_node_at_path(
+        clone,
+        _path_relative_to(info_path, set_info_path, "mpInfo"),
+    )
+    cloned_unit_class = None
+    if unit_class_path is not None:
+        cloned_unit_class = _xml_node_at_path(
+            clone,
+            _path_relative_to(unit_class_path, set_info_path, "mUnitClass"),
+        )
+    _write_marker_values(
+        cloned_record, cloned_info, cloned_unit_class, marker, marker_kind="item"
+    )
+    return clone
+
+
+def write_xfs_lot_marker_changes(xml_root, bl_object):
+    """Apply marker edits, additions, and deletions to the source XFS XML."""
+    records = _get_record_locations_from_lot(xml_root)
+    markers_by_path = {}
+    for marker in bl_object.children_recursive:
+        if marker.get(_MARKER_TAG):
+            path = tuple(json.loads(marker.get(_MARKER_PATH, "[]")))
+            markers_by_path.setdefault(path, []).append(marker)
+
+    unknown_paths = set(markers_by_path).difference(records)
+    if unknown_paths:
+        raise ValueError(f"XFS lot marker source paths no longer exist: {sorted(unknown_paths)}")
+
+    paths_by_set_info = {}
+    for path, location in records.items():
+        paths_by_set_info.setdefault(location["set_info_entry_path"], []).append(path)
+
+    # Update each source record from one surviving marker. Further markers with
+    # the same source path are Blender duplicates and become new XML entries.
+    for path, markers in markers_by_path.items():
+        (
+            record, _unit_class, parent, _parent_path, unit_class_path, *_
+        ) = records[path]["values"]
+        unit_class_node = (
+            _xml_node_at_path(xml_root, tuple(unit_class_path))
+            if unit_class_path is not None else None
+        )
+        _write_marker_values(
+            record, parent, unit_class_node, markers[0],
+            marker_kind=records[path]["kind"],
+        )
+
+    used_instance_names, used_instance_slots = _existing_named_instance_names(xml_root)
+
+    # Each additional marker represents a new placement. Copy the complete
+    # mSetInfos entry so its class, info object, and transforms stay independent.
+    for path, markers in markers_by_path.items():
+        location = records[path]
+        if len(markers) < 2:
+            continue
+        container = _ensure_set_info_array(location, xml_root)
+        prune_to_item_entry = (
+            location["kind"] == "item" and len(
+                paths_by_set_info[location["set_info_entry_path"]]
+            ) > 1
+        )
+        for marker in markers[1:]:
+            if location["kind"] == "instance" and location["values"][1] == "uIm":
+                original_name = str(
+                    marker.get(
+                        _MARKER_INSTANCE_NAME,
+                        location.get("instance_name", ""),
+                    )
+                )
+                unique_name = _reserve_unique_instance_name(
+                    original_name,
+                    used_instance_names,
+                    used_instance_slots,
+                )
+                if unique_name != original_name:
+                    marker[_MARKER_INSTANCE_NAME] = unique_name
+                    try:
+                        marker_properties = (
+                            marker.albam_custom_properties.re5__lot_placement
+                        )
+                    except AttributeError:
+                        marker_properties = None
+                    if (
+                        marker_properties is not None and
+                        marker_properties.instance_name != unique_name
+                    ):
+                        marker_properties.instance_name = unique_name
+            container.append(
+                _duplicate_set_info(
+                    location, path, marker, xml_root,
+                    prune_to_item_entry=prune_to_item_entry,
+                )
+            )
+
+    # Remove one item-set entry when a row contains other markers, or remove
+    # the whole row for instances and single-placement item rows. Do this after
+    # cloning so the source child paths still have their original indexes.
+    for source_paths in paths_by_set_info.values():
+        location = records[source_paths[0]]
+        active_paths = [path for path in source_paths if path in markers_by_path]
+        if location["kind"] in ("instance", "enemy"):
+            if active_paths:
+                continue
+            entry = location["set_info_entry"]
+            container = _ensure_set_info_array(location, xml_root)
+            if entry not in list(container):
+                raise ValueError("Cannot remove the deleted mSetInfos entry")
+            container.remove(entry)
+            continue
+
+        if len(active_paths) == len(source_paths):
+            continue
+        if active_paths:
+            for path in source_paths:
+                if path not in markers_by_path:
+                    _remove_item_entry(records[path])
+            continue
+
+        entry = location["set_info_entry"]
+        container = _ensure_set_info_array(location, xml_root)
+        if entry not in list(container):
+            raise ValueError("Cannot remove the deleted mSetInfos entry")
+        container.remove(entry)

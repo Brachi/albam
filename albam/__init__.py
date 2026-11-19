@@ -55,6 +55,7 @@ def register():
         importlib.import_module(".engines.mtfw.archive", __package__)
         importlib.import_module(".engines.mtfw.mesh", __package__)
         importlib.import_module(".engines.mtfw.navmesh", __package__)
+        importlib.import_module(".engines.mtfw.config_assets", __package__)
         importlib.import_module(".engines.hexn.archive", __package__)
         importlib.import_module(".engines.hexn.mesh", __package__)
         importlib.import_module(".engines.hexn.animation", __package__)
