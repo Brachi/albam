@@ -50,10 +50,14 @@ seq:
   - id: unk_08_one
     type: u2
     if: version > 27 and version != 190820018
+  # Layout B's table holds one entry per mipmap of each image: a cubemap's six
+  # faces and an array's layers each get num_mipmaps entries.
+  # Volume textures (depth > 1) are not described yet: their entries size
+  # one slice each.
   - id: mipmaps
     type: mipmap_data
     repeat: expr
-    repeat-expr: 'version > 11 and version != 190820018 ? mipmap_header.as<mipmap_header_2>.num_mipmaps : mipmap_header.as<mipmap_header_1>.num_mipmaps'
+    repeat-expr: 'version > 11 and version != 190820018 ? mipmap_header.as<mipmap_header_2>.num_mipmaps * mipmap_header.as<mipmap_header_2>.num_images : mipmap_header.as<mipmap_header_1>.num_mipmaps'
 types:
   mipmap_data:
     seq:

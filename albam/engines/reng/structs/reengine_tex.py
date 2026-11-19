@@ -161,7 +161,7 @@ class ReengineTex(ReadWriteKaitaiStruct):
             self.unk_08_one = self._io.read_u2le()
 
         self.mipmaps = []
-        for i in range((self.mipmap_header.num_mipmaps if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps)):
+        for i in range((self.mipmap_header.num_mipmaps * self.mipmap_header.num_images if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps)):
             _t_mipmaps = ReengineTex.MipmapData(self._io, self, self._root)
             try:
                 _t_mipmaps._read()
@@ -280,8 +280,8 @@ class ReengineTex(ReadWriteKaitaiStruct):
         if  ((self.version > 27) and (self.version != 190820018)) :
             pass
 
-        if len(self.mipmaps) != (self.mipmap_header.num_mipmaps if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps):
-            raise kaitaistruct.ConsistencyError(u"mipmaps", (self.mipmap_header.num_mipmaps if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps), len(self.mipmaps))
+        if len(self.mipmaps) != (self.mipmap_header.num_mipmaps * self.mipmap_header.num_images if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps):
+            raise kaitaistruct.ConsistencyError(u"mipmaps", (self.mipmap_header.num_mipmaps * self.mipmap_header.num_images if  ((self.version > 11) and (self.version != 190820018))  else self.mipmap_header.num_mipmaps), len(self.mipmaps))
         for i in range(len(self.mipmaps)):
             pass
             if self.mipmaps[i]._root != self._root:
