@@ -1908,12 +1908,6 @@ def _draw_chn_file_editor(layout, bl_object):
         orphan_index = file_props.active_orphan_index
         if 0 <= orphan_index < len(file_props.orphans):
             _draw_chn_joint_fields(layout, file_props.orphans[orphan_index])
-
-    previews = sorted(
-        (child for child in bl_object.children
-         if child.get("_albam_chn_joint_preview", False)),
-        key=lambda child: child.name,
-    )
     angle_previews = [
         child for child in bl_object.children
         if child.get("_albam_chn_angle_preview", False)

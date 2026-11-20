@@ -6,9 +6,7 @@ meta:
   title: MTFramework chain (.chn, rChain) version 0x80618
 doc: |
   Chain (cloth / hair "chain" simulation) resource of the older MT Framework
-  generation: Resident Evil 5 and DMC4 Special Edition (both expose
-  rChain::getExt -> "chn").  DMC4 (2008) does not have this class - its cloth
-  chain is rCnsChain, extension "clt".
+  generation. Was found only in Resident Evil 5, DMC4 used xfs file with clt  extension
 
     rChain::Header      0x10  magic, version, data_size, chain_info_num, reserve[3]
     rChain::ChainInfo   0x20  joint_info_num, chain_type, reserve, joint_info_offset,

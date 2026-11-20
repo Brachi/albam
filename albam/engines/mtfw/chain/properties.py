@@ -257,15 +257,16 @@ class CHNChainProperties(bpy.types.PropertyGroup):
     strands: bpy.props.CollectionProperty(type=CHNStrandProperties)
     active_strand_index: bpy.props.IntProperty(
         default=0, min=0, update=_update_chn_selection_highlight)
-    chain_type: bpy.props.EnumProperty(
+    chain_type_enum = bpy.props.EnumProperty(
         name="Chain Info Type",
         items=(
             ("CHAIN", "Chain", "Standard chain simulation", "NONE", 1),
             ("SHAKE", "Shake", "Shake chain simulation", "NONE", 2),
         ),
-        default="CHAIN",
+        default="CHAIN",  # noqa: F821
         update=_update_chn_header_preview,
     )
+    chain_type: chain_type_enum
     grav_scaler: bpy.props.FloatProperty(
         name="Gravity Scale", default=0.0, update=_update_chn_header_preview)
     time_scaler: bpy.props.FloatProperty(
@@ -308,13 +309,13 @@ class CHNFileProperties(bpy.types.PropertyGroup):
 class CCLNodeProperties(bpy.types.PropertyGroup):
     """One CCL collision preview entry shown in the file-root UIList."""
 
-    bone_name: bpy.props.StringProperty(options={"HIDDEN"})
-    anim_id: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    shape: bpy.props.StringProperty(options={"HIDDEN"})
-    record_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
-    record_slot: bpy.props.IntProperty(default=-1, options={"HIDDEN"})
+    bone_name: bpy.props.StringProperty(options={"HIDDEN"})  # noqa: F821
+    anim_id: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    shape: bpy.props.StringProperty(options={"HIDDEN"})  # noqa: F821
+    record_index: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
+    record_slot: bpy.props.IntProperty(default=-1, options={"HIDDEN"})  # noqa: F821
     preview_object: bpy.props.PointerProperty(
-        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})
+        name="Preview Object", type=bpy.types.Object, options={"HIDDEN"})  # noqa: F821
 
 
 @blender_registry.register_blender_prop
