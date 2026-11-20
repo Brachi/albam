@@ -17,7 +17,11 @@ def register_handlers():
     load_handler = _ui.chain_file_load_post
     if load_handler not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(load_handler)
-    _ui.chain_file_load_post(None)
+    seed_timer = _ui.seed_bone_rename_signatures
+    if not bpy.app.timers.is_registered(seed_timer):
+        # bpy.data is restricted while Blender is executing register(). Run
+        # the initial scan once that restricted registration context is gone.
+        bpy.app.timers.register(seed_timer, first_interval=0.0)
 
 
 def unregister_handlers():

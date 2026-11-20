@@ -82,8 +82,9 @@ def reset_preview_highlight_state():
     _CCL_NODE_SIGNATURES.clear()
     _ARMATURE_BONE_NAME_SIGNATURES.clear()
     _PENDING_CHAIN_PREVIEW_REBUILDS.clear()
-    if bpy.app.timers.is_registered(_rebuild_renamed_chain_previews):
-        bpy.app.timers.unregister(_rebuild_renamed_chain_previews)
+    for timer in (_rebuild_renamed_chain_previews, seed_bone_rename_signatures):
+        if bpy.app.timers.is_registered(timer):
+            bpy.app.timers.unregister(timer)
     if root_object is not None:
         try:
             _update_preview_root_highlight(root_object, None)
@@ -149,6 +150,12 @@ def chain_file_load_post(_filepath):
     _ARMATURE_BONE_NAME_SIGNATURES.clear()
     _PENDING_CHAIN_PREVIEW_REBUILDS.clear()
     _queue_bone_rename_rebuilds()
+
+
+def seed_bone_rename_signatures():
+    """Seed armature signatures after addon registration has finished."""
+    _queue_bone_rename_rebuilds()
+    return None
 
 
 def _rebuild_renamed_chain_previews():
