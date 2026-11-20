@@ -193,6 +193,14 @@ def _new_preview(root_object, armature, record, pose_bone, anim_id,
     preview.hide_render = True
     preview.hide_viewport = not show_collision_primitives
     preview["_albam_chn_joint_preview"] = True
+    # Keep the generated primitive self-describing in Blender's Custom
+    # Properties panel, like CCL preview objects. The editable CHN record
+    # remains on its pose bone; these object properties are display metadata.
+    preview["albam_chn_bone_name"] = pose_bone.name
+    preview["albam_chn_anim_id"] = anim_id
+    preview["albam_chn_chain_index"] = record.chain_index
+    preview["albam_chn_joint_index"] = record.joint_index
+    preview["albam_chn_shape"] = record.col_shape.title()
     for collection in root_object.users_collection:
         collection.objects.link(preview)
 

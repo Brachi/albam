@@ -14,6 +14,10 @@ def register_handlers():
     handlers = bpy.app.handlers.depsgraph_update_post
     if handler not in handlers:
         handlers.append(handler)
+    load_handler = _ui.chain_file_load_post
+    if load_handler not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(load_handler)
+    _ui.chain_file_load_post(None)
 
 
 def unregister_handlers():
@@ -22,3 +26,6 @@ def unregister_handlers():
     handler = _ui.preview_highlight_handler
     if handler in handlers:
         handlers.remove(handler)
+    load_handler = _ui.chain_file_load_post
+    if load_handler in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(load_handler)

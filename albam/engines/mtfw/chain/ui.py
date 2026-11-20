@@ -29,11 +29,14 @@ from .chn_preview import rebuild_chn_previews, update_chn_strand_highlight
 
 _ACTIVE_PREVIEW_HIGHLIGHT_ROOT = None
 _CCL_NODE_SIGNATURES = {}
+_ARMATURE_BONE_NAME_SIGNATURES = {}
+_PENDING_CHAIN_PREVIEW_REBUILDS = set()
 
 
 @persistent
 def preview_highlight_handler(scene, depsgraph):
     global _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
+    _queue_bone_rename_rebuilds()
     view_layer = getattr(depsgraph, "view_layer", None)
     if view_layer is None:
         context = bpy.context
@@ -77,6 +80,10 @@ def reset_preview_highlight_state():
     root_object = _ACTIVE_PREVIEW_HIGHLIGHT_ROOT
     _ACTIVE_PREVIEW_HIGHLIGHT_ROOT = None
     _CCL_NODE_SIGNATURES.clear()
+    _ARMATURE_BONE_NAME_SIGNATURES.clear()
+    _PENDING_CHAIN_PREVIEW_REBUILDS.clear()
+    if bpy.app.timers.is_registered(_rebuild_renamed_chain_previews):
+        bpy.app.timers.unregister(_rebuild_renamed_chain_previews)
     if root_object is not None:
         try:
             _update_preview_root_highlight(root_object, None)
@@ -94,6 +101,86 @@ def _preview_root_for(active_object):
 
 def _is_ccl_root(bl_object):
     return bl_object.type == "EMPTY" and bl_object.albam_asset.extension == "ccl"
+
+
+def _queue_bone_rename_rebuilds():
+    """Rebuild CCL and CHN previews when names in their armature change."""
+    current_signatures = {}
+    previous_signatures = _ARMATURE_BONE_NAME_SIGNATURES.copy()
+
+    for root_object in tuple(bpy.data.objects):
+        if root_object.type != "EMPTY":
+            continue
+        if _is_ccl_root(root_object):
+            armature = get_ccl_file_properties(root_object).armature
+        elif root_object.get("_albam_chn_root", False):
+            armature = get_chn_file_properties(root_object).armature
+        else:
+            continue
+        if armature is None or armature.type != "ARMATURE":
+            continue
+
+        armature_key = armature.as_pointer()
+        if armature.mode == "EDIT":
+            # Wait until edit-bone names have been committed to the armature.
+            if armature_key in previous_signatures:
+                current_signatures[armature_key] = previous_signatures[armature_key]
+            continue
+
+        signature = tuple((bone.as_pointer(), bone.name) for bone in armature.data.bones)
+        current_signatures[armature_key] = signature
+        previous = previous_signatures.get(armature_key)
+        if previous is not None and previous != signature:
+            _PENDING_CHAIN_PREVIEW_REBUILDS.add(armature_key)
+
+    _ARMATURE_BONE_NAME_SIGNATURES.clear()
+    _ARMATURE_BONE_NAME_SIGNATURES.update(current_signatures)
+    if (_PENDING_CHAIN_PREVIEW_REBUILDS and
+            not bpy.app.timers.is_registered(_rebuild_renamed_chain_previews)):
+        bpy.app.timers.register(
+            _rebuild_renamed_chain_previews,
+            first_interval=0.1,
+        )
+
+
+@persistent
+def chain_file_load_post(_filepath):
+    """Discard timer state from the previous file and seed the new armatures."""
+    _ARMATURE_BONE_NAME_SIGNATURES.clear()
+    _PENDING_CHAIN_PREVIEW_REBUILDS.clear()
+    _queue_bone_rename_rebuilds()
+
+
+def _rebuild_renamed_chain_previews():
+    """Rebuild previews outside the depsgraph handler after a bone rename."""
+    pending = tuple(_PENDING_CHAIN_PREVIEW_REBUILDS)
+    _PENDING_CHAIN_PREVIEW_REBUILDS.clear()
+    if not pending:
+        return None
+
+    armatures = {
+        armature.as_pointer(): armature
+        for armature in tuple(bpy.data.objects)
+        if armature.type == "ARMATURE" and armature.as_pointer() in pending
+    }
+    for armature_key, armature in armatures.items():
+        if armature.mode == "EDIT":
+            # The depsgraph handler keeps the old signature during Edit Mode
+            # and will queue this again once the committed name change appears.
+            continue
+
+        rebuild_armature_previews(armature)
+        for root_object in tuple(bpy.data.objects):
+            if (root_object.type != "EMPTY" or
+                    not root_object.get("_albam_chn_root", False)):
+                continue
+            try:
+                if get_chn_file_properties(root_object).armature == armature:
+                    rebuild_chn_previews(root_object)
+            except (ReferenceError, RuntimeError):
+                continue
+
+    return None
 
 
 def _update_preview_root_highlight(root_object, active_object):
@@ -219,7 +306,9 @@ def _sync_chn_preview_bone_name(preview_object, preview_props):
     for pose_bone in armature.pose.bones:
         if any(record.preview_object == preview_object
                for record in get_ccl_bone_properties(pose_bone).chn_joints):
-            preview_props.reference_bone_name = pose_bone.name
+            if preview_props.reference_bone_name != pose_bone.name:
+                preview_props.reference_bone_name = pose_bone.name
+                preview_object["albam_chn_bone_name"] = pose_bone.name
             return pose_bone.name
     return preview_props.reference_bone_name
 
@@ -753,10 +842,31 @@ class ALBAM_OT_CCLAddRecord(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _remove_ccl_record(bl_object, bone_props, record_index):
+    record = bone_props.records[record_index]
+    if record.record_index >= 0:
+        try:
+            removed = set(json.loads(bl_object.get("_albam_ccl_removed_records", "[]")))
+        except (TypeError, ValueError):
+            removed = set()
+        removed.add(record.record_index)
+        bl_object["_albam_ccl_removed_records"] = json.dumps(sorted(removed))
+
+    active_index = bone_props.active_record_index
+    bone_props.records.remove(record_index)
+    if active_index > record_index:
+        active_index -= 1
+    elif active_index == record_index:
+        active_index = min(record_index, max(0, len(bone_props.records) - 1))
+    bone_props.active_record_index = active_index
+    rebuild_ccl_preview(bl_object)
+
+
 @blender_registry.register_blender_type
 class ALBAM_OT_CCLRemoveRecord(bpy.types.Operator):
     bl_idname = "albam.ccl_remove_record"
     bl_label = "Remove CCL Record"
+    bl_options = {"UNDO"}
 
     @classmethod
     def poll(cls, context):
@@ -771,20 +881,47 @@ class ALBAM_OT_CCLRemoveRecord(bpy.types.Operator):
     def execute(self, context):
         pose_bone = _active_pose_bone(context)
         bone_props = get_ccl_bone_properties(pose_bone)
-        record = bone_props.records[bone_props.active_record_index]
         bl_object = find_ccl_file_for_armature(pose_bone.id_data)
-        if record.record_index >= 0:
-            try:
-                removed = set(json.loads(bl_object.get("_albam_ccl_removed_records", "[]")))
-            except (TypeError, ValueError):
-                removed = set()
-            removed.add(record.record_index)
-            bl_object["_albam_ccl_removed_records"] = json.dumps(sorted(removed))
-        bone_props.records.remove(bone_props.active_record_index)
-        bone_props.active_record_index = min(
-            bone_props.active_record_index, max(0, len(bone_props.records) - 1))
-        rebuild_ccl_preview(bl_object)
+        _remove_ccl_record(bl_object, bone_props, bone_props.active_record_index)
         return {"FINISHED"}
+
+
+@blender_registry.register_blender_type
+class ALBAM_OT_CCLRemoveFileNode(bpy.types.Operator):
+    bl_idname = "albam.ccl_remove_file_node"
+    bl_label = "Remove CCL Primitive"
+    bl_description = "Remove the selected collision primitive from the CCL file"
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        root_object = getattr(context, "object", None)
+        if root_object is None or not _is_ccl_root(root_object):
+            return False
+        file_props = get_ccl_file_properties(root_object)
+        index = file_props.active_node_index
+        return (file_props.armature is not None and
+                0 <= index < len(file_props.nodes) and
+                file_props.nodes[index].preview_object is not None)
+
+    def execute(self, context):
+        root_object = context.object
+        file_props = get_ccl_file_properties(root_object)
+        preview_object = file_props.nodes[file_props.active_node_index].preview_object
+        armature = file_props.armature
+        if armature is None or armature.type != "ARMATURE":
+            self.report({"ERROR"}, "The CCL file is not linked to an armature")
+            return {"CANCELLED"}
+
+        for pose_bone in armature.pose.bones:
+            bone_props = get_ccl_bone_properties(pose_bone)
+            for record_index, record in enumerate(bone_props.records):
+                if record.preview_object == preview_object:
+                    _remove_ccl_record(root_object, bone_props, record_index)
+                    return {"FINISHED"}
+
+        self.report({"ERROR"}, "The selected CCL primitive has no matching bone record")
+        return {"CANCELLED"}
 
 
 def _chn_records_for_chain(root_object, chain_index):
@@ -1666,10 +1803,12 @@ def _draw_ccl_file_editor(layout, bl_object):
     if file_props.duplicate_joint_ids:
         layout.label(text=f"Duplicate Anim IDs: {file_props.duplicate_joint_ids}", icon="INFO")
 
-    row = layout.row()
+    row = layout.row(align=True)
     row.template_list(
         "ALBAM_UL_CCLNodes", "", file_props, "nodes",
         file_props, "active_node_index", rows=4)
+    row.column(align=True).operator(
+        "albam.ccl_remove_file_node", icon="REMOVE", text="")
     layout.operator("albam.ccl_refresh_preview", icon="FILE_REFRESH")
     layout.prop(file_props, "show_collision_primitives")
     if not file_props.nodes:
@@ -1741,10 +1880,12 @@ def _draw_chn_file_editor(layout, bl_object):
         layout.label(text=f"Chain Info {chain.chain_index} · {chain.num_joints} joints")
         layout.label(text=f"Graph strands: {len(chain.strands)}" +
                      (" · modified" if chain.topology_dirty else " · source links"))
-        layout.template_list(
+        row = layout.row(align=True)
+        row.template_list(
             "ALBAM_UL_CHNStrands", "", chain, "strands",
             chain, "active_strand_index", rows=4)
-        layout.operator("albam.chn_remove_strand", icon="REMOVE", text="Remove Strand")
+        row.column(align=True).operator(
+            "albam.chn_remove_strand", icon="REMOVE", text="")
         row = layout.row(align=True)
         row.operator("albam.chn_rebuild_strands", icon="FILE_REFRESH")
         row.operator("albam.chn_autofill_links", icon="CON_TRACKTO")
