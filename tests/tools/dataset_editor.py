@@ -50,6 +50,8 @@ DATASETS_DIR = os.path.join(_REPO_ROOT, "tests", "mtfw", "datasets")
 KNOWN_SCHEMAS = {
     "lmt_import_hashes.json": ("lmt_path_hash", "mod_path_hash"),
     "mrl_serialization_hashes.json": ("mrl_path_hash", "mod_path_hash"),
+    "ccl_serialization_hashes.json": ("ccl_path_hash", "mod_path_hash"),
+    "chn_serialization_hashes.json": ("chn_path_hash", "mod_path_hash"),
 }
 
 # hash key -> the extension a file assigned to that slot is expected to
