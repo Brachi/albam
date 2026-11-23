@@ -69,15 +69,20 @@ def build_blender_materials(edgemodel, context, root_id=None):
 
         bl_material = bpy.data.materials.new(os.path.basename(material_path))
         ensure_material_nodes(bl_material)
-        # Same as MT Framework's own materials (albam.engines.mtfw.material) -
-        # a _d diffuse map's Alpha is wired below whenever the texture has
-        # one (hair cards etc. use it as a cutout mask; solid DXT1 diffuse
-        # maps decode Alpha as a flat 1.0, so this is a no-op for those).
+        # A version 7 .matb flags alpha-tested materials in the low byte of
+        # extra_flags[0] (hair and goggle cutouts); every other version 7
+        # material is opaque, whatever its _d map holds in its alpha channel
+        # (DXT5 diffuse maps can carry an unused, all-zero alpha). Other
+        # versions have no known flag, so they treat every _d map's alpha as
+        # a cutout mask. Solid DXT1 diffuse maps decode Alpha as a flat 1.0,
+        # so the cutout is a no-op for those.
         # Blender 5.x accepts "CLIP" here but stores HASHED - the
         # per-material control it kept is alpha_threshold, with dithered
         # vs blended now living on the material's render method. Set the
         # same way albam.engines.mtfw.material does.
-        bl_material.blend_method = "CLIP"
+        alpha_test = matb.version != 7 or (matb.extra_flags[0] & 0xFF) == 1
+        if alpha_test:
+            bl_material.blend_method = "CLIP"
         node_tree = bl_material.node_tree
         bsdf = next(node for node in node_tree.nodes if node.type == "BSDF_PRINCIPLED")
         link = node_tree.links.new
@@ -140,7 +145,7 @@ def build_blender_materials(edgemodel, context, root_id=None):
                 link(texture_node.outputs["Color"], bsdf.inputs[socket_name])
                 if socket_name == "Emission Color":
                     bsdf.inputs["Emission Strength"].default_value = 1.0
-                elif socket_name == "Base Color":
+                elif socket_name == "Base Color" and alpha_test:
                     link(texture_node.outputs["Alpha"], bsdf.inputs["Alpha"])
                 node_chains.append([texture_node])
 

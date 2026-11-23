@@ -46,8 +46,11 @@ seq:
       Material/render flag words, partly decoded, and not one opaque
       number each. In version 7, which has four of them: words 0 and 1 are
       near-constant apart from one or two independent 0/1 bytes inside
-      them, in the shape of packed boolean render flags (which byte is
-      which is not identified); word 2 is an f4, 0.0 or a round negative
+      them, in the shape of packed boolean render flags. The low byte of
+      word 0 is "alpha test": 1 (0x0F010001) on cutout materials such as
+      hair and goggles, 0 (0x0F010100) on all others, checked on the
+      version 7 materials of one DLC pack. The other bytes are not
+      identified; word 2 is an f4, 0.0 or a round negative
       number on decal/skybox shaders, in the shape of a depth bias; word 3
       is a small int, 11 except on skybox/glow/glass shaders, in the shape
       of a render-layer selector. Versions 3 and 6 carry the first three
