@@ -5624,12 +5624,14 @@ class Mod21(ReadWriteKaitaiStruct):
             self.occlusion = self._io.read_u1()
             self.tangent = Mod21.Vec4U1(self._io, self, self._root)
             self.tangent._read()
+            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv._read()
             self.bone_indices = []
             for i in range(2):
                 self.bone_indices.append(self._io.read_bytes(2))
 
-            self.uv = Mod21.Vec2HalfFloat(self._io, self, self._root)
-            self.uv._read()
+            self.uv2 = Mod21.Vec2HalfFloat(self._io, self, self._root)
+            self.uv2._read()
             self._dirty = False
 
 
@@ -5638,10 +5640,11 @@ class Mod21(ReadWriteKaitaiStruct):
             self.position._fetch_instances()
             self.normal._fetch_instances()
             self.tangent._fetch_instances()
+            self.uv._fetch_instances()
             for i in range(len(self.bone_indices)):
                 pass
 
-            self.uv._fetch_instances()
+            self.uv2._fetch_instances()
 
 
         def _write__seq(self, io=None):
@@ -5650,11 +5653,12 @@ class Mod21(ReadWriteKaitaiStruct):
             self.normal._write__seq(self._io)
             self._io.write_u1(self.occlusion)
             self.tangent._write__seq(self._io)
+            self.uv._write__seq(self._io)
             for i in range(len(self.bone_indices)):
                 pass
                 self._io.write_bytes(self.bone_indices[i])
 
-            self.uv._write__seq(self._io)
+            self.uv2._write__seq(self._io)
 
 
         def _check(self):
@@ -5670,6 +5674,10 @@ class Mod21(ReadWriteKaitaiStruct):
                 raise kaitaistruct.ConsistencyError(u"tangent", self._root, self.tangent._root)
             if self.tangent._parent != self:
                 raise kaitaistruct.ConsistencyError(u"tangent", self, self.tangent._parent)
+            if self.uv._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv", self._root, self.uv._root)
+            if self.uv._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv", self, self.uv._parent)
             if len(self.bone_indices) != 2:
                 raise kaitaistruct.ConsistencyError(u"bone_indices", 2, len(self.bone_indices))
             for i in range(len(self.bone_indices)):
@@ -5677,10 +5685,10 @@ class Mod21(ReadWriteKaitaiStruct):
                 if len(self.bone_indices[i]) != 2:
                     raise kaitaistruct.ConsistencyError(u"bone_indices", 2, len(self.bone_indices[i]))
 
-            if self.uv._root != self._root:
-                raise kaitaistruct.ConsistencyError(u"uv", self._root, self.uv._root)
-            if self.uv._parent != self:
-                raise kaitaistruct.ConsistencyError(u"uv", self, self.uv._parent)
+            if self.uv2._root != self._root:
+                raise kaitaistruct.ConsistencyError(u"uv2", self._root, self.uv2._root)
+            if self.uv2._parent != self:
+                raise kaitaistruct.ConsistencyError(u"uv2", self, self.uv2._parent)
             self._dirty = False
 
         @property

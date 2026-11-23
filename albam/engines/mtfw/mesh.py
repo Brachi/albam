@@ -217,6 +217,7 @@ VERTEX_FORMATS_UV2 = (
     0x64593023,
     0xdA55a021,
     0xb392101f,
+    0xd9e801d,
     0xd877801b,
     0x667b1019,
 )
