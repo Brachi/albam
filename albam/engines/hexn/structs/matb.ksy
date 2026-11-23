@@ -49,7 +49,7 @@ seq:
       them, in the shape of packed boolean render flags. The low byte of
       word 0 is 1 (0x0F010001) on character and weapon cutout materials
       (hair, goggles) and 0 (0x0F010100) on the other character and weapon
-      materials (checked on those in one DLC pack); world materials don't
+      materials (checked on those in one DLC pack); world materials don't reliably
       follow it, their alpha-test shaders name it instead. The other bytes
       are not identified; word 2 is an f4, 0.0 or a round negative number on
       decal/skybox shaders, in the shape of a depth bias; word 3

@@ -71,14 +71,15 @@ def build_blender_materials(edgemodel, context, root_id=None):
         ensure_material_nodes(bl_material)
         # Alpha-tested materials link the _d map's Alpha and use a cutout
         # blend. In version 7, character and weapon materials (hair,
-        # goggles) flag it in the low byte of extra_flags[0], while world
-        # materials (foliage, fences) and decals name it in their shader
-        # ("alphatest", "decal") with that byte at 0. Every other version 7
-        # material is opaque, whatever its _d map holds in its alpha channel
-        # (DXT5 diffuse maps can carry an unused, all-zero alpha). Other
-        # versions have no known flag, so they treat every _d map's alpha as
-        # a cutout mask. Solid DXT1 diffuse maps decode Alpha as a flat 1.0,
-        # so the cutout is a no-op for those.
+        # goggles) flag it in the low byte of extra_flags[0]. World
+        # materials and decals may leave that byte at 0; their shader names
+        # it instead ("alpha" as in lit_alphatest_d or lit_bump_alpha,
+        # "decal"). Other version 7 materials are opaque, whatever their _d
+        # map holds in its alpha channel (DXT5 diffuse maps can carry an
+        # unused, all-zero alpha). Other versions have no known flag, so
+        # they treat every _d map's alpha as a cutout mask. Solid DXT1
+        # diffuse maps decode Alpha as a flat 1.0, so the cutout is a no-op
+        # for those.
         # Blender 5.x accepts "CLIP" here but stores HASHED - the
         # per-material control it kept is alpha_threshold, with dithered
         # vs blended now living on the material's render method. Set the
@@ -87,7 +88,7 @@ def build_blender_materials(edgemodel, context, root_id=None):
         alpha_test = any((
             matb.version != 7,
             (matb.extra_flags[0] & 0xFF) == 1,
-            "alphatest" in shader_name,
+            "alpha" in shader_name,
             "decal" in shader_name,
         ))
         if alpha_test:
