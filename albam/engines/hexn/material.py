@@ -69,8 +69,11 @@ def build_blender_materials(edgemodel, context, root_id=None):
 
         bl_material = bpy.data.materials.new(os.path.basename(material_path))
         ensure_material_nodes(bl_material)
-        # A version 7 .matb flags alpha-tested materials in the low byte of
-        # extra_flags[0] (hair and goggle cutouts); every other version 7
+        # Alpha-tested materials link the _d map's Alpha and use a cutout
+        # blend. In version 7, character and weapon materials (hair,
+        # goggles) flag it in the low byte of extra_flags[0], while world
+        # materials (foliage, fences) and decals name it in their shader
+        # ("alphatest", "decal") with that byte at 0. Every other version 7
         # material is opaque, whatever its _d map holds in its alpha channel
         # (DXT5 diffuse maps can carry an unused, all-zero alpha). Other
         # versions have no known flag, so they treat every _d map's alpha as
@@ -80,7 +83,13 @@ def build_blender_materials(edgemodel, context, root_id=None):
         # per-material control it kept is alpha_threshold, with dithered
         # vs blended now living on the material's render method. Set the
         # same way albam.engines.mtfw.material does.
-        alpha_test = matb.version != 7 or (matb.extra_flags[0] & 0xFF) == 1
+        shader_name = matb.shader.shader.lower()
+        alpha_test = any((
+            matb.version != 7,
+            (matb.extra_flags[0] & 0xFF) == 1,
+            "alphatest" in shader_name,
+            "decal" in shader_name,
+        ))
         if alpha_test:
             bl_material.blend_method = "CLIP"
         node_tree = bl_material.node_tree
