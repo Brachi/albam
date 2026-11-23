@@ -217,6 +217,7 @@ VERTEX_FORMATS_UV2 = (
     0x64593023,
     0xdA55a021,
     0xb392101f,
+    0xd9e801d,
     0xd877801b,
     0x667b1019,
 )
@@ -581,6 +582,7 @@ def _get_bone_indices(mod, mesh, bone_indices):
     elif mesh.vertex_format in (
         0xC31F201C,
         0xB392101F,
+        0xd9e801d,
     ):
         b1 = int(unpack("e", bone_indices[0])[0])
         b2 = int(unpack("e", bone_indices[1])[0])
@@ -608,6 +610,7 @@ def _get_weights(mod, mesh, vertex):
         0xC31F201C,
         0xDB7DA014,
         0xb392101f,
+        0xd9e801d,
     ):
         w1 = vertex.position.w / 32767
         w2 = 1.0 - w1
