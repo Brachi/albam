@@ -647,14 +647,15 @@ types:
       size_:
         value: 28
 
-  vertex_d9e8: # 28 IASkinTBN2wt untested re6 sm6290 
+  vertex_d9e8: # 28 IASkinTBN2wt re6 em6510 mesh0 
     seq:
       - {id: position, type: vec4_s2}
       - {id: normal, type: vec3_u1}
       - {id: occlusion, type: u1}
       - {id: tangent, type: vec4_u1}
-      - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2}
       - {id: uv, type: vec2_half_float}
+      - {id: bone_indices, size: 2, repeat: expr, repeat-expr: 2}
+      - {id: uv2, type: vec2_half_float}
     instances:
       size_:
         value: 28
