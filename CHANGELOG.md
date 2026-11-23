@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- Exporting a non-power-of-two texture with mipmaps for Resident Evil 5 or Devil May Cry 4
+  writing mipmap offsets and data laid out differently from the game's own `.tex` files from
+  mipmap 3 on, and importing one giving a DDS whose smaller mipmaps image editors read from
+  the wrong place
 - Exporting two images that point at the same texture path (e.g. `pl_VTF` and `pl_VTF.001`
   after importing a model twice) refusing to export and asking for a unique path, even when
   both are the same texture. Identical images are now exported once; images that really
