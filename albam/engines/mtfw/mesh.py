@@ -312,8 +312,8 @@ VERSIONS_USE_TRISTRIPS = {153, 156, 212}
 # num_indices * 2 rather than (num_indices * 2) - 2.
 VERSIONS_MOD_21 = {210, 211, 212}
 
-# Dragon's Dogma's level_of_detail is a bit mask of the distances a mesh is drawn at;
-# 7 (drawn at every distance) belongs to the main model.
+# Dragon's Dogma's level_of_detail is a bit mask of the distances a mesh is drawn at
+# (bit 0 = near). Every mask with bit 0 set (1, 3, 7, 15) belongs to the main model.
 MAIN_LODS = {
     "re0": [1, 255],
     "re1": [1, 255],
@@ -321,7 +321,7 @@ MAIN_LODS = {
     "re6": [1, 3, 255],
     "rev1": [1, 255],
     "rev2": [1, 255],
-    "dd": [1, 7, 255],
+    "dd": [1, 3, 7, 15, 255],
     "dmc4": [1, 255],
     "umvc3": [255],  # its models ship a single LOD, always 255
 }
