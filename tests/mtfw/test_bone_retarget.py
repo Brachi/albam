@@ -4,6 +4,7 @@ All synthetic: these build their rigs directly, no game data needed.
 """
 
 import bpy
+import pytest
 
 
 def test_anim_ids_are_the_rigs_own_and_survive_renaming_its_bones():
@@ -40,6 +41,76 @@ def test_anim_ids_are_the_rigs_own_and_survive_renaming_its_bones():
             "0": "root", "7": "hips", "255": "root_motion"
         }
         assert get_anim_retarget(armature.pose.bones["hips"], "re5") == "7"
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
+def test_fill_empty_anim_retarget_ids_uses_free_byte_ids():
+    from albam.engines.mtfw.bone import (
+        fill_empty_anim_retarget_ids,
+        get_anim_retarget,
+        set_anim_retarget,
+    )
+
+    armature_data = bpy.data.armatures.new("fill_anim_ids_rig")
+    armature = bpy.data.objects.new("fill_anim_ids_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name in ("id_zero", "id_two_suffix", "id_root_motion", "empty_a", "empty_b"):
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        set_anim_retarget(armature.pose.bones["id_zero"], "re5", "0")
+        set_anim_retarget(armature.pose.bones["id_two_suffix"], "re5", "2_1")
+        set_anim_retarget(armature.pose.bones["id_root_motion"], "re5", "255")
+
+        assert fill_empty_anim_retarget_ids(armature, "re5") == [1, 3]
+        assert get_anim_retarget(armature.pose.bones["empty_a"], "re5") == "1"
+        assert get_anim_retarget(armature.pose.bones["empty_b"], "re5") == "3"
+        assert get_anim_retarget(armature.pose.bones["id_two_suffix"], "re5") == "2_1"
+    finally:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.data.objects.remove(armature, do_unlink=True)
+        bpy.data.armatures.remove(armature_data)
+        bpy.context.view_layer.objects.active = previous
+
+
+def test_fill_empty_anim_retarget_ids_preflights_invalid_values_and_exhaustion():
+    from albam.engines.mtfw.bone import (
+        _available_anim_retarget_ids,
+        fill_empty_anim_retarget_ids,
+        get_anim_retarget,
+        set_anim_retarget,
+    )
+
+    with pytest.raises(ValueError, match="reserving 254 and 255"):
+        _available_anim_retarget_ids(set(range(254)), 1)
+
+    armature_data = bpy.data.armatures.new("invalid_anim_ids_rig")
+    armature = bpy.data.objects.new("invalid_anim_ids_rig", armature_data)
+    bpy.context.scene.collection.objects.link(armature)
+    previous = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        for name in ("empty", "invalid"):
+            edit_bone = armature_data.edit_bones.new(name)
+            edit_bone.tail = (0.0, 0.0, 0.1)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        set_anim_retarget(armature.pose.bones["invalid"], "re5", "not-an-id")
+
+        with pytest.raises(ValueError, match="invalid Anim Retarget ID"):
+            fill_empty_anim_retarget_ids(armature, "re5")
+        assert get_anim_retarget(armature.pose.bones["empty"], "re5") == ""
     finally:
         if bpy.context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")

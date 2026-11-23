@@ -55,6 +55,7 @@ def register():
         importlib.import_module(".engines.mtfw.archive", __package__)
         importlib.import_module(".engines.mtfw.mesh", __package__)
         importlib.import_module(".engines.mtfw.navmesh", __package__)
+        importlib.import_module(".engines.mtfw.chain", __package__)
         importlib.import_module(".engines.hexn.archive", __package__)
         importlib.import_module(".engines.hexn.mesh", __package__)
         importlib.import_module(".engines.hexn.animation", __package__)
@@ -114,6 +115,14 @@ def register():
     # before this existed; _lmt_blocks treats that the same as a match, so
     # those scenes keep exporting exactly as they did.
     bpy.types.Object.albam_lmt_block_owner = bpy.props.PointerProperty(type=bpy.types.Object)
+    # File metadata lives on each chain file object; the physics custom
+    # properties group stores bone-level CCL and CHN data.
+    from .engines.mtfw.chain.properties import (
+        CCLFileProperties, CHNFileProperties, CHNJointPreviewProperties)
+    bpy.types.Object.albam_ccl_file = bpy.props.PointerProperty(type=CCLFileProperties)
+    bpy.types.Object.albam_chn_file = bpy.props.PointerProperty(type=CHNFileProperties)
+    bpy.types.Object.albam_chn_joint_preview = bpy.props.PointerProperty(
+        type=CHNJointPreviewProperties)
 
     bpy.types.Material.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMaterial)
     bpy.types.Mesh.albam_custom_properties = bpy.props.PointerProperty(type=AlbamCustomPropertiesMesh)
@@ -124,6 +133,8 @@ def register():
 
     register_workspace_tools()
     overlay.register_overlay()
+    from .engines.mtfw.chain import register_handlers as register_chain_handlers
+    register_chain_handlers()
 
     for handler in LOAD_POST_HANDLERS:
         bpy.app.handlers.load_post.append(handler)
@@ -131,6 +142,13 @@ def register():
 
 def unregister():
     overlay.unregister_overlay()
+    from .engines.mtfw.chain import unregister_handlers as unregister_chain_handlers
+    unregister_chain_handlers()
+
+    for property_name in (
+            "albam_ccl_file", "albam_chn_file", "albam_chn_joint_preview"):
+        if hasattr(bpy.types.Object, property_name):
+            delattr(bpy.types.Object, property_name)
 
     for handler in LOAD_POST_HANDLERS:
         try:

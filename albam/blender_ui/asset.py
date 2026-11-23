@@ -13,6 +13,7 @@ class AlbamAssetType(Enum):
     COLLISION = "Collision"
     MATERIAL = "Material"
     NAVMESH = "Navigation mesh"
+    PHYSICS = "Physics simulation"
 
 
 # Avoid generating dynamically per Blender issues
@@ -24,6 +25,7 @@ ASSET_TYPES_BL_ENUM = [
     (AlbamAssetType.COLLISION.name, AlbamAssetType.COLLISION.value , "", 4),
     (AlbamAssetType.MATERIAL.name, AlbamAssetType.MATERIAL.value , "", 5),
     (AlbamAssetType.NAVMESH.name, AlbamAssetType.NAVMESH.value , "", 6),
+    (AlbamAssetType.PHYSICS.name, AlbamAssetType.PHYSICS.value , "", 7),
 ]
 
 
