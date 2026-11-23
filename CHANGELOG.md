@@ -52,7 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
-- Dragon's Dogma: importing only the main LODs skipping meshes drawn at near distance whose level of detail mask isn't 1 (3, 7, 15). 16 enemies and 84 objects and stage props imported empty, and parts such as the Eliminator's skin and the Succubus' and Siren's wings were missing
+- Dragon's Dogma: importing only the main LODs skipping meshes drawn at near distance whose level of detail mask isn't 1 (3, 7, 15). 13 enemy models and 34 object and stage models imported empty, and parts such as the Eliminator's skin and the Succubus' and Siren's wings were missing
 - Exporting a non-power-of-two texture with mipmaps for Resident Evil 5 or Devil May Cry 4
   writing mipmap offsets and data laid out differently from the game's own `.tex` files from
   mipmap 3 on, and importing one giving a DDS whose smaller mipmaps image editors read from
