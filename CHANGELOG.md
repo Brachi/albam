@@ -52,7 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
-- RE6 import: em6510 IASkinTBN2wt meshes (reading bone indices before the uv) import textured and skinned
+- RE6 import: IASkinTBN2wt meshes (e.g. em6510) importing untextured and unskinned, with the uv and bone indices read from each other's bytes
 - Exporting a non-power-of-two texture with mipmaps for Resident Evil 5 or Devil May Cry 4
   writing mipmap offsets and data laid out differently from the game's own `.tex` files from
   mipmap 3 on, and importing one giving a DDS whose smaller mipmaps image editors read from
